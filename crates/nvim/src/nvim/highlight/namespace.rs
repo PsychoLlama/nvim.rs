@@ -29,14 +29,15 @@ use crate::src::nvim::api::private::dispatch::KeyDict_highlight_get_field;
 use crate::src::nvim::api::private::helpers::{api_dict_to_keydict, cstr_as_string};
 use crate::src::nvim::decoration_provider::get_decor_provider;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight_group::hlf_names;
 use crate::src::nvim::highlight_group::{
     HLF_BORDER, HLF_COUNT, HLF_INACTIVE, HLF_NFLOAT, HLF_NONE, HLF_PNI, HLF_PST, set_hl_group,
     syn_check_group, syn_id2name, syn_ns_id2attr,
 };
 use crate::src::nvim::lua::executor::nlua_call_ref;
 use crate::src::nvim::main::{
-    curwin, highlight_attr, hl_attr_active, hlf_names, must_redraw_pum, need_highlight_changed,
-    ns_hl_active, ns_hl_fast, ns_hl_global, ns_hl_win, p_pb,
+    curwin, highlight_attr, hl_attr_active, must_redraw_pum, need_highlight_changed, ns_hl_active,
+    ns_hl_fast, ns_hl_global, ns_hl_win, p_pb,
 };
 use crate::src::nvim::option::check_blending;
 use crate::src::nvim::os::libc::strlen;
@@ -349,7 +350,7 @@ pub unsafe fn hl_ns_get_attrs(
 ) -> Option<HlAttrs> {
     let mut opt = optional.as_deref().copied().unwrap_or(true);
     // SAFETY: the editor's own tables.
-    let syn_attr = unsafe { syn_ns_id2attr(ns_id, hl_id, &raw mut opt) };
+    let syn_attr = unsafe { syn_ns_id2attr(ns_id, hl_id, &mut opt) };
     if let Some(optional) = optional {
         *optional = opt;
     }

@@ -21,28 +21,27 @@ pub(crate) unsafe extern "C" fn hlgroup2dict(
     mut arena: *mut Arena,
 ) -> bool {
     unsafe {
-        let mut sgp: *mut HlGroup = ((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-            .offset((hl_id - 1 as ::core::ffi::c_int) as isize);
+        let mut sgp: *mut HlGroup = (hl_table()).offset((hl_id - 1 as ::core::ffi::c_int) as isize);
         let mut ns: NS = ns_id;
         let mut link: ::core::ffi::c_int = if ns_id == 0 as ::core::ffi::c_int {
-            (*sgp).sg_link
+            (*sgp).link
         } else {
-            ns_get_hl(&mut ns, hl_id, true_0 != 0, (*sgp).sg_set != 0)
+            ns_get_hl(&mut ns, hl_id, true_0 != 0, (*sgp).set != 0)
         };
         if link == -1 as ::core::ffi::c_int {
             return false_0 != 0;
         }
         if ns_id == 0 as ::core::ffi::c_int
-            && (*sgp).sg_cleared as ::core::ffi::c_int != 0
-            && (*sgp).sg_set == 0 as ::core::ffi::c_int
+            && (*sgp).cleared as ::core::ffi::c_int != 0
+            && (*sgp).set == 0 as ::core::ffi::c_int
         {
             return false_0 != 0;
         }
         ns = ns_id;
         let mut attr: HlAttrs = syn_attr2entry(if ns_id == 0 as ::core::ffi::c_int {
-            (*sgp).sg_attr
+            (*sgp).attr
         } else {
-            ns_get_hl(&mut ns, hl_id, false_0 != 0, (*sgp).sg_set != 0)
+            ns_get_hl(&mut ns, hl_id, false_0 != 0, (*sgp).set != 0)
         });
         *hl = arena_dict(
             arena,
@@ -61,7 +60,7 @@ pub(crate) unsafe extern "C" fn hlgroup2dict(
         }
         if link > 0 as ::core::ffi::c_int {
             '_c2rust_label: {
-                if 1 as ::core::ffi::c_int <= link && link <= (*highlight_ga.ptr()).ga_len {
+                if 1 as ::core::ffi::c_int <= link && link <= highlight_num_groups() {
                 } else {
                     __assert_fail(
                         b"1 <= link && link <= highlight_ga.ga_len\0".as_ptr()
@@ -80,9 +79,10 @@ pub(crate) unsafe extern "C" fn hlgroup2dict(
                     type_0: kObjectTypeString,
                     data: C2Rust_Unnamed_0 {
                         string: cstr_as_string(
-                            (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                                .offset((link - 1 as ::core::ffi::c_int) as isize))
-                            .sg_name,
+                            (*(hl_table()).offset((link - 1 as ::core::ffi::c_int) as isize))
+                                .name
+                                .as_ptr()
+                                .cast_mut(),
                         ),
                     },
                 },
@@ -162,7 +162,7 @@ pub unsafe extern "C" fn ns_get_hl_defs(
             id = (*opts).id as ::core::ffi::c_int;
         }
         if id != -1 as ::core::ffi::c_int {
-            if !(1 as ::core::ffi::c_int <= id && id <= (*highlight_ga.ptr()).ga_len) {
+            if !(1 as ::core::ffi::c_int <= id && id <= highlight_num_groups()) {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
@@ -184,16 +184,16 @@ pub unsafe extern "C" fn ns_get_hl_defs(
                 return attrs_0;
             }
         } else if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-            rv = arena_dict(arena, (*highlight_ga.ptr()).ga_len as size_t);
+            rv = arena_dict(arena, highlight_num_groups() as size_t);
             let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-            while i <= (*highlight_ga.ptr()).ga_len {
+            while i <= highlight_num_groups() {
                 let mut attrs_1: Dict = ARRAY_DICT_INIT;
                 if hlgroup2dict(&raw mut attrs_1, ns_id, i, arena) {
                     let c2rust_fresh0 = rv.size;
                     rv.size = rv.size.wrapping_add(1);
                     *rv.items.offset(c2rust_fresh0 as isize) = key_value_pair {
                         key: cstr_as_string(
-                            (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(
+                            (*(hl_table()).offset(
                                 ((if link as ::core::ffi::c_int != 0 {
                                     i
                                 } else {
@@ -201,7 +201,9 @@ pub unsafe extern "C" fn ns_get_hl_defs(
                                 }) - 1 as ::core::ffi::c_int)
                                     as isize,
                             ))
-                            .sg_name,
+                            .name
+                            .as_ptr()
+                            .cast_mut(),
                         ),
                         value: object {
                             type_0: kObjectTypeDict,
@@ -223,18 +225,14 @@ pub unsafe extern "C" fn highlight_has_attr(
     modec: ::core::ffi::c_int,
 ) -> *const ::core::ffi::c_char {
     unsafe {
-        if id <= 0 as ::core::ffi::c_int || id > (*highlight_ga.ptr()).ga_len {
+        if id <= 0 as ::core::ffi::c_int || id > highlight_num_groups() {
             return ::core::ptr::null::<::core::ffi::c_char>();
         }
         let mut attr: ::core::ffi::c_int = 0;
         if modec == 'g' as ::core::ffi::c_int {
-            attr = (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                .offset((id - 1 as ::core::ffi::c_int) as isize))
-            .sg_gui;
+            attr = (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).gui;
         } else {
-            attr = (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                .offset((id - 1 as ::core::ffi::c_int) as isize))
-            .sg_cterm;
+            attr = (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).cterm;
         }
         if flag & HL_UNDERLINE_MASK != 0 {
             let mut ul: ::core::ffi::c_int = attr & HL_UNDERLINE_MASK;
@@ -263,7 +261,7 @@ pub unsafe extern "C" fn highlight_color(
         let mut fg: bool = false_0 != 0;
         let mut sp: bool = false_0 != 0;
         let mut font: bool = false_0 != 0;
-        if id <= 0 as ::core::ffi::c_int || id > (*highlight_ga.ptr()).ga_len {
+        if id <= 0 as ::core::ffi::c_int || id > highlight_num_groups() {
             return ::core::ptr::null::<::core::ffi::c_char>();
         }
         if (if (*what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
@@ -382,17 +380,14 @@ pub unsafe extern "C" fn highlight_color(
                 && ui_rgb_attached() as ::core::ffi::c_int != 0
             {
                 if fg {
-                    n = (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                        .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_fg as ::core::ffi::c_int;
+                    n = (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_fg
+                        as ::core::ffi::c_int;
                 } else if sp {
-                    n = (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                        .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_sp as ::core::ffi::c_int;
+                    n = (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_sp
+                        as ::core::ffi::c_int;
                 } else {
-                    n = (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                        .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_bg as ::core::ffi::c_int;
+                    n = (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_bg
+                        as ::core::ffi::c_int;
                 }
                 if n < 0 as ::core::ffi::c_int || n > 0xffffff as ::core::ffi::c_int {
                     return ::core::ptr::null::<::core::ffi::c_char>();
@@ -407,34 +402,25 @@ pub unsafe extern "C" fn highlight_color(
             }
             if fg {
                 return coloridx_to_name(
-                    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                        .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_fg_idx,
-                    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                        .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_fg as ::core::ffi::c_int,
+                    (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_fg_idx,
+                    (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_fg
+                        as ::core::ffi::c_int,
                     &mut *HEXBUF.ptr(),
                 )
                 .map_or(::core::ptr::null(), |s| s.as_ptr());
             } else if sp {
                 return coloridx_to_name(
-                    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                        .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_sp_idx,
-                    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                        .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_sp as ::core::ffi::c_int,
+                    (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_sp_idx,
+                    (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_sp
+                        as ::core::ffi::c_int,
                     &mut *HEXBUF.ptr(),
                 )
                 .map_or(::core::ptr::null(), |s| s.as_ptr());
             } else {
                 return coloridx_to_name(
-                    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                        .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_bg_idx,
-                    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                        .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_bg as ::core::ffi::c_int,
+                    (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_bg_idx,
+                    (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_bg
+                        as ::core::ffi::c_int,
                     &mut *HEXBUF.ptr(),
                 )
                 .map_or(::core::ptr::null(), |s| s.as_ptr());
@@ -445,14 +431,10 @@ pub unsafe extern "C" fn highlight_color(
         }
         if modec == 'c' as ::core::ffi::c_int {
             if fg {
-                n = (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                    .offset((id - 1 as ::core::ffi::c_int) as isize))
-                .sg_cterm_fg
+                n = (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).cterm_fg
                     - 1 as ::core::ffi::c_int;
             } else {
-                n = (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                    .offset((id - 1 as ::core::ffi::c_int) as isize))
-                .sg_cterm_bg
+                n = (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).cterm_bg
                     - 1 as ::core::ffi::c_int;
             }
             if n < 0 as ::core::ffi::c_int {

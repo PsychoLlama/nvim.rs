@@ -41,10 +41,11 @@ use crate::src::nvim::api::private::helpers::{arena_array, arena_dict, cstr_as_s
 use crate::src::nvim::api::ui::{remote_ui_hl_attr_define, remote_ui_hl_group_set};
 use crate::src::nvim::drawscreen::screen_invalidate_highlights;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight_group::hlf_names;
 use crate::src::nvim::highlight_group::{
     HLF_COUNT, highlight_attr_set_all, highlight_changed, syn_id2name,
 };
-use crate::src::nvim::main::{highlight_attr, highlight_attr_last, hlf_names};
+use crate::src::nvim::main::{highlight_attr, highlight_attr_last};
 use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::gettext;

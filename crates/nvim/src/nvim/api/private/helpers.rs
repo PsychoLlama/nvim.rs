@@ -378,24 +378,21 @@ pub(crate) fn get_default_stl_hl(
     use_winbar: bool,
     stc_hl_id: c_int,
 ) -> *const c_char {
-    // SAFETY: `syn_id2name` takes an id, not a pointer; `wp` is only
-    // compared, never followed.
-    unsafe {
-        if wp.is_null() {
-            c"TabLineFill".as_ptr()
-        } else if use_winbar {
-            if wp == curwin.get() {
-                c"WinBar".as_ptr()
-            } else {
-                c"WinBarNC".as_ptr()
-            }
-        } else if stc_hl_id > 0 {
-            syn_id2name(stc_hl_id)
-        } else if wp == curwin.get() {
-            c"StatusLine".as_ptr()
+    // `wp` is only compared, never followed.
+    if wp.is_null() {
+        c"TabLineFill".as_ptr()
+    } else if use_winbar {
+        if wp == curwin.get() {
+            c"WinBar".as_ptr()
         } else {
-            c"StatusLineNC".as_ptr()
+            c"WinBarNC".as_ptr()
         }
+    } else if stc_hl_id > 0 {
+        syn_id2name(stc_hl_id)
+    } else if wp == curwin.get() {
+        c"StatusLine".as_ptr()
+    } else {
+        c"StatusLineNC".as_ptr()
     }
 }
 

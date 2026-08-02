@@ -18,20 +18,19 @@ pub const LIST_INT: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 
 pub(crate) unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
     unsafe {
-        let mut sgp: *const HlGroup = ((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-            .offset((id - 1 as ::core::ffi::c_int) as isize);
+        let mut sgp: *const HlGroup = (hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize);
         let mut didh: bool = false_0 != 0;
-        if message_filtered((*sgp).sg_name) {
+        if message_filtered((*sgp).name.as_ptr().cast_mut()) {
             return;
         }
-        if (*sgp).sg_parent != 0 && (*sgp).sg_cleared as ::core::ffi::c_int != 0 {
+        if (*sgp).parent != 0 && (*sgp).cleared as ::core::ffi::c_int != 0 {
             return;
         }
         didh = highlight_list_arg(
             id,
             didh,
             LIST_ATTR,
-            (*sgp).sg_cterm,
+            (*sgp).cterm,
             ::core::ptr::null::<::core::ffi::c_char>(),
             b"cterm\0".as_ptr() as *const ::core::ffi::c_char,
         );
@@ -39,7 +38,7 @@ pub(crate) unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
             id,
             didh,
             LIST_INT,
-            (*sgp).sg_cterm_fg,
+            (*sgp).cterm_fg,
             ::core::ptr::null::<::core::ffi::c_char>(),
             b"ctermfg\0".as_ptr() as *const ::core::ffi::c_char,
         );
@@ -47,7 +46,7 @@ pub(crate) unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
             id,
             didh,
             LIST_INT,
-            (*sgp).sg_cterm_bg,
+            (*sgp).cterm_bg,
             ::core::ptr::null::<::core::ffi::c_char>(),
             b"ctermbg\0".as_ptr() as *const ::core::ffi::c_char,
         );
@@ -55,7 +54,7 @@ pub(crate) unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
             id,
             didh,
             LIST_ATTR,
-            (*sgp).sg_gui,
+            (*sgp).gui,
             ::core::ptr::null::<::core::ffi::c_char>(),
             b"gui\0".as_ptr() as *const ::core::ffi::c_char,
         );
@@ -66,8 +65,8 @@ pub(crate) unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
             LIST_STRING,
             0 as ::core::ffi::c_int,
             coloridx_to_name(
-                (*sgp).sg_rgb_fg_idx,
-                (*sgp).sg_rgb_fg as ::core::ffi::c_int,
+                (*sgp).rgb_fg_idx,
+                (*sgp).rgb_fg as ::core::ffi::c_int,
                 &mut hexbuf,
             )
             .map_or(::core::ptr::null(), |s| s.as_ptr()),
@@ -79,8 +78,8 @@ pub(crate) unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
             LIST_STRING,
             0 as ::core::ffi::c_int,
             coloridx_to_name(
-                (*sgp).sg_rgb_bg_idx,
-                (*sgp).sg_rgb_bg as ::core::ffi::c_int,
+                (*sgp).rgb_bg_idx,
+                (*sgp).rgb_bg as ::core::ffi::c_int,
                 &mut hexbuf,
             )
             .map_or(::core::ptr::null(), |s| s.as_ptr()),
@@ -92,8 +91,8 @@ pub(crate) unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
             LIST_STRING,
             0 as ::core::ffi::c_int,
             coloridx_to_name(
-                (*sgp).sg_rgb_sp_idx,
-                (*sgp).sg_rgb_sp as ::core::ffi::c_int,
+                (*sgp).rgb_sp_idx,
+                (*sgp).rgb_sp as ::core::ffi::c_int,
                 &mut hexbuf,
             )
             .map_or(::core::ptr::null(), |s| s.as_ptr()),
@@ -103,11 +102,11 @@ pub(crate) unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
             id,
             didh,
             LIST_INT,
-            (*sgp).sg_blend + 1 as ::core::ffi::c_int,
+            (*sgp).blend + 1 as ::core::ffi::c_int,
             ::core::ptr::null::<::core::ffi::c_char>(),
             b"blend\0".as_ptr() as *const ::core::ffi::c_char,
         );
-        if (*sgp).sg_link != 0 && !got_int.get() {
+        if (*sgp).link != 0 && !got_int.get() {
             syn_list_header(didh, 0 as ::core::ffi::c_int, id, true_0 != 0);
             didh = true_0 != 0;
             msg_puts_hl(
@@ -117,13 +116,13 @@ pub(crate) unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
             );
             msg_putchar(' ' as ::core::ffi::c_int);
             msg_outtrans(
-                (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(
-                    ((*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                        .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_link
+                (*(hl_table()).offset(
+                    ((*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).link
                         - 1 as ::core::ffi::c_int) as isize,
                 ))
-                .sg_name,
+                .name
+                .as_ptr()
+                .cast_mut(),
                 0 as ::core::ffi::c_int,
                 false_0 != 0,
             );
@@ -139,7 +138,7 @@ pub(crate) unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
             );
         }
         if p_verbose.get() > 0 as OptInt {
-            last_set_msg((*sgp).sg_script_ctx);
+            last_set_msg((*sgp).script_ctx);
         }
     }
 }
@@ -244,9 +243,10 @@ pub unsafe extern "C" fn syn_list_header(
                 return true_0 != 0;
             }
             name_col = msg_outtrans(
-                (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                    .offset((id - 1 as ::core::ffi::c_int) as isize))
-                .sg_name,
+                (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize))
+                    .name
+                    .as_ptr()
+                    .cast_mut(),
                 0 as ::core::ffi::c_int,
                 false_0 != 0,
             );
@@ -414,34 +414,35 @@ pub unsafe extern "C" fn get_highlight_name_ext(
             return ::core::ptr::null::<::core::ffi::c_char>();
         }
         if skip_cleared as ::core::ffi::c_int != 0
-            && idx < (*highlight_ga.ptr()).ga_len
-            && (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_cleared
-                as ::core::ffi::c_int
-                != 0
+            && idx < highlight_num_groups()
+            && (*(hl_table()).offset(idx as isize)).cleared as ::core::ffi::c_int != 0
         {
             return b"\0".as_ptr() as *const ::core::ffi::c_char;
         }
-        if idx == (*highlight_ga.ptr()).ga_len && include_none.get() != 0 as ::core::ffi::c_int {
+        if idx == highlight_num_groups() && include_none.get() != 0 as ::core::ffi::c_int {
             return b"none\0".as_ptr() as *const ::core::ffi::c_char;
-        } else if idx == (*highlight_ga.ptr()).ga_len + include_none.get()
+        } else if idx == highlight_num_groups() + include_none.get()
             && include_default.get() != 0 as ::core::ffi::c_int
         {
             return b"default\0".as_ptr() as *const ::core::ffi::c_char;
-        } else if idx == (*highlight_ga.ptr()).ga_len + include_none.get() + include_default.get()
+        } else if idx == highlight_num_groups() + include_none.get() + include_default.get()
             && include_link.get() != 0 as ::core::ffi::c_int
         {
             return b"link\0".as_ptr() as *const ::core::ffi::c_char;
         } else if idx
-            == (*highlight_ga.ptr()).ga_len
+            == highlight_num_groups()
                 + include_none.get()
                 + include_default.get()
                 + 1 as ::core::ffi::c_int
             && include_link.get() != 0 as ::core::ffi::c_int
         {
             return b"clear\0".as_ptr() as *const ::core::ffi::c_char;
-        } else if idx >= (*highlight_ga.ptr()).ga_len {
+        } else if idx >= highlight_num_groups() {
             return ::core::ptr::null::<::core::ffi::c_char>();
         }
-        return (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_name;
+        return (*(hl_table()).offset(idx as isize))
+            .name
+            .as_ptr()
+            .cast_mut();
     }
 }

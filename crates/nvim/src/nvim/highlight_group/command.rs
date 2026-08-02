@@ -19,15 +19,12 @@ pub(crate) unsafe extern "C" fn set_gui_color(
 ) -> bool {
     unsafe {
         if init as ::core::ffi::c_int != 0
-            && (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_set
-                & SG_GUI as ::core::ffi::c_int
-                != 0
+            && (*(hl_table()).offset(idx as isize)).set & SG_GUI as ::core::ffi::c_int != 0
         {
             return false_0 != 0;
         }
         if !init {
-            (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_set |=
-                SG_GUI as ::core::ffi::c_int;
+            (*(hl_table()).offset(idx as isize)).set |= SG_GUI as ::core::ffi::c_int;
         }
         let mut old_color: RgbValue = *color;
         let mut old_idx: ::core::ffi::c_int = *color_idx;
@@ -53,7 +50,7 @@ pub unsafe extern "C" fn do_highlight(
         if !init && ends_excmd(*line as uint8_t as ::core::ffi::c_int) != 0 {
             msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
             let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-            while i <= (*highlight_ga.ptr()).ga_len && !got_int.get() {
+            while i <= highlight_num_groups() && !got_int.get() {
                 highlight_list_one(i);
                 i += 1;
             }
@@ -149,30 +146,27 @@ pub unsafe extern "C" fn do_highlight(
                 to_id = syn_check_group(to_start, to_end.offset_from(to_start) as size_t);
             }
             if from_id > 0 as ::core::ffi::c_int {
-                hlgroup = ((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                    .offset((from_id - 1 as ::core::ffi::c_int) as isize);
+                hlgroup = (hl_table()).offset((from_id - 1 as ::core::ffi::c_int) as isize);
                 if dodefault as ::core::ffi::c_int != 0
                     && (forceit as ::core::ffi::c_int != 0
-                        || (*hlgroup).sg_deflink == 0 as ::core::ffi::c_int)
+                        || (*hlgroup).deflink == 0 as ::core::ffi::c_int)
                 {
-                    (*hlgroup).sg_deflink = to_id;
-                    (*hlgroup).sg_deflink_sctx = current_sctx.get();
-                    (*hlgroup).sg_deflink_sctx.sc_lnum += (*((*exestack.ptr()).ga_data
+                    (*hlgroup).deflink = to_id;
+                    (*hlgroup).deflink_sctx = current_sctx.get();
+                    (*hlgroup).deflink_sctx.sc_lnum += (*((*exestack.ptr()).ga_data
                         as *mut estack_T)
                         .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                     .es_lnum;
-                    nlua_set_sctx(&raw mut (*hlgroup).sg_deflink_sctx);
+                    nlua_set_sctx(&raw mut (*hlgroup).deflink_sctx);
                 }
             }
             if from_id > 0 as ::core::ffi::c_int
-                && (!init || (*hlgroup).sg_set == 0 as ::core::ffi::c_int)
+                && (!init || (*hlgroup).set == 0 as ::core::ffi::c_int)
             {
                 if to_id > 0 as ::core::ffi::c_int
                     && !forceit
                     && !init
-                    && hl_has_settings(from_id - 1 as ::core::ffi::c_int, dodefault)
-                        as ::core::ffi::c_int
-                        != 0
+                    && hl_has_settings(from_id, dodefault) as ::core::ffi::c_int != 0
                 {
                     if (*((*exestack.ptr()).ga_data as *mut estack_T)
                         .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
@@ -185,21 +179,21 @@ pub unsafe extern "C" fn do_highlight(
                                 as *const ::core::ffi::c_char,
                         ));
                     }
-                } else if (*hlgroup).sg_link != to_id
-                    || (*hlgroup).sg_script_ctx.sc_sid != (*current_sctx.ptr()).sc_sid
-                    || (*hlgroup).sg_cleared as ::core::ffi::c_int != 0
+                } else if (*hlgroup).link != to_id
+                    || (*hlgroup).script_ctx.sc_sid != (*current_sctx.ptr()).sc_sid
+                    || (*hlgroup).cleared as ::core::ffi::c_int != 0
                 {
                     if !init {
-                        (*hlgroup).sg_set |= SG_LINK as ::core::ffi::c_int;
+                        (*hlgroup).set |= SG_LINK as ::core::ffi::c_int;
                     }
-                    (*hlgroup).sg_link = to_id;
-                    (*hlgroup).sg_script_ctx = current_sctx.get();
-                    (*hlgroup).sg_script_ctx.sc_lnum += (*((*exestack.ptr()).ga_data
+                    (*hlgroup).link = to_id;
+                    (*hlgroup).script_ctx = current_sctx.get();
+                    (*hlgroup).script_ctx.sc_lnum += (*((*exestack.ptr()).ga_data
                         as *mut estack_T)
                         .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                     .es_lnum;
-                    nlua_set_sctx(&raw mut (*hlgroup).sg_script_ctx);
-                    (*hlgroup).sg_cleared = false_0 != 0;
+                    nlua_set_sctx(&raw mut (*hlgroup).script_ctx);
+                    (*hlgroup).cleared = false_0 != 0;
                     redraw_all_later(UPD_SOME_VALID);
                     need_highlight_changed.set(true_0 != 0);
                 }
@@ -216,8 +210,8 @@ pub unsafe extern "C" fn do_highlight(
                 );
                 restore_cterm_colors();
                 let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while j < (*highlight_ga.ptr()).ga_len {
-                    highlight_clear(j);
+                while j < highlight_num_groups() {
+                    highlight_clear(j + 1 as ::core::ffi::c_int);
                     j += 1;
                 }
                 init_highlight(true_0 != 0, true_0 != 0);
@@ -235,23 +229,25 @@ pub unsafe extern "C" fn do_highlight(
         }
         let mut idx: ::core::ffi::c_int = id_0 - 1 as ::core::ffi::c_int;
         if dodefault as ::core::ffi::c_int != 0
-            && hl_has_settings(idx, true_0 != 0) as ::core::ffi::c_int != 0
+            && hl_has_settings(idx + 1 as ::core::ffi::c_int, true_0 != 0) as ::core::ffi::c_int
+                != 0
         {
             return;
         }
-        let mut item_before: HlGroup =
-            *((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize);
+        let mut item_before: HlGroup = *(hl_table()).offset(idx as isize);
         let mut is_normal_group: bool = strcmp(
-            (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_name_u,
+            (*(hl_table()).offset(idx as isize))
+                .name_u
+                .as_ptr()
+                .cast_mut(),
             b"NORMAL\0".as_ptr() as *const ::core::ffi::c_char,
         ) == 0 as ::core::ffi::c_int;
         if doclear as ::core::ffi::c_int != 0
             || forceit as ::core::ffi::c_int != 0 && init as ::core::ffi::c_int != 0
         {
-            highlight_clear(idx);
+            highlight_clear(idx + 1 as ::core::ffi::c_int);
             if !doclear {
-                (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_set =
-                    0 as ::core::ffi::c_int;
+                (*(hl_table()).offset(idx as isize)).set = 0 as ::core::ffi::c_int;
             }
         }
         let mut did_change: bool = false_0 != 0;
@@ -300,18 +296,15 @@ pub unsafe extern "C" fn do_highlight(
                         ) == 0 as ::core::ffi::c_int
                         {
                             if !init
-                                || (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                                    .offset(idx as isize))
-                                .sg_set
+                                || (*(hl_table()).offset(idx as isize)).set
                                     == 0 as ::core::ffi::c_int
                             {
                                 if !init {
-                                    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                                        .offset(idx as isize))
-                                    .sg_set |= SG_CTERM as ::core::ffi::c_int
+                                    (*(hl_table()).offset(idx as isize)).set |= SG_CTERM
+                                        as ::core::ffi::c_int
                                         + SG_GUI as ::core::ffi::c_int;
                                 }
-                                highlight_clear(idx);
+                                highlight_clear(idx + 1 as ::core::ffi::c_int);
                             }
                         } else if *linep as ::core::ffi::c_int != '=' as ::core::ffi::c_int {
                             semsg(
@@ -460,50 +453,32 @@ pub unsafe extern "C" fn do_highlight(
                                             == 'C' as ::core::ffi::c_int
                                         {
                                             if !init
-                                                || (*((*highlight_ga.ptr()).ga_data
-                                                    as *mut HlGroup)
-                                                    .offset(idx as isize))
-                                                .sg_set
+                                                || (*(hl_table()).offset(idx as isize)).set
                                                     & SG_CTERM as ::core::ffi::c_int
                                                     == 0
                                             {
                                                 if !init {
-                                                    (*((*highlight_ga.ptr()).ga_data
-                                                        as *mut HlGroup)
-                                                        .offset(idx as isize))
-                                                    .sg_set |= SG_CTERM as ::core::ffi::c_int;
+                                                    (*(hl_table()).offset(idx as isize)).set |=
+                                                        SG_CTERM as ::core::ffi::c_int;
                                                 }
-                                                (*((*highlight_ga.ptr()).ga_data
-                                                    as *mut HlGroup)
-                                                    .offset(idx as isize))
-                                                .sg_cterm = attr;
-                                                (*((*highlight_ga.ptr()).ga_data
-                                                    as *mut HlGroup)
-                                                    .offset(idx as isize))
-                                                .sg_cterm_bold = false_0 != 0;
+                                                (*(hl_table()).offset(idx as isize)).cterm = attr;
+                                                (*(hl_table()).offset(idx as isize)).cterm_bold =
+                                                    false_0 != 0;
                                             }
                                         } else if *(&raw mut key as *mut ::core::ffi::c_char)
                                             as ::core::ffi::c_int
                                             == 'G' as ::core::ffi::c_int
                                         {
                                             if !init
-                                                || (*((*highlight_ga.ptr()).ga_data
-                                                    as *mut HlGroup)
-                                                    .offset(idx as isize))
-                                                .sg_set
+                                                || (*(hl_table()).offset(idx as isize)).set
                                                     & SG_GUI as ::core::ffi::c_int
                                                     == 0
                                             {
                                                 if !init {
-                                                    (*((*highlight_ga.ptr()).ga_data
-                                                        as *mut HlGroup)
-                                                        .offset(idx as isize))
-                                                    .sg_set |= SG_GUI as ::core::ffi::c_int;
+                                                    (*(hl_table()).offset(idx as isize)).set |=
+                                                        SG_GUI as ::core::ffi::c_int;
                                                 }
-                                                (*((*highlight_ga.ptr()).ga_data
-                                                    as *mut HlGroup)
-                                                    .offset(idx as isize))
-                                                .sg_gui = attr;
+                                                (*(hl_table()).offset(idx as isize)).gui = attr;
                                             }
                                         }
                                     } else if strcmp(
@@ -521,37 +496,26 @@ pub unsafe extern "C" fn do_highlight(
                                             ) == 0 as ::core::ffi::c_int
                                         {
                                             if !init
-                                                || (*((*highlight_ga.ptr()).ga_data
-                                                    as *mut HlGroup)
-                                                    .offset(idx as isize))
-                                                .sg_set
+                                                || (*(hl_table()).offset(idx as isize)).set
                                                     & SG_CTERM as ::core::ffi::c_int
                                                     == 0
                                             {
                                                 if !init {
-                                                    (*((*highlight_ga.ptr()).ga_data
-                                                        as *mut HlGroup)
-                                                        .offset(idx as isize))
-                                                    .sg_set |= SG_CTERM as ::core::ffi::c_int;
+                                                    (*(hl_table()).offset(idx as isize)).set |=
+                                                        SG_CTERM as ::core::ffi::c_int;
                                                 }
                                                 if key[5 as ::core::ffi::c_int as usize]
                                                     as ::core::ffi::c_int
                                                     == 'F' as ::core::ffi::c_int
-                                                    && (*((*highlight_ga.ptr()).ga_data
-                                                        as *mut HlGroup)
-                                                        .offset(idx as isize))
-                                                    .sg_cterm_bold
+                                                    && (*(hl_table()).offset(idx as isize))
+                                                        .cterm_bold
                                                         as ::core::ffi::c_int
                                                         != 0
                                                 {
-                                                    (*((*highlight_ga.ptr()).ga_data
-                                                        as *mut HlGroup)
-                                                        .offset(idx as isize))
-                                                    .sg_cterm &= !(HL_BOLD);
-                                                    (*((*highlight_ga.ptr()).ga_data
-                                                        as *mut HlGroup)
-                                                        .offset(idx as isize))
-                                                    .sg_cterm_bold = false_0 != 0;
+                                                    (*(hl_table()).offset(idx as isize)).cterm &=
+                                                        !(HL_BOLD);
+                                                    (*(hl_table()).offset(idx as isize))
+                                                        .cterm_bold = false_0 != 0;
                                                 }
                                                 let mut color: ::core::ffi::c_int = 0;
                                                 if ascii_isdigit(
@@ -628,21 +592,15 @@ pub unsafe extern "C" fn do_highlight(
                                                         if bold as ::core::ffi::c_int
                                                             == kTrue as ::core::ffi::c_int
                                                         {
-                                                            (*((*highlight_ga.ptr()).ga_data
-                                                                as *mut HlGroup)
-                                                                .offset(idx as isize))
-                                                            .sg_cterm |= HL_BOLD;
-                                                            (*((*highlight_ga.ptr()).ga_data
-                                                                as *mut HlGroup)
-                                                                .offset(idx as isize))
-                                                            .sg_cterm_bold = true_0 != 0;
+                                                            (*(hl_table()).offset(idx as isize))
+                                                                .cterm |= HL_BOLD;
+                                                            (*(hl_table()).offset(idx as isize))
+                                                                .cterm_bold = true_0 != 0;
                                                         } else if bold as ::core::ffi::c_int
                                                             == kFalse as ::core::ffi::c_int
                                                         {
-                                                            (*((*highlight_ga.ptr()).ga_data
-                                                                as *mut HlGroup)
-                                                                .offset(idx as isize))
-                                                            .sg_cterm &= !(HL_BOLD);
+                                                            (*(hl_table()).offset(idx as isize))
+                                                                .cterm &= !(HL_BOLD);
                                                         }
                                                     }
                                                 }
@@ -650,19 +608,15 @@ pub unsafe extern "C" fn do_highlight(
                                                     as ::core::ffi::c_int
                                                     == 'F' as ::core::ffi::c_int
                                                 {
-                                                    (*((*highlight_ga.ptr()).ga_data
-                                                        as *mut HlGroup)
-                                                        .offset(idx as isize))
-                                                    .sg_cterm_fg = color + 1 as ::core::ffi::c_int;
+                                                    (*(hl_table()).offset(idx as isize)).cterm_fg =
+                                                        color + 1 as ::core::ffi::c_int;
                                                     if is_normal_group {
                                                         cterm_normal_fg_color
                                                             .set(color + 1 as ::core::ffi::c_int);
                                                     }
                                                 } else {
-                                                    (*((*highlight_ga.ptr()).ga_data
-                                                        as *mut HlGroup)
-                                                        .offset(idx as isize))
-                                                    .sg_cterm_bg = color + 1 as ::core::ffi::c_int;
+                                                    (*(hl_table()).offset(idx as isize)).cterm_bg =
+                                                        color + 1 as ::core::ffi::c_int;
                                                     if is_normal_group {
                                                         cterm_normal_bg_color
                                                             .set(color + 1 as ::core::ffi::c_int);
@@ -734,21 +688,14 @@ pub unsafe extern "C" fn do_highlight(
                                                 idx,
                                                 init,
                                                 &raw mut arg as *mut ::core::ffi::c_char,
-                                                &raw mut (*((*highlight_ga.ptr()).ga_data
-                                                    as *mut HlGroup)
-                                                    .offset(idx as isize))
-                                                .sg_rgb_fg,
-                                                &raw mut (*((*highlight_ga.ptr()).ga_data
-                                                    as *mut HlGroup)
-                                                    .offset(idx as isize))
-                                                .sg_rgb_fg_idx,
+                                                &raw mut (*(hl_table()).offset(idx as isize))
+                                                    .rgb_fg,
+                                                &raw mut (*(hl_table()).offset(idx as isize))
+                                                    .rgb_fg_idx,
                                             );
                                             if is_normal_group {
                                                 normal_fg.set(
-                                                    (*((*highlight_ga.ptr()).ga_data
-                                                        as *mut HlGroup)
-                                                        .offset(idx as isize))
-                                                    .sg_rgb_fg,
+                                                    (*(hl_table()).offset(idx as isize)).rgb_fg,
                                                 );
                                             }
                                         } else if strcmp(
@@ -760,21 +707,14 @@ pub unsafe extern "C" fn do_highlight(
                                                 idx,
                                                 init,
                                                 &raw mut arg as *mut ::core::ffi::c_char,
-                                                &raw mut (*((*highlight_ga.ptr()).ga_data
-                                                    as *mut HlGroup)
-                                                    .offset(idx as isize))
-                                                .sg_rgb_bg,
-                                                &raw mut (*((*highlight_ga.ptr()).ga_data
-                                                    as *mut HlGroup)
-                                                    .offset(idx as isize))
-                                                .sg_rgb_bg_idx,
+                                                &raw mut (*(hl_table()).offset(idx as isize))
+                                                    .rgb_bg,
+                                                &raw mut (*(hl_table()).offset(idx as isize))
+                                                    .rgb_bg_idx,
                                             );
                                             if is_normal_group {
                                                 normal_bg.set(
-                                                    (*((*highlight_ga.ptr()).ga_data
-                                                        as *mut HlGroup)
-                                                        .offset(idx as isize))
-                                                    .sg_rgb_bg,
+                                                    (*(hl_table()).offset(idx as isize)).rgb_bg,
                                                 );
                                             }
                                         } else if strcmp(
@@ -786,21 +726,14 @@ pub unsafe extern "C" fn do_highlight(
                                                 idx,
                                                 init,
                                                 &raw mut arg as *mut ::core::ffi::c_char,
-                                                &raw mut (*((*highlight_ga.ptr()).ga_data
-                                                    as *mut HlGroup)
-                                                    .offset(idx as isize))
-                                                .sg_rgb_sp,
-                                                &raw mut (*((*highlight_ga.ptr()).ga_data
-                                                    as *mut HlGroup)
-                                                    .offset(idx as isize))
-                                                .sg_rgb_sp_idx,
+                                                &raw mut (*(hl_table()).offset(idx as isize))
+                                                    .rgb_sp,
+                                                &raw mut (*(hl_table()).offset(idx as isize))
+                                                    .rgb_sp_idx,
                                             );
                                             if is_normal_group {
                                                 normal_sp.set(
-                                                    (*((*highlight_ga.ptr()).ga_data
-                                                        as *mut HlGroup)
-                                                        .offset(idx as isize))
-                                                    .sg_rgb_sp,
+                                                    (*(hl_table()).offset(idx as isize)).rgb_sp,
                                                 );
                                             }
                                         } else if !(strcmp(
@@ -823,23 +756,20 @@ pub unsafe extern "C" fn do_highlight(
                                                         as *const ::core::ffi::c_char,
                                                 ) != 0 as ::core::ffi::c_int
                                                 {
-                                                    (*((*highlight_ga.ptr()).ga_data
-                                                        as *mut HlGroup)
-                                                        .offset(idx as isize))
-                                                    .sg_blend = strtol(
-                                                        &raw mut arg as *mut ::core::ffi::c_char,
-                                                        ::core::ptr::null_mut::<
-                                                            *mut ::core::ffi::c_char,
-                                                        >(
-                                                        ),
-                                                        10 as ::core::ffi::c_int,
-                                                    )
-                                                        as ::core::ffi::c_int;
+                                                    (*(hl_table()).offset(idx as isize)).blend =
+                                                        strtol(
+                                                            &raw mut arg
+                                                                as *mut ::core::ffi::c_char,
+                                                            ::core::ptr::null_mut::<
+                                                                *mut ::core::ffi::c_char,
+                                                            >(
+                                                            ),
+                                                            10 as ::core::ffi::c_int,
+                                                        )
+                                                            as ::core::ffi::c_int;
                                                 } else {
-                                                    (*((*highlight_ga.ptr()).ga_data
-                                                        as *mut HlGroup)
-                                                        .offset(idx as isize))
-                                                    .sg_blend = -1 as ::core::ffi::c_int;
+                                                    (*(hl_table()).offset(idx as isize)).blend =
+                                                        -1 as ::core::ffi::c_int;
                                                 }
                                             } else {
                                                 semsg(
@@ -854,19 +784,14 @@ pub unsafe extern "C" fn do_highlight(
                                             }
                                         }
                                     }
-                                    (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                                        .offset(idx as isize))
-                                    .sg_cleared = false_0 != 0;
+                                    (*(hl_table()).offset(idx as isize)).cleared = false_0 != 0;
                                     if !init
-                                        || (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                                            .offset(idx as isize))
-                                        .sg_set
+                                        || (*(hl_table()).offset(idx as isize)).set
                                             & SG_LINK as ::core::ffi::c_int
                                             == 0
                                     {
-                                        (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                                            .offset(idx as isize))
-                                        .sg_link = 0 as ::core::ffi::c_int;
+                                        (*(hl_table()).offset(idx as isize)).link =
+                                            0 as ::core::ffi::c_int;
                                     }
                                     linep = skipwhite(linep);
                                 }
@@ -887,23 +812,17 @@ pub unsafe extern "C" fn do_highlight(
             did_highlight_changed = true_0 != 0;
             redraw_all_later(UPD_NOT_VALID);
         } else {
-            set_hl_attr(idx);
+            set_hl_attr(idx + 1 as ::core::ffi::c_int);
         }
-        (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)).sg_script_ctx =
-            current_sctx.get();
-        (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize))
-            .sg_script_ctx
-            .sc_lnum += (*((*exestack.ptr()).ga_data as *mut estack_T)
+        (*(hl_table()).offset(idx as isize)).script_ctx = current_sctx.get();
+        (*(hl_table()).offset(idx as isize)).script_ctx.sc_lnum += (*((*exestack.ptr()).ga_data
+            as *mut estack_T)
             .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
         .es_lnum;
-        nlua_set_sctx(
-            &raw mut (*((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize))
-                .sg_script_ctx,
-        );
+        nlua_set_sctx(&raw mut (*(hl_table()).offset(idx as isize)).script_ctx);
         if (did_change as ::core::ffi::c_int != 0
             || memcmp(
-                ((*highlight_ga.ptr()).ga_data as *mut HlGroup).offset(idx as isize)
-                    as *const ::core::ffi::c_void,
+                (hl_table()).offset(idx as isize) as *const ::core::ffi::c_void,
                 &raw mut item_before as *const ::core::ffi::c_void,
                 ::core::mem::size_of::<HlGroup>(),
             ) != 0 as ::core::ffi::c_int)

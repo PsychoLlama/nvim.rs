@@ -4,7 +4,9 @@
 
 #![forbid(unsafe_code)]
 
-use core::ffi::c_int;
+use core::ffi::{c_char, c_int};
+
+use crate::src::nvim::global_cell::GlobalCell;
 
 /// Index into `highlight_attr[]`: the builtin UI highlight groups.
 ///
@@ -164,3 +166,87 @@ pub const HLF_OK: c_int = 74;
 pub const HLF_PRE: c_int = 75;
 /// One past the last group.
 pub const HLF_COUNT: c_int = 76;
+
+/// The group each `HLF_*` index names.
+///
+/// Index 0 (`HLF_NONE`) is a NULL, as upstream has it: the sentinel is not a
+/// group and the two readers that walk from 0 hand it straight to
+/// `cstr_as_string`, which answers an empty string for a NULL.
+pub static hlf_names: GlobalCell<[*const c_char; HLF_COUNT as usize]> = GlobalCell::new([
+    ::core::ptr::null::<c_char>(),
+    c"SpecialKey".as_ptr(),
+    c"EndOfBuffer".as_ptr(),
+    c"TermCursor".as_ptr(),
+    c"NonText".as_ptr(),
+    c"Directory".as_ptr(),
+    c"ErrorMsg".as_ptr(),
+    c"IncSearch".as_ptr(),
+    c"Search".as_ptr(),
+    c"CurSearch".as_ptr(),
+    c"MoreMsg".as_ptr(),
+    c"ModeMsg".as_ptr(),
+    c"LineNr".as_ptr(),
+    c"LineNrAbove".as_ptr(),
+    c"LineNrBelow".as_ptr(),
+    c"CursorLineNr".as_ptr(),
+    c"CursorLineSign".as_ptr(),
+    c"CursorLineFold".as_ptr(),
+    c"Question".as_ptr(),
+    c"StatusLine".as_ptr(),
+    c"StatusLineNC".as_ptr(),
+    c"WinSeparator".as_ptr(),
+    c"VertSplit".as_ptr(),
+    c"Title".as_ptr(),
+    c"Visual".as_ptr(),
+    c"VisualNC".as_ptr(),
+    c"WarningMsg".as_ptr(),
+    c"WildMenu".as_ptr(),
+    c"Folded".as_ptr(),
+    c"FoldColumn".as_ptr(),
+    c"DiffAdd".as_ptr(),
+    c"DiffChange".as_ptr(),
+    c"DiffDelete".as_ptr(),
+    c"DiffText".as_ptr(),
+    c"DiffTextAdd".as_ptr(),
+    c"SignColumn".as_ptr(),
+    c"Conceal".as_ptr(),
+    c"SpellBad".as_ptr(),
+    c"SpellCap".as_ptr(),
+    c"SpellRare".as_ptr(),
+    c"SpellLocal".as_ptr(),
+    c"Pmenu".as_ptr(),
+    c"PmenuSel".as_ptr(),
+    c"PmenuMatch".as_ptr(),
+    c"PmenuMatchSel".as_ptr(),
+    c"PmenuKind".as_ptr(),
+    c"PmenuKindSel".as_ptr(),
+    c"PmenuExtra".as_ptr(),
+    c"PmenuExtraSel".as_ptr(),
+    c"PmenuSbar".as_ptr(),
+    c"PmenuThumb".as_ptr(),
+    c"PmenuBorder".as_ptr(),
+    c"TabLine".as_ptr(),
+    c"TabLineSel".as_ptr(),
+    c"TabLineFill".as_ptr(),
+    c"CursorColumn".as_ptr(),
+    c"CursorLine".as_ptr(),
+    c"ColorColumn".as_ptr(),
+    c"QuickFixLine".as_ptr(),
+    c"Whitespace".as_ptr(),
+    c"NormalNC".as_ptr(),
+    c"MsgSeparator".as_ptr(),
+    c"NormalFloat".as_ptr(),
+    c"MsgArea".as_ptr(),
+    c"FloatBorder".as_ptr(),
+    c"WinBar".as_ptr(),
+    c"WinBarNC".as_ptr(),
+    c"Cursor".as_ptr(),
+    c"FloatTitle".as_ptr(),
+    c"FloatFooter".as_ptr(),
+    c"StatusLineTerm".as_ptr(),
+    c"StatusLineTermNC".as_ptr(),
+    c"StderrMsg".as_ptr(),
+    c"StdoutMsg".as_ptr(),
+    c"OkMsg".as_ptr(),
+    c"PreInsert".as_ptr(),
+]);

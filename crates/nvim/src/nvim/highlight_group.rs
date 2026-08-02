@@ -1,52 +1,51 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{CStr, c_int};
+
 use crate::src::nvim::api::private::helpers::{api_set_error, arena_dict, cstr_as_string};
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::src::nvim::charset::{skiptowhite, skipwhite, vim_isprintc, vim_strsize};
+use crate::src::nvim::charset::{skiptowhite, skipwhite, vim_strsize};
 use crate::src::nvim::cursor_shape::cursor_mode_uses_syn_id;
 use crate::src::nvim::decoration_provider::decor_provider_invalidate_hl;
 use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_all_later};
 use crate::src::nvim::eval::last_set_msg;
 use crate::src::nvim::eval::vars::do_unlet;
 use crate::src::nvim::ex_docmd::ends_excmd;
-use crate::src::nvim::garray::{ga_append_via_ptr, ga_grow, ga_set_growsize};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::{
     HL_ALTFONT, HL_BLINK, HL_BOLD, HL_CONCEALED, HL_DEFAULT, HL_DIM, HL_INVERSE, HL_ITALIC,
     HL_NOCOMBINE, HL_OVERLINE, HL_STANDOUT, HL_STRIKETHROUGH, HL_UNDERCURL, HL_UNDERDASHED,
-    HL_UNDERDOTTED, HL_UNDERDOUBLE, HL_UNDERLINE, HL_UNDERLINE_MASK, HLATTRS_INIT, hl_get_syn_attr,
+    HL_UNDERDOTTED, HL_UNDERDOUBLE, HL_UNDERLINE, HL_UNDERLINE_MASK, hl_get_syn_attr,
     hl_get_ui_attr, hlattrs2dict, ns_get_hl, syn_attr2entry,
 };
 use crate::src::nvim::lua::executor::nlua_set_sctx;
 use crate::src::nvim::main::{
-    Columns, clear_cmdline, cterm_normal_bg_color, cterm_normal_fg_color, current_sctx, curwin,
-    e_highlight_group_name_invalid_char, e_highlight_group_name_too_long, e_invarg2, got_int,
-    highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, hlf_names,
-    include_default, include_link, include_none, msg_col, msg_grid, msg_silent,
-    need_highlight_changed, normal_bg, normal_fg, normal_sp, p_bg, p_verbose, starting, t_colors,
-    updating_screen,
+    Columns, clear_cmdline, cterm_normal_bg_color, cterm_normal_fg_color, current_sctx, e_invarg2,
+    got_int, highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, include_default,
+    include_link, include_none, msg_col, msg_grid, msg_silent, need_highlight_changed, normal_bg,
+    normal_fg, normal_sp, p_bg, p_verbose, starting, t_colors, updating_screen,
 };
-use crate::src::nvim::map::{map_put_ref_cstr_t_int, mh_get_cstr_t};
-use crate::src::nvim::memory::{ARENA_EMPTY, arena_memdupz, xmemrchr, xstrlcat};
+use crate::src::nvim::memory::xstrlcat;
 use crate::src::nvim::message::{
     emsg, message_filtered, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_outtrans, msg_putchar,
-    msg_puts_hl, msg_source, semsg,
+    msg_puts_hl, semsg,
 };
 use crate::src::nvim::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
 use crate::src::nvim::options::kOptBackground;
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, atoi, gettext, memcmp, memcpy, memmove, memset, snprintf, strcasecmp,
-    strchr, strcmp, strlen, strncasecmp, strncmp, strtol,
+    __assert_fail, atoi, gettext, memcmp, memcpy, snprintf, strcasecmp, strchr, strcmp, strlen,
+    strncasecmp, strncmp, strtol,
 };
 use crate::src::nvim::os::time::os_delay;
 use crate::src::nvim::runtime::exestack;
-use crate::src::nvim::strings::{vim_memcpy_up, vim_strup};
+use crate::src::nvim::strings::vim_memcpy_up;
 use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::ui::{kUILinegrid, kUIMessages};
 use crate::src::nvim::types::{
     Arena, Boolean, Dict, Error, HlAttrs, Integer, KeyDict_get_highlight, KeyDict_highlight,
-    KeyValuePair, Map_cstr_t_int, MapHash, NS, Object, OptInt, OptVal, OptValData, OptValType,
-    RgbValue, Set_cstr_t, TriState, cstr_t, estack_T, expand_T, garray_T, int16_t, int32_t,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeNil, kObjectTypeString, key_value_pair, object,
-    object_data as C2Rust_Unnamed_0, sctx_T, size_t, uint8_t, uint32_t, uint64_t,
+    KeyValuePair, NS, Object, OptInt, OptVal, OptValData, OptValType, RgbValue, TriState, estack_T,
+    expand_T, int32_t, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeNil, kObjectTypeString,
+    key_value_pair, object, object_data as C2Rust_Unnamed_0, size_t, uint8_t, uint64_t,
 };
 use crate::src::nvim::ui::{
     ui_call_hl_group_set, ui_default_colors_set, ui_flush, ui_has, ui_mode_info_set, ui_refresh,
@@ -86,32 +85,6 @@ pub const EXPAND_NOTHING: C2Rust_Unnamed_17 = 0;
 pub const kOptValTypeString: OptValType = 2;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const MAX_HL_ID: C2Rust_Unnamed_20 = 20000;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct HlGroup {
-    pub sg_name: *mut ::core::ffi::c_char,
-    pub sg_name_u: *mut ::core::ffi::c_char,
-    pub sg_cleared: bool,
-    pub sg_attr: ::core::ffi::c_int,
-    pub sg_link: ::core::ffi::c_int,
-    pub sg_deflink: ::core::ffi::c_int,
-    pub sg_set: ::core::ffi::c_int,
-    pub sg_deflink_sctx: sctx_T,
-    pub sg_script_ctx: sctx_T,
-    pub sg_cterm: ::core::ffi::c_int,
-    pub sg_cterm_fg: ::core::ffi::c_int,
-    pub sg_cterm_bg: ::core::ffi::c_int,
-    pub sg_cterm_bold: bool,
-    pub sg_gui: ::core::ffi::c_int,
-    pub sg_rgb_fg: RgbValue,
-    pub sg_rgb_bg: RgbValue,
-    pub sg_rgb_sp: RgbValue,
-    pub sg_rgb_fg_idx: ::core::ffi::c_int,
-    pub sg_rgb_bg_idx: ::core::ffi::c_int,
-    pub sg_rgb_sp_idx: ::core::ffi::c_int,
-    pub sg_blend: ::core::ffi::c_int,
-    pub sg_parent: ::core::ffi::c_int,
-}
 pub const kColorIdxNone: C2Rust_Unnamed_24 = -1;
 pub const kColorIdxBg: C2Rust_Unnamed_24 = -4;
 pub const kColorIdxFg: C2Rust_Unnamed_24 = -3;
@@ -222,153 +195,139 @@ static e_missing_equal_sign_str_2: GlobalCell<[::core::ffi::c_char; 29]> =
 static e_missing_argument_str: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E417: Missing argument: %s\0")
 });
-unsafe extern "C" fn combine_stl_hlt(
-    mut id: ::core::ffi::c_int,
-    mut id_S: ::core::ffi::c_int,
-    mut id_alt: ::core::ffi::c_int,
-    mut hlcnt: ::core::ffi::c_int,
-    mut i: ::core::ffi::c_int,
-    mut hlf: ::core::ffi::c_int,
-    mut table: *mut ::core::ffi::c_int,
-) {
-    let hlt: *mut HlGroup = (*highlight_ga.ptr()).ga_data as *mut HlGroup;
-    if id_alt == 0 as ::core::ffi::c_int {
-        memset(
-            hlt.offset((hlcnt + i) as isize) as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            ::core::mem::size_of::<HlGroup>(),
-        );
-        (*hlt.offset((hlcnt + i) as isize)).sg_cterm = (*highlight_attr.ptr())[hlf as usize];
-        (*hlt.offset((hlcnt + i) as isize)).sg_gui = (*highlight_attr.ptr())[hlf as usize];
-    } else {
-        memmove(
-            hlt.offset((hlcnt + i) as isize) as *mut ::core::ffi::c_void,
-            hlt.offset((id_alt - 1 as ::core::ffi::c_int) as isize) as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<HlGroup>(),
-        );
-    }
-    (*hlt.offset((hlcnt + i) as isize)).sg_link = 0 as ::core::ffi::c_int;
-    (*hlt.offset((hlcnt + i) as isize)).sg_cterm ^=
-        (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_cterm
-            ^ (*hlt.offset((id_S - 1 as ::core::ffi::c_int) as isize)).sg_cterm;
-    if (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_cterm_fg
-        != (*hlt.offset((id_S - 1 as ::core::ffi::c_int) as isize)).sg_cterm_fg
-    {
-        (*hlt.offset((hlcnt + i) as isize)).sg_cterm_fg =
-            (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_cterm_fg;
-    }
-    if (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_cterm_bg
-        != (*hlt.offset((id_S - 1 as ::core::ffi::c_int) as isize)).sg_cterm_bg
-    {
-        (*hlt.offset((hlcnt + i) as isize)).sg_cterm_bg =
-            (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_cterm_bg;
-    }
-    (*hlt.offset((hlcnt + i) as isize)).sg_gui ^=
-        (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_gui
-            ^ (*hlt.offset((id_S - 1 as ::core::ffi::c_int) as isize)).sg_gui;
-    if (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_rgb_fg
-        != (*hlt.offset((id_S - 1 as ::core::ffi::c_int) as isize)).sg_rgb_fg
-    {
-        (*hlt.offset((hlcnt + i) as isize)).sg_rgb_fg =
-            (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_rgb_fg;
-    }
-    if (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_rgb_bg
-        != (*hlt.offset((id_S - 1 as ::core::ffi::c_int) as isize)).sg_rgb_bg
-    {
-        (*hlt.offset((hlcnt + i) as isize)).sg_rgb_bg =
-            (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_rgb_bg;
-    }
-    if (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_rgb_sp
-        != (*hlt.offset((id_S - 1 as ::core::ffi::c_int) as isize)).sg_rgb_sp
-    {
-        (*hlt.offset((hlcnt + i) as isize)).sg_rgb_sp =
-            (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_rgb_sp;
-    }
-    (*highlight_ga.ptr()).ga_len = hlcnt + i + 1 as ::core::ffi::c_int;
-    set_hl_attr(hlcnt + i);
-    *table.offset(i as isize) = syn_id2attr(hlcnt + i + 1 as ::core::ffi::c_int);
-}
-pub unsafe extern "C" fn highlight_changed() {
-    let mut userhl: [::core::ffi::c_char; 30] = [0; 30];
-    let mut id_S: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    let mut id_SNC: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    need_highlight_changed.set(false_0 != 0);
-    (*highlight_attr.ptr())[HLF_NONE as usize] = 0 as ::core::ffi::c_int;
-    let mut hlf: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    while hlf < HLF_COUNT {
-        let mut id: ::core::ffi::c_int = syn_check_group(
-            *(hlf_names.ptr() as *mut *const ::core::ffi::c_char).offset(hlf as isize),
-            strlen(*(hlf_names.ptr() as *mut *const ::core::ffi::c_char).offset(hlf as isize)),
-        );
-        if id == 0 as ::core::ffi::c_int {
-            abort();
-        }
-        let mut ns_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-        let mut final_id: ::core::ffi::c_int = id;
-        syn_ns_get_final_id(&raw mut ns_id, &raw mut final_id);
-        if hlf == HLF_SNC {
-            id_SNC = final_id;
-        } else if hlf == HLF_S {
-            id_S = final_id;
-        }
-        (*highlight_attr.ptr())[hlf as usize] =
-            hl_get_ui_attr(ns_id, hlf, final_id, hlf == HLF_INACTIVE);
-        if (*highlight_attr.ptr())[hlf as usize] != (*highlight_attr_last.ptr())[hlf as usize] {
-            if hlf == HLF_MSG {
-                clear_cmdline.set(true_0 != 0);
-                let mut attrs: HlAttrs = syn_attr2entry((*highlight_attr.ptr())[hlf as usize]);
-                (*msg_grid.ptr()).blending = attrs.hl_blend > -1 as int32_t;
+/// Applies the difference between `User{i+1}` and `StatusLine` to
+/// `StatusLineNC`, in scratch entry `hlcnt + i`, and answers the attribute
+/// id that combination resolves to.
+///
+/// `id` is the `User` group, `id_s` `StatusLine`, `id_alt` `StatusLineNC`.
+/// The scratch entry has to be a real group because `syn_id2attr` is asked
+/// for it — see [`highlight_changed`].
+///
+/// # Safety
+/// Reaches the attribute table; main thread only.
+unsafe fn combine_stl_hlt(
+    id: c_int,
+    id_s: c_int,
+    id_alt: c_int,
+    hlcnt: c_int,
+    i: c_int,
+    hlf: c_int,
+) -> c_int {
+    // SAFETY (whole body): the editor's own tables, on the main thread.
+    unsafe {
+        let scratch = hlcnt + i + 1;
+        let mut combined = if id_alt == 0 {
+            // No `StatusLineNC` of its own: start from the resolved attribute.
+            let attr = highlight_attr.with(|attrs| attrs[hlf as usize]);
+            HlGroup {
+                cterm: attr,
+                gui: attr,
+                ..HlGroup::ZEROED
             }
-            ui_call_hl_group_set(
-                cstr_as_string(
-                    *(hlf_names.ptr() as *mut *const ::core::ffi::c_char).offset(hlf as isize),
-                ),
-                (*highlight_attr.ptr())[hlf as usize] as Integer,
-            );
-            (*highlight_attr_last.ptr())[hlf as usize] = (*highlight_attr.ptr())[hlf as usize];
-        }
-        hlf += 1;
-    }
-    ga_grow(highlight_ga.ptr(), 10 as ::core::ffi::c_int);
-    let mut hlcnt: ::core::ffi::c_int = (*highlight_ga.ptr()).ga_len;
-    if id_S == -1 as ::core::ffi::c_int {
-        memset(
-            ((*highlight_ga.ptr()).ga_data as *mut HlGroup)
-                .offset((hlcnt + 9 as ::core::ffi::c_int) as isize)
-                as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            ::core::mem::size_of::<HlGroup>(),
-        );
-        id_S = hlcnt + 10 as ::core::ffi::c_int;
-    }
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < 9 as ::core::ffi::c_int {
-        snprintf(
-            &raw mut userhl as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 30]>(),
-            b"User%d\0".as_ptr() as *const ::core::ffi::c_char,
-            i + 1 as ::core::ffi::c_int,
-        );
-        let mut id_0: ::core::ffi::c_int = syn_name2id(&raw mut userhl as *mut ::core::ffi::c_char);
-        if id_0 == 0 as ::core::ffi::c_int {
-            (*highlight_user.ptr())[i as usize] = 0 as ::core::ffi::c_int;
-            (*highlight_stlnc.ptr())[i as usize] = 0 as ::core::ffi::c_int;
         } else {
-            (*highlight_user.ptr())[i as usize] = syn_id2attr(id_0);
-            combine_stl_hlt(
-                id_0,
-                id_S,
-                id_SNC,
-                hlcnt,
-                i,
-                HLF_SNC,
-                highlight_stlnc.ptr() as *mut ::core::ffi::c_int,
-            );
+            group(id_alt)
+        };
+        let user = group(id);
+        let stl = group(id_s);
+
+        combined.link = 0;
+        combined.cterm ^= user.cterm ^ stl.cterm;
+        if user.cterm_fg != stl.cterm_fg {
+            combined.cterm_fg = user.cterm_fg;
         }
-        i += 1;
+        if user.cterm_bg != stl.cterm_bg {
+            combined.cterm_bg = user.cterm_bg;
+        }
+        combined.gui ^= user.gui ^ stl.gui;
+        if user.rgb_fg != stl.rgb_fg {
+            combined.rgb_fg = user.rgb_fg;
+        }
+        if user.rgb_bg != stl.rgb_bg {
+            combined.rgb_bg = user.rgb_bg;
+        }
+        if user.rgb_sp != stl.rgb_sp {
+            combined.rgb_sp = user.rgb_sp;
+        }
+
+        with_group(scratch, |entry| *entry = combined);
+        set_hl_attr(scratch);
+        syn_id2attr(scratch)
     }
-    (*highlight_ga.ptr()).ga_len = hlcnt;
-    decor_provider_invalidate_hl();
 }
+
+/// Resolves every builtin group into `highlight_attr[]`, and sets up
+/// `User1`..`User9`.
+///
+/// Called when nvim starts and on the first redraw after any `:highlight`.
+///
+/// # Safety
+/// Adds groups, resolves attributes and emits UI events; main thread only.
+pub unsafe fn highlight_changed() {
+    // SAFETY (whole body): the editor's own tables and UI, on the main
+    // thread; `hlf_names` is static and NUL-terminated.
+    unsafe {
+        need_highlight_changed.set(false);
+
+        // Sentinel: used when no highlight is active.
+        highlight_attr.with_mut(|attrs| attrs[HLF_NONE as usize] = 0);
+
+        let mut id_s = -1;
+        let mut id_snc = 0;
+        for hlf in 1..HLF_COUNT {
+            let name = hlf_names.with(|names| names[hlf as usize]);
+            let id = syn_check_group(name, CStr::from_ptr(name).count_bytes() as size_t);
+            assert!(id != 0, "builtin highlight group {hlf} could not be added");
+
+            let mut ns_id = -1;
+            let mut final_id = id;
+            syn_ns_get_final_id(&mut ns_id, &mut final_id);
+            if hlf == HLF_SNC {
+                id_snc = final_id;
+            } else if hlf == HLF_S {
+                id_s = final_id;
+            }
+
+            let attr = hl_get_ui_attr(ns_id, hlf, final_id, hlf == HLF_INACTIVE);
+            highlight_attr.with_mut(|attrs| attrs[hlf as usize] = attr);
+            if attr == highlight_attr_last.with(|last| last[hlf as usize]) {
+                continue;
+            }
+            if hlf == HLF_MSG {
+                clear_cmdline.set(true);
+                (*msg_grid.ptr()).blending = syn_attr2entry(attr).hl_blend > -1;
+            }
+            ui_call_hl_group_set(cstr_as_string(name), Integer::from(attr));
+            highlight_attr_last.with_mut(|last| last[hlf as usize] = attr);
+        }
+
+        // Ten scratch entries, live at once in case the attribute table
+        // overflows while they are being built: nine for User1-User9 combined
+        // with StatusLineNC, one for the StatusLine default.
+        let hlcnt = highlight_num_groups();
+        open_scratch(hlcnt, 10);
+        if id_s == -1 {
+            // Make id_s always valid, using the last (all-zero) scratch entry.
+            id_s = hlcnt + 10;
+        }
+        for i in 0..9 {
+            let userhl = format!("User{}\0", i + 1);
+            let id = syn_name2id(userhl.as_ptr().cast());
+            let (user, stlnc) = if id == 0 {
+                (0, 0)
+            } else {
+                (
+                    syn_id2attr(id),
+                    combine_stl_hlt(id, id_s, id_snc, hlcnt, i, HLF_SNC),
+                )
+            };
+            highlight_user.with_mut(|table| table[i as usize] = user);
+            highlight_stlnc.with_mut(|table| table[i as usize] = stlnc);
+        }
+        close_scratch(hlcnt);
+
+        decor_provider_invalidate_hl();
+    }
+}
+
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
