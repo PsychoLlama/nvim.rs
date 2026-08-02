@@ -9,6 +9,19 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Rewrote the screen pipeline, covering the cell grid and its double-width
+  and combining-character handling, screen-line measurement (`virtcol()`,
+  `strdisplaywidth()`, `'linebreak'`, `'breakindent'`, `'vartabstop'`),
+  highlight attributes and the `:highlight` group table (colour names,
+  `nvim_set_hl`, namespaces, `'winblend'` and `'pumblend'`), decorations and
+  decoration providers (extmark highlights, virtual text and virtual lines),
+  signs and the `:sign` command, `matchadd()` and search highlighting, the
+  popup menu behind insert-mode completion and `:popup`, syntax highlighting
+  (`:syntax` in all its forms, clusters, regions, `:syntax sync`, conceal and
+  `:syntime`), the line drawer (the number, fold and sign columns,
+  `'statuscolumn'`, `'list'`, conceal, spelling, and diff and Visual
+  highlighting) and the screen updater (`:redraw`, the scroll optimisation,
+  window separators, `showmode()` and the message-area restore).
 - Rewrote searching and navigation, covering `/` and `?` with their search
   offsets, `n`, `*`, `#` and `gd`, `searchcount()` and the search-stat
   message, `%` and the `[`/`]` bracket motions, `:checkpath` and the
@@ -38,6 +51,12 @@ and this project adheres to [CalVer](https://calver.org/).
   autocommands, `b:term_title`, and OSC 52 clipboard writes), and the
   remote-UI protocol on both ends: `nvim_ui_attach` and its options, the
   serialisation of every UI event, and the `--remote-ui` client.
+
+### Fixed
+
+- A sign whose text is wider than two cells no longer overruns the buffer it
+  is stored in, whether it comes from `:sign define` or an extmark's
+  `sign_text`.
 
 ## [2026.07.30-4b9dee25d3]
 
