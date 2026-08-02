@@ -42,8 +42,8 @@ use crate::src::nvim::message::{
 use crate::src::nvim::optionstr::clear_string_option;
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, gettext, memcpy, memmove, memset, qsort, strcasecmp, strcmp, strcpy, strlen,
-    strncasecmp, strncmp, strpbrk,
+    gettext, memcpy, memmove, qsort, strcasecmp, strcmp, strcpy, strlen, strncasecmp, strncmp,
+    strpbrk,
 };
 use crate::src::nvim::path::path_is_absolute;
 use crate::src::nvim::pos::MAXLNUM;

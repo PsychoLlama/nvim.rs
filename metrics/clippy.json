@@ -139,7 +139,6 @@
     "crates/nvim/src/nvim/strings.rs": 94,
     "crates/nvim/src/nvim/syntax.rs": 20,
     "crates/nvim/src/nvim/syntax/command.rs": 65,
-    "crates/nvim/src/nvim/syntax/define.rs": 19,
     "crates/nvim/src/nvim/syntax/list.rs": 49,
     "crates/nvim/src/nvim/syntax/options.rs": 1,
     "crates/nvim/src/nvim/syntax/query.rs": 23,

@@ -278,7 +278,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_i
 
                 // Pass 2: an entry per keyword.
                 if (*eap).skip == 0 {
-                    syn_incl_toplevel(syn_id, &raw mut opt.flags);
+                    syn_incl_toplevel(syn_id, &mut opt.flags);
                     let def = KeywordDef {
                         id: syn_id,
                         flags: opt.flags,

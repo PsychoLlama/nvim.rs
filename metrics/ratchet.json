@@ -518,7 +518,7 @@
     "crates/nvim/src/nvim/syntax/attr.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/syntax/cluster.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/syntax/command.rs": {"unsafe": 40},
-    "crates/nvim/src/nvim/syntax/define.rs": {"unsafe": 6},
+    "crates/nvim/src/nvim/syntax/define.rs": {"unsafe": 14},
     "crates/nvim/src/nvim/syntax/endpos.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/syntax/items.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/syntax/keyword.rs": {"unsafe": 8},
