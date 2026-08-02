@@ -515,7 +515,7 @@
     "crates/nvim/src/nvim/statusline.rs": {"lines": 3332, "no_mangle": 1, "unsafe": 15},
     "crates/nvim/src/nvim/strings.rs": {"lines": 4007, "no_mangle": 1, "unsafe": 113, "variadic": 5},
     "crates/nvim/src/nvim/syntax.rs": {"unsafe": 11},
-    "crates/nvim/src/nvim/syntax/attr.rs": {"unsafe": 3},
+    "crates/nvim/src/nvim/syntax/attr.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/syntax/cluster.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/syntax/command.rs": {"unsafe": 40},
     "crates/nvim/src/nvim/syntax/define.rs": {"unsafe": 6},
