@@ -268,7 +268,7 @@ pub unsafe extern "C" fn win_line(
         color_cols: ::core::ptr::null_mut::<::core::ffi::c_int>(),
     };
     let buf: *mut buf_T = (*wp).w_buffer;
-    let mut scratch = LineScratch::new();
+    let mut nextline: SpellLookahead = [0; SPWORDLEN as usize * 2];
     let LineSetup {
         view_width,
         view_height,
@@ -281,6 +281,7 @@ pub unsafe extern "C" fn win_line(
         bg_attr,
         conceal_attr,
         may_have_inline_virt,
+        has_terminal,
         mut line,
         mut ptr,
         trailcol,
@@ -317,7 +318,27 @@ pub unsafe extern "C" fn win_line(
         mut spell_attr,
         mut word_end,
         cur_checked_col,
-    } = prepare_line(&mut wlv, wp, endrow, col_rows, concealed, spv, &mut scratch);
+    } = prepare_line(
+        &mut wlv,
+        wp,
+        endrow,
+        col_rows,
+        concealed,
+        spv,
+        &mut nextline,
+    );
+    // Zeroed here rather than in the setup half so that it is zeroed only
+    // for a `:terminal` buffer; see `LineSetup::has_terminal`.
+    let mut term_attrs: [::core::ffi::c_int; TERM_ATTRS_MAX as usize] =
+        [0; TERM_ATTRS_MAX as usize];
+    if has_terminal {
+        terminal_get_line_attributes(
+            (*(*wp).w_buffer).terminal,
+            wp,
+            lnum,
+            term_attrs.as_mut_ptr(),
+        );
+    }
     statuscol.sattrs = &raw mut wlv.sign_attrs as *mut SignTextAttrs;
     let mut lcs_eol_todo: bool = true_0 != 0;
     let mut draw_cols: bool = true_0 != 0;
@@ -1084,7 +1105,7 @@ pub unsafe extern "C" fn win_line(
                                 v1 -= mb_l - 1 as ::core::ffi::c_int;
                                 if prev_ptr_0.offset_from(line) - nextlinecol as isize >= 0 as isize
                                 {
-                                    p = (scratch.nextline.as_mut_ptr()).offset(
+                                    p = (nextline.as_mut_ptr()).offset(
                                         (prev_ptr_0.offset_from(line) - nextlinecol as isize)
                                             as isize,
                                     );
@@ -1129,12 +1150,11 @@ pub unsafe extern "C" fn win_line(
                                 if spell_hlf_0 as ::core::ffi::c_uint
                                     == HLF_COUNT as ::core::ffi::c_uint
                                     && p != prev_ptr_0 as *mut ::core::ffi::c_char
-                                    && p.offset_from(scratch.nextline.as_mut_ptr()) + len_0 as isize
+                                    && p.offset_from(nextline.as_mut_ptr()) + len_0 as isize
                                         > nextline_idx as isize
                                 {
                                     (*spv).spv_checked_lnum = lnum + 1 as linenr_T;
-                                    (*spv).spv_checked_col = (p
-                                        .offset_from(scratch.nextline.as_mut_ptr())
+                                    (*spv).spv_checked_col = (p.offset_from(nextline.as_mut_ptr())
                                         + len_0 as isize
                                         - nextline_idx as isize)
                                         as ::core::ffi::c_int;
@@ -1146,13 +1166,12 @@ pub unsafe extern "C" fn win_line(
                                 }
                                 if (*spv).spv_cap_col > 0 as ::core::ffi::c_int {
                                     if p != prev_ptr_0 as *mut ::core::ffi::c_char
-                                        && p.offset_from(scratch.nextline.as_mut_ptr())
+                                        && p.offset_from(nextline.as_mut_ptr())
                                             + (*spv).spv_cap_col as isize
                                             >= nextline_idx as isize
                                     {
                                         (*spv).spv_capcol_lnum = lnum + 1 as linenr_T;
-                                        (*spv).spv_cap_col = (p
-                                            .offset_from(scratch.nextline.as_mut_ptr())
+                                        (*spv).spv_cap_col = (p.offset_from(nextline.as_mut_ptr())
                                             + (*spv).spv_cap_col as isize
                                             - nextline_idx as isize)
                                             as ::core::ffi::c_int;
@@ -1170,7 +1189,7 @@ pub unsafe extern "C" fn win_line(
                         if !(*(*wp).w_buffer).terminal.is_null() {
                             wlv.char_attr = hl_combine_attr(
                                 if wlv.vcol < TERM_ATTRS_MAX as ::core::ffi::c_int {
-                                    scratch.term_attrs[wlv.vcol as usize]
+                                    term_attrs[wlv.vcol as usize]
                                 } else {
                                     0 as ::core::ffi::c_int
                                 },
@@ -1847,10 +1866,7 @@ pub unsafe extern "C" fn win_line(
                             if !(*(*wp).w_buffer).terminal.is_null()
                                 && wlv.vcol < TERM_ATTRS_MAX as ::core::ffi::c_int
                             {
-                                col_attr = hl_combine_attr(
-                                    col_attr,
-                                    scratch.term_attrs[wlv.vcol as usize],
-                                );
+                                col_attr = hl_combine_attr(col_attr, term_attrs[wlv.vcol as usize]);
                             }
                             col_attr = hl_combine_attr(col_attr, wlv.line_attr);
                             *(*linebuf_attr.ptr()).offset(wlv.off as isize) = col_attr as sattr_T;

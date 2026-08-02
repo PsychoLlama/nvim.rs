@@ -37,7 +37,7 @@ pub(crate) unsafe fn prepare_line(
     col_rows: ::core::ffi::c_int,
     concealed: bool,
     spv: *mut spellvars_T,
-    scratch: &mut LineScratch,
+    nextline: &mut SpellLookahead,
 ) -> LineSetup {
     // SAFETY: the caller's window, spell state and line.
     unsafe {
@@ -80,7 +80,7 @@ pub(crate) unsafe fn prepare_line(
         s.line_attr_lowprio_save = wlv.line_attr_lowprio;
 
         if (*spv).spv_has_spell && col_rows == 0 && s.draw_text {
-            s.spell_line_start(wp, lnum, spv, scratch);
+            s.spell_line_start(wp, lnum, spv, nextline);
         }
 
         s.line = if s.draw_text {
@@ -155,13 +155,10 @@ pub(crate) unsafe fn prepare_line(
 
         wlv.start_line(wp);
 
+        // The `:terminal` attributes themselves are filled in by the caller:
+        // see [`LineSetup::has_terminal`].
         if !(*(*wp).w_buffer).terminal.is_null() {
-            terminal_get_line_attributes(
-                (*(*wp).w_buffer).terminal,
-                wp,
-                lnum,
-                scratch.term_attrs.as_mut_ptr(),
-            );
+            s.has_terminal = true;
             s.extra_check = true;
         }
         s.may_have_inline_virt =
@@ -198,6 +195,7 @@ impl LineSetup {
                 start_vcol: 0,
                 bg_attr: 0,
                 may_have_inline_virt: false,
+                has_terminal: false,
 
                 line: ::core::ptr::null_mut(),
                 ptr: ::core::ptr::null_mut(),
@@ -584,7 +582,7 @@ impl LineSetup {
         wp: *mut win_T,
         lnum: linenr_T,
         spv: *mut spellvars_T,
-        scratch: &mut LineScratch,
+        nextline: &mut SpellLookahead,
     ) {
         // SAFETY: the caller's window and spell state.
         unsafe {
@@ -607,14 +605,10 @@ impl LineSetup {
 
             // Trick: `spell_cat_line` skips a few characters for C/shell/Vim
             // comment leaders.
-            scratch.nextline[SPELL_LOOKAHEAD] = 0;
+            nextline[SPELL_LOOKAHEAD] = 0;
             if lnum < (*(*wp).w_buffer).b_ml.ml_line_count {
                 let next = ml_get_buf((*wp).w_buffer, lnum + 1);
-                spell_cat_line(
-                    scratch.nextline.as_mut_ptr().add(SPELL_LOOKAHEAD),
-                    next,
-                    SPWORDLEN,
-                );
+                spell_cat_line(nextline.as_mut_ptr().add(SPELL_LOOKAHEAD), next, SPWORDLEN);
             }
             let line = ml_get_buf((*wp).w_buffer, lnum);
 
@@ -628,7 +622,7 @@ impl LineSetup {
                 (*spv).spv_cap_col = first.offset_from(line) as ::core::ffi::c_int;
             }
 
-            if scratch.nextline[SPELL_LOOKAHEAD] == 0 {
+            if nextline[SPELL_LOOKAHEAD] == 0 {
                 // No next line, or it is empty.
                 self.nextlinecol = MAXCOL as ::core::ffi::c_int;
                 self.nextline_idx = 0;
@@ -638,14 +632,12 @@ impl LineSetup {
             if line_len < SPELL_LOOKAHEAD {
                 // Short line: use all of it, then move the next line's start
                 // up against it.
-                let tail = scratch.nextline[SPELL_LOOKAHEAD..]
+                let tail = nextline[SPELL_LOOKAHEAD..]
                     .iter()
                     .position(|&c| c == 0)
                     .unwrap_or(SPELL_LOOKAHEAD - 1);
-                ::core::ptr::copy_nonoverlapping(line, scratch.nextline.as_mut_ptr(), line_len);
-                scratch
-                    .nextline
-                    .copy_within(SPELL_LOOKAHEAD..SPELL_LOOKAHEAD + tail + 1, line_len);
+                ::core::ptr::copy_nonoverlapping(line, nextline.as_mut_ptr(), line_len);
+                nextline.copy_within(SPELL_LOOKAHEAD..SPELL_LOOKAHEAD + tail + 1, line_len);
                 self.nextlinecol = 0;
                 self.nextline_idx = line_len as ::core::ffi::c_int + 1;
             } else {
@@ -653,7 +645,7 @@ impl LineSetup {
                 self.nextlinecol = (line_len - SPELL_LOOKAHEAD) as ::core::ffi::c_int;
                 ::core::ptr::copy_nonoverlapping(
                     line.add(self.nextlinecol as usize),
-                    scratch.nextline.as_mut_ptr(),
+                    nextline.as_mut_ptr(),
                     SPELL_LOOKAHEAD,
                 );
                 self.nextline_idx = SPWORDLEN + 1;

@@ -89,7 +89,7 @@
     "crates/nvim/src/nvim/decoration_provider.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/diff.rs": {"lines": 5639, "unsafe": 81},
     "crates/nvim/src/nvim/digraph.rs": {"unsafe": 30},
-    "crates/nvim/src/nvim/drawline.rs": {"lines": 2412, "unsafe": 4},
+    "crates/nvim/src/nvim/drawline.rs": {"lines": 2428, "unsafe": 4},
     "crates/nvim/src/nvim/drawline/columns.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/drawline/prologue.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/drawline/state.rs": {"unsafe": 10},

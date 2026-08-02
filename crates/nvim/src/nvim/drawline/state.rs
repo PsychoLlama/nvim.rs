@@ -143,29 +143,13 @@ pub struct WinLineVars {
 /// How many bytes of the next line the spell checker joins on, as a `usize`.
 pub(crate) const SPELL_LOOKAHEAD: usize = SPWORDLEN as usize;
 
-/// Scratch the character loop reads back, too large to hand over by value.
+/// The tail of a line followed by the start of the next one, so that a word
+/// wrapping across the line break can be spell-checked whole.
 ///
-/// Lives in `win_line`'s frame; [`prepare_line`] fills what applies.
-pub(crate) struct LineScratch {
-    /// The tail of this line followed by the start of the next one, so a word
-    /// that wraps across the line break can be spell-checked whole. The next
-    /// line arrives at offset [`SPWORDLEN`] and the two halves are then joined
-    /// at [`LineSetup::nextline_idx`].
-    pub(crate) nextline: [::core::ffi::c_char; SPELL_LOOKAHEAD * 2],
-    /// `:terminal` highlighting, one attribute per screen column. Columns past
-    /// [`TERM_ATTRS_MAX`] are not highlighted at all.
-    pub(crate) term_attrs: [::core::ffi::c_int; TERM_ATTRS_MAX as usize],
-}
-
-impl LineScratch {
-    /// An unfilled scratch buffer.
-    pub(crate) const fn new() -> Self {
-        LineScratch {
-            nextline: [0; SPELL_LOOKAHEAD * 2],
-            term_attrs: [0; TERM_ATTRS_MAX as usize],
-        }
-    }
-}
+/// The next line arrives at offset [`SPWORDLEN`] and the two halves are then
+/// joined at [`LineSetup::nextline_idx`]. Lives in `win_line`'s frame — too
+/// large to hand over by value.
+pub(crate) type SpellLookahead = [::core::ffi::c_char; SPELL_LOOKAHEAD * 2];
 
 /// What the setup half tells the character loop.
 ///
@@ -200,6 +184,15 @@ pub(crate) struct LineSetup {
     /// The buffer has inline virtual text somewhere, so the loop has to ask
     /// for it per character.
     pub(crate) may_have_inline_virt: bool,
+    /// This is a `:terminal` buffer, so `win_line` has to fill its own
+    /// `term_attrs`.
+    ///
+    /// The 4 KiB array is deliberately NOT part of the setup's answer: left
+    /// to `win_line`, its zeroing sinks into this branch, and on every other
+    /// line — which is nearly all of them — it costs nothing. Filling it here
+    /// instead cost a 4 KiB `memset` per buffer line drawn, worth up to 8% of
+    /// a redraw.
+    pub(crate) has_terminal: bool,
 
     // -- the text ------------------------------------------------------------
     /// The buffer line, or the empty string when there is no text to draw.
