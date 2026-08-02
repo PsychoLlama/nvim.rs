@@ -989,12 +989,7 @@ pub unsafe extern "C" fn win_line(
                     }
                 };
                 if wp == cmdwin_win.get() {
-                    draw_col_fill(
-                        &raw mut wlv,
-                        cmdwin_type.get() as schar_T,
-                        1 as ::core::ffi::c_int,
-                        win_hl_attr(wp, HLF_AT),
-                    );
+                    wlv.draw_col_fill(cmdwin_type.get() as schar_T, 1, win_hl_attr(wp, HLF_AT));
                 }
                 if wlv.filler_todo > 0 as ::core::ffi::c_int {
                     let mut index: ::core::ffi::c_int =
@@ -1025,9 +1020,8 @@ pub unsafe extern "C" fn win_line(
                     if statuscol.draw {
                         let v_0: ::core::ffi::c_int =
                             ptr_0.offset_from(line_1) as ::core::ffi::c_int;
-                        draw_statuscol(
+                        wlv.draw_statuscol(
                             wp,
-                            &raw mut wlv,
                             wlv.row - startrow - wlv.filler_lines,
                             col_rows,
                             &raw mut statuscol,
@@ -1040,13 +1034,13 @@ pub unsafe extern "C" fn win_line(
                             ptr_0 = line_1.offset(v_0 as isize);
                         }
                     } else {
-                        draw_foldcolumn(wp, &raw mut wlv);
+                        wlv.draw_foldcolumn(wp);
                         let mut sign_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                         while sign_idx < (*wp).w_scwidth {
-                            draw_sign(false_0 != 0, wp, &raw mut wlv, sign_idx);
+                            wlv.draw_sign(false, wp, sign_idx);
                             sign_idx += 1;
                         }
-                        draw_lnum_col(wp, &raw mut wlv);
+                        wlv.draw_lnum_col(wp);
                     }
                 }
                 win_col_offset = wlv.off;
@@ -1087,11 +1081,11 @@ pub unsafe extern "C" fn win_line(
                     continue 's_5143;
                 } else {
                     if !(*wp).w_briopt_sbr {
-                        handle_breakindent(wp, &raw mut wlv);
+                        wlv.handle_breakindent(wp);
                     }
-                    handle_showbreak_and_filler(wp, &raw mut wlv);
+                    wlv.handle_showbreak_and_filler(wp);
                     if (*wp).w_briopt_sbr {
-                        handle_breakindent(wp, &raw mut wlv);
+                        wlv.handle_breakindent(wp);
                     }
                     wlv.col = wlv.off;
                     draw_cols = false_0 != 0;

@@ -2753,10 +2753,8 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                             wp,
                                             (*stcp).foldinfo,
                                             (*stcp).lnum,
-                                            0 as ::core::ffi::c_int,
                                             fdc,
                                             get_vim_var_nr(VV_VIRTNUM) < 0 as varnumber_T,
-                                            ::core::ptr::null_mut::<::core::ffi::c_int>(),
                                             &raw mut (*stcp).fold_vcol as *mut colnr_T,
                                             &raw mut fold_buf as *mut schar_T,
                                         );
