@@ -19,7 +19,7 @@ pub struct StlClickRecord {
     pub start: *const ::core::ffi::c_char,
 }
 pub type StlFlag = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 #[repr(C)]
 pub struct statuscol_T {
     pub width: ::core::ffi::c_int,

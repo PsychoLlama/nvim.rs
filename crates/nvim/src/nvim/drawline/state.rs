@@ -140,6 +140,158 @@ pub struct WinLineVars {
     pub color_cols: *mut ::core::ffi::c_int,
 }
 
+/// How many bytes of the next line the spell checker joins on, as a `usize`.
+pub(crate) const SPELL_LOOKAHEAD: usize = SPWORDLEN as usize;
+
+/// Scratch the character loop reads back, too large to hand over by value.
+///
+/// Lives in `win_line`'s frame; [`prepare_line`] fills what applies.
+pub(crate) struct LineScratch {
+    /// The tail of this line followed by the start of the next one, so a word
+    /// that wraps across the line break can be spell-checked whole. The next
+    /// line arrives at offset [`SPWORDLEN`] and the two halves are then joined
+    /// at [`LineSetup::nextline_idx`].
+    pub(crate) nextline: [::core::ffi::c_char; SPELL_LOOKAHEAD * 2],
+    /// `:terminal` highlighting, one attribute per screen column. Columns past
+    /// [`TERM_ATTRS_MAX`] are not highlighted at all.
+    pub(crate) term_attrs: [::core::ffi::c_int; TERM_ATTRS_MAX as usize],
+}
+
+impl LineScratch {
+    /// An unfilled scratch buffer.
+    pub(crate) const fn new() -> Self {
+        LineScratch {
+            nextline: [0; SPELL_LOOKAHEAD * 2],
+            term_attrs: [0; TERM_ATTRS_MAX as usize],
+        }
+    }
+}
+
+/// What the setup half tells the character loop.
+///
+/// [`WinLineVars`] carries the state the two halves *share* and that the
+/// column drawers also touch; this carries the rest — facts about the window
+/// and the line, and the highlighting sources found for it.
+pub(crate) struct LineSetup {
+    // -- the window and the line, decided once ------------------------------
+    /// `w_view_width` of the window being drawn.
+    pub(crate) view_width: ::core::ffi::c_int,
+    /// `w_view_height` of the window being drawn.
+    pub(crate) view_height: ::core::ffi::c_int,
+    /// This is the cursor's own line in the current window.
+    pub(crate) in_curline: bool,
+    /// The line is inside a closed fold.
+    pub(crate) has_fold: bool,
+    /// The closed fold has a `'foldtext'` to draw instead of the line.
+    pub(crate) has_foldtext: bool,
+    /// The line wraps rather than being cut off at the right edge.
+    pub(crate) is_wrapped: bool,
+    /// There is buffer text to draw: the line is not concealed and is not the
+    /// one-past-the-end line that exists only to carry filler.
+    pub(crate) draw_text: bool,
+    /// Virtual column the drawn part of the line starts at — `w_skipcol` on a
+    /// wrapped first row, `w_leftcol` without `'wrap'`, otherwise 0.
+    pub(crate) start_vcol: ::core::ffi::c_int,
+    /// The window's background attribute, applied to everything.
+    pub(crate) bg_attr: ::core::ffi::c_int,
+    /// `Conceal` attribute, looked up before anything else so that its id is
+    /// upstream's.
+    pub(crate) conceal_attr: ::core::ffi::c_int,
+    /// The buffer has inline virtual text somewhere, so the loop has to ask
+    /// for it per character.
+    pub(crate) may_have_inline_virt: bool,
+
+    // -- the text ------------------------------------------------------------
+    /// The buffer line, or the empty string when there is no text to draw.
+    /// Anything that can run Lua invalidates it, so it is re-fetched after.
+    pub(crate) line: *mut ::core::ffi::c_char,
+    /// Read cursor into [`LineSetup::line`], already advanced past whatever is
+    /// scrolled off to the left.
+    pub(crate) ptr: *mut ::core::ffi::c_char,
+    /// Byte index where the trailing whitespace `'listchars'` "trail" applies
+    /// to starts, or `MAXCOL` when it does not apply.
+    pub(crate) trailcol: colnr_T,
+    /// Byte index one past the leading whitespace, or 0 when "lead" does not
+    /// apply.
+    pub(crate) leadcol: colnr_T,
+    /// `'listchars'` "eol".
+    pub(crate) lcs_eol: schar_T,
+    /// `'listchars'` "prec", cleared by the loop once it has been drawn.
+    pub(crate) lcs_prec_todo: schar_T,
+    /// The skipped-over text ended inside a run of consecutive spaces.
+    pub(crate) in_multispace: bool,
+    /// How far into the `'listchars'` "multispace" pattern that run is.
+    pub(crate) multispace_pos: ::core::ffi::c_int,
+
+    // -- highlighting sources found for this line ---------------------------
+    /// Some whole-line or ranged highlighting applies, so the loop has to
+    /// recompute the attribute per cell.
+    pub(crate) area_highlighting: bool,
+    /// Something on this line needs the character loop's slow path.
+    pub(crate) extra_check: bool,
+    /// Syntax highlighting is running for this line.
+    pub(crate) has_syntax: bool,
+    /// Extmark decorations apply to this line.
+    pub(crate) has_decor: bool,
+    /// Attribute for the Visual or `'incsearch'` range.
+    pub(crate) vi_attr: ::core::ffi::c_int,
+    /// Attribute from `'hlsearch'`, `:match` or insert-mode completion.
+    pub(crate) search_attr: ::core::ffi::c_int,
+    /// [`LineSetup::search_attr`] came from `:match` rather than `'hlsearch'`.
+    pub(crate) search_attr_from_match: bool,
+    /// The cursor has to stay visible, so inverting skips over it.
+    pub(crate) noinvcur: bool,
+    /// Virtual column inverting resumes at after the skipped cursor, or `-2`.
+    pub(crate) fromcol_prev: ::core::ffi::c_int,
+    /// The line is between the two ends of the Visual selection.
+    pub(crate) lnum_in_visual_area: bool,
+    /// `'cursorlineopt'` is "screenline", so `'cursorline'` applies to the
+    /// cursor's screen row rather than to the whole buffer line.
+    pub(crate) cul_screenline: bool,
+    /// First virtual column of the cursor's screen row, for that mode.
+    pub(crate) left_curline_col: ::core::ffi::c_int,
+    /// One past its last virtual column.
+    pub(crate) right_curline_col: ::core::ffi::c_int,
+    /// [`WinLineVars::line_attr`] as the setup left it; the loop restores it
+    /// after a virtual line has borrowed the field.
+    pub(crate) line_attr_save: ::core::ffi::c_int,
+    /// [`WinLineVars::line_attr_lowprio`] likewise.
+    pub(crate) line_attr_lowprio_save: ::core::ffi::c_int,
+
+    // -- diff mode -----------------------------------------------------------
+    /// The changed byte ranges of this line, in diff mode.
+    pub(crate) line_changes: diffline_T,
+    /// Which of them the loop is at, or `-1` when there are none.
+    pub(crate) change_index: ::core::ffi::c_int,
+    /// First byte of the change the loop is at.
+    pub(crate) change_start: ::core::ffi::c_int,
+    /// Last byte of it.
+    pub(crate) change_end: ::core::ffi::c_int,
+
+    // -- columns and decorations ---------------------------------------------
+    /// `'statuscolumn'` request; `draw` is false when the option is empty.
+    pub(crate) statuscol: statuscol_T,
+    /// Virtual lines to draw above or below this buffer line.
+    pub(crate) virt_lines: VirtLines,
+    /// Decoration providers are being driven for this line.
+    pub(crate) check_decor_providers: bool,
+    /// Byte column their last answer covered up to; past it the loop asks for
+    /// the next chunk.
+    pub(crate) decor_provider_end_col: ::core::ffi::c_int,
+
+    // -- spell checking -------------------------------------------------------
+    /// Byte column [`LineScratch::nextline`] starts at, or `MAXCOL` when there
+    /// is no next line to join on.
+    pub(crate) nextlinecol: ::core::ffi::c_int,
+    /// Index in it where the next line begins.
+    pub(crate) nextline_idx: ::core::ffi::c_int,
+    /// Attribute for the badly spelled word being drawn.
+    pub(crate) spell_attr: ::core::ffi::c_int,
+    /// Byte after the last one [`LineSetup::spell_attr`] applies to.
+    pub(crate) word_end: ::core::ffi::c_int,
+    /// Byte column already checked, when a word wrapped from the line above.
+    pub(crate) cur_checked_col: ::core::ffi::c_int,
+}
 // ---------------------------------------------------------------------------
 // The line buffer
 // ---------------------------------------------------------------------------

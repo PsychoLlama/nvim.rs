@@ -4,7 +4,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 #[repr(C)]
 pub struct foldinfo_T {
     pub fi_lnum: linenr_T,

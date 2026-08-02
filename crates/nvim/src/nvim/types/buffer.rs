@@ -77,7 +77,7 @@ pub struct diffblock_S {
     pub has_changes: bool,
     pub df_changes: garray_T,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 #[repr(C)]
 pub struct diffline_S {
     pub changes: *mut diffline_change_T,
