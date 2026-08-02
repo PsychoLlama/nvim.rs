@@ -7,6 +7,8 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.08.02-af6bcec290]
+
 Ongoing migration of the transpiled code toward safe, idiomatic Rust.
 
 ### Changed
@@ -163,7 +165,8 @@ made to build and pass the functional, old, and unit suites, with the CalVer
 release pipeline in place. The starting point: ~1.21M lines of mostly `unsafe`
 Rust with no user-visible change from upstream.
 
-[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.07.30-4b9dee25d3...HEAD
+[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.08.02-af6bcec290...HEAD
+[2026.08.02-af6bcec290]: https://github.com/PsychoLlama/nvim.rs/compare/2026.07.30-4b9dee25d3...2026.08.02-af6bcec290
 [2026.07.30-4b9dee25d3]: https://github.com/PsychoLlama/nvim.rs/compare/2026.07.27-dd16441f3f...2026.07.30-4b9dee25d3
 [2026.07.27-dd16441f3f]: https://github.com/PsychoLlama/nvim.rs/compare/2026.07.26-d0c5cf2147...2026.07.27-dd16441f3f
 [2026.07.26-d0c5cf2147]: https://github.com/PsychoLlama/nvim.rs/compare/2026.07.23-95cd63254c...2026.07.26-d0c5cf2147
