@@ -38,28 +38,6 @@ impl WindowCorner {
     }
 }
 
-/// The screen row below window `wp`'s last one — `W_ENDROW`.
-///
-/// That is where its horizontal separator or status line goes.
-///
-/// # Safety
-/// `wp` must be a live window.
-unsafe fn win_endrow(wp: *const win_T) -> c_int {
-    // SAFETY: caller's promise.
-    unsafe { (*wp).w_winrow + (*wp).w_height }
-}
-
-/// The screen column right of window `wp`'s last one — `W_ENDCOL`.
-///
-/// That is where its vertical separator goes.
-///
-/// # Safety
-/// `wp` must be a live window.
-unsafe fn win_endcol(wp: *const win_T) -> c_int {
-    // SAFETY: caller's promise.
-    unsafe { (*wp).w_wincol + (*wp).w_width }
-}
-
 /// Recompute window `wp`'s sign-column width, and answer whether it changed.
 ///
 /// A changed width means the whole window has to be redrawn: every line's
