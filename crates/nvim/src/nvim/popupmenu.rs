@@ -32,7 +32,10 @@ use crate::src::nvim::highlight_group::{
 use crate::src::nvim::insexpand::{
     compl_match_curr_select, get_cot_flags, ins_compl_active, ins_compl_leader,
 };
-use crate::src::nvim::keycodes::{K_DOWN, K_UP};
+use crate::src::nvim::keycodes::{
+    K_DOWN, K_LEFTDRAG, K_LEFTMOUSE, K_LEFTMOUSE_NM, K_MOUSEDOWN, K_MOUSEMOVE, K_MOUSEUP,
+    K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_UP,
+};
 use crate::src::nvim::main::{
     Columns, RedrawingDisabled, Rows, State, cia_flags, cmdline_row, cmdline_win, cmdwin_type,
     curbuf, curtab, curwin, default_grid, e_menu_only_exists_in_another_mode, firstwin,
@@ -42,7 +45,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
 use crate::src::nvim::memory::{
-    ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xcalloc, xfree, xmalloc, xstrdup,
+    ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc,
 };
 use crate::src::nvim::menu::{execute_menu, get_menu_mode_flag, menu_find, menu_is_separator};
 use crate::src::nvim::message::emsg;
@@ -55,7 +58,7 @@ use crate::src::nvim::options::{
     kOptBufhidden, kOptBuflisted, kOptBuftype, kOptCotFlagFuzzy, kOptCotFlagPopup,
     kOptCotFlagPreview, kOptDiff, kOptSwapfile, opt_winborder_values,
 };
-use crate::src::nvim::os::libc::{gettext, memset, strchr, strlen};
+use crate::src::nvim::os::libc::{gettext, strchr, strlen};
 use crate::src::nvim::plines::plines_m_win;
 use crate::src::nvim::plines::win_linetabsize;
 use crate::src::nvim::state::MODE_CMDLINE;
@@ -65,10 +68,10 @@ use crate::src::nvim::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWil
 use crate::src::nvim::types::{
     AlignTextPos, Arena, Array, BoolVarValue, Buffer, CMD_index, Error, Float, FloatRelative,
     Integer, Object, OptInt, OptVal, OptValData, OptValType, String_0, TriState, VirtText,
-    VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, cmd_addr_T, cstack_T, dict_T, exarg_T,
-    float_T, handle_T, hlf_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeString, key_extra,
-    linenr_T, lpos_T, object, object_data as C2Rust_Unnamed_12, pumitem_T, sattr_T, schar_T,
-    size_t, tabpage_T, uint32_t, varnumber_T, vimmenu_T, win_T,
+    VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, cmd_addr_T, dict_T, exarg_T, float_T,
+    handle_T, hlf_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeString, linenr_T, lpos_T,
+    object, object_data as C2Rust_Unnamed_12, pumitem_T, sattr_T, schar_T, size_t, tabpage_T,
+    uint32_t, varnumber_T, vimmenu_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
@@ -119,15 +122,6 @@ pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const CPT_MENU: C2Rust_Unnamed_21 = 2;
 pub const CPT_KIND: C2Rust_Unnamed_21 = 1;
 pub const CPT_ABBR: C2Rust_Unnamed_21 = 0;
-pub const KE_MOUSEMOVE: key_extra = 100;
-pub const KE_MOUSEUP: key_extra = 76;
-pub const KE_MOUSEDOWN: key_extra = 75;
-pub const KE_LEFTMOUSE_NM: key_extra = 69;
-pub const KE_RIGHTRELEASE: key_extra = 52;
-pub const KE_RIGHTDRAG: key_extra = 51;
-pub const KE_RIGHTMOUSE: key_extra = 50;
-pub const KE_LEFTDRAG: key_extra = 45;
-pub const KE_LEFTMOUSE: key_extra = 44;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const OPT_LOCAL: C2Rust_Unnamed_22 = 2;
 #[derive(Copy, Clone)]

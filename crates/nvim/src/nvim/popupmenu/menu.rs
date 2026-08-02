@@ -4,310 +4,311 @@
 //! through the same grid the completion menu uses and dispatching the
 //! chosen entry. [`pum_select_mouse_pos`] maps a mouse position back to an
 //! item for both this loop and the completion menu.
+//!
+//! This menu owns its items, unlike the completion menu, whose array belongs
+//! to `insexpand`. They live in the two `Vec`s below for as long as the key
+//! loop runs; a mapping run from `vgetc` can call `pum_undisplay`, which is
+//! why the loop re-checks that the menu is still up on every key.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::CStr;
+use std::ffi::CString;
 
 #[allow(unused_imports)]
 use super::*;
 
-pub(crate) unsafe extern "C" fn pum_select_mouse_pos() {
+/// The width `:popup` asks for even when the entries are narrower.
+const PUM_POPUP_MIN_WIDTH: c_int = 20;
+
+/// Point `pum_selected` at the item under the mouse, or clear it.
+///
+/// Three cases: the mouse is over the menu's own grid (the row is the item,
+/// less the top border), it is over the grid the menu is anchored to (the row
+/// is an offset from `pum_row`), or it is somewhere else entirely.
+///
+/// # Safety
+/// The item array must be live and the placement settled.
+pub(crate) unsafe fn pum_select_mouse_pos() {
+    // SAFETY: `mouse_find_win_outer` writes through the three locals.
     unsafe {
-        let mut grid: ::core::ffi::c_int = mouse_grid.get();
-        let mut row: ::core::ffi::c_int = mouse_row.get();
-        let mut col: ::core::ffi::c_int = mouse_col.get();
-        if grid == 0 as ::core::ffi::c_int {
+        let mut grid = mouse_grid.get();
+        let mut row = mouse_row.get();
+        let mut col = mouse_col.get();
+
+        if grid == 0 {
             mouse_find_win_outer(&raw mut grid, &raw mut row, &raw mut col);
         }
+
         if grid == (*pum_grid.ptr()).handle {
-            let mut border_offset: ::core::ffi::c_int =
-                if pum_border_width() == 2 as ::core::ffi::c_int {
-                    1 as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                };
-            let mut item: ::core::ffi::c_int = row - border_offset;
-            pum_selected.set(
-                if item >= 0 as ::core::ffi::c_int && item < pum_height.get() {
-                    item
-                } else {
-                    -1 as ::core::ffi::c_int
-                },
-            );
+            // On the menu itself. A box border (width 2) takes the top row.
+            let border_offset = c_int::from(pum_border_width() == 2);
+            let item = row - border_offset;
+            pum_selected.set(if item >= 0 && item < pum_height.get() {
+                item
+            } else {
+                -1
+            });
             return;
         }
+
         if grid != pum_anchor_grid.get()
             || col < pum_left_col.get() - pum_win_col_offset.get()
             || col >= pum_right_col.get() - pum_win_col_offset.get()
         {
-            pum_selected.set(-1 as ::core::ffi::c_int);
+            pum_selected.set(-1);
             return;
         }
-        let mut idx: ::core::ffi::c_int = row - (pum_row.get() - pum_win_row_offset.get());
-        if idx < 0 as ::core::ffi::c_int || idx >= pum_height.get() {
-            pum_selected.set(-1 as ::core::ffi::c_int);
-        } else if *(*(*pum_array.ptr()).offset(idx as isize)).pum_text as ::core::ffi::c_int != NUL
-        {
+
+        let idx = row - (pum_row.get() - pum_win_row_offset.get());
+        if idx < 0 || idx >= pum_height.get() {
+            pum_selected.set(-1);
+        } else if *pum_items()[idx as usize].pum_text != 0 {
+            // A separator has empty text and cannot be selected; the
+            // selection stays where it was.
             pum_selected.set(idx);
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn pum_execute_menu(
-    mut menu: *mut vimmenu_T,
-    mut mode: ::core::ffi::c_int,
-) {
+/// Run the selected entry of `menu`.
+///
+/// The menu tree is walked in the same order `pum_show_popupmenu` numbered it
+/// in, so the n-th entry that is enabled in `mode` is the n-th row.
+///
+/// # Safety
+/// `menu` must be live.
+unsafe fn pum_execute_menu(menu: *mut vimmenu_T, mode: c_int) {
+    // SAFETY: the menu tree is the editor's own; `execute_menu` may redefine
+    // it, which is why the walk stops as soon as the entry is found.
     unsafe {
-        let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut ea: exarg_T = exarg_T {
-            arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            args: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-            arglens: ::core::ptr::null_mut::<size_t>(),
-            argc: 0,
-            nextcmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            cmdlinep: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-            cmdline_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            cmdidx: CMD_append,
-            argt: 0,
-            skip: 0,
-            forceit: 0,
-            addr_count: 0,
-            line1: 0,
-            line2: 0,
-            addr_type: ADDR_LINES,
-            flags: 0,
-            do_ecmd_cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            do_ecmd_lnum: 0,
-            append: 0,
-            usefilter: 0,
-            amount: 0,
-            regname: 0,
-            force_bin: 0,
-            read_edit: 0,
-            mkdir_p: 0,
-            force_ff: 0,
-            force_enc: 0,
-            bad_char: 0,
-            useridx: 0,
-            errmsg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ea_getline: None,
-            cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            cstack: ::core::ptr::null_mut::<cstack_T>(),
-        };
-        let mut mp: *mut vimmenu_T = (*menu).children;
+        let mut idx = 0;
+        let mut mp = (*menu).children;
         while !mp.is_null() {
-            if (*mp).modes & (*mp).enabled & mode != 0 && {
-                let c2rust_fresh7 = idx;
-                idx = idx + 1;
-                c2rust_fresh7 == pum_selected.get()
-            } {
-                memset(
-                    &raw mut ea as *mut ::core::ffi::c_void,
-                    0 as ::core::ffi::c_int,
-                    ::core::mem::size_of::<exarg_T>(),
-                );
-                execute_menu(&raw mut ea, mp, -1 as ::core::ffi::c_int);
-                break;
-            } else {
-                mp = (*mp).next;
-            }
-        }
-    }
-}
-
-pub unsafe extern "C" fn pum_show_popupmenu(mut menu: *mut vimmenu_T) {
-    unsafe {
-        pum_undisplay(true_0 != 0);
-        pum_size.set(0 as ::core::ffi::c_int);
-        let mut mode: ::core::ffi::c_int = get_menu_mode_flag();
-        let mut mp: *mut vimmenu_T = (*menu).children;
-        while !mp.is_null() {
-            if menu_is_separator((*mp).dname) as ::core::ffi::c_int != 0
-                || (*mp).modes & (*mp).enabled & mode != 0
-            {
-                (*pum_size.ptr()) += 1;
+            if (*mp).modes & (*mp).enabled & mode != 0 {
+                if idx == pum_selected.get() {
+                    let mut ea = exarg_T::default();
+                    execute_menu(&raw mut ea, mp, -1);
+                    return;
+                }
+                idx += 1;
             }
             mp = (*mp).next;
         }
-        if pum_size.get() <= 0 as ::core::ffi::c_int {
-            emsg(gettext(
-                &raw const e_menu_only_exists_in_another_mode as *const ::core::ffi::c_char,
-            ));
-            return;
-        }
-        let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut array: *mut pumitem_T = xcalloc(
-            pum_size.get() as size_t,
-            ::core::mem::size_of::<pumitem_T>(),
-        ) as *mut pumitem_T;
-        let mut mp_0: *mut vimmenu_T = (*menu).children;
-        while !mp_0.is_null() {
-            let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-            if menu_is_separator((*mp_0).dname) {
-                s = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-            } else if (*mp_0).modes & (*mp_0).enabled & mode != 0 {
-                s = (*mp_0).dname;
+    }
+}
+
+/// The entries `menu` shows in `mode`, as owned strings.
+///
+/// A separator is an entry with empty text: it takes a row and cannot be
+/// selected. The text is copied because a callback can redefine the menu
+/// while the key loop below is running.
+///
+/// # Safety
+/// `menu` must be live.
+unsafe fn pum_menu_entries(menu: *mut vimmenu_T, mode: c_int) -> Vec<CString> {
+    // SAFETY: the menu tree is the editor's own and `dname` is
+    // NUL-terminated.
+    unsafe {
+        let mut entries = Vec::new();
+        let mut mp = (*menu).children;
+        while !mp.is_null() {
+            if menu_is_separator((*mp).dname) {
+                entries.push(CString::default());
+            } else if (*mp).modes & (*mp).enabled & mode != 0 {
+                entries.push(CStr::from_ptr((*mp).dname).to_owned());
             }
-            if !s.is_null() {
-                s = xstrdup(s);
-                let c2rust_fresh6 = idx;
-                idx = idx + 1;
-                let c2rust_lvalue_ptr = &raw mut (*array.offset(c2rust_fresh6 as isize)).pum_text;
-                *c2rust_lvalue_ptr = s;
-            }
-            mp_0 = (*mp_0).next;
+            mp = (*mp).next;
         }
-        pum_array.set(array);
-        pum_compute_size();
-        pum_scrollbar.set(0 as ::core::ffi::c_int);
-        pum_height.set(pum_size.get());
-        pum_rl.set((*curwin.get()).w_onebuf_opt.wo_rl != 0);
-        pum_position_at_mouse(20 as ::core::ffi::c_int);
-        pum_selected.set(-1 as ::core::ffi::c_int);
-        pum_first.set(0 as ::core::ffi::c_int);
-        if p_mousemev.get() == 0 {
-            ui_call_option_set(
-                String_0 {
-                    data: b"mousemoveevent\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    size: ::core::mem::size_of::<[::core::ffi::c_char; 15]>()
-                        .wrapping_sub(1 as size_t),
-                },
-                object {
-                    type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed_12 { boolean: true },
-                },
-            );
-        }
-        loop {
-            pum_is_visible.set(true_0 != 0);
-            pum_is_drawn.set(true_0 != 0);
-            (*pum_grid.ptr()).zindex = kZIndexCmdlinePopupMenu as ::core::ffi::c_int;
-            pum_redraw();
-            setcursor_mayforce(curwin.get(), true_0 != 0);
-            let mut c: ::core::ffi::c_int = vgetc();
-            if c == ESC || c == Ctrl_C || (*pum_array.ptr()).is_null() {
-                break;
-            }
-            if c == CAR || c == NL {
-                pum_execute_menu(menu, mode);
-                break;
-            } else if c == 'k' as ::core::ffi::c_int
-                || c == K_UP
-                || c == -(253 as ::core::ffi::c_int
-                    + ((KE_MOUSEUP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            {
-                while pum_selected.get() > 0 as ::core::ffi::c_int {
-                    (*pum_selected.ptr()) -= 1;
-                    if *(*array.offset(pum_selected.get() as isize)).pum_text as ::core::ffi::c_int
-                        != NUL
-                    {
+        entries
+    }
+}
+
+/// What one key of the `:popup` loop asked for.
+enum MenuStep {
+    /// Keep the menu up.
+    Continue,
+    /// Close it.
+    Close,
+    /// Run the selected entry, then close.
+    Execute,
+}
+
+/// Handle one key of the `:popup` loop.
+///
+/// # Safety
+/// The menu must be up; `items` must describe it.
+unsafe fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
+    // SAFETY: `pum_select_mouse_pos` reads the live placement.
+    unsafe {
+        match c {
+            ESC | Ctrl_C => MenuStep::Close,
+            CAR | NL => MenuStep::Execute,
+            _ if c == 'k' as c_int || c == K_UP || c == K_MOUSEUP => {
+                // Previous selectable item; separators are skipped over.
+                while pum_selected.get() > 0 {
+                    pum_selected.set(pum_selected.get() - 1);
+                    if !items[pum_selected.get() as usize].as_bytes().is_empty() {
                         break;
                     }
                 }
-            } else if c == 'j' as ::core::ffi::c_int
-                || c == K_DOWN
-                || c == -(253 as ::core::ffi::c_int
-                    + ((KE_MOUSEDOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            {
-                while pum_selected.get() < pum_size.get() - 1 as ::core::ffi::c_int {
-                    (*pum_selected.ptr()) += 1;
-                    if *(*array.offset(pum_selected.get() as isize)).pum_text as ::core::ffi::c_int
-                        != NUL
-                    {
+                MenuStep::Continue
+            }
+            _ if c == 'j' as c_int || c == K_DOWN || c == K_MOUSEDOWN => {
+                while pum_selected.get() < pum_size.get() - 1 {
+                    pum_selected.set(pum_selected.get() + 1);
+                    if !items[pum_selected.get() as usize].as_bytes().is_empty() {
                         break;
                     }
                 }
-            } else if c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_RIGHTMOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            {
+                MenuStep::Continue
+            }
+            _ if c == K_RIGHTMOUSE => {
+                // Reposition the menu: hand the click back to the caller.
                 vungetc(c);
-                break;
-            } else if c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_LEFTDRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-                || c == -(253 as ::core::ffi::c_int
-                    + ((KE_RIGHTDRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-                || c == -(253 as ::core::ffi::c_int
-                    + ((KE_MOUSEMOVE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            {
+                MenuStep::Close
+            }
+            _ if c == K_LEFTDRAG || c == K_RIGHTDRAG || c == K_MOUSEMOVE => {
                 pum_select_mouse_pos();
-            } else {
-                if !(c
-                    == -(253 as ::core::ffi::c_int
-                        + ((KE_LEFTMOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-                    || c == -(253 as ::core::ffi::c_int
-                        + ((KE_LEFTMOUSE_NM as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-                    || c == -(253 as ::core::ffi::c_int
-                        + ((KE_RIGHTRELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)))
-                {
-                    continue;
-                }
+                MenuStep::Continue
+            }
+            _ if c == K_LEFTMOUSE || c == K_LEFTMOUSE_NM || c == K_RIGHTRELEASE => {
+                // A left click always closes; a right release only closes
+                // when it landed on an item.
                 pum_select_mouse_pos();
-                if pum_selected.get() >= 0 as ::core::ffi::c_int {
-                    pum_execute_menu(menu, mode);
-                    break;
-                } else if c
-                    == -(253 as ::core::ffi::c_int
-                        + ((KE_LEFTMOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-                    || c == -(253 as ::core::ffi::c_int
-                        + ((KE_LEFTMOUSE_NM as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-                {
-                    break;
+                if pum_selected.get() >= 0 {
+                    MenuStep::Execute
+                } else if c == K_RIGHTRELEASE {
+                    MenuStep::Continue
+                } else {
+                    MenuStep::Close
                 }
             }
-        }
-        idx = 0 as ::core::ffi::c_int;
-        while idx < pum_size.get() {
-            xfree((*array.offset(idx as isize)).pum_text as *mut ::core::ffi::c_void);
-            idx += 1;
-        }
-        xfree(array as *mut ::core::ffi::c_void);
-        pum_undisplay(true_0 != 0);
-        if p_mousemev.get() == 0 {
-            ui_call_option_set(
-                String_0 {
-                    data: b"mousemoveevent\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    size: ::core::mem::size_of::<[::core::ffi::c_char; 15]>()
-                        .wrapping_sub(1 as size_t),
-                },
-                object {
-                    type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed_12 { boolean: false },
-                },
-            );
+            _ => MenuStep::Continue,
         }
     }
 }
 
-pub unsafe extern "C" fn pum_make_popup(
-    mut path_name: *const ::core::ffi::c_char,
-    mut use_mouse_pos: ::core::ffi::c_int,
-) {
+/// Show `menu` as a terminal popup and do not return until it is closed.
+///
+/// # Safety
+/// `menu` must be live. This pumps the event loop, so nothing may be held
+/// across it.
+pub unsafe fn pum_show_popupmenu(menu: *mut vimmenu_T) {
+    // SAFETY: `items` outlives `pum_array`, which is cleared by the
+    // `pum_undisplay` at the end.
     unsafe {
-        if use_mouse_pos == 0 {
-            mouse_row.set((*curwin.get()).w_grid.row_offset + (*curwin.get()).w_wrow);
-            mouse_col.set(
-                (*curwin.get()).w_grid.col_offset
-                    + (if (*curwin.get()).w_onebuf_opt.wo_rl != 0 {
-                        (*curwin.get()).w_view_width
-                            - (*curwin.get()).w_wcol
-                            - 1 as ::core::ffi::c_int
-                    } else {
-                        (*curwin.get()).w_wcol
-                    }),
-            );
-            if ui_has(kUIMultigrid) {
-                mouse_grid.set((*(*curwin.get()).w_grid.target).handle as ::core::ffi::c_int);
-            } else if (*curwin.get()).w_grid.target != default_grid.ptr() {
-                mouse_grid.set(0 as ::core::ffi::c_int);
-                (*mouse_row.ptr()) += (*curwin.get()).w_winrow;
-                (*mouse_col.ptr()) += (*curwin.get()).w_wincol;
+        pum_undisplay(true);
+        let mode = get_menu_mode_flag();
+        let entries = pum_menu_entries(menu, mode);
+
+        // "popup Edit" with only Terminal-mode entries lands here.
+        pum_size.set(entries.len() as c_int);
+        if entries.is_empty() {
+            emsg(gettext(
+                &raw const e_menu_only_exists_in_another_mode as *const c_char,
+            ));
+            return;
+        }
+
+        let mut array: Vec<pumitem_T> = entries
+            .iter()
+            .map(|text| pumitem_T {
+                pum_text: text.as_ptr().cast_mut(),
+                ..Default::default()
+            })
+            .collect();
+
+        pum_array.set(array.as_mut_ptr());
+        pum_compute_size();
+        pum_scrollbar.set(0);
+        pum_height.set(pum_size.get());
+        pum_rl.set((*curwin.get()).w_onebuf_opt.wo_rl != 0);
+        pum_position_at_mouse(PUM_POPUP_MIN_WIDTH);
+
+        pum_selected.set(-1);
+        pum_first.set(0);
+        if p_mousemev.get() == 0 {
+            // Pretend 'mousemoveevent' is set so the menu can follow the
+            // pointer, and put it back afterwards.
+            set_mousemoveevent(true);
+        }
+
+        loop {
+            pum_is_visible.set(true);
+            pum_is_drawn.set(true);
+            // Above the cmdline area: #23275.
+            (*pum_grid.ptr()).zindex = kZIndexCmdlinePopupMenu as c_int;
+            pum_redraw();
+            setcursor_mayforce(curwin.get(), true);
+
+            let c = vgetc();
+            // A callback or <expr> mapping run from `vgetc` may have taken
+            // the menu down under us.
+            if pum_array.get().is_null() {
+                break;
+            }
+            match pum_menu_key(c, &entries) {
+                MenuStep::Continue => {}
+                MenuStep::Close => break,
+                MenuStep::Execute => {
+                    pum_execute_menu(menu, mode);
+                    break;
+                }
             }
         }
-        let mut menu: *mut vimmenu_T = menu_find(path_name);
+
+        drop(array);
+        pum_undisplay(true);
+        if p_mousemev.get() == 0 {
+            set_mousemoveevent(false);
+        }
+    }
+}
+
+/// Tell the UI whether to send mouse-move events.
+fn set_mousemoveevent(on: bool) {
+    ui_call_option_set(
+        String_0 {
+            data: c"mousemoveevent".as_ptr().cast_mut(),
+            size: 14,
+        },
+        Object {
+            type_0: kObjectTypeBoolean,
+            data: C2Rust_Unnamed_12 { boolean: on },
+        },
+    );
+}
+
+/// `:popup` — show the menu at `path_name`, at the mouse or at the cursor.
+///
+/// # Safety
+/// `path_name` must be NUL-terminated. Pumps the event loop.
+pub unsafe fn pum_make_popup(path_name: *const c_char, use_mouse_pos: c_int) {
+    // SAFETY: `curwin` is live and `menu_find` answers a live menu or null.
+    unsafe {
+        if use_mouse_pos == 0 {
+            // Put the mouse where the cursor is, so the menu pops up there.
+            let win = curwin.get();
+            mouse_row.set((*win).w_grid.row_offset + (*win).w_wrow);
+            mouse_col.set(
+                (*win).w_grid.col_offset
+                    + if (*win).w_onebuf_opt.wo_rl != 0 {
+                        (*win).w_view_width - (*win).w_wcol - 1
+                    } else {
+                        (*win).w_wcol
+                    },
+            );
+            if ui_has(kUIMultigrid) {
+                mouse_grid.set((*(*win).w_grid.target).handle as c_int);
+            } else if (*win).w_grid.target != default_grid.ptr() {
+                mouse_grid.set(0);
+                mouse_row.set(mouse_row.get() + (*win).w_winrow);
+                mouse_col.set(mouse_col.get() + (*win).w_wincol);
+            }
+        }
+
+        let menu = menu_find(path_name);
         if !menu.is_null() {
             pum_show_popupmenu(menu);
         }
