@@ -31,10 +31,8 @@ pub(crate) unsafe extern "C" fn syn_incl_toplevel(
             *grp_list.offset(0 as ::core::ffi::c_int as isize) = id as int16_t;
             *grp_list.offset(1 as ::core::ffi::c_int as isize) = 0 as int16_t;
             syn_combine_list(
-                &raw mut (*((*(*curwin.get()).w_s).b_syn_clusters.ga_data as *mut syn_cluster_T)
-                    .offset(tlg_id as isize))
-                .scl_list,
-                &raw mut grp_list,
+                &mut (*cur_cluster(tlg_id)).scl_list,
+                &mut grp_list,
                 CLUSTER_ADD,
             );
         }

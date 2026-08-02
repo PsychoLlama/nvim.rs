@@ -138,7 +138,6 @@
     "crates/nvim/src/nvim/statusline.rs": 73,
     "crates/nvim/src/nvim/strings.rs": 94,
     "crates/nvim/src/nvim/syntax.rs": 20,
-    "crates/nvim/src/nvim/syntax/cluster.rs": 7,
     "crates/nvim/src/nvim/syntax/command.rs": 65,
     "crates/nvim/src/nvim/syntax/define.rs": 19,
     "crates/nvim/src/nvim/syntax/keyword.rs": 5,
