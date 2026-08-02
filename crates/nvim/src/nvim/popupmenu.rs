@@ -1,3 +1,5 @@
+use core::ffi::c_int;
+
 use crate::src::nvim::api::buffer::nvim_buf_set_lines;
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_array, arena_array, cstr_as_string, cstr_to_string,
@@ -175,6 +177,26 @@ static pum_is_visible: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static pum_is_drawn: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static pum_external: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static pum_invalid: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+
+/// The items the menu is showing, empty while it is down.
+///
+/// `pum_array` is borrowed from whoever called [`pum_display`] and is only
+/// read; the strings inside it are what the drawing code writes through (it
+/// NUL-terminates an item in place to measure a prefix, then puts the byte
+/// back), which is why a shared slice is honest here.
+///
+/// # Safety
+/// The result must not be held across `pum_undisplay`, which drops the
+/// caller's array.
+unsafe fn pum_items() -> &'static [pumitem_T] {
+    let array = pum_array.get();
+    if array.is_null() {
+        return &[];
+    }
+    // SAFETY: `pum_array` and `pum_size` are set together and the array
+    // outlives the menu.
+    unsafe { ::core::slice::from_raw_parts(array, pum_size.get() as usize) }
+}
 #[inline]
 unsafe extern "C" fn pum_border_width() -> ::core::ffi::c_int {
     if *p_pumborder.get() as ::core::ffi::c_int == NUL

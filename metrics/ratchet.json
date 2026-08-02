@@ -393,7 +393,7 @@
     "crates/nvim/src/nvim/plines.rs": {"unsafe": 20},
     "crates/nvim/src/nvim/plines/lines.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/plines/vcol.rs": {"unsafe": 4},
-    "crates/nvim/src/nvim/popupmenu.rs": {"unsafe": 13},
+    "crates/nvim/src/nvim/popupmenu.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/popupmenu/draw.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/popupmenu/layout.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/popupmenu/menu.rs": {"unsafe": 4},
