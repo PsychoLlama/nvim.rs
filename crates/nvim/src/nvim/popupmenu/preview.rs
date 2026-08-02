@@ -3,470 +3,556 @@
 //! [`pum_set_selected`] scrolls the menu to the new selection and, when
 //! `'completeopt'` asks for it, fills a preview window (a split, or a
 //! float under `popup`) with the item's `info` text.
+//!
+//! The float and the split are two different windows with two different
+//! lifetimes: the float is found or created by `winfloat`'s preview helpers
+//! and only hidden when it is not wanted, while the split is opened by
+//! `prepare_tagpreview` and edited into a scratch buffer. Both end up in
+//! [`pum_preview_set_text`].
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
 
-pub(crate) unsafe extern "C" fn pum_preview_set_text(
-    mut win: *mut win_T,
-    mut info: *mut ::core::ffi::c_char,
-    mut lnum: *mut linenr_T,
-    mut max_width: *mut ::core::ffi::c_int,
-) {
+/// How tall a preview split starts out.
+const PUM_PREVIEW_HEIGHT: c_int = 3;
+
+/// `BOOLEAN_OPTVAL`. There is no constructor for these in the port yet — the
+/// transpile spells the literal out at every call site, tree-wide.
+const fn bool_optval(value: bool) -> OptVal {
+    OptVal {
+        type_0: kOptValTypeBoolean,
+        data: OptValData {
+            boolean: if value { kTrue } else { kFalse },
+        },
+    }
+}
+
+/// `STATIC_CSTR_AS_OPTVAL`: an option value borrowed from a string literal.
+fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
+    OptVal {
+        type_0: kOptValTypeString,
+        data: OptValData {
+            string: String_0 {
+                data: value.as_ptr().cast_mut(),
+                size: value.count_bytes(),
+            },
+        },
+    }
+}
+
+/// The selected item's `info` text, if it has one.
+///
+/// Answers `None` for "nothing selected" as well; upstream reads
+/// `pum_array[pum_selected]` after testing only the lower bound, which is out
+/// of range whenever a caller passes an index past the end.
+///
+/// # Safety
+/// The item array must be the live one.
+unsafe fn pum_selected_info() -> Option<*mut c_char> {
+    // SAFETY: the array outlives the menu.
+    let selected = pum_selected.get();
+    let items = unsafe { pum_items() };
+    if selected < 0 || selected as usize >= items.len() {
+        return None;
+    }
+    let info = items[selected as usize].pum_info;
+    (!info.is_null()).then_some(info)
+}
+
+/// Fill `win`'s buffer with `info`, one buffer line per `\n`-separated line.
+///
+/// Answers the number of lines written and the widest of them in cells,
+/// which is what the caller sizes the window with. A trailing empty line is
+/// dropped; empty lines anywhere else are kept.
+///
+/// # Safety
+/// `win` must be live and `info` NUL-terminated. `info` is written through
+/// and restored, so it must be writable — the callers own it.
+unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (linenr_T, c_int) {
+    // SAFETY: the buffer is `win`'s own and `nvim_buf_set_lines` copies out of
+    // `replacement` before it is freed.
     unsafe {
-        let mut err: Error = Error {
-            type_0: kErrorTypeNone,
-            msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        };
-        let mut arena: Arena = ARENA_EMPTY;
-        let mut replacement: Array = ARRAY_DICT_INIT;
-        let mut buf: *mut buf_T = (*win).w_buffer;
-        (*buf).b_p_ma = true_0;
-        let mut curr: *mut ::core::ffi::c_char = info;
-        let mut next: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        let buf = (*win).w_buffer;
+        (*buf).b_p_ma = 1;
+
+        let mut lines: Vec<Object> = Vec::new();
+        let mut max_width = 0;
+        let mut curr = info;
         while !curr.is_null() {
-            next = strchr(curr, '\n' as ::core::ffi::c_int);
+            let next = strchr(curr, '\n' as c_int);
             if !next.is_null() {
-                *next = NUL as ::core::ffi::c_char;
+                // Terminate the line for `cstr_to_string` and the width
+                // measurement, then put the newline back.
+                *next = 0;
             }
-            if *curr as ::core::ffi::c_int == NUL && next.is_null() {
+            // An empty line is only dropped when it is the last one.
+            if *curr == 0 && next.is_null() {
                 break;
             }
-            let mut save_wrap: bool = (*win).w_onebuf_opt.wo_wrap != 0;
-            (*win).w_onebuf_opt.wo_wrap = false_0;
-            let mut line_width: ::core::ffi::c_int =
-                win_linetabsize(win, 0 as linenr_T, curr, MAXCOL as ::core::ffi::c_int);
-            (*win).w_onebuf_opt.wo_wrap = save_wrap as ::core::ffi::c_int;
-            *max_width = if *max_width > line_width {
-                *max_width
-            } else {
-                line_width
-            };
-            if replacement.size == replacement.capacity {
-                replacement.capacity = if replacement.capacity != 0 {
-                    replacement.capacity << 1 as ::core::ffi::c_int
-                } else {
-                    8 as size_t
-                };
-                replacement.items = xrealloc(
-                    replacement.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<Object>().wrapping_mul(replacement.capacity),
-                ) as *mut Object;
-            } else {
-            };
-            let c2rust_fresh5 = replacement.size;
-            replacement.size = replacement.size.wrapping_add(1);
-            *replacement.items.offset(c2rust_fresh5 as isize) = object {
+
+            // 'wrap' off while measuring: 'showbreak'/'linebreak' would
+            // inflate the answer in a narrow window.
+            let save_wrap = (*win).w_onebuf_opt.wo_wrap;
+            (*win).w_onebuf_opt.wo_wrap = 0;
+            max_width = max_width.max(win_linetabsize(win, 0, curr, MAXCOL as c_int));
+            (*win).w_onebuf_opt.wo_wrap = save_wrap;
+
+            lines.push(Object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed_12 {
                     string: cstr_to_string(curr),
                 },
-            };
-            *lnum += 1;
+            });
+
             if !next.is_null() {
-                *next = '\n' as ::core::ffi::c_char;
+                *next = b'\n' as c_char;
             }
-            curr = if !next.is_null() {
-                next.offset(1 as ::core::ffi::c_int as isize)
+            curr = if next.is_null() {
+                ::core::ptr::null_mut()
             } else {
-                ::core::ptr::null_mut::<::core::ffi::c_char>()
+                next.offset(1)
             };
         }
-        let mut original_textlock: ::core::ffi::c_int = textlock.get();
-        textlock.set(0 as ::core::ffi::c_int);
+
+        // Hand the lines over as an api `Array`, which `api_free_array` frees
+        // with `xfree` — so the buffer has to come from `xmalloc`, not `Vec`.
+        let mut replacement = ARRAY_DICT_INIT;
+        if !lines.is_empty() {
+            replacement.items =
+                xmalloc(size_of::<Object>().wrapping_mul(lines.len())).cast::<Object>();
+            ::core::ptr::copy_nonoverlapping(lines.as_ptr(), replacement.items, lines.len());
+            replacement.size = lines.len() as size_t;
+            replacement.capacity = replacement.size;
+        }
+        let lnum = lines.len() as linenr_T;
+
+        let mut err = Error {
+            type_0: kErrorTypeNone,
+            msg: ::core::ptr::null_mut(),
+        };
+        let mut arena = ARENA_EMPTY;
+        // Setting the lines is the editor's own doing, not a plugin's.
+        let original_textlock = textlock.replace(0);
         nvim_buf_set_lines(
-            0 as uint64_t,
+            0,
             (*buf).handle as Buffer,
-            0 as Integer,
-            -1 as Integer,
-            false_0 != 0,
+            0,
+            -1,
+            false,
             replacement,
             &raw mut arena,
             &raw mut err,
         );
         textlock.set(original_textlock);
-        if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+        if err.type_0 != kErrorTypeNone {
             emsg(err.msg);
             api_clear_error(&raw mut err);
         }
         arena_mem_free(arena_finish(&raw mut arena));
         api_free_array(replacement);
-        (*buf).b_p_ma = false_0;
+        (*buf).b_p_ma = 0;
+
+        (lnum, max_width)
     }
 }
 
-pub(crate) unsafe extern "C" fn pum_adjust_info_position(
-    mut wp: *mut win_T,
-    mut width: ::core::ffi::c_int,
-) -> bool {
+/// Place the floating info window beside the menu.
+///
+/// It goes to the right when the text fits there, otherwise to the left,
+/// otherwise on whichever side has more room. Answers false — with the
+/// window hidden — when neither side has enough space to be worth it.
+///
+/// # Safety
+/// `wp` must be a live float and the menu's placement settled.
+unsafe fn pum_adjust_info_position(wp: *mut win_T, width: c_int) -> bool {
+    // SAFETY: `wp` is live and `win_config_float` takes the config by value.
     unsafe {
-        let mut border_width: ::core::ffi::c_int = pum_border_width();
-        let mut col: ::core::ffi::c_int = pum_col.get()
-            + pum_width.get()
-            + 1 as ::core::ffi::c_int
-            + (if border_width > pum_scrollbar.get() {
-                border_width
-            } else {
-                pum_scrollbar.get()
-            });
-        let mut right_extra: ::core::ffi::c_int = Columns.get() - col;
-        let mut left_extra: ::core::ffi::c_int = pum_col.get() - 2 as ::core::ffi::c_int;
-        let mut max_extra: ::core::ffi::c_int = if right_extra > left_extra {
-            right_extra
-        } else {
-            left_extra
-        };
-        if max_extra < 10 as ::core::ffi::c_int {
-            (*wp).w_config.hide = true_0 != 0;
-            return false_0 != 0;
+        let border_width = pum_border_width();
+        let col = pum_col.get() + pum_width.get() + 1 + border_width.max(pum_scrollbar.get());
+        // TODO(glepnir): support config align border by using completepopup
+        // align menu
+        let right_extra = Columns.get() - col;
+        let left_extra = pum_col.get() - 2;
+
+        // TODO(glepnir): Replace the hardcoded value (10) with values from the
+        // 'completepopup' width/height options.
+        let max_extra = right_extra.max(left_extra);
+        if max_extra < 10 {
+            (*wp).w_config.hide = true;
+            return false;
         }
+
         if right_extra > width {
             (*wp).w_config.width = width;
-            (*wp).w_config.col = (col - 1 as ::core::ffi::c_int) as ::core::ffi::c_double;
+            (*wp).w_config.col = f64::from(col - 1);
         } else if left_extra > width {
             (*wp).w_config.width = width;
-            (*wp).w_config.col = (pum_col.get() - (*wp).w_config.width - 1 as ::core::ffi::c_int)
-                as ::core::ffi::c_double;
+            (*wp).w_config.col = f64::from(pum_col.get() - width - 1);
         } else {
-            let place_in_right: bool = right_extra > left_extra;
+            // Neither side fits the text; take the bigger one.
             (*wp).w_config.width = max_extra;
-            (*wp).w_config.col = (if place_in_right as ::core::ffi::c_int != 0 {
-                col - 1 as ::core::ffi::c_int
+            (*wp).w_config.col = f64::from(if right_extra > left_extra {
+                col - 1
             } else {
-                pum_col.get() - (*wp).w_config.width - 1 as ::core::ffi::c_int
-            }) as ::core::ffi::c_double;
+                pum_col.get() - max_extra - 1
+            });
         }
-        (*wp).w_config.anchor = 0 as ::core::ffi::c_int as FloatAnchor;
-        let mut count: linenr_T = (*(*wp).w_buffer).b_ml.ml_line_count;
+
+        (*wp).w_config.anchor = 0; // NW: align its top with the menu's top
+        let count = (*(*wp).w_buffer).b_ml.ml_line_count;
         (*wp).w_view_width = (*wp).w_config.width;
         (*wp).w_config.height = plines_m_win(wp, (*wp).w_topline, count, Rows.get());
-        (*wp).w_config.row = pum_row.get() as ::core::ffi::c_double;
-        (*wp).w_config.hide = false_0 != 0;
+        (*wp).w_config.row = f64::from(pum_row.get());
+        (*wp).w_config.hide = false;
         win_config_float(wp, (*wp).w_config);
-        return true_0 != 0;
+        true
     }
 }
 
-pub unsafe extern "C" fn pum_set_info(
-    mut selected: ::core::ffi::c_int,
-    mut info: *mut ::core::ffi::c_char,
-) -> *mut win_T {
+/// Set the info text of the current item, for `nvim__complete_set`.
+///
+/// Answers the info window, or null when the menu is down, the item is not
+/// the selected one, or there is no room for the window.
+///
+/// # Safety
+/// `info` must be a writable NUL-terminated string owned by the caller.
+pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> *mut win_T {
+    // SAFETY: the preview helpers answer live windows or null.
     unsafe {
         if !pum_is_visible.get() || !compl_match_curr_select(selected) {
-            return ::core::ptr::null_mut::<win_T>();
+            return ::core::ptr::null_mut();
         }
         block_autocmds();
-        (*RedrawingDisabled.ptr()) += 1;
-        (*no_u_sync.ptr()) += 1;
-        let mut wp: *mut win_T = win_float_find_preview();
+        RedrawingDisabled.set(RedrawingDisabled.get() + 1);
+        no_u_sync.set(no_u_sync.get() + 1);
+
+        let mut wp = win_float_find_preview();
         if wp.is_null() {
-            wp = win_float_create_preview(false_0 != 0, true_0 != 0);
+            wp = win_float_create_preview(false, true);
             if wp.is_null() {
-                return ::core::ptr::null_mut::<win_T>();
+                // NOTE: leaves autocmds blocked and the two counters raised,
+                // as upstream does.
+                return ::core::ptr::null_mut();
             }
-            (*wp).w_topline = 1 as ::core::ffi::c_int as linenr_T;
-            (*wp).w_onebuf_opt.wo_wfb = true_0;
+            (*wp).w_topline = 1;
+            (*wp).w_onebuf_opt.wo_wfb = 1;
         }
-        let mut lnum: linenr_T = 0 as linenr_T;
-        let mut max_info_width: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        pum_preview_set_text(wp, info, &raw mut lnum, &raw mut max_info_width);
-        (*no_u_sync.ptr()) -= 1;
-        (*RedrawingDisabled.ptr()) -= 1;
+
+        let (_lnum, max_info_width) = pum_preview_set_text(wp, info);
+        no_u_sync.set(no_u_sync.get() - 1);
+        RedrawingDisabled.set(RedrawingDisabled.get() - 1);
         redraw_later(wp, UPD_NOT_VALID);
+
         if !pum_adjust_info_position(wp, max_info_width) {
-            wp = ::core::ptr::null_mut::<win_T>();
+            wp = ::core::ptr::null_mut();
         }
         unblock_autocmds();
-        return wp;
+        wp
     }
 }
 
-pub(crate) unsafe extern "C" fn pum_set_selected(
-    mut n: ::core::ffi::c_int,
-    mut repeat: ::core::ffi::c_int,
+/// Scroll the menu so that `pum_selected` is visible, with context around it.
+///
+/// A jump of more than a few items is treated as a PageUp/PageDown and
+/// scrolls a whole page; a small step keeps three lines of context.
+fn pum_scroll_to_selected() {
+    let (selected, height, size) = (pum_selected.get(), pum_height.get(), pum_size.get());
+    let scroll_offset = selected - height;
+    let mut first = pum_first.get();
+
+    if first > selected - 4 {
+        // Scroll up towards the selection; a jump means a PageUp.
+        if first > selected - 2 {
+            first = (first - (height - 2)).max(0).min(selected);
+        } else {
+            first = selected;
+        }
+    } else if first < scroll_offset + 5 {
+        // Scroll down towards the selection; a jump means a PageDown.
+        if first < scroll_offset + 3 {
+            first = (first + height - 2).max(scroll_offset + 1);
+        } else {
+            first = scroll_offset + 1;
+        }
+    }
+
+    // A few lines of context around the selection, when the menu is tall
+    // enough for any to fit.
+    let context = (height / 2).min(3);
+    if height > 2 {
+        if first > selected - context {
+            first = (selected - context).max(0);
+        } else if first < selected + context - height + 1 {
+            first = selected + context - height + 1;
+        }
+    }
+
+    pum_first.set(first.min(size - height));
+}
+
+/// Whether `'completeopt'` wants an info window for this call.
+///
+/// Skipped when the screen is too short, when the placement is being redone
+/// (`repeat` above 1), and — for the split, not the float — inside the
+/// command-line window.
+fn wants_info_window(cot_flags: c_uint, repeat: c_int) -> bool {
+    Rows.get() > 10
+        && repeat <= 1
+        && cot_flags & (kOptCotFlagPreview | kOptCotFlagPopup) != 0
+        && !(cot_flags & kOptCotFlagPreview != 0 && cmdwin_type.get() != 0)
+}
+
+/// Open (or reuse) the preview window and put the item's `info` in it.
+///
+/// Answers whether a window was resized, which is what makes `pum_display`
+/// redo the whole placement.
+///
+/// # Safety
+/// Must be called with a selected item that has info text. Autocommands run
+/// from here, so nothing may be held across it.
+unsafe fn pum_show_info(
+    info: *mut c_char,
+    repeat: c_int,
+    use_float: bool,
+    prev_selected: c_int,
 ) -> bool {
+    // SAFETY: every window pointer below is re-checked with `win_valid`
+    // after anything that can run autocommands.
     unsafe {
-        let mut resized: bool = false_0 != 0;
-        let mut context: ::core::ffi::c_int = pum_height.get() / 2 as ::core::ffi::c_int;
-        let mut prev_selected: ::core::ffi::c_int = pum_selected.get();
-        pum_selected.set(n);
-        let mut scroll_offset: ::core::ffi::c_int = pum_selected.get() - pum_height.get();
-        let mut cur_cot_flags: ::core::ffi::c_uint = get_cot_flags();
-        let mut use_float: bool = cur_cot_flags
-            & kOptCotFlagPopup as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0 as ::core::ffi::c_uint;
-        if use_float as ::core::ffi::c_int != 0
-            && (pum_selected.get() < 0 as ::core::ffi::c_int
-                || (*(*pum_array.ptr()).offset(pum_selected.get() as isize))
-                    .pum_info
-                    .is_null())
-        {
-            let mut wp: *mut win_T = win_float_find_preview();
+        let mut resized = false;
+        let curwin_save = curwin.get();
+        let curtab_save = curtab.get();
+
+        if use_float {
+            block_autocmds();
+        }
+
+        // A preview split is 3 lines by default, less if 'previewheight' is.
+        g_do_tagpreview.set(PUM_PREVIEW_HEIGHT);
+        if p_pvh.get() > 0 && p_pvh.get() < OptInt::from(g_do_tagpreview.get()) {
+            g_do_tagpreview.set(p_pvh.get() as c_int);
+        }
+        RedrawingDisabled.set(RedrawingDisabled.get() + 1);
+        // An autocommand that syncs undo here does weird things to the tree.
+        no_u_sync.set(no_u_sync.get() + 1);
+
+        if !use_float {
+            resized = prepare_tagpreview(false);
+        } else {
+            let wp = win_float_find_preview();
             if !wp.is_null() {
-                (*wp).w_config.hide = true_0 != 0;
+                win_enter(wp, false);
+            } else if !win_float_create_preview(true, true).is_null() {
+                resized = true;
+            }
+        }
+
+        no_u_sync.set(no_u_sync.get() - 1);
+        RedrawingDisabled.set(RedrawingDisabled.get() - 1);
+        g_do_tagpreview.set(0);
+
+        if (*curwin.get()).w_onebuf_opt.wo_pvw != 0 || (*curwin.get()).w_float_is_info {
+            let mut res = OK;
+            if !resized
+                && (*curbuf.get()).b_nwindows == 1
+                && (*curbuf.get()).b_fname.is_null()
+                && bt_nofile(curbuf.get())
+                && *(*curbuf.get()).b_p_bh == b'w' as c_char
+            {
+                // Already a "wipeout" buffer: just empty it.
+                buf_clear();
+            } else {
+                no_u_sync.set(no_u_sync.get() + 1);
+                res = do_ecmd(
+                    0,
+                    ::core::ptr::null_mut(),
+                    ::core::ptr::null_mut(),
+                    ::core::ptr::null_mut(),
+                    ECMD_ONE as linenr_T,
+                    0,
+                    ::core::ptr::null_mut(),
+                );
+                no_u_sync.set(no_u_sync.get() - 1);
+
+                if res == OK {
+                    // A new, empty, throwaway buffer.
+                    for (option, value) in [
+                        (kOptSwapfile, bool_optval(false)),
+                        (kOptBuflisted, bool_optval(false)),
+                        (kOptBuftype, static_optval(c"nofile")),
+                        (kOptBufhidden, static_optval(c"wipe")),
+                        (kOptDiff, bool_optval(false)),
+                    ] {
+                        set_option_value_give_err(option, value, OPT_LOCAL as c_int);
+                    }
+                }
+            }
+
+            if res == OK {
+                resized =
+                    pum_fill_info(info, repeat, use_float, prev_selected, resized, curwin_save);
+                resized = pum_restore_window(curwin_save, curtab_save, resized);
+            }
+        }
+
+        if use_float {
+            unblock_autocmds();
+        }
+        resized
+    }
+}
+
+/// Put the info text in the window `pum_show_info` just entered and size it.
+///
+/// # Safety
+/// `curwin` must be the preview window.
+unsafe fn pum_fill_info(
+    info: *mut c_char,
+    repeat: c_int,
+    use_float: bool,
+    prev_selected: c_int,
+    mut resized: bool,
+    curwin_save: *mut win_T,
+) -> bool {
+    // SAFETY: `curwin`/`curbuf` are the preview window and its buffer;
+    // `curwin_save` is the window completion started in and is re-validated.
+    unsafe {
+        let (lnum, max_info_width) = pum_preview_set_text(curwin.get(), info);
+
+        // Grow a preview split to fit the text, up to 'previewheight'.
+        if repeat == 0 && !use_float {
+            let lnum = lnum.min(p_pvh.get() as linenr_T);
+            if linenr_T::from((*curwin.get()).w_height) < lnum {
+                win_setheight(lnum as c_int);
+                resized = true;
+            }
+        }
+
+        (*curbuf.get()).b_changed = 0;
+        (*curbuf.get()).b_p_ma = 0;
+        if pum_selected.get() != prev_selected {
+            (*curwin.get()).w_topline = 1;
+        } else if (*curwin.get()).w_topline > (*curbuf.get()).b_ml.ml_line_count {
+            (*curwin.get()).w_topline = (*curbuf.get()).b_ml.ml_line_count;
+        }
+        (*curwin.get()).w_cursor.lnum = 1;
+        (*curwin.get()).w_cursor.col = 0;
+
+        if use_float
+            && !pum_adjust_info_position(curwin.get(), max_info_width)
+            && win_valid(curwin_save)
+        {
+            win_enter(curwin_save, false);
+        }
+        resized
+    }
+}
+
+/// Go back to the window the completion started in, redrawing on the way.
+///
+/// Does nothing when opening the preview did not leave that window, which is
+/// the float case once the float already existed.
+///
+/// # Safety
+/// `curwin_save`/`curtab_save` are re-checked before use.
+unsafe fn pum_restore_window(
+    curwin_save: *mut win_T,
+    curtab_save: *mut tabpage_T,
+    resized: bool,
+) -> bool {
+    // SAFETY: both pointers are validated before they are entered.
+    unsafe {
+        let left_window = curwin.get() != curwin_save && win_valid(curwin_save);
+        let left_tab = curtab.get() != curtab_save && valid_tabpage(curtab_save);
+        if !left_window && !left_tab {
+            return resized;
+        }
+        if left_tab {
+            goto_tabpage_tp(curtab_save, false, false);
+        }
+
+        // On the first completion, with the preview window not resized, skip
+        // its status line redraw.
+        if ins_compl_active() && !resized {
+            (*curwin.get()).w_redr_status = false;
+        }
+
+        validate_cursor(curwin.get());
+        redraw_later(curwin.get(), UPD_SOME_VALID);
+
+        // A resized preview window needs the buffer view updated, which only
+        // happens in the window itself.
+        if resized && win_valid(curwin_save) {
+            no_u_sync.set(no_u_sync.get() + 1);
+            win_enter(curwin_save, true);
+            no_u_sync.set(no_u_sync.get() - 1);
+            update_topline(curwin.get());
+        }
+
+        // Draw the screen before the menu goes back on top of it, with the
+        // status lines enabled again.
+        // TODO(bfredl): can simplify, get rid of the flag munging? or at
+        // least eliminate the extra redraw before win_enter()?
+        pum_is_visible.set(false);
+        update_screen();
+        pum_is_visible.set(true);
+
+        if !resized && win_valid(curwin_save) {
+            no_u_sync.set(no_u_sync.get() + 1);
+            win_enter(curwin_save, true);
+            no_u_sync.set(no_u_sync.get() - 1);
+        }
+
+        // Autocommands may have changed it again.
+        pum_is_visible.set(false);
+        update_screen();
+        pum_is_visible.set(true);
+        resized
+    }
+}
+
+/// Select item `n`, scrolling the menu and updating the info window.
+///
+/// `repeat` counts how often `pum_display` has already redone the placement:
+/// 0 opens the preview window normally, 1 opens it without setting its size,
+/// 2 does not open it at all.
+///
+/// Answers true when a window was resized, so the caller must recompute the
+/// menu's placement.
+///
+/// # Safety
+/// The item array must be live. Autocommands run from here.
+pub(crate) unsafe fn pum_set_selected(n: c_int, repeat: c_int) -> bool {
+    // SAFETY: the array outlives the menu; every window pointer is
+    // re-validated after anything that can run autocommands.
+    unsafe {
+        let prev_selected = pum_selected.replace(n);
+        let cot_flags = get_cot_flags();
+        let use_float = cot_flags & kOptCotFlagPopup != 0;
+        let info = pum_selected_info();
+
+        // Back to no selection, or to one with nothing to show: hide the
+        // float rather than closing it, so the next item can reuse it.
+        if use_float && info.is_none() {
+            let wp = win_float_find_preview();
+            if !wp.is_null() {
+                (*wp).w_config.hide = true;
                 win_config_float(wp, (*wp).w_config);
             }
         }
-        if pum_selected.get() >= 0 as ::core::ffi::c_int && pum_selected.get() < pum_size.get() {
-            if pum_first.get() > pum_selected.get() - 4 as ::core::ffi::c_int {
-                if pum_first.get() > pum_selected.get() - 2 as ::core::ffi::c_int {
-                    (*pum_first.ptr()) -= pum_height.get() - 2 as ::core::ffi::c_int;
-                    if pum_first.get() < 0 as ::core::ffi::c_int {
-                        pum_first.set(0 as ::core::ffi::c_int);
-                    } else if pum_first.get() > pum_selected.get() {
-                        pum_first.set(pum_selected.get());
-                    }
-                } else {
-                    pum_first.set(pum_selected.get());
-                }
-            } else if pum_first.get() < scroll_offset + 5 as ::core::ffi::c_int {
-                if pum_first.get() < scroll_offset + 3 as ::core::ffi::c_int {
-                    pum_first.set(
-                        if pum_first.get() + pum_height.get() - 2 as ::core::ffi::c_int
-                            > scroll_offset + 1 as ::core::ffi::c_int
-                        {
-                            pum_first.get() + pum_height.get() - 2 as ::core::ffi::c_int
-                        } else {
-                            scroll_offset + 1 as ::core::ffi::c_int
-                        },
-                    );
-                } else {
-                    pum_first.set(scroll_offset + 1 as ::core::ffi::c_int);
-                }
-            }
-            context = if context < 3 as ::core::ffi::c_int {
-                context
-            } else {
-                3 as ::core::ffi::c_int
-            };
-            if pum_height.get() > 2 as ::core::ffi::c_int {
-                if pum_first.get() > pum_selected.get() - context {
-                    pum_first.set(if pum_selected.get() - context > 0 as ::core::ffi::c_int {
-                        pum_selected.get() - context
-                    } else {
-                        0 as ::core::ffi::c_int
-                    });
-                } else if pum_first.get()
-                    < pum_selected.get() + context - pum_height.get() + 1 as ::core::ffi::c_int
-                {
-                    pum_first.set(
-                        pum_selected.get() + context - pum_height.get() + 1 as ::core::ffi::c_int,
-                    );
-                }
-            }
-            pum_first.set(if pum_first.get() < pum_size.get() - pum_height.get() {
-                pum_first.get()
-            } else {
-                pum_size.get() - pum_height.get()
-            });
-            if !(*(*pum_array.ptr()).offset(pum_selected.get() as isize))
-                .pum_info
-                .is_null()
-                && Rows.get() > 10 as ::core::ffi::c_int
-                && repeat <= 1 as ::core::ffi::c_int
-                && cur_cot_flags
-                    & (kOptCotFlagPreview as ::core::ffi::c_int
-                        | kOptCotFlagPopup as ::core::ffi::c_int)
-                        as ::core::ffi::c_uint
-                    != 0
-                && !(cur_cot_flags
-                    & kOptCotFlagPreview as ::core::ffi::c_int as ::core::ffi::c_uint
-                    != 0
-                    && cmdwin_type.get() != 0 as ::core::ffi::c_int)
-            {
-                let mut curwin_save: *mut win_T = curwin.get();
-                let mut curtab_save: *mut tabpage_T = curtab.get();
-                if use_float {
-                    block_autocmds();
-                }
-                g_do_tagpreview.set(3 as ::core::ffi::c_int);
-                if p_pvh.get() > 0 as OptInt && p_pvh.get() < g_do_tagpreview.get() as OptInt {
-                    g_do_tagpreview.set(p_pvh.get() as ::core::ffi::c_int);
-                }
-                (*RedrawingDisabled.ptr()) += 1;
-                (*no_u_sync.ptr()) += 1;
-                if !use_float {
-                    resized = prepare_tagpreview(false_0 != 0);
-                } else {
-                    let mut wp_0: *mut win_T = win_float_find_preview();
-                    if !wp_0.is_null() {
-                        win_enter(wp_0, false_0 != 0);
-                    } else {
-                        wp_0 = win_float_create_preview(true_0 != 0, true_0 != 0);
-                        if !wp_0.is_null() {
-                            resized = true_0 != 0;
-                        }
-                    }
-                }
-                (*no_u_sync.ptr()) -= 1;
-                (*RedrawingDisabled.ptr()) -= 1;
-                g_do_tagpreview.set(0 as ::core::ffi::c_int);
-                if (*curwin.get()).w_onebuf_opt.wo_pvw != 0
-                    || (*curwin.get()).w_float_is_info as ::core::ffi::c_int != 0
-                {
-                    let mut res: ::core::ffi::c_int = OK;
-                    if !resized
-                        && (*curbuf.get()).b_nwindows == 1 as ::core::ffi::c_int
-                        && (*curbuf.get()).b_fname.is_null()
-                        && bt_nofile(curbuf.get()) as ::core::ffi::c_int != 0
-                        && *(*curbuf.get())
-                            .b_p_bh
-                            .offset(0 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int
-                            == 'w' as ::core::ffi::c_int
-                    {
-                        buf_clear();
-                    } else {
-                        (*no_u_sync.ptr()) += 1;
-                        res = do_ecmd(
-                            0 as ::core::ffi::c_int,
-                            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            ::core::ptr::null_mut::<exarg_T>(),
-                            ECMD_ONE as ::core::ffi::c_int as linenr_T,
-                            0 as ::core::ffi::c_int,
-                            ::core::ptr::null_mut::<win_T>(),
-                        );
-                        (*no_u_sync.ptr()) -= 1;
-                        if res == OK {
-                            set_option_value_give_err(
-                                kOptSwapfile,
-                                OptVal {
-                                    type_0: kOptValTypeBoolean,
-                                    data: OptValData { boolean: kFalse },
-                                },
-                                OPT_LOCAL as ::core::ffi::c_int,
-                            );
-                            set_option_value_give_err(
-                                kOptBuflisted,
-                                OptVal {
-                                    type_0: kOptValTypeBoolean,
-                                    data: OptValData { boolean: kFalse },
-                                },
-                                OPT_LOCAL as ::core::ffi::c_int,
-                            );
-                            set_option_value_give_err(
-                                kOptBuftype,
-                                OptVal {
-                                    type_0: kOptValTypeString,
-                                    data: OptValData {
-                                        string: String_0 {
-                                            data: b"nofile\0".as_ptr() as *const ::core::ffi::c_char
-                                                as *mut ::core::ffi::c_char,
-                                            size: ::core::mem::size_of::<[::core::ffi::c_char; 7]>(
-                                            )
-                                            .wrapping_sub(1 as size_t),
-                                        },
-                                    },
-                                },
-                                OPT_LOCAL as ::core::ffi::c_int,
-                            );
-                            set_option_value_give_err(
-                                kOptBufhidden,
-                                OptVal {
-                                    type_0: kOptValTypeString,
-                                    data: OptValData {
-                                        string: String_0 {
-                                            data: b"wipe\0".as_ptr() as *const ::core::ffi::c_char
-                                                as *mut ::core::ffi::c_char,
-                                            size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>(
-                                            )
-                                            .wrapping_sub(1 as size_t),
-                                        },
-                                    },
-                                },
-                                OPT_LOCAL as ::core::ffi::c_int,
-                            );
-                            set_option_value_give_err(
-                                kOptDiff,
-                                OptVal {
-                                    type_0: kOptValTypeBoolean,
-                                    data: OptValData { boolean: kFalse },
-                                },
-                                OPT_LOCAL as ::core::ffi::c_int,
-                            );
-                        }
-                    }
-                    if res == OK {
-                        let mut lnum: linenr_T = 0 as linenr_T;
-                        let mut max_info_width: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                        pum_preview_set_text(
-                            curwin.get(),
-                            (*(*pum_array.ptr()).offset(pum_selected.get() as isize)).pum_info,
-                            &raw mut lnum,
-                            &raw mut max_info_width,
-                        );
-                        if repeat == 0 as ::core::ffi::c_int && !use_float {
-                            lnum = if lnum < p_pvh.get() as linenr_T {
-                                lnum
-                            } else {
-                                p_pvh.get() as linenr_T
-                            };
-                            if ((*curwin.get()).w_height as linenr_T) < lnum {
-                                win_setheight(lnum as ::core::ffi::c_int);
-                                resized = true_0 != 0;
-                            }
-                        }
-                        (*curbuf.get()).b_changed = false_0;
-                        (*curbuf.get()).b_p_ma = false_0;
-                        if pum_selected.get() != prev_selected {
-                            (*curwin.get()).w_topline = 1 as ::core::ffi::c_int as linenr_T;
-                        } else if (*curwin.get()).w_topline > (*curbuf.get()).b_ml.ml_line_count {
-                            (*curwin.get()).w_topline = (*curbuf.get()).b_ml.ml_line_count;
-                        }
-                        (*curwin.get()).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
-                        (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-                        if use_float {
-                            if !pum_adjust_info_position(curwin.get(), max_info_width)
-                                && win_valid(curwin_save) as ::core::ffi::c_int != 0
-                            {
-                                win_enter(curwin_save, false_0 != 0);
-                            }
-                        }
-                        if curwin.get() != curwin_save
-                            && win_valid(curwin_save) as ::core::ffi::c_int != 0
-                            || curtab.get() != curtab_save
-                                && valid_tabpage(curtab_save) as ::core::ffi::c_int != 0
-                        {
-                            if curtab.get() != curtab_save
-                                && valid_tabpage(curtab_save) as ::core::ffi::c_int != 0
-                            {
-                                goto_tabpage_tp(curtab_save, false_0 != 0, false_0 != 0);
-                            }
-                            if ins_compl_active() as ::core::ffi::c_int != 0 && !resized {
-                                (*curwin.get()).w_redr_status = false_0 != 0;
-                            }
-                            validate_cursor(curwin.get());
-                            redraw_later(curwin.get(), UPD_SOME_VALID);
-                            if resized as ::core::ffi::c_int != 0
-                                && win_valid(curwin_save) as ::core::ffi::c_int != 0
-                            {
-                                (*no_u_sync.ptr()) += 1;
-                                win_enter(curwin_save, true_0 != 0);
-                                (*no_u_sync.ptr()) -= 1;
-                                update_topline(curwin.get());
-                            }
-                            pum_is_visible.set(false_0 != 0);
-                            update_screen();
-                            pum_is_visible.set(true_0 != 0);
-                            if !resized && win_valid(curwin_save) as ::core::ffi::c_int != 0 {
-                                (*no_u_sync.ptr()) += 1;
-                                win_enter(curwin_save, true_0 != 0);
-                                (*no_u_sync.ptr()) -= 1;
-                            }
-                            pum_is_visible.set(false_0 != 0);
-                            update_screen();
-                            pum_is_visible.set(true_0 != 0);
-                        }
-                    }
-                }
-                if use_float {
-                    unblock_autocmds();
-                }
-            }
+
+        if pum_selected.get() < 0 || pum_selected.get() >= pum_size.get() {
+            return false;
         }
-        return resized;
+        pum_scroll_to_selected();
+
+        match info {
+            Some(info) if wants_info_window(cot_flags, repeat) => {
+                pum_show_info(info, repeat, use_float, prev_selected)
+            }
+            _ => false,
+        }
     }
 }

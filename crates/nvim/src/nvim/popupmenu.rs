@@ -42,7 +42,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
 use crate::src::nvim::memory::{
-    ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xcalloc, xfree, xrealloc, xstrdup,
+    ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xcalloc, xfree, xmalloc, xstrdup,
 };
 use crate::src::nvim::menu::{execute_menu, get_menu_mode_flag, menu_find, menu_is_separator};
 use crate::src::nvim::message::emsg;
@@ -63,13 +63,12 @@ use crate::src::nvim::strings::reverse_text;
 use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::src::nvim::types::{
-    AlignTextPos, Arena, Array, BoolVarValue, Buffer, CMD_index, Error, Float, FloatAnchor,
-    FloatRelative, Integer, Object, OptInt, OptVal, OptValData, OptValType, String_0, TriState,
-    VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, buf_T, cmd_addr_T, colnr_T,
-    cstack_T, dict_T, exarg_T, float_T, handle_T, hlf_T, kObjectTypeArray, kObjectTypeBoolean,
-    kObjectTypeString, key_extra, linenr_T, lpos_T, object, object_data as C2Rust_Unnamed_12,
-    pumitem_T, sattr_T, schar_T, size_t, tabpage_T, uint32_t, uint64_t, varnumber_T, vimmenu_T,
-    win_T,
+    AlignTextPos, Arena, Array, BoolVarValue, Buffer, CMD_index, Error, Float, FloatRelative,
+    Integer, Object, OptInt, OptVal, OptValData, OptValType, String_0, TriState, VirtText,
+    VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, cmd_addr_T, cstack_T, dict_T, exarg_T,
+    float_T, handle_T, hlf_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeString, key_extra,
+    linenr_T, lpos_T, object, object_data as C2Rust_Unnamed_12, pumitem_T, sattr_T, schar_T,
+    size_t, tabpage_T, uint32_t, varnumber_T, vimmenu_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
@@ -97,6 +96,7 @@ unsafe extern "C" {
     static pum_want: GlobalCell<C2Rust_Unnamed_24>;
 }
 pub const kFalse: TriState = 0;
+pub const kTrue: TriState = 1;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kAlignLeft: AlignTextPos = 0;

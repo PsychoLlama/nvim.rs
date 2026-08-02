@@ -397,7 +397,7 @@
     "crates/nvim/src/nvim/popupmenu/draw.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/popupmenu/layout.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/popupmenu/menu.rs": {"unsafe": 4},
-    "crates/nvim/src/nvim/popupmenu/preview.rs": {"unsafe": 4},
+    "crates/nvim/src/nvim/popupmenu/preview.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/profile.rs": {"unsafe": 33},
     "crates/nvim/src/nvim/quickfix/cmds.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/quickfix/display.rs": {"unsafe": 11},
