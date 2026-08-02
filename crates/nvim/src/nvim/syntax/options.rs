@@ -423,7 +423,7 @@ unsafe fn parse_id_name(
         if text == b"ALLBUT" || text == b"ALL" || text == b"TOP" || text == b"CONTAINED" {
             // Only `contains=` and `containedin=` accept these, which is what
             // upstream tests by the keyword's first letter.
-            if (*arg as u8).to_ascii_uppercase() != b'C' {
+            if !(*arg as u8).eq_ignore_ascii_case(&b'C') {
                 semsg(gettext(c"E407: %s not allowed here".as_ptr()), plain);
                 return Err(());
             }
