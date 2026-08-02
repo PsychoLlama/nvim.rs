@@ -1,3 +1,5 @@
+use core::ffi::{c_char, c_int};
+
 use crate::src::nvim::ascii::ascii_iswhite;
 use crate::src::nvim::charset::{skiptowhite, skipwhite};
 use crate::src::nvim::drawscreen::{
@@ -53,8 +55,7 @@ unsafe extern "C" {
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
 }
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed = 2147483647;
+pub const MAXCOL: ::core::ffi::c_int = 2147483647;
 pub const VAR_DICT: VarType = 5;
 pub const VAR_LIST: VarType = 4;
 pub const VAR_NUMBER: VarType = 1;
@@ -70,7 +71,6 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const CPO_SEARCH: ::core::ffi::c_int = 'c' as ::core::ffi::c_int;
-pub const SEARCH_HL_PRIORITY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 unsafe extern "C" fn match_add(
     mut wp: *mut win_T,
     grp: *const ::core::ffi::c_char,

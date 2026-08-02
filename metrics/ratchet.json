@@ -303,7 +303,7 @@
     "crates/nvim/src/nvim/marktree/rebalance.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/marktree/splice.rs": {"no_mangle": 1, "unsafe": 4},
     "crates/nvim/src/nvim/match.rs": {"unsafe": 7},
-    "crates/nvim/src/nvim/match/searchhl.rs": {"unsafe": 9},
+    "crates/nvim/src/nvim/match/searchhl.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/match/vimscript.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/mbyte.rs": {"lines": 5019, "no_mangle": 11, "unsafe": 96},
     "crates/nvim/src/nvim/memfile.rs": {"unsafe": 27},
