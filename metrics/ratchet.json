@@ -1,6 +1,6 @@
 {
   "internal_exports": 47,
-  "files_without_forbid_unsafe": 582,
+  "files_without_forbid_unsafe": 586,
   "files_without_deny_unsafe_op": 208,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -81,7 +81,11 @@
     "crates/nvim/src/nvim/cursor.rs": {"unsafe": 23},
     "crates/nvim/src/nvim/cursor_shape.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/debugger.rs": {"lines": 1914, "unsafe": 21},
-    "crates/nvim/src/nvim/decoration.rs": {"lines": 2471, "unsafe": 52},
+    "crates/nvim/src/nvim/decoration.rs": {"unsafe": 18},
+    "crates/nvim/src/nvim/decoration/dict.rs": {"unsafe": 3},
+    "crates/nvim/src/nvim/decoration/query.rs": {"unsafe": 5},
+    "crates/nvim/src/nvim/decoration/signs.rs": {"unsafe": 8},
+    "crates/nvim/src/nvim/decoration/state.rs": {"unsafe": 18},
     "crates/nvim/src/nvim/decoration_provider.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/diff.rs": {"lines": 5639, "unsafe": 81},
     "crates/nvim/src/nvim/digraph.rs": {"unsafe": 30},
