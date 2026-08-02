@@ -36,7 +36,6 @@
     "crates/nvim/src/nvim/cursor_shape.rs": 76,
     "crates/nvim/src/nvim/debugger.rs": 41,
     "crates/nvim/src/nvim/decoration.rs": 8,
-    "crates/nvim/src/nvim/decoration/query.rs": 9,
     "crates/nvim/src/nvim/decoration/state.rs": 3,
     "crates/nvim/src/nvim/diff.rs": 103,
     "crates/nvim/src/nvim/digraph.rs": 9,

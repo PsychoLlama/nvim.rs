@@ -83,7 +83,7 @@
     "crates/nvim/src/nvim/debugger.rs": {"lines": 1914, "unsafe": 21},
     "crates/nvim/src/nvim/decoration.rs": {"unsafe": 17},
     "crates/nvim/src/nvim/decoration/dict.rs": {"unsafe": 6},
-    "crates/nvim/src/nvim/decoration/query.rs": {"unsafe": 5},
+    "crates/nvim/src/nvim/decoration/query.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/decoration/signs.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/decoration/state.rs": {"unsafe": 18},
     "crates/nvim/src/nvim/decoration_provider.rs": {"unsafe": 12},
