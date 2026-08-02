@@ -1307,9 +1307,9 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                 {
                     sign.text[0 as ::core::ffi::c_int as usize] = 0 as schar_T;
                     if init_sign_text(
-                        ::core::ptr::null_mut::<sign_T>(),
-                        &raw mut sign.text as *mut schar_T,
                         (*opts).sign_text.data,
+                        &raw mut sign.text as *mut schar_T,
+                        false,
                     ) == 0
                     {
                         api_err_invalid(

@@ -39,82 +39,36 @@ pub(crate) unsafe extern "C" fn sign_list_placed(
                     gettext(b"Signs for %s:\0".as_ptr() as *const ::core::ffi::c_char),
                     (*buf).b_fname,
                 );
-                msg_puts_hl(
-                    &raw mut lbuf as *mut ::core::ffi::c_char,
-                    HLF_D,
-                    false_0 != 0,
-                );
+                msg_puts_hl(&raw mut lbuf as *mut ::core::ffi::c_char, HLF_D, false);
             }
             if ns >= 0 as int64_t {
-                let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
-                    pos: MTPos { row: 0, col: 0 },
-                    lvl: 0,
-                    x: ::core::ptr::null_mut::<MTNode>(),
-                    i: 0,
-                    s: [C2Rust_Unnamed_16 { oldcol: 0, i: 0 }; 20],
-                    intersect_idx: 0,
-                    intersect_pos: MTPos { row: 0, col: 0 },
-                    intersect_pos_x: MTPos { row: 0, col: 0 },
-                }; 1];
-                let mut signs: C2Rust_Unnamed_25 = C2Rust_Unnamed_25 {
-                    size: 0 as size_t,
-                    capacity: 0 as size_t,
-                    items: ::core::ptr::null_mut::<MTKey>(),
-                };
+                let mut itr = MarkTreeIter::default();
+                let mut signs: Vec<MTKey> = Vec::new();
                 marktree_itr_get(
                     &raw mut (*buf).b_marktree as *mut MarkTree,
-                    0 as int32_t,
+                    0,
                     0 as ::core::ffi::c_int,
-                    &raw mut itr as *mut MarkTreeIter,
+                    &raw mut itr,
                 );
-                while !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null() {
-                    let mut mark: MTKey = marktree_itr_current(&raw mut itr as *mut MarkTreeIter);
+                while !itr.x.is_null() {
+                    let mut mark: MTKey = marktree_itr_current(&raw mut itr);
                     if !mt_end(mark)
                         && mt_decor_sign(mark) as ::core::ffi::c_int != 0
-                        && (ns == UINT32_MAX as int64_t || ns == mark.ns as int64_t)
+                        && (ns == ALL_GROUPS || ns == mark.ns as int64_t)
                     {
-                        if signs.size == signs.capacity {
-                            signs.capacity = if signs.capacity != 0 {
-                                signs.capacity << 1 as ::core::ffi::c_int
-                            } else {
-                                8 as size_t
-                            };
-                            signs.items = xrealloc(
-                                signs.items as *mut ::core::ffi::c_void,
-                                ::core::mem::size_of::<MTKey>().wrapping_mul(signs.capacity),
-                            ) as *mut MTKey;
-                        } else {
-                        };
-                        let c2rust_fresh4 = signs.size;
-                        signs.size = signs.size.wrapping_add(1);
-                        *signs.items.offset(c2rust_fresh4 as isize) = mark;
+                        signs.push(mark);
                     }
-                    marktree_itr_next(
-                        &raw mut (*buf).b_marktree as *mut MarkTree,
-                        &raw mut itr as *mut MarkTreeIter,
-                    );
+                    marktree_itr_next(&raw mut (*buf).b_marktree as *mut MarkTree, &raw mut itr);
                 }
-                if signs.size != 0 {
-                    qsort(
-                        signs.items.offset(0 as ::core::ffi::c_int as isize)
-                            as *mut ::core::ffi::c_void,
-                        signs.size,
-                        ::core::mem::size_of::<MTKey>(),
-                        Some(
-                            sign_row_cmp
-                                as unsafe extern "C" fn(
-                                    *const ::core::ffi::c_void,
-                                    *const ::core::ffi::c_void,
-                                )
-                                    -> ::core::ffi::c_int,
-                        ),
-                    );
+                if !signs.is_empty() {
+                    sort_signs(&mut signs);
+                    let signs_size = signs.len() as size_t;
                     msg_putchar('\n' as ::core::ffi::c_int);
                     let mut i: size_t = 0 as size_t;
-                    while i < signs.size {
+                    while i < signs_size {
                         namebuf[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
                         groupbuf[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-                        let mut mark_0: MTKey = *signs.items.offset(i as isize);
+                        let mut mark_0: MTKey = signs[i as usize];
                         let mut sh: *mut DecorSignHighlight = decor_find_sign(mt_decor(mark_0));
                         if !(*sh).sign_name.is_null() {
                             vim_snprintf(
@@ -140,22 +94,18 @@ pub(crate) unsafe extern "C" fn sign_list_placed(
                             MSG_BUF_LEN as size_t,
                             gettext(b"    line=%d  id=%u%s%s  priority=%d\0".as_ptr()
                                 as *const ::core::ffi::c_char),
-                            mark_0.pos.row + 1 as int32_t,
+                            mark_0.pos.row + 1,
                             mark_0.id,
                             &raw mut groupbuf as *mut ::core::ffi::c_char,
                             &raw mut namebuf as *mut ::core::ffi::c_char,
                             (*sh).priority as ::core::ffi::c_int,
                         );
                         msg_puts(&raw mut lbuf as *mut ::core::ffi::c_char);
-                        if i < signs.size.wrapping_sub(1 as size_t) {
+                        if i < signs_size.wrapping_sub(1 as size_t) {
                             msg_putchar('\n' as ::core::ffi::c_int);
                         }
                         i = i.wrapping_add(1);
                     }
-                    xfree(signs.items as *mut ::core::ffi::c_void);
-                    signs.capacity = 0 as size_t;
-                    signs.size = signs.capacity;
-                    signs.items = ::core::ptr::null_mut::<MTKey>();
                 }
             }
             if !rbuf.is_null() {
@@ -171,15 +121,12 @@ pub(crate) unsafe extern "C" fn sign_cmd_idx(
     mut end_cmd: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     unsafe {
-        let mut idx: ::core::ffi::c_int = 0;
-        let mut save: ::core::ffi::c_char = *end_cmd;
+        let save: ::core::ffi::c_char = *end_cmd;
         *end_cmd = NUL as ::core::ffi::c_char;
-        idx = 0 as ::core::ffi::c_int;
-        while !((*cmds.ptr())[idx as usize].is_null()
-            || strcmp(begin_cmd, (*cmds.ptr())[idx as usize]) == 0 as ::core::ffi::c_int)
-        {
-            idx += 1;
-        }
+        let idx = CMDS
+            .iter()
+            .position(|cmd| strcmp(begin_cmd, cmd.as_ptr()) == 0)
+            .map_or(SIGNCMD_LAST, |i| i as ::core::ffi::c_int);
         *end_cmd = save;
         return idx;
     }
@@ -194,7 +141,7 @@ pub(crate) unsafe extern "C" fn sign_list_defined(mut sp: *mut sign_T) {
         );
         if !(*sp).sn_icon.is_null() {
             msg_puts(b" icon=\0".as_ptr() as *const ::core::ffi::c_char);
-            msg_outtrans((*sp).sn_icon, 0 as ::core::ffi::c_int, false_0 != 0);
+            msg_outtrans((*sp).sn_icon, 0 as ::core::ffi::c_int, false);
             msg_puts(gettext(
                 b" (not supported)\0".as_ptr() as *const ::core::ffi::c_char
             ));
@@ -209,7 +156,7 @@ pub(crate) unsafe extern "C" fn sign_list_defined(mut sp: *mut sign_T) {
             msg_outtrans(
                 &raw mut buf as *mut ::core::ffi::c_char,
                 0 as ::core::ffi::c_int,
-                false_0 != 0,
+                false,
             );
         }
         if (*sp).sn_priority > 0 as ::core::ffi::c_int {
@@ -241,7 +188,7 @@ pub(crate) unsafe extern "C" fn sign_list_defined(mut sp: *mut sign_T) {
                 let mut p: *const ::core::ffi::c_char = get_highlight_name_ext(
                     ::core::ptr::null_mut::<expand_T>(),
                     hl[i as usize] - 1 as ::core::ffi::c_int,
-                    false_0 != 0,
+                    false,
                 );
                 msg_puts(if !p.is_null() {
                     p
@@ -256,8 +203,7 @@ pub(crate) unsafe extern "C" fn sign_list_defined(mut sp: *mut sign_T) {
 
 pub(crate) unsafe extern "C" fn sign_list_by_name(mut name: *mut ::core::ffi::c_char) {
     unsafe {
-        let mut sp: *mut sign_T =
-            map_get_cstr_t_ptr_t(sign_map.ptr(), name as cstr_t) as *mut sign_T;
+        let sp: *mut sign_T = sign_find(name);
         if !sp.is_null() {
             sign_list_defined(sp);
         } else {
@@ -461,9 +407,9 @@ pub(crate) unsafe extern "C" fn parse_sign_cmd_args(
     unsafe {
         let mut arg1: *mut ::core::ffi::c_char = arg;
         let mut filename: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut lnum_arg: bool = false_0 != 0;
+        let mut lnum_arg: bool = false;
         if ascii_isdigit(*arg as ::core::ffi::c_int) {
-            *id = getdigits_int(&raw mut arg, true_0 != 0, 0 as ::core::ffi::c_int);
+            *id = getdigits_int(&raw mut arg, true, 0 as ::core::ffi::c_int);
             if !ascii_iswhite(*arg as ::core::ffi::c_int) && *arg as ::core::ffi::c_int != NUL {
                 *id = -1 as ::core::ffi::c_int;
                 arg = arg1;
@@ -481,7 +427,7 @@ pub(crate) unsafe extern "C" fn parse_sign_cmd_args(
                 arg = arg.offset(5 as ::core::ffi::c_int as isize);
                 *lnum = atoi(arg) as linenr_T;
                 arg = skiptowhite(arg);
-                lnum_arg = true_0 != 0;
+                lnum_arg = true;
             } else if strncmp(
                 arg,
                 b"*\0".as_ptr() as *const ::core::ffi::c_char,
@@ -557,11 +503,7 @@ pub(crate) unsafe extern "C" fn parse_sign_cmd_args(
             {
                 arg = arg.offset(7 as ::core::ffi::c_int as isize);
                 filename = arg;
-                *buf = buflist_findnr(getdigits_int(
-                    &raw mut arg,
-                    true_0 != 0,
-                    0 as ::core::ffi::c_int,
-                ));
+                *buf = buflist_findnr(getdigits_int(&raw mut arg, true, 0 as ::core::ffi::c_int));
                 if *skipwhite(arg) as ::core::ffi::c_int != NUL {
                     semsg(
                         gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
@@ -606,13 +548,8 @@ pub unsafe fn ex_sign(mut eap: *mut exarg_T) {
         arg = skipwhite(p);
         if idx <= SIGNCMD_LIST {
             if idx == SIGNCMD_LIST && *arg as ::core::ffi::c_int == NUL {
-                let mut sp: *mut sign_T = ::core::ptr::null_mut::<sign_T>();
-                let mut __i: uint32_t = 0;
-                __i = 0 as uint32_t;
-                while __i < (*sign_map.ptr()).set.h.n_keys {
-                    sp = *(*sign_map.ptr()).values.offset(__i as isize) as *mut sign_T;
+                for sp in sign_defs() {
                     sign_list_defined(sp);
-                    __i = __i.wrapping_add(1);
                 }
             } else if *arg as ::core::ffi::c_int == NUL {
                 emsg(gettext(

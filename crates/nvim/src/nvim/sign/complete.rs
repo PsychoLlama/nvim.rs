@@ -1,246 +1,199 @@
 //! Command-line completion for `:sign`.
 //!
 //! [`set_context_in_sign_cmd`] decides, from how much of the line has been
-//! typed, which of seven things the word under the cursor is: a
-//! subcommand, an argument name for one of the four subcommands that take
-//! them, a defined sign name, a placed sign group, or something with a
-//! completion of its own (a highlight group, a file, a buffer).
-//! [`get_sign_name`] is the `ExpandGeneric` callback that then enumerates
-//! whichever list that answer named.
+//! typed, which of seven things the word under the cursor is: a subcommand,
+//! an argument name for one of the four subcommands that take them, a
+//! defined sign name, a placed sign group, or something with a completion of
+//! its own (a highlight group, a file, a buffer). [`get_sign_name`] is the
+//! `ExpandGeneric` callback that then enumerates whichever list that answer
+//! named.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
 
-pub(crate) unsafe extern "C" fn get_nth_sign_name(
-    mut idx: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        let mut name: cstr_t = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut current_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut __i: uint32_t = 0;
-        __i = 0 as uint32_t;
-        while __i < (*sign_map.ptr()).set.h.n_keys {
-            name = *(*sign_map.ptr()).set.keys.offset(__i as isize);
-            let c2rust_fresh9 = current_idx;
-            current_idx = current_idx + 1;
-            if c2rust_fresh9 == idx {
-                return name as *mut ::core::ffi::c_char;
-            }
-            __i = __i.wrapping_add(1);
-        }
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+/// What [`get_sign_name`] should enumerate.
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum Expand {
+    /// `:sign {subcmd}`.
+    Subcmd,
+    /// `:sign define {name} {args}...`.
+    Define,
+    /// `:sign place {id} {args}...`.
+    Place,
+    /// `:sign place {args}...` — the listing form, which takes fewer.
+    List,
+    /// `:sign unplace {args}...` and `:sign jump {args}...`.
+    Unplace,
+    /// The name of a defined sign.
+    SignNames,
+    /// The name of a sign group that has had a sign placed in it.
+    SignGroups,
+    /// Nothing — `xp_context` carries the real answer.
+    Nothing,
+}
+
+/// What the last [`set_context_in_sign_cmd`] decided.
+///
+/// A static, because `ExpandGeneric` calls [`get_sign_name`] with nothing but
+/// an index: the `expand_T` it also passes carries the *other* completions'
+/// context, not this one.
+static EXPAND_WHAT: GlobalCell<Expand> = GlobalCell::new(Expand::Subcmd);
+
+/// The `idx`'th element of a completion list, or null past its end.
+///
+/// `ExpandGeneric` walks upwards until it gets a null, which is what the
+/// NULL terminator on each of these arrays upstream is for.
+fn nth(list: &[&CStr], idx: c_int) -> *mut c_char {
+    usize::try_from(idx)
+        .ok()
+        .and_then(|i| list.get(i))
+        .map_or(::core::ptr::null_mut(), |s| s.as_ptr().cast_mut())
+}
+
+/// The `ExpandGeneric` callback: the `idx`'th completion of whatever
+/// [`set_context_in_sign_cmd`] decided this `:sign` line wants.
+///
+/// # Safety
+/// None; `xp` is unused.
+pub unsafe extern "C" fn get_sign_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+    match EXPAND_WHAT.get() {
+        Expand::Subcmd => nth(&CMDS, idx),
+        Expand::Define => nth(
+            &[
+                c"culhl=",
+                c"icon=",
+                c"linehl=",
+                c"numhl=",
+                c"text=",
+                c"texthl=",
+                c"priority=",
+            ],
+            idx,
+        ),
+        Expand::Place => nth(
+            &[
+                c"line=",
+                c"name=",
+                c"group=",
+                c"priority=",
+                c"file=",
+                c"buffer=",
+            ],
+            idx,
+        ),
+        // `:sign place` with no id lists rather than places, so it takes
+        // neither `line=` nor `name=`; `:sign unplace` and `:sign jump` take
+        // the same three.
+        Expand::List | Expand::Unplace => nth(&[c"group=", c"file=", c"buffer="], idx),
+        Expand::SignNames => sign_nth_name(idx.max(0) as usize),
+        Expand::SignGroups => match sign_nth_group(idx.max(0) as usize) {
+            // SAFETY: the namespace came out of the group list, so it is one
+            // `nvim_create_namespace` handed out.
+            Some(ns) => unsafe { describe_ns(ns as NS, c"".as_ptr()).cast_mut() },
+            None => ::core::ptr::null_mut(),
+        },
+        Expand::Nothing => ::core::ptr::null_mut(),
     }
 }
 
-pub(crate) unsafe extern "C" fn get_nth_sign_group_name(
-    mut idx: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+/// Works out what the word at the end of a `:sign` command line is, and
+/// points `xp` at it.
+///
+/// The line is scanned to its last whitespace-separated word; whether that
+/// word contains an `=` decides between completing an argument *name* and
+/// completing its *value*, and the subcommand decides which list either one
+/// comes from. Values with a completion of their own — highlight groups,
+/// files, buffers — are handed off through `xp_context` instead.
+///
+/// # Safety
+/// `xp` must be live and `arg` a writable NUL-terminated string
+/// ([`sign_cmd_idx`] terminates the subcommand in place).
+pub unsafe fn set_context_in_sign_cmd(xp: *mut expand_T, arg: *mut c_char) {
+    // SAFETY: the caller's completion context and command line.
     unsafe {
-        if idx < (*sign_ns.ptr()).size as ::core::ffi::c_int {
-            return describe_ns(
-                *(*sign_ns.ptr()).items.offset(idx as isize) as NS,
-                b"\0".as_ptr() as *const ::core::ffi::c_char,
-            ) as *mut ::core::ffi::c_char;
-        }
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
-    }
-}
-
-pub unsafe extern "C" fn get_sign_name(
-    mut _xp: *mut expand_T,
-    mut idx: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        match expand_what.get() as ::core::ffi::c_uint {
-            0 => return (*cmds.ptr())[idx as usize],
-            1 => {
-                let mut define_arg: [*mut ::core::ffi::c_char; 8] = [
-                    b"culhl=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"icon=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"linehl=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"numhl=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"text=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"texthl=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"priority=\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ];
-                return define_arg[idx as usize];
-            }
-            2 => {
-                let mut place_arg: [*mut ::core::ffi::c_char; 7] = [
-                    b"line=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"name=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"group=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"priority=\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    b"file=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"buffer=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ];
-                return place_arg[idx as usize];
-            }
-            3 => {
-                let mut list_arg: [*mut ::core::ffi::c_char; 4] = [
-                    b"group=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"file=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"buffer=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ];
-                return list_arg[idx as usize];
-            }
-            4 => {
-                let mut unplace_arg: [*mut ::core::ffi::c_char; 4] = [
-                    b"group=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"file=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"buffer=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ];
-                return unplace_arg[idx as usize];
-            }
-            5 => return get_nth_sign_name(idx),
-            6 => return get_nth_sign_group_name(idx),
-            _ => return ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        };
-    }
-}
-
-pub unsafe extern "C" fn set_context_in_sign_cmd(
-    mut xp: *mut expand_T,
-    mut arg: *mut ::core::ffi::c_char,
-) {
-    unsafe {
-        (*xp).xp_context = EXPAND_SIGN as ::core::ffi::c_int;
-        expand_what.set(EXP_SUBCMD);
+        // Default: expand subcommand names.
+        (*xp).xp_context = EXPAND_SIGN;
+        EXPAND_WHAT.set(Expand::Subcmd);
         (*xp).xp_pattern = arg;
-        let mut end_subcmd: *mut ::core::ffi::c_char = skiptowhite(arg);
-        if *end_subcmd as ::core::ffi::c_int == NUL {
+
+        let end_subcmd = skiptowhite(arg);
+        if *end_subcmd == 0 {
+            // `:sign {subcmd}<CTRL-D>`, still on the subcommand itself.
             return;
         }
-        let mut cmd_idx: ::core::ffi::c_int = sign_cmd_idx(arg, end_subcmd);
-        let mut begin_subcmd_args: *mut ::core::ffi::c_char = skipwhite(end_subcmd);
-        let mut last: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut p: *mut ::core::ffi::c_char = begin_subcmd_args;
+
+        let cmd_idx = sign_cmd_idx(arg, end_subcmd);
+        let begin_subcmd_args = skipwhite(end_subcmd);
+
+        // Walk to the last word of the line.
+        let mut last;
+        let mut p = begin_subcmd_args;
         loop {
             p = skipwhite(p);
             last = p;
             p = skiptowhite(p);
-            if *p as ::core::ffi::c_int == NUL {
+            if *p == 0 {
                 break;
             }
         }
-        p = vim_strchr(last, '=' as ::core::ffi::c_int);
-        if p.is_null() {
+
+        let eq = vim_strchr(last, '=' as c_int);
+        if eq.is_null() {
+            // Before the `=`: an argument name, or whatever the subcommand
+            // takes instead of one.
             (*xp).xp_pattern = last;
-            match cmd_idx {
-                SIGNCMD_DEFINE => {
-                    expand_what.set(EXP_DEFINE);
-                }
-                SIGNCMD_PLACE => {
-                    if ascii_isdigit(*begin_subcmd_args as ::core::ffi::c_int) {
-                        expand_what.set(EXP_PLACE);
-                    } else {
-                        expand_what.set(EXP_LIST);
-                    }
-                }
-                SIGNCMD_LIST | SIGNCMD_UNDEFINE => {
-                    expand_what.set(EXP_SIGN_NAMES);
-                }
-                SIGNCMD_JUMP | SIGNCMD_UNPLACE => {
-                    expand_what.set(EXP_UNPLACE);
-                }
+            EXPAND_WHAT.set(match cmd_idx {
+                SIGNCMD_DEFINE => Expand::Define,
+                // `:sign place {id} ...` places and takes the full argument
+                // list; `:sign place ...` lists and takes the short one.
+                SIGNCMD_PLACE if ascii_isdigit(*begin_subcmd_args as c_int) => Expand::Place,
+                SIGNCMD_PLACE => Expand::List,
+                SIGNCMD_LIST | SIGNCMD_UNDEFINE => Expand::SignNames,
+                SIGNCMD_JUMP | SIGNCMD_UNPLACE => Expand::Unplace,
                 _ => {
-                    (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_NOTHING;
+                    Expand::Nothing
+                }
+            });
+            return;
+        }
+
+        // After the `=`: the argument's value.
+        (*xp).xp_pattern = eq.add(1);
+        let starts = |lit: &CStr| strncmp(last, lit.as_ptr(), lit.count_bytes()) == 0;
+        match cmd_idx {
+            SIGNCMD_DEFINE => {
+                if starts(c"texthl") || starts(c"linehl") || starts(c"culhl") || starts(c"numhl") {
+                    (*xp).xp_context = EXPAND_HIGHLIGHT;
+                } else if starts(c"icon") {
+                    (*xp).xp_context = EXPAND_FILES;
+                } else {
+                    (*xp).xp_context = EXPAND_NOTHING;
                 }
             }
-        } else {
-            (*xp).xp_pattern = p.offset(1 as ::core::ffi::c_int as isize);
-            match cmd_idx {
-                SIGNCMD_DEFINE => {
-                    if strncmp(
-                        last,
-                        b"texthl\0".as_ptr() as *const ::core::ffi::c_char,
-                        6 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                        || strncmp(
-                            last,
-                            b"linehl\0".as_ptr() as *const ::core::ffi::c_char,
-                            6 as size_t,
-                        ) == 0 as ::core::ffi::c_int
-                        || strncmp(
-                            last,
-                            b"culhl\0".as_ptr() as *const ::core::ffi::c_char,
-                            5 as size_t,
-                        ) == 0 as ::core::ffi::c_int
-                        || strncmp(
-                            last,
-                            b"numhl\0".as_ptr() as *const ::core::ffi::c_char,
-                            5 as size_t,
-                        ) == 0 as ::core::ffi::c_int
-                    {
-                        (*xp).xp_context = EXPAND_HIGHLIGHT as ::core::ffi::c_int;
-                    } else if strncmp(
-                        last,
-                        b"icon\0".as_ptr() as *const ::core::ffi::c_char,
-                        4 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        (*xp).xp_context = EXPAND_FILES as ::core::ffi::c_int;
-                    } else {
-                        (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
-                    }
-                }
-                SIGNCMD_PLACE => {
-                    if strncmp(
-                        last,
-                        b"name\0".as_ptr() as *const ::core::ffi::c_char,
-                        4 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        expand_what.set(EXP_SIGN_NAMES);
-                    } else if strncmp(
-                        last,
-                        b"group\0".as_ptr() as *const ::core::ffi::c_char,
-                        5 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        expand_what.set(EXP_SIGN_GROUPS);
-                    } else if strncmp(
-                        last,
-                        b"file\0".as_ptr() as *const ::core::ffi::c_char,
-                        4 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        (*xp).xp_context = EXPAND_BUFFERS as ::core::ffi::c_int;
-                    } else {
-                        (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
-                    }
-                }
-                SIGNCMD_UNPLACE | SIGNCMD_JUMP => {
-                    if strncmp(
-                        last,
-                        b"group\0".as_ptr() as *const ::core::ffi::c_char,
-                        5 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        expand_what.set(EXP_SIGN_GROUPS);
-                    } else if strncmp(
-                        last,
-                        b"file\0".as_ptr() as *const ::core::ffi::c_char,
-                        4 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        (*xp).xp_context = EXPAND_BUFFERS as ::core::ffi::c_int;
-                    } else {
-                        (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
-                    }
-                }
-                _ => {
-                    (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+            SIGNCMD_PLACE => {
+                if starts(c"name") {
+                    EXPAND_WHAT.set(Expand::SignNames);
+                } else if starts(c"group") {
+                    EXPAND_WHAT.set(Expand::SignGroups);
+                } else if starts(c"file") {
+                    (*xp).xp_context = EXPAND_BUFFERS;
+                } else {
+                    (*xp).xp_context = EXPAND_NOTHING;
                 }
             }
-        };
+            SIGNCMD_UNPLACE | SIGNCMD_JUMP => {
+                if starts(c"group") {
+                    EXPAND_WHAT.set(Expand::SignGroups);
+                } else if starts(c"file") {
+                    (*xp).xp_context = EXPAND_BUFFERS;
+                } else {
+                    (*xp).xp_context = EXPAND_NOTHING;
+                }
+            }
+            _ => (*xp).xp_context = EXPAND_NOTHING,
+        }
     }
 }
