@@ -242,7 +242,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_i
             return;
         }
 
-        let mut rest = get_group_name(arg, &raw mut group_name_end);
+        let mut rest = get_group_name(arg, &mut group_name_end);
         if !rest.is_null() {
             let scl_id = syn_check_cluster(arg, group_name_end.offset_from(arg) as c_int);
             if scl_id == 0 {
@@ -256,13 +256,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_i
 
             while let Some((opt_len, list_op)) = cluster_op(rest) {
                 let mut clstr_list = ::core::ptr::null_mut::<int16_t>();
-                if get_id_list(
-                    &raw mut rest,
-                    opt_len,
-                    &raw mut clstr_list,
-                    (*eap).skip != 0,
-                ) == FAIL
-                {
+                if get_id_list(&mut rest, opt_len, &mut clstr_list, (*eap).skip != 0) == FAIL {
                     semsg(gettext(&raw const e_invarg2 as *const c_char), rest);
                     break;
                 }

@@ -606,7 +606,7 @@ unsafe fn match_keyword(
                     current_next_list.get(),
                     &raw mut (*kp).k_syn,
                     0,
-                ) != 0
+                )
             } else if cur_si.is_null() {
                 (*kp).flags & HL_CONTAINED == 0
             } else {
@@ -615,7 +615,7 @@ unsafe fn match_keyword(
                     (*cur_si).si_cont_list,
                     &raw mut (*kp).k_syn,
                     (*kp).flags,
-                ) != 0
+                )
             };
             if ok {
                 return kp;

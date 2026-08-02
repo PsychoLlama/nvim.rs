@@ -9,681 +9,628 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{CStr, c_char, c_int, c_void};
+
 #[allow(unused_imports)]
 use super::*;
 
-pub(crate) unsafe extern "C" fn get_group_name(
-    mut arg: *mut ::core::ffi::c_char,
-    mut name_end: *mut *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+/// Split off a `:syntax` command's group-name argument.
+///
+/// `name_end` is left at the end of the name; the answer is the first argument
+/// after it, or NULL when the command ended instead. The first argument may be
+/// a pattern, in which which `|` is allowed, so only a NUL counts as the end.
+pub(crate) unsafe fn get_group_name(arg: *mut c_char, name_end: &mut *mut c_char) -> *mut c_char {
     unsafe {
         *name_end = skiptowhite(arg);
-        let mut rest: *mut ::core::ffi::c_char = skipwhite(*name_end);
-        if ends_excmd(*arg as ::core::ffi::c_int) != 0 || *rest as ::core::ffi::c_int == NUL {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        let rest = skipwhite(*name_end);
+        if ends_excmd(*arg as c_int) != 0 || *rest as c_int == NUL {
+            return ::core::ptr::null_mut();
         }
-        return rest;
+        rest
     }
 }
 
-pub(crate) unsafe extern "C" fn get_syn_options(
-    mut arg: *mut ::core::ffi::c_char,
-    mut opt: *mut syn_opt_arg_T,
-    mut conceal_char: *mut ::core::ffi::c_int,
-    mut skip: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+/// What an option word takes after its name.
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum OptArg {
+    /// Nothing: a bare flag word that ORs its `HL_*` into the item's flags.
+    Flag,
+    /// `contains=`
+    Contains,
+    /// `containedin=`
+    ContainedIn,
+    /// `nextgroup=`
+    NextGroup,
+    /// `cchar=`
+    Cchar,
+}
+
+impl OptArg {
+    /// Whether the name must be followed by `=` rather than by the end of the
+    /// argument.
+    fn takes_value(self) -> bool {
+        self != OptArg::Flag
+    }
+}
+
+/// One recognised option word.
+struct SynFlag {
+    name: &'static CStr,
+    arg: OptArg,
+    /// The `HL_*` a bare flag word sets; 0 for the ones that take a value.
+    flags: c_int,
+}
+
+/// A `const fn` constructor keeps each entry on one line under rustfmt.
+const fn flag(name: &'static CStr, arg: OptArg, flags: c_int) -> SynFlag {
+    SynFlag { name, arg, flags }
+}
+
+/// Every option word any `:syntax` item definition accepts.
+///
+/// Searched **last to first**, which is the order upstream's `--fidx` loop
+/// walks it. Nothing here depends on that order — every name that is a prefix
+/// of another (`conceal`/`concealends`, `contained`/`containedin`) is
+/// separated by the "followed by white space, `=` or the end of the command"
+/// test below — but the order is kept as documentation of that fact.
+static FLAG_TAB: [SynFlag; 19] = [
+    flag(c"contained", OptArg::Flag, HL_CONTAINED),
+    flag(c"oneline", OptArg::Flag, HL_ONELINE),
+    flag(c"keepend", OptArg::Flag, HL_KEEPEND),
+    flag(c"extend", OptArg::Flag, HL_EXTEND),
+    flag(c"excludenl", OptArg::Flag, HL_EXCLUDENL),
+    flag(c"transparent", OptArg::Flag, HL_TRANSP),
+    flag(c"skipnl", OptArg::Flag, HL_SKIPNL),
+    flag(c"skipwhite", OptArg::Flag, HL_SKIPWHITE),
+    flag(c"skipempty", OptArg::Flag, HL_SKIPEMPTY),
+    flag(c"grouphere", OptArg::Flag, HL_SYNC_HERE),
+    flag(c"groupthere", OptArg::Flag, HL_SYNC_THERE),
+    flag(c"display", OptArg::Flag, HL_DISPLAY),
+    flag(c"fold", OptArg::Flag, HL_FOLD),
+    flag(c"conceal", OptArg::Flag, HL_CONCEAL),
+    flag(c"concealends", OptArg::Flag, HL_CONCEALENDS),
+    flag(c"cchar", OptArg::Cchar, 0),
+    flag(c"contains", OptArg::Contains, 0),
+    flag(c"containedin", OptArg::ContainedIn, 0),
+    flag(c"nextgroup", OptArg::NextGroup, 0),
+];
+
+/// Could `c` start an option word? A cheap reject, because this runs for every
+/// word of a `:syntax keyword` command with a large keyword list.
+///
+/// Upstream spells this as `strchr(first_letters, *arg)`, which answers the
+/// terminator for a NUL `*arg` and so scans the whole table once for nothing;
+/// the outcome is the same either way.
+fn starts_option(c: u8) -> bool {
+    matches!(
+        c.to_ascii_lowercase(),
+        b'c' | b'o' | b'k' | b'e' | b't' | b's' | b'g' | b'd' | b'f' | b'n'
+    )
+}
+
+/// Does `arg` begin with `f`'s name, followed by what `f` requires?
+///
+/// The comparison is ASCII-case-insensitive, which is what upstream's
+/// doubled-case name table (`"cCoOnNtTaAiInNeEdD"`) spells out a byte at a
+/// time. A NUL never matches a letter, so the walk stops at the terminator.
+unsafe fn flag_matches(arg: *const c_char, f: &SynFlag) -> bool {
     unsafe {
-        let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut fidx: ::core::ffi::c_int = 0;
-        static flagtab: GlobalCell<[flag; 19]> = GlobalCell::new([
-            flag {
-                name: b"cCoOnNtTaAiInNeEdD\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 0 as ::core::ffi::c_int,
-                flags: HL_CONTAINED,
-            },
-            flag {
-                name: b"oOnNeElLiInNeE\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 0 as ::core::ffi::c_int,
-                flags: HL_ONELINE,
-            },
-            flag {
-                name: b"kKeEeEpPeEnNdD\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 0 as ::core::ffi::c_int,
-                flags: HL_KEEPEND,
-            },
-            flag {
-                name: b"eExXtTeEnNdD\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 0 as ::core::ffi::c_int,
-                flags: HL_EXTEND,
-            },
-            flag {
-                name: b"eExXcClLuUdDeEnNlL\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 0 as ::core::ffi::c_int,
-                flags: HL_EXCLUDENL,
-            },
-            flag {
-                name: b"tTrRaAnNsSpPaArReEnNtT\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 0 as ::core::ffi::c_int,
-                flags: HL_TRANSP,
-            },
-            flag {
-                name: b"sSkKiIpPnNlL\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 0 as ::core::ffi::c_int,
-                flags: HL_SKIPNL,
-            },
-            flag {
-                name: b"sSkKiIpPwWhHiItTeE\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 0 as ::core::ffi::c_int,
-                flags: HL_SKIPWHITE,
-            },
-            flag {
-                name: b"sSkKiIpPeEmMpPtTyY\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 0 as ::core::ffi::c_int,
-                flags: HL_SKIPEMPTY,
-            },
-            flag {
-                name: b"gGrRoOuUpPhHeErReE\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 0 as ::core::ffi::c_int,
-                flags: HL_SYNC_HERE,
-            },
-            flag {
-                name: b"gGrRoOuUpPtThHeErReE\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 0 as ::core::ffi::c_int,
-                flags: HL_SYNC_THERE,
-            },
-            flag {
-                name: b"dDiIsSpPlLaAyY\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 0 as ::core::ffi::c_int,
-                flags: HL_DISPLAY,
-            },
-            flag {
-                name: b"fFoOlLdD\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 0 as ::core::ffi::c_int,
-                flags: HL_FOLD,
-            },
-            flag {
-                name: b"cCoOnNcCeEaAlL\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 0 as ::core::ffi::c_int,
-                flags: HL_CONCEAL,
-            },
-            flag {
-                name: b"cCoOnNcCeEaAlLeEnNdDsS\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 0 as ::core::ffi::c_int,
-                flags: HL_CONCEALENDS,
-            },
-            flag {
-                name: b"cCcChHaArR\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 11 as ::core::ffi::c_int,
-                flags: 0 as ::core::ffi::c_int,
-            },
-            flag {
-                name: b"cCoOnNtTaAiInNsS\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 1 as ::core::ffi::c_int,
-                flags: 0 as ::core::ffi::c_int,
-            },
-            flag {
-                name: b"cCoOnNtTaAiInNeEdDiInN\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 2 as ::core::ffi::c_int,
-                flags: 0 as ::core::ffi::c_int,
-            },
-            flag {
-                name: b"nNeExXtTgGrRoOuUpP\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                argtype: 3 as ::core::ffi::c_int,
-                flags: 0 as ::core::ffi::c_int,
-            },
-        ]);
-        static first_letters: GlobalCell<*const ::core::ffi::c_char> =
-            GlobalCell::new(b"cCoOkKeEtTsSgGdDfFnN\0".as_ptr() as *const ::core::ffi::c_char);
+        let name = f.name.to_bytes();
+        for (i, &want) in name.iter().enumerate() {
+            if !(*arg.add(i) as u8).eq_ignore_ascii_case(&want) {
+                return false;
+            }
+        }
+        let after = *arg.add(name.len()) as c_int;
+        ascii_iswhite(after)
+            || if f.arg.takes_value() {
+                after == '=' as c_int
+            } else {
+                ends_excmd(after) != 0
+            }
+    }
+}
+
+/// Which option word `arg` names, if any.
+///
+/// `keyword` is set while parsing `:syntax keyword`, where `display`, `fold`
+/// and `extend` are keywords rather than options — a match on one of those is
+/// reported as no match at all, which stops option parsing right there.
+unsafe fn find_flag(arg: *const c_char, keyword: bool) -> Option<&'static SynFlag> {
+    unsafe {
+        let f = FLAG_TAB.iter().rev().find(|f| flag_matches(arg, f))?;
+        if keyword && (f.flags == HL_DISPLAY || f.flags == HL_FOLD || f.flags == HL_EXTEND) {
+            return None;
+        }
+        Some(f)
+    }
+}
+
+/// Read the item options at `arg`, answering the first argument that is not
+/// one, or NULL on any error.
+///
+/// Callable at any point in an argument list and repeatedly, so that options
+/// before, between and after the patterns of a `:syntax region` all land in
+/// the same [`syn_opt_arg_T`].
+pub(crate) unsafe fn get_syn_options(
+    mut arg: *mut c_char,
+    opt: &mut syn_opt_arg_T,
+    conceal_char: &mut c_int,
+    skip: c_int,
+) -> *mut c_char {
+    unsafe {
         if arg.is_null() {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+            return ::core::ptr::null_mut(); // already detected error
         }
-        if (*(*curwin.get()).w_s).b_syn_conceal != 0 {
-            (*opt).flags |= HL_CONCEAL;
+        if (*cur_syn_block()).b_syn_conceal != 0 {
+            opt.flags |= HL_CONCEAL;
         }
-        while !strchr(first_letters.get(), *arg as ::core::ffi::c_int).is_null() {
-            fidx = ::core::mem::size_of::<[flag; 19]>()
-                .wrapping_div(::core::mem::size_of::<flag>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[flag; 19]>()
-                        .wrapping_rem(::core::mem::size_of::<flag>())
-                        == 0) as ::core::ffi::c_int as usize,
-                ) as ::core::ffi::c_int;
-            loop {
-                fidx -= 1;
-                if fidx < 0 as ::core::ffi::c_int {
-                    break;
-                }
-                let mut p: *mut ::core::ffi::c_char = (*flagtab.ptr())[fidx as usize].name;
-                let mut i: ::core::ffi::c_int = 0;
-                i = 0 as ::core::ffi::c_int;
-                len = 0 as ::core::ffi::c_int;
-                while *p.offset(i as isize) as ::core::ffi::c_int != NUL {
-                    if *arg.offset(len as isize) as ::core::ffi::c_int
-                        != *p.offset(i as isize) as ::core::ffi::c_int
-                        && *arg.offset(len as isize) as ::core::ffi::c_int
-                            != *p.offset((i + 1 as ::core::ffi::c_int) as isize)
-                                as ::core::ffi::c_int
-                    {
-                        break;
-                    }
-                    i += 2 as ::core::ffi::c_int;
-                    len += 1;
-                }
-                if !(*p.offset(i as isize) as ::core::ffi::c_int == NUL
-                    && (ascii_iswhite(*arg.offset(len as isize) as ::core::ffi::c_int)
-                        as ::core::ffi::c_int
-                        != 0
-                        || (if (*flagtab.ptr())[fidx as usize].argtype > 0 as ::core::ffi::c_int {
-                            (*arg.offset(len as isize) as ::core::ffi::c_int
-                                == '=' as ::core::ffi::c_int)
-                                as ::core::ffi::c_int
-                        } else {
-                            ends_excmd(*arg.offset(len as isize) as ::core::ffi::c_int)
-                        }) != 0))
-                {
-                    continue;
-                }
-                if (*opt).keyword as ::core::ffi::c_int != 0
-                    && ((*flagtab.ptr())[fidx as usize].flags == HL_DISPLAY
-                        || (*flagtab.ptr())[fidx as usize].flags == HL_FOLD
-                        || (*flagtab.ptr())[fidx as usize].flags == HL_EXTEND)
-                {
-                    fidx = -1 as ::core::ffi::c_int;
-                }
+
+        while starts_option(*arg as u8) {
+            let Some(f) = find_flag(arg, opt.keyword) else {
                 break;
-            }
-            if fidx < 0 as ::core::ffi::c_int {
-                break;
-            }
-            if (*flagtab.ptr())[fidx as usize].argtype == 1 as ::core::ffi::c_int {
-                if !(*opt).has_cont_list {
-                    emsg(gettext(
-                        (e_contains_argument_not_accepted_here.ptr() as *const _)
-                            as *const ::core::ffi::c_char,
-                    ));
-                    return ::core::ptr::null_mut::<::core::ffi::c_char>();
-                }
-                if get_id_list(
-                    &raw mut arg,
-                    8 as ::core::ffi::c_int,
-                    &raw mut (*opt).cont_list,
-                    skip != 0,
-                ) == FAIL
-                {
-                    return ::core::ptr::null_mut::<::core::ffi::c_char>();
-                }
-            } else if (*flagtab.ptr())[fidx as usize].argtype == 2 as ::core::ffi::c_int {
-                if get_id_list(
-                    &raw mut arg,
-                    11 as ::core::ffi::c_int,
-                    &raw mut (*opt).cont_in_list,
-                    skip != 0,
-                ) == FAIL
-                {
-                    return ::core::ptr::null_mut::<::core::ffi::c_char>();
-                }
-            } else if (*flagtab.ptr())[fidx as usize].argtype == 3 as ::core::ffi::c_int {
-                if get_id_list(
-                    &raw mut arg,
-                    9 as ::core::ffi::c_int,
-                    &raw mut (*opt).next_list,
-                    skip != 0,
-                ) == FAIL
-                {
-                    return ::core::ptr::null_mut::<::core::ffi::c_char>();
-                }
-            } else if (*flagtab.ptr())[fidx as usize].argtype == 11 as ::core::ffi::c_int
-                && *arg.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '=' as ::core::ffi::c_int
-            {
-                *conceal_char = utf_ptr2char(arg.offset(6 as ::core::ffi::c_int as isize));
-                arg = arg.offset(
-                    (utfc_ptr2len(arg.offset(6 as ::core::ffi::c_int as isize))
-                        - 1 as ::core::ffi::c_int) as isize,
-                );
-                if !vim_isprintc(*conceal_char) {
-                    emsg(gettext(
-                        (e_invalid_cchar_value.ptr() as *const _) as *const ::core::ffi::c_char,
-                    ));
-                    return ::core::ptr::null_mut::<::core::ffi::c_char>();
-                }
-                arg = skipwhite(arg.offset(7 as ::core::ffi::c_int as isize));
-            } else {
-                (*opt).flags |= (*flagtab.ptr())[fidx as usize].flags;
-                arg = skipwhite(arg.offset(len as isize));
-                if (*flagtab.ptr())[fidx as usize].flags == HL_SYNC_HERE
-                    || (*flagtab.ptr())[fidx as usize].flags == HL_SYNC_THERE
-                {
-                    if (*opt).sync_idx.is_null() {
-                        emsg(gettext(b"E393: group[t]here not accepted here\0".as_ptr()
-                            as *const ::core::ffi::c_char));
-                        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+            };
+            match f.arg {
+                OptArg::Contains => {
+                    if !opt.has_cont_list {
+                        emsg(gettext(E_CONTAINS_NOT_ACCEPTED_HERE.as_ptr()));
+                        return ::core::ptr::null_mut();
                     }
-                    let mut gname_start: *mut ::core::ffi::c_char = arg;
-                    arg = skiptowhite(arg);
-                    if gname_start == arg {
-                        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+                    if get_id_list(&mut arg, 8, &mut opt.cont_list, skip != 0) == FAIL {
+                        return ::core::ptr::null_mut();
                     }
-                    let mut gname: *mut ::core::ffi::c_char =
-                        xstrnsave(gname_start, arg.offset_from(gname_start) as size_t);
-                    if strcmp(gname, b"NONE\0".as_ptr() as *const ::core::ffi::c_char)
-                        == 0 as ::core::ffi::c_int
-                    {
-                        *(*opt).sync_idx = NONE_IDX;
-                    } else {
-                        let mut syn_id: ::core::ffi::c_int = syn_name2id(gname);
-                        let mut i_0: ::core::ffi::c_int = 0;
-                        i_0 = (*(*curwin.get()).w_s).b_syn_patterns.ga_len;
-                        loop {
-                            i_0 -= 1;
-                            if i_0 < 0 as ::core::ffi::c_int {
-                                break;
-                            }
-                            if !((*((*(*curwin.get()).w_s).b_syn_patterns.ga_data as *mut synpat_T)
-                                .offset(i_0 as isize))
-                            .sp_syn
-                            .id as ::core::ffi::c_int
-                                == syn_id
-                                && (*((*(*curwin.get()).w_s).b_syn_patterns.ga_data
-                                    as *mut synpat_T)
-                                    .offset(i_0 as isize))
-                                .sp_type as ::core::ffi::c_int
-                                    == SPTYPE_START)
-                            {
-                                continue;
-                            }
-                            *(*opt).sync_idx = i_0;
-                            break;
+                }
+                OptArg::ContainedIn => {
+                    if get_id_list(&mut arg, 11, &mut opt.cont_in_list, skip != 0) == FAIL {
+                        return ::core::ptr::null_mut();
+                    }
+                }
+                OptArg::NextGroup => {
+                    if get_id_list(&mut arg, 9, &mut opt.next_list, skip != 0) == FAIL {
+                        return ::core::ptr::null_mut();
+                    }
+                }
+                OptArg::Cchar => {
+                    // `cchar` is five letters and `flag_matches` already
+                    // required the `=`, so the character starts at arg[6].
+                    *conceal_char = utf_ptr2char(arg.add(6));
+                    arg = arg.add(utfc_ptr2len(arg.add(6)) as usize - 1);
+                    if !vim_isprintc(*conceal_char) {
+                        emsg(gettext(E_INVALID_CCHAR_VALUE.as_ptr()));
+                        return ::core::ptr::null_mut();
+                    }
+                    arg = skipwhite(arg.add(7));
+                }
+                OptArg::Flag => {
+                    opt.flags |= f.flags;
+                    arg = skipwhite(arg.add(f.name.count_bytes()));
+                    if f.flags == HL_SYNC_HERE || f.flags == HL_SYNC_THERE {
+                        arg = sync_group_arg(arg, opt);
+                        if arg.is_null() {
+                            return ::core::ptr::null_mut();
                         }
-                        if i_0 < 0 as ::core::ffi::c_int {
-                            semsg(
-                                gettext(b"E394: Didn't find region item for %s\0".as_ptr()
-                                    as *const ::core::ffi::c_char),
-                                gname,
-                            );
-                            xfree(gname as *mut ::core::ffi::c_void);
-                            return ::core::ptr::null_mut::<::core::ffi::c_char>();
-                        }
+                    } else if f.flags == HL_FOLD && foldmethodIsSyntax(curwin.get()) {
+                        foldUpdateAll(curwin.get()); // Need to update folds later.
                     }
-                    xfree(gname as *mut ::core::ffi::c_void);
-                    arg = skipwhite(arg);
-                } else if (*flagtab.ptr())[fidx as usize].flags == HL_FOLD
-                    && foldmethodIsSyntax(curwin.get()) as ::core::ffi::c_int != 0
-                {
-                    foldUpdateAll(curwin.get());
                 }
             }
         }
-        return arg;
+        arg
     }
 }
 
-pub(crate) unsafe extern "C" fn get_id_list(
-    arg: *mut *mut ::core::ffi::c_char,
-    keylen: ::core::ffi::c_int,
-    list: *mut *mut int16_t,
-    skip: bool,
-) -> ::core::ffi::c_int {
+/// Read the group name after `grouphere`/`groupthere` and record the pattern
+/// index it names in `opt.sync_idx`.
+///
+/// Answers what follows it, or NULL after reporting an error.
+unsafe fn sync_group_arg(mut arg: *mut c_char, opt: &syn_opt_arg_T) -> *mut c_char {
     unsafe {
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut total_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut retval: *mut int16_t = ::core::ptr::null_mut::<int16_t>();
-        let mut regmatch: regmatch_T = regmatch_T {
-            regprog: ::core::ptr::null_mut::<regprog_T>(),
-            startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-            endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-            rm_matchcol: 0,
-            rm_ic: false,
-        };
-        let mut id: ::core::ffi::c_int = 0;
-        let mut failed: bool = false_0 != 0;
-        let mut round: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-        while round <= 2 as ::core::ffi::c_int {
-            p = skipwhite((*arg).offset(keylen as isize));
-            if *p as ::core::ffi::c_int != '=' as ::core::ffi::c_int {
-                semsg(
-                    gettext(
-                        b"E405: Missing equal sign: %s\0".as_ptr() as *const ::core::ffi::c_char
-                    ),
-                    *arg,
-                );
-                break;
-            } else {
-                p = skipwhite(p.offset(1 as ::core::ffi::c_int as isize));
-                if ends_excmd(*p as ::core::ffi::c_int) != 0 {
-                    semsg(
-                        gettext(
-                            b"E406: Empty argument: %s\0".as_ptr() as *const ::core::ffi::c_char
-                        ),
-                        *arg,
-                    );
-                    break;
-                } else {
-                    let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    loop {
-                        end = p;
-                        while *end as ::core::ffi::c_int != 0
-                            && !ascii_iswhite(*end as ::core::ffi::c_int)
-                            && *end as ::core::ffi::c_int != ',' as ::core::ffi::c_int
-                        {
-                            end = end.offset(1);
-                        }
-                        let name: *mut ::core::ffi::c_char =
-                            xmalloc((end.offset_from(p) as size_t).wrapping_add(3 as size_t))
-                                as *mut ::core::ffi::c_char;
-                        xmemcpyz(
-                            name.offset(1 as ::core::ffi::c_int as isize)
-                                as *mut ::core::ffi::c_void,
-                            p as *const ::core::ffi::c_void,
-                            end.offset_from(p) as size_t,
-                        );
-                        if strcmp(
-                            name.offset(1 as ::core::ffi::c_int as isize),
-                            b"ALLBUT\0".as_ptr() as *const ::core::ffi::c_char,
-                        ) == 0 as ::core::ffi::c_int
-                            || strcmp(
-                                name.offset(1 as ::core::ffi::c_int as isize),
-                                b"ALL\0".as_ptr() as *const ::core::ffi::c_char,
-                            ) == 0 as ::core::ffi::c_int
-                            || strcmp(
-                                name.offset(1 as ::core::ffi::c_int as isize),
-                                b"TOP\0".as_ptr() as *const ::core::ffi::c_char,
-                            ) == 0 as ::core::ffi::c_int
-                            || strcmp(
-                                name.offset(1 as ::core::ffi::c_int as isize),
-                                b"CONTAINED\0".as_ptr() as *const ::core::ffi::c_char,
-                            ) == 0 as ::core::ffi::c_int
-                        {
-                            if (if (**arg as ::core::ffi::c_int) < 'a' as ::core::ffi::c_int
-                                || **arg as ::core::ffi::c_int > 'z' as ::core::ffi::c_int
-                            {
-                                **arg as ::core::ffi::c_int
-                            } else {
-                                **arg as ::core::ffi::c_int
-                                    - ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-                            }) != 'C' as ::core::ffi::c_int
-                            {
-                                semsg(
-                                    gettext(b"E407: %s not allowed here\0".as_ptr()
-                                        as *const ::core::ffi::c_char),
-                                    name.offset(1 as ::core::ffi::c_int as isize),
-                                );
-                                failed = true_0 != 0;
-                                xfree(name as *mut ::core::ffi::c_void);
-                                break;
-                            } else if count != 0 as ::core::ffi::c_int {
-                                semsg(
-                                    gettext(b"E408: %s must be first in contains list\0".as_ptr()
-                                        as *const ::core::ffi::c_char),
-                                    name.offset(1 as ::core::ffi::c_int as isize),
-                                );
-                                failed = true_0 != 0;
-                                xfree(name as *mut ::core::ffi::c_void);
-                                break;
-                            } else {
-                                if *name.offset(1 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int
-                                    == 'A' as ::core::ffi::c_int
-                                {
-                                    id = MAX_HL_ID as ::core::ffi::c_int;
-                                } else if *name.offset(1 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int
-                                    == 'T' as ::core::ffi::c_int
-                                {
-                                    id = SYNID_TOP;
-                                } else {
-                                    id = SYNID_CONTAINED;
-                                }
-                                id += current_syn_inc_tag.get();
-                            }
-                        } else if *name.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int
-                            == '@' as ::core::ffi::c_int
-                        {
-                            if skip {
-                                id = -1 as ::core::ffi::c_int;
-                            } else {
-                                id = syn_check_cluster(
-                                    name.offset(2 as ::core::ffi::c_int as isize),
-                                    (end.offset_from(p) - 1 as isize) as ::core::ffi::c_int,
-                                );
-                            }
-                        } else if strpbrk(
-                            name.offset(1 as ::core::ffi::c_int as isize),
-                            b"\\.*^$~[\0".as_ptr() as *const ::core::ffi::c_char,
-                        )
-                        .is_null()
-                        {
-                            id = syn_check_group(
-                                name.offset(1 as ::core::ffi::c_int as isize),
-                                end.offset_from(p) as size_t,
-                            );
-                        } else {
-                            *name = '^' as ::core::ffi::c_char;
-                            strcat(name, b"$\0".as_ptr() as *const ::core::ffi::c_char);
-                            regmatch.regprog = vim_regcomp(name, RE_MAGIC);
-                            if regmatch.regprog.is_null() {
-                                failed = true_0 != 0;
-                                xfree(name as *mut ::core::ffi::c_void);
-                                break;
-                            } else {
-                                regmatch.rm_ic = true_0 != 0;
-                                id = 0 as ::core::ffi::c_int;
-                                let mut i: ::core::ffi::c_int = highlight_num_groups();
-                                loop {
-                                    i -= 1;
-                                    if i < 0 as ::core::ffi::c_int {
-                                        break;
-                                    }
-                                    if vim_regexec(
-                                        &raw mut regmatch,
-                                        highlight_group_name(i),
-                                        0 as colnr_T,
-                                    ) {
-                                        if round == 2 as ::core::ffi::c_int {
-                                            if count >= total_count {
-                                                xfree(retval as *mut ::core::ffi::c_void);
-                                                round = 1 as ::core::ffi::c_int;
-                                            } else {
-                                                *retval.offset(count as isize) =
-                                                    (i + 1 as ::core::ffi::c_int) as int16_t;
-                                            }
-                                        }
-                                        count += 1;
-                                        id = -1 as ::core::ffi::c_int;
-                                    }
-                                }
-                                vim_regfree(regmatch.regprog);
-                            }
-                        }
-                        xfree(name as *mut ::core::ffi::c_void);
-                        if id == 0 as ::core::ffi::c_int {
-                            semsg(
-                                gettext(b"E409: Unknown group name: %s\0".as_ptr()
-                                    as *const ::core::ffi::c_char),
-                                p,
-                            );
-                            failed = true_0 != 0;
-                            break;
-                        } else {
-                            if id > 0 as ::core::ffi::c_int {
-                                if round == 2 as ::core::ffi::c_int {
-                                    if count >= total_count {
-                                        xfree(retval as *mut ::core::ffi::c_void);
-                                        round = 1 as ::core::ffi::c_int;
-                                    } else {
-                                        *retval.offset(count as isize) = id as int16_t;
-                                    }
-                                }
-                                count += 1;
-                            }
-                            p = skipwhite(end);
-                            if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int {
-                                break;
-                            }
-                            p = skipwhite(p.offset(1 as ::core::ffi::c_int as isize));
-                            if ends_excmd(*p as ::core::ffi::c_int) != 0 {
-                                break;
-                            }
-                        }
-                    }
-                    if failed {
-                        break;
-                    }
-                    if round == 1 as ::core::ffi::c_int {
-                        retval = xmalloc(
-                            (count as size_t)
-                                .wrapping_add(1 as size_t)
-                                .wrapping_mul(::core::mem::size_of::<int16_t>()),
-                        ) as *mut int16_t;
-                        *retval.offset(count as isize) = 0 as int16_t;
-                        total_count = count;
-                    }
-                    round += 1;
+        if opt.sync_idx.is_null() {
+            emsg(gettext(c"E393: group[t]here not accepted here".as_ptr()));
+            return ::core::ptr::null_mut();
+        }
+        let gname_start = arg;
+        arg = skiptowhite(arg);
+        if gname_start == arg {
+            return ::core::ptr::null_mut();
+        }
+        let gname = xstrnsave(gname_start, arg.offset_from(gname_start) as size_t);
+
+        if strcmp(gname, c"NONE".as_ptr()) == 0 {
+            *opt.sync_idx = NONE_IDX;
+        } else {
+            // The named group has to already have a region START item: this is
+            // an index into the pattern array, not an id.
+            let syn_id = syn_name2id(gname);
+            let mut i = cur_pattern_count();
+            let found = loop {
+                i -= 1;
+                if i < 0 {
+                    break false;
                 }
+                let spp = cur_pattern(i);
+                if (*spp).sp_syn.id as c_int == syn_id && (*spp).sp_type as c_int == SPTYPE_START {
+                    *opt.sync_idx = i;
+                    break true;
+                }
+            };
+            if !found {
+                semsg(
+                    gettext(c"E394: Didn't find region item for %s".as_ptr()),
+                    gname,
+                );
+                xfree(gname as *mut c_void);
+                return ::core::ptr::null_mut();
             }
         }
-        *arg = p;
-        if failed as ::core::ffi::c_int != 0 || retval.is_null() {
-            xfree(retval as *mut ::core::ffi::c_void);
+
+        xfree(gname as *mut c_void);
+        skipwhite(arg)
+    }
+}
+
+/// What one pass of [`parse_id_list`] found.
+struct IdListPass {
+    /// The ids, in the order the list named them.
+    ids: Vec<int16_t>,
+    /// Where the scan stopped. Written back to the caller's `arg` even on
+    /// failure — `:syntax cluster` reports the error against it.
+    end: *mut c_char,
+    /// An error was reported and the whole list is to be discarded.
+    failed: bool,
+}
+
+/// Turn a `contains=`-style group list into a list of ids.
+///
+/// `arg` points at the keyword and is advanced past the list. The argument is
+/// modified in passing (the parse writes NULs into it). Answers `FAIL` on any
+/// error; an existing `*list` is kept and the new one discarded.
+pub(crate) unsafe fn get_id_list(
+    arg: &mut *mut c_char,
+    keylen: c_int,
+    list: &mut *mut int16_t,
+    skip: bool,
+) -> c_int {
+    unsafe {
+        // The list is parsed more than once. A name that is a regexp matches
+        // the group table as it stands, and a *later* name in the same list
+        // can create a group that the regexp would also have matched
+        // ("contains=a.*b,axb"), so the pass has to be repeated until it stops
+        // growing. Upstream spells this as a two-round loop that resets its
+        // own counter back to round 1.
+        let mut previous: Option<usize> = None;
+        let pass = loop {
+            let pass = parse_id_list(*arg, keylen, skip);
+            if pass.failed {
+                break pass;
+            }
+            match previous {
+                Some(n) if pass.ids.len() <= n => break pass,
+                _ => previous = Some(pass.ids.len()),
+            }
+        };
+
+        *arg = pass.end;
+        if pass.failed {
             return FAIL;
         }
-        if (*list).is_null() {
-            *list = retval;
-        } else {
-            xfree(retval as *mut ::core::ffi::c_void);
+        // An already-parsed list is kept; upstream allocates the second one
+        // and frees it again.
+        if list.is_null() {
+            *list = alloc_ids(&pass.ids);
         }
-        return OK;
+        OK
     }
 }
 
-pub(crate) unsafe extern "C" fn copy_id_list(list: *const int16_t) -> *mut int16_t {
+/// Copy `ids` into the `xmalloc`ed, NUL-terminated array the item structs hold.
+unsafe fn alloc_ids(ids: &[int16_t]) -> *mut int16_t {
+    unsafe {
+        let out = xmalloc((ids.len() + 1) * ::core::mem::size_of::<int16_t>()) as *mut int16_t;
+        ::core::ptr::copy_nonoverlapping(ids.as_ptr(), out, ids.len());
+        *out.add(ids.len()) = 0;
+        out
+    }
+}
+
+/// One pass over `keyword=a,b,@cl` starting at `arg`.
+unsafe fn parse_id_list(arg: *mut c_char, keylen: c_int, skip: bool) -> IdListPass {
+    unsafe {
+        let mut ids: Vec<int16_t> = Vec::new();
+
+        let mut p = skipwhite(arg.offset(keylen as isize));
+        if *p as c_int != '=' as c_int {
+            semsg(gettext(c"E405: Missing equal sign: %s".as_ptr()), arg);
+            return IdListPass {
+                ids,
+                end: p,
+                failed: true,
+            };
+        }
+        p = skipwhite(p.add(1));
+        if ends_excmd(*p as c_int) != 0 {
+            semsg(gettext(c"E406: Empty argument: %s".as_ptr()), arg);
+            return IdListPass {
+                ids,
+                end: p,
+                failed: true,
+            };
+        }
+
+        loop {
+            let mut end = p;
+            while *end as c_int != 0
+                && !ascii_iswhite(*end as c_int)
+                && *end as c_int != ',' as c_int
+            {
+                end = end.add(1);
+            }
+
+            match parse_id_name(arg, p, end, skip, &mut ids) {
+                Ok(Some(id)) => ids.push(id as int16_t),
+                // A regexp name pushed its own matches, or `skip` is on.
+                Ok(None) => {}
+                Err(()) => {
+                    return IdListPass {
+                        ids,
+                        end: p,
+                        failed: true,
+                    };
+                }
+            }
+
+            p = skipwhite(end);
+            if *p as c_int != ',' as c_int {
+                break;
+            }
+            p = skipwhite(p.add(1)); // skip comma in between arguments
+            if ends_excmd(*p as c_int) != 0 {
+                break;
+            }
+        }
+
+        IdListPass {
+            ids,
+            end: p,
+            failed: false,
+        }
+    }
+}
+
+/// Resolve one name of a group list.
+///
+/// Answers the id to add, `None` when the name added its own (a regexp) or
+/// added nothing (`@cluster` while skipping), and `Err` when a message has
+/// been given.
+unsafe fn parse_id_name(
+    arg: *mut c_char,
+    p: *mut c_char,
+    end: *mut c_char,
+    skip: bool,
+    ids: &mut Vec<int16_t>,
+) -> Result<Option<c_int>, ()> {
+    unsafe {
+        let text_len = end.offset_from(p) as usize;
+        // Leave room in front for the `^` and behind for the `$` the regexp
+        // form needs.
+        let mut name: Vec<u8> = Vec::with_capacity(text_len + 3);
+        name.push(b'^');
+        name.extend_from_slice(::core::slice::from_raw_parts(p as *const u8, text_len));
+        name.push(0);
+        let plain = name.as_ptr().add(1) as *const c_char;
+        let text = &name[1..1 + text_len];
+
+        if text == b"ALLBUT" || text == b"ALL" || text == b"TOP" || text == b"CONTAINED" {
+            // Only `contains=` and `containedin=` accept these, which is what
+            // upstream tests by the keyword's first letter.
+            if (*arg as u8).to_ascii_uppercase() != b'C' {
+                semsg(gettext(c"E407: %s not allowed here".as_ptr()), plain);
+                return Err(());
+            }
+            if !ids.is_empty() {
+                semsg(
+                    gettext(c"E408: %s must be first in contains list".as_ptr()),
+                    plain,
+                );
+                return Err(());
+            }
+            let base = match text[0] {
+                b'A' => SYNID_ALLBUT,
+                b'T' => SYNID_TOP,
+                _ => SYNID_CONTAINED,
+            };
+            return Ok(Some(base + current_syn_inc_tag.get()));
+        }
+
+        if text.first() == Some(&b'@') {
+            if skip {
+                return Ok(None);
+            }
+            let id = syn_check_cluster(plain.add(1), text_len as c_int - 1);
+            return if id == 0 {
+                semsg(gettext(c"E409: Unknown group name: %s".as_ptr()), p);
+                Err(())
+            } else {
+                Ok(Some(id))
+            };
+        }
+
+        if strpbrk(plain, c"\\.*^$~[".as_ptr()).is_null() {
+            let id = syn_check_group(plain, text_len as size_t);
+            return if id == 0 {
+                semsg(gettext(c"E409: Unknown group name: %s".as_ptr()), p);
+                Err(())
+            } else {
+                Ok(Some(id))
+            };
+        }
+
+        // A regexp matching group names: add every group it matches.
+        name.pop();
+        name.push(b'$');
+        name.push(0);
+        let mut regmatch = regmatch_T {
+            regprog: vim_regcomp(name.as_ptr() as *const c_char, RE_MAGIC),
+            startp: [::core::ptr::null_mut(); 10],
+            endp: [::core::ptr::null_mut(); 10],
+            rm_matchcol: 0,
+            rm_ic: true,
+        };
+        if regmatch.regprog.is_null() {
+            return Err(());
+        }
+        let mut matched = false;
+        let mut i = highlight_num_groups();
+        while i > 0 {
+            i -= 1;
+            if vim_regexec(&raw mut regmatch, highlight_group_name(i), 0) {
+                ids.push((i + 1) as int16_t);
+                matched = true;
+            }
+        }
+        vim_regfree(regmatch.regprog);
+        if !matched {
+            semsg(gettext(c"E409: Unknown group name: %s".as_ptr()), p);
+            return Err(());
+        }
+        Ok(None)
+    }
+}
+
+/// Copy an id list, which is a NUL-terminated `int16_t` array.
+pub(crate) unsafe fn copy_id_list(list: *const int16_t) -> *mut int16_t {
     unsafe {
         if list.is_null() {
-            return ::core::ptr::null_mut::<int16_t>();
+            return ::core::ptr::null_mut();
         }
-        let mut count: ::core::ffi::c_int = 0;
-        count = 0 as ::core::ffi::c_int;
-        while *list.offset(count as isize) != 0 {
+        let mut count = 0;
+        while *list.add(count) != 0 {
             count += 1;
         }
-        let len: size_t = (count as size_t)
-            .wrapping_add(1 as size_t)
-            .wrapping_mul(::core::mem::size_of::<int16_t>());
-        let retval: *mut int16_t = xmalloc(len) as *mut int16_t;
-        memmove(
-            retval as *mut ::core::ffi::c_void,
-            list as *const ::core::ffi::c_void,
-            len,
-        );
-        return retval;
+        let len = (count + 1) * ::core::mem::size_of::<int16_t>();
+        let retval = xmalloc(len) as *mut int16_t;
+        memmove(retval as *mut c_void, list as *const c_void, len);
+        retval
     }
 }
 
-pub(crate) unsafe extern "C" fn in_id_list(
-    mut cur_si: *mut stateitem_T,
-    mut list: *mut int16_t,
-    mut ssp: *mut sp_syn,
-    mut flags: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Is the syntax group `ssp` in the id list `list` of `cur_si`?
+///
+/// `cur_si` is the current item, or NULL when the `containedin` list is not
+/// being checked. This runs once per candidate pattern per column: keep it
+/// fast.
+pub(crate) unsafe fn in_id_list(
+    cur_si: *mut stateitem_T,
+    list: *mut int16_t,
+    ssp: *mut sp_syn,
+    flags: c_int,
+) -> bool {
     unsafe {
-        let mut retval: ::core::ffi::c_int = 0;
-        let mut id: int16_t = (*ssp).id;
-        static depth: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+        // If `ssp` has a `containedin` list and `cur_si` is in it, it is
+        // admitted whatever `list` says.
         if !cur_si.is_null() && !(*ssp).cont_in_list.is_null() && (*cur_si).si_flags & HL_MATCH == 0
         {
-            while (*cur_si).si_flags & HL_TRANS_CONT != 0
-                && cur_si > (*current_state.ptr()).ga_data as *mut stateitem_T
-            {
-                cur_si = cur_si.offset(-1);
+            // Ignore transparent items without a contains argument, double
+            // checking that we don't go back past the first one.
+            let mut si = cur_si;
+            while (*si).si_flags & HL_TRANS_CONT != 0 && si > state_at(0) {
+                si = si.offset(-1);
             }
-            if (*cur_si).si_idx >= 0 as ::core::ffi::c_int
-                && in_id_list(
-                    ::core::ptr::null_mut::<stateitem_T>(),
+            // si_idx is -1 for keywords, which never contain anything.
+            if (*si).si_idx >= 0 {
+                let spp = syn_pattern((*si).si_idx);
+                if id_list_has(
                     (*ssp).cont_in_list,
-                    &raw mut (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
-                        .offset((*cur_si).si_idx as isize))
-                    .sp_syn,
-                    (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
-                        .offset((*cur_si).si_idx as isize))
-                    .sp_flags,
-                ) != 0
-            {
-                return true_0;
+                    &raw mut (*spp).sp_syn,
+                    (*spp).sp_flags,
+                    0,
+                ) {
+                    return true;
+                }
             }
         }
+        id_list_has(list, ssp, flags, 0)
+    }
+}
+
+/// The list half of [`in_id_list`], with the cluster recursion depth threaded
+/// through rather than kept in a static.
+///
+/// A cluster that includes itself indirectly would recurse forever, so the
+/// depth is capped at 30.
+unsafe fn id_list_has(
+    mut list: *mut int16_t,
+    ssp: *mut sp_syn,
+    flags: c_int,
+    depth: c_int,
+) -> bool {
+    unsafe {
         if list.is_null() {
-            return false_0;
+            return false;
         }
+        // ID_LIST_ALL means a transparent item that is not inside anything:
+        // only not-contained groups are admitted.
         if list == ID_LIST_ALL {
-            return (flags & HL_CONTAINED == 0) as ::core::ffi::c_int;
+            return flags & HL_CONTAINED == 0;
         }
-        let mut toplevel: bool = flags & HL_CONTAINED == 0 || flags & HL_INCLUDED_TOPLEVEL != 0;
-        let mut item: int16_t = *list;
-        if item as ::core::ffi::c_int >= MAX_HL_ID as ::core::ffi::c_int
-            && (item as ::core::ffi::c_int) < SYNID_CLUSTER
-        {
-            if (item as ::core::ffi::c_int) < SYNID_TOP {
-                if item as ::core::ffi::c_int - MAX_HL_ID as ::core::ffi::c_int != (*ssp).inc_tag {
-                    return false_0;
+
+        // Is this top-level (i.e. not `contained`) in the file it was declared
+        // in? For an included file that is not the same as HL_CONTAINED, which
+        // is set unconditionally there.
+        let toplevel = flags & HL_CONTAINED == 0 || flags & HL_INCLUDED_TOPLEVEL != 0;
+
+        // A leading ALLBUT/TOP/CONTAINED inverts the answer, and requires the
+        // group to be at the same `:syntax include` level as the list.
+        let id = (*ssp).id;
+        let mut item = *list;
+        let mut retval = true;
+        if item as c_int >= SYNID_ALLBUT && (item as c_int) < SYNID_CLUSTER {
+            let level = if (item as c_int) < SYNID_TOP {
+                // ALL or ALLBUT: accept all groups in the same file.
+                item as c_int - SYNID_ALLBUT
+            } else if (item as c_int) < SYNID_CONTAINED {
+                // TOP: accept all not-contained groups in the same file.
+                if !toplevel {
+                    return false;
                 }
-            } else if (item as ::core::ffi::c_int) < SYNID_CONTAINED {
-                if item as ::core::ffi::c_int - SYNID_TOP != (*ssp).inc_tag || !toplevel {
-                    return false_0;
+                item as c_int - SYNID_TOP
+            } else {
+                // CONTAINED: accept all contained groups in the same file.
+                if toplevel {
+                    return false;
                 }
-            } else if item as ::core::ffi::c_int - SYNID_CONTAINED != (*ssp).inc_tag
-                || toplevel as ::core::ffi::c_int != 0
-            {
-                return false_0;
+                item as c_int - SYNID_CONTAINED
+            };
+            if level != (*ssp).inc_tag {
+                return false;
             }
-            list = list.offset(1);
+            list = list.add(1);
             item = *list;
-            retval = false_0;
-        } else {
-            retval = true_0;
+            retval = false;
         }
-        while item as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
-            if item as ::core::ffi::c_int == id as ::core::ffi::c_int {
+
+        while item != 0 {
+            if item == id {
                 return retval;
             }
-            if item as ::core::ffi::c_int >= SYNID_CLUSTER {
-                let mut scl_list: *mut int16_t = (*((*syn_block.get()).b_syn_clusters.ga_data
-                    as *mut syn_cluster_T)
-                    .offset((item as ::core::ffi::c_int - SYNID_CLUSTER) as isize))
-                .scl_list;
-                if !scl_list.is_null() && depth.get() < 30 as ::core::ffi::c_int {
-                    (*depth.ptr()) += 1;
-                    let mut r: ::core::ffi::c_int =
-                        in_id_list(::core::ptr::null_mut::<stateitem_T>(), scl_list, ssp, flags);
-                    (*depth.ptr()) -= 1;
-                    if r != 0 {
-                        return retval;
-                    }
+            if item as c_int >= SYNID_CLUSTER {
+                let scl_list = (*cluster_of(item as c_int - SYNID_CLUSTER)).scl_list;
+                if !scl_list.is_null() && depth < 30 && id_list_has(scl_list, ssp, flags, depth + 1)
+                {
+                    return retval;
                 }
             }
-            list = list.offset(1);
+            list = list.add(1);
             item = *list;
         }
-        return (retval == 0) as ::core::ffi::c_int;
+        !retval
+    }
+}
+
+/// The cluster at `idx` in the block being *parsed*.
+#[inline(always)]
+unsafe fn cluster_of(idx: c_int) -> *mut syn_cluster_T {
+    unsafe {
+        ((*syn_block.get()).b_syn_clusters.ga_data as *mut syn_cluster_T).offset(idx as isize)
     }
 }

@@ -58,7 +58,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_include(
             == '@' as ::core::ffi::c_int
         {
             arg = arg.offset(1);
-            let mut rest: *mut ::core::ffi::c_char = get_group_name(arg, &raw mut group_name_end);
+            let mut rest: *mut ::core::ffi::c_char = get_group_name(arg, &mut group_name_end);
             if rest.is_null() {
                 emsg(gettext(
                     b"E397: Filename required\0".as_ptr() as *const ::core::ffi::c_char
@@ -166,7 +166,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_match(
         };
         let mut sync_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut conceal_char: ::core::ffi::c_int = NUL;
-        let mut rest: *mut ::core::ffi::c_char = get_group_name(arg, &raw mut group_name_end);
+        let mut rest: *mut ::core::ffi::c_char = get_group_name(arg, &mut group_name_end);
         syn_opt_arg.flags = 0 as ::core::ffi::c_int;
         syn_opt_arg.keyword = false_0 != 0;
         syn_opt_arg.sync_idx = if syncing != 0 {
@@ -178,12 +178,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_match(
         syn_opt_arg.cont_list = ::core::ptr::null_mut::<int16_t>();
         syn_opt_arg.cont_in_list = ::core::ptr::null_mut::<int16_t>();
         syn_opt_arg.next_list = ::core::ptr::null_mut::<int16_t>();
-        rest = get_syn_options(
-            rest,
-            &raw mut syn_opt_arg,
-            &raw mut conceal_char,
-            (*eap).skip,
-        );
+        rest = get_syn_options(rest, &mut syn_opt_arg, &mut conceal_char, (*eap).skip);
         init_syn_patterns();
         memset(
             &raw mut item as *mut ::core::ffi::c_void,
@@ -194,12 +189,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_match(
         if vim_regcomp_had_eol() != 0 && syn_opt_arg.flags & HL_EXCLUDENL == 0 {
             syn_opt_arg.flags |= HL_HAS_EOL;
         }
-        rest = get_syn_options(
-            rest,
-            &raw mut syn_opt_arg,
-            &raw mut conceal_char,
-            (*eap).skip,
-        );
+        rest = get_syn_options(rest, &mut syn_opt_arg, &mut conceal_char, (*eap).skip);
         if !rest.is_null() {
             (*eap).nextcmd = check_nextcmd(rest);
             if ends_excmd(*rest as ::core::ffi::c_int) == 0 || (*eap).skip != 0 {
@@ -283,7 +273,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_region(
             next_list: ::core::ptr::null_mut::<int16_t>(),
         };
         let mut conceal_char: ::core::ffi::c_int = NUL;
-        rest = get_group_name(arg, &raw mut group_name_end);
+        rest = get_group_name(arg, &mut group_name_end);
         pat_ptrs[0 as ::core::ffi::c_int as usize] = ::core::ptr::null_mut::<pat_ptr>();
         pat_ptrs[1 as ::core::ffi::c_int as usize] = ::core::ptr::null_mut::<pat_ptr>();
         pat_ptrs[2 as ::core::ffi::c_int as usize] = ::core::ptr::null_mut::<pat_ptr>();
@@ -296,12 +286,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_region(
         syn_opt_arg.cont_in_list = ::core::ptr::null_mut::<int16_t>();
         syn_opt_arg.next_list = ::core::ptr::null_mut::<int16_t>();
         while !rest.is_null() && ends_excmd(*rest as ::core::ffi::c_int) == 0 {
-            rest = get_syn_options(
-                rest,
-                &raw mut syn_opt_arg,
-                &raw mut conceal_char,
-                (*eap).skip,
-            );
+            rest = get_syn_options(rest, &mut syn_opt_arg, &mut conceal_char, (*eap).skip);
             if rest.is_null() || ends_excmd(*rest as ::core::ffi::c_int) != 0 {
                 break;
             }

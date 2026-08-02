@@ -42,8 +42,8 @@ use crate::src::nvim::message::{
 use crate::src::nvim::optionstr::clear_string_option;
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, gettext, memcpy, memmove, memset, qsort, strcasecmp, strcat, strchr, strcmp,
-    strcpy, strlen, strncasecmp, strncmp, strpbrk,
+    __assert_fail, gettext, memcpy, memmove, memset, qsort, strcasecmp, strcmp, strcpy, strlen,
+    strncasecmp, strncmp, strpbrk,
 };
 use crate::src::nvim::path::path_is_absolute;
 use crate::src::nvim::pos::MAXLNUM;
@@ -137,6 +137,9 @@ pub struct keyentry {
 pub type keyentry_T = keyentry;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const MAX_HL_ID: C2Rust_Unnamed_20 = 20000;
+/// The `contains=ALL`/`ALLBUT` marker, which shares its value with the highest
+/// possible highlight id and is offset by the `:syntax include` tag.
+pub(crate) const SYNID_ALLBUT: ::core::ffi::c_int = MAX_HL_ID as ::core::ffi::c_int;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const DOSO_NONE: C2Rust_Unnamed_21 = 0;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
@@ -279,15 +282,9 @@ pub const SPO_COUNT: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
 static e_illegal_arg: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E390: Illegal argument: %s\0")
 });
-static e_contains_argument_not_accepted_here: GlobalCell<[::core::ffi::c_char; 42]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
-            *b"E395: Contains argument not accepted here\0",
-        )
-    });
-static e_invalid_cchar_value: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E844: Invalid cchar value\0")
-});
+pub(crate) const E_CONTAINS_NOT_ACCEPTED_HERE: &::core::ffi::CStr =
+    c"E395: Contains argument not accepted here";
+pub(crate) const E_INVALID_CCHAR_VALUE: &::core::ffi::CStr = c"E844: Invalid cchar value";
 /// `%s` is the text before the `]`, `%s` the text after it.
 pub(crate) const E_TRAILING_CHAR_AFTER_RSB: &::core::ffi::CStr =
     c"E890: Trailing char after ']': %s]%s";

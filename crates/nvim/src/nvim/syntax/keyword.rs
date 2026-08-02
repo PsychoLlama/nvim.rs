@@ -231,7 +231,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_i
         let mut group_name_end = ::core::ptr::null_mut::<c_char>();
         let mut conceal_char: c_int = NUL;
 
-        let mut rest = get_group_name(arg, &raw mut group_name_end);
+        let mut rest = get_group_name(arg, &mut group_name_end);
         if !rest.is_null() {
             let syn_id = if (*eap).skip != 0 {
                 -1
@@ -258,7 +258,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_i
                 let mut cnt = 0;
                 let mut p = keyword_copy;
                 while !rest.is_null() && ends_excmd(*rest as c_int) == 0 {
-                    rest = get_syn_options(rest, &raw mut opt, &raw mut conceal_char, (*eap).skip);
+                    rest = get_syn_options(rest, &mut opt, &mut conceal_char, (*eap).skip);
                     if rest.is_null() || ends_excmd(*rest as c_int) != 0 {
                         break;
                     }

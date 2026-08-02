@@ -530,7 +530,7 @@ unsafe fn pattern_admitted(
                 current_next_list.get(),
                 &raw mut (*spp).sp_syn,
                 0,
-            ) != 0
+            )
         } else if cur_si.is_null() {
             // At the top level, anything that is not `contained`.
             (*spp).sp_flags & HL_CONTAINED == 0
@@ -541,7 +541,7 @@ unsafe fn pattern_admitted(
                 (*cur_si).si_cont_list,
                 &raw mut (*spp).sp_syn,
                 (*spp).sp_flags,
-            ) != 0
+            )
         }
     }
 }
@@ -609,7 +609,7 @@ unsafe fn item_can_spell(sip: *mut stateitem_T) -> bool {
                 return (*block).b_syn_spell != SYNSPL_NOTOP;
             }
             sps.id = (*block).b_nospell_cluster_id as int16_t;
-            return in_id_list(sip, (*sip).si_cont_list, &raw mut sps, 0) == 0;
+            return !in_id_list(sip, (*sip).si_cont_list, &raw mut sps, 0);
         }
         // The @Spell cluster is defined: spell check in items carrying it, but
         // not when @NoSpell is there too. At the top level only spell check
@@ -618,10 +618,10 @@ unsafe fn item_can_spell(sip: *mut stateitem_T) -> bool {
             return (*block).b_syn_spell == SYNSPL_TOP;
         }
         sps.id = (*block).b_spell_cluster_id as int16_t;
-        let mut can = in_id_list(sip, (*sip).si_cont_list, &raw mut sps, 0) != 0;
+        let mut can = in_id_list(sip, (*sip).si_cont_list, &raw mut sps, 0);
         if (*block).b_nospell_cluster_id != 0 {
             sps.id = (*block).b_nospell_cluster_id as int16_t;
-            if in_id_list(sip, (*sip).si_cont_list, &raw mut sps, 0) != 0 {
+            if in_id_list(sip, (*sip).si_cont_list, &raw mut sps, 0) {
                 can = false;
             }
         }
