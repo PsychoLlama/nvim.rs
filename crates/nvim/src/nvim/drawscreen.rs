@@ -491,16 +491,21 @@ pub unsafe fn update_screen() -> c_int {
         // Upstream special-cases `curwin` here and says so in a comment; either
         // every window should be checked or none should. Reproduced.
         let wp = curwin.get();
-        let nrwidth = if (*wp).w_onebuf_opt.wo_nu != 0
-            || (*wp).w_onebuf_opt.wo_rnu != 0
-            || *(*wp).w_onebuf_opt.wo_stc != 0
-        {
-            number_width(wp)
-        } else {
-            0
-        };
-        if (*wp).w_redr_type < UPD_NOT_VALID && (*wp).w_nrwidth != nrwidth {
-            (*wp).w_redr_type = UPD_NOT_VALID;
+        // `number_width` is NOT pure -- it caches its answer in the window and
+        // resets the 'statuscolumn' width estimate -- so it stays behind the
+        // `w_redr_type` test, where upstream's `&&` puts it.
+        if (*wp).w_redr_type < UPD_NOT_VALID {
+            let nrwidth = if (*wp).w_onebuf_opt.wo_nu != 0
+                || (*wp).w_onebuf_opt.wo_rnu != 0
+                || *(*wp).w_onebuf_opt.wo_stc != 0
+            {
+                number_width(wp)
+            } else {
+                0
+            };
+            if (*wp).w_nrwidth != nrwidth {
+                (*wp).w_redr_type = UPD_NOT_VALID;
+            }
         }
 
         if (*wp).w_redr_type == UPD_INVERTED {

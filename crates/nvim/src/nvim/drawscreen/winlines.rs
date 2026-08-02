@@ -817,9 +817,10 @@ pub unsafe fn win_draw_end(
         let view_width = (*wp).w_view_width;
         let fdc = compute_foldcolumn(wp, 0);
         let scwidth = (*wp).w_scwidth;
-        let attr = win_hl_attr(wp, hl);
-        let bg = win_bg_attr(wp);
 
+        // The `win_hl_attr` lookups deliberately stay inside the loop, in
+        // upstream's order: it hands out attribute ids in call order, so
+        // hoisting `hl` above the three margin groups would renumber them.
         for row in startrow..endrow {
             grid_line_start(&raw mut (*wp).w_grid, row);
 
@@ -854,11 +855,12 @@ pub unsafe fn win_draw_end(
                 }
             }
 
+            let attr = win_hl_attr(wp, hl);
             if n < view_width {
                 grid_line_put_schar(n, c1, attr);
                 n += 1;
             }
-            grid_line_clear_end(n, view_width, bg, attr);
+            grid_line_clear_end(n, view_width, win_bg_attr(wp), attr);
 
             if (*wp).w_onebuf_opt.wo_rl != 0 {
                 grid_line_mirror(view_width);

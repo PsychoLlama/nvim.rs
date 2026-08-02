@@ -469,20 +469,13 @@ unsafe fn widen_over_folds(wp: *mut win_T, rg: &mut Regions) {
 unsafe fn plan_scroll(wp: *mut win_T, buf: *mut buf_T, rg: &mut Regions) {
     // SAFETY: the caller's window, its buffer and its `w_lines` array.
     unsafe {
-        let scrollable = matches!(
-            rg.redr_type,
-            UPD_VALID | UPD_SOME_VALID | UPD_INVERTED | UPD_INVERTED_ALL
-        ) && !(*wp).w_botfill
-            && !(*wp).w_old_botfill;
-        if !scrollable {
-            // Redraw all lines.
-            rg.redraw_all(wp);
-            return;
-        }
-
         // `w_lines[0].wl_lnum` can be below `w_topline` when the top line is
         // concealed, which would read as a scroll that did not happen. Compare
         // against a topline adjusted the same way.
+        //
+        // This runs whether or not the window is scrollable, as upstream has
+        // it: `decor_conceal_line` invokes the decoration providers, so
+        // skipping it on the non-scrollable path would be a change.
         let mut topline_conceal = (*wp).w_topline;
         while topline_conceal < (*buf).b_ml.ml_line_count
             && decor_conceal_line(wp, topline_conceal - 1, false)
@@ -494,6 +487,17 @@ unsafe fn plan_scroll(wp: *mut win_T, buf: *mut buf_T, rg: &mut Regions) {
                 ::core::ptr::null_mut(),
                 &raw mut topline_conceal,
             );
+        }
+
+        let scrollable = matches!(
+            rg.redr_type,
+            UPD_VALID | UPD_SOME_VALID | UPD_INVERTED | UPD_INVERTED_ALL
+        ) && !(*wp).w_botfill
+            && !(*wp).w_old_botfill;
+        if !scrollable {
+            // Not UPD_VALID or UPD_INVERTED: redraw all lines.
+            rg.redraw_all(wp);
+            return;
         }
 
         let first = (*wp).w_lines;
