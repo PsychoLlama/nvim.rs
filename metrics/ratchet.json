@@ -1,6 +1,6 @@
 {
   "internal_exports": 46,
-  "files_without_forbid_unsafe": 610,
+  "files_without_forbid_unsafe": 613,
   "files_without_deny_unsafe_op": 203,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -89,7 +89,10 @@
     "crates/nvim/src/nvim/decoration_provider.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/diff.rs": {"lines": 5639, "unsafe": 81},
     "crates/nvim/src/nvim/digraph.rs": {"unsafe": 30},
-    "crates/nvim/src/nvim/drawline.rs": {"lines": 4396, "unsafe": 33},
+    "crates/nvim/src/nvim/drawline.rs": {"lines": 3057, "unsafe": 5},
+    "crates/nvim/src/nvim/drawline/columns.rs": {"unsafe": 14},
+    "crates/nvim/src/nvim/drawline/state.rs": {"unsafe": 9},
+    "crates/nvim/src/nvim/drawline/virttext.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/drawscreen.rs": {"lines": 3370, "no_mangle": 1, "unsafe": 53},
     "crates/nvim/src/nvim/edit.rs": {"lines": 4688, "unsafe": 89},
     "crates/nvim/src/nvim/eval/buffer.rs": {"unsafe": 4},
