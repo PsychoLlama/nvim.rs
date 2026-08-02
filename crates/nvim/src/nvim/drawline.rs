@@ -47,7 +47,7 @@ use crate::src::nvim::main::{
     State, VIsual, VIsual_active, VIsual_mode, cmdwin_type, cmdwin_win, cterm_normal_bg_color,
     curwin, decor_state, did_emsg, dollar_vcol, dy_flags, highlight_attr, highlight_match,
     hl_attr_active, linebuf_attr, linebuf_char, linebuf_vcol, normal_bg, p_cpo, p_sel,
-    screen_search_hl, search_match_endcol, search_match_lines, spell_redraw_lnum,
+    screen_search_hl, search_match_endcol, search_match_lines, spell_redraw_lnum, win_extmark_arr,
 };
 use crate::src::nvim::r#match::{
     get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
@@ -80,12 +80,12 @@ use crate::src::nvim::syntax::{
 };
 use crate::src::nvim::terminal::terminal_get_line_attributes;
 use crate::src::nvim::types::{
-    CharSize, CharsizeArg, CharsizeKind, DecorRange, DecorState, DecorVirtText, GridView, HlAttrs,
-    MetaIndex, NS, OptInt, RgbValue, ScreenGrid, SignTextAttrs, StlFlag, StrCharInfo, TriState,
-    VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinExtmark, buf_T, colnr_T,
-    diffline_S, diffline_T, diffline_change_T, foldinfo_T, hlf_T, linenr_T, pos_T, ptrdiff_t,
-    sattr_T, schar_T, size_t, smt_T, spellvars_T, ssize_t, statuscol_T, stl_hlrec_t, uint8_t,
-    uint32_t, uint64_t, varnumber_T, virt_line, win_T,
+    CharSize, CharsizeArg, CharsizeKind, DecorRange, DecorRangeKind, DecorVirtText, GridView,
+    HlAttrs, MetaIndex, NS, OptInt, RgbValue, ScreenGrid, SignTextAttrs, StlFlag, StrCharInfo,
+    TriState, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinExtmark, buf_T,
+    colnr_T, diffline_S, diffline_T, diffline_change_T, foldinfo_T, hlf_T, linenr_T, pos_T,
+    ptrdiff_t, sattr_T, schar_T, size_t, smt_T, spellvars_T, ssize_t, statuscol_T, stl_hlrec_t,
+    uint8_t, uint32_t, uint64_t, varnumber_T, virt_line, win_T,
 };
 use crate::src::nvim::ui::ui_rgb_attached;
 
@@ -96,9 +96,6 @@ mod columns;
 pub use self::columns::*;
 mod virttext;
 pub(crate) use self::virttext::*;
-unsafe extern "C" {
-    static win_extmark_arr: GlobalCell<C2Rust_Unnamed_30>;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;
 pub const kTrue: TriState = 1;
@@ -127,18 +124,12 @@ pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const SIGN_SHOW_MAX: C2Rust_Unnamed_20 = 9;
 pub const STL_SIGNCOL: StlFlag = 115;
 pub const STL_FOLDCOL: StlFlag = 67;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
-pub const kDecorKindUIWatched: C2Rust_Unnamed_24 = 4;
-pub const kDecorKindVirtText: C2Rust_Unnamed_24 = 2;
+/// A `DecorRange` that draws virtual text of its own.
+pub const kDecorKindVirtText: DecorRangeKind = 2;
+/// A `DecorRange` that draws nothing and reports its position to the UI.
+pub const kDecorKindUIWatched: DecorRangeKind = 4;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
 pub const TERM_ATTRS_MAX: C2Rust_Unnamed_29 = 1024;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_30 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut WinExtmark,
-}
 pub const SLF_WRAP: C2Rust_Unnamed_32 = 2;
 pub const SLF_RIGHTLEFT: C2Rust_Unnamed_32 = 1;
 pub const SLF_INC_VCOL: C2Rust_Unnamed_32 = 4;
@@ -1123,7 +1114,7 @@ pub unsafe extern "C" fn win_line(
                 && in_curline as ::core::ffi::c_int != 0
                 && wlv.vcol >= (*wp).w_virtcol
             {
-                draw_virt_text(wp, buf, win_col_offset, &raw mut wlv.col, wlv.row);
+                draw_virt_text(wp, buf, win_col_offset, &mut wlv.col, wlv.row);
                 wlv_put_linebuf(
                     wp,
                     &raw mut wlv,
@@ -1199,12 +1190,7 @@ pub unsafe extern "C" fn win_line(
                             decor_provider_end_col - 1 as ::core::ffi::c_int,
                         );
                         if may_have_inline_virt {
-                            handle_inline_virtual_text(
-                                wp,
-                                &raw mut wlv,
-                                ptr_0.offset_from(line_1),
-                                selected,
-                            );
+                            wlv.handle_inline_virtual_text(ptr_0.offset_from(line_1), selected);
                             if wlv.n_extra > 0 as ::core::ffi::c_int
                                 && wlv.virt_inline_hl_mode as ::core::ffi::c_uint
                                     <= kHlModeReplace as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -2499,7 +2485,7 @@ pub unsafe extern "C" fn win_line(
                             0 as ::core::ffi::c_int,
                         );
                     }
-                    draw_virt_text(wp, buf, win_col_offset, &raw mut wlv.col, wlv.row);
+                    draw_virt_text(wp, buf, win_col_offset, &mut wlv.col, wlv.row);
                     wlv_put_linebuf(
                         wp,
                         &raw mut wlv,
@@ -2543,7 +2529,7 @@ pub unsafe extern "C" fn win_line(
                                 && (wlv.sc_extra != NUL as schar_T
                                     || *wlv.p_extra as ::core::ffi::c_int != NUL)
                             || may_have_inline_virt as ::core::ffi::c_int != 0
-                                && has_more_inline_virt(&raw mut wlv, ptr_0.offset_from(line_1))
+                                && wlv.has_more_inline_virt(ptr_0.offset_from(line_1))
                                     as ::core::ffi::c_int
                                     != 0
                         {
@@ -2744,8 +2730,7 @@ pub unsafe extern "C" fn win_line(
                     && (wlv.sc_extra != NUL as schar_T
                         || *wlv.p_extra as ::core::ffi::c_int != NUL)
                 || may_have_inline_virt as ::core::ffi::c_int != 0
-                    && has_more_inline_virt(&raw mut wlv, ptr_0.offset_from(line_1))
-                        as ::core::ffi::c_int
+                    && wlv.has_more_inline_virt(ptr_0.offset_from(line_1)) as ::core::ffi::c_int
                         != 0))
         {
             continue;
@@ -2797,7 +2782,7 @@ pub unsafe extern "C" fn win_line(
                 },
             );
         } else if wlv.filler_todo <= 0 as ::core::ffi::c_int {
-            draw_virt_text(wp, buf, win_col_offset, &raw mut draw_col, wlv.row);
+            draw_virt_text(wp, buf, win_col_offset, &mut draw_col, wlv.row);
         }
         wlv_put_linebuf(
             wp,

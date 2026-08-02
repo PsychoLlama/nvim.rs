@@ -66,7 +66,7 @@ impl WinLineVars {
             while ptr < end && self.off < (*wp).w_view_width {
                 let cells = line_putchar(
                     (*wp).w_buffer,
-                    &raw mut ptr,
+                    &mut ptr,
                     linebuf_char.get().add(self.off as usize),
                     (*wp).w_view_width - self.off,
                     self.off,
