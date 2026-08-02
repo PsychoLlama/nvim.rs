@@ -789,12 +789,23 @@ pub unsafe extern "C" fn init_sign_text(
     s = text;
     while s < endp {
         let mut c: ::core::ffi::c_int = 0;
-        *sign_text.offset(cells as isize) = utfc_ptr2schar(s, &raw mut c);
+        // `sign_text` holds SIGN_WIDTH cells but this walk runs to the end of
+        // `text` and only tests the width afterwards, so upstream (v0.12.4)
+        // overruns the array for any text wider than two cells: on the heap
+        // via `:sign define x text=xxx`, on the STACK via
+        // nvim_buf_set_extmark{sign_text=...}. Dropping the out-of-range
+        // stores is unobservable — those paths all fail and discard it.
+        let sc: schar_T = utfc_ptr2schar(s, &raw mut c);
+        if cells < SIGN_WIDTH as ::core::ffi::c_int {
+            *sign_text.offset(cells as isize) = sc;
+        }
         if !vim_isprintc(c) {
             break;
         }
         let mut width: ::core::ffi::c_int = utf_ptr2cells(s);
-        if width == 2 as ::core::ffi::c_int {
+        if width == 2 as ::core::ffi::c_int
+            && (cells + 1 as ::core::ffi::c_int) < (SIGN_WIDTH as ::core::ffi::c_int)
+        {
             *sign_text.offset((cells + 1 as ::core::ffi::c_int) as isize) = 0 as schar_T;
         }
         cells += width;
