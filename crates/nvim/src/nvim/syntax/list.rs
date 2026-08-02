@@ -579,11 +579,7 @@ pub(crate) unsafe extern "C" fn syn_list_keywords(
                 || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
             {
                 todo = todo.wrapping_sub(1);
-                let mut kp: *mut keyentry_T = (*hi).hi_key.offset(
-                    -((&raw mut (*dumkey.ptr()).keyword as *mut ::core::ffi::c_char)
-                        .offset_from(dumkey.ptr() as *mut ::core::ffi::c_char)
-                        as isize),
-                ) as *mut keyentry_T;
+                let mut kp: *mut keyentry_T = key_to_entry((*hi).hi_key);
                 while !kp.is_null() && !got_int.get() {
                     if (*kp).k_syn.id as ::core::ffi::c_int == id {
                         let mut outlen: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

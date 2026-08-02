@@ -58,9 +58,9 @@ use crate::src::nvim::strings::{
 };
 use crate::src::nvim::types::{
     CMD_index, OptInt, buf_T, bufstate_T, cmd_addr_T, colnr_T, cstack_T, exarg_T, expand_T,
-    garray_T, hash_T, hashitem_T, hashtab_T, int16_t, int32_t, keyvalue_T, linenr_T, lpos_T,
-    proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T, synblock_T,
-    synstate_T, uint8_t, uint32_t, uint64_t, varnumber_T, win_T,
+    garray_T, hashitem_T, hashtab_T, int16_t, int32_t, keyvalue_T, linenr_T, lpos_T, proftime_T,
+    reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T, synblock_T, synstate_T,
+    uint8_t, uint32_t, uint64_t, varnumber_T, win_T,
 };
 
 mod flags;
@@ -288,12 +288,9 @@ static e_contains_argument_not_accepted_here: GlobalCell<[::core::ffi::c_char; 4
 static e_invalid_cchar_value: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E844: Invalid cchar value\0")
 });
-static e_trailing_char_after_rsb_str_str: GlobalCell<[::core::ffi::c_char; 37]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
-            *b"E890: Trailing char after ']': %s]%s\0",
-        )
-    });
+/// `%s` is the text before the `]`, `%s` the text after it.
+pub(crate) const E_TRAILING_CHAR_AFTER_RSB: &::core::ffi::CStr =
+    c"E890: Trailing char after ']': %s]%s";
 static spo_name_tab: GlobalCell<[*mut ::core::ffi::c_char; 7]> = GlobalCell::new([
     b"ms=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"me=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -331,18 +328,6 @@ static current_syn_inc_tag: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 static running_syn_inc_tag: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-static dumkey: GlobalCell<keyentry_T> = GlobalCell::new(keyentry_T {
-    ke_next: ::core::ptr::null_mut::<keyentry_T>(),
-    k_syn: sp_syn {
-        inc_tag: 0,
-        id: 0,
-        cont_in_list: ::core::ptr::null_mut::<int16_t>(),
-    },
-    next_list: ::core::ptr::null_mut::<int16_t>(),
-    flags: 0,
-    k_char: 0,
-    keyword: [],
-});
 static keepend_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 /// What every `:syntax`/`:syntime` listing answers when there is nothing to
 /// list.
