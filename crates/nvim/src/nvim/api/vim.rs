@@ -739,7 +739,7 @@ pub unsafe extern "C" fn nvim_set_hl(
     let mut attrs: HlAttrs = dict2hlattrs(&*val, true_0 != 0, Some(&mut link_id), base, err);
     if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
         let save_current_sctx: sctx_T = api_set_sctx(channel_id);
-        ns_hl_def(ns_id as NS, hl_id, attrs, link_id, val);
+        ns_hl_def(ns_id as NS, hl_id, attrs, link_id, Some(&*val));
         current_sctx.set(save_current_sctx);
     }
 }

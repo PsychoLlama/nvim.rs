@@ -150,7 +150,7 @@ pub struct partial_S {
 }
 pub type partial_T = partial_S;
 pub type scid_T = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 #[repr(C)]
 pub struct sctx_T {
     pub sc_sid: scid_T,

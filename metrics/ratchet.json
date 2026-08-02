@@ -230,7 +230,7 @@
     "crates/nvim/src/nvim/highlight/namespace.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/highlight_group.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/highlight_group/apply.rs": {"unsafe": 1},
-    "crates/nvim/src/nvim/highlight_group/command.rs": {"unsafe": 2},
+    "crates/nvim/src/nvim/highlight_group/command.rs": {"unsafe": 13},
     "crates/nvim/src/nvim/highlight_group/defaults.rs": {"no_mangle": 1, "unsafe": 3},
     "crates/nvim/src/nvim/highlight_group/list.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/highlight_group/query.rs": {"unsafe": 6},

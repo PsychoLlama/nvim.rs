@@ -2,835 +2,744 @@
 //!
 //! It parses `:hi [default] {group} key=value ...` — and the `clear` and
 //! `link` forms — writing what it finds into the group's table entry. Each
-//! key family has its own rules about what `default` and `init` mean for
-//! an already-set value.
+//! key family has its own rules about what `default` and `init` mean for an
+//! already-set value, which is why they are one function each rather than a
+//! table.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{CStr, c_char, c_int};
 
-pub(crate) unsafe extern "C" fn set_gui_color(
-    mut idx: ::core::ffi::c_int,
-    mut init: bool,
-    mut arg: *const ::core::ffi::c_char,
-    mut color: *mut RgbValue,
-    mut color_idx: *mut ::core::ffi::c_int,
-) -> bool {
-    unsafe {
-        if init as ::core::ffi::c_int != 0
-            && (*(hl_table()).offset(idx as isize)).set & SG_GUI as ::core::ffi::c_int != 0
-        {
-            return false_0 != 0;
+use crate::src::nvim::api::private::helpers::cstr_as_string;
+use crate::src::nvim::ascii::ascii_isdigit;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_all_later};
+use crate::src::nvim::eval::vars::do_unlet;
+use crate::src::nvim::ex_docmd::ends_excmd;
+use crate::src::nvim::lua::executor::nlua_set_sctx;
+use crate::src::nvim::main::{
+    cterm_normal_bg_color, cterm_normal_fg_color, current_sctx, e_invarg2, got_int,
+    need_highlight_changed, normal_bg, normal_fg, normal_sp, p_bg, starting, t_colors,
+    updating_screen,
+};
+use crate::src::nvim::message::{emsg, msg_ext_set_kind, semsg};
+use crate::src::nvim::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
+use crate::src::nvim::options::kOptBackground;
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::runtime::exestack;
+use crate::src::nvim::types::ui::kUILinegrid;
+use crate::src::nvim::types::{OptVal, OptValData, estack_T};
+use crate::src::nvim::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};
+
+use super::{
+    ATTR_NAMES, HL_BOLD, HL_UNDERLINE_MASK, SG_CTERM, SG_GUI, SG_LINK, cterm_color_index,
+    e_group_has_settings_highlight_link_ignored, e_highlight_group_name_not_found_str,
+    e_missing_argument_str, e_missing_equal_sign_str_2, e_unexpected_equal_sign_str, group,
+    highlight_attr_set_all, highlight_clear, highlight_list_one, highlight_num_groups,
+    hl_has_settings, init_highlight, kColorIdxNone, kFalse, kOptValTypeString, kTrue, lookup_color,
+    name_to_color, restore_cterm_colors, set_hl_attr, syn_check_group, syn_name2id_len, with_group,
+};
+use crate::src::nvim::highlight_group::highlight_changed;
+
+/// The command line being parsed, as bytes plus the pointer the error
+/// messages need: several of them print the rest of the line from the key
+/// that failed, so a slice is not enough.
+struct Line {
+    base: *const c_char,
+    bytes: &'static [u8],
+    at: usize,
+}
+
+impl Line {
+    /// # Safety
+    /// `line` outlives the parse.
+    unsafe fn new(line: *const c_char) -> Self {
+        // SAFETY: the caller's NUL-terminated command line.
+        let bytes = unsafe { CStr::from_ptr(line) }.to_bytes();
+        Self {
+            base: line,
+            // The borrow lives as long as the parse, which is inside the
+            // caller's own borrow of the line.
+            bytes: unsafe { core::mem::transmute::<&[u8], &'static [u8]>(bytes) },
+            at: 0,
         }
-        if !init {
-            (*(hl_table()).offset(idx as isize)).set |= SG_GUI as ::core::ffi::c_int;
+    }
+
+    fn peek(&self) -> u8 {
+        self.bytes.get(self.at).copied().unwrap_or(0)
+    }
+
+    fn at_end(&self) -> bool {
+        ends_excmd(c_int::from(self.peek())) != 0
+    }
+
+    /// A pointer at offset `at`, for `%s` in an error message.
+    fn ptr(&self, at: usize) -> *const c_char {
+        // SAFETY: `at` is an offset this parse produced, so it is inside the
+        // line or on its terminator.
+        unsafe { self.base.add(at) }
+    }
+
+    fn skip_white(&mut self) {
+        while matches!(self.peek(), b' ' | b'\t') {
+            self.at += 1;
         }
-        let mut old_color: RgbValue = *color;
-        let mut old_idx: ::core::ffi::c_int = *color_idx;
-        if strcmp(arg, b"NONE\0".as_ptr() as *const ::core::ffi::c_char) != 0 as ::core::ffi::c_int
-        {
-            let (rgb, idx) = name_to_color(::core::ffi::CStr::from_ptr(arg));
-            *color = rgb;
-            *color_idx = idx;
-        } else {
-            *color = -1 as ::core::ffi::c_int as RgbValue;
-            *color_idx = kColorIdxNone as ::core::ffi::c_int;
+    }
+
+    /// Consumes up to the next white space and answers what was skipped.
+    fn word(&mut self) -> &'static [u8] {
+        let start = self.at;
+        while !matches!(self.peek(), 0 | b' ' | b'\t') {
+            self.at += 1;
         }
-        return *color != old_color || *color_idx != old_idx;
+        &self.bytes[start..self.at]
+    }
+
+    /// [`Self::word`] followed by the white space after it.
+    fn word_then_space(&mut self) -> &'static [u8] {
+        let word = self.word();
+        self.skip_white();
+        word
     }
 }
 
-pub unsafe extern "C" fn do_highlight(
-    mut line: *const ::core::ffi::c_char,
-    forceit: bool,
-    init: bool,
-) {
+/// `strncmp(full, word, word.len()) == 0`: whether `word` is a prefix of
+/// `full`, which is how `:hi` accepts `def`, `cle` and `li`.
+fn is_prefix(word: &[u8], full: &[u8]) -> bool {
+    word.len() <= full.len() && full.starts_with(word)
+}
+
+/// Handles `:highlight`.
+///
+/// `forceit` is the `!`, which allows a link over a group that has its own
+/// settings; `init` marks the compiled-in defaults and colour schemes, which
+/// do not overwrite anything the user set. `:highlight clear` calls back in
+/// with both set for every group.
+///
+/// # Safety
+/// Runs messages, autocommands and redraws; main thread only.
+pub unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool) {
+    // SAFETY: the caller's NUL-terminated command line, live for the parse.
     unsafe {
-        if !init && ends_excmd(*line as uint8_t as ::core::ffi::c_int) != 0 {
-            msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
-            let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-            while i <= highlight_num_groups() && !got_int.get() {
-                highlight_list_one(i);
-                i += 1;
+        let mut line = Line::new(line);
+
+        // No argument: list all highlighting.
+        if !init && line.at_end() {
+            msg_ext_set_kind(c"list_cmd".as_ptr());
+            let mut id = 1;
+            while id <= highlight_num_groups() && !got_int.get() {
+                // TODO(brammool): only call when the group has attributes set
+                highlight_list_one(id);
+                id += 1;
             }
             return;
         }
-        let mut dodefault: bool = false_0 != 0;
-        let mut name_end: *const ::core::ffi::c_char = skiptowhite(line);
-        let mut linep: *const ::core::ffi::c_char = skipwhite(name_end);
-        if strncmp(
-            line,
-            b"default\0".as_ptr() as *const ::core::ffi::c_char,
-            name_end.offset_from(line) as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            dodefault = true_0 != 0;
-            line = linep;
-            name_end = skiptowhite(line);
-            linep = skipwhite(name_end);
+
+        let mut name = line.word_then_space();
+        let dodefault = is_prefix(name, b"default");
+        if dodefault {
+            name = line.word_then_space();
         }
-        let mut doclear: bool = false_0 != 0;
-        let mut dolink: bool = false_0 != 0;
-        if strncmp(
-            line,
-            b"clear\0".as_ptr() as *const ::core::ffi::c_char,
-            name_end.offset_from(line) as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            doclear = true_0 != 0;
-        } else if strncmp(
-            line,
-            b"link\0".as_ptr() as *const ::core::ffi::c_char,
-            name_end.offset_from(line) as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            dolink = true_0 != 0;
-        }
-        if !doclear && !dolink && ends_excmd(*linep as uint8_t as ::core::ffi::c_int) != 0 {
-            let mut id: ::core::ffi::c_int =
-                syn_name2id_len(line, name_end.offset_from(line) as size_t);
-            if id == 0 as ::core::ffi::c_int {
+        // An else-if chain, not two tests: the empty word left by a bare
+        // `:hi default` is a prefix of both, and upstream calls it `clear`.
+        let doclear = is_prefix(name, b"clear");
+        let dolink = !doclear && is_prefix(name, b"link");
+
+        // ":highlight {group-name}": list highlighting for one group.
+        if !doclear && !dolink && line.at_end() {
+            let id = syn_name2id_len(name.as_ptr().cast(), name.len());
+            if id == 0 {
                 semsg(
-                    gettext(
-                        (e_highlight_group_name_not_found_str.ptr() as *const _)
-                            as *const ::core::ffi::c_char,
-                    ),
-                    line,
+                    gettext(e_highlight_group_name_not_found_str.as_raw().cast()),
+                    name.as_ptr(),
                 );
             } else {
-                msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
+                msg_ext_set_kind(c"list_cmd".as_ptr());
                 highlight_list_one(id);
             }
             return;
         }
+
         if dolink {
-            let mut from_start: *const ::core::ffi::c_char = linep;
-            let mut to_id: ::core::ffi::c_int = 0;
-            let mut hlgroup: *mut HlGroup = ::core::ptr::null_mut::<HlGroup>();
-            let mut from_end: *const ::core::ffi::c_char = skiptowhite(from_start);
-            let mut to_start: *const ::core::ffi::c_char = skipwhite(from_end);
-            let mut to_end: *const ::core::ffi::c_char = skiptowhite(to_start);
-            if ends_excmd(*from_start as uint8_t as ::core::ffi::c_int) != 0
-                || ends_excmd(*to_start as uint8_t as ::core::ffi::c_int) != 0
-            {
-                semsg(
-                    gettext(
-                        b"E412: Not enough arguments: \":highlight link %s\"\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
-                    from_start,
-                );
-                return;
-            }
-            if ends_excmd(*skipwhite(to_end) as ::core::ffi::c_int) == 0 {
-                semsg(
-                    gettext(
-                        b"E413: Too many arguments: \":highlight link %s\"\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
-                    from_start,
-                );
-                return;
-            }
-            let mut from_id: ::core::ffi::c_int =
-                syn_check_group(from_start, from_end.offset_from(from_start) as size_t);
-            if strncmp(
-                to_start,
-                b"NONE\0".as_ptr() as *const ::core::ffi::c_char,
-                4 as size_t,
-            ) == 0 as ::core::ffi::c_int
-            {
-                to_id = 0 as ::core::ffi::c_int;
-            } else {
-                to_id = syn_check_group(to_start, to_end.offset_from(to_start) as size_t);
-            }
-            if from_id > 0 as ::core::ffi::c_int {
-                hlgroup = (hl_table()).offset((from_id - 1 as ::core::ffi::c_int) as isize);
-                if dodefault as ::core::ffi::c_int != 0
-                    && (forceit as ::core::ffi::c_int != 0
-                        || (*hlgroup).deflink == 0 as ::core::ffi::c_int)
-                {
-                    (*hlgroup).deflink = to_id;
-                    (*hlgroup).deflink_sctx = current_sctx.get();
-                    (*hlgroup).deflink_sctx.sc_lnum += (*((*exestack.ptr()).ga_data
-                        as *mut estack_T)
-                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_lnum;
-                    nlua_set_sctx(&raw mut (*hlgroup).deflink_sctx);
-                }
-            }
-            if from_id > 0 as ::core::ffi::c_int
-                && (!init || (*hlgroup).set == 0 as ::core::ffi::c_int)
-            {
-                if to_id > 0 as ::core::ffi::c_int
-                    && !forceit
-                    && !init
-                    && hl_has_settings(from_id, dodefault) as ::core::ffi::c_int != 0
-                {
-                    if (*((*exestack.ptr()).ga_data as *mut estack_T)
-                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_name
-                    .is_null()
-                        && !dodefault
-                    {
-                        emsg(gettext(
-                            (e_group_has_settings_highlight_link_ignored.ptr() as *const _)
-                                as *const ::core::ffi::c_char,
-                        ));
-                    }
-                } else if (*hlgroup).link != to_id
-                    || (*hlgroup).script_ctx.sc_sid != (*current_sctx.ptr()).sc_sid
-                    || (*hlgroup).cleared as ::core::ffi::c_int != 0
-                {
-                    if !init {
-                        (*hlgroup).set |= SG_LINK as ::core::ffi::c_int;
-                    }
-                    (*hlgroup).link = to_id;
-                    (*hlgroup).script_ctx = current_sctx.get();
-                    (*hlgroup).script_ctx.sc_lnum += (*((*exestack.ptr()).ga_data
-                        as *mut estack_T)
-                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_lnum;
-                    nlua_set_sctx(&raw mut (*hlgroup).script_ctx);
-                    (*hlgroup).cleared = false_0 != 0;
-                    redraw_all_later(UPD_SOME_VALID);
-                    need_highlight_changed.set(true_0 != 0);
-                }
-            }
+            highlight_link(&mut line, forceit, init, dodefault);
             return;
         }
+
         if doclear {
-            line = linep;
-            if ends_excmd(*line as uint8_t as ::core::ffi::c_int) != 0 {
-                do_unlet(
-                    b"g:colors_name\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 14]>().wrapping_sub(1 as size_t),
-                    true_0 != 0,
-                );
+            name = line.word_then_space();
+            if name.is_empty() {
+                // ":highlight clear": back to the compiled-in defaults.
+                do_unlet(c"g:colors_name".as_ptr(), 13, true);
                 restore_cterm_colors();
-                let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while j < highlight_num_groups() {
-                    highlight_clear(j + 1 as ::core::ffi::c_int);
-                    j += 1;
+                for id in 1..=highlight_num_groups() {
+                    highlight_clear(id);
                 }
-                init_highlight(true_0 != 0, true_0 != 0);
+                init_highlight(true, true);
                 highlight_changed();
                 redraw_all_later(UPD_NOT_VALID);
                 return;
             }
-            name_end = skiptowhite(line);
-            linep = skipwhite(name_end);
         }
-        let mut id_0: ::core::ffi::c_int =
-            syn_check_group(line, name_end.offset_from(line) as size_t);
-        if id_0 == 0 as ::core::ffi::c_int {
+
+        // Find the group name in the table. If it does not exist yet, add it.
+        let id = syn_check_group(name.as_ptr().cast(), name.len());
+        if id == 0 {
+            return; // Failed.
+        }
+
+        // Return if "default" was used and the group already has settings.
+        if dodefault && hl_has_settings(id, true) {
             return;
         }
-        let mut idx: ::core::ffi::c_int = id_0 - 1 as ::core::ffi::c_int;
-        if dodefault as ::core::ffi::c_int != 0
-            && hl_has_settings(idx + 1 as ::core::ffi::c_int, true_0 != 0) as ::core::ffi::c_int
-                != 0
-        {
-            return;
-        }
-        let mut item_before: HlGroup = *(hl_table()).offset(idx as isize);
-        let mut is_normal_group: bool = strcmp(
-            (*(hl_table()).offset(idx as isize))
-                .name_u
-                .as_ptr()
-                .cast_mut(),
-            b"NORMAL\0".as_ptr() as *const ::core::ffi::c_char,
-        ) == 0 as ::core::ffi::c_int;
-        if doclear as ::core::ffi::c_int != 0
-            || forceit as ::core::ffi::c_int != 0 && init as ::core::ffi::c_int != 0
-        {
-            highlight_clear(idx + 1 as ::core::ffi::c_int);
+
+        // A copy, so that the end can tell whether anything actually changed.
+        let before = group(id);
+        let is_normal_group = before.name_u == c"NORMAL";
+
+        // Clear the highlighting for ":hi clear {group}" and ":hi clear".
+        if doclear || (forceit && init) {
+            highlight_clear(id);
             if !doclear {
-                (*(hl_table()).offset(idx as isize)).set = 0 as ::core::ffi::c_int;
+                with_group(id, |entry| entry.set = 0);
             }
         }
-        let mut did_change: bool = false_0 != 0;
-        let mut error: bool = false_0 != 0;
-        let mut key: [::core::ffi::c_char; 64] = [0; 64];
-        let mut arg: [::core::ffi::c_char; 512] = [0; 512];
+
+        let mut state = KeyLoop {
+            id,
+            init,
+            is_normal_group,
+            did_change: false,
+            error: false,
+        };
         if !doclear {
-            let mut arg_start: *const ::core::ffi::c_char =
-                ::core::ptr::null::<::core::ffi::c_char>();
-            while ends_excmd(*linep as uint8_t as ::core::ffi::c_int) == 0 {
-                let mut key_start: *const ::core::ffi::c_char = linep;
-                if *linep as ::core::ffi::c_int == '=' as ::core::ffi::c_int {
-                    semsg(
-                        gettext(
-                            (e_unexpected_equal_sign_str.ptr() as *const _)
-                                as *const ::core::ffi::c_char,
-                        ),
-                        key_start,
-                    );
-                    error = true_0 != 0;
-                    break;
-                } else {
-                    while *linep as ::core::ffi::c_int != 0
-                        && !ascii_iswhite(*linep as ::core::ffi::c_int)
-                        && *linep as ::core::ffi::c_int != '=' as ::core::ffi::c_int
-                    {
-                        linep = linep.offset(1);
-                    }
-                    let mut key_len: size_t = linep.offset_from(key_start) as size_t;
-                    if key_len
-                        > ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
-                            .wrapping_sub(1 as usize)
-                    {
-                        emsg(gettext(
-                            b"E423: Illegal argument\0".as_ptr() as *const ::core::ffi::c_char
-                        ));
-                        error = true_0 != 0;
-                        break;
-                    } else {
-                        vim_memcpy_up(&raw mut key as *mut ::core::ffi::c_char, key_start, key_len);
-                        key[key_len as usize] = NUL as ::core::ffi::c_char;
-                        linep = skipwhite(linep);
-                        if strcmp(
-                            &raw mut key as *mut ::core::ffi::c_char,
-                            b"NONE\0".as_ptr() as *const ::core::ffi::c_char,
-                        ) == 0 as ::core::ffi::c_int
-                        {
-                            if !init
-                                || (*(hl_table()).offset(idx as isize)).set
-                                    == 0 as ::core::ffi::c_int
-                            {
-                                if !init {
-                                    (*(hl_table()).offset(idx as isize)).set |= SG_CTERM
-                                        as ::core::ffi::c_int
-                                        + SG_GUI as ::core::ffi::c_int;
-                                }
-                                highlight_clear(idx + 1 as ::core::ffi::c_int);
-                            }
-                        } else if *linep as ::core::ffi::c_int != '=' as ::core::ffi::c_int {
-                            semsg(
-                                gettext(
-                                    (e_missing_equal_sign_str_2.ptr() as *const _)
-                                        as *const ::core::ffi::c_char,
-                                ),
-                                key_start,
-                            );
-                            error = true_0 != 0;
-                            break;
-                        } else {
-                            linep = linep.offset(1);
-                            linep = skipwhite(linep);
-                            if *linep as ::core::ffi::c_int == '\'' as ::core::ffi::c_int {
-                                linep = linep.offset(1);
-                                arg_start = linep;
-                                linep = strchr(linep, '\'' as ::core::ffi::c_int);
-                                if linep.is_null() {
-                                    semsg(
-                                        gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                                        key_start,
-                                    );
-                                    error = true_0 != 0;
-                                    break;
-                                }
-                            } else {
-                                arg_start = linep;
-                                linep = skiptowhite(linep);
-                            }
-                            if linep == arg_start {
-                                semsg(
-                                    gettext(
-                                        (e_missing_argument_str.ptr() as *const _)
-                                            as *const ::core::ffi::c_char,
-                                    ),
-                                    key_start,
-                                );
-                                error = true_0 != 0;
-                                break;
-                            } else {
-                                let mut arg_len: size_t = linep.offset_from(arg_start) as size_t;
-                                if arg_len
-                                    > ::core::mem::size_of::<[::core::ffi::c_char; 512]>()
-                                        .wrapping_sub(1 as usize)
-                                {
-                                    emsg(gettext(b"E423: Illegal argument\0".as_ptr()
-                                        as *const ::core::ffi::c_char));
-                                    error = true_0 != 0;
-                                    break;
-                                } else {
-                                    memcpy(
-                                        &raw mut arg as *mut ::core::ffi::c_char
-                                            as *mut ::core::ffi::c_void,
-                                        arg_start as *const ::core::ffi::c_void,
-                                        arg_len,
-                                    );
-                                    arg[arg_len as usize] = NUL as ::core::ffi::c_char;
-                                    if *linep as ::core::ffi::c_int == '\'' as ::core::ffi::c_int {
-                                        linep = linep.offset(1);
-                                    }
-                                    if strcmp(
-                                        &raw mut key as *mut ::core::ffi::c_char,
-                                        b"TERM\0".as_ptr() as *const ::core::ffi::c_char,
-                                    ) == 0 as ::core::ffi::c_int
-                                        || strcmp(
-                                            &raw mut key as *mut ::core::ffi::c_char,
-                                            b"CTERM\0".as_ptr() as *const ::core::ffi::c_char,
-                                        ) == 0 as ::core::ffi::c_int
-                                        || strcmp(
-                                            &raw mut key as *mut ::core::ffi::c_char,
-                                            b"GUI\0".as_ptr() as *const ::core::ffi::c_char,
-                                        ) == 0 as ::core::ffi::c_int
-                                    {
-                                        let mut attr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                                        let mut off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                                        let mut i_0: ::core::ffi::c_int = 0;
-                                        while arg[off as usize] as ::core::ffi::c_int != NUL {
-                                            i_0 =
-                                                ::core::mem::size_of::<[::core::ffi::c_int; 18]>()
-                                                    .wrapping_div(::core::mem::size_of::<
-                                                        ::core::ffi::c_int,
-                                                    >(
-                                                    ))
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<
-                                                            [::core::ffi::c_int; 18],
-                                                        >(
-                                                        )
-                                                        .wrapping_rem(::core::mem::size_of::<
-                                                            ::core::ffi::c_int,
-                                                        >(
-                                                        )) == 0)
-                                                            as ::core::ffi::c_int
-                                                            as usize,
-                                                    )
-                                                    as ::core::ffi::c_int;
-                                            loop {
-                                                i_0 -= 1;
-                                                if i_0 < 0 as ::core::ffi::c_int {
-                                                    break;
-                                                }
-                                                let mut len: ::core::ffi::c_int = strlen(
-                                                    ATTR_NAMES[i_0 as usize].0.as_ptr().cast_mut()
-                                                        as *const ::core::ffi::c_char,
-                                                )
-                                                    as ::core::ffi::c_int;
-                                                if strncasecmp(
-                                                    (&raw mut arg as *mut ::core::ffi::c_char)
-                                                        .offset(off as isize),
-                                                    ATTR_NAMES[i_0 as usize].0.as_ptr().cast_mut(),
-                                                    len as size_t,
-                                                ) != 0 as ::core::ffi::c_int
-                                                {
-                                                    continue;
-                                                }
-                                                if ATTR_NAMES[i_0 as usize].1 & HL_UNDERLINE_MASK
-                                                    != 0
-                                                {
-                                                    attr &= !(HL_UNDERLINE_MASK);
-                                                }
-                                                attr |= ATTR_NAMES[i_0 as usize].1;
-                                                off += len;
-                                                break;
-                                            }
-                                            if i_0 < 0 as ::core::ffi::c_int {
-                                                semsg(
-                                                    gettext(b"E418: Illegal value: %s\0".as_ptr()
-                                                        as *const ::core::ffi::c_char),
-                                                    &raw mut arg as *mut ::core::ffi::c_char,
-                                                );
-                                                error = true_0 != 0;
-                                                break;
-                                            } else if arg[off as usize] as ::core::ffi::c_int
-                                                == ',' as ::core::ffi::c_int
-                                            {
-                                                off += 1;
-                                            }
-                                        }
-                                        if error {
-                                            break;
-                                        }
-                                        if *(&raw mut key as *mut ::core::ffi::c_char)
-                                            as ::core::ffi::c_int
-                                            == 'C' as ::core::ffi::c_int
-                                        {
-                                            if !init
-                                                || (*(hl_table()).offset(idx as isize)).set
-                                                    & SG_CTERM as ::core::ffi::c_int
-                                                    == 0
-                                            {
-                                                if !init {
-                                                    (*(hl_table()).offset(idx as isize)).set |=
-                                                        SG_CTERM as ::core::ffi::c_int;
-                                                }
-                                                (*(hl_table()).offset(idx as isize)).cterm = attr;
-                                                (*(hl_table()).offset(idx as isize)).cterm_bold =
-                                                    false_0 != 0;
-                                            }
-                                        } else if *(&raw mut key as *mut ::core::ffi::c_char)
-                                            as ::core::ffi::c_int
-                                            == 'G' as ::core::ffi::c_int
-                                        {
-                                            if !init
-                                                || (*(hl_table()).offset(idx as isize)).set
-                                                    & SG_GUI as ::core::ffi::c_int
-                                                    == 0
-                                            {
-                                                if !init {
-                                                    (*(hl_table()).offset(idx as isize)).set |=
-                                                        SG_GUI as ::core::ffi::c_int;
-                                                }
-                                                (*(hl_table()).offset(idx as isize)).gui = attr;
-                                            }
-                                        }
-                                    } else if strcmp(
-                                        &raw mut key as *mut ::core::ffi::c_char,
-                                        b"FONT\0".as_ptr() as *const ::core::ffi::c_char,
-                                    ) != 0 as ::core::ffi::c_int
-                                    {
-                                        if strcmp(
-                                            &raw mut key as *mut ::core::ffi::c_char,
-                                            b"CTERMFG\0".as_ptr() as *const ::core::ffi::c_char,
-                                        ) == 0 as ::core::ffi::c_int
-                                            || strcmp(
-                                                &raw mut key as *mut ::core::ffi::c_char,
-                                                b"CTERMBG\0".as_ptr() as *const ::core::ffi::c_char,
-                                            ) == 0 as ::core::ffi::c_int
-                                        {
-                                            if !init
-                                                || (*(hl_table()).offset(idx as isize)).set
-                                                    & SG_CTERM as ::core::ffi::c_int
-                                                    == 0
-                                            {
-                                                if !init {
-                                                    (*(hl_table()).offset(idx as isize)).set |=
-                                                        SG_CTERM as ::core::ffi::c_int;
-                                                }
-                                                if key[5 as ::core::ffi::c_int as usize]
-                                                    as ::core::ffi::c_int
-                                                    == 'F' as ::core::ffi::c_int
-                                                    && (*(hl_table()).offset(idx as isize))
-                                                        .cterm_bold
-                                                        as ::core::ffi::c_int
-                                                        != 0
-                                                {
-                                                    (*(hl_table()).offset(idx as isize)).cterm &=
-                                                        !(HL_BOLD);
-                                                    (*(hl_table()).offset(idx as isize))
-                                                        .cterm_bold = false_0 != 0;
-                                                }
-                                                let mut color: ::core::ffi::c_int = 0;
-                                                if ascii_isdigit(
-                                                    *(&raw mut arg as *mut ::core::ffi::c_char)
-                                                        as ::core::ffi::c_int,
-                                                ) {
-                                                    color = atoi(
-                                                        &raw mut arg as *mut ::core::ffi::c_char,
-                                                    );
-                                                } else if strcasecmp(
-                                                    &raw mut arg as *mut ::core::ffi::c_char,
-                                                    b"fg\0".as_ptr() as *const ::core::ffi::c_char
-                                                        as *mut ::core::ffi::c_char,
-                                                ) == 0 as ::core::ffi::c_int
-                                                {
-                                                    if cterm_normal_fg_color.get() != 0 {
-                                                        color = cterm_normal_fg_color.get()
-                                                            - 1 as ::core::ffi::c_int;
-                                                    } else {
-                                                        emsg(gettext(
-                                                            b"E419: FG color unknown\0".as_ptr()
-                                                                as *const ::core::ffi::c_char,
-                                                        ));
-                                                        error = true_0 != 0;
-                                                        break;
-                                                    }
-                                                } else if strcasecmp(
-                                                    &raw mut arg as *mut ::core::ffi::c_char,
-                                                    b"bg\0".as_ptr() as *const ::core::ffi::c_char
-                                                        as *mut ::core::ffi::c_char,
-                                                ) == 0 as ::core::ffi::c_int
-                                                {
-                                                    if cterm_normal_bg_color.get()
-                                                        > 0 as ::core::ffi::c_int
-                                                    {
-                                                        color = cterm_normal_bg_color.get()
-                                                            - 1 as ::core::ffi::c_int;
-                                                    } else {
-                                                        emsg(gettext(
-                                                            b"E420: BG color unknown\0".as_ptr()
-                                                                as *const ::core::ffi::c_char,
-                                                        ));
-                                                        error = true_0 != 0;
-                                                        break;
-                                                    }
-                                                } else {
-                                                    let i_1 = match cterm_color_index(
-                                                        ::core::ffi::CStr::from_ptr(
-                                                            &raw const arg
-                                                                as *const ::core::ffi::c_char,
-                                                        ),
-                                                    ) {
-                                                        Some(i) => i as ::core::ffi::c_int,
-                                                        None => -1,
-                                                    };
-                                                    if i_1 < 0 as ::core::ffi::c_int {
-                                                        semsg(
-                                                        gettext(
-                                                            b"E421: Color name or number not recognized: %s\0".as_ptr()
-                                                                as *const ::core::ffi::c_char,
-                                                        ),
-                                                        key_start,
-                                                    );
-                                                        error = true_0 != 0;
-                                                        break;
-                                                    } else {
-                                                        let (c, bold) = lookup_color(
-                                                            i_1 as usize,
-                                                            key[5 as ::core::ffi::c_int as usize]
-                                                                as ::core::ffi::c_int
-                                                                == 'F' as ::core::ffi::c_int,
-                                                        );
-                                                        color = c;
-                                                        if bold as ::core::ffi::c_int
-                                                            == kTrue as ::core::ffi::c_int
-                                                        {
-                                                            (*(hl_table()).offset(idx as isize))
-                                                                .cterm |= HL_BOLD;
-                                                            (*(hl_table()).offset(idx as isize))
-                                                                .cterm_bold = true_0 != 0;
-                                                        } else if bold as ::core::ffi::c_int
-                                                            == kFalse as ::core::ffi::c_int
-                                                        {
-                                                            (*(hl_table()).offset(idx as isize))
-                                                                .cterm &= !(HL_BOLD);
-                                                        }
-                                                    }
-                                                }
-                                                if key[5 as ::core::ffi::c_int as usize]
-                                                    as ::core::ffi::c_int
-                                                    == 'F' as ::core::ffi::c_int
-                                                {
-                                                    (*(hl_table()).offset(idx as isize)).cterm_fg =
-                                                        color + 1 as ::core::ffi::c_int;
-                                                    if is_normal_group {
-                                                        cterm_normal_fg_color
-                                                            .set(color + 1 as ::core::ffi::c_int);
-                                                    }
-                                                } else {
-                                                    (*(hl_table()).offset(idx as isize)).cterm_bg =
-                                                        color + 1 as ::core::ffi::c_int;
-                                                    if is_normal_group {
-                                                        cterm_normal_bg_color
-                                                            .set(color + 1 as ::core::ffi::c_int);
-                                                        if !ui_rgb_attached() {
-                                                            if color >= 0 as ::core::ffi::c_int {
-                                                                let mut dark: ::core::ffi::c_int =
-                                                                    -1 as ::core::ffi::c_int;
-                                                                if t_colors.get()
-                                                                    < 16 as ::core::ffi::c_int
-                                                                {
-                                                                    dark = (color
-                                                                    == 0 as ::core::ffi::c_int
-                                                                    || color
-                                                                        == 4 as ::core::ffi::c_int)
-                                                                    as ::core::ffi::c_int;
-                                                                } else if color
-                                                                    < 16 as ::core::ffi::c_int
-                                                                {
-                                                                    dark = (color
-                                                                    < 7 as ::core::ffi::c_int
-                                                                    || color
-                                                                        == 8 as ::core::ffi::c_int)
-                                                                    as ::core::ffi::c_int;
-                                                                }
-                                                                if dark != -1 as ::core::ffi::c_int
-                                                                    && dark != (*p_bg.get()
-                                                                        as ::core::ffi::c_int
-                                                                        == 'd'
-                                                                            as ::core::ffi::c_int)
-                                                                        as ::core::ffi::c_int
-                                                                    && !option_was_set(
-                                                                        kOptBackground,
-                                                                    )
-                                                                {
-                                                                    set_option_value_give_err(
-                                                                        kOptBackground,
-                                                                        OptVal {
-                                                                            type_0:
-                                                                                kOptValTypeString,
-                                                                            data: OptValData {
-                                                                                string:
-                                                                                    cstr_as_string(
-                                                                                        if dark != 0
-                                                                                        {
-                                                                                            b"dark\0".as_ptr() as *const ::core::ffi::c_char
-                                                                                        } else {
-                                                                                            b"light\0".as_ptr() as *const ::core::ffi::c_char
-                                                                                        },
-                                                                                    ),
-                                                                            },
-                                                                        },
-                                                                        0 as ::core::ffi::c_int,
-                                                                    );
-                                                                    reset_option_was_set(
-                                                                        kOptBackground,
-                                                                    );
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        } else if strcmp(
-                                            &raw mut key as *mut ::core::ffi::c_char,
-                                            b"GUIFG\0".as_ptr() as *const ::core::ffi::c_char,
-                                        ) == 0 as ::core::ffi::c_int
-                                        {
-                                            did_change = set_gui_color(
-                                                idx,
-                                                init,
-                                                &raw mut arg as *mut ::core::ffi::c_char,
-                                                &raw mut (*(hl_table()).offset(idx as isize))
-                                                    .rgb_fg,
-                                                &raw mut (*(hl_table()).offset(idx as isize))
-                                                    .rgb_fg_idx,
-                                            );
-                                            if is_normal_group {
-                                                normal_fg.set(
-                                                    (*(hl_table()).offset(idx as isize)).rgb_fg,
-                                                );
-                                            }
-                                        } else if strcmp(
-                                            &raw mut key as *mut ::core::ffi::c_char,
-                                            b"GUIBG\0".as_ptr() as *const ::core::ffi::c_char,
-                                        ) == 0 as ::core::ffi::c_int
-                                        {
-                                            did_change = set_gui_color(
-                                                idx,
-                                                init,
-                                                &raw mut arg as *mut ::core::ffi::c_char,
-                                                &raw mut (*(hl_table()).offset(idx as isize))
-                                                    .rgb_bg,
-                                                &raw mut (*(hl_table()).offset(idx as isize))
-                                                    .rgb_bg_idx,
-                                            );
-                                            if is_normal_group {
-                                                normal_bg.set(
-                                                    (*(hl_table()).offset(idx as isize)).rgb_bg,
-                                                );
-                                            }
-                                        } else if strcmp(
-                                            &raw mut key as *mut ::core::ffi::c_char,
-                                            b"GUISP\0".as_ptr() as *const ::core::ffi::c_char,
-                                        ) == 0 as ::core::ffi::c_int
-                                        {
-                                            did_change = set_gui_color(
-                                                idx,
-                                                init,
-                                                &raw mut arg as *mut ::core::ffi::c_char,
-                                                &raw mut (*(hl_table()).offset(idx as isize))
-                                                    .rgb_sp,
-                                                &raw mut (*(hl_table()).offset(idx as isize))
-                                                    .rgb_sp_idx,
-                                            );
-                                            if is_normal_group {
-                                                normal_sp.set(
-                                                    (*(hl_table()).offset(idx as isize)).rgb_sp,
-                                                );
-                                            }
-                                        } else if !(strcmp(
-                                            &raw mut key as *mut ::core::ffi::c_char,
-                                            b"START\0".as_ptr() as *const ::core::ffi::c_char,
-                                        ) == 0 as ::core::ffi::c_int
-                                            || strcmp(
-                                                &raw mut key as *mut ::core::ffi::c_char,
-                                                b"STOP\0".as_ptr() as *const ::core::ffi::c_char,
-                                            ) == 0 as ::core::ffi::c_int)
-                                        {
-                                            if strcmp(
-                                                &raw mut key as *mut ::core::ffi::c_char,
-                                                b"BLEND\0".as_ptr() as *const ::core::ffi::c_char,
-                                            ) == 0 as ::core::ffi::c_int
-                                            {
-                                                if strcmp(
-                                                    &raw mut arg as *mut ::core::ffi::c_char,
-                                                    b"NONE\0".as_ptr()
-                                                        as *const ::core::ffi::c_char,
-                                                ) != 0 as ::core::ffi::c_int
-                                                {
-                                                    (*(hl_table()).offset(idx as isize)).blend =
-                                                        strtol(
-                                                            &raw mut arg
-                                                                as *mut ::core::ffi::c_char,
-                                                            ::core::ptr::null_mut::<
-                                                                *mut ::core::ffi::c_char,
-                                                            >(
-                                                            ),
-                                                            10 as ::core::ffi::c_int,
-                                                        )
-                                                            as ::core::ffi::c_int;
-                                                } else {
-                                                    (*(hl_table()).offset(idx as isize)).blend =
-                                                        -1 as ::core::ffi::c_int;
-                                                }
-                                            } else {
-                                                semsg(
-                                                    gettext(
-                                                        b"E423: Illegal argument: %s\0".as_ptr()
-                                                            as *const ::core::ffi::c_char,
-                                                    ),
-                                                    key_start,
-                                                );
-                                                error = true_0 != 0;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                    (*(hl_table()).offset(idx as isize)).cleared = false_0 != 0;
-                                    if !init
-                                        || (*(hl_table()).offset(idx as isize)).set
-                                            & SG_LINK as ::core::ffi::c_int
-                                            == 0
-                                    {
-                                        (*(hl_table()).offset(idx as isize)).link =
-                                            0 as ::core::ffi::c_int;
-                                    }
-                                    linep = skipwhite(linep);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            state.run(&mut line);
         }
-        let mut did_highlight_changed: bool = false_0 != 0;
-        if !error && is_normal_group as ::core::ffi::c_int != 0 {
+
+        let mut did_highlight_changed = false;
+        if !state.error && is_normal_group {
+            // Every group may be using "bg" and/or "fg", which just moved.
             highlight_attr_set_all();
-            if !ui_has(kUILinegrid) && starting.get() == 0 as ::core::ffi::c_int {
+
+            if !ui_has(kUILinegrid) && starting.get() == 0 {
+                // Older UIs assume the screen is cleared after the Normal
+                // group changes.
                 ui_refresh();
             } else {
+                // TUI and newer UIs repaint themselves; the UPD_NOT_VALID
+                // redraw below still handles `guibg=fg` and friends.
                 ui_default_colors_set();
             }
-            did_highlight_changed = true_0 != 0;
+            did_highlight_changed = true;
             redraw_all_later(UPD_NOT_VALID);
         } else {
-            set_hl_attr(idx + 1 as ::core::ffi::c_int);
+            set_hl_attr(id);
         }
-        (*(hl_table()).offset(idx as isize)).script_ctx = current_sctx.get();
-        (*(hl_table()).offset(idx as isize)).script_ctx.sc_lnum += (*((*exestack.ptr()).ga_data
-            as *mut estack_T)
-            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-        .es_lnum;
-        nlua_set_sctx(&raw mut (*(hl_table()).offset(idx as isize)).script_ctx);
-        if (did_change as ::core::ffi::c_int != 0
-            || memcmp(
-                (hl_table()).offset(idx as isize) as *const ::core::ffi::c_void,
-                &raw mut item_before as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<HlGroup>(),
-            ) != 0 as ::core::ffi::c_int)
-            && !did_highlight_changed
-        {
+        with_group(id, |entry| {
+            entry.script_ctx = current_sctx.get();
+            entry.script_ctx.sc_lnum += sourcing_lnum();
+            nlua_set_sctx(&raw mut entry.script_ctx);
+        });
+
+        // Call `highlight_changed` once after a sequence of `:highlight`
+        // commands, and only if an attribute actually changed.
+        if (state.did_change || group(id) != before) && !did_highlight_changed {
+            // Do not redraw while redrawing: evaluating 'statusline' can
+            // change the StatusLine group.
             if !updating_screen.get() {
                 redraw_all_later(UPD_NOT_VALID);
             }
-            need_highlight_changed.set(true_0 != 0);
+            need_highlight_changed.set(true);
         }
     }
+}
+
+/// The innermost `estack_T`, which is what `SOURCING_LNUM`/`SOURCING_NAME`
+/// read. Upstream indexes `ga_len - 1` with no guard at all.
+///
+/// # Safety
+/// Main thread only.
+unsafe fn sourcing() -> estack_T {
+    // SAFETY: the editor's own stack; the index is upstream's.
+    unsafe {
+        let stack = *exestack.ptr();
+        *stack
+            .ga_data
+            .cast::<estack_T>()
+            .offset((stack.ga_len - 1) as isize)
+    }
+}
+
+/// `SOURCING_LNUM`: the line of the script being sourced.
+///
+/// # Safety
+/// See [`sourcing`].
+pub(crate) unsafe fn sourcing_lnum() -> c_int {
+    // SAFETY: as the callee.
+    unsafe { sourcing().es_lnum }
+}
+
+/// `:highlight [default] link {from} {to}`.
+///
+/// # Safety
+/// See [`do_highlight`].
+unsafe fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
+    // SAFETY: the caller's live line, and the editor's own tables.
+    unsafe {
+        let from_at = line.at;
+        let from = line.word_then_space();
+        let to = line.word_then_space();
+        if from.is_empty() || to.is_empty() {
+            semsg(
+                gettext(c"E412: Not enough arguments: \":highlight link %s\"".as_ptr()),
+                line.ptr(from_at),
+            );
+            return;
+        }
+        if !line.at_end() {
+            semsg(
+                gettext(c"E413: Too many arguments: \":highlight link %s\"".as_ptr()),
+                line.ptr(from_at),
+            );
+            return;
+        }
+
+        let from_id = syn_check_group(from.as_ptr().cast(), from.len());
+        let to_id = if to.starts_with(b"NONE") {
+            0
+        } else {
+            syn_check_group(to.as_ptr().cast(), to.len())
+        };
+
+        if from_id <= 0 {
+            return;
+        }
+        if dodefault && (forceit || group(from_id).deflink == 0) {
+            with_group(from_id, |entry| {
+                entry.deflink = to_id;
+                entry.deflink_sctx = current_sctx.get();
+                entry.deflink_sctx.sc_lnum += sourcing_lnum();
+                nlua_set_sctx(&raw mut entry.deflink_sctx);
+            });
+        }
+
+        let entry = group(from_id);
+        if init && entry.set != 0 {
+            return;
+        }
+        if to_id > 0 && !forceit && !init && hl_has_settings(from_id, dodefault) {
+            // Don't allow a link when the group already has highlighting,
+            // unless '!' is used.
+            if sourcing_name_is_null() && !dodefault {
+                emsg(gettext(
+                    e_group_has_settings_highlight_link_ignored.as_raw().cast(),
+                ));
+            }
+        } else if entry.link != to_id
+            || entry.script_ctx.sc_sid != current_sctx.get().sc_sid
+            || entry.cleared
+        {
+            with_group(from_id, |entry| {
+                if !init {
+                    entry.set |= SG_LINK as c_int;
+                }
+                entry.link = to_id;
+                entry.script_ctx = current_sctx.get();
+                entry.script_ctx.sc_lnum += sourcing_lnum();
+                nlua_set_sctx(&raw mut entry.script_ctx);
+                entry.cleared = false;
+            });
+            redraw_all_later(UPD_SOME_VALID);
+            // Only call highlight_changed() once after multiple changes.
+            need_highlight_changed.set(true);
+        }
+    }
+}
+
+/// `SOURCING_NAME == NULL`: whether the innermost entry names a script.
+///
+/// # Safety
+/// See [`sourcing`].
+unsafe fn sourcing_name_is_null() -> bool {
+    // SAFETY: as the callee.
+    unsafe { sourcing().es_name.is_null() }
+}
+
+/// The `key=value` pairs of one `:highlight {group} ...` command.
+struct KeyLoop {
+    id: c_int,
+    init: bool,
+    is_normal_group: bool,
+    /// A `gui*=` handler said the value it wrote differs from the old one.
+    did_change: bool,
+    error: bool,
+}
+
+impl KeyLoop {
+    /// # Safety
+    /// See [`do_highlight`].
+    unsafe fn run(&mut self, line: &mut Line) {
+        // SAFETY: the caller's live line, and the editor's own tables.
+        unsafe {
+            while !line.at_end() {
+                let key_at = line.at;
+                if line.peek() == b'=' {
+                    semsg(
+                        gettext(e_unexpected_equal_sign_str.as_raw().cast()),
+                        line.ptr(key_at),
+                    );
+                    break;
+                }
+
+                // Isolate the key: "term", "ctermfg", "guibg", ...
+                let start = line.at;
+                while !matches!(line.peek(), 0 | b' ' | b'\t' | b'=') {
+                    line.at += 1;
+                }
+                let key = line.bytes[start..line.at].to_ascii_uppercase();
+                if key.len() > 63 {
+                    emsg(gettext(c"E423: Illegal argument".as_ptr()));
+                    break;
+                }
+                line.skip_white();
+
+                if key == b"NONE" {
+                    if !self.init || group(self.id).set == 0 {
+                        if !self.init {
+                            with_group(self.id, |entry| entry.set |= (SG_CTERM + SG_GUI) as c_int);
+                        }
+                        highlight_clear(self.id);
+                    }
+                    continue;
+                }
+
+                if line.peek() != b'=' {
+                    semsg(
+                        gettext(e_missing_equal_sign_str_2.as_raw().cast()),
+                        line.ptr(key_at),
+                    );
+                    break;
+                }
+                line.at += 1;
+                line.skip_white();
+
+                // Isolate the argument, which may be 'quoted'.
+                let quoted = line.peek() == b'\'';
+                let arg_at = line.at + usize::from(quoted);
+                let end = if quoted {
+                    match line.bytes[arg_at..].iter().position(|&b| b == b'\'') {
+                        Some(at) => arg_at + at,
+                        None => {
+                            semsg(gettext(e_invarg2.as_raw().cast()), line.ptr(key_at));
+                            break;
+                        }
+                    }
+                } else {
+                    let mut at = line.at;
+                    while !matches!(line.bytes.get(at).copied().unwrap_or(0), 0 | b' ' | b'\t') {
+                        at += 1;
+                    }
+                    at
+                };
+                line.at = end;
+                if end == arg_at {
+                    semsg(
+                        gettext(e_missing_argument_str.as_raw().cast()),
+                        line.ptr(key_at),
+                    );
+                    break;
+                }
+                if end - arg_at > 511 {
+                    emsg(gettext(c"E423: Illegal argument".as_ptr()));
+                    break;
+                }
+                let arg = &line.bytes[arg_at..end];
+                if quoted {
+                    line.at += 1;
+                }
+
+                if !self.store(&key, arg, line.ptr(key_at)) {
+                    break;
+                }
+
+                with_group(self.id, |entry| {
+                    entry.cleared = false;
+                    // When highlighting has been given for a group, don't
+                    // link it.
+                    if !self.init || entry.set & SG_LINK as c_int == 0 {
+                        entry.link = 0;
+                    }
+                });
+                line.skip_white();
+            }
+        }
+    }
+
+    /// Applies one `key=arg` pair. Answers false to stop the loop, having set
+    /// [`Self::error`] and reported it.
+    ///
+    /// # Safety
+    /// See [`do_highlight`]. `key_start` points into the command line.
+    unsafe fn store(&mut self, key: &[u8], arg: &[u8], key_start: *const c_char) -> bool {
+        // SAFETY: the caller's line, and the editor's own tables.
+        unsafe {
+            match key {
+                b"TERM" | b"CTERM" | b"GUI" => self.set_attrs(key, arg),
+                b"CTERMFG" | b"CTERMBG" => self.set_cterm_color(key, arg, key_start),
+                b"GUIFG" | b"GUIBG" | b"GUISP" => {
+                    self.set_gui_color(key, arg);
+                    true
+                }
+                // Fonts, and the raw terminal codes, are ignored.
+                b"FONT" | b"START" | b"STOP" => true,
+                b"BLEND" => {
+                    let blend = if arg == b"NONE" { -1 } else { parse_int(arg) };
+                    with_group(self.id, |entry| entry.blend = blend);
+                    true
+                }
+                _ => {
+                    semsg(gettext(c"E423: Illegal argument: %s".as_ptr()), key_start);
+                    self.error = true;
+                    false
+                }
+            }
+        }
+    }
+
+    /// `term=`/`cterm=`/`gui=`: a comma-separated list of attribute names.
+    ///
+    /// # Safety
+    /// See [`do_highlight`].
+    unsafe fn set_attrs(&mut self, key: &[u8], arg: &[u8]) -> bool {
+        let mut attr = 0;
+        let mut off = 0;
+        while off < arg.len() {
+            // Reverse order, as upstream: the longer names have to be tried
+            // first, since `underdouble` starts with `under`.
+            let found = ATTR_NAMES.iter().rev().find(|(name, _)| {
+                let name = name.to_bytes();
+                arg[off..].len() >= name.len()
+                    && arg[off..off + name.len()].eq_ignore_ascii_case(name)
+            });
+            let Some(&(name, flag)) = found else {
+                // SAFETY: main-thread message call.
+                unsafe { semsg(gettext(c"E418: Illegal value: %s".as_ptr()), arg.as_ptr()) };
+                self.error = true;
+                return false;
+            };
+            if flag & HL_UNDERLINE_MASK != 0 {
+                // The underline styles share a field.
+                attr &= !HL_UNDERLINE_MASK;
+            }
+            attr |= flag;
+            off += name.count_bytes();
+            if arg.get(off) == Some(&b',') {
+                off += 1;
+            }
+        }
+
+        // "term=" is accepted and ignored.
+        if key[0] == b'C' {
+            if !self.init || group(self.id).set & SG_CTERM as c_int == 0 {
+                with_group(self.id, |entry| {
+                    if !self.init {
+                        entry.set |= SG_CTERM as c_int;
+                    }
+                    entry.cterm = attr;
+                    entry.cterm_bold = false;
+                });
+            }
+        } else if key[0] == b'G' && (!self.init || group(self.id).set & SG_GUI as c_int == 0) {
+            with_group(self.id, |entry| {
+                if !self.init {
+                    entry.set |= SG_GUI as c_int;
+                }
+                entry.gui = attr;
+            });
+        }
+        true
+    }
+
+    /// `ctermfg=`/`ctermbg=`: a number, `fg`/`bg`, or one of the sixteen
+    /// colour names.
+    ///
+    /// # Safety
+    /// See [`do_highlight`].
+    unsafe fn set_cterm_color(&mut self, key: &[u8], arg: &[u8], key_start: *const c_char) -> bool {
+        let foreground = key[5] == b'F';
+        if self.init && group(self.id).set & SG_CTERM as c_int != 0 {
+            return true;
+        }
+        // SAFETY: main-thread message and option calls.
+        unsafe {
+            if !self.init {
+                with_group(self.id, |entry| entry.set |= SG_CTERM as c_int);
+            }
+            // Setting the foreground colour undoes a "bold" that was only
+            // there to reach a light colour.
+            if foreground && group(self.id).cterm_bold {
+                with_group(self.id, |entry| {
+                    entry.cterm &= !HL_BOLD;
+                    entry.cterm_bold = false;
+                });
+            }
+
+            let color = if arg.first().is_some_and(|&b| ascii_isdigit(c_int::from(b))) {
+                parse_int(arg)
+            } else if arg.eq_ignore_ascii_case(b"fg") {
+                if cterm_normal_fg_color.get() == 0 {
+                    emsg(gettext(c"E419: FG color unknown".as_ptr()));
+                    self.error = true;
+                    return false;
+                }
+                cterm_normal_fg_color.get() - 1
+            } else if arg.eq_ignore_ascii_case(b"bg") {
+                if cterm_normal_bg_color.get() <= 0 {
+                    emsg(gettext(c"E420: BG color unknown".as_ptr()));
+                    self.error = true;
+                    return false;
+                }
+                cterm_normal_bg_color.get() - 1
+            } else {
+                let name = arg.to_vec();
+                let name = CStr::from_bytes_with_nul(&[name.as_slice(), b"\0"].concat())
+                    .map(CStr::to_owned);
+                let idx = name.ok().and_then(|name| cterm_color_index(&name));
+                let Some(idx) = idx else {
+                    semsg(
+                        gettext(c"E421: Color name or number not recognized: %s".as_ptr()),
+                        key_start,
+                    );
+                    self.error = true;
+                    return false;
+                };
+                let (color, bold) = lookup_color(idx, foreground);
+                // Set or reset bold to get the light foreground colours some
+                // terminals (e.g. "linux") only have that way.
+                if bold == kTrue {
+                    with_group(self.id, |entry| {
+                        entry.cterm |= HL_BOLD;
+                        entry.cterm_bold = true;
+                    });
+                } else if bold == kFalse {
+                    with_group(self.id, |entry| entry.cterm &= !HL_BOLD);
+                }
+                color
+            };
+
+            // Stored plus one, so that 0 can mean "NONE" (colour -1).
+            if foreground {
+                with_group(self.id, |entry| entry.cterm_fg = color + 1);
+                if self.is_normal_group {
+                    cterm_normal_fg_color.set(color + 1);
+                }
+            } else {
+                with_group(self.id, |entry| entry.cterm_bg = color + 1);
+                if self.is_normal_group {
+                    cterm_normal_bg_color.set(color + 1);
+                    self.guess_background(color);
+                }
+            }
+        }
+        true
+    }
+
+    /// A dark `Normal` background means `'background'` should be `dark`; fix
+    /// it if the user has not said otherwise.
+    ///
+    /// # Safety
+    /// Sets an option, which can fire autocommands; main thread only.
+    unsafe fn guess_background(&self, color: c_int) {
+        // SAFETY: main-thread option calls.
+        unsafe {
+            if ui_rgb_attached() || color < 0 {
+                return;
+            }
+            let dark = if t_colors.get() < 16 {
+                Some(color == 0 || color == 4)
+            } else if color < 16 {
+                // Limit the heuristic to the standard 16 colours.
+                Some(color < 7 || color == 8)
+            } else {
+                None
+            };
+            let Some(dark) = dark else { return };
+            if dark == (*p_bg.get() == b'd' as c_char) || option_was_set(kOptBackground) {
+                return;
+            }
+            set_option_value_give_err(
+                kOptBackground,
+                OptVal {
+                    type_0: kOptValTypeString,
+                    data: OptValData {
+                        string: cstr_as_string(if dark {
+                            c"dark".as_ptr()
+                        } else {
+                            c"light".as_ptr()
+                        }),
+                    },
+                },
+                0,
+            );
+            reset_option_was_set(kOptBackground);
+        }
+    }
+
+    /// `guifg=`/`guibg=`/`guisp=`.
+    ///
+    /// # Safety
+    /// See [`do_highlight`].
+    unsafe fn set_gui_color(&mut self, key: &[u8], arg: &[u8]) {
+        if self.init && group(self.id).set & SG_GUI as c_int != 0 {
+            return;
+        }
+        if !self.init {
+            with_group(self.id, |entry| entry.set |= SG_GUI as c_int);
+        }
+
+        let (color, idx) = if arg == b"NONE" {
+            (-1, kColorIdxNone)
+        } else {
+            let owned = [arg, b"\0"].concat();
+            match CStr::from_bytes_with_nul(&owned) {
+                Ok(name) => name_to_color(name),
+                // An embedded NUL cannot reach here: the parse stopped at it.
+                Err(_) => (-1, kColorIdxNone),
+            }
+        };
+
+        let changed = with_group(self.id, |entry| {
+            let (old, old_idx) = match key[3] {
+                b'F' => (entry.rgb_fg, entry.rgb_fg_idx),
+                b'B' => (entry.rgb_bg, entry.rgb_bg_idx),
+                _ => (entry.rgb_sp, entry.rgb_sp_idx),
+            };
+            match key[3] {
+                b'F' => (entry.rgb_fg, entry.rgb_fg_idx) = (color, idx),
+                b'B' => (entry.rgb_bg, entry.rgb_bg_idx) = (color, idx),
+                _ => (entry.rgb_sp, entry.rgb_sp_idx) = (color, idx),
+            }
+            color != old || idx != old_idx
+        });
+        self.did_change = changed;
+
+        if self.is_normal_group {
+            let entry = group(self.id);
+            match key[3] {
+                b'F' => normal_fg.set(entry.rgb_fg),
+                b'B' => normal_bg.set(entry.rgb_bg),
+                _ => normal_sp.set(entry.rgb_sp),
+            }
+        }
+    }
+}
+
+/// `atoi`/`strtol`: leading digits, 0 for anything else.
+fn parse_int(arg: &[u8]) -> c_int {
+    let text = arg
+        .iter()
+        .position(|b| !b.is_ascii_digit() && *b != b'-' && *b != b'+')
+        .map_or(arg, |at| &arg[..at]);
+    core::str::from_utf8(text)
+        .ok()
+        .and_then(|text| text.parse().ok())
+        .unwrap_or(0)
 }

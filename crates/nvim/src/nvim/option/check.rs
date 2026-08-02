@@ -40,8 +40,8 @@ use crate::src::nvim::spellfile::spell_check_msm;
 use crate::src::nvim::spellsuggest::spell_check_sps;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    DecorProvider, HlAttrs, KeyDict_highlight, NS, OptIndex, OptInt, buf_T, int32_t, optset_T,
-    size_t, uint8_t, uint32_t, vimoption_T, win_T,
+    DecorProvider, HlAttrs, NS, OptIndex, OptInt, buf_T, int32_t, optset_T, size_t, uint8_t,
+    uint32_t, vimoption_T, win_T,
 };
 
 use super::{
@@ -367,13 +367,7 @@ pub unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut win_T) -> bool {
             if !wp.is_null() {
                 let mut attrs: HlAttrs = HLATTRS_INIT;
                 attrs.rgb_ae_attr = (attrs.rgb_ae_attr as c_int | HL_GLOBAL) as int32_t;
-                ns_hl_def(
-                    ns_hl as NS,
-                    hl_id_link,
-                    attrs,
-                    hl_id,
-                    ptr::null_mut::<KeyDict_highlight>(),
-                );
+                ns_hl_def(ns_hl as NS, hl_id_link, attrs, hl_id, None);
             }
             p = if *comma != 0 {
                 comma.add(1)

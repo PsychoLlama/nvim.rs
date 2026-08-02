@@ -41,7 +41,7 @@ use super::{HLF_W, MAX_HL_ID, MAX_SYN_NAME, SG_LINK, kColorIdxBg, kColorIdxFg, k
 ///
 /// `Copy` on purpose: [`super::highlight_changed`] builds ten scratch entries
 /// by cloning real ones, which upstream does with `memmove`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct HlGroup {
     /// The name as written.
     pub name: &'static CStr,

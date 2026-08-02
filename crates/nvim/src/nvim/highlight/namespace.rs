@@ -115,24 +115,24 @@ pub fn clear_ns_defs() {
 /// Defines highlight group `hl_id` inside namespace `ns_id`.
 ///
 /// `ns_id` 0 is not a namespace at all — it is the global `:highlight` table,
-/// and `dict` (which must then be non-null) goes straight to `set_hl_group`.
+/// and `dict` (which must then be `Some`) goes straight to `set_hl_group`.
 ///
 /// A `default` definition does not overwrite one the namespace already has,
 /// which is what `nvim_set_hl`'s `default = true` means.
 ///
 /// # Safety
-/// `dict` is null or a live keydict; main thread only.
+/// Main thread only.
 pub unsafe fn ns_hl_def(
     ns_id: NS,
     hl_id: c_int,
     attrs: HlAttrs,
     link_id: c_int,
-    dict: *mut KeyDict_highlight,
+    dict: Option<&KeyDict_highlight>,
 ) {
-    // SAFETY: the caller's keydict and the editor's own tables.
+    // SAFETY: the editor's own tables.
     unsafe {
         if ns_id == 0 {
-            assert!(!dict.is_null(), "dict");
+            let dict = dict.expect("the global table needs the caller's dict");
             set_hl_group(hl_id, attrs, dict, link_id);
             return;
         }

@@ -3,45 +3,21 @@
 use core::ffi::{CStr, c_int};
 
 use crate::src::nvim::api::private::helpers::cstr_as_string;
-use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::src::nvim::charset::{skiptowhite, skipwhite};
-use crate::src::nvim::cursor_shape::cursor_mode_uses_syn_id;
 use crate::src::nvim::decoration_provider::decor_provider_invalidate_hl;
-use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_all_later};
-use crate::src::nvim::eval::vars::do_unlet;
-use crate::src::nvim::ex_docmd::ends_excmd;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::{
-    HL_ALTFONT, HL_BLINK, HL_BOLD, HL_CONCEALED, HL_DEFAULT, HL_DIM, HL_INVERSE, HL_ITALIC,
-    HL_NOCOMBINE, HL_OVERLINE, HL_STANDOUT, HL_STRIKETHROUGH, HL_UNDERCURL, HL_UNDERDASHED,
-    HL_UNDERDOTTED, HL_UNDERDOUBLE, HL_UNDERLINE, HL_UNDERLINE_MASK, hl_get_syn_attr,
-    hl_get_ui_attr, syn_attr2entry,
+    HL_ALTFONT, HL_BLINK, HL_BOLD, HL_CONCEALED, HL_DIM, HL_INVERSE, HL_ITALIC, HL_NOCOMBINE,
+    HL_OVERLINE, HL_STANDOUT, HL_STRIKETHROUGH, HL_UNDERCURL, HL_UNDERDASHED, HL_UNDERDOTTED,
+    HL_UNDERDOUBLE, HL_UNDERLINE, HL_UNDERLINE_MASK, hl_get_ui_attr, syn_attr2entry,
 };
-use crate::src::nvim::lua::executor::nlua_set_sctx;
 use crate::src::nvim::main::{
-    clear_cmdline, cterm_normal_bg_color, cterm_normal_fg_color, current_sctx, e_invarg2, got_int,
-    highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, msg_grid,
-    need_highlight_changed, normal_bg, normal_fg, normal_sp, p_bg, starting, t_colors,
-    updating_screen,
+    clear_cmdline, highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, msg_grid,
+    need_highlight_changed,
 };
-use crate::src::nvim::message::{emsg, msg_ext_set_kind, semsg};
-use crate::src::nvim::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
-use crate::src::nvim::options::kOptBackground;
-use crate::src::nvim::os::libc::{
-    atoi, gettext, memcmp, memcpy, strcasecmp, strchr, strcmp, strlen, strncasecmp, strncmp, strtol,
-};
-use crate::src::nvim::runtime::exestack;
-use crate::src::nvim::strings::vim_memcpy_up;
-use crate::src::nvim::types::ui::kUILinegrid;
 use crate::src::nvim::types::{
-    Dict, HlAttrs, Integer, KeyDict_highlight, KeyValuePair, Object, OptVal, OptValData,
-    OptValType, RgbValue, TriState, estack_T, int32_t, kObjectTypeNil, kObjectTypeString, object,
-    object_data as C2Rust_Unnamed_0, size_t, uint8_t,
+    Dict, Integer, KeyValuePair, Object, OptValType, RgbValue, TriState, size_t,
 };
-use crate::src::nvim::ui::{
-    ui_call_hl_group_set, ui_default_colors_set, ui_has, ui_mode_info_set, ui_refresh,
-    ui_rgb_attached,
-};
+use crate::src::nvim::ui::ui_call_hl_group_set;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISxdigit: C2Rust_Unnamed = 4096;
 pub const kTrue: TriState = 1;
