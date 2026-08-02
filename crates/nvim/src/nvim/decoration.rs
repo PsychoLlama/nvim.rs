@@ -1,131 +1,179 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
+//! Extmark decorations: what a mark makes the screen do.
+//!
+//! A decoration is whatever an extmark carries beyond its position — a
+//! highlight over the text, virtual text beside or instead of it, whole
+//! virtual lines, a sign, a conceal, a spelling override, a URL. This file
+//! owns the storage for all of that and the "something changed, redraw it"
+//! side; the four children do the work:
+//!
+//! * [`state`] — `DecorState`, the per-window iteration the drawing code
+//!   walks a window with.
+//! * [`signs`] — signs from extmarks, and the sign-column width histogram.
+//! * [`query`] — the row questions the layout code asks without drawing.
+//! * [`dict`] — a decoration as an API dictionary.
+//!
+//! # How a decoration is stored
+//!
+//! Small ones live *inline* in the marktree key: a `DecorHighlightInline` is
+//! a highlight id, a priority and a conceal character, and fits in the space
+//! the mark already has. Anything bigger is `ext`: the mark then holds a
+//! pointer to a chain of [`DecorVirtText`] and an index into
+//! [`DECOR_ITEMS`], the one global store of `DecorSignHighlight`s that every
+//! mark's chain runs through.
+//!
+//! # Deleting while drawing
+//!
+//! A decoration can be deleted by a decoration provider's Lua callback in the
+//! middle of the redraw that is reading it. [`decor_free`] therefore checks
+//! `running_decor_provider`, and puts anything freed at such a moment on a
+//! to-free list that [`decor_check_to_be_deleted`] drains once the redraw is
+//! over.
+
 use crate::src::nvim::change::changed_lines_invalidate_buf;
 use crate::src::nvim::drawscreen::{redraw_buf_line_later, redraw_buf_range_later};
 use crate::src::nvim::extmark::extmark_set;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{schar_from_char, schar_get_first_codepoint, schar_high};
-use crate::src::nvim::main::{curtab, decor_state, firstwin, namespace_localscope};
+use crate::src::nvim::main::{decor_state, firstwin, namespace_localscope};
 use crate::src::nvim::map::set_has_uint32_t;
 use crate::src::nvim::marktree::key::{MT_FLAG_DECOR_EXT, MT_FLAG_DECOR_HL};
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::r#move::changed_window_setting;
-use crate::src::nvim::os::libc::__assert_fail;
 use crate::src::nvim::types::{
     DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight,
-    DecorVirtText, Error, MTKey, MetaIndex, SignItem, TriState, VirtLines, VirtText, VirtTextChunk,
-    VirtTextPos, buf_T, colnr_T, linenr_T, lpos_T, schar_T, size_t, uint16_t, uint32_t, virt_line,
-    win_T,
+    DecorVirtText, MTKey, MetaIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos, buf_T,
+    colnr_T, linenr_T, lpos_T, uint8_t, uint16_t, uint32_t, virt_line, win_T,
+};
+use ::core::ffi::c_int;
+use ::core::{mem, ptr};
+
+mod dict;
+mod query;
+mod signs;
+mod state;
+
+pub use self::dict::*;
+pub use self::query::*;
+pub use self::signs::*;
+pub use self::state::*;
+
+// ---------------------------------------------------------------------------
+// The shapes a decoration is made of
+// ---------------------------------------------------------------------------
+
+/// `kSH*`: what a `DecorSignHighlight` (or its inline form) actually does.
+/// Several can be set at once, which is why one item can be both a highlight
+/// and a spelling override.
+pub(crate) const kSHIsSign: uint16_t = 1;
+/// Colour the rest of the screen line past the end of the text too.
+pub(crate) const kSHHlEol: uint16_t = 2;
+/// The position is reported to the UI rather than drawn (`ui_watched`).
+pub(crate) const kSHUIWatched: uint16_t = 4;
+/// A `ui_watched` mark that reports an overlay position, not an eol one.
+pub(crate) const kSHUIWatchedOverlay: uint16_t = 8;
+/// Force spell checking on, and off, over the range.
+pub(crate) const kSHSpellOn: uint16_t = 16;
+pub(crate) const kSHSpellOff: uint16_t = 32;
+/// Replace the range with `text[0]` at 'conceallevel' 2 or more.
+pub(crate) const kSHConceal: uint16_t = 64;
+/// Hide the whole line.
+pub(crate) const kSHConcealLines: uint16_t = 128;
+
+/// `kVT*`: flags of a `DecorVirtText`.
+/// The item is a block of whole lines, not text alongside the line.
+pub(crate) const kVTIsLines: uint8_t = 1;
+/// Do not draw the virtual text while the line is selected.
+pub(crate) const kVTHide: uint8_t = 2;
+/// Draw the virtual lines above their own line rather than below it.
+pub(crate) const kVTLinesAbove: uint8_t = 4;
+/// Repeat the virtual text on every screen line a wrapped line takes.
+pub(crate) const kVTRepeatLinebreak: uint8_t = 8;
+
+/// `kVL*`: flags of one `virt_line` inside a virtual-lines block.
+/// Start at the left window edge, ignoring the number column and friends.
+pub(crate) const kVLLeftcol: c_int = 1;
+/// May scroll horizontally with `nowrap`.
+pub(crate) const kVLScroll: c_int = 2;
+
+/// `VirtTextPos`: where virtual text goes relative to the line. Keep in sync
+/// with `dict::VIRT_TEXT_POS_STR`.
+pub(crate) const kVPosEndOfLine: VirtTextPos = 0;
+pub(crate) const kVPosInline: VirtTextPos = 2;
+pub(crate) const kVPosOverlay: VirtTextPos = 3;
+pub(crate) const kVPosWinCol: VirtTextPos = 5;
+
+/// `kMTMeta*`: the marktree's per-node counts, which is what lets a walk skip
+/// a whole subtree that has no mark of the kind it is looking for.
+pub(crate) const kMTMetaLines: MetaIndex = 1;
+pub(crate) const kMTMetaSignText: MetaIndex = 3;
+pub(crate) const kMTMetaConcealLines: MetaIndex = 4;
+
+/// Cells a sign takes in the sign column.
+pub(crate) const SIGN_WIDTH: c_int = 2;
+/// `'signcolumn'` value meaning "put signs in the number column".
+pub(crate) const SCL_NUM: c_int = -2;
+
+/// The index that ends a decoration's chain of items.
+pub(crate) const DECOR_ID_INVALID: uint32_t = uint32_t::MAX;
+/// The priority a decoration gets when its creator did not name one.
+const DECOR_PRIORITY_BASE: DecorPriority = 0x1000;
+
+/// An unset inline highlight — no flags, no group, base priority.
+pub(crate) const DECOR_HIGHLIGHT_INLINE_INIT: DecorHighlightInline = DecorHighlightInline {
+    flags: 0,
+    priority: DECOR_PRIORITY_BASE,
+    hl_id: 0,
+    conceal_char: 0,
 };
 
-// The carve of the transpiled module; see each child's docs.
-mod dict;
-pub use self::dict::*;
-mod signs;
-pub use self::signs::*;
-mod query;
-pub use self::query::*;
-mod state;
-pub use self::state::*;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const SIGN_WIDTH: C2Rust_Unnamed = 2;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLine: VirtTextPos = 0;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const kVLScroll: C2Rust_Unnamed_16 = 2;
-pub const kVLLeftcol: C2Rust_Unnamed_16 = 1;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const kSHConcealLines: C2Rust_Unnamed_17 = 128;
-pub const kSHConceal: C2Rust_Unnamed_17 = 64;
-pub const kSHSpellOff: C2Rust_Unnamed_17 = 32;
-pub const kSHSpellOn: C2Rust_Unnamed_17 = 16;
-pub const kSHUIWatchedOverlay: C2Rust_Unnamed_17 = 8;
-pub const kSHUIWatched: C2Rust_Unnamed_17 = 4;
-pub const kSHHlEol: C2Rust_Unnamed_17 = 2;
-pub const kSHIsSign: C2Rust_Unnamed_17 = 1;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const kVTRepeatLinebreak: C2Rust_Unnamed_18 = 8;
-pub const kVTLinesAbove: C2Rust_Unnamed_18 = 4;
-pub const kVTHide: C2Rust_Unnamed_18 = 2;
-pub const kVTIsLines: C2Rust_Unnamed_18 = 1;
-pub const kMTMetaConcealLines: MetaIndex = 4;
-pub const kMTMetaSignText: MetaIndex = 3;
-pub const kMTMetaLines: MetaIndex = 1;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const SIGN_SHOW_MAX: C2Rust_Unnamed_20 = 9;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const kDecorKindUIWatched: C2Rust_Unnamed_21 = 4;
-pub const kDecorKindVirtLines: C2Rust_Unnamed_21 = 3;
-pub const kDecorKindVirtText: C2Rust_Unnamed_21 = 2;
-pub const kDecorKindHighlight: C2Rust_Unnamed_21 = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_26 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut DecorSignHighlight,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_27 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut SignItem,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_28 {
-    pub name: *mut ::core::ffi::c_char,
-    pub val: ::core::ffi::c_int,
-}
-pub const kExtmarkHighlight: C2Rust_Unnamed_29 = 32;
-pub const kExtmarkSign: C2Rust_Unnamed_29 = 2;
-pub const kExtmarkNone: C2Rust_Unnamed_29 = 1;
-pub const kExtmarkVirtText: C2Rust_Unnamed_29 = 8;
-pub const kExtmarkVirtLines: C2Rust_Unnamed_29 = 16;
-pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const DECOR_ID_INVALID: ::core::ffi::c_uint = UINT32_MAX;
-pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int;
-pub const DECOR_HIGHLIGHT_INLINE_INIT: DecorHighlightInline = DecorHighlightInline {
-    flags: 0 as uint16_t,
-    priority: DECOR_PRIORITY_BASE as DecorPriority,
-    hl_id: 0 as ::core::ffi::c_int,
-    conceal_char: 0 as schar_T,
+/// An unset sign/highlight item.
+pub(crate) const DECOR_SIGN_HIGHLIGHT_INIT: DecorSignHighlight = DecorSignHighlight {
+    flags: 0,
+    priority: DECOR_PRIORITY_BASE,
+    hl_id: 0,
+    text: [0; 2],
+    sign_name: ptr::null_mut(),
+    sign_add_id: 0,
+    number_hl_id: 0,
+    line_hl_id: 0,
+    cursorline_hl_id: 0,
+    next: DECOR_ID_INVALID,
+    url: ptr::null(),
 };
-pub const DECOR_SIGN_HIGHLIGHT_INIT: DecorSignHighlight = DecorSignHighlight {
-    flags: 0 as uint16_t,
-    priority: DECOR_PRIORITY_BASE as DecorPriority,
-    hl_id: 0 as ::core::ffi::c_int,
-    text: [0 as schar_T, 0 as schar_T],
-    sign_name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    sign_add_id: 0 as ::core::ffi::c_int,
-    number_hl_id: 0 as ::core::ffi::c_int,
-    line_hl_id: 0 as ::core::ffi::c_int,
-    cursorline_hl_id: 0 as ::core::ffi::c_int,
-    next: DECOR_ID_INVALID as uint32_t,
-    url: ::core::ptr::null::<::core::ffi::c_char>(),
-};
+
+/// "No decoration": by convention that is always the inline branch with an
+/// unset highlight, never an `ext` one with empty chains.
 pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
-    ext: false_0 != 0,
+    ext: false,
     data: DecorInlineData {
         hl: DECOR_HIGHLIGHT_INLINE_INIT,
     },
 };
-/// Whether marks in namespace `ns_id` are visible in `wp`. A namespace that is
-/// not window-local is visible in every window; a window-local one only in the
-/// windows that opted in.
+
+/// The virtual-text chain of `mark`, or null if it has no `ext` decoration.
+///
+/// # Safety
+/// `mark` must be a live marktree key.
+pub(crate) unsafe fn mt_decor_virt(mark: MTKey) -> *mut DecorVirtText {
+    if mark.flags as c_int & MT_FLAG_DECOR_EXT != 0 {
+        // SAFETY: the flag says the union holds the `ext` branch.
+        unsafe { mark.decor_data.ext.vt }
+    } else {
+        ptr::null_mut()
+    }
+}
+
+/// Whether marks in namespace `ns_id` are visible in `wp`: a namespace that is
+/// not window-local is visible everywhere, a window-local one only where it
+/// was opted into.
 ///
 /// # Safety
 /// `wp` must point to a live window.
 #[inline]
 pub unsafe fn ns_in_win(ns_id: uint32_t, wp: *mut win_T) -> bool {
+    // SAFETY: the caller's window and the editor's namespace table.
     unsafe {
         if !set_has_uint32_t(namespace_localscope.ptr(), ns_id) {
             return true;
@@ -133,11 +181,15 @@ pub unsafe fn ns_in_win(ns_id: uint32_t, wp: *mut win_T) -> bool {
         set_has_uint32_t(&raw mut (*wp).w_ns_set, ns_id)
     }
 }
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
+
+// ---------------------------------------------------------------------------
+// The item store
+// ---------------------------------------------------------------------------
+
 /// Every `DecorSignHighlight` that any extmark anywhere points at, in one
-/// array. An extmark stores the *index* of the first item of its decoration
-/// and each item the index of the next, so one decoration is a chain through
-/// this store and `DECOR_ID_INVALID` ends it.
+/// array. A mark stores the *index* of the first item of its decoration and
+/// each item the index of the next, so one decoration is a chain through this
+/// store and [`DECOR_ID_INVALID`] ends it.
 ///
 /// Entries are never removed. An index handed to a marktree entry has to stay
 /// valid until that entry is deleted, so a freed item goes on a freelist
@@ -145,15 +197,15 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 /// in place.
 static DECOR_ITEMS: GlobalCell<Vec<DecorSignHighlight>> = GlobalCell::new(Vec::new());
 
-/// Index of the first free slot of [`DECOR_ITEMS`], or `DECOR_ID_INVALID`.
+/// Index of the first free slot of [`DECOR_ITEMS`], or [`DECOR_ID_INVALID`].
 static DECOR_FREELIST: GlobalCell<uint32_t> = GlobalCell::new(DECOR_ID_INVALID);
 
 /// A pointer to decoration item `idx`.
 ///
-/// A pointer and not a borrow, because upstream hands these out and then
-/// keeps writing through them across calls that can add another item — see
-/// [`decor_put_sh`], which is what invalidates them. Panics on an index no
-/// [`decor_put_sh`] handed out, where upstream would read past the array.
+/// A pointer and not a borrow, because callers walk a `next` chain writing
+/// through it, across calls that can add another item — see [`decor_put_sh`],
+/// which is what invalidates them. Panics on an index no [`decor_put_sh`]
+/// handed out, where upstream would read past the array.
 pub(crate) fn decor_item(idx: uint32_t) -> *mut DecorSignHighlight {
     DECOR_ITEMS.with(|items| {
         let items = &items[..];
@@ -166,155 +218,7 @@ pub(crate) fn decor_item(idx: uint32_t) -> *mut DecorSignHighlight {
 pub(crate) fn decor_item_count() -> usize {
     DECOR_ITEMS.with(Vec::len)
 }
-pub static to_free_virt: GlobalCell<*mut DecorVirtText> =
-    GlobalCell::new(::core::ptr::null_mut::<DecorVirtText>());
-pub static to_free_sh: GlobalCell<uint32_t> = GlobalCell::new(UINT32_MAX as uint32_t);
-pub unsafe extern "C" fn bufhl_add_hl_pos_offset(
-    mut buf: *mut buf_T,
-    mut src_id: ::core::ffi::c_int,
-    mut hl_id: ::core::ffi::c_int,
-    mut pos_start: lpos_T,
-    mut pos_end: lpos_T,
-    mut offset: colnr_T,
-) {
-    let mut hl_start: colnr_T = 0 as colnr_T;
-    let mut hl_end: colnr_T = 0 as colnr_T;
-    let mut decor: DecorInline = DECOR_INLINE_INIT;
-    decor.data.hl.hl_id = hl_id;
-    let mut lnum: linenr_T = pos_start.lnum;
-    while lnum <= pos_end.lnum {
-        let mut end_off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if pos_start.lnum < lnum && lnum < pos_end.lnum {
-            hl_start = (if offset as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-                > 0 as ::core::ffi::c_int
-            {
-                offset as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            }) as colnr_T;
-            end_off = 1 as ::core::ffi::c_int;
-            hl_end = 0 as ::core::ffi::c_int as colnr_T;
-        } else if lnum == pos_start.lnum && lnum < pos_end.lnum {
-            hl_start = pos_start.col + offset;
-            end_off = 1 as ::core::ffi::c_int;
-            hl_end = 0 as ::core::ffi::c_int as colnr_T;
-        } else if pos_start.lnum < lnum && lnum == pos_end.lnum {
-            hl_start = (if offset as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-                > 0 as ::core::ffi::c_int
-            {
-                offset as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            }) as colnr_T;
-            hl_end = pos_end.col + offset;
-        } else if pos_start.lnum == lnum && pos_end.lnum == lnum {
-            hl_start = pos_start.col + offset;
-            hl_end = pos_end.col + offset;
-        }
-        extmark_set(
-            buf,
-            src_id as uint32_t,
-            ::core::ptr::null_mut::<uint32_t>(),
-            lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-            hl_start,
-            lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int + end_off,
-            hl_end,
-            decor,
-            MT_FLAG_DECOR_HL as uint16_t,
-            true_0 != 0,
-            false_0 != 0,
-            true_0 != 0,
-            false_0 != 0,
-            ::core::ptr::null_mut::<Error>(),
-        );
-        lnum += 1;
-    }
-}
-pub unsafe extern "C" fn decor_redraw(
-    mut buf: *mut buf_T,
-    mut row1: ::core::ffi::c_int,
-    mut row2: ::core::ffi::c_int,
-    mut col1: ::core::ffi::c_int,
-    mut decor: DecorInline,
-) {
-    if decor.ext {
-        let mut vt: *mut DecorVirtText = decor.data.ext.vt;
-        while !vt.is_null() {
-            let mut below: bool =
-                (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0
-                    && (*vt).flags as ::core::ffi::c_int & kVTLinesAbove as ::core::ffi::c_int == 0;
-            let mut vt_lnum: linenr_T = row1 as linenr_T + 1 as linenr_T + below as linenr_T;
-            redraw_buf_line_later(buf, vt_lnum, true_0 != 0);
-            if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0
-                || (*vt).pos as ::core::ffi::c_uint
-                    == kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                let mut vt_col: colnr_T =
-                    if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0 {
-                        0 as colnr_T
-                    } else {
-                        col1 as colnr_T
-                    };
-                changed_lines_invalidate_buf(
-                    buf,
-                    vt_lnum,
-                    vt_col,
-                    vt_lnum + 1 as linenr_T,
-                    0 as linenr_T,
-                );
-            }
-            vt = (*vt).next;
-        }
-        let mut idx: uint32_t = decor.data.ext.sh_idx;
-        while idx != DECOR_ID_INVALID as uint32_t {
-            let mut sh: *mut DecorSignHighlight = decor_item(idx);
-            decor_redraw_sh(buf, row1, row2, *sh);
-            idx = (*sh).next;
-        }
-    } else {
-        decor_redraw_sh(buf, row1, row2, decor_sh_from_inline(decor.data.hl));
-    };
-}
-pub unsafe extern "C" fn decor_redraw_sh(
-    mut buf: *mut buf_T,
-    mut row1: ::core::ffi::c_int,
-    mut row2: ::core::ffi::c_int,
-    mut sh: DecorSignHighlight,
-) {
-    if sh.hl_id != 0
-        || !sh.url.is_null()
-        || sh.flags as ::core::ffi::c_int
-            & (kSHIsSign as ::core::ffi::c_int
-                | kSHSpellOn as ::core::ffi::c_int
-                | kSHSpellOff as ::core::ffi::c_int
-                | kSHConceal as ::core::ffi::c_int)
-            != 0
-    {
-        if row2 >= row1 {
-            redraw_buf_range_later(
-                buf,
-                row1 as linenr_T + 1 as linenr_T,
-                row2 as linenr_T + 1 as linenr_T,
-            );
-        }
-    }
-    if sh.flags as ::core::ffi::c_int & kSHConcealLines as ::core::ffi::c_int != 0 {
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
-        } else {
-            (*curtab.get()).tp_firstwin
-        };
-        while !wp.is_null() {
-            if (*wp).w_buffer == buf {
-                changed_window_setting(wp);
-            }
-            wp = (*wp).w_next;
-        }
-    }
-    if sh.flags as ::core::ffi::c_int & kSHUIWatched as ::core::ffi::c_int != 0 {
-        redraw_buf_line_later(buf, row1 as linenr_T + 1 as linenr_T, false_0 != 0);
-    }
-}
+
 /// Stores `item` and answers the index other code refers to it by, reusing a
 /// freed slot when there is one.
 ///
@@ -332,243 +236,402 @@ pub fn decor_put_sh(item: DecorSignHighlight) -> uint32_t {
         (items.len() - 1) as uint32_t
     })
 }
-pub unsafe extern "C" fn decor_put_vt(
-    mut vt: DecorVirtText,
-    mut next: *mut DecorVirtText,
-) -> *mut DecorVirtText {
-    let mut decor_alloc: *mut DecorVirtText =
-        xmalloc(::core::mem::size_of::<DecorVirtText>()) as *mut DecorVirtText;
-    *decor_alloc = vt;
-    (*decor_alloc).next = next;
-    return decor_alloc;
+
+/// Heap-allocates a copy of `vt` with `next` as its tail, which is how a
+/// virtual-text chain is built. Freed by [`decor_free`].
+pub fn decor_put_vt(vt: DecorVirtText, next: *mut DecorVirtText) -> *mut DecorVirtText {
+    // SAFETY: `xmalloc` never answers null and the size is this type's.
+    unsafe {
+        let alloc: *mut DecorVirtText = xmalloc(mem::size_of::<DecorVirtText>()).cast();
+        *alloc = vt;
+        (*alloc).next = next;
+        alloc
+    }
 }
-pub unsafe extern "C" fn decor_sh_from_inline(
-    mut item: DecorHighlightInline,
-) -> DecorSignHighlight {
-    '_c2rust_label: {
-        if item.flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int == 0 {
-        } else {
-            __assert_fail(
-                b"!(item.flags & kSHIsSign)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/decoration.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                166 as ::core::ffi::c_uint,
-                b"DecorSignHighlight decor_sh_from_inline(DecorHighlightInline)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let mut conv: DecorSignHighlight = DecorSignHighlight {
+
+/// The stored form of an inline highlight — the same thing with the fields a
+/// full item has and it does not.
+///
+/// # Panics
+/// A sign is never inline, so an inline item claiming to be one is a bug.
+/// TODO(bfredl): eventually simple signs will be inlinable as well.
+pub fn decor_sh_from_inline(item: DecorHighlightInline) -> DecorSignHighlight {
+    assert!(item.flags & kSHIsSign == 0);
+    DecorSignHighlight {
         flags: item.flags,
         priority: item.priority,
         hl_id: item.hl_id,
         text: [item.conceal_char, 0],
-        sign_name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        sign_add_id: 0,
-        number_hl_id: 0 as ::core::ffi::c_int,
-        line_hl_id: 0 as ::core::ffi::c_int,
-        cursorline_hl_id: 0 as ::core::ffi::c_int,
-        next: DECOR_ID_INVALID as uint32_t,
-        url: ::core::ptr::null::<::core::ffi::c_char>(),
-    };
-    return conv;
+        next: DECOR_ID_INVALID,
+        ..DECOR_SIGN_HIGHLIGHT_INIT
+    }
 }
-pub unsafe extern "C" fn buf_put_decor(
-    mut buf: *mut buf_T,
-    mut decor: DecorInline,
-    mut row: ::core::ffi::c_int,
-    mut row2: ::core::ffi::c_int,
-) {
-    if decor.ext as ::core::ffi::c_int != 0 && (row as linenr_T) < (*buf).b_ml.ml_line_count {
+
+// ---------------------------------------------------------------------------
+// Freeing
+// ---------------------------------------------------------------------------
+
+/// Decorations a callback asked to delete in the middle of a redraw, which
+/// may still be referenced by the `DecorState` the redraw is walking. Drained
+/// by [`decor_check_to_be_deleted`] once the redraw is over.
+static TO_FREE_VIRT: GlobalCell<*mut DecorVirtText> = GlobalCell::new(ptr::null_mut());
+static TO_FREE_SH: GlobalCell<uint32_t> = GlobalCell::new(DECOR_ID_INVALID);
+
+/// Frees `decor`, or defers it when a decoration provider is running.
+///
+/// Deferring works by splicing the decoration's own chains onto the to-free
+/// lists, which is why it costs no allocation: the last link of each chain
+/// takes the old list head.
+///
+/// # Safety
+/// `decor` must be live and must not be reachable from any mark afterwards.
+pub unsafe fn decor_free(decor: DecorInline) {
+    if !decor.ext {
+        return;
+    }
+    // SAFETY: the caller's decoration.
+    unsafe {
+        let mut vt = decor.data.ext.vt;
         let mut idx: uint32_t = decor.data.ext.sh_idx;
-        row2 = (if ((*buf).b_ml.ml_line_count - 1 as linenr_T) < row2 as linenr_T {
-            (*buf).b_ml.ml_line_count - 1 as linenr_T
-        } else {
-            row2 as linenr_T
-        }) as ::core::ffi::c_int;
-        while idx != DECOR_ID_INVALID as uint32_t {
-            let mut sh: *mut DecorSignHighlight = decor_item(idx);
+
+        if !(*decor_state.ptr()).running_decor_provider {
+            // Safe to delete right now.
+            decor_free_inner(vt, idx);
+            return;
+        }
+
+        while !vt.is_null() {
+            if (*vt).next.is_null() {
+                (*vt).next = TO_FREE_VIRT.get();
+                TO_FREE_VIRT.set(decor.data.ext.vt);
+                break;
+            }
+            vt = (*vt).next;
+        }
+        while idx != DECOR_ID_INVALID {
+            let sh = decor_item(idx);
+            if (*sh).next == DECOR_ID_INVALID {
+                (*sh).next = TO_FREE_SH.get();
+                TO_FREE_SH.set(decor.data.ext.sh_idx);
+                break;
+            }
+            idx = (*sh).next;
+        }
+    }
+}
+
+/// Frees a virtual-text chain and returns a chain of items to the freelist.
+///
+/// # Safety
+/// Both chains must be live and unreachable.
+unsafe fn decor_free_inner(mut vt: *mut DecorVirtText, first_idx: uint32_t) {
+    // SAFETY: the caller's chains.
+    unsafe {
+        while !vt.is_null() {
+            if (*vt).flags as c_int & kVTIsLines as c_int != 0 {
+                clear_virtlines(&raw mut (*vt).data.virt_lines);
+            } else {
+                clear_virttext(&raw mut (*vt).data.virt_text);
+            }
+            let tofree = vt;
+            vt = (*vt).next;
+            xfree(tofree.cast());
+        }
+
+        let mut idx = first_idx;
+        while idx != DECOR_ID_INVALID {
+            let sh = decor_item(idx);
+            if (*sh).flags & kSHIsSign != 0 {
+                xfree((*sh).sign_name.cast());
+                (*sh).sign_name = ptr::null_mut();
+            }
+            (*sh).flags = 0;
+            if !(*sh).url.is_null() {
+                xfree((*sh).url as *mut _);
+                (*sh).url = ptr::null();
+            }
+            // The whole chain goes on the freelist at once, head first.
+            if (*sh).next == DECOR_ID_INVALID {
+                (*sh).next = DECOR_FREELIST.get();
+                DECOR_FREELIST.set(first_idx);
+                break;
+            }
+            idx = (*sh).next;
+        }
+    }
+}
+
+/// Drains the to-free lists at the end of a redraw, and forgets the window
+/// the `DecorState` was drawing.
+///
+/// # Safety
+/// Must not be called while a decoration provider is running.
+pub unsafe fn decor_check_to_be_deleted() {
+    // SAFETY: the assert is the precondition, and the lists are this file's.
+    unsafe {
+        assert!(!(*decor_state.ptr()).running_decor_provider);
+        decor_free_inner(TO_FREE_VIRT.get(), TO_FREE_SH.get());
+        TO_FREE_VIRT.set(ptr::null_mut());
+        TO_FREE_SH.set(DECOR_ID_INVALID);
+        (*decor_state.ptr()).win = ptr::null_mut();
+    }
+}
+
+/// Frees the chunks of a virtual text and empties it.
+///
+/// # Safety
+/// `text` must point to a live `VirtText` that owns its chunks.
+pub unsafe fn clear_virttext(text: *mut VirtText) {
+    // SAFETY: the caller's virtual text.
+    unsafe {
+        for i in 0..(*text).size {
+            xfree((*(*text).items.add(i)).text.cast());
+        }
+        xfree((*text).items.cast());
+        *text = VirtText {
+            size: 0,
+            capacity: 0,
+            items: ptr::null_mut::<VirtTextChunk>(),
+        };
+    }
+}
+
+/// [`clear_virttext`] for a block of virtual lines.
+///
+/// # Safety
+/// `lines` must point to a live `VirtLines` that owns its lines.
+pub unsafe fn clear_virtlines(lines: *mut VirtLines) {
+    // SAFETY: the caller's virtual lines.
+    unsafe {
+        for i in 0..(*lines).size {
+            clear_virttext(&raw mut (*(*lines).items.add(i)).line);
+        }
+        xfree((*lines).items.cast());
+        *lines = VirtLines {
+            size: 0,
+            capacity: 0,
+            items: ptr::null_mut::<virt_line>(),
+        };
+    }
+}
+
+/// Replaces any sign or conceal character that the glyph cache no longer
+/// holds — called when the cache is rebuilt, since a `schar_T` is an index
+/// into it once the character is longer than four bytes.
+///
+/// # Safety
+/// Reaches the glyph cache; main thread only.
+pub unsafe fn decor_check_invalid_glyphs() {
+    for i in 0..decor_item_count() {
+        let it = decor_item(i as uint32_t);
+        // SAFETY: an index below `decor_item_count()` is a live item.
+        unsafe {
+            let width = if (*it).flags & kSHIsSign != 0 {
+                SIGN_WIDTH
+            } else if (*it).flags & kSHConceal != 0 {
+                1
+            } else {
+                0
+            };
+            for j in 0..width as usize {
+                if schar_high((*it).text[j]) {
+                    (*it).text[j] = schar_from_char(schar_get_first_codepoint((*it).text[j]));
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Telling the screen something changed
+// ---------------------------------------------------------------------------
+
+/// Adds highlighting between two positions, one extmark per line.
+///
+/// `offset` shifts the whole thing right, which is what `:substitute`'s
+/// preview needs: it highlights a replacement that has not been made yet, in
+/// a line the command line has already indented.
+///
+/// TODO(bfredl): make decoration powerful enough that this can be done with a
+/// single ephemeral decoration.
+///
+/// # Safety
+/// `buf` must be live and the positions must be inside it.
+pub unsafe fn bufhl_add_hl_pos_offset(
+    buf: *mut buf_T,
+    src_id: c_int,
+    hl_id: c_int,
+    pos_start: lpos_T,
+    pos_end: lpos_T,
+    offset: colnr_T,
+) {
+    let mut decor = DECOR_INLINE_INIT;
+    decor.data.hl.hl_id = hl_id;
+
+    // SAFETY: the caller's buffer.
+    unsafe {
+        // TODO(bfredl): if decoration had blocky mode, we could avoid this loop
+        for lnum in pos_start.lnum..=pos_end.lnum {
+            let first = lnum == pos_start.lnum;
+            let last = lnum == pos_end.lnum;
+            // A middle or last line starts one column left of `offset`. This
+            // is quite ad-hoc, but the space between the number column and
+            // the highlighted text is what shows that the `\n` is part of the
+            // substituted text.
+            let hl_start = if first {
+                pos_start.col + offset
+            } else {
+                (offset - 1).max(0)
+            };
+            // Anything but the last line runs to the end, which is spelled as
+            // "column 0 of the next line".
+            let (end_off, hl_end) = if last {
+                (0, pos_end.col + offset)
+            } else {
+                (1, 0)
+            };
+
+            extmark_set(
+                buf,
+                src_id as uint32_t,
+                ptr::null_mut(),
+                lnum as c_int - 1,
+                hl_start,
+                lnum as c_int - 1 + end_off,
+                hl_end,
+                decor,
+                MT_FLAG_DECOR_HL as uint16_t,
+                true,
+                false,
+                true,
+                false,
+                ptr::null_mut(),
+            );
+        }
+    }
+}
+
+/// Marks the screen lines `decor` affects as needing a redraw.
+///
+/// # Safety
+/// `buf` must be live and `decor` must be its mark's decoration.
+pub unsafe fn decor_redraw(
+    buf: *mut buf_T,
+    row1: c_int,
+    row2: c_int,
+    col1: c_int,
+    decor: DecorInline,
+) {
+    // SAFETY: the caller's buffer and decoration.
+    unsafe {
+        if !decor.ext {
+            decor_redraw_sh(buf, row1, row2, decor_sh_from_inline(decor.data.hl));
+            return;
+        }
+
+        let mut vt = decor.data.ext.vt;
+        while !vt.is_null() {
+            let is_lines = (*vt).flags & kVTIsLines != 0;
+            let below = is_lines && (*vt).flags & kVTLinesAbove == 0;
+            let vt_lnum = row1 as linenr_T + 1 + linenr_T::from(below);
+            redraw_buf_line_later(buf, vt_lnum, true);
+            // Virtual lines and inline virtual text change how much room the
+            // line takes, so the cached line sizes have to go as well.
+            if is_lines || (*vt).pos == kVPosInline {
+                let vt_col: colnr_T = if is_lines { 0 } else { col1 };
+                changed_lines_invalidate_buf(buf, vt_lnum, vt_col, vt_lnum + 1, 0);
+            }
+            vt = (*vt).next;
+        }
+
+        let mut idx: uint32_t = decor.data.ext.sh_idx;
+        while idx != DECOR_ID_INVALID {
+            let sh = decor_item(idx);
+            decor_redraw_sh(buf, row1, row2, *sh);
+            idx = (*sh).next;
+        }
+    }
+}
+
+/// [`decor_redraw`] for one sign/highlight item.
+///
+/// # Safety
+/// `buf` must be live.
+pub unsafe fn decor_redraw_sh(buf: *mut buf_T, row1: c_int, row2: c_int, sh: DecorSignHighlight) {
+    // SAFETY: the caller's buffer and the editor's window list.
+    unsafe {
+        let paints = sh.flags & (kSHIsSign | kSHSpellOn | kSHSpellOff | kSHConceal) != 0;
+        if (sh.hl_id != 0 || !sh.url.is_null() || paints) && row2 >= row1 {
+            redraw_buf_range_later(buf, row1 as linenr_T + 1, row2 as linenr_T + 1);
+        }
+
+        if sh.flags & kSHConcealLines != 0 {
+            // The current tabpage's window list is in the globals, which is
+            // what `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)` expands to.
+            // TODO(luukvbaal): redraw only unconcealed lines, and scroll
+            // lines below it up or down. Also when opening/closing a fold.
+            let mut wp = firstwin.get();
+            while !wp.is_null() {
+                if (*wp).w_buffer == buf {
+                    changed_window_setting(wp);
+                }
+                wp = (*wp).w_next;
+            }
+        }
+
+        if sh.flags & kSHUIWatched != 0 {
+            redraw_buf_line_later(buf, row1 as linenr_T + 1, false);
+        }
+    }
+}
+
+/// Accounts for a decoration that has just been placed on rows `row..=row2`.
+///
+/// # Safety
+/// `buf` must be live and `decor` must be its mark's decoration.
+pub unsafe fn buf_put_decor(buf: *mut buf_T, decor: DecorInline, row: c_int, mut row2: c_int) {
+    // SAFETY: the caller's buffer and decoration.
+    unsafe {
+        if !decor.ext || row as linenr_T >= (*buf).b_ml.ml_line_count {
+            return;
+        }
+        row2 = ((*buf).b_ml.ml_line_count - 1).min(row2 as linenr_T) as c_int;
+        let mut idx: uint32_t = decor.data.ext.sh_idx;
+        while idx != DECOR_ID_INVALID {
+            let sh = decor_item(idx);
             buf_put_decor_sh(buf, sh, row, row2);
             idx = (*sh).next;
         }
     }
 }
-pub unsafe extern "C" fn buf_decor_remove(
-    mut buf: *mut buf_T,
-    mut row1: ::core::ffi::c_int,
-    mut row2: ::core::ffi::c_int,
-    mut col1: ::core::ffi::c_int,
-    mut decor: DecorInline,
-    mut free: bool,
+
+/// Undoes [`buf_put_decor`] and schedules the redraw, freeing the decoration
+/// too when `free` says the mark is going away with it.
+///
+/// # Safety
+/// `buf` must be live and `decor` must be its mark's decoration.
+pub unsafe fn buf_decor_remove(
+    buf: *mut buf_T,
+    row1: c_int,
+    mut row2: c_int,
+    col1: c_int,
+    decor: DecorInline,
+    free: bool,
 ) {
-    decor_redraw(buf, row1, row2, col1, decor);
-    if decor.ext as ::core::ffi::c_int != 0 && (row1 as linenr_T) < (*buf).b_ml.ml_line_count {
-        let mut idx: uint32_t = decor.data.ext.sh_idx;
-        row2 = (if ((*buf).b_ml.ml_line_count - 1 as linenr_T) < row2 as linenr_T {
-            (*buf).b_ml.ml_line_count - 1 as linenr_T
-        } else {
-            row2 as linenr_T
-        }) as ::core::ffi::c_int;
-        while idx != DECOR_ID_INVALID as uint32_t {
-            let mut sh: *mut DecorSignHighlight = decor_item(idx);
-            buf_remove_decor_sh(buf, row1, row2, sh);
-            idx = (*sh).next;
-        }
-    }
-    if free {
-        decor_free(decor);
-    }
-}
-pub unsafe extern "C" fn decor_free(mut decor: DecorInline) {
-    if !decor.ext {
-        return;
-    }
-    let mut vt: *mut DecorVirtText = decor.data.ext.vt;
-    let mut idx: uint32_t = decor.data.ext.sh_idx;
-    if (*decor_state.ptr()).running_decor_provider {
-        while !vt.is_null() {
-            if (*vt).next.is_null() {
-                (*vt).next = to_free_virt.get();
-                to_free_virt.set(decor.data.ext.vt);
-                break;
-            } else {
-                vt = (*vt).next;
-            }
-        }
-        while idx != DECOR_ID_INVALID as uint32_t {
-            let mut sh: *mut DecorSignHighlight = decor_item(idx);
-            if (*sh).next == DECOR_ID_INVALID as uint32_t {
-                (*sh).next = to_free_sh.get();
-                to_free_sh.set(decor.data.ext.sh_idx);
-                break;
-            } else {
+    // SAFETY: the caller's buffer and decoration.
+    unsafe {
+        decor_redraw(buf, row1, row2, col1, decor);
+        if decor.ext && (row1 as linenr_T) < (*buf).b_ml.ml_line_count {
+            row2 = ((*buf).b_ml.ml_line_count - 1).min(row2 as linenr_T) as c_int;
+            let mut idx: uint32_t = decor.data.ext.sh_idx;
+            while idx != DECOR_ID_INVALID {
+                let sh = decor_item(idx);
+                buf_remove_decor_sh(buf, row1, row2, sh);
                 idx = (*sh).next;
             }
         }
-    } else {
-        decor_free_inner(vt, idx);
-    };
-}
-unsafe extern "C" fn decor_free_inner(mut vt: *mut DecorVirtText, mut first_idx: uint32_t) {
-    while !vt.is_null() {
-        if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0 {
-            clear_virtlines(&raw mut (*vt).data.virt_lines);
-        } else {
-            clear_virttext(&raw mut (*vt).data.virt_text);
-        }
-        let mut tofree: *mut DecorVirtText = vt;
-        vt = (*vt).next;
-        xfree(tofree as *mut ::core::ffi::c_void);
-    }
-    let mut idx: uint32_t = first_idx;
-    while idx != DECOR_ID_INVALID as uint32_t {
-        let mut sh: *mut DecorSignHighlight = decor_item(idx);
-        if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
-            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                &raw mut (*sh).sign_name as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr_);
-            *ptr_ = NULL;
-            let _ = *ptr_;
-        }
-        (*sh).flags = 0 as uint16_t;
-        if !(*sh).url.is_null() {
-            let mut ptr__0: *mut *mut ::core::ffi::c_void =
-                &raw mut (*sh).url as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr__0);
-            *ptr__0 = NULL;
-            let _ = *ptr__0;
-        }
-        if (*sh).next == DECOR_ID_INVALID as uint32_t {
-            (*sh).next = DECOR_FREELIST.get();
-            DECOR_FREELIST.set(first_idx);
-            break;
-        } else {
-            idx = (*sh).next;
+        if free {
+            decor_free(decor);
         }
     }
 }
-pub unsafe extern "C" fn decor_check_to_be_deleted() {
-    '_c2rust_label: {
-        if !(*decor_state.ptr()).running_decor_provider {
-        } else {
-            __assert_fail(
-                b"!decor_state.running_decor_provider\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/decoration.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                330 as ::core::ffi::c_uint,
-                b"void decor_check_to_be_deleted(void)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    decor_free_inner(to_free_virt.get(), to_free_sh.get());
-    to_free_virt.set(::core::ptr::null_mut::<DecorVirtText>());
-    to_free_sh.set(DECOR_ID_INVALID as uint32_t);
-    (*decor_state.ptr()).win = ::core::ptr::null_mut::<win_T>();
-}
-pub unsafe extern "C" fn clear_virttext(mut text: *mut VirtText) {
-    let mut i: size_t = 0 as size_t;
-    while i < (*text).size {
-        xfree((*(*text).items.offset(i as isize)).text as *mut ::core::ffi::c_void);
-        i = i.wrapping_add(1);
-    }
-    xfree((*text).items as *mut ::core::ffi::c_void);
-    (*text).capacity = 0 as size_t;
-    (*text).size = (*text).capacity;
-    (*text).items = ::core::ptr::null_mut::<VirtTextChunk>();
-    *text = VirtText {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<VirtTextChunk>(),
-    };
-}
-pub unsafe extern "C" fn clear_virtlines(mut lines: *mut VirtLines) {
-    let mut i: size_t = 0 as size_t;
-    while i < (*lines).size {
-        clear_virttext(&raw mut (*(*lines).items.offset(i as isize)).line);
-        i = i.wrapping_add(1);
-    }
-    xfree((*lines).items as *mut ::core::ffi::c_void);
-    (*lines).capacity = 0 as size_t;
-    (*lines).size = (*lines).capacity;
-    (*lines).items = ::core::ptr::null_mut::<virt_line>();
-    *lines = VirtLines {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<virt_line>(),
-    };
-}
-pub unsafe extern "C" fn decor_check_invalid_glyphs() {
-    let mut i: size_t = 0 as size_t;
-    while i < decor_item_count() {
-        let mut it: *mut DecorSignHighlight = decor_item(i as uint32_t);
-        let mut width: ::core::ffi::c_int =
-            if (*it).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
-                SIGN_WIDTH as ::core::ffi::c_int
-            } else if (*it).flags as ::core::ffi::c_int & kSHConceal as ::core::ffi::c_int != 0 {
-                1 as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            };
-        let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while j < width {
-            if schar_high((*it).text[j as usize]) {
-                (*it).text[j as usize] =
-                    schar_from_char(schar_get_first_codepoint((*it).text[j as usize]));
-            }
-            j += 1;
-        }
-        i = i.wrapping_add(1);
-    }
-}
-pub const SCL_NUM: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn mt_decor_virt(mut mark: MTKey) -> *mut DecorVirtText {
-    return if mark.flags as ::core::ffi::c_int & MT_FLAG_DECOR_EXT != 0 {
-        mark.decor_data.ext.vt
-    } else {
-        ::core::ptr::null_mut::<DecorVirtText>()
-    };
-}
-pub const INT_MIN: ::core::ffi::c_int = -INT_MAX - 1 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
