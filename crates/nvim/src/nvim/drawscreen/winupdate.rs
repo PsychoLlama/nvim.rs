@@ -15,6 +15,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::decoration::kVPosWinCol;
 
 /// A row index no window can reach, used as "this area is empty".
 ///

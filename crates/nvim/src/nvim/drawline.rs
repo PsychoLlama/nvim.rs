@@ -10,13 +10,13 @@ use crate::src::nvim::charset::{
 };
 use crate::src::nvim::cursor::get_cursor_rel_lnum;
 use crate::src::nvim::cursor_shape::cursor_is_block_during_visual;
-use crate::src::nvim::decoration::decor_redraw_col;
 use crate::src::nvim::decoration::{
     clear_virttext, decor_has_more_decorations, decor_init_draw_col, decor_range_at,
     decor_range_count, decor_recheck_draw_col, decor_redraw_eol, decor_redraw_line,
     decor_redraw_signs, decor_virt_lines, decor_virt_pos, decor_virt_pos_kind,
     next_virt_text_chunk,
 };
+use crate::src::nvim::decoration::{decor_redraw_col, kHlModeUnknown};
 use crate::src::nvim::decoration_provider::{
     decor_providers_invoke_line, decor_providers_invoke_range,
 };
@@ -25,10 +25,10 @@ use crate::src::nvim::drawscreen::{
     compute_foldcolumn, conceal_cursor_line, number_width, win_draw_end,
 };
 use crate::src::nvim::eval::vars::set_vim_var_nr;
-use crate::src::nvim::fold::get_foldtext;
+use crate::src::nvim::fold::{FOLD_TEXT_LEN, VIRTTEXT_EMPTY, get_foldtext};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{
-    LineAttrs, LineSpan, grid_adjust, grid_put_linebuf, linebuf_mirror, schar_cells,
+    LineAttrs, LineSpan, SLF_RIGHTLEFT, grid_adjust, grid_put_linebuf, linebuf_mirror, schar_cells,
     schar_from_ascii, schar_from_char, schar_get_adv, schar_get_ascii, schar_get_first_codepoint,
     schar_len,
 };
@@ -75,18 +75,17 @@ use crate::src::nvim::spell::{
     check_need_cap, spell_cat_line, spell_check, spell_move_to, spell_to_word_end,
 };
 use crate::src::nvim::state::{MODE_INSERT, virtual_active};
-use crate::src::nvim::statusline::build_statuscol_str;
+use crate::src::nvim::statusline::{SIGN_SHOW_MAX, build_statuscol_str};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::syntax::{
     HL_CONCEAL, get_syntax_attr, get_syntax_info, syn_get_sub_char, syntax_present, syntax_start,
 };
 use crate::src::nvim::terminal::terminal_get_line_attributes;
 use crate::src::nvim::types::{
-    CharSize, CharsizeArg, DecorRange, DecorRangeKind, DecorVirtText, GridView, MetaIndex, NS,
-    RgbValue, SignTextAttrs, StlFlag, TriState, VimVarIndex, VirtLines, VirtText, VirtTextChunk,
-    VirtTextPos, WinExtmark, buf_T, colnr_T, diffline_T, foldinfo_T, hlf_T, linenr_T, pos_T,
-    ptrdiff_t, sattr_T, schar_T, size_t, smt_T, spellvars_T, ssize_t, statuscol_T, uint8_t,
-    uint32_t, uint64_t, varnumber_T, virt_line, win_T,
+    CharSize, CharsizeArg, DecorRange, DecorVirtText, GridView, HlMode, NS, RgbValue,
+    SignTextAttrs, TriState, VimVarIndex, VirtLines, VirtText, WinExtmark, buf_T, colnr_T,
+    diffline_T, foldinfo_T, hlf_T, linenr_T, pos_T, ptrdiff_t, sattr_T, schar_T, size_t,
+    spellvars_T, ssize_t, statuscol_T, uint8_t, uint32_t, uint64_t, varnumber_T, virt_line, win_T,
 };
 use crate::src::nvim::ui::ui_rgb_attached;
 
@@ -105,46 +104,23 @@ mod attrs;
 mod chars;
 mod rows;
 mod special;
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed = 2147483647;
+/// A column past any real one -- "to the end of the line".
+///
+/// Still declared per module tree-wide (40 copies); `pos.rs` is the home it
+/// wants, and that is the standing tree-wide constant job.
+pub const MAXCOL: ::core::ffi::c_int = ::core::ffi::c_int::MAX;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
-pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
-pub const SIGN_WIDTH: C2Rust_Unnamed_0 = 2;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const kVLScroll: C2Rust_Unnamed_14 = 2;
-pub const kVLLeftcol: C2Rust_Unnamed_14 = 1;
-pub type HlMode = ::core::ffi::c_uint;
-pub const kHlModeBlend: HlMode = 3;
-pub const kHlModeCombine: HlMode = 2;
-pub const kHlModeReplace: HlMode = 1;
-pub const kHlModeUnknown: HlMode = 0;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const kVTRepeatLinebreak: C2Rust_Unnamed_15 = 8;
-pub const kMTMetaInline: MetaIndex = 0;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const FOLD_TEXT_LEN: C2Rust_Unnamed_19 = 51;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const SIGN_SHOW_MAX: C2Rust_Unnamed_20 = 9;
-pub const STL_SIGNCOL: StlFlag = 115;
-pub const STL_FOLDCOL: StlFlag = 67;
 /// A `DecorRange` that draws virtual text of its own.
-pub const kDecorKindVirtText: DecorRangeKind = 2;
 /// A `DecorRange` that draws nothing and reports its position to the UI.
-pub const kDecorKindUIWatched: DecorRangeKind = 4;
-pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
-pub const TERM_ATTRS_MAX: C2Rust_Unnamed_29 = 1024;
-pub const SLF_WRAP: C2Rust_Unnamed_32 = 2;
-pub const SLF_RIGHTLEFT: C2Rust_Unnamed_32 = 1;
-pub const SLF_INC_VCOL: C2Rust_Unnamed_32 = 4;
+/// Columns of a `:terminal` line whose attributes `win_line` will look up.
+///
+/// The scratch array is that many entries; past it a terminal cell just takes
+/// the window's own attributes.
+pub const TERM_ATTRS_MAX: ::core::ffi::c_int = 1024;
+/// `v:virtnum` -- which virtual line of a buffer line `'statuscolumn'` is being
+/// evaluated for.
 pub const VV_VIRTNUM: VimVarIndex = 103;
-pub const SMT_ALL: smt_T = 0;
-pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
@@ -154,14 +130,8 @@ pub const INT_MIN: ::core::ffi::c_int = ::core::ffi::c_int::MIN;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-pub const VIRTTEXT_EMPTY: VirtText = VirtText {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<VirtTextChunk>(),
-};
 pub const CPO_NUMCOL: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
-pub const SCL_NUM: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const VALID_WROW: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const VALID_WCOL: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const VALID_VIRTCOL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
@@ -298,6 +268,8 @@ pub unsafe extern "C" fn win_line(
 
 /// How many bytes of the next line the spell checker joins onto this one, so
 /// that a word wrapping across the line break can be checked whole.
+/// Bytes of the following line the spell checker looks ahead over, which is
+/// the longest word it will ever consider.
 pub const SPWORDLEN: ::core::ffi::c_int = 150;
 /// Hand the line buffer to the grid.
 ///

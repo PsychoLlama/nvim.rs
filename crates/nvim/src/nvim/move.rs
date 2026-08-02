@@ -1,6 +1,6 @@
 use crate::src::nvim::buffer::buf_is_empty;
 use crate::src::nvim::cursor::{check_cursor, check_cursor_lnum, coladvance};
-use crate::src::nvim::decoration::{decor_conceal_line, win_lines_concealed};
+use crate::src::nvim::decoration::{SIGN_WIDTH, decor_conceal_line, win_lines_concealed};
 use crate::src::nvim::diff::diff_get_corresponding_line;
 use crate::src::nvim::drawscreen::{
     UPD_INVERTED, UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, conceal_cursor_line, number_width,
@@ -72,13 +72,6 @@ use crate::src::nvim::winfloat::win_check_anchored_floats;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
-pub const SIGN_WIDTH: C2Rust_Unnamed_0 = 2;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;

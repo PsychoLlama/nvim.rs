@@ -6,7 +6,10 @@ use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::src::nvim::charset::{transstr, vim_isprintc};
 use crate::src::nvim::decoration::{
     clear_virtlines, clear_virttext, decor_free, decor_put_sh, decor_put_vt, decor_range_add_sh,
-    decor_range_add_virt, decor_sh_from_inline, decor_to_dict_legacy, hl_group_name,
+    decor_range_add_virt, decor_sh_from_inline, decor_to_dict_legacy, hl_group_name, kHlModeBlend,
+    kHlModeCombine, kHlModeReplace, kHlModeUnknown, kVLLeftcol, kVLScroll, kVPosEndOfLine,
+    kVPosEndOfLineRightAlign, kVPosInline, kVPosOverlay, kVPosRightAlign, kVPosWinCol, kVTHide,
+    kVTIsLines, kVTLinesAbove, kVTRepeatLinebreak,
 };
 use crate::src::nvim::decoration_provider::{
     decor_provider_clear, get_decor_provider, kDecorProviderActive,
@@ -82,12 +85,6 @@ pub use crate::src::nvim::types::{
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -136,13 +133,7 @@ pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const kVLScroll: C2Rust_Unnamed_16 = 2;
-pub const kVLLeftcol: C2Rust_Unnamed_16 = 1;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const kHlModeBlend: C2Rust_Unnamed_17 = 3;
-pub const kHlModeCombine: C2Rust_Unnamed_17 = 2;
-pub const kHlModeReplace: C2Rust_Unnamed_17 = 1;
-pub const kHlModeUnknown: C2Rust_Unnamed_17 = 0;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const kSHConcealLines: C2Rust_Unnamed_18 = 128;
 pub const kSHConceal: C2Rust_Unnamed_18 = 64;
@@ -153,10 +144,6 @@ pub const kSHUIWatched: C2Rust_Unnamed_18 = 4;
 pub const kSHHlEol: C2Rust_Unnamed_18 = 2;
 pub const kSHIsSign: C2Rust_Unnamed_18 = 1;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kVTRepeatLinebreak: C2Rust_Unnamed_19 = 8;
-pub const kVTLinesAbove: C2Rust_Unnamed_19 = 4;
-pub const kVTHide: C2Rust_Unnamed_19 = 2;
-pub const kVTIsLines: C2Rust_Unnamed_19 = 1;
 pub const kMHNewKeyRealloc: MHPutStatus = 2;
 pub const kMHNewKeyDidFit: MHPutStatus = 1;
 pub const kMHExisting: MHPutStatus = 0;

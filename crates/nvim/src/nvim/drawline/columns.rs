@@ -19,13 +19,15 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::decoration::{SCL_NUM, SIGN_WIDTH};
+use crate::src::nvim::statusline::{STL_FOLDCOL, STL_SIGNCOL};
 
 /// The widest a `'statuscolumn'` may grow the number column to.
 ///
 /// Upstream's `MAX_STCWIDTH`: a full-width line number, every sign the sign
 /// column can show, and the widest fold column.
 const MAX_STCWIDTH: ::core::ffi::c_int =
-    MAX_NUMBERWIDTH + SIGN_SHOW_MAX as ::core::ffi::c_int * SIGN_WIDTH as ::core::ffi::c_int + 9;
+    MAX_NUMBERWIDTH + SIGN_SHOW_MAX * SIGN_WIDTH as ::core::ffi::c_int + 9;
 
 /// The widest `'foldcolumn'` (and so the size of the arrays
 /// [`fill_foldcolumn`] fills).

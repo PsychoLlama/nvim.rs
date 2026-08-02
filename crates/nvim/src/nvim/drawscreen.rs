@@ -8,8 +8,8 @@ use crate::src::nvim::buffer::maketitle;
 use crate::src::nvim::charset::{vim_isprintc, vim_strsize};
 use crate::src::nvim::cmdexpand::cmdline_pum_display;
 use crate::src::nvim::decoration::{
-    buf_signcols_count_range, decor_conceal_line, decor_range_add_virt, decor_redraw_reset,
-    decor_virt_lines, win_lines_concealed,
+    SCL_NUM, buf_signcols_count_range, decor_conceal_line, decor_range_add_virt,
+    decor_redraw_reset, decor_virt_lines, kMTMetaSignText, win_lines_concealed,
 };
 use crate::src::nvim::decoration_provider::{
     decor_providers_invoke_buf, decor_providers_invoke_end, decor_providers_invoke_win,
@@ -99,10 +99,10 @@ use crate::src::nvim::syntax::{
 use crate::src::nvim::terminal::{terminal_check_size, terminal_suspended};
 use crate::src::nvim::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::src::nvim::types::{
-    DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Integer, MetaIndex,
-    OptInt, TriState, VimVarIndex, VirtText, VirtTextChunk, VirtTextPos, Window, buf_T, colnr_T,
-    foldinfo_T, frame_T, handle_T, hlf_T, int64_t, linenr_T, pos_T, regprog_T, schar_T, size_t,
-    spellvars_T, uint16_t, varnumber_T, win_T,
+    DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Integer, OptInt,
+    TriState, VimVarIndex, VirtText, VirtTextChunk, Window, buf_T, colnr_T, foldinfo_T, frame_T,
+    handle_T, hlf_T, int64_t, linenr_T, pos_T, regprog_T, schar_T, size_t, spellvars_T, uint16_t,
+    varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_call_grid_clear, ui_call_grid_resize, ui_call_msg_clear, ui_call_win_extmark, ui_flush,
@@ -133,16 +133,16 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
 }
 pub const kFalse: TriState = 0;
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const SIGN_WIDTH: C2Rust_Unnamed = 2;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_14 = 2147483647;
-pub const kMTMetaSignText: MetaIndex = 3;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const SHM_RECORDING: C2Rust_Unnamed_18 = 113;
-pub const SHM_COMPLETIONMENU: C2Rust_Unnamed_18 = 99;
-/// How much of a window has to be redrawn, ordered by severity.
+/// A column past any real one -- "to the end of the line".
+///
+/// Still declared per module tree-wide (40 copies); `pos.rs` is the home it
+/// wants, and that is the standing tree-wide constant job.
+pub const MAXCOL: ::core::ffi::c_int = ::core::ffi::c_int::MAX;
+/// `'shortmess'` flags this module tests.
+pub const SHM_RECORDING: ::core::ffi::c_int = b'q' as ::core::ffi::c_int;
+pub const SHM_COMPLETIONMENU: ::core::ffi::c_int = b'c' as ::core::ffi::c_int;
+/// How much of a window has to be redrawn, ordered by severity. Each value
+/// implies every lower one.
 pub type RedrawType = ::core::ffi::c_int;
 pub const UPD_CLEAR: RedrawType = 50;
 pub const UPD_NOT_VALID: RedrawType = 40;
@@ -151,15 +151,12 @@ pub const UPD_REDRAW_TOP: RedrawType = 30;
 pub const UPD_INVERTED_ALL: RedrawType = 25;
 pub const UPD_INVERTED: RedrawType = 20;
 pub const UPD_VALID: RedrawType = 10;
-pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
-pub const DID_FOLD: C2Rust_Unnamed_25 = 3;
-pub const DID_LINE: C2Rust_Unnamed_25 = 2;
-pub const DID_NONE: C2Rust_Unnamed_25 = 1;
+/// `v:echospace` -- how many columns a message may use before it wraps.
 pub const VV_ECHOSPACE: VimVarIndex = 87;
-pub const SHOWCMD_COLS: C2Rust_Unnamed_27 = 10;
-pub const MIN_COLUMNS: C2Rust_Unnamed_28 = 12;
-pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
+/// Columns `'showcmd'` reserves at the right of the last line.
+pub const SHOWCMD_COLS: ::core::ffi::c_int = 10;
+/// The narrowest screen the editor will lay windows out on.
+pub const MIN_COLUMNS: ::core::ffi::c_int = 12;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
@@ -173,7 +170,6 @@ pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const CPO_NUMCOL: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
-pub const SCL_NUM: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 /// The windows of the current tab page, in layout order.

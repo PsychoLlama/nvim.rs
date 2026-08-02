@@ -10,7 +10,9 @@ use crate::src::nvim::api::private::helpers::{
 };
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::src::nvim::api::vimscript::exec_impl;
-use crate::src::nvim::decoration::{clear_virttext, decor_find_virttext};
+use crate::src::nvim::decoration::{
+    clear_virttext, decor_find_virttext, kHlModeUnknown, kVPosEndOfLine,
+};
 use crate::src::nvim::eval::vars::get_globvar_dict;
 use crate::src::nvim::extmark::extmark_set;
 use crate::src::nvim::global_cell::GlobalCell;
@@ -69,12 +71,6 @@ pub use crate::src::nvim::types::{
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -126,7 +122,6 @@ pub const kRetMulti: LuaRetMode = 3;
 pub const kRetLuaref: LuaRetMode = 2;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
-pub const kHlModeUnknown: C2Rust_Unnamed_16 = 0;
 pub const OPT_GLOBAL: C2Rust_Unnamed_17 = 1;
 pub const kOptScopeBuf: OptScope = 2;
 pub const kOptScopeWin: OptScope = 1;
@@ -138,9 +133,6 @@ pub const kOptValTypeBoolean: OptValType = 0;
 pub const kOptValTypeNil: OptValType = -1;
 pub const LINE_BUFFER_MIN_SIZE: C2Rust_Unnamed_18 = 4096;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const kHlModeBlend: C2Rust_Unnamed_16 = 3;
-pub const kHlModeCombine: C2Rust_Unnamed_16 = 2;
-pub const kHlModeReplace: C2Rust_Unnamed_16 = 1;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const OPT_SKIPRTP: C2Rust_Unnamed_17 = 128;
 pub const OPT_NO_REDRAW: C2Rust_Unnamed_17 = 64;

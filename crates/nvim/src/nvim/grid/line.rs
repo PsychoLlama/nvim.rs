@@ -13,6 +13,7 @@
 //! `grid_put_linebuf` runs per cell of every redraw. Plain loops here.
 
 use super::*;
+use crate::src::nvim::grid::{SLF_INC_VCOL, SLF_RIGHTLEFT, SLF_WRAP};
 
 /// The line batch in progress. Only one exists at a time; `grid` being null
 /// means there is none.

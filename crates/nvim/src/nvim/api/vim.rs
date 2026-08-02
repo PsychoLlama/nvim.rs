@@ -98,7 +98,8 @@ use crate::src::nvim::runtime::{
 use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::state::get_mode;
 use crate::src::nvim::statusline::{
-    build_stl_str_hl, draw_tabline, fillchar_status, win_redr_status, win_redr_winbar,
+    STL_FOLDCOL, STL_SIGNCOL, build_stl_str_hl, draw_tabline, fillchar_status, win_redr_status,
+    win_redr_winbar,
 };
 use crate::src::nvim::terminal::{
     terminal_alloc, terminal_buf, terminal_check_size, terminal_destroy, terminal_open,
@@ -183,12 +184,6 @@ use crate::src::nvim::window::{
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -296,8 +291,6 @@ pub const STL_USER_HL: StlFlag = 42;
 pub const STL_TRUNCMARK: StlFlag = 60;
 pub const STL_SEPARATE: StlFlag = 61;
 pub const STL_VIM_EXPR: StlFlag = 123;
-pub const STL_SIGNCOL: StlFlag = 115;
-pub const STL_FOLDCOL: StlFlag = 67;
 pub const STL_SHOWCMD: StlFlag = 83;
 pub const STL_PAGENUM: StlFlag = 78;
 pub const STL_ARGLISTSTAT: StlFlag = 97;

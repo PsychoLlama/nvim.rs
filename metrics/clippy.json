@@ -101,7 +101,6 @@
     "crates/nvim/src/nvim/mouse.rs": 27,
     "crates/nvim/src/nvim/move.rs": 29,
     "crates/nvim/src/nvim/msgpack_rpc/unpacker.rs": 1,
-    "crates/nvim/src/nvim/normal/brackets.rs": 1,
     "crates/nvim/src/nvim/normal/dispatch.rs": 1,
     "crates/nvim/src/nvim/normal/edit.rs": 1,
     "crates/nvim/src/nvim/normal/gcmd.rs": 1,

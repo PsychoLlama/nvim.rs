@@ -215,12 +215,6 @@ pub type luv_CFcpcall = Option<
 >;
 pub type luv_acquire_vm = Option<unsafe extern "C-unwind" fn() -> *mut lua_State>;
 pub type luv_release_vm = Option<unsafe extern "C-unwind" fn(*mut lua_State) -> ()>;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;

@@ -15,10 +15,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{
-    DECOR_ID_INVALID, SCL_NUM, SIGN_WIDTH, decor_item, kMTMetaSignText, kSHIsSign, ns_in_win,
-};
+use super::{DECOR_ID_INVALID, decor_item, kSHIsSign, ns_in_win};
 use crate::src::nvim::buffer::buf_meta_total;
+use crate::src::nvim::decoration::{SCL_NUM, SIGN_WIDTH, kMTMetaSignText};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{curtab, first_tabpage, firstwin};
 use crate::src::nvim::marktree::key::{
@@ -29,16 +28,13 @@ use crate::src::nvim::marktree::{
     marktree_itr_step_out_filter, marktree_itr_step_overlap,
 };
 use crate::src::nvim::sign::buf_has_signs;
+use crate::src::nvim::statusline::SIGN_SHOW_MAX;
 use crate::src::nvim::types::{
     DecorInline, DecorSignHighlight, MTPair, MTPos, MarkTree, MarkTreeIter, MetaFilter, SignItem,
     SignTextAttrs, TriState, buf_T, linenr_T, tabpage_T, uint32_t, win_T,
 };
 use ::core::ffi::c_int;
 use ::core::{mem, ptr};
-
-/// The most signs one row is counted as showing, and so the number of
-/// buckets in `b_signcols.count`.
-const SIGN_SHOW_MAX: c_int = 9;
 
 /// `kTrue`/`kFalse`/`kNone`, the argument [`buf_signcols_count_range`] takes.
 const kTrue: TriState = 1;

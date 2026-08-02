@@ -17,6 +17,10 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::decoration::{
+    kDecorKindUIWatched, kDecorKindVirtText, kHlModeBlend, kHlModeCombine, kVPosEndOfLine,
+    kVPosEndOfLineRightAlign, kVPosInline, kVPosRightAlign, kVPosWinCol, kVTRepeatLinebreak,
+};
 
 /// Put one character of `*pp` into `dest`, and advance `*pp` past it.
 ///

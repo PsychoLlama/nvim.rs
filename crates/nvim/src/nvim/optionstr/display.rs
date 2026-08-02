@@ -42,12 +42,13 @@ use crate::src::nvim::window::check_colorcolumn;
 use super::frame::{errbuf, invalid, local_window, old_value, varp, win};
 use super::{
     COCU_ALL, FAIL, HIGHLIGHT_INIT, INT_MAX, MOUSESCROLL_HOR_DFLT, MOUSESCROLL_VERT_DFLT, NUL, OK,
-    OPT_LOCAL, SCL_NUM, WW_ALL, check_chars_options, check_signcolumn, check_str_opt,
-    check_string_option, did_set_option_listflag, did_set_statustabline_rulerformat,
-    did_set_str_generic, e_showbreak_contains_unprintable_or_wide_character, free_string_option,
-    kAlignLeft, kFloatRelativeEditor, kWinSplitLeft, kWinStyleUnused, kZIndexFloatDefault,
-    opt_strings_flags, terminal_notify_theme,
+    OPT_LOCAL, WW_ALL, check_chars_options, check_signcolumn, check_str_opt, check_string_option,
+    did_set_option_listflag, did_set_statustabline_rulerformat, did_set_str_generic,
+    e_showbreak_contains_unprintable_or_wide_character, free_string_option, kAlignLeft,
+    kFloatRelativeEditor, kWinSplitLeft, kWinStyleUnused, kZIndexFloatDefault, opt_strings_flags,
+    terminal_notify_theme,
 };
+use crate::src::nvim::decoration::SCL_NUM;
 use crate::src::nvim::types::api::kErrorTypeNone;
 
 /// 'ambiwidth' decides how wide an ambiguous-width character is drawn, so

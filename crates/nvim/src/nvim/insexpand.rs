@@ -98,7 +98,8 @@ use crate::src::nvim::search::{
     BACKWARD, FORWARD, find_pattern_in_path, ignorecase, search_for_exact_line, searchit,
 };
 use crate::src::nvim::spell::{
-    expand_spelling, spell_dump_compl, spell_expand_check_cap, spell_move_to, spell_word_start,
+    SMT_ALL, expand_spelling, spell_dump_compl, spell_expand_check_cap, spell_move_to,
+    spell_word_start,
 };
 use crate::src::nvim::state::{MODE_INSERT, REPLACE_FLAG, may_trigger_modechanged};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
@@ -175,12 +176,6 @@ pub type MergeSortCompareFunc = Option<
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -568,7 +563,6 @@ pub const CTRL_X_LOCAL_MSG: C2Rust_Unnamed_36 = 15;
 pub const CTRL_X_FINISHED: C2Rust_Unnamed_36 = 8;
 pub const SMT_RARE: smt_T = 2;
 pub const SMT_BAD: smt_T = 1;
-pub const SMT_ALL: smt_T = 0;
 pub const KE_MOUSEMOVE: key_extra = 100;
 pub const KE_MOUSERIGHT: key_extra = 78;
 pub const KE_MOUSELEFT: key_extra = 77;

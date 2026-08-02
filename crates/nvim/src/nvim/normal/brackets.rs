@@ -16,22 +16,19 @@ use crate::src::nvim::memory::{xfree, xmemdupz};
 use crate::src::nvim::mouse::do_mouse;
 use crate::src::nvim::normal::{
     _ISlower, _ISupper, ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, BL_FIX, BL_WHITE, FIND_ANY,
-    FIND_DEFINE, FIND_IDENT, FM_BACKWARD, FM_FORWARD, OP_NOP, PUT_FIXINDENT, SMT_ALL, SMT_BAD,
-    SMT_RARE, clearop, clearopbeep, false_0, find_ident_under_cursor, kDirectionNotSet,
-    kMTCharWise, kMarkBeginLine, kMarkContext, may_fold_open, nv_gotofile, nv_mark_move_to,
-    nv_put_opt, true_0,
+    FIND_DEFINE, FIND_IDENT, FM_BACKWARD, FM_FORWARD, OP_NOP, PUT_FIXINDENT, SMT_BAD, SMT_RARE,
+    clearop, clearopbeep, false_0, find_ident_under_cursor, kDirectionNotSet, kMTCharWise,
+    kMarkBeginLine, kMarkContext, may_fold_open, nv_gotofile, nv_mark_move_to, nv_put_opt, true_0,
 };
 use crate::src::nvim::options::{kOptFdoFlagBlock, kOptFdoFlagSearch};
 use crate::src::nvim::os::libc::__ctype_b_loc;
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
-use crate::src::nvim::spell::spell_move_to;
+use crate::src::nvim::spell::{SMT_ALL, spell_move_to};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::textobject::findpar;
 use crate::src::nvim::types::{MarkMove, cmdarg_T, linenr_T, pos_T, smt_T};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
-
-/// The mouse keys `[` and `]` accept, which are one contiguous run.
 
 /// Which way a `[` or `]` command searches.
 unsafe fn direction(cap: *mut cmdarg_T) -> c_int {

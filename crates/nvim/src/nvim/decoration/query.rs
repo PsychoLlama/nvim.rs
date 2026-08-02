@@ -12,10 +12,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{
-    kMTMetaConcealLines, kMTMetaLines, kVTIsLines, kVTLinesAbove, mt_decor_virt, ns_in_win,
-};
+use super::{mt_decor_virt, ns_in_win};
 use crate::src::nvim::buffer::buf_meta_total;
+use crate::src::nvim::decoration::{kMTMetaConcealLines, kMTMetaLines, kVTIsLines, kVTLinesAbove};
 use crate::src::nvim::decoration_provider::decor_providers_invoke_conceal_line;
 use crate::src::nvim::drawscreen::conceal_cursor_line;
 use crate::src::nvim::fold::{hasAnyFolding, hasFolding};

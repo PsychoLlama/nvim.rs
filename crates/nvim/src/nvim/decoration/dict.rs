@@ -13,12 +13,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    DECOR_ID_INVALID, DECOR_SIGN_HIGHLIGHT_INIT, SIGN_WIDTH, decor_item, decor_sh_from_inline,
-    kSHConceal, kSHConcealLines, kSHHlEol, kSHIsSign, kSHSpellOff, kSHSpellOn, kSHUIWatched,
-    kVLLeftcol, kVLScroll, kVPosWinCol, kVTHide, kVTIsLines, kVTLinesAbove, kVTRepeatLinebreak,
+    DECOR_ID_INVALID, DECOR_SIGN_HIGHLIGHT_INIT, decor_item, decor_sh_from_inline, kSHConceal,
+    kSHConcealLines, kSHHlEol, kSHIsSign, kSHSpellOff, kSHSpellOn, kSHUIWatched,
 };
 use crate::src::nvim::api::extmark::virt_text_to_array;
 use crate::src::nvim::api::private::helpers::{arena_array, arena_string, cstr_as_string};
+use crate::src::nvim::decoration::{
+    SIGN_WIDTH, kVLLeftcol, kVLScroll, kVPosWinCol, kVTHide, kVTIsLines, kVTLinesAbove,
+    kVTRepeatLinebreak,
+};
 use crate::src::nvim::grid::MAX_SCHAR_SIZE;
 use crate::src::nvim::grid::schar_get;
 use crate::src::nvim::highlight::dict::put;

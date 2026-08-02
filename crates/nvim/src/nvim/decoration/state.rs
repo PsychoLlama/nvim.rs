@@ -32,10 +32,12 @@
 
 use super::{
     DECOR_ID_INVALID, decor_item, decor_sh_from_inline, kSHConceal, kSHHlEol, kSHIsSign,
-    kSHSpellOff, kSHSpellOn, kSHUIWatched, kSHUIWatchedOverlay, kVPosEndOfLine, kVPosInline,
-    kVPosOverlay, kVTHide, kVTIsLines, ns_in_win,
+    kSHSpellOff, kSHSpellOn, kSHUIWatched, kSHUIWatchedOverlay, ns_in_win,
 };
-use crate::src::nvim::decoration::clear_virttext;
+use crate::src::nvim::decoration::{
+    clear_virttext, kDecorKindHighlight, kDecorKindUIWatched, kDecorKindVirtLines,
+    kDecorKindVirtText, kVPosEndOfLine, kVPosInline, kVPosOverlay, kVTHide, kVTIsLines,
+};
 use crate::src::nvim::highlight::{hl_add_url, hl_combine_attr};
 use crate::src::nvim::highlight_group::syn_id2attr;
 use crate::src::nvim::main::decor_state;
@@ -47,18 +49,11 @@ use crate::src::nvim::marktree::{
 use crate::src::nvim::memory::xfree;
 use crate::src::nvim::types::{
     DecorInline, DecorPriority, DecorPriorityInternal, DecorRange, DecorRange_data,
-    DecorRange_data_ui, DecorRangeKind, DecorRangeSlot, DecorSignHighlight, DecorState,
-    DecorVirtText, MTPair, MTPos, MarkTree, MarkTreeIter, TriState, VirtTextPos, buf_T, uint32_t,
-    win_T,
+    DecorRange_data_ui, DecorRangeSlot, DecorSignHighlight, DecorState, DecorVirtText, MTPair,
+    MTPos, MarkTree, MarkTreeIter, TriState, VirtTextPos, buf_T, uint32_t, win_T,
 };
 use ::core::ffi::c_int;
 use ::core::{mem, ptr};
-
-/// `DecorRangeKind`: what a `DecorRange`'s `data` union holds.
-const kDecorKindHighlight: DecorRangeKind = 0;
-const kDecorKindVirtText: DecorRangeKind = 2;
-const kDecorKindVirtLines: DecorRangeKind = 3;
-const kDecorKindUIWatched: DecorRangeKind = 4;
 
 /// `TriState`, the spelling state a cell inherits from its decorations.
 const kTrue: TriState = 1;

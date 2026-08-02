@@ -12,6 +12,8 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::decoration::{kHlModeCombine, kHlModeReplace, kVLLeftcol, kVLScroll};
+use crate::src::nvim::grid::{SLF_INC_VCOL, SLF_WRAP};
 
 impl Cells {
     /// Draw everything left of the text on this screen row: the fold, sign and

@@ -31,7 +31,7 @@ use crate::src::nvim::charset::{
 use crate::src::nvim::cursor::check_cursor_lnum;
 use crate::src::nvim::decoration::{
     DECOR_SIGN_HIGHLIGHT_INIT, SIGN_WIDTH, decor_find_sign, decor_item, decor_item_count,
-    decor_put_sh, kSHIsSign, sign_item_cmp,
+    decor_put_sh, kMTMetaSignHL, kMTMetaSignText, kSHIsSign, sign_item_cmp,
 };
 use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_buf_later};
 use crate::src::nvim::edit::beginline;
@@ -70,10 +70,9 @@ use crate::src::nvim::os::libc::{atoi, gettext, snprintf, strcmp, strlen, strncm
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
     DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight, DecorVirtText,
-    Error, EvalFuncData, Integer, ListLenSpecials, MTKey, MTPair, MarkTree, MarkTreeIter,
-    MetaIndex, NS, SignItem, VarType, buf_T, dict_T, dictitem_T, exarg_T, expand_T, int64_t,
-    linenr_T, list_T, listitem_T, ptrdiff_t, schar_T, sign_T, size_t, typval_T, uint16_t, uint32_t,
-    varnumber_T,
+    Error, EvalFuncData, Integer, ListLenSpecials, MTKey, MTPair, MarkTree, MarkTreeIter, NS,
+    SignItem, VarType, buf_T, dict_T, dictitem_T, exarg_T, expand_T, int64_t, linenr_T, list_T,
+    listitem_T, ptrdiff_t, schar_T, sign_T, size_t, typval_T, uint16_t, uint32_t, varnumber_T,
 };
 use crate::src::nvim::window::buf_jump_open_win;
 
@@ -88,8 +87,6 @@ pub const VAR_DICT: VarType = 5;
 pub const VAR_LIST: VarType = 4;
 pub const VAR_UNKNOWN: VarType = 0;
 pub const kListLenMayKnow: ListLenSpecials = -3;
-pub const kMTMetaSignText: MetaIndex = 3;
-pub const kMTMetaSignHL: MetaIndex = 2;
 
 pub const EXPAND_SIGN: c_int = 34;
 pub const EXPAND_HIGHLIGHT: c_int = 13;

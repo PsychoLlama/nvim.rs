@@ -51,11 +51,11 @@ use crate::src::nvim::options::kOptBoFlagSpell;
 use crate::src::nvim::os::libc::{gettext, memmove, strcat, strcpy, strlen, strncmp};
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::spell::{
-    check_need_cap, parse_spelllang, repl_from, repl_to, spell_iswordp_nmw, spell_move_to,
+    SMT_ALL, check_need_cap, parse_spelllang, repl_from, repl_to, spell_iswordp_nmw, spell_move_to,
 };
 use crate::src::nvim::spellsuggest::collect::suggestions;
 use crate::src::nvim::spellsuggest::{
-    MAXWLEN, NUL, OK, SMT_ALL, SPS_BEST, SPS_DOUBLE, spell_find_cleanup, spell_find_suggest,
+    MAXWLEN, NUL, OK, SPS_BEST, SPS_DOUBLE, spell_find_cleanup, spell_find_suggest,
     spell_suggest_timeout, sps_flags, sps_limit, suggest_T, suginfo_T,
 };
 use crate::src::nvim::strings::{vim_snprintf, xstrnsave};

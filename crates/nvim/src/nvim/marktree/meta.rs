@@ -16,7 +16,7 @@ use crate::src::nvim::types::{MTKey, uint32_t};
 
 use super::key::{
     MT_FLAG_DECOR_CONCEAL_LINES, MT_FLAG_DECOR_SIGNHL, MT_FLAG_DECOR_SIGNTEXT,
-    MT_FLAG_DECOR_VIRT_LINES, MT_FLAG_DECOR_VIRT_TEXT_INLINE, kMTMetaCount, mt_end, mt_invalid,
+    MT_FLAG_DECOR_VIRT_LINES, MT_FLAG_DECOR_VIRT_TEXT_INLINE, mt_end, mt_invalid,
 };
 
 // Nested so `ffigen` does not publish a name this generic into the flat cdef
@@ -25,6 +25,7 @@ use super::key::{
 mod count {
     pub const META_COUNT: usize = super::kMTMetaCount as usize;
 }
+use crate::src::nvim::decoration::kMTMetaCount;
 pub use count::META_COUNT;
 
 /// One count per meta kind, indexed by `kMTMeta*`.
@@ -108,9 +109,11 @@ pub fn filtered_key_flags(filter: &MetaCount) -> uint32_t {
 mod tests {
     use super::super::key::{
         DECOR_HIGHLIGHT_INLINE_INIT, MT_FLAG_END, MT_FLAG_INVALID, kMTFilterSelect,
-        kMTMetaConcealLines, kMTMetaInline, kMTMetaLines, kMTMetaSignHL, kMTMetaSignText,
     };
     use super::*;
+    use crate::src::nvim::decoration::{
+        kMTMetaConcealLines, kMTMetaInline, kMTMetaLines, kMTMetaSignHL, kMTMetaSignText,
+    };
     use crate::src::nvim::types::{DecorInlineData, MTPos, uint16_t};
 
     fn key(flags: ::core::ffi::c_int) -> MTKey {

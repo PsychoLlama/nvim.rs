@@ -78,12 +78,6 @@ use crate::src::nvim::window::{
     goto_tabpage_tp, goto_tabpage_win, valid_tabpage, win_goto, win_split, win_valid,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;

@@ -76,12 +76,6 @@ pub use crate::src::nvim::types::{
     undo_object, uvarnumber_T, varnumber_T, vimconv_T, virt_line, visualinfo_T, win_T, window_S,
     wininfo_S, winopt_T, wline_T, xfmark_T,
 };
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
 pub const kCallbackLua: CallbackType = 3;
 pub const kCallbackPartial: CallbackType = 2;
 pub const kCallbackFuncref: CallbackType = 1;

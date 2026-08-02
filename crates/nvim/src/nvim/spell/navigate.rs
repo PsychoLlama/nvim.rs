@@ -53,8 +53,9 @@ use crate::src::nvim::types::{
 };
 
 use super::check::{check_need_cap, no_spell_checking, spell_check};
-use super::{MAXCOL, MAXWLEN, NUL, SHM_SEARCH, SMT_ALL, SMT_BAD, SMT_RARE, kFalse, kTrue};
+use super::{MAXCOL, MAXWLEN, NUL, SHM_SEARCH, SMT_BAD, SMT_RARE, kFalse, kTrue};
 use crate::src::nvim::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPR};
+use crate::src::nvim::spell::SMT_ALL;
 
 /// Ask the decoration providers whether column `col` of line `lnum` is
 /// spell-checked, running the `_on_spell_nav` callbacks once per line.

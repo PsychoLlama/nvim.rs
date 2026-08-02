@@ -17,6 +17,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::decoration::kHlModeReplace;
 
 impl Cells {
     /// Work out what this cell takes from everything that is not the character

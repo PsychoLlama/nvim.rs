@@ -9,6 +9,7 @@ use crate::src::nvim::buffer::{
 use crate::src::nvim::charset::{
     getdigits_int, ptr2cells, skipdigits, trans_characters, transstr_buf, vim_strnsize, vim_strsize,
 };
+use crate::src::nvim::decoration::{SCL_NUM, SIGN_WIDTH};
 use crate::src::nvim::digraph::keymap_str;
 use crate::src::nvim::drawline::{fill_foldcolumn, use_cursor_line_highlight};
 use crate::src::nvim::drawscreen::{compute_foldcolumn, redrawing};
@@ -100,13 +101,6 @@ pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
-pub const SIGN_WIDTH: C2Rust_Unnamed_0 = 2;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -151,7 +145,8 @@ pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeBoolean: OptValType = 0;
 pub const kOptValTypeNil: OptValType = -1;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const SIGN_SHOW_MAX: C2Rust_Unnamed_14 = 9;
+/// Most sign columns `'signcolumn'` will ever ask for.
+pub const SIGN_SHOW_MAX: ::core::ffi::c_int = 9;
 pub const STL_CLICK_FUNC: StlFlag = 64;
 pub const STL_TABCLOSENR: StlFlag = 88;
 pub const STL_TABPAGENR: StlFlag = 84;
@@ -350,7 +345,6 @@ pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
-pub const SCL_NUM: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const SID_ERROR: ::core::ffi::c_int = -5 as ::core::ffi::c_int;
 pub const MAX_STL_EVAL_DEPTH: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub unsafe extern "C" fn win_redr_status(mut wp: *mut win_T) {
@@ -3069,7 +3063,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
         && (stcp.is_null()
             || width_0
                 > MAX_NUMBERWIDTH
-                    + SIGN_SHOW_MAX as ::core::ffi::c_int * SIGN_WIDTH as ::core::ffi::c_int
+                    + SIGN_SHOW_MAX * SIGN_WIDTH as ::core::ffi::c_int
                     + 9 as ::core::ffi::c_int)
     {
         let mut item_idx: ::core::ffi::c_int = evalstart;

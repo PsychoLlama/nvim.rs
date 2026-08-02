@@ -14,6 +14,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::decoration::SIGN_WIDTH;
 
 /// What the previous line of the walk was.
 ///

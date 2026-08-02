@@ -42,9 +42,10 @@ use crate::src::nvim::marktree::key::{MT_FLAG_DECOR_EXT, MT_FLAG_DECOR_HL};
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::r#move::changed_window_setting;
 use crate::src::nvim::types::{
-    DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight,
-    DecorVirtText, MTKey, MetaIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos, buf_T,
-    colnr_T, linenr_T, lpos_T, uint8_t, uint16_t, uint32_t, virt_line, win_T,
+    DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority, DecorRangeKind,
+    DecorSignHighlight, DecorVirtText, HlMode, MTKey, MetaIndex, VirtLines, VirtText,
+    VirtTextChunk, VirtTextPos, buf_T, colnr_T, linenr_T, lpos_T, uint8_t, uint16_t, uint32_t,
+    virt_line, win_T,
 };
 use ::core::ffi::c_int;
 use ::core::{mem, ptr};
@@ -100,15 +101,38 @@ pub(crate) const kVLScroll: c_int = 2;
 /// `VirtTextPos`: where virtual text goes relative to the line. Keep in sync
 /// with `dict::VIRT_TEXT_POS_STR`.
 pub(crate) const kVPosEndOfLine: VirtTextPos = 0;
+pub(crate) const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub(crate) const kVPosInline: VirtTextPos = 2;
 pub(crate) const kVPosOverlay: VirtTextPos = 3;
+pub(crate) const kVPosRightAlign: VirtTextPos = 4;
 pub(crate) const kVPosWinCol: VirtTextPos = 5;
+
+/// `HlMode`: how a virtual text's highlight combines with what is under it.
+pub(crate) const kHlModeUnknown: HlMode = 0;
+/// Replace whatever is under the text.
+pub(crate) const kHlModeReplace: HlMode = 1;
+/// Combine with it, as `:highlight` links do.
+pub(crate) const kHlModeCombine: HlMode = 2;
+/// Blend the two colours, as `'winblend'` does.
+pub(crate) const kHlModeBlend: HlMode = 3;
+
+/// `DecorRangeKind`: which arm of a `DecorRange`'s union is live.
+pub(crate) const kDecorKindHighlight: DecorRangeKind = 0;
+pub(crate) const kDecorKindSign: DecorRangeKind = 1;
+pub(crate) const kDecorKindVirtText: DecorRangeKind = 2;
+pub(crate) const kDecorKindVirtLines: DecorRangeKind = 3;
+/// A position reported to the UI rather than anything drawn.
+pub(crate) const kDecorKindUIWatched: DecorRangeKind = 4;
 
 /// `kMTMeta*`: the marktree's per-node counts, which is what lets a walk skip
 /// a whole subtree that has no mark of the kind it is looking for.
+pub(crate) const kMTMetaInline: MetaIndex = 0;
 pub(crate) const kMTMetaLines: MetaIndex = 1;
+pub(crate) const kMTMetaSignHL: MetaIndex = 2;
 pub(crate) const kMTMetaSignText: MetaIndex = 3;
 pub(crate) const kMTMetaConcealLines: MetaIndex = 4;
+/// How many kinds there are — the length of a node's count array.
+pub(crate) const kMTMetaCount: MetaIndex = 5;
 
 /// Cells a sign takes in the sign column.
 pub(crate) const SIGN_WIDTH: c_int = 2;

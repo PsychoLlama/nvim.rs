@@ -180,7 +180,6 @@ pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
 pub const OP_NOP: C2Rust_Unnamed_62 = 0;
-pub const SMT_ALL: smt_T = 0;
 pub type SomeMatchType = ::core::ffi::c_uint;
 pub const kSomeMatchStrPos: SomeMatchType = 4;
 pub const kSomeMatchStr: SomeMatchType = 3;

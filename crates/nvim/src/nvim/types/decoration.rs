@@ -69,6 +69,8 @@ pub struct DecorRange {
     pub draw_col: ::core::ffi::c_int,
 }
 pub type DecorRangeKind = uint8_t;
+/// How a virtual text's highlight combines with what is under it.
+pub type HlMode = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union DecorRangeSlot {

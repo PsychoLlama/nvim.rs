@@ -20,7 +20,7 @@ use crate::src::nvim::cursor::{
     gchar_cursor, get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_len, get_cursor_pos_ptr,
     getviscol, inc_cursor,
 };
-use crate::src::nvim::decoration::{decor_conceal_line, win_lines_concealed};
+use crate::src::nvim::decoration::{decor_conceal_line, kMTMetaInline, win_lines_concealed};
 use crate::src::nvim::digraph::{digraph_get, do_digraph};
 use crate::src::nvim::drawscreen::{
     UPD_VALID, redraw_later, redraw_statuslines, redrawWinline, redrawing, setcursor,
@@ -201,12 +201,6 @@ pub const _ISupper: C2Rust_Unnamed = 256;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -254,12 +248,6 @@ pub const kFloatRelativeEditor: FloatRelative = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_14 = 2147483647;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const kMTMetaCount: MetaIndex = 5;
-pub const kMTMetaConcealLines: MetaIndex = 4;
-pub const kMTMetaSignText: MetaIndex = 3;
-pub const kMTMetaSignHL: MetaIndex = 2;
-pub const kMTMetaLines: MetaIndex = 1;
-pub const kMTMetaInline: MetaIndex = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_17 = 8192;

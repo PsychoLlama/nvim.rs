@@ -24,16 +24,6 @@ pub const MT_BRANCH_FACTOR: ::core::ffi::c_uint = 10;
 /// "right before this node", which is what `pseudo_index` needs.
 pub const MT_LOG2_BRANCH: ::core::ffi::c_uint = 5;
 
-// Meta counts. Each node carries, per child, how many keys of each kind live in
-// that subtree, so a filtered walk can skip whole subtrees.
-pub const kMTMetaInline: ::core::ffi::c_uint = 0;
-pub const kMTMetaLines: ::core::ffi::c_uint = 1;
-pub const kMTMetaSignHL: ::core::ffi::c_uint = 2;
-pub const kMTMetaSignText: ::core::ffi::c_uint = 3;
-pub const kMTMetaConcealLines: ::core::ffi::c_uint = 4;
-/// Sentinel; must stay last.
-pub const kMTMetaCount: ::core::ffi::c_uint = 5;
-
 /// A filter slot set to this selects that meta kind; zero skips it.
 pub const kMTFilterSelect: uint32_t = 4294967295;
 

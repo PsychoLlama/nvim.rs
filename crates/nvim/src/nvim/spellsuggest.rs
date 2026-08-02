@@ -74,7 +74,7 @@ use crate::src::nvim::spellsuggest::soundalike::{
 };
 use crate::src::nvim::spellsuggest::walk::suggest_trie_walk;
 use crate::src::nvim::strings::vim_strchr;
-use crate::src::nvim::types::{FILE, VarType, garray_T, hashtab_T, hlf_T, langp_T, slang_T, smt_T};
+use crate::src::nvim::types::{FILE, VarType, garray_T, hashtab_T, hlf_T, langp_T, slang_T};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
 
@@ -100,7 +100,6 @@ const FAIL: c_int = 0;
 /// "No highlight", which `spell_check` leaves in place when it finds
 /// nothing wrong with the word.
 /// Move to any kind of spelling mistake, not just bad or rare words.
-const SMT_ALL: smt_T = 0;
 /// A `v:t_list` typval, which is what a `'spellsuggest'` expression must
 /// yield one of per suggestion.
 const VAR_LIST: VarType = 4;

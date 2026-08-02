@@ -5,8 +5,8 @@
 use super::args::{Args, frame};
 use super::wrappers::non_zero_arg;
 use super::{
-    CONV_NONE, FAIL, GA_EMPTY_INIT_VALUE, NSUBEXP, NUL, RE_MAGIC, RE_STRING, SMT_ALL, VAR_BLOB,
-    VAR_LIST, VAR_STRING, VSE_NONE, kListLenMayKnow,
+    CONV_NONE, FAIL, GA_EMPTY_INIT_VALUE, NSUBEXP, NUL, RE_MAGIC, RE_STRING, VAR_BLOB, VAR_LIST,
+    VAR_STRING, VSE_NONE, kListLenMayKnow,
 };
 use crate::semsg;
 use crate::src::nvim::cursor::get_cursor_pos_ptr;
@@ -37,7 +37,9 @@ use crate::src::nvim::regexp::{
 };
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::sha256::hex_digest;
-use crate::src::nvim::spell::{eval_soundfold, parse_spelllang, spell_check, spell_move_to};
+use crate::src::nvim::spell::{
+    SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_move_to,
+};
 use crate::src::nvim::spellsuggest::spell_suggest_list;
 use crate::src::nvim::strings::{
     vim_strsave_escaped, vim_strsave_shellescape, vim_vsnprintf_typval,

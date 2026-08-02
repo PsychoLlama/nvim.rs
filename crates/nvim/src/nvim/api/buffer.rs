@@ -13,6 +13,7 @@ use crate::src::nvim::cursor::{check_cursor_col, check_cursor_lnum, check_visual
 use crate::src::nvim::ex_cmds::rename_buffer;
 use crate::src::nvim::extmark::extmark_splice;
 
+use crate::src::nvim::decoration::kMTMetaLines;
 use crate::src::nvim::lua::executor::nlua_call_ref;
 use crate::src::nvim::lua::ffi::{lua_createtable, lua_pushlstring, lua_rawseti};
 use crate::src::nvim::main::{
@@ -72,12 +73,6 @@ pub use crate::src::nvim::types::{
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
 };
 use crate::src::nvim::undo::u_save_buf;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -145,12 +140,6 @@ pub const kRetMulti: LuaRetMode = 3;
 pub const kRetLuaref: LuaRetMode = 2;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
-pub const kMTMetaCount: MetaIndex = 5;
-pub const kMTMetaConcealLines: MetaIndex = 4;
-pub const kMTMetaSignText: MetaIndex = 3;
-pub const kMTMetaSignHL: MetaIndex = 2;
-pub const kMTMetaLines: MetaIndex = 1;
-pub const kMTMetaInline: MetaIndex = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
 pub const kDirectionNotSet: C2Rust_Unnamed_16 = 0;
 pub const DOBUF_DEL: dobuf_action_values = 3;

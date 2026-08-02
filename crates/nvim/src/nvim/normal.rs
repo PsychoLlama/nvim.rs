@@ -173,7 +173,6 @@ pub const SPELL_ADD_BAD: SpellAddType = 1;
 pub const SPELL_ADD_GOOD: SpellAddType = 0;
 pub const SMT_RARE: smt_T = 2;
 pub const SMT_BAD: smt_T = 1;
-pub const SMT_ALL: smt_T = 0;
 pub const OP_FOLD: c_uint = 19;
 pub const OP_LOWER: c_uint = 12;
 pub const OP_FORMAT: c_uint = 9;

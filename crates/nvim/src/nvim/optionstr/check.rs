@@ -38,9 +38,10 @@ use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{buf_T, size_t, uint32_t, win_T};
 
 use super::{
-    FAIL, NUL, OK, SCL_NO, SCL_NUM, check_str_opt, e_illegal_character_after_chr,
-    e_unbalanced_groups, e_unclosed_expression_sequence, opt_strings_flags,
+    FAIL, NUL, OK, SCL_NO, check_str_opt, e_illegal_character_after_chr, e_unbalanced_groups,
+    e_unclosed_expression_sequence, opt_strings_flags,
 };
+use crate::src::nvim::decoration::SCL_NUM;
 
 /// The options whose bitmask is derived from a value the startup sequence
 /// may have installed without going through `:set`.
