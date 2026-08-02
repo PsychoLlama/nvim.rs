@@ -90,8 +90,6 @@
     "crates/nvim/src/nvim/main/remote.rs": 3,
     "crates/nvim/src/nvim/map_glyph_cache.rs": 1,
     "crates/nvim/src/nvim/mapping.rs": 161,
-    "crates/nvim/src/nvim/match.rs": 7,
-    "crates/nvim/src/nvim/match/vimscript.rs": 36,
     "crates/nvim/src/nvim/mbyte.rs": 188,
     "crates/nvim/src/nvim/memfile.rs": 1,
     "crates/nvim/src/nvim/memline.rs": 2,

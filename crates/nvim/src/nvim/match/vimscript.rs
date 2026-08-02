@@ -11,588 +11,470 @@
 #[allow(unused_imports)]
 use super::*;
 
-pub(crate) unsafe extern "C" fn matchadd_dict_arg(
-    mut tv: *mut typval_T,
-    mut conceal_char: *mut *const ::core::ffi::c_char,
-    mut win: *mut *mut win_T,
-) -> ::core::ffi::c_int {
+/// How many `posN` keys a saved position match can carry.
+///
+/// `matchaddpos()` itself takes any number of positions, but only the first
+/// eight survive a `getmatches()`/`setmatches()` round trip — the reader
+/// stops at `pos8`, so this is upstream's limit and not an arbitrary one.
+const MAX_SAVED_POS: c_int = 8;
+
+/// `tv_dict_add_str` with a Rust key: the dictionary copies exactly the
+/// length it is given, so the transpile's `b"group\0"` plus
+/// `size_of::<[c_char; 6]>() - 1` collapses to a `&str`.
+///
+/// # Safety
+/// `d` must be live and `val` null or NUL-terminated.
+unsafe fn put_str(d: *mut dict_T, key: &str, val: *const c_char) {
+    // SAFETY: the caller's dictionary and value.
     unsafe {
-        let mut di: *mut dictitem_T = ::core::ptr::null_mut::<dictitem_T>();
-        if (*tv).v_type as ::core::ffi::c_uint
-            != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            emsg(gettext(&raw const e_dictreq as *const ::core::ffi::c_char));
+        tv_dict_add_str(d, key.as_ptr().cast(), key.len(), val);
+    }
+}
+
+/// `tv_dict_add_nr` with a Rust key; see [`put_str`].
+///
+/// # Safety
+/// `d` must be live.
+unsafe fn put_nr(d: *mut dict_T, key: &str, nr: varnumber_T) {
+    // SAFETY: the caller's dictionary.
+    unsafe {
+        tv_dict_add_nr(d, key.as_ptr().cast(), key.len(), nr);
+    }
+}
+
+/// `tv_dict_find` with a Rust key; null when absent.
+///
+/// # Safety
+/// `d` must be null or live.
+unsafe fn find(d: *const dict_T, key: &str) -> *mut dictitem_T {
+    // SAFETY: the caller's dictionary.
+    unsafe { tv_dict_find(d, key.as_ptr().cast(), key.len() as ptrdiff_t) }
+}
+
+/// Reads `matchadd()`'s and `matchaddpos()`' optional fifth argument, the
+/// `{'conceal': c, 'window': w}` dictionary.
+///
+/// # Safety
+/// `tv` must be live; `conceal_char` and `win` must be writable.
+unsafe fn matchadd_dict_arg(
+    tv: *mut typval_T,
+    conceal_char: *mut *const c_char,
+    win: *mut *mut win_T,
+) -> c_int {
+    // SAFETY: the caller's typval and out-parameters.
+    unsafe {
+        if (*tv).v_type != VAR_DICT {
+            emsg(gettext(&raw const e_dictreq as *const c_char));
             return FAIL;
         }
-        di = tv_dict_find(
-            (*tv).vval.v_dict,
-            b"conceal\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        );
+        let dict = (*tv).vval.v_dict;
+
+        let di = find(dict, "conceal");
         if !di.is_null() {
             *conceal_char = tv_get_string(&raw mut (*di).di_tv);
         }
-        di = tv_dict_find(
-            (*tv).vval.v_dict,
-            b"window\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        );
+
+        let di = find(dict, "window");
         if di.is_null() {
             return OK;
         }
         *win = find_win_by_nr_or_id(&raw mut (*di).di_tv);
         if (*win).is_null() {
-            emsg(gettext(
-                &raw const e_invalwindow as *const ::core::ffi::c_char,
-            ));
+            emsg(gettext(&raw const e_invalwindow as *const c_char));
             return FAIL;
         }
-        return OK;
+        OK
     }
 }
 
+/// `clearmatches([win])`.
+///
+/// # Safety
+/// The evaluator's argument and return slots.
 pub unsafe extern "C" fn f_clearmatches(
-    mut argvars: *mut typval_T,
-    mut _rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    _rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
+    // SAFETY: the evaluator's slots.
     unsafe {
-        let mut win: *mut win_T = get_optional_window(argvars, 0 as ::core::ffi::c_int);
+        let win = get_optional_window(argvars, 0);
         if !win.is_null() {
             clear_matches(win);
         }
     }
 }
 
+/// `getmatches([win])`.
+///
+/// # Safety
+/// The evaluator's argument and return slots.
 pub unsafe extern "C" fn f_getmatches(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
+    // SAFETY: the evaluator's slots.
     unsafe {
-        let mut win: *mut win_T = get_optional_window(argvars, 0 as ::core::ffi::c_int);
-        tv_list_alloc_ret(rettv, kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
+        let win = get_optional_window(argvars, 0);
+        let l = tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
         if win.is_null() {
             return;
         }
-        let mut cur: *mut matchitem_T = (*win).w_match_head;
+
+        let mut cur = (*win).w_match_head;
         while !cur.is_null() {
-            let mut dict: *mut dict_T = tv_dict_alloc();
+            let dict = tv_dict_alloc();
             if (*cur).mit_match.regprog.is_null() {
-                let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while i < (*cur).mit_pos_count {
-                    let mut llpos: *mut llpos_T = ::core::ptr::null_mut::<llpos_T>();
-                    let mut buf: [::core::ffi::c_char; 30] = [0; 30];
-                    llpos = (*cur).mit_pos_array.offset(i as isize);
-                    if (*llpos).lnum == 0 as linenr_T {
+                // Added with matchaddpos(): one `posN` key per position.
+                for i in 0..(*cur).mit_pos_count {
+                    let llpos = (*cur).mit_pos_array.offset(i as isize);
+                    if (*llpos).lnum == 0 {
                         break;
                     }
-                    let l: *mut list_T = tv_list_alloc(
-                        (1 as ::core::ffi::c_int
-                            + (if (*llpos).col > 0 as ::core::ffi::c_int {
-                                2 as ::core::ffi::c_int
-                            } else {
-                                0 as ::core::ffi::c_int
-                            })) as ptrdiff_t,
-                    );
-                    tv_list_append_number(l, (*llpos).lnum as varnumber_T);
-                    if (*llpos).col > 0 as ::core::ffi::c_int {
-                        tv_list_append_number(l, (*llpos).col as varnumber_T);
-                        tv_list_append_number(l, (*llpos).len as varnumber_T);
+                    // A column of zero means the whole line, and is reported
+                    // as a one-element list.
+                    let sub = tv_list_alloc(1 + if (*llpos).col > 0 { 2 } else { 0 });
+                    tv_list_append_number(sub, (*llpos).lnum as varnumber_T);
+                    if (*llpos).col > 0 {
+                        tv_list_append_number(sub, (*llpos).col as varnumber_T);
+                        tv_list_append_number(sub, (*llpos).len as varnumber_T);
                     }
-                    let mut len: ::core::ffi::c_int = snprintf(
-                        &raw mut buf as *mut ::core::ffi::c_char,
-                        ::core::mem::size_of::<[::core::ffi::c_char; 30]>(),
-                        b"pos%d\0".as_ptr() as *const ::core::ffi::c_char,
-                        i + 1 as ::core::ffi::c_int,
-                    );
-                    '_c2rust_label: {
-                        if (len as size_t) < ::core::mem::size_of::<[::core::ffi::c_char; 30]>() {
-                        } else {
-                            __assert_fail(
-                                b"(size_t)len < sizeof(buf)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                b"src/nvim/match.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                898 as ::core::ffi::c_uint,
-                                __ASSERT_FUNCTION.as_ptr(),
-                            );
-                        }
-                    };
-                    tv_dict_add_list(
-                        dict,
-                        &raw mut buf as *mut ::core::ffi::c_char,
-                        len as size_t,
-                        l,
-                    );
-                    i += 1;
+                    let key = format!("pos{}", i + 1);
+                    tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), sub);
                 }
             } else {
-                tv_dict_add_str(
-                    dict,
-                    b"pattern\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-                    (*cur).mit_pattern,
-                );
+                put_str(dict, "pattern", (*cur).mit_pattern);
             }
-            tv_dict_add_str(
-                dict,
-                b"group\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-                syn_id2name((*cur).mit_hlg_id),
-            );
-            tv_dict_add_nr(
-                dict,
-                b"priority\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
-                (*cur).mit_priority as varnumber_T,
-            );
-            tv_dict_add_nr(
-                dict,
-                b"id\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
-                (*cur).mit_id as varnumber_T,
-            );
+            put_str(dict, "group", syn_id2name((*cur).mit_hlg_id));
+            put_nr(dict, "priority", (*cur).mit_priority as varnumber_T);
+            put_nr(dict, "id", (*cur).mit_id as varnumber_T);
+
             if (*cur).mit_conceal_char != 0 {
-                let mut buf_0: [::core::ffi::c_char; 7] = [0; 7];
-                buf_0[utf_char2bytes(
-                    (*cur).mit_conceal_char,
-                    &raw mut buf_0 as *mut ::core::ffi::c_char,
-                ) as usize] = NUL as ::core::ffi::c_char;
-                tv_dict_add_str(
-                    dict,
-                    b"conceal\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-                    &raw mut buf_0 as *mut ::core::ffi::c_char,
-                );
+                let mut buf = [0 as c_char; MB_MAXCHAR + 1];
+                let len = utf_char2bytes((*cur).mit_conceal_char, buf.as_mut_ptr());
+                buf[len as usize] = 0;
+                put_str(dict, "conceal", buf.as_ptr());
             }
-            tv_list_append_dict((*rettv).vval.v_list, dict);
+
+            tv_list_append_dict(l, dict);
             cur = (*cur).mit_next;
         }
     }
 }
 
+/// `setmatches(list [, win])`.
+///
+/// Rebuilds a whole match list from `getmatches()`' answer. The list is
+/// validated in full *before* anything is cleared, so a malformed entry
+/// leaves the window's matches alone.
+///
+/// # Safety
+/// The evaluator's argument and return slots.
 pub unsafe extern "C" fn f_setmatches(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
+    // SAFETY: the evaluator's slots.
     unsafe {
-        let mut d: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
-        let mut s: *mut list_T = ::core::ptr::null_mut::<list_T>();
-        let mut win: *mut win_T = get_optional_window(argvars, 1 as ::core::ffi::c_int);
-        (*rettv).vval.v_number = -1 as varnumber_T;
-        if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            emsg(gettext(&raw const e_listreq as *const ::core::ffi::c_char));
+        let win = get_optional_window(argvars, 1);
+
+        (*rettv).vval.v_number = -1;
+        if (*argvars).v_type != VAR_LIST {
+            emsg(gettext(&raw const e_listreq as *const c_char));
             return;
         }
         if win.is_null() {
             return;
         }
-        let l: *mut list_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
-            .vval
-            .v_list;
-        let mut li_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let l_: *const list_T = l;
-        if !l_.is_null() {
-            let mut li: *const listitem_T = (*l_).lv_first;
-            while !li.is_null() {
-                if (*li).li_tv.v_type as ::core::ffi::c_uint
-                    != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-                    || {
-                        d = (*li).li_tv.vval.v_dict;
-                        d.is_null()
-                    }
-                {
-                    semsg(
-                        gettext(
-                            b"E474: List item %d is either not a dictionary or an empty one\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                        ),
-                        li_idx,
-                    );
-                    return;
-                }
-                if !(!tv_dict_find(
-                    d,
-                    b"group\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-                        as ptrdiff_t,
-                )
-                .is_null()
-                    && (!tv_dict_find(
-                        d,
-                        b"pattern\0".as_ptr() as *const ::core::ffi::c_char,
-                        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize)
-                            as ptrdiff_t,
-                    )
-                    .is_null()
-                        || !tv_dict_find(
-                            d,
-                            b"pos1\0".as_ptr() as *const ::core::ffi::c_char,
-                            ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                                .wrapping_sub(1 as usize) as ptrdiff_t,
-                        )
-                        .is_null())
-                    && !tv_dict_find(
-                        d,
-                        b"priority\0".as_ptr() as *const ::core::ffi::c_char,
-                        ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as usize)
-                            as ptrdiff_t,
-                    )
-                    .is_null()
-                    && !tv_dict_find(
-                        d,
-                        b"id\0".as_ptr() as *const ::core::ffi::c_char,
-                        ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize)
-                            as ptrdiff_t,
-                    )
-                    .is_null())
-                {
-                    semsg(
-                        gettext(
-                            b"E474: List item %d is missing one of the required keys\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
-                        li_idx,
-                    );
-                    return;
-                }
-                li_idx += 1;
-                li = (*li).li_next;
+        let l = (*argvars).vval.v_list;
+
+        // To some extent make sure this really came from getmatches().
+        let mut li_idx = 0;
+        let mut li = tv_list_first(l);
+        while !li.is_null() {
+            let tv = &raw mut (*li).li_tv;
+            if (*tv).v_type != VAR_DICT || (*tv).vval.v_dict.is_null() {
+                semsg(
+                    gettext(
+                        c"E474: List item %d is either not a dictionary or an empty one".as_ptr(),
+                    ),
+                    li_idx,
+                );
+                return;
             }
+            let d = (*tv).vval.v_dict;
+            let ok = !find(d, "group").is_null()
+                && (!find(d, "pattern").is_null() || !find(d, "pos1").is_null())
+                && !find(d, "priority").is_null()
+                && !find(d, "id").is_null();
+            if !ok {
+                semsg(
+                    gettext(c"E474: List item %d is missing one of the required keys".as_ptr()),
+                    li_idx,
+                );
+                return;
+            }
+            li_idx += 1;
+            li = (*li).li_next;
         }
+
         clear_matches(win);
-        let mut match_add_failed: bool = false_0 != 0;
-        let l__0: *const list_T = l;
-        if !l__0.is_null() {
-            let mut li_0: *const listitem_T = (*l__0).lv_first;
-            while !li_0.is_null() {
-                let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                d = (*li_0).li_tv.vval.v_dict;
-                let di: *mut dictitem_T = tv_dict_find(
-                    d,
-                    b"pattern\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize)
-                        as ptrdiff_t,
-                );
-                if di.is_null() {
-                    if s.is_null() {
-                        s = tv_list_alloc(9 as ptrdiff_t);
+        let mut match_add_failed = false;
+        let mut li = tv_list_first(l);
+        while !li.is_null() {
+            let d = (*li).li_tv.vval.v_dict;
+
+            // A match with no `pattern` is a position match: collect
+            // pos1..pos8 into the list `match_add` wants.
+            let mut positions: *mut list_T = ::core::ptr::null_mut();
+            if find(d, "pattern").is_null() {
+                positions = tv_list_alloc(MAX_SAVED_POS as ptrdiff_t + 1);
+                for i in 1..MAX_SAVED_POS + 1 {
+                    let key = format!("pos{i}");
+                    let pos_di = tv_dict_find(d, key.as_ptr().cast(), key.len() as ptrdiff_t);
+                    if pos_di.is_null() {
+                        break;
                     }
-                    i = 1 as ::core::ffi::c_int;
-                    while i < 9 as ::core::ffi::c_int {
-                        let mut buf: [::core::ffi::c_char; 30] = [0; 30];
-                        snprintf(
-                            &raw mut buf as *mut ::core::ffi::c_char,
-                            ::core::mem::size_of::<[::core::ffi::c_char; 30]>(),
-                            b"pos%d\0".as_ptr() as *const ::core::ffi::c_char,
-                            i,
-                        );
-                        let pos_di: *mut dictitem_T = tv_dict_find(
-                            d,
-                            &raw mut buf as *mut ::core::ffi::c_char,
-                            -1 as ptrdiff_t,
-                        );
-                        if pos_di.is_null() {
-                            break;
-                        }
-                        if (*pos_di).di_tv.v_type as ::core::ffi::c_uint
-                            != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            return;
-                        }
-                        tv_list_append_tv(s, &raw mut (*pos_di).di_tv);
-                        tv_list_ref(s);
-                        i += 1;
+                    if (*pos_di).di_tv.v_type != VAR_LIST {
+                        // Leaks `positions` exactly as upstream does, and
+                        // leaves the earlier entries of the list already
+                        // restored — the validation above does not look
+                        // inside a `posN` key.
+                        return;
                     }
+                    tv_list_append_tv(positions, &raw mut (*pos_di).di_tv);
+                    tv_list_ref(positions);
                 }
-                let mut group_buf: [::core::ffi::c_char; 65] = [0; 65];
-                let group: *const ::core::ffi::c_char = tv_dict_get_string_buf(
-                    d,
-                    b"group\0".as_ptr() as *const ::core::ffi::c_char,
-                    &raw mut group_buf as *mut ::core::ffi::c_char,
-                );
-                let priority: ::core::ffi::c_int =
-                    tv_dict_get_number(d, b"priority\0".as_ptr() as *const ::core::ffi::c_char)
-                        as ::core::ffi::c_int;
-                let id: ::core::ffi::c_int =
-                    tv_dict_get_number(d, b"id\0".as_ptr() as *const ::core::ffi::c_char)
-                        as ::core::ffi::c_int;
-                let conceal_di: *mut dictitem_T = tv_dict_find(
-                    d,
-                    b"conceal\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize)
-                        as ptrdiff_t,
-                );
-                let conceal: *const ::core::ffi::c_char = if !conceal_di.is_null() {
-                    tv_get_string(&raw mut (*conceal_di).di_tv)
-                } else {
-                    ::core::ptr::null::<::core::ffi::c_char>()
-                };
-                if i == 0 as ::core::ffi::c_int {
-                    if match_add(
-                        win,
-                        group,
-                        tv_dict_get_string(
-                            d,
-                            b"pattern\0".as_ptr() as *const ::core::ffi::c_char,
-                            false,
-                        ),
-                        priority,
-                        id,
-                        ::core::ptr::null_mut::<list_T>(),
-                        conceal,
-                    ) != id
-                    {
-                        match_add_failed = true;
-                    }
-                } else {
-                    if match_add(
-                        win,
-                        group,
-                        ::core::ptr::null::<::core::ffi::c_char>(),
-                        priority,
-                        id,
-                        s,
-                        conceal,
-                    ) != id
-                    {
-                        match_add_failed = true;
-                    }
-                    tv_list_unref(s);
-                    s = ::core::ptr::null_mut::<list_T>();
-                }
-                li_0 = (*li_0).li_next;
             }
+
+            // Three number buffers are in play here — this one,
+            // `tv_dict_get_string`'s and `tv_get_string`'s — and none may be
+            // reused before its value is.
+            let mut group_buf = [0 as c_char; NUMBUFLEN];
+            let group = tv_dict_get_string_buf(d, c"group".as_ptr(), group_buf.as_mut_ptr());
+            let priority = tv_dict_get_number(d, c"priority".as_ptr()) as c_int;
+            let id = tv_dict_get_number(d, c"id".as_ptr()) as c_int;
+            let conceal_di = find(d, "conceal");
+            let conceal = if conceal_di.is_null() {
+                ::core::ptr::null()
+            } else {
+                tv_get_string(&raw mut (*conceal_di).di_tv)
+            };
+
+            let added = if positions.is_null() {
+                let pattern = tv_dict_get_string(d, c"pattern".as_ptr(), false);
+                match_add(
+                    win,
+                    group,
+                    pattern,
+                    priority,
+                    id,
+                    ::core::ptr::null_mut(),
+                    conceal,
+                )
+            } else {
+                let rc = match_add(
+                    win,
+                    group,
+                    ::core::ptr::null(),
+                    priority,
+                    id,
+                    positions,
+                    conceal,
+                );
+                tv_list_unref(positions);
+                rc
+            };
+            if added != id {
+                match_add_failed = true;
+            }
+
+            li = (*li).li_next;
         }
         if !match_add_failed {
-            (*rettv).vval.v_number = 0 as varnumber_T;
+            (*rettv).vval.v_number = 0;
         }
     }
 }
 
-pub unsafe extern "C" fn f_matchadd(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
+/// The optional `priority`, `id` and dictionary arguments `matchadd()` and
+/// `matchaddpos()` share, read from `argvars[2..=4]`.
+///
+/// Answers `None` once something has been diagnosed.
+///
+/// # Safety
+/// The evaluator's argument slots.
+unsafe fn optional_args(
+    argvars: *mut typval_T,
+) -> Option<(c_int, c_int, *const c_char, *mut win_T)> {
+    // SAFETY: the evaluator's slots.
     unsafe {
-        let mut grpbuf: [::core::ffi::c_char; 65] = [0; 65];
-        let mut patbuf: [::core::ffi::c_char; 65] = [0; 65];
-        let grp: *const ::core::ffi::c_char = tv_get_string_buf_chk(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-            &raw mut grpbuf as *mut ::core::ffi::c_char,
-        );
-        let pat: *const ::core::ffi::c_char = tv_get_string_buf_chk(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-            &raw mut patbuf as *mut ::core::ffi::c_char,
-        );
-        let mut prio: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
-        let mut id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-        let mut error: bool = false_0 != 0;
-        let mut conceal_char: *const ::core::ffi::c_char =
-            ::core::ptr::null::<::core::ffi::c_char>();
-        let mut win: *mut win_T = curwin.get();
-        (*rettv).vval.v_number = -1 as varnumber_T;
-        if grp.is_null() || pat.is_null() {
-            return;
-        }
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            prio = tv_get_number_chk(
-                argvars.offset(2 as ::core::ffi::c_int as isize),
-                &raw mut error,
-            ) as ::core::ffi::c_int;
-            if (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                id = tv_get_number_chk(
-                    argvars.offset(3 as ::core::ffi::c_int as isize),
-                    &raw mut error,
-                ) as ::core::ffi::c_int;
-                if (*argvars.offset(4 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                    != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                    && matchadd_dict_arg(
-                        argvars.offset(4 as ::core::ffi::c_int as isize),
-                        &raw mut conceal_char,
-                        &raw mut win,
-                    ) == FAIL
+        let mut prio = DEFAULT_PRIORITY;
+        let mut id = -1;
+        let mut conceal_char: *const c_char = ::core::ptr::null();
+        let mut win = curwin.get();
+        let mut error = false;
+
+        // Nested, not sequential: an `id` is only read when a `priority` was
+        // given, and the dictionary only when an `id` was.
+        if (*argvars.offset(2)).v_type != VAR_UNKNOWN {
+            prio = tv_get_number_chk(argvars.offset(2), &raw mut error) as c_int;
+            if (*argvars.offset(3)).v_type != VAR_UNKNOWN {
+                id = tv_get_number_chk(argvars.offset(3), &raw mut error) as c_int;
+                if (*argvars.offset(4)).v_type != VAR_UNKNOWN
+                    && matchadd_dict_arg(argvars.offset(4), &raw mut conceal_char, &raw mut win)
+                        == FAIL
                 {
-                    return;
+                    return None;
                 }
             }
         }
         if error {
+            None
+        } else {
+            Some((prio, id, conceal_char, win))
+        }
+    }
+}
+
+/// `matchadd(group, pattern [, priority [, id [, options]]])`.
+///
+/// # Safety
+/// The evaluator's argument and return slots.
+pub unsafe extern "C" fn f_matchadd(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    // SAFETY: the evaluator's slots.
+    unsafe {
+        let mut grpbuf = [0 as c_char; NUMBUFLEN];
+        let mut patbuf = [0 as c_char; NUMBUFLEN];
+        let grp = tv_get_string_buf_chk(argvars, grpbuf.as_mut_ptr());
+        let pat = tv_get_string_buf_chk(argvars.offset(1), patbuf.as_mut_ptr());
+
+        (*rettv).vval.v_number = -1;
+        if grp.is_null() || pat.is_null() {
             return;
         }
-        if id >= 1 as ::core::ffi::c_int && id <= 3 as ::core::ffi::c_int {
+        let Some((prio, id, conceal_char, win)) = optional_args(argvars) else {
+            return;
+        };
+        if (1..=3).contains(&id) {
             semsg(
-                gettext(b"E798: ID is reserved for \":match\": %d\0".as_ptr()
-                    as *const ::core::ffi::c_char),
+                gettext(c"E798: ID is reserved for \":match\": %d".as_ptr()),
                 id,
             );
             return;
         }
+
         (*rettv).vval.v_number = match_add(
             win,
             grp,
             pat,
             prio,
             id,
-            ::core::ptr::null_mut::<list_T>(),
+            ::core::ptr::null_mut(),
             conceal_char,
         ) as varnumber_T;
     }
 }
 
+/// `matchaddpos(group, positions [, priority [, id [, options]]])`.
+///
+/// # Safety
+/// The evaluator's argument and return slots.
 pub unsafe extern "C" fn f_matchaddpos(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
+    // SAFETY: the evaluator's slots.
     unsafe {
-        (*rettv).vval.v_number = -1 as varnumber_T;
-        let mut buf: [::core::ffi::c_char; 65] = [0; 65];
-        let group: *const ::core::ffi::c_char = tv_get_string_buf_chk(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-            &raw mut buf as *mut ::core::ffi::c_char,
-        );
+        (*rettv).vval.v_number = -1;
+
+        let mut buf = [0 as c_char; NUMBUFLEN];
+        let group = tv_get_string_buf_chk(argvars, buf.as_mut_ptr());
         if group.is_null() {
             return;
         }
-        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if (*argvars.offset(1)).v_type != VAR_LIST {
             semsg(
-                gettext(&raw const e_listarg as *const ::core::ffi::c_char),
-                b"matchaddpos()\0".as_ptr() as *const ::core::ffi::c_char,
+                gettext(&raw const e_listarg as *const c_char),
+                c"matchaddpos()".as_ptr(),
             );
             return;
         }
-        let mut l: *mut list_T = ::core::ptr::null_mut::<list_T>();
-        l = (*argvars.offset(1 as ::core::ffi::c_int as isize))
-            .vval
-            .v_list;
-        if tv_list_len(l) == 0 as ::core::ffi::c_int {
+        let l = (*argvars.offset(1)).vval.v_list;
+        if tv_list_len(l) == 0 {
             return;
         }
-        let mut error: bool = false_0 != 0;
-        let mut prio: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
-        let mut id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-        let mut conceal_char: *const ::core::ffi::c_char =
-            ::core::ptr::null::<::core::ffi::c_char>();
-        let mut win: *mut win_T = curwin.get();
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            prio = tv_get_number_chk(
-                argvars.offset(2 as ::core::ffi::c_int as isize),
-                &raw mut error,
-            ) as ::core::ffi::c_int;
-            if (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                id = tv_get_number_chk(
-                    argvars.offset(3 as ::core::ffi::c_int as isize),
-                    &raw mut error,
-                ) as ::core::ffi::c_int;
-                if (*argvars.offset(4 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                    != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                    && matchadd_dict_arg(
-                        argvars.offset(4 as ::core::ffi::c_int as isize),
-                        &raw mut conceal_char,
-                        &raw mut win,
-                    ) == FAIL
-                {
-                    return;
-                }
-            }
-        }
-        if error as ::core::ffi::c_int == true_0 {
+
+        let Some((prio, id, conceal_char, win)) = optional_args(argvars) else {
             return;
-        }
-        if id == 1 as ::core::ffi::c_int || id == 2 as ::core::ffi::c_int {
+        };
+        // 3 is allowed: matchaddpos() is meant to stand in for `:3match`.
+        if id == 1 || id == 2 {
             semsg(
-                gettext(b"E798: ID is reserved for \"match\": %d\0".as_ptr()
-                    as *const ::core::ffi::c_char),
+                gettext(c"E798: ID is reserved for \"match\": %d".as_ptr()),
                 id,
             );
             return;
         }
-        (*rettv).vval.v_number = match_add(
-            win,
-            group,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            prio,
-            id,
-            l,
-            conceal_char,
-        ) as varnumber_T;
+
+        (*rettv).vval.v_number =
+            match_add(win, group, ::core::ptr::null(), prio, id, l, conceal_char) as varnumber_T;
     }
 }
 
+/// `matcharg(id)` — the `[group, pattern]` of `:match`, `:2match` or
+/// `:3match`, or `["", ""]` when that one is not set.
+///
+/// # Safety
+/// The evaluator's argument and return slots.
 pub unsafe extern "C" fn f_matcharg(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
+    // SAFETY: the evaluator's slots.
     unsafe {
-        let id: ::core::ffi::c_int =
-            tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
-        tv_list_alloc_ret(
-            rettv,
-            (if id >= 1 as ::core::ffi::c_int && id <= 3 as ::core::ffi::c_int {
-                2 as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            }) as ptrdiff_t,
-        );
-        if id >= 1 as ::core::ffi::c_int && id <= 3 as ::core::ffi::c_int {
-            let m: *mut matchitem_T = get_match(curwin.get(), id);
-            if !m.is_null() {
-                tv_list_append_string(
-                    (*rettv).vval.v_list,
-                    syn_id2name((*m).mit_hlg_id),
-                    -1 as ssize_t,
-                );
-                tv_list_append_string((*rettv).vval.v_list, (*m).mit_pattern, -1 as ssize_t);
-            } else {
-                tv_list_append_string(
-                    (*rettv).vval.v_list,
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                    0 as ssize_t,
-                );
-                tv_list_append_string(
-                    (*rettv).vval.v_list,
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                    0 as ssize_t,
-                );
-            }
+        let id = tv_get_number(argvars) as c_int;
+        let is_excmd = (1..=3).contains(&id);
+        // Any other id answers an empty list, not an error.
+        let l = tv_list_alloc_ret(rettv, if is_excmd { 2 } else { 0 });
+        if !is_excmd {
+            return;
+        }
+        let m = get_match(curwin.get(), id);
+        if m.is_null() {
+            tv_list_append_string(l, ::core::ptr::null(), 0);
+            tv_list_append_string(l, ::core::ptr::null(), 0);
+        } else {
+            tv_list_append_string(l, syn_id2name((*m).mit_hlg_id), -1);
+            tv_list_append_string(l, (*m).mit_pattern, -1);
         }
     }
 }
 
+/// `matchdelete(id [, win])`.
+///
+/// # Safety
+/// The evaluator's argument and return slots.
 pub unsafe extern "C" fn f_matchdelete(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
+    // SAFETY: the evaluator's slots.
     unsafe {
-        let mut win: *mut win_T = get_optional_window(argvars, 1 as ::core::ffi::c_int);
-        if win.is_null() {
-            (*rettv).vval.v_number = -1 as varnumber_T;
+        let win = get_optional_window(argvars, 1);
+        (*rettv).vval.v_number = if win.is_null() {
+            -1
         } else {
-            (*rettv).vval.v_number = match_delete(
-                win,
-                tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize))
-                    as ::core::ffi::c_int,
-                true_0 != 0,
-            ) as varnumber_T;
+            match_delete(win, tv_get_number(argvars) as c_int, true) as varnumber_T
         };
     }
 }
