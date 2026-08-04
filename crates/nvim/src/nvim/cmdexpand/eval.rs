@@ -85,7 +85,7 @@ pub unsafe extern "C" fn f_getcompletion(
                 pattern as *mut ::core::ffi::c_char,
                 cmdline_len,
                 cmdline_len,
-                false_0,
+                false,
             );
             pattern_start = xpc.xp_pattern;
             xpc.xp_pattern_len = strlen(xpc.xp_pattern);
@@ -265,7 +265,7 @@ pub unsafe extern "C" fn f_getcompletiontype(
             pat as *mut ::core::ffi::c_char,
             cmdline_len,
             cmdline_len,
-            false_0,
+            false,
         );
         (*rettv).vval.v_string = cmdcomplete_type_to_str(xpc.xp_context, xpc.xp_arg);
         ExpandCleanup(&raw mut xpc);

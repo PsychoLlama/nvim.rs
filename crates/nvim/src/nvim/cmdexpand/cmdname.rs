@@ -545,12 +545,12 @@ pub(crate) unsafe extern "C" fn set_one_cmd_context(
     }
 }
 
-pub unsafe extern "C" fn set_cmd_context(
+pub unsafe fn set_cmd_context(
     mut xp: *mut expand_T,
     mut str: *mut ::core::ffi::c_char,
     mut len: ::core::ffi::c_int,
     mut col: ::core::ffi::c_int,
-    mut use_ccline: ::core::ffi::c_int,
+    use_ccline: bool,
 ) {
     unsafe {
         let ccline: *mut CmdlineInfo = get_cmdline_info();
@@ -560,9 +560,9 @@ pub unsafe extern "C" fn set_cmd_context(
         }
         *str.offset(col as isize) = NUL as ::core::ffi::c_char;
         let mut nextcomm: *const ::core::ffi::c_char = str;
-        if use_ccline != 0 && (*ccline).cmdfirstc == '=' as ::core::ffi::c_int {
+        if use_ccline && (*ccline).cmdfirstc == '=' as ::core::ffi::c_int {
             set_context_for_expression(xp, str, CMD_SIZE);
-        } else if use_ccline != 0 && (*ccline).input_fn != 0 {
+        } else if use_ccline && (*ccline).input_fn != 0 {
             (*xp).xp_context = (*ccline).xp_context;
             (*xp).xp_pattern = (*ccline).cmdbuff;
             (*xp).xp_arg = (*ccline).xp_arg;

@@ -62,7 +62,13 @@ pub(crate) unsafe fn nextwild(
             pre_incsearch_pos.set((*xp).xp_pre_incsearch_pos);
             if (*ccline).input_fn != 0 && (*ccline).xp_context == EXPAND_COMMANDS {
                 // Expand commands typed in the input() function.
-                set_cmd_context(xp, (*ccline).cmdbuff, (*ccline).cmdlen, (*ccline).cmdpos, 0);
+                set_cmd_context(
+                    xp,
+                    (*ccline).cmdbuff,
+                    (*ccline).cmdlen,
+                    (*ccline).cmdpos,
+                    false,
+                );
             } else {
                 may_expand_pattern.set(options & WILD_MAY_EXPAND_PATTERN != 0);
                 set_expand_context(xp);

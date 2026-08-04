@@ -6647,7 +6647,7 @@ unsafe extern "C" fn get_cmdline_compl_info(
         (*compl_pattern.ptr()).data,
         (*compl_pattern.ptr()).size as ::core::ffi::c_int,
         curs_col as ::core::ffi::c_int,
-        false_0,
+        false,
     );
     if (*compl_xp.ptr()).xp_context == EXPAND_LUA as ::core::ffi::c_int {
         nlua_expand_pat(compl_xp.ptr());
