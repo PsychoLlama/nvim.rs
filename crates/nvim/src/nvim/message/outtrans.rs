@@ -8,448 +8,428 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::{termcap_key, termcap_name};
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
-pub unsafe extern "C" fn msg_putchar(mut c: ::core::ffi::c_int) {
-    unsafe {
-        msg_putchar_hl(c, 0 as ::core::ffi::c_int);
-    }
+/// The `<xx>` form of an unprintable byte gets its own highlight so it can be
+/// told apart from the same characters typed literally.
+const SPECIAL_HL: c_int = HLF_8;
+
+/// Show one character.
+pub unsafe fn msg_putchar(c: c_int) {
+    unsafe { msg_putchar_hl(c, 0) }
 }
 
-pub unsafe extern "C" fn msg_putchar_hl(mut c: ::core::ffi::c_int, mut hl_id: ::core::ffi::c_int) {
+/// Show one character with a highlight id.
+///
+/// A special key is put back into the three-byte `K_SPECIAL` form it arrived
+/// as, because that is what [`msg_outtrans_len`] and `str2special` downstream
+/// know how to read.
+pub unsafe fn msg_putchar_hl(c: c_int, hl_id: c_int) {
     unsafe {
-        let mut buf: [::core::ffi::c_char; 7] = [0; 7];
-        if c < 0 as ::core::ffi::c_int {
-            buf[0 as ::core::ffi::c_int as usize] = K_SPECIAL as ::core::ffi::c_char;
-            buf[1 as ::core::ffi::c_int as usize] = (if c == K_SPECIAL {
-                KS_SPECIAL
-            } else if c == NUL {
-                KS_ZERO
-            } else {
-                -c & 0xff as ::core::ffi::c_int
-            }) as ::core::ffi::c_char;
-            buf[2 as ::core::ffi::c_int as usize] = (if c == K_SPECIAL || c == NUL {
-                KE_FILLER as ::core::ffi::c_uint
-            } else {
-                -c as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint
-            }) as ::core::ffi::c_char;
-            buf[3 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+        let mut buf = [0 as c_char; MB_MAXCHAR + 1];
+        if c < 0 {
+            // `K_SECOND`/`K_THIRD`, less their `c == K_SPECIAL`/`c == NUL`
+            // arms: both of those codes are positive, so neither is reachable
+            // here.
+            let name = termcap_name(c);
+            buf[0] = K_SPECIAL as c_char;
+            buf[1] = name[0] as c_char;
+            buf[2] = name[1] as c_char;
         } else {
-            buf[utf_char2bytes(c, &raw mut buf as *mut ::core::ffi::c_char) as usize] =
-                NUL as ::core::ffi::c_char;
+            let len = utf_char2bytes(c, buf.as_mut_ptr());
+            buf[len as usize] = 0;
+        }
+        msg_puts_hl(buf.as_ptr(), hl_id, false)
+    }
+}
+
+/// The longest character `utf_char2bytes` writes, matching upstream's
+/// `MB_MAXCHAR`.
+const MB_MAXCHAR: usize = 6;
+
+/// Show a number in decimal.
+pub unsafe fn msg_outnum(n: c_int) {
+    // Filled from the right so the digits come out in order; the last byte
+    // stays zero and terminates it.
+    let mut buf = [0u8; 16];
+    let mut at = buf.len() - 1;
+    let mut rest = n.unsigned_abs();
+    loop {
+        at -= 1;
+        buf[at] = b'0' + (rest % 10) as u8;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    if n < 0 {
+        at -= 1;
+        buf[at] = b'-';
+    }
+    unsafe { msg_puts(buf[at..].as_ptr().cast()) }
+}
+
+/// Show a file name with `$HOME` folded back to `~`.
+pub unsafe fn msg_home_replace(fname: *const c_char) {
+    unsafe { msg_home_replace_hl(fname, 0) }
+}
+
+pub(crate) unsafe fn msg_home_replace_hl(fname: *const c_char, hl_id: c_int) {
+    unsafe {
+        let name = home_replace_save(ptr::null_mut(), fname);
+        msg_outtrans(name, hl_id, false);
+        xfree(name.cast());
+    }
+}
+
+/// Show a NUL-terminated string, translating what cannot be displayed.
+///
+/// Answers how many screen cells it took.
+pub unsafe fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int {
+    unsafe { msg_outtrans_len(str, strlen(str) as c_int, hl_id, hist) }
+}
+
+/// Show the one character at `p`, answering a pointer to the next one.
+pub unsafe fn msg_outtrans_one(p: *const c_char, hl_id: c_int, hist: bool) -> *const c_char {
+    unsafe {
+        let len = utfc_ptr2len(p);
+        if len > 1 {
+            msg_outtrans_len(p, len, hl_id, hist);
+            return p.add(len as usize);
         }
         msg_puts_hl(
-            &raw mut buf as *mut ::core::ffi::c_char,
-            hl_id,
-            false_0 != 0,
-        );
-    }
-}
-
-pub unsafe extern "C" fn msg_outnum(mut n: ::core::ffi::c_int) {
-    unsafe {
-        let mut buf: [::core::ffi::c_char; 20] = [0; 20];
-        snprintf(
-            &raw mut buf as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 20]>(),
-            b"%d\0".as_ptr() as *const ::core::ffi::c_char,
-            n,
-        );
-        msg_puts(&raw mut buf as *mut ::core::ffi::c_char);
-    }
-}
-
-pub unsafe extern "C" fn msg_home_replace(mut fname: *const ::core::ffi::c_char) {
-    unsafe {
-        msg_home_replace_hl(fname, 0 as ::core::ffi::c_int);
-    }
-}
-
-pub(crate) unsafe extern "C" fn msg_home_replace_hl(
-    mut fname: *const ::core::ffi::c_char,
-    mut hl_id: ::core::ffi::c_int,
-) {
-    unsafe {
-        let mut name: *mut ::core::ffi::c_char =
-            home_replace_save(::core::ptr::null_mut::<buf_T>(), fname);
-        msg_outtrans(name, hl_id, false_0 != 0);
-        xfree(name as *mut ::core::ffi::c_void);
-    }
-}
-
-pub unsafe extern "C" fn msg_outtrans(
-    mut str: *const ::core::ffi::c_char,
-    mut hl_id: ::core::ffi::c_int,
-    mut hist: bool,
-) -> ::core::ffi::c_int {
-    unsafe {
-        return msg_outtrans_len(str, strlen(str) as ::core::ffi::c_int, hl_id, hist);
-    }
-}
-
-pub unsafe extern "C" fn msg_outtrans_one(
-    mut p: *const ::core::ffi::c_char,
-    mut hl_id: ::core::ffi::c_int,
-    mut hist: bool,
-) -> *const ::core::ffi::c_char {
-    unsafe {
-        let mut l: ::core::ffi::c_int = 0;
-        l = utfc_ptr2len(p);
-        if l > 1 as ::core::ffi::c_int {
-            msg_outtrans_len(p, l, hl_id, hist);
-            return p.offset(l as isize);
-        }
-        msg_puts_hl(
-            transchar_byte_buf(
-                ::core::ptr::null::<buf_T>(),
-                *p as uint8_t as ::core::ffi::c_int,
-            ),
+            transchar_byte_buf(ptr::null(), *p as u8 as c_int),
             hl_id,
             hist,
         );
-        return p.offset(1 as ::core::ffi::c_int as isize);
+        p.add(1)
     }
 }
 
-pub unsafe extern "C" fn msg_outtrans_len(
-    mut msgstr: *const ::core::ffi::c_char,
-    mut len: ::core::ffi::c_int,
-    mut hl_id: ::core::ffi::c_int,
-    mut hist: bool,
-) -> ::core::ffi::c_int {
+/// Show `len` bytes of `msgstr`, NULs included, translating what cannot be
+/// displayed.
+///
+/// Printable runs are handed to [`msg_puts_len`] whole; only the characters
+/// that need a `<xx>` or `<C-X>` rendering are emitted one at a time, in the
+/// `SPECIAL_HL` highlight.
+///
+/// Answers how many screen cells it took.
+///
+/// # Safety
+/// `msgstr` must point at `len` readable bytes.
+pub unsafe fn msg_outtrans_len(
+    msgstr: *const c_char,
+    len: c_int,
+    hl_id: c_int,
+    hist: bool,
+) -> c_int {
     unsafe {
-        let mut retval: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut str: *const ::core::ffi::c_char = msgstr;
-        let mut plain_start: *const ::core::ffi::c_char = msgstr;
-        let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut c: ::core::ffi::c_int = 0;
-        let mut save_got_int: ::core::ffi::c_int = got_int.get() as ::core::ffi::c_int;
-        got_int.set(false_0 != 0);
+        let mut cells = 0;
+        let mut str = msgstr;
+        // Start of the run of printable bytes not yet emitted.
+        let mut plain_start = msgstr;
+        // Only quit when got_int was set in here.
+        let save_got_int = got_int.get();
+        got_int.set(false);
+
         if hist {
             msg_hist_add(str, len, hl_id);
         }
-        if msg_silent.get() == 0 as ::core::ffi::c_int
-            && len > 0 as ::core::ffi::c_int
+
+        // When drawing over the command line there is no need to clear it
+        // later or to remove the mode message.
+        if msg_silent.get() == 0
+            && len > 0
             && msg_row.get() >= cmdline_row.get()
-            && msg_col.get() == 0 as ::core::ffi::c_int
+            && msg_col.get() == 0
         {
-            clear_cmdline.set(false_0 != 0);
-            mode_displayed.set(false_0 != 0);
+            clear_cmdline.set(false);
+            mode_displayed.set(false);
         }
+
+        // `left` is how many bytes follow the one being looked at, which is
+        // what utfc_ptr2len_len needs as its bound.
+        let mut left = len;
         loop {
-            len -= 1;
-            if !(len >= 0 as ::core::ffi::c_int && !got_int.get()) {
+            left -= 1;
+            if left < 0 || got_int.get() {
                 break;
             }
-            let mut mb_l: ::core::ffi::c_int = utfc_ptr2len_len(str, len + 1 as ::core::ffi::c_int);
-            if mb_l > 1 as ::core::ffi::c_int {
-                c = utf_ptr2char(str);
+            let flush_plain = |upto: *const c_char, plain_start: *const c_char| {
+                if upto > plain_start {
+                    msg_puts_len(plain_start, upto.offset_from(plain_start), hl_id, hist);
+                }
+            };
+            // Don't include composing chars after the end.
+            let mb_len = utfc_ptr2len_len(str, left + 1);
+            if mb_len > 1 {
+                let c = utf_ptr2char(str);
                 if vim_isprintc(c) {
-                    retval += utf_ptr2cells(str);
+                    cells += utf_ptr2cells(str);
                 } else {
-                    if str > plain_start {
-                        msg_puts_len(plain_start, str.offset_from(plain_start), hl_id, hist);
-                    }
-                    plain_start = str.offset(mb_l as isize);
-                    msg_puts_hl(
-                        transchar_buf(::core::ptr::null::<buf_T>(), c),
-                        if hl_id == 0 as ::core::ffi::c_int {
-                            HLF_8
-                        } else {
-                            hl_id
-                        },
-                        false_0 != 0,
-                    );
-                    retval += char2cells(c);
+                    flush_plain(str, plain_start);
+                    plain_start = str.add(mb_len as usize);
+                    msg_puts_hl(transchar_buf(ptr::null(), c), special_hl(hl_id), false);
+                    cells += char2cells(c);
                 }
-                len -= mb_l - 1 as ::core::ffi::c_int;
-                str = str.offset(mb_l as isize);
+                left -= mb_len - 1;
+                str = str.add(mb_len as usize);
             } else {
-                s = transchar_byte_buf(
-                    ::core::ptr::null::<buf_T>(),
-                    *str as uint8_t as ::core::ffi::c_int,
-                );
-                if *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL {
-                    if str > plain_start {
-                        msg_puts_len(plain_start, str.offset_from(plain_start), hl_id, hist);
-                    }
-                    plain_start = str.offset(1 as ::core::ffi::c_int as isize);
-                    msg_puts_hl(
-                        s,
-                        if hl_id == 0 as ::core::ffi::c_int {
-                            HLF_8
-                        } else {
-                            hl_id
-                        },
-                        false_0 != 0,
-                    );
-                    retval += strlen(s) as ::core::ffi::c_int;
+                let rendered = transchar_byte_buf(ptr::null(), *str as u8 as c_int);
+                if *rendered.add(1) != 0 {
+                    // Unprintable: emit the printable run so far, then it.
+                    flush_plain(str, plain_start);
+                    plain_start = str.add(1);
+                    msg_puts_hl(rendered, special_hl(hl_id), false);
+                    cells += strlen(rendered) as c_int;
                 } else {
-                    retval += 1;
+                    cells += 1;
                 }
-                str = str.offset(1);
+                str = str.add(1);
             }
         }
+
+        // The printable characters at the end -- or, for an empty string, the
+        // empty message the callers rely on being emitted.
         if (str > plain_start || plain_start == msgstr) && !got_int.get() {
             msg_puts_len(plain_start, str.offset_from(plain_start), hl_id, hist);
         }
-        got_int.set(got_int.get() as ::core::ffi::c_int | save_got_int != 0);
-        return retval;
+
+        got_int.set(got_int.get() | save_got_int);
+        cells
     }
 }
 
-pub unsafe extern "C" fn msg_make(mut arg: *const ::core::ffi::c_char) {
+/// Unprintable characters take `SPECIAL_HL` unless the caller asked for a
+/// highlight of its own.
+fn special_hl(hl_id: c_int) -> c_int {
+    if hl_id == 0 { SPECIAL_HL } else { hl_id }
+}
+
+/// `:smile`.
+pub unsafe fn msg_make(arg: *const c_char) {
+    // The command name backwards, and the answer with every byte shifted up
+    // by three -- both so that neither reads as itself in the binary.
+    const REVERSED: &[u8] = b"eeffoc";
+    const SHIFTED: &[u8] = b"Plon#dqg#vxjduB";
+
     unsafe {
-        let mut i: ::core::ffi::c_int = 0;
-        static str: GlobalCell<*const ::core::ffi::c_char> =
-            GlobalCell::new(b"eeffoc\0".as_ptr() as *const ::core::ffi::c_char);
-        static rs: GlobalCell<*const ::core::ffi::c_char> =
-            GlobalCell::new(b"Plon#dqg#vxjduB\0".as_ptr() as *const ::core::ffi::c_char);
-        arg = skipwhite(arg);
-        i = 5 as ::core::ffi::c_int;
-        while *arg as ::core::ffi::c_int != 0 && i >= 0 as ::core::ffi::c_int {
-            let c2rust_fresh33 = arg;
-            arg = arg.offset(1);
-            if *c2rust_fresh33 as ::core::ffi::c_int
-                != *(*str.ptr()).offset(i as isize) as ::core::ffi::c_int
-            {
+        let mut arg = skipwhite(arg);
+        let mut at = REVERSED.len() as isize - 1;
+        while *arg != 0 && at >= 0 {
+            let byte = *arg as u8;
+            arg = arg.add(1);
+            if byte != REVERSED[at as usize] {
                 break;
             }
-            i -= 1;
+            at -= 1;
         }
-        if i < 0 as ::core::ffi::c_int {
-            msg_putchar('\n' as ::core::ffi::c_int);
-            i = 0 as ::core::ffi::c_int;
-            while *(*rs.ptr()).offset(i as isize) != 0 {
-                msg_putchar(
-                    *(*rs.ptr()).offset(i as isize) as ::core::ffi::c_int - 3 as ::core::ffi::c_int,
-                );
-                i += 1;
+        if at < 0 {
+            msg_putchar(NL);
+            for &byte in SHIFTED {
+                msg_putchar((byte - 3) as c_int);
             }
         }
     }
 }
 
-pub unsafe extern "C" fn msg_outtrans_special(
-    mut strstart: *const ::core::ffi::c_char,
-    mut from: bool,
-    mut maxlen: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Show a string with key codes rendered as `<C-X>` notation, the way a
+/// mapping is listed.
+///
+/// A leading or trailing space is shown as `<Space>` so it cannot be missed.
+/// Stops before exceeding `maxlen` screen columns; 0 means unlimited.
+///
+/// @param from  true for the left-hand side of a mapping
+pub unsafe fn msg_outtrans_special(strstart: *const c_char, from: bool, maxlen: c_int) -> c_int {
+    if strstart.is_null() {
+        return 0;
+    }
     unsafe {
-        if strstart.is_null() {
-            return 0 as ::core::ffi::c_int;
-        }
-        let mut str: *const ::core::ffi::c_char = strstart;
-        let mut retval: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut hl_id: ::core::ffi::c_int = HLF_8;
-        while *str as ::core::ffi::c_int != NUL {
-            let mut text: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-            if (str == strstart
-                || *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL)
-                && *str as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
-            {
-                text = b"<Space>\0".as_ptr() as *const ::core::ffi::c_char;
-                str = str.offset(1);
+        let mut str = strstart;
+        let mut cells = 0;
+        while *str != 0 {
+            let mut text = if *str == b' ' as c_char && (str == strstart || *str.add(1) == 0) {
+                str = str.add(1);
+                c"<Space>".as_ptr()
             } else {
-                text = str2special(&raw mut str, from, false_0 != 0);
+                str2special(&raw mut str, from, false)
+            };
+            if *text != 0 && *text.add(1) == 0 {
+                // Single-byte character, or an illegal byte.
+                text = transchar_byte_buf(ptr::null(), *text as u8 as c_int);
             }
-            if *text.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-                && *text.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-            {
-                text = transchar_byte_buf(
-                    ::core::ptr::null::<buf_T>(),
-                    *text.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int,
-                );
-            }
-            let len: ::core::ffi::c_int = vim_strsize(text);
-            if maxlen > 0 as ::core::ffi::c_int && retval + len >= maxlen {
+            let len = vim_strsize(text);
+            if maxlen > 0 && cells + len >= maxlen {
                 break;
             }
-            msg_puts_hl(
-                text,
-                if len > 1 as ::core::ffi::c_int && utfc_ptr2len(text) <= 1 as ::core::ffi::c_int {
-                    hl_id
-                } else {
-                    0 as ::core::ffi::c_int
-                },
-                false_0 != 0,
-            );
-            retval += len;
+            // Highlight the ones that came out as a `<>` name.
+            let hl_id = if len > 1 && utfc_ptr2len(text) <= 1 {
+                SPECIAL_HL
+            } else {
+                0
+            };
+            msg_puts_hl(text, hl_id, false);
+            cells += len;
         }
-        return retval;
+        cells
     }
 }
 
-pub unsafe extern "C" fn str2special_save(
-    str: *const ::core::ffi::c_char,
+/// [`str2special`] over a whole string, into a freshly allocated one.
+///
+/// The caller owns the result and frees it with `xfree`.
+pub unsafe fn str2special_save(
+    str: *const c_char,
     replace_spaces: bool,
     replace_lt: bool,
-) -> *mut ::core::ffi::c_char {
+) -> *mut c_char {
     unsafe {
-        let mut ga: garray_T = garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        };
-        ga_init(
-            &raw mut ga,
-            1 as ::core::ffi::c_int,
-            40 as ::core::ffi::c_int,
-        );
-        let mut p: *const ::core::ffi::c_char = str;
-        while *p as ::core::ffi::c_int != NUL {
+        let mut ga = garray_T::default();
+        ga_init(&raw mut ga, 1, 40);
+        let mut p = str;
+        while *p != 0 {
             ga_concat(
                 &raw mut ga,
                 str2special(&raw mut p, replace_spaces, replace_lt),
             );
         }
-        ga_append(&raw mut ga, NUL as uint8_t);
-        return ga.ga_data as *mut ::core::ffi::c_char;
+        ga_append(&raw mut ga, 0);
+        ga.ga_data.cast()
     }
 }
 
-pub unsafe extern "C" fn str2special_arena(
-    mut str: *const ::core::ffi::c_char,
-    mut replace_spaces: bool,
-    mut replace_lt: bool,
-    mut arena: *mut Arena,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        let mut p: *const ::core::ffi::c_char = str;
-        let mut len: size_t = 0 as size_t;
-        while *p != 0 {
-            len = len.wrapping_add(strlen(str2special(&raw mut p, replace_spaces, replace_lt)));
-        }
-        let mut buf: *mut ::core::ffi::c_char =
-            arena_alloc(arena, len.wrapping_add(1 as size_t), false_0 != 0)
-                as *mut ::core::ffi::c_char;
-        let mut pos: size_t = 0 as size_t;
-        p = str;
-        while *p != 0 {
-            let mut s: *const ::core::ffi::c_char =
-                str2special(&raw mut p, replace_spaces, replace_lt);
-            let mut s_len: size_t = strlen(s);
-            memcpy(
-                buf.offset(pos as isize) as *mut ::core::ffi::c_void,
-                s as *const ::core::ffi::c_void,
-                s_len,
-            );
-            pos = pos.wrapping_add(s_len);
-        }
-        *buf.offset(pos as isize) = NUL as ::core::ffi::c_char;
-        return buf;
-    }
-}
-
-pub unsafe extern "C" fn str2special(
-    sp: *mut *const ::core::ffi::c_char,
+/// [`str2special`] over a whole string, into `arena`.
+///
+/// Measures first and copies second, because the conversion buffer is one
+/// shared static and cannot hold two answers at once.
+pub unsafe fn str2special_arena(
+    str: *const c_char,
     replace_spaces: bool,
     replace_lt: bool,
-) -> *const ::core::ffi::c_char {
+    arena: *mut Arena,
+) -> *mut c_char {
     unsafe {
-        static buf: GlobalCell<[::core::ffi::c_char; 7]> = GlobalCell::new([0; 7]);
-        let p: *const ::core::ffi::c_char = mb_unescape(sp);
-        if !p.is_null() {
-            return p;
+        let mut len: size_t = 0;
+        let mut p = str;
+        while *p != 0 {
+            len += strlen(str2special(&raw mut p, replace_spaces, replace_lt));
         }
-        let mut str: *const ::core::ffi::c_char = *sp;
-        let mut c: ::core::ffi::c_int = *str as uint8_t as ::core::ffi::c_int;
-        let mut modifiers: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut special: bool = false_0 != 0;
-        if c == K_SPECIAL
-            && *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-            && *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-        {
-            if *str.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
-                == KS_MODIFIER
-            {
-                modifiers =
-                    *str.offset(2 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int;
-                str = str.offset(3 as ::core::ffi::c_int as isize);
-                c = *str as uint8_t as ::core::ffi::c_int;
+
+        let buf: *mut c_char = arena_alloc(arena, len + 1, false).cast();
+        let mut at: size_t = 0;
+        p = str;
+        while *p != 0 {
+            let piece = str2special(&raw mut p, replace_spaces, replace_lt);
+            let piece_len = strlen(piece);
+            ptr::copy_nonoverlapping(piece, buf.add(at), piece_len);
+            at += piece_len;
+        }
+        *buf.add(at) = 0;
+        buf
+    }
+}
+
+/// Render one key code as printable text, advancing `*sp` past it.
+///
+/// Special keys and C0 control characters come out in `<>` form;
+/// `replace_spaces` and `replace_lt` extend that to `<Space>` and `<lt>`,
+/// which is what a mapping's left-hand side and `keytrans()` want and its
+/// right-hand side does not.
+///
+/// The answer lives in **one shared static buffer**, so it has to be copied
+/// somewhere before the next call. An illegal byte comes back as itself.
+///
+/// # Safety
+/// `sp` must point at a readable pointer into a NUL-terminated string.
+pub unsafe fn str2special(
+    sp: *mut *const c_char,
+    replace_spaces: bool,
+    replace_lt: bool,
+) -> *const c_char {
+    static BUF: GlobalCell<[c_char; 7]> = GlobalCell::new([0; 7]);
+
+    unsafe {
+        // A multi-byte character escaped into the stream comes back whole.
+        let unescaped = mb_unescape(sp);
+        if !unescaped.is_null() {
+            return unescaped;
+        }
+
+        let mut str = *sp;
+        let mut c = *str as u8 as c_int;
+        let mut modifiers = 0;
+        let mut special = false;
+        if c == K_SPECIAL && *str.add(1) != 0 && *str.add(2) != 0 {
+            if *str.add(1) as u8 as c_int == KS_MODIFIER {
+                modifiers = *str.add(2) as u8 as c_int;
+                str = str.add(3);
+                c = *str as u8 as c_int;
             }
-            if c == K_SPECIAL
-                && *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-                && *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-            {
-                c = if *str.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int
-                    == KS_SPECIAL
-                {
-                    K_SPECIAL
-                } else if *str.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int
-                    == KS_ZERO
-                {
-                    K_ZERO
-                } else {
-                    -(*str.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                        as ::core::ffi::c_int
-                        + ((*str.offset(2 as ::core::ffi::c_int as isize) as uint8_t
-                            as ::core::ffi::c_int)
-                            << 8 as ::core::ffi::c_int))
-                };
-                str = str.offset(2 as ::core::ffi::c_int as isize);
+            if c == K_SPECIAL && *str.add(1) != 0 && *str.add(2) != 0 {
+                c = to_special(*str.add(1) as u8, *str.add(2) as u8);
+                str = str.add(2);
             }
-            if c < 0 as ::core::ffi::c_int || modifiers != 0 {
-                special = true_0 != 0;
+            if c < 0 || modifiers != 0 {
+                special = true;
             }
         }
-        if !(c < 0 as ::core::ffi::c_int)
-            && (*utf8len_tab.ptr())[c as usize] as ::core::ffi::c_int > 1 as ::core::ffi::c_int
-        {
+
+        if c >= 0 && (*utf8len_tab.ptr())[c as usize] > 1 {
             *sp = str;
-            let mut p_0: *const ::core::ffi::c_char = mb_unescape(sp);
-            if !p_0.is_null() {
-                c = utf_ptr2char(p_0);
+            // Try to un-escape a multi-byte character after the modifiers.
+            let unescaped = mb_unescape(sp);
+            if unescaped.is_null() {
+                // Illegal byte.
+                *sp = str.add(1);
             } else {
-                *sp = str.offset(1 as ::core::ffi::c_int as isize);
+                // `special` is set, so get_special_key_name() renders it.
+                c = utf_ptr2char(unescaped);
             }
         } else {
-            *sp = str.offset(
-                (if *str as ::core::ffi::c_int == NUL {
-                    0 as ::core::ffi::c_int
-                } else {
-                    1 as ::core::ffi::c_int
-                }) as isize,
-            );
+            // Single-byte character, NUL or illegal byte.
+            *sp = str.add(usize::from(*str != 0));
         }
-        if special as ::core::ffi::c_int != 0
-            || c < ' ' as ::core::ffi::c_int
-            || replace_spaces as ::core::ffi::c_int != 0 && c == ' ' as ::core::ffi::c_int
-            || replace_lt as ::core::ffi::c_int != 0 && c == '<' as ::core::ffi::c_int
+
+        if special
+            || c < b' ' as c_int
+            || (replace_spaces && c == b' ' as c_int)
+            || (replace_lt && c == b'<' as c_int)
         {
             return get_special_key_name(c, modifiers);
         }
-        (*buf.ptr())[0 as ::core::ffi::c_int as usize] = c as ::core::ffi::c_char;
-        (*buf.ptr())[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-        return buf.ptr() as *mut ::core::ffi::c_char;
+        BUF.with_mut(|buf| {
+            buf[0] = c as c_char;
+            buf[1] = 0;
+        });
+        BUF.ptr().cast()
     }
 }
 
-pub unsafe extern "C" fn msg_outtrans_long(
-    mut longstr: *const ::core::ffi::c_char,
-    mut hl_id: ::core::ffi::c_int,
-) {
+/// The key code a two-byte termcap name stands for (C's `TO_SPECIAL`).
+fn to_special(second: u8, third: u8) -> c_int {
+    match second as c_int {
+        KS_SPECIAL => K_SPECIAL,
+        KS_ZERO => K_ZERO,
+        _ => termcap_key([second, third]),
+    }
+}
+
+/// Show a string, cutting the middle out with `...` if it would not fit on the
+/// rest of the line.
+///
+/// Does not handle multi-byte characters.
+pub unsafe fn msg_outtrans_long(longstr: *const c_char, hl_id: c_int) {
     unsafe {
-        let mut len: ::core::ffi::c_int = strlen(longstr) as ::core::ffi::c_int;
-        let mut slen: ::core::ffi::c_int = len;
-        let mut room: ::core::ffi::c_int = Columns.get() - msg_col.get();
-        if !ui_has(kUIMessages) && len > room && room >= 20 as ::core::ffi::c_int {
-            slen = (room - 3 as ::core::ffi::c_int) / 2 as ::core::ffi::c_int;
-            msg_outtrans_len(longstr, slen, hl_id, false_0 != 0);
-            msg_puts_hl(
-                b"...\0".as_ptr() as *const ::core::ffi::c_char,
-                HLF_8,
-                false_0 != 0,
-            );
+        let len = strlen(longstr) as c_int;
+        let mut tail = len;
+        let room = Columns.get() - msg_col.get();
+        if !ui_has(kUIMessages) && len > room && room >= 20 {
+            tail = (room - 3) / 2;
+            msg_outtrans_len(longstr, tail, hl_id, false);
+            msg_puts_hl(c"...".as_ptr(), SPECIAL_HL, false);
         }
-        msg_outtrans_len(
-            longstr.offset(len as isize).offset(-(slen as isize)),
-            slen,
-            hl_id,
-            false_0 != 0,
-        );
+        msg_outtrans_len(longstr.offset((len - tail) as isize), tail, hl_id, false);
     }
 }
