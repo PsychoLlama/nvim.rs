@@ -97,7 +97,6 @@
     "crates/nvim/src/nvim/memory.rs": 4,
     "crates/nvim/src/nvim/menu.rs": 114,
     "crates/nvim/src/nvim/message.rs": 11,
-    "crates/nvim/src/nvim/message/prompt.rs": 14,
     "crates/nvim/src/nvim/mouse.rs": 27,
     "crates/nvim/src/nvim/move.rs": 29,
     "crates/nvim/src/nvim/msgpack_rpc/unpacker.rs": 1,
