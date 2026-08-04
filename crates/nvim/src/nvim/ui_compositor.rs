@@ -13,10 +13,8 @@ use crate::src::nvim::os::libc::{__assert_fail, abort, llabs, memcpy};
 use crate::src::nvim::os::time::os_sleep;
 use crate::src::nvim::types::ui::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
 use crate::src::nvim::types::{
-    AlignTextPos, BoolVarValue, Boolean, FloatRelative, Integer, LineFlags, RemoteUI, ScopeType,
-    ScreenGrid, SpecialVarValue, StlClickDefinition_type_0 as C2Rust_Unnamed_11, String_0,
-    VarLockStatus, VarType, WinSplit, WinStyle, handle_T, sattr_T, schar_T, size_t, ssize_t,
-    uint64_t, win_T,
+    BoolVarValue, Boolean, Integer, LineFlags, RemoteUI, ScopeType, ScreenGrid, SpecialVarValue,
+    String_0, VarLockStatus, VarType, handle_T, sattr_T, schar_T, size_t, ssize_t, uint64_t, win_T,
 };
 use crate::src::nvim::ui::{
     ui_call_flush, ui_composed_call_grid_cursor_goto, ui_composed_call_grid_resize,
@@ -24,14 +22,12 @@ use crate::src::nvim::ui::{
 };
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
 pub const VAR_SPECIAL: VarType = 8;
 pub const VAR_BOOL: VarType = 7;
@@ -42,27 +38,6 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_11 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_11 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_11 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_11 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
-pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_15 {

@@ -520,7 +520,6 @@ pub union uv_timer_s_u {
     pub reserved: [*mut ::core::ffi::c_void; 4],
 }
 pub type uv_clock_id = ::core::ffi::c_uint;
-pub const UV_CLOCK_MONOTONIC: uv_clock_id = 0;
 pub const UV_CLOCK_REALTIME: uv_clock_id = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]

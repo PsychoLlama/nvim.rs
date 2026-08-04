@@ -63,35 +63,14 @@ const SEQINDEX_NONE: u16 = u16::MAX;
 // order.
 pub const UTF8PROC_CATEGORY_CN: i16 = 0;
 pub const UTF8PROC_CATEGORY_LU: i16 = 1;
-pub const UTF8PROC_CATEGORY_LL: i16 = 2;
-pub const UTF8PROC_CATEGORY_LT: i16 = 3;
-pub const UTF8PROC_CATEGORY_LM: i16 = 4;
-pub const UTF8PROC_CATEGORY_LO: i16 = 5;
 pub const UTF8PROC_CATEGORY_MN: i16 = 6;
 pub const UTF8PROC_CATEGORY_MC: i16 = 7;
 pub const UTF8PROC_CATEGORY_ME: i16 = 8;
-pub const UTF8PROC_CATEGORY_ND: i16 = 9;
-pub const UTF8PROC_CATEGORY_NL: i16 = 10;
-pub const UTF8PROC_CATEGORY_NO: i16 = 11;
 pub const UTF8PROC_CATEGORY_PC: i16 = 12;
 pub const UTF8PROC_CATEGORY_PD: i16 = 13;
-pub const UTF8PROC_CATEGORY_PS: i16 = 14;
-pub const UTF8PROC_CATEGORY_PE: i16 = 15;
-pub const UTF8PROC_CATEGORY_PI: i16 = 16;
-pub const UTF8PROC_CATEGORY_PF: i16 = 17;
-pub const UTF8PROC_CATEGORY_PO: i16 = 18;
-pub const UTF8PROC_CATEGORY_SM: i16 = 19;
-pub const UTF8PROC_CATEGORY_SC: i16 = 20;
-pub const UTF8PROC_CATEGORY_SK: i16 = 21;
-pub const UTF8PROC_CATEGORY_SO: i16 = 22;
 pub const UTF8PROC_CATEGORY_ZS: i16 = 23;
 pub const UTF8PROC_CATEGORY_ZL: i16 = 24;
 pub const UTF8PROC_CATEGORY_ZP: i16 = 25;
-pub const UTF8PROC_CATEGORY_CC: i16 = 26;
-pub const UTF8PROC_CATEGORY_CF: i16 = 27;
-pub const UTF8PROC_CATEGORY_CS: i16 = 28;
-pub const UTF8PROC_CATEGORY_CO: i16 = 29;
-
 // Grapheme boundclasses (utf8proc_boundclass_t), in `boundclass` field
 // order.
 pub const UTF8PROC_BOUNDCLASS_START: i32 = 0;
@@ -109,10 +88,6 @@ pub const UTF8PROC_BOUNDCLASS_REGIONAL_INDICATOR: i32 = 11;
 pub const UTF8PROC_BOUNDCLASS_SPACINGMARK: i32 = 12;
 pub const UTF8PROC_BOUNDCLASS_PREPEND: i32 = 13;
 pub const UTF8PROC_BOUNDCLASS_ZWJ: i32 = 14;
-pub const UTF8PROC_BOUNDCLASS_E_BASE: i32 = 15;
-pub const UTF8PROC_BOUNDCLASS_E_MODIFIER: i32 = 16;
-pub const UTF8PROC_BOUNDCLASS_GLUE_AFTER_ZWJ: i32 = 17;
-pub const UTF8PROC_BOUNDCLASS_E_BASE_GAZ: i32 = 18;
 pub const UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC: i32 = 19;
 pub const UTF8PROC_BOUNDCLASS_E_ZWG: i32 = 20;
 
@@ -125,8 +100,6 @@ pub const UTF8PROC_INDIC_CONJUNCT_BREAK_EXTEND: i32 = 3;
 
 // Option bits accepted by utf8proc_decompose_char.
 pub type utf8proc_option_t = u32;
-pub const UTF8PROC_NULLTERM: utf8proc_option_t = 1 << 0;
-pub const UTF8PROC_STABLE: utf8proc_option_t = 1 << 1;
 pub const UTF8PROC_COMPAT: utf8proc_option_t = 1 << 2;
 pub const UTF8PROC_COMPOSE: utf8proc_option_t = 1 << 3;
 pub const UTF8PROC_DECOMPOSE: utf8proc_option_t = 1 << 4;
@@ -134,8 +107,6 @@ pub const UTF8PROC_IGNORE: utf8proc_option_t = 1 << 5;
 pub const UTF8PROC_REJECTNA: utf8proc_option_t = 1 << 6;
 pub const UTF8PROC_NLF2LS: utf8proc_option_t = 1 << 7;
 pub const UTF8PROC_NLF2PS: utf8proc_option_t = 1 << 8;
-pub const UTF8PROC_NLF2LF: utf8proc_option_t = UTF8PROC_NLF2LS | UTF8PROC_NLF2PS;
-pub const UTF8PROC_STRIPCC: utf8proc_option_t = 1 << 9;
 pub const UTF8PROC_CASEFOLD: utf8proc_option_t = 1 << 10;
 pub const UTF8PROC_CHARBOUND: utf8proc_option_t = 1 << 11;
 pub const UTF8PROC_LUMP: utf8proc_option_t = 1 << 12;

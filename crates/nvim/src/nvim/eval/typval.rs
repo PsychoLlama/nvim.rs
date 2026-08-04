@@ -41,17 +41,15 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
-    __compar_fn_t, AlignTextPos, Arena, BoolVarValue, Callback, CallbackType, DictWatcher,
-    EvalFuncData, FloatRelative, ListLenSpecials, LuaRef, MPConvPartialStage, MPConvStack,
-    MPConvStackVal, MPConvStackVal_data as C2Rust_Unnamed_18,
-    MPConvStackVal_data_a as C2Rust_Unnamed_19, MPConvStackVal_data_d as C2Rust_Unnamed_22,
-    MPConvStackVal_data_l as C2Rust_Unnamed_21, MPConvStackVal_data_p as C2Rust_Unnamed_20,
-    MPConvStackValType, MessagePackType, QUEUE, ScopeType, SpecialVarValue,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, VarLockStatus, VarType, WinSplit,
-    WinStyle, blob_T, buf_T, dict_T, dictitem_T, float_T, funcexe_T, garray_T, hashitem_T,
-    hashtab_T, int64_t, linenr_T, list_T, listitem_T, listwatch_T, partial_T, pos_T, ptrdiff_t,
-    queue, size_t, ssize_t, staticList10_T, typval_T, typval_vval_union, ufunc_T, uint8_t,
-    uint64_t, uvarnumber_T, varnumber_T, vimconv_T,
+    __compar_fn_t, Arena, BoolVarValue, Callback, CallbackType, DictWatcher, EvalFuncData,
+    ListLenSpecials, LuaRef, MPConvPartialStage, MPConvStack, MPConvStackVal,
+    MPConvStackVal_data as C2Rust_Unnamed_18, MPConvStackVal_data_a as C2Rust_Unnamed_19,
+    MPConvStackVal_data_d as C2Rust_Unnamed_22, MPConvStackVal_data_l as C2Rust_Unnamed_21,
+    MPConvStackVal_data_p as C2Rust_Unnamed_20, MPConvStackValType, MessagePackType, QUEUE,
+    ScopeType, SpecialVarValue, String_0, VarLockStatus, VarType, blob_T, buf_T, dict_T,
+    dictitem_T, float_T, funcexe_T, garray_T, hashitem_T, hashtab_T, int64_t, linenr_T, list_T,
+    listitem_T, listwatch_T, partial_T, pos_T, ptrdiff_t, queue, size_t, ssize_t, staticList10_T,
+    typval_T, typval_vval_union, ufunc_T, uint8_t, uint64_t, uvarnumber_T, varnumber_T, vimconv_T,
 };
 pub const kCallbackLua: CallbackType = 3;
 pub const kCallbackPartial: CallbackType = 2;
@@ -77,62 +75,20 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_12 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_12 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_12 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_12 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const DO_NOT_FREE_CNT: C2Rust_Unnamed_13 = 1073741823;
 pub const kListLenMayKnow: ListLenSpecials = -3;
-pub const kListLenShouldKnow: ListLenSpecials = -2;
 pub const kListLenUnknown: ListLenSpecials = -1;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const DI_FLAGS_ALLOC: C2Rust_Unnamed_14 = 16;
-pub const DI_FLAGS_LOCK: C2Rust_Unnamed_14 = 8;
 pub const DI_FLAGS_FIX: C2Rust_Unnamed_14 = 4;
 pub const DI_FLAGS_RO_SBX: C2Rust_Unnamed_14 = 2;
 pub const DI_FLAGS_RO: C2Rust_Unnamed_14 = 1;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const NUMBUFLEN: C2Rust_Unnamed_15 = 65;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const STR2NR_QUOTE: C2Rust_Unnamed_16 = 16;
-pub const STR2NR_NO_OCT: C2Rust_Unnamed_16 = 13;
 pub const STR2NR_ALL: C2Rust_Unnamed_16 = 15;
-pub const STR2NR_FORCE: C2Rust_Unnamed_16 = 128;
-pub const STR2NR_OOCT: C2Rust_Unnamed_16 = 8;
-pub const STR2NR_HEX: C2Rust_Unnamed_16 = 4;
-pub const STR2NR_OCT: C2Rust_Unnamed_16 = 2;
-pub const STR2NR_BIN: C2Rust_Unnamed_16 = 1;
-pub const STR2NR_DEC: C2Rust_Unnamed_16 = 0;
-pub const kMPExt: MessagePackType = 7;
-pub const kMPMap: MessagePackType = 6;
-pub const kMPArray: MessagePackType = 5;
-pub const kMPString: MessagePackType = 4;
-pub const kMPFloat: MessagePackType = 3;
-pub const kMPInteger: MessagePackType = 2;
-pub const kMPBoolean: MessagePackType = 1;
-pub const kMPNil: MessagePackType = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const CONV_ICONV: C2Rust_Unnamed_17 = 5;
-pub const CONV_TO_LATIN9: C2Rust_Unnamed_17 = 4;
-pub const CONV_TO_LATIN1: C2Rust_Unnamed_17 = 3;
-pub const CONV_9_TO_UTF8: C2Rust_Unnamed_17 = 2;
-pub const CONV_TO_UTF8: C2Rust_Unnamed_17 = 1;
 pub const CONV_NONE: C2Rust_Unnamed_17 = 0;
 pub const kMPConvPartialEnd: MPConvPartialStage = 2;
 pub const kMPConvPartialSelf: MPConvPartialStage = 1;

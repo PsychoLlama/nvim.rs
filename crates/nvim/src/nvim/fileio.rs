@@ -84,11 +84,10 @@ use crate::src::nvim::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::src::nvim::strings::{sort_strings, vim_strchr};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    CMD_index, CheckItem, Directory, FILE, FileInfo, OptInt, OptVal, OptValData, OptValType,
-    VimVarIndex, aco_save_T, bln_values, buf_T, bufref_T, cmd_addr_T, colnr_T, exarg_T, garray_T,
-    iconv_t, int64_t, linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t,
-    ssize_t, time_t, uint64_t, uintmax_t, uv_dirent_type_t, uv_fs_type, uv_gid_t, uv_req_type,
-    uv_uid_t,
+    CheckItem, Directory, FILE, FileInfo, OptInt, OptVal, OptValData, OptValType, VimVarIndex,
+    aco_save_T, bln_values, buf_T, bufref_T, colnr_T, exarg_T, garray_T, iconv_t, int64_t,
+    linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t, time_t,
+    uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has};
 use crate::src::nvim::undo::{
@@ -136,15 +135,9 @@ pub type DIR = __dirstream;
 pub type C2Rust_Unnamed_5 = ::core::ffi::c_int;
 pub const UV_ENOENT: C2Rust_Unnamed_5 = -2;
 pub const UV_EFBIG: C2Rust_Unnamed_5 = -27;
-pub const UV_UNKNOWN_REQ: uv_req_type = 0;
-pub const UV_DIRENT_UNKNOWN: uv_dirent_type_t = 0;
-pub const UV_FS_CUSTOM: uv_fs_type = 0;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_20 = 2147483647;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const kOptValTypeString: OptValType = 2;
-pub const CMD_append: CMD_index = 0;
-pub const ADDR_LINES: cmd_addr_T = 0;
 pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
 pub const CMOD_LOCKMARKS: C2Rust_Unnamed_23 = 2048;
 pub const BLN_DUMMY: bln_values = 4;
@@ -188,10 +181,6 @@ pub const SHM_LINES: C2Rust_Unnamed_35 = 108;
 pub const SHM_RO: C2Rust_Unnamed_35 = 114;
 pub const OPT_LOCAL: C2Rust_Unnamed_34 = 2;
 pub const SHM_OVER: C2Rust_Unnamed_35 = 111;
-pub const RELOAD_DETECT: C2Rust_Unnamed_31 = 2;
-pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
-pub const RELOAD_NORMAL: C2Rust_Unnamed_31 = 1;
-pub const RELOAD_NONE: C2Rust_Unnamed_31 = 0;
 pub const SHM_FILEINFO: C2Rust_Unnamed_35 = 70;
 pub const VIM_WARNING: C2Rust_Unnamed_33 = 2;
 pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
@@ -202,7 +191,6 @@ pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const UV_FS_COPYFILE_EXCL: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const BACKSLASH_IN_FILENAME_BOOL: ::core::ffi::c_int = false_0;
 pub const BASENAMELEN: ::core::ffi::c_int = NAME_MAX - 5 as ::core::ffi::c_int;
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
@@ -210,8 +198,6 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const Ctrl_Z: ::core::ffi::c_int = 26 as ::core::ffi::c_int;
-pub const PATHSEPSTR: [::core::ffi::c_char; 2] =
-    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"/\0") };
 pub const BF_CHECK_RO: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const BF_NOTEDITED: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
 pub const BF_NEW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;

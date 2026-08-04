@@ -28,33 +28,18 @@ use crate::src::nvim::types::{
     typval_vval_union, uint8_t, uint32_t, uint64_t, uvarnumber_T, varnumber_T,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const MPACK_ERROR: C2Rust_Unnamed = 2;
-pub const MPACK_EOF: C2Rust_Unnamed = 1;
 pub const MPACK_OK: C2Rust_Unnamed = 0;
-pub const MPACK_TOKEN_EXT: mpack_token_type_t = 11;
-pub const MPACK_TOKEN_STR: mpack_token_type_t = 10;
-pub const MPACK_TOKEN_BIN: mpack_token_type_t = 9;
-pub const MPACK_TOKEN_MAP: mpack_token_type_t = 8;
-pub const MPACK_TOKEN_ARRAY: mpack_token_type_t = 7;
 pub const MPACK_TOKEN_CHUNK: mpack_token_type_t = 6;
-pub const MPACK_TOKEN_FLOAT: mpack_token_type_t = 5;
 pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
-pub const MPACK_TOKEN_UINT: mpack_token_type_t = 3;
-pub const MPACK_TOKEN_BOOLEAN: mpack_token_type_t = 2;
-pub const MPACK_TOKEN_NIL: mpack_token_type_t = 1;
 pub const kListLenMayKnow: ListLenSpecials = -3;
-pub const kListLenShouldKnow: ListLenSpecials = -2;
-pub const kListLenUnknown: ListLenSpecials = -1;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
 pub const VAR_SPECIAL: VarType = 8;
 pub const VAR_BOOL: VarType = 7;
@@ -66,23 +51,11 @@ pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_2 = ::core::ffi::c_uint;
-pub const STR2NR_QUOTE: C2Rust_Unnamed_2 = 16;
-pub const STR2NR_NO_OCT: C2Rust_Unnamed_2 = 13;
-pub const STR2NR_ALL: C2Rust_Unnamed_2 = 15;
 pub const STR2NR_FORCE: C2Rust_Unnamed_2 = 128;
-pub const STR2NR_OOCT: C2Rust_Unnamed_2 = 8;
 pub const STR2NR_HEX: C2Rust_Unnamed_2 = 4;
-pub const STR2NR_OCT: C2Rust_Unnamed_2 = 2;
-pub const STR2NR_BIN: C2Rust_Unnamed_2 = 1;
-pub const STR2NR_DEC: C2Rust_Unnamed_2 = 0;
 pub const kMPExt: MessagePackType = 7;
 pub const kMPMap: MessagePackType = 6;
-pub const kMPArray: MessagePackType = 5;
-pub const kMPString: MessagePackType = 4;
-pub const kMPFloat: MessagePackType = 3;
 pub const kMPInteger: MessagePackType = 2;
-pub const kMPBoolean: MessagePackType = 1;
-pub const kMPNil: MessagePackType = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ContainerStackItem {

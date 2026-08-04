@@ -32,14 +32,12 @@ use crate::src::nvim::types::{
 };
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
 pub const VAR_SPECIAL: VarType = 8;
 pub const VAR_BOOL: VarType = 7;
@@ -50,14 +48,7 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const kMPExt: MessagePackType = 7;
-pub const kMPMap: MessagePackType = 6;
-pub const kMPArray: MessagePackType = 5;
 pub const kMPString: MessagePackType = 4;
-pub const kMPFloat: MessagePackType = 3;
-pub const kMPInteger: MessagePackType = 2;
-pub const kMPBoolean: MessagePackType = 1;
-pub const kMPNil: MessagePackType = 0;
 pub const kMPConvPartialEnd: MPConvPartialStage = 2;
 pub const kMPConvPartialSelf: MPConvPartialStage = 1;
 pub const kMPConvPartialArgs: MPConvPartialStage = 0;
@@ -79,8 +70,6 @@ pub const CAR: ::core::ffi::c_int = 13;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub static _typval_encode_msgpack_nodict_var: GlobalCell<*const dict_T> =
-    GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
 unsafe extern "C" fn _typval_encode_msgpack_check_self_reference(
     _packer: *mut PackerBuffer,
@@ -1615,8 +1604,6 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
     }
     return FAIL;
 }
-pub static _typval_encode_echo_nodict_var: GlobalCell<*const dict_T> =
-    GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
 unsafe extern "C" fn _typval_encode_echo_check_self_reference(
     gap: *mut garray_T,
@@ -3753,8 +3740,6 @@ pub unsafe extern "C" fn encode_vim_to_echo(
     }
     return FAIL;
 }
-pub static _typval_encode_string_nodict_var: GlobalCell<*const dict_T> =
-    GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
 unsafe extern "C" fn _typval_encode_string_check_self_reference(
     gap: *mut garray_T,
@@ -5882,8 +5867,6 @@ unsafe extern "C" fn encode_vim_to_string(
     }
     return FAIL;
 }
-pub static _typval_encode_json_nodict_var: GlobalCell<*const dict_T> =
-    GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
 unsafe extern "C" fn _typval_encode_json_check_self_reference(
     _gap: *mut garray_T,

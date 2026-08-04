@@ -2017,11 +2017,6 @@ pub static pum_want: GlobalCell<PumWant> = GlobalCell::new(PumWant {
 pub static tab_page_click_defs: GlobalCell<*mut StlClickDefinition> =
     GlobalCell::new(::core::ptr::null_mut::<StlClickDefinition>());
 pub static tab_page_click_defs_size: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-pub static noargs: GlobalCell<Array> = GlobalCell::new(Array {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<Object>(),
-});
 pub static ui_event_ns_id: GlobalCell<uint32_t> = GlobalCell::new(0 as uint32_t);
 pub static resize_events: GlobalCell<*mut MultiQueue> =
     GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());

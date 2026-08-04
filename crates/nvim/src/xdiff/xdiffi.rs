@@ -25,18 +25,7 @@ use crate::src::xdiff::xpatience::xdl_do_patience_diff;
 use crate::src::xdiff::xprepare::{xdl_free_env, xdl_prepare_env};
 use crate::src::xdiff::xutils::{xdl_blankline, xdl_bogosqrt, xdl_recmatch};
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const _ISalnum: C2Rust_Unnamed = 8;
-pub const _ISpunct: C2Rust_Unnamed = 4;
-pub const _IScntrl: C2Rust_Unnamed = 2;
-pub const _ISblank: C2Rust_Unnamed = 1;
-pub const _ISgraph: C2Rust_Unnamed = 32768;
-pub const _ISprint: C2Rust_Unnamed = 16384;
 pub const _ISspace: C2Rust_Unnamed = 8192;
-pub const _ISxdigit: C2Rust_Unnamed = 4096;
-pub const _ISdigit: C2Rust_Unnamed = 2048;
-pub const _ISalpha: C2Rust_Unnamed = 1024;
-pub const _ISlower: C2Rust_Unnamed = 512;
-pub const _ISupper: C2Rust_Unnamed = 256;
 pub type emit_func_t = Option<
     unsafe extern "C" fn(
         *mut xdfenv_t,

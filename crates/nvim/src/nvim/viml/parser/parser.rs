@@ -31,8 +31,6 @@ const CONV_NONE: c_int = 0;
 
 pub const kExprUnknown: ParserStateItem_data_expr_type_0 = 0;
 pub const kPTopStateParsingCommand: ParserStateItem_type_0 = 0;
-pub const kPTopStateParsingExpression: ParserStateItem_type_0 = 1;
-
 const EMPTY_LINE: ParserLine = ParserLine {
     data: ptr::null(),
     size: 0,

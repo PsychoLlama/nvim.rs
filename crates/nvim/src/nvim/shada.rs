@@ -117,7 +117,6 @@ unsafe extern "C" {
     ) -> *const ::core::ffi::c_void;
     fn op_reg_set(name: ::core::ffi::c_char, reg: yankreg_T, is_unnamed: bool) -> bool;
 }
-pub type __uint64_t = u64;
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const UV_ENOENT: C2Rust_Unnamed = -2;
 pub const UV_ELOOP: C2Rust_Unnamed = -40;
@@ -334,7 +333,6 @@ pub const kSDReadBufferList: SRNIFlags = 512;
 pub type SRNIFlags = ::core::ffi::c_uint;
 pub const PTRDIFF_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = 4096;
 pub const ROOT_UID: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -706,7 +704,4 @@ static sd_default_values: GlobalCell<[ShadaEntry; 12]> = GlobalCell::new([
 ]);
 static default_shada_file: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-pub const SHADA_MPACK_FREE_SPACE: ::core::ffi::c_int = 4 as ::core::ffi::c_int * MPACK_ITEM_SIZE;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;

@@ -46,14 +46,12 @@ use crate::src::nvim::types::{
 };
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
 pub const VAR_SPECIAL: VarType = 8;
 pub const VAR_BOOL: VarType = 7;
@@ -65,21 +63,11 @@ pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub const kMPConvPartialList: MPConvStackValType = 4;
-pub const kMPConvPartial: MPConvStackValType = 3;
 pub const kMPConvPairs: MPConvStackValType = 2;
 pub const kMPConvList: MPConvStackValType = 1;
 pub const kMPConvDict: MPConvStackValType = 0;
 pub const kMPConvPartialEnd: MPConvPartialStage = 2;
 pub const kMPConvPartialSelf: MPConvPartialStage = 1;
-pub const kMPConvPartialArgs: MPConvPartialStage = 0;
-pub const kMPExt: MessagePackType = 7;
-pub const kMPMap: MessagePackType = 6;
-pub const kMPArray: MessagePackType = 5;
-pub const kMPString: MessagePackType = 4;
-pub const kMPFloat: MessagePackType = 3;
-pub const kMPInteger: MessagePackType = 2;
-pub const kMPBoolean: MessagePackType = 1;
-pub const kMPNil: MessagePackType = 0;
 pub type C2Rust_Unnamed_6 = ::core::ffi::c_uint;
 pub const kNluaPushFreeRefs: C2Rust_Unnamed_6 = 2;
 pub const kNluaPushSpecial: C2Rust_Unnamed_6 = 1;
@@ -2692,8 +2680,6 @@ pub unsafe extern "C-unwind" fn nlua_push_keydict(
         i = i.wrapping_add(1);
     }
 }
-pub static _typval_encode_lua_nodict_var: GlobalCell<*const dict_T> =
-    GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
 unsafe extern "C-unwind" fn _typval_encode_lua_check_self_reference(
     lstate: *mut lua_State,

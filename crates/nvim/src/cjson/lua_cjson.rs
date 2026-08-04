@@ -166,7 +166,6 @@ pub const DEFAULT_DECODE_ARRAY_WITH_ARRAY_MT: ::core::ffi::c_int = 0 as ::core::
 pub const DEFAULT_DECODE_SKIP_COMMENTS: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const DEFAULT_ENCODE_ESCAPE_FORWARD_SLASH: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const DEFAULT_ENCODE_SKIP_UNSUPPORTED_VALUE_TYPES: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const DEFAULT_ENCODE_INDENT: *mut ::core::ffi::c_void = NULL;
 pub const DEFAULT_ENCODE_SORT_KEYS: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static json_empty_array: SharedCell<*const *const ::core::ffi::c_char> =
     SharedCell::new(::core::ptr::null::<*const ::core::ffi::c_char>());

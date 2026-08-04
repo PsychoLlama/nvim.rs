@@ -41,16 +41,11 @@ pub struct Packer {
     pub is_bin_fn: ::core::ffi::c_int,
 }
 pub const MPACK_TOKEN_EXT: mpack_token_type_t = 11;
-pub const MPACK_TOKEN_STR: mpack_token_type_t = 10;
 pub const MPACK_TOKEN_BIN: mpack_token_type_t = 9;
 pub const MPACK_TOKEN_MAP: mpack_token_type_t = 8;
 pub const MPACK_TOKEN_ARRAY: mpack_token_type_t = 7;
 pub const MPACK_TOKEN_CHUNK: mpack_token_type_t = 6;
-pub const MPACK_TOKEN_FLOAT: mpack_token_type_t = 5;
 pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
-pub const MPACK_TOKEN_UINT: mpack_token_type_t = 3;
-pub const MPACK_TOKEN_BOOLEAN: mpack_token_type_t = 2;
-pub const MPACK_TOKEN_NIL: mpack_token_type_t = 1;
 pub const MPACK_EOF: C2Rust_Unnamed_1 = 1;
 pub const MPACK_NOMEM: C2Rust_Unnamed_2 = 3;
 pub const MPACK_OK: C2Rust_Unnamed_1 = 0;
@@ -83,14 +78,8 @@ pub struct C2Rust_Unnamed_0 {
     pub method_or_error: ::core::ffi::c_int,
     pub args_or_result: ::core::ffi::c_int,
 }
-pub const MPACK_RPC_NOTIFICATION: C2Rust_Unnamed_3 = 6;
-pub const MPACK_RPC_RESPONSE: C2Rust_Unnamed_3 = 5;
-pub const MPACK_RPC_REQUEST: C2Rust_Unnamed_3 = 4;
 pub type C2Rust_Unnamed_1 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_2 = ::core::ffi::c_int;
-pub const MPACK_EXCEPTION: C2Rust_Unnamed_2 = -1;
-pub type C2Rust_Unnamed_3 = ::core::ffi::c_uint;
-pub const MPACK_RPC_ERROR: C2Rust_Unnamed_3 = 7;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUAL_BUFFERSIZE: ::core::ffi::c_int = if BUFSIZ > 16384 as ::core::ffi::c_int {
     8192 as ::core::ffi::c_int

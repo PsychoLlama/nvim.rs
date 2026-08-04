@@ -42,10 +42,6 @@ pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
 
-/// The most entries `hlattrs2dict` can write, which is what its callers have
-/// to allocate.
-pub const HLATTRS_DICT_SIZE: size_t = 24;
-
 /// `xp_context` values: what `:highlight`'s completion is expanding.
 pub const EXPAND_HIGHLIGHT: c_int = 13;
 pub const EXPAND_NOTHING: c_int = 0;

@@ -76,7 +76,6 @@ unsafe extern "C" {
 
 const UV_RUN_DEFAULT: core::ffi::c_uint = 0;
 const UV_EINTR: c_int = -4;
-const UV_TTY_MODE_NORMAL: uv_tty_mode_t = 0;
 const UV_TTY_MODE_IO: uv_tty_mode_t = 2;
 
 const SIGSTOP: c_int = 19;

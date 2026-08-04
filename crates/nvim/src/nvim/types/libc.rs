@@ -59,7 +59,6 @@ pub struct _IO_FILE {
     pub _mode: ::core::ffi::c_int,
     pub _unused2: [::core::ffi::c_char; 20],
 }
-pub type _IO_lock_t = ();
 pub type __builtin_va_list = [__va_list_tag; 1];
 pub type __compar_fn_t = Option<
     unsafe extern "C" fn(

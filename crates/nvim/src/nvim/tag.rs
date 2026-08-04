@@ -67,12 +67,11 @@ use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    AdditionalData, Callback, Callback_data as C2Rust_Unnamed_5, Direction, FILE, OptInt,
-    SpecialVarValue, Timestamp, VarLockStatus, VarType, VimVarIndex, buf_T, colnr_T, dict_T,
-    dictitem_T, exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T, garray_T, getf_retvalues,
-    getf_values, int64_t, linenr_T, list_T, off_T, optmagic_T, optset_T, pos_T, ptrdiff_t,
-    regmatch_T, regprog_T, size_t, taggy_T, typval_T, typval_vval_union, varnumber_T, vimconv_T,
-    win_T, xp_prefix_T,
+    AdditionalData, Callback, Callback_data as C2Rust_Unnamed_5, FILE, OptInt, SpecialVarValue,
+    Timestamp, VarLockStatus, VarType, VimVarIndex, buf_T, colnr_T, dict_T, dictitem_T, exarg_T,
+    expand_T, file_comparison, fmark_T, fmarkv_T, getf_retvalues, getf_values, int64_t, linenr_T,
+    list_T, off_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, size_t, taggy_T,
+    typval_T, typval_vval_union, varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::window::{
@@ -109,8 +108,6 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const _ISdigit: C2Rust_Unnamed = 2048;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
@@ -121,14 +118,10 @@ pub const VAR_STRING: VarType = 2;
 pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_14 = 2147483647;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const kDirectionNotSet: Direction = 0;
-pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
 pub const EXPAND_FILES: C2Rust_Unnamed_16 = 2;
 pub const OPTION_MAGIC_OFF: optmagic_T = 2;
 pub const GETF_SETMARK: getf_values = 1;
-pub const GETFILE_UNUSED: getf_retvalues = 8;
 pub const GETFILE_OPEN_OTHER: getf_retvalues = -1;
 pub const GETFILE_SAME_FILE: getf_retvalues = 0;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
@@ -203,19 +196,11 @@ pub const MT_RE_OFF: C2Rust_Unnamed_35 = 8;
 pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const CMDBUFFSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
-    ga_len: 0 as ::core::ffi::c_int,
-    ga_maxlen: 0 as ::core::ffi::c_int,
-    ga_itemsize: 0 as ::core::ffi::c_int,
-    ga_growsize: 1 as ::core::ffi::c_int,
-    ga_data: NULL_0,
-};
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -224,16 +209,6 @@ pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const CPO_TAGPAT: ::core::ffi::c_int = 't' as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-static mt_names: GlobalCell<[*mut ::core::ffi::c_char; 8]> = GlobalCell::new([
-    b"FSC\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"F C\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"F  \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"FS \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b" SC\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"  C\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"   \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b" S \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-]);
 pub const NOTAGFILE: ::core::ffi::c_int = 99 as ::core::ffi::c_int;
 static nofile_fname: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());

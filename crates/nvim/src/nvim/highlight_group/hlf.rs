@@ -18,8 +18,6 @@ pub const HLF_NONE: c_int = 0;
 pub const HLF_8: c_int = 1;
 /// `EndOfBuffer`: after the last line in the buffer
 pub const HLF_EOB: c_int = 2;
-/// `TermCursor`: terminal cursor focused
-pub const HLF_TERM: c_int = 3;
 /// `NonText`: @ characters at end of screen, characters that don't really exist in the text
 pub const HLF_AT: c_int = 4;
 /// `Directory`: directories in CTRL-D listing
@@ -56,14 +54,10 @@ pub const HLF_S: c_int = 19;
 pub const HLF_SNC: c_int = 20;
 /// `WinSeparator`: window split separators
 pub const HLF_C: c_int = 21;
-/// `VertSplit`: VertSplit
-pub const HLF_VSP: c_int = 22;
 /// `Title`: Titles for output from ":set all", ":autocmd" etc.
 pub const HLF_T: c_int = 23;
 /// `Visual`: Visual mode
 pub const HLF_V: c_int = 24;
-/// `VisualNC`: Visual mode, autoselecting and not clipboard owner
-pub const HLF_VNC: c_int = 25;
 /// `WarningMsg`: warning messages
 pub const HLF_W: c_int = 26;
 /// `WildMenu`: Wildmenu highlight
@@ -146,24 +140,14 @@ pub const HLF_BORDER: c_int = 64;
 pub const HLF_WBR: c_int = 65;
 /// `WinBarNC`: Window bars of not-current windows
 pub const HLF_WBRNC: c_int = 66;
-/// `Cursor`: Cursor
-pub const HLF_CU: c_int = 67;
 /// `FloatTitle`: Float Border Title
 pub const HLF_BTITLE: c_int = 68;
 /// `FloatFooter`: Float Border Footer
 pub const HLF_BFOOTER: c_int = 69;
-/// `StatusLineTerm`: status line for terminal window
-pub const HLF_TS: c_int = 70;
-/// `StatusLineTermNC`: status line for non-current terminal window
-pub const HLF_TSNC: c_int = 71;
 /// `StderrMsg`: stderr messages (from shell)
 pub const HLF_SE: c_int = 72;
 /// `StdoutMsg`: stdout messages (from shell)
 pub const HLF_SO: c_int = 73;
-/// `OkMsg`: OK message
-pub const HLF_OK: c_int = 74;
-/// `PreInsert`: "preinsert" in 'completeopt'
-pub const HLF_PRE: c_int = 75;
 /// One past the last group.
 pub const HLF_COUNT: c_int = 76;
 

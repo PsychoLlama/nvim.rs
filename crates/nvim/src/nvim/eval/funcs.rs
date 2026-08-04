@@ -231,7 +231,6 @@ pub type C2Rust_Unnamed_55 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_56 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_57 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_58 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_59 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_61 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_62 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_66 = ::core::ffi::c_uint;
@@ -281,12 +280,6 @@ pub const CONTEXT_INIT: Context = Context {
     gvars: STRING_INIT,
     funcs: ARRAY_DICT_INIT,
 };
-static e_invalid_submatch_number_nr: GlobalCell<[::core::ffi::c_char; 34]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
-            *b"E935: Invalid submatch number: %d\0",
-        )
-    });
 static e_string_list_or_blob_required: GlobalCell<[::core::ffi::c_char; 37]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(

@@ -23,9 +23,8 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
-    AlignTextPos, BoolVarValue, FloatRelative, LuaRef, Map_cstr_t_ptr_t, Map_int_ptr_t, MapHash,
-    ScopeType, Set_cstr_t, SpecialVarValue, StlClickDefinition_type_0 as C2Rust_Unnamed_12,
-    VarLockStatus, VarType, WinSplit, WinStyle, buf_T, cstr_t, handle_T, int32_t, linenr_T,
+    BoolVarValue, LuaRef, Map_cstr_t_ptr_t, Map_int_ptr_t, MapHash, ScopeType, Set_cstr_t,
+    SpecialVarValue, VarLockStatus, VarType, buf_T, cstr_t, handle_T, int32_t, linenr_T,
     lua_Integer, lua_Number, lua_State, luaL_Reg, ptr_t, size_t, uint8_t, uint16_t, uint32_t,
     uint64_t, uv_lib_t,
 };
@@ -210,31 +209,15 @@ unsafe extern "C" {
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
-pub const _ISpunct: C2Rust_Unnamed = 4;
-pub const _IScntrl: C2Rust_Unnamed = 2;
-pub const _ISblank: C2Rust_Unnamed = 1;
-pub const _ISgraph: C2Rust_Unnamed = 32768;
-pub const _ISprint: C2Rust_Unnamed = 16384;
-pub const _ISspace: C2Rust_Unnamed = 8192;
-pub const _ISxdigit: C2Rust_Unnamed = 4096;
-pub const _ISdigit: C2Rust_Unnamed = 2048;
-pub const _ISalpha: C2Rust_Unnamed = 1024;
-pub const _ISlower: C2Rust_Unnamed = 512;
-pub const _ISupper: C2Rust_Unnamed = 256;
 pub type TSSymbol = uint16_t;
 pub type TSFieldId = uint16_t;
 pub type TSDecodeFunction =
     Option<unsafe extern "C" fn(*const uint8_t, uint32_t, *mut int32_t) -> uint32_t>;
 pub type TSInputEncoding = ::core::ffi::c_uint;
-pub const TSInputEncodingCustom: TSInputEncoding = 3;
-pub const TSInputEncodingUTF16BE: TSInputEncoding = 2;
-pub const TSInputEncodingUTF16LE: TSInputEncoding = 1;
 pub const TSInputEncodingUTF8: TSInputEncoding = 0;
 pub type TSSymbolType = ::core::ffi::c_uint;
 pub const TSSymbolTypeAuxiliary: TSSymbolType = 3;
-pub const TSSymbolTypeSupertype: TSSymbolType = 2;
 pub const TSSymbolTypeAnonymous: TSSymbolType = 1;
-pub const TSSymbolTypeRegular: TSSymbolType = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSPoint {
@@ -330,12 +313,9 @@ pub struct TSQueryPredicateStep {
     pub value_id: uint32_t,
 }
 pub type TSQueryError = ::core::ffi::c_uint;
-pub const TSQueryErrorLanguage: TSQueryError = 6;
-pub const TSQueryErrorStructure: TSQueryError = 5;
 pub const TSQueryErrorCapture: TSQueryError = 4;
 pub const TSQueryErrorField: TSQueryError = 3;
 pub const TSQueryErrorNodeType: TSQueryError = 2;
-pub const TSQueryErrorSyntax: TSQueryError = 1;
 pub const TSQueryErrorNone: TSQueryError = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -346,14 +326,12 @@ pub struct TSLanguageMetadata {
 }
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
 pub const VAR_SPECIAL: VarType = 8;
 pub const VAR_BOOL: VarType = 7;
@@ -364,25 +342,6 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_12 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_12 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_12 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_12 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSLuaTree {
@@ -403,7 +362,6 @@ pub struct TSLuaParserCallbackPayload {
     pub timeout_threshold_ns: uint64_t,
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_REGISTRYINDEX: ::core::ffi::c_int = -10000 as ::core::ffi::c_int;
 pub const LUA_GLOBALSINDEX: ::core::ffi::c_int = -10002 as ::core::ffi::c_int;
 pub const LUA_TNIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

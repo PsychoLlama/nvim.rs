@@ -22,12 +22,11 @@ use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::plines::{win_get_fill, win_text_height};
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
-    AlignTextPos, Arena, Array, BoolVarValue, Boolean, Buffer, Dict, Error, FloatRelative, Integer,
-    KeyDict_win_text_height, LuaRef, LuaRetMode, NS, Object, ScopeType, SpecialVarValue,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Tabpage, TryState, VarLockStatus,
-    VarType, WinSplit, WinStyle, Window, buf_T, colnr_T, except_T, except_type_T, int64_t,
-    kObjectTypeInteger, kObjectTypeNil, key_value_pair, linenr_T, msglist_T, object,
-    object_data as C2Rust_Unnamed, pos_T, size_t, switchwin_T, tabpage_T, win_T, win_execute_T,
+    Arena, Array, BoolVarValue, Boolean, Buffer, Dict, Error, Integer, KeyDict_win_text_height,
+    LuaRef, LuaRetMode, NS, Object, ScopeType, SpecialVarValue, String_0, Tabpage, TryState,
+    VarLockStatus, VarType, Window, buf_T, colnr_T, except_T, int64_t, kObjectTypeInteger,
+    kObjectTypeNil, key_value_pair, linenr_T, msglist_T, object, object_data as C2Rust_Unnamed,
+    pos_T, size_t, switchwin_T, tabpage_T, win_T, win_execute_T,
 };
 use crate::src::nvim::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
@@ -35,14 +34,12 @@ use crate::src::nvim::window::{
 };
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
 pub const VAR_SPECIAL: VarType = 8;
 pub const VAR_BOOL: VarType = 7;
@@ -53,35 +50,10 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_12 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_12 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_12 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_12 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_13 = 2147483647;
-pub const ET_INTERRUPT: except_type_T = 2;
-pub const ET_ERROR: except_type_T = 1;
-pub const ET_USER: except_type_T = 0;
-pub const kRetMulti: LuaRetMode = 3;
 pub const kRetLuaref: LuaRetMode = 2;
 pub const kRetNilBool: LuaRetMode = 1;
-pub const kRetObject: LuaRetMode = 0;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {

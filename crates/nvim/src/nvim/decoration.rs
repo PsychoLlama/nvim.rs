@@ -118,7 +118,6 @@ pub(crate) const kHlModeBlend: HlMode = 3;
 
 /// `DecorRangeKind`: which arm of a `DecorRange`'s union is live.
 pub(crate) const kDecorKindHighlight: DecorRangeKind = 0;
-pub(crate) const kDecorKindSign: DecorRangeKind = 1;
 pub(crate) const kDecorKindVirtText: DecorRangeKind = 2;
 pub(crate) const kDecorKindVirtLines: DecorRangeKind = 3;
 /// A position reported to the UI rather than anything drawn.

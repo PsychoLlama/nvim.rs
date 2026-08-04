@@ -43,33 +43,29 @@ use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::sign::init_sign_text;
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
-    AlignTextPos, Arena, Array, BoolVarValue, Boolean, Buffer, DecorExt, DecorHighlightInline,
-    DecorInline, DecorInlineData, DecorPriority, DecorProvider, DecorSignHighlight, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ExtmarkInfoArray, ExtmarkType,
-    FloatRelative, Integer, KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_ns_opts,
-    KeyDict_set_decoration_provider, KeyDict_set_extmark, KeySetLink, LuaRef, MHPutStatus, MTKey,
-    MTPair, Map_String_int, Map_uint32_t_uint32_t, MapHash, MarkTree, NS, Object, OptionalKeys,
-    ScopeType, Set_ptr_t, Set_uint32_t, SpecialVarValue,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_13, String_0, TriState, UndoObjectType,
-    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, WinSplit, WinStyle, Window, buf_T,
-    colnr_T, handle_T, int32_t, int64_t, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
-    kObjectTypeInteger, kObjectTypeString, key_value_pair, linenr_T, object,
-    object_data as C2Rust_Unnamed, ptr_t, schar_T, size_t, tabpage_T, uint8_t, uint16_t, uint32_t,
-    virt_line, win_T,
+    Arena, Array, BoolVarValue, Boolean, Buffer, DecorExt, DecorHighlightInline, DecorInline,
+    DecorInlineData, DecorPriority, DecorProvider, DecorSignHighlight, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ExtmarkInfoArray, ExtmarkType, Integer,
+    KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_ns_opts, KeyDict_set_decoration_provider,
+    KeyDict_set_extmark, KeySetLink, LuaRef, MHPutStatus, MTKey, MTPair, Map_String_int,
+    Map_uint32_t_uint32_t, MapHash, MarkTree, NS, Object, OptionalKeys, ScopeType, Set_ptr_t,
+    Set_uint32_t, SpecialVarValue, String_0, TriState, UndoObjectType, VarLockStatus, VarType,
+    VirtLines, VirtText, VirtTextChunk, Window, buf_T, colnr_T, handle_T, int32_t, int64_t,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
+    key_value_pair, linenr_T, object, object_data as C2Rust_Unnamed, ptr_t, schar_T, size_t,
+    tabpage_T, uint8_t, uint16_t, uint32_t, virt_line, win_T,
 };
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
 pub const VAR_SPECIAL: VarType = 8;
 pub const VAR_BOOL: VarType = 7;
@@ -80,35 +76,10 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const kExtmarkClear: UndoObjectType = 4;
-pub const kExtmarkSavePos: UndoObjectType = 3;
-pub const kExtmarkUpdate: UndoObjectType = 2;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_13 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_13 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_13 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_13 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const kSHConcealLines: C2Rust_Unnamed_18 = 128;
 pub const kSHConceal: C2Rust_Unnamed_18 = 64;
@@ -118,14 +89,10 @@ pub const kSHUIWatchedOverlay: C2Rust_Unnamed_18 = 8;
 pub const kSHUIWatched: C2Rust_Unnamed_18 = 4;
 pub const kSHHlEol: C2Rust_Unnamed_18 = 2;
 pub const kSHIsSign: C2Rust_Unnamed_18 = 1;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kMHNewKeyRealloc: MHPutStatus = 2;
-pub const kMHNewKeyDidFit: MHPutStatus = 1;
 pub const kMHExisting: MHPutStatus = 0;
 pub const kExtmarkHighlight: ExtmarkType = 32;
 pub const kExtmarkVirtLines: ExtmarkType = 16;
 pub const kExtmarkVirtText: ExtmarkType = 8;
-pub const kExtmarkSignHL: ExtmarkType = 4;
 pub const kExtmarkSign: ExtmarkType = 2;
 pub const kExtmarkNone: ExtmarkType = 1;
 #[derive(Copy, Clone)]
@@ -135,7 +102,6 @@ pub struct C2Rust_Unnamed_26 {
     pub source: *mut LuaRef,
     pub dest: *mut LuaRef,
 }
-pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 87] = unsafe {
     ::core::mem::transmute::<
         [u8; 87],
@@ -145,7 +111,6 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 87] = unsafe {
     )
 };
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;

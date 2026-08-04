@@ -22,18 +22,7 @@ use crate::src::nvim::types::{
 use crate::src::xdiff::xdiffi::xdl_do_diff;
 use crate::src::xdiff::xprepare::xdl_free_env;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const _ISalnum: C2Rust_Unnamed = 8;
-pub const _ISpunct: C2Rust_Unnamed = 4;
-pub const _IScntrl: C2Rust_Unnamed = 2;
-pub const _ISblank: C2Rust_Unnamed = 1;
-pub const _ISgraph: C2Rust_Unnamed = 32768;
-pub const _ISprint: C2Rust_Unnamed = 16384;
 pub const _ISspace: C2Rust_Unnamed = 8192;
-pub const _ISxdigit: C2Rust_Unnamed = 4096;
-pub const _ISdigit: C2Rust_Unnamed = 2048;
-pub const _ISalpha: C2Rust_Unnamed = 1024;
-pub const _ISlower: C2Rust_Unnamed = 512;
-pub const _ISupper: C2Rust_Unnamed = 256;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const XDF_IGNORE_WHITESPACE: ::core::ffi::c_int =
     (1 as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;

@@ -829,7 +829,6 @@ pub const NO_SCREEN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const STL_IN_ICON: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const STL_IN_TITLE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const DEFAULT_GRID_HANDLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

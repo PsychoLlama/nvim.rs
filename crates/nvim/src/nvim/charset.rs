@@ -50,9 +50,6 @@ pub const STR2NR_OCT: c_int = 2;
 pub const STR2NR_HEX: c_int = 4;
 pub const STR2NR_OOCT: c_int = 8;
 pub const STR2NR_ALL: c_int = STR2NR_BIN | STR2NR_OCT | STR2NR_HEX | STR2NR_OOCT;
-// Spelled as a literal, not as `STR2NR_ALL & !STR2NR_OOCT`: ffigen only
-// evaluates literal expressions, and nine other modules declare this as 13.
-pub const STR2NR_NO_OCT: c_int = 13;
 pub const STR2NR_FORCE: c_int = 128;
 pub const STR2NR_QUOTE: c_int = 16;
 

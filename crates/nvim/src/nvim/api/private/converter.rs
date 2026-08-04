@@ -12,7 +12,6 @@ use crate::src::nvim::eval::typval::{
 use crate::src::nvim::eval::userfunc::{find_func, register_luafunc};
 use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
 use crate::src::nvim::eval::{get_copyID, partial_name};
-use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::api_new_luaref;
@@ -32,14 +31,12 @@ use crate::src::nvim::types::{
 };
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
 pub const VAR_SPECIAL: VarType = 8;
 pub const VAR_BOOL: VarType = 7;
@@ -67,20 +64,10 @@ pub struct EncodedData {
 }
 pub const kMPConvPartialEnd: MPConvPartialStage = 2;
 pub const kMPConvPartialSelf: MPConvPartialStage = 1;
-pub const kMPConvPartialArgs: MPConvPartialStage = 0;
 pub const kMPConvPartialList: MPConvStackValType = 4;
-pub const kMPConvPartial: MPConvStackValType = 3;
 pub const kMPConvPairs: MPConvStackValType = 2;
 pub const kMPConvList: MPConvStackValType = 1;
 pub const kMPConvDict: MPConvStackValType = 0;
-pub const kMPExt: MessagePackType = 7;
-pub const kMPMap: MessagePackType = 6;
-pub const kMPArray: MessagePackType = 5;
-pub const kMPString: MessagePackType = 4;
-pub const kMPFloat: MessagePackType = 3;
-pub const kMPInteger: MessagePackType = 2;
-pub const kMPBoolean: MessagePackType = 1;
-pub const kMPNil: MessagePackType = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
@@ -492,8 +479,6 @@ unsafe extern "C" fn typval_encode_dict_end(edata: *mut EncodedData) {
         }
     };
 }
-pub static _typval_encode_object_nodict_var: GlobalCell<*const dict_T> =
-    GlobalCell::new(::core::ptr::null::<dict_T>());
 #[inline(always)]
 unsafe extern "C" fn _typval_encode_object_check_self_reference(
     edata: *mut EncodedData,

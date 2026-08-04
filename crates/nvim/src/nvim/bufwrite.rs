@@ -71,7 +71,6 @@ mod lines;
 pub(crate) use self::lines::*;
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const UV_ENOTSUP: C2Rust_Unnamed = -95;
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const CMOD_LOCKMARKS: C2Rust_Unnamed_15 = 2048;
 /// A write error, held until the cleanup path can report it.
@@ -256,7 +255,6 @@ pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const NODE_WRITABLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 /// `'cpoptions'` "W": refuse to overwrite a read-only file even with `!`.
 pub(crate) const E_READONLY_CPO: &CStr = c"is read-only (cannot override: \"W\" in 'cpoptions')";
 pub const SMALLBUFSIZE: usize = 256;
@@ -902,7 +900,5 @@ pub const CPO_FWRITE: ::core::ffi::c_int = 'W' as ::core::ffi::c_int;
 pub const CPO_KEEPRO: ::core::ffi::c_int = 'Z' as ::core::ffi::c_int;
 pub const CPO_PLUS: ::core::ffi::c_int = '+' as ::core::ffi::c_int;
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const EINVAL: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 pub const ICONV_EINVAL: ::core::ffi::c_int = EINVAL;

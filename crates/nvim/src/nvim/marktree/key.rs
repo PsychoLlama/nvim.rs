@@ -16,8 +16,6 @@ use crate::src::nvim::types::{
     schar_T, uint16_t, uint32_t, uint64_t,
 };
 
-/// Depth of the deepest tree the iterator's stack can walk.
-pub const MT_MAX_DEPTH: ::core::ffi::c_uint = 20;
 /// Minimum fill of a node. The maximum branch is twice this.
 pub const MT_BRANCH_FACTOR: ::core::ffi::c_uint = 10;
 /// `ceil(log2(2 * MT_BRANCH_FACTOR + 1))` — one extra index encodes

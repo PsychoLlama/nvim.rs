@@ -40,24 +40,22 @@ use crate::src::nvim::types::{
     AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, Dict, Error,
     ExtmarkOp, FloatRelative, Integer, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty,
     KeyDict_keymap, KeyValuePair, LuaRef, LuaRetMode, MarkAdjustMode, MarkGet, Object, ScopeType,
-    SpecialVarValue, StlClickDefinition_type_0 as C2Rust_Unnamed_13, String_0, TryState,
-    UndoObjectType, VarLockStatus, VarType, WinSplit, WinStyle, aco_save_T, bcount_t, buf_T,
-    colnr_T, dobuf_action_values, dobuf_start_values, except_T, except_type_T, fmark_T, int64_t,
-    kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, key_value_pair,
-    linenr_T, lua_State, msglist_T, object, object_data as C2Rust_Unnamed, pos_T, ptrdiff_t,
-    size_t, tabpage_T, u_header_T, uint64_t, win_T,
+    SpecialVarValue, String_0, TryState, UndoObjectType, VarLockStatus, VarType, WinSplit,
+    WinStyle, aco_save_T, bcount_t, buf_T, colnr_T, dobuf_action_values, dobuf_start_values,
+    except_T, fmark_T, int64_t, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil,
+    kObjectTypeString, key_value_pair, linenr_T, lua_State, msglist_T, object,
+    object_data as C2Rust_Unnamed, pos_T, ptrdiff_t, size_t, tabpage_T, u_header_T, uint64_t,
+    win_T,
 };
 use crate::src::nvim::undo::u_save_buf;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
 pub const VAR_SPECIAL: VarType = 8;
 pub const VAR_BOOL: VarType = 7;
@@ -68,37 +66,14 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const kExtmarkClear: UndoObjectType = 4;
-pub const kExtmarkSavePos: UndoObjectType = 3;
-pub const kExtmarkUpdate: UndoObjectType = 2;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_13 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_13 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_13 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_13 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
 pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
 pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
 pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
 pub const kFloatRelativeEditor: FloatRelative = 0;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
-pub const ET_INTERRUPT: except_type_T = 2;
-pub const ET_ERROR: except_type_T = 1;
-pub const ET_USER: except_type_T = 0;
-pub const kExtmarkUndoNoRedo: ExtmarkOp = 3;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
@@ -109,21 +84,9 @@ pub const DOBUF_FIRST: dobuf_start_values = 1;
 pub const DOBUF_WIPE: dobuf_action_values = 4;
 pub const DOBUF_UNLOAD: dobuf_action_values = 2;
 pub const kMarkAllNoResolve: MarkGet = 2;
-pub const kMarkAll: MarkGet = 1;
 pub const kMarkBufLocal: MarkGet = 0;
-pub const kRetMulti: LuaRetMode = 3;
 pub const kRetLuaref: LuaRetMode = 2;
-pub const kRetNilBool: LuaRetMode = 1;
-pub const kRetObject: LuaRetMode = 0;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
-pub const kDirectionNotSet: C2Rust_Unnamed_16 = 0;
 pub const DOBUF_DEL: dobuf_action_values = 3;
-pub const DOBUF_SPLIT: dobuf_action_values = 1;
-pub const DOBUF_GOTO: dobuf_action_values = 0;
-pub const DOBUF_MOD: dobuf_start_values = 3;
-pub const DOBUF_LAST: dobuf_start_values = 2;
-pub const DOBUF_CURRENT: dobuf_start_values = 0;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)

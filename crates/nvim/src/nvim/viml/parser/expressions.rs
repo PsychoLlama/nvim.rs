@@ -39,31 +39,17 @@ use crate::src::nvim::os::libc::{abort, gettext, memchr, memcmp, memcpy, strchr}
 use crate::src::nvim::types::{
     ExprAST, ExprASTError, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, ExprVarScope,
-    ParserLine, ParserPosition, ParserState, ParserStateItem_data_expr_type_0 as C2Rust_Unnamed_3,
-    ParserStateItem_type_0 as C2Rust_Unnamed_4, float_T, size_t, uint8_t, uvarnumber_T,
-    varnumber_T,
+    ParserLine, ParserPosition, ParserState, float_T, size_t, uint8_t, uvarnumber_T, varnumber_T,
 };
 use crate::src::nvim::viml::parser::parser::{
     highlight_vec, viml_parser_advance, viml_parser_get_remaining_line, viml_parser_highlight,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const STR2NR_QUOTE: C2Rust_Unnamed = 16;
-pub const STR2NR_NO_OCT: C2Rust_Unnamed = 13;
 pub const STR2NR_ALL: C2Rust_Unnamed = 15;
-pub const STR2NR_FORCE: C2Rust_Unnamed = 128;
-pub const STR2NR_OOCT: C2Rust_Unnamed = 8;
-pub const STR2NR_HEX: C2Rust_Unnamed = 4;
-pub const STR2NR_OCT: C2Rust_Unnamed = 2;
-pub const STR2NR_BIN: C2Rust_Unnamed = 1;
-pub const STR2NR_DEC: C2Rust_Unnamed = 0;
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
 pub const FSK_SIMPLIFY: C2Rust_Unnamed_0 = 8;
 pub const FSK_IN_STRING: C2Rust_Unnamed_0 = 4;
-pub const FSK_KEEP_X_KEY: C2Rust_Unnamed_0 = 2;
 pub const FSK_KEYCODE: C2Rust_Unnamed_0 = 1;
-pub const kExprUnknown: C2Rust_Unnamed_3 = 0;
-pub const kPTopStateParsingExpression: C2Rust_Unnamed_4 = 1;
-pub const kPTopStateParsingCommand: C2Rust_Unnamed_4 = 0;
 pub const kCCStrategyIgnoreCase: ExprCaseCompareStrategy = 63;
 pub const kCCStrategyMatchCase: ExprCaseCompareStrategy = 35;
 pub const kCCStrategyUseOption: ExprCaseCompareStrategy = 0;
@@ -299,8 +285,6 @@ pub struct StringShift {
     pub escape_not_known: bool,
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-
 /// The slot `back` places down from the top of the AST stack; `back` of zero
 /// is the top. Panics on an empty stack, where the C read one slot before the
 /// buffer.

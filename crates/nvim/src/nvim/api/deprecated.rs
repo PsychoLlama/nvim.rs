@@ -34,30 +34,25 @@ use crate::src::nvim::options::kOptInvalid;
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
-    AlignTextPos, Arena, Array, BoolVarValue, Boolean, Buffer, DecorExt, DecorHighlightInline,
-    DecorInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, FloatRelative, Integer, KeyDict_empty,
-    KeyDict_exec_opts, KeyValuePair, LuaRetMode, MsgpackRpcRequestHandler, Object, OptIndex,
-    OptScope, OptVal, OptValData, OptValType, ScopeType, SpecialVarValue,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_13, String_0, StringBuilder, Tabpage, TriState,
-    UndoObjectType, VarLockStatus, VarType, VirtText, VirtTextChunk, WinSplit, WinStyle, Window,
-    buf_T, colnr_T, int64_t, kObjectTypeArray, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil,
-    kObjectTypeString, lua_State, object, object_data as C2Rust_Unnamed, schar_T, sctx_T, size_t,
-    tabpage_T, uint8_t, uint16_t, uint32_t, uint64_t, win_T,
+    Arena, Array, BoolVarValue, Boolean, Buffer, DecorExt, DecorHighlightInline, DecorInline,
+    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict,
+    Error, Integer, KeyDict_empty, KeyDict_exec_opts, KeyValuePair, LuaRetMode,
+    MsgpackRpcRequestHandler, Object, OptIndex, OptScope, OptVal, OptValData, OptValType,
+    ScopeType, SpecialVarValue, String_0, StringBuilder, Tabpage, TriState, VarLockStatus, VarType,
+    VirtText, VirtTextChunk, Window, buf_T, colnr_T, int64_t, kObjectTypeArray, kObjectTypeDict,
+    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, lua_State, object,
+    object_data as C2Rust_Unnamed, schar_T, sctx_T, size_t, tabpage_T, uint8_t, uint16_t, uint32_t,
+    uint64_t, win_T,
 };
-pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
 pub const VAR_SPECIAL: VarType = 8;
 pub const VAR_BOOL: VarType = 7;
@@ -68,55 +63,17 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const kExtmarkClear: UndoObjectType = 4;
-pub const kExtmarkSavePos: UndoObjectType = 3;
-pub const kExtmarkUpdate: UndoObjectType = 2;
-pub const kExtmarkMove: UndoObjectType = 1;
-pub const kExtmarkSplice: UndoObjectType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_13 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_13 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_13 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_13 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
-pub const kRetMulti: LuaRetMode = 3;
-pub const kRetLuaref: LuaRetMode = 2;
-pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
 pub const OPT_GLOBAL: C2Rust_Unnamed_17 = 1;
 pub const kOptScopeBuf: OptScope = 2;
 pub const kOptScopeWin: OptScope = 1;
 pub const kOptScopeGlobal: OptScope = 0;
 pub const OPT_LOCAL: C2Rust_Unnamed_17 = 2;
-pub const kOptValTypeString: OptValType = 2;
-pub const kOptValTypeNumber: OptValType = 1;
-pub const kOptValTypeBoolean: OptValType = 0;
 pub const kOptValTypeNil: OptValType = -1;
 pub const LINE_BUFFER_MIN_SIZE: C2Rust_Unnamed_18 = 4096;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const OPT_SKIPRTP: C2Rust_Unnamed_17 = 128;
-pub const OPT_NO_REDRAW: C2Rust_Unnamed_17 = 64;
-pub const OPT_ONECOLUMN: C2Rust_Unnamed_17 = 32;
-pub const OPT_NOWIN: C2Rust_Unnamed_17 = 16;
-pub const OPT_WINONLY: C2Rust_Unnamed_17 = 8;
-pub const OPT_MODELINE: C2Rust_Unnamed_17 = 4;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

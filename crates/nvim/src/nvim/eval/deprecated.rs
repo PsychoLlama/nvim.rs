@@ -13,61 +13,18 @@ use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::types::channel::kChannelStdinPipe;
 use crate::src::nvim::types::{
-    AlignTextPos, BoolVarValue, Callback, Callback_data as C2Rust_Unnamed_19, CallbackReader,
-    Channel, ChannelPart, ChannelStreamType, ClientType, EvalFuncData, FloatRelative, ProcType,
-    ScopeType, SpecialVarValue, StlClickDefinition_type_0 as C2Rust_Unnamed_26, VarLockStatus,
-    VarType, WinSplit, WinStyle, buf_T, dict_T, garray_T, list_T, listitem_T, size_t, typval_T,
-    uint16_t, uint64_t, uv_handle_type, uv_req_type, uv_stdio_flags, varnumber_T,
+    BoolVarValue, Callback, Callback_data as C2Rust_Unnamed_19, CallbackReader, Channel,
+    ChannelPart, EvalFuncData, ScopeType, SpecialVarValue, VarLockStatus, VarType, buf_T, dict_T,
+    garray_T, list_T, listitem_T, size_t, typval_T, uint16_t, uint64_t, varnumber_T,
 };
-pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
-pub const UV_FILE: uv_handle_type = 17;
-pub const UV_SIGNAL: uv_handle_type = 16;
-pub const UV_UDP: uv_handle_type = 15;
-pub const UV_TTY: uv_handle_type = 14;
-pub const UV_TIMER: uv_handle_type = 13;
-pub const UV_TCP: uv_handle_type = 12;
-pub const UV_STREAM: uv_handle_type = 11;
-pub const UV_PROCESS: uv_handle_type = 10;
-pub const UV_PREPARE: uv_handle_type = 9;
-pub const UV_POLL: uv_handle_type = 8;
-pub const UV_NAMED_PIPE: uv_handle_type = 7;
-pub const UV_IDLE: uv_handle_type = 6;
-pub const UV_HANDLE: uv_handle_type = 5;
-pub const UV_FS_POLL: uv_handle_type = 4;
-pub const UV_FS_EVENT: uv_handle_type = 3;
-pub const UV_CHECK: uv_handle_type = 2;
-pub const UV_ASYNC: uv_handle_type = 1;
-pub const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
-pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
-pub const UV_RANDOM: uv_req_type = 10;
-pub const UV_GETNAMEINFO: uv_req_type = 9;
-pub const UV_GETADDRINFO: uv_req_type = 8;
-pub const UV_WORK: uv_req_type = 7;
-pub const UV_FS: uv_req_type = 6;
-pub const UV_UDP_SEND: uv_req_type = 5;
-pub const UV_SHUTDOWN: uv_req_type = 4;
-pub const UV_WRITE: uv_req_type = 3;
-pub const UV_CONNECT: uv_req_type = 2;
-pub const UV_REQ: uv_req_type = 1;
-pub const UV_UNKNOWN_REQ: uv_req_type = 0;
-pub const UV_OVERLAPPED_PIPE: uv_stdio_flags = 64;
-pub const UV_NONBLOCK_PIPE: uv_stdio_flags = 64;
-pub const UV_WRITABLE_PIPE: uv_stdio_flags = 32;
-pub const UV_READABLE_PIPE: uv_stdio_flags = 16;
-pub const UV_INHERIT_STREAM: uv_stdio_flags = 4;
-pub const UV_INHERIT_FD: uv_stdio_flags = 2;
-pub const UV_CREATE_PIPE: uv_stdio_flags = 1;
-pub const UV_IGNORE: uv_stdio_flags = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
 pub const VAR_SPECIAL: VarType = 8;
 pub const VAR_BOOL: VarType = 7;
@@ -78,44 +35,7 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_26 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_26 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_26 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_26 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
-pub const kProcTypePty: ProcType = 1;
-pub const kProcTypeUv: ProcType = 0;
-pub const kChannelStreamInternal: ChannelStreamType = 4;
-pub const kChannelStreamStderr: ChannelStreamType = 3;
-pub const kChannelStreamStdio: ChannelStreamType = 2;
-pub const kChannelStreamSocket: ChannelStreamType = 1;
-pub const kChannelStreamProc: ChannelStreamType = 0;
-pub const kChannelPartAll: ChannelPart = 4;
 pub const kChannelPartRpc: ChannelPart = 3;
-pub const kChannelPartStderr: ChannelPart = 2;
-pub const kChannelPartStdout: ChannelPart = 1;
-pub const kChannelPartStdin: ChannelPart = 0;
-pub const kClientTypePlugin: ClientType = 4;
-pub const kClientTypeHost: ClientType = 3;
-pub const kClientTypeEmbedder: ClientType = 2;
-pub const kClientTypeUi: ClientType = 1;
-pub const kClientTypeMsgpackRpc: ClientType = 5;
-pub const kClientTypeRemote: ClientType = 0;
-pub const kClientTypeUnknown: ClientType = -1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_len: 0 as ::core::ffi::c_int,

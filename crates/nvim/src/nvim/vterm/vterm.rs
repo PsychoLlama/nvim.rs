@@ -21,8 +21,6 @@ pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;
 pub const VTERM_DAMAGE_ROW: VTermDamageSize = 1;
 pub const VTERM_DAMAGE_SCREEN: VTermDamageSize = 2;
 pub const VTERM_DAMAGE_SCROLL: VTermDamageSize = 3;
-pub const VTERM_N_DAMAGES: VTermDamageSize = 4;
-
 /// How a control string was ended.
 pub const VTERM_TERMINATOR_BEL: VTermTerminator = 0;
 pub const VTERM_TERMINATOR_ST: VTermTerminator = 1;
@@ -84,13 +82,8 @@ pub const VTERM_N_ATTRS: VTermAttr = 16;
 /// Where the escape-sequence parser is in a sequence. Everything from
 /// `OSC_COMMAND` down collects a control string.
 pub const NORMAL: VTermParserState = 0;
-pub const CSI_LEADER: VTermParserState = 1;
-pub const CSI_ARGS: VTermParserState = 2;
-pub const CSI_INTERMED: VTermParserState = 3;
-pub const DCS_COMMAND: VTermParserState = 4;
 pub const OSC_COMMAND: VTermParserState = 5;
 pub const OSC: VTermParserState = 6;
-pub const DCS_VTERM: VTermParserState = 7;
 pub const APC: VTermParserState = 8;
 pub const PM: VTermParserState = 9;
 pub const SOS: VTermParserState = 10;

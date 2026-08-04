@@ -120,4 +120,3 @@ pub unsafe extern "C" fn mh_put_glyph(
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

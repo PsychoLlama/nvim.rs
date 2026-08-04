@@ -24,13 +24,12 @@ use crate::src::nvim::memory::{xfree, xrealloc};
 use crate::src::nvim::os::libc::{__assert_fail, memset};
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::types::{
-    AlignTextPos, BoolVarValue, DecorHighlightInline, DecorInline, DecorInlineData, Error,
-    ExtmarkInfoArray, ExtmarkMove, ExtmarkOp, ExtmarkSavePos, ExtmarkSplice, ExtmarkType,
-    ExtmarkUndoObject, FloatRelative, MTKey, MTNode, MTPair, MTPos, Map_uint32_t_uint32_t, MapHash,
-    MarkTree, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_14, ScopeType, Set_uint32_t,
-    SpecialVarValue, StlClickDefinition_type_0 as C2Rust_Unnamed_12, TriState, UndoObjectType,
-    VarLockStatus, VarType, WinSplit, WinStyle, bcount_t, buf_T, colnr_T, extmark_undo_vec_t,
-    int32_t, int64_t, linenr_T, size_t, u_header_T, uint16_t, uint32_t, uint64_t, undo_object,
+    BoolVarValue, DecorHighlightInline, DecorInline, DecorInlineData, Error, ExtmarkInfoArray,
+    ExtmarkMove, ExtmarkOp, ExtmarkSavePos, ExtmarkSplice, ExtmarkType, ExtmarkUndoObject, MTKey,
+    MTNode, MTPair, MTPos, Map_uint32_t_uint32_t, MapHash, MarkTree, MarkTreeIter,
+    MarkTreeIter_s as C2Rust_Unnamed_14, ScopeType, Set_uint32_t, SpecialVarValue, TriState,
+    UndoObjectType, VarLockStatus, VarType, bcount_t, buf_T, colnr_T, extmark_undo_vec_t, int32_t,
+    int64_t, linenr_T, size_t, u_header_T, uint16_t, uint32_t, uint64_t, undo_object,
     undo_object_data as C2Rust_Unnamed_6,
 };
 use crate::src::nvim::undo::u_force_get_undo_header;
@@ -39,14 +38,12 @@ pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
 pub const VAR_SPECIAL: VarType = 8;
 pub const VAR_BOOL: VarType = 7;
@@ -57,40 +54,12 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const kExtmarkClear: UndoObjectType = 4;
 pub const kExtmarkSavePos: UndoObjectType = 3;
-pub const kExtmarkUpdate: UndoObjectType = 2;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_12 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_12 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_12 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_12 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const kExtmarkUndoNoRedo: ExtmarkOp = 3;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
-pub const kExtmarkHighlight: ExtmarkType = 32;
-pub const kExtmarkVirtLines: ExtmarkType = 16;
-pub const kExtmarkVirtText: ExtmarkType = 8;
-pub const kExtmarkSignHL: ExtmarkType = 4;
-pub const kExtmarkSign: ExtmarkType = 2;
 pub const kExtmarkNone: ExtmarkType = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;

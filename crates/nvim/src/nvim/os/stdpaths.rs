@@ -19,10 +19,7 @@ use core::ffi::{CStr, c_char};
 use core::ptr;
 use std::ffi::CString;
 
-pub const kXDGNone: XDGVarType = -1;
 pub const kXDGConfigHome: XDGVarType = 0;
-pub const kXDGDataHome: XDGVarType = 1;
-pub const kXDGCacheHome: XDGVarType = 2;
 pub const kXDGStateHome: XDGVarType = 3;
 pub const kXDGRuntimeDir: XDGVarType = 4;
 pub const kXDGConfigDirs: XDGVarType = 5;
