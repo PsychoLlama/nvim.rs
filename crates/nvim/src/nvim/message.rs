@@ -97,10 +97,10 @@ use crate::src::nvim::types::{
     HlMessageChunk, Integer, KeyDict_echo_opts, KeyValuePair, MessageData, Object, OptInt,
     ScopeType, ScreenGrid, SpecialVarValue, String_0, VV_ERRMSG, VV_SCROLLSTART, VV_STATUSMSG,
     VV_WARNINGMSG, VarLockStatus, VarType, buf_T, cmd_addr_T, colnr_T, estack_T, estack_arg_T,
-    exarg_T, flush_buffers_T, garray_T, int64_t, kObjectTypeArray, kObjectTypeBoolean,
-    kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, key_extra,
-    key_value_pair, linenr_T, object, object_data as C2Rust_Unnamed_11, ptrdiff_t, regmatch_T,
-    sattr_T, schar_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t, uint32_t, uint64_t,
+    exarg_T, flush_buffers_T, garray_T, int64_t, kObjectTypeArray, kObjectTypeDict,
+    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, key_extra, key_value_pair, linenr_T,
+    object, object_data as C2Rust_Unnamed_11, ptrdiff_t, regmatch_T, sattr_T, schar_T, size_t,
+    ssize_t, typval_T, typval_vval_union, uint8_t, uint32_t, uint64_t,
 };
 use crate::src::nvim::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
@@ -247,23 +247,7 @@ static confirm_msg: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static confirm_buttons: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-#[unsafe(no_mangle)]
-pub static msg_hist_last: GlobalCell<*mut MessageHistoryEntry> =
-    GlobalCell::new(::core::ptr::null_mut::<MessageHistoryEntry>());
-static msg_hist_first: GlobalCell<*mut MessageHistoryEntry> =
-    GlobalCell::new(::core::ptr::null_mut::<MessageHistoryEntry>());
-static msg_hist_temp: GlobalCell<*mut MessageHistoryEntry> =
-    GlobalCell::new(::core::ptr::null_mut::<MessageHistoryEntry>());
-static msg_hist_len: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static msg_hist_max: GlobalCell<::core::ffi::c_int> = GlobalCell::new(500 as ::core::ffi::c_int);
 pub const PROGRESS_TARGET_CMD: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-static msg_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(
-    kOptMoptFlagHitEnter as ::core::ffi::c_int
-        | kOptMoptFlagHistory as ::core::ffi::c_int
-        | kOptMoptFlagProgress as ::core::ffi::c_int,
-);
-static msg_wait: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static progress_msg_target: GlobalCell<::core::ffi::c_int> = GlobalCell::new(PROGRESS_TARGET_CMD);
 static keep_msg_more: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static msg_ext_kind: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
@@ -828,7 +812,6 @@ pub unsafe extern "C" fn msg_may_trunc(
         return s;
     }
 }
-static do_clear_hist_temp: GlobalCell<bool> = GlobalCell::new(true_0 != 0);
 pub unsafe extern "C" fn set_keep_msg(
     mut s: *const ::core::ffi::c_char,
     mut hl_id: ::core::ffi::c_int,

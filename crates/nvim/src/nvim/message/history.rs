@@ -3,163 +3,200 @@
 //! A doubly-linked list of [`MessageHistoryEntry`] capped at
 //! `'messagesopt'`'s `history:` count. [`msg_hist_add`] appends and evicts,
 //! [`ex_messages`] prints (or, under `ext_messages`, emits) the tail of it.
+//!
+//! The list stays a raw `repr(C)` chain rather than becoming a `Vec`: every
+//! entry is addressed by pointer from three cursors at once (first, last and
+//! the `g<` mark), and [`ex_messages`] holds one across [`msg_multihl`],
+//! which can run autocommands that add to the history.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
 
-pub unsafe extern "C" fn hl_msg_free(mut hl_msg: HlMessage) {
+/// Oldest entry in the history.
+static msg_hist_first: GlobalCell<*mut MessageHistoryEntry> = GlobalCell::new(ptr::null_mut());
+
+/// Newest entry in the history. Exported for the unit specs.
+#[unsafe(no_mangle)]
+pub static msg_hist_last: GlobalCell<*mut MessageHistoryEntry> = GlobalCell::new(ptr::null_mut());
+
+/// Oldest entry `g<` may still show: the temporary entries start here.
+static msg_hist_temp: GlobalCell<*mut MessageHistoryEntry> = GlobalCell::new(ptr::null_mut());
+
+/// Number of non-temporary entries, which is what `history:` caps.
+static msg_hist_len: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// `'messagesopt'`'s `history:` count.
+static msg_hist_max: GlobalCell<c_int> = GlobalCell::new(500);
+
+/// Drop the temporary entries before adding the next message.
+pub(crate) static do_clear_hist_temp: GlobalCell<bool> = GlobalCell::new(true);
+
+/// `'messagesopt'`'s flag set.
+pub(crate) static msg_flags: GlobalCell<c_int> = GlobalCell::new(
+    kOptMoptFlagHitEnter as c_int | kOptMoptFlagHistory as c_int | kOptMoptFlagProgress as c_int,
+);
+
+/// `'messagesopt'`'s `wait:` delay, in milliseconds.
+pub(crate) static msg_wait: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// Where `'messagesopt'`'s `progress:` sends progress messages.
+pub(crate) static progress_msg_target: GlobalCell<c_int> = GlobalCell::new(PROGRESS_TARGET_CMD);
+
+/// The `'messagesopt'` items, spelled as [`messagesopt_changed`] matches them.
+const OPT_HIT_ENTER: &CStr = c"hit-enter";
+const OPT_WAIT: &CStr = c"wait:";
+const OPT_HISTORY: &CStr = c"history:";
+const OPT_PROGRESS: &CStr = c"progress:";
+
+/// Free a message's chunks and the array holding them.
+///
+/// # Safety
+/// `hl_msg` must own its chunks; nothing else may hold them afterwards.
+pub unsafe fn hl_msg_free(hl_msg: HlMessage) {
     unsafe {
-        let mut i: size_t = 0 as size_t;
-        while i < hl_msg.size {
-            xfree((*hl_msg.items.offset(i as isize)).text.data as *mut ::core::ffi::c_void);
-            i = i.wrapping_add(1);
+        for i in 0..hl_msg.size {
+            xfree((*hl_msg.items.add(i)).text.data.cast());
         }
-        xfree(hl_msg.items as *mut ::core::ffi::c_void);
-        hl_msg.capacity = 0 as size_t;
-        hl_msg.size = hl_msg.capacity;
-        hl_msg.items = ::core::ptr::null_mut::<HlMessageChunk>();
+        xfree(hl_msg.items.cast());
     }
 }
 
-pub(crate) unsafe extern "C" fn msg_hist_add(
-    mut s: *const ::core::ffi::c_char,
-    mut len: ::core::ffi::c_int,
-    mut hl_id: ::core::ffi::c_int,
-) {
+/// Add `s` (of `len` bytes, or -1 for the whole string) to the history.
+///
+/// # Safety
+/// `s` must be a valid C string, readable for `len` bytes when that is not
+/// negative.
+pub(crate) unsafe fn msg_hist_add(s: *const c_char, len: c_int, hl_id: c_int) {
     unsafe {
-        let mut text: String_0 = String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: if len < 0 as ::core::ffi::c_int {
-                strlen(s)
-            } else {
-                len as size_t
-            },
-        };
-        while text.size > 0 as size_t && *s as ::core::ffi::c_int == '\n' as ::core::ffi::c_int {
-            text.size = text.size.wrapping_sub(1);
-            s = s.offset(1);
+        let mut start = s;
+        let mut size = if len < 0 { strlen(s) } else { len as size_t };
+        // Remove leading and trailing newlines.
+        while size > 0 && *start == b'\n' as c_char {
+            size -= 1;
+            start = start.add(1);
         }
-        while text.size > 0 as size_t
-            && *s.offset(text.size.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
-                == '\n' as ::core::ffi::c_int
-        {
-            text.size = text.size.wrapping_sub(1);
+        while size > 0 && *start.add(size - 1) == b'\n' as c_char {
+            size -= 1;
         }
-        if text.size == 0 as size_t {
+        if size == 0 {
             return;
         }
-        text.data =
-            xmemdupz(s as *const ::core::ffi::c_void, text.size) as *mut ::core::ffi::c_char;
-        let mut msg_0: HlMessage = HlMessage {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<HlMessageChunk>(),
+
+        let text = String_0 {
+            data: xmemdupz(start.cast(), size).cast(),
+            size,
         };
-        if msg_0.size == msg_0.capacity {
-            msg_0.capacity = if msg_0.capacity != 0 {
-                msg_0.capacity << 1 as ::core::ffi::c_int
-            } else {
-                8 as size_t
-            };
-            msg_0.items = xrealloc(
-                msg_0.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<HlMessageChunk>().wrapping_mul(msg_0.capacity),
-            ) as *mut HlMessageChunk;
-        } else {
-        };
-        let c2rust_fresh7 = msg_0.size;
-        msg_0.size = msg_0.size.wrapping_add(1);
-        *msg_0.items.offset(c2rust_fresh7 as isize) = HlMessageChunk {
-            text: text,
-            hl_id: hl_id,
-        };
-        msg_hist_add_multihl(msg_0, false_0 != 0, ::core::ptr::null_mut::<MessageData>());
+        let mut msg = EMPTY_HL_MESSAGE;
+        hl_msg_push(&mut msg, HlMessageChunk { text, hl_id });
+        msg_hist_add_multihl(msg, false, ptr::null_mut());
     }
 }
 
-pub(crate) unsafe extern "C" fn msg_hist_add_multihl(
-    mut msg_0: HlMessage,
-    mut temp: bool,
-    mut _msg_data: *mut MessageData,
-) {
+/// Append an already-chunked message to the history, taking ownership of it.
+///
+/// A `temp` entry is one only `g<` shows; the next real message displaces it.
+///
+/// # Safety
+/// `msg` must own its chunks.
+pub(crate) unsafe fn msg_hist_add_multihl(msg: HlMessage, temp: bool, _msg_data: *mut MessageData) {
     unsafe {
         if do_clear_hist_temp.get() {
             msg_hist_clear_temp();
-            do_clear_hist_temp.set(false_0 != 0);
+            do_clear_hist_temp.set(false);
         }
-        if msg_hist_off.get() as ::core::ffi::c_int != 0
-            || msg_silent.get() != 0 as ::core::ffi::c_int
-        {
-            hl_msg_free(msg_0);
+
+        if msg_hist_off.get() || msg_silent.get() != 0 {
+            hl_msg_free(msg);
             return;
         }
-        let mut entry: *mut MessageHistoryEntry =
-            xmalloc(::core::mem::size_of::<MessageHistoryEntry>()) as *mut MessageHistoryEntry;
-        (*entry).msg = msg_0;
+
+        let entry: *mut MessageHistoryEntry =
+            xmalloc(::core::mem::size_of::<MessageHistoryEntry>()).cast();
+        (*entry).msg = msg;
         (*entry).temp = temp;
-        (*entry).kind = if !(*msg_ext_kind.ptr()).is_null() {
-            xstrdup(msg_ext_kind.get())
+        (*entry).kind = if msg_ext_kind.get().is_null() {
+            ptr::null_mut()
         } else {
-            ::core::ptr::null_mut::<::core::ffi::c_char>()
+            xstrdup(msg_ext_kind.get())
         };
-        (*entry).prev = msg_hist_last.get() as *mut msg_hist;
-        (*entry).next = ::core::ptr::null_mut::<msg_hist>();
+        (*entry).prev = msg_hist_last.get();
+        (*entry).next = ptr::null_mut();
+        // NOTE: this does not encode whether the message was actually appended
+        // to the previous history entry. `append` is currently only true for
+        // `:echon`, which is stored as a temporary entry for `g<`, where it is
+        // guaranteed to follow the entry it was appended to.
         (*entry).append = msg_ext_append.get();
-        if (*msg_hist_first.ptr()).is_null() {
+
+        if msg_hist_first.get().is_null() {
             msg_hist_first.set(entry);
         }
-        if !(*msg_hist_last.ptr()).is_null() {
-            (*msg_hist_last.get()).next = entry as *mut msg_hist;
+        if !msg_hist_last.get().is_null() {
+            (*msg_hist_last.get()).next = entry;
         }
-        if (*msg_hist_temp.ptr()).is_null() {
+        if msg_hist_temp.get().is_null() {
             msg_hist_temp.set(entry);
         }
-        (*msg_hist_len.ptr()) += !temp as ::core::ffi::c_int;
+
+        msg_hist_len.set(msg_hist_len.get() + c_int::from(!temp));
         msg_hist_last.set(entry);
-        msg_ext_history.set(true_0 != 0);
+        msg_ext_history.set(true);
+
         msg_hist_clear(msg_hist_max.get());
     }
 }
 
-pub(crate) unsafe extern "C" fn msg_hist_free_msg(mut entry: *mut MessageHistoryEntry) {
+/// Unlink `entry` from the list and free it.
+///
+/// # Safety
+/// `entry` must be in the history list.
+unsafe fn msg_hist_free_msg(entry: *mut MessageHistoryEntry) {
     unsafe {
         if (*entry).next.is_null() {
-            msg_hist_last.set((*entry).prev as *mut MessageHistoryEntry);
+            msg_hist_last.set((*entry).prev);
         } else {
             (*(*entry).next).prev = (*entry).prev;
         }
         if (*entry).prev.is_null() {
-            msg_hist_first.set((*entry).next as *mut MessageHistoryEntry);
+            msg_hist_first.set((*entry).next);
         } else {
             (*(*entry).prev).next = (*entry).next;
         }
         if entry == msg_hist_temp.get() {
-            msg_hist_temp.set((*entry).next as *mut MessageHistoryEntry);
+            msg_hist_temp.set((*entry).next);
         }
         hl_msg_free((*entry).msg);
-        xfree((*entry).kind as *mut ::core::ffi::c_void);
-        xfree(entry as *mut ::core::ffi::c_void);
+        xfree((*entry).kind.cast());
+        xfree(entry.cast());
     }
 }
 
-pub unsafe extern "C" fn msg_hist_clear(mut keep: ::core::ffi::c_int) {
+/// Delete the oldest messages until `keep` non-temporary ones remain.
+///
+/// `keep` of zero empties the list, temporary entries included.
+///
+/// # Safety
+/// Only that the history list is well formed.
+unsafe fn msg_hist_clear(keep: c_int) {
     unsafe {
-        while msg_hist_len.get() > keep
-            || keep == 0 as ::core::ffi::c_int && !(*msg_hist_first.ptr()).is_null()
-        {
-            (*msg_hist_len.ptr()) -= !(*msg_hist_first.get()).temp as ::core::ffi::c_int;
+        while msg_hist_len.get() > keep || (keep == 0 && !msg_hist_first.get().is_null()) {
+            msg_hist_len.set(msg_hist_len.get() - c_int::from(!(*msg_hist_first.get()).temp));
             msg_hist_free_msg(msg_hist_first.get());
         }
     }
 }
 
-pub unsafe extern "C" fn msg_hist_clear_temp() {
+/// Drop every temporary (`g<`-only) entry.
+///
+/// # Safety
+/// Only that the history list is well formed.
+unsafe fn msg_hist_clear_temp() {
     unsafe {
-        while !(*msg_hist_temp.ptr()).is_null() {
-            let mut next: *mut MessageHistoryEntry =
-                (*msg_hist_temp.get()).next as *mut MessageHistoryEntry;
+        while !msg_hist_temp.get().is_null() {
+            let next = (*msg_hist_temp.get()).next;
             if (*msg_hist_temp.get()).temp {
                 msg_hist_free_msg(msg_hist_temp.get());
             }
@@ -168,376 +205,192 @@ pub unsafe extern "C" fn msg_hist_clear_temp() {
     }
 }
 
-pub unsafe extern "C" fn messagesopt_changed() -> ::core::ffi::c_int {
+/// Does `p` start with `word`, and with a digit after it if `digit` is set?
+///
+/// # Safety
+/// `p` must be a valid C string.
+unsafe fn at_opt(p: *const c_char, word: &CStr, digit: bool) -> bool {
     unsafe {
-        let mut messages_flags_new: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut messages_wait_new: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut messages_history_new: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut progress_target_flag: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut p: *mut ::core::ffi::c_char = p_mopt.get();
-        while *p as ::core::ffi::c_int != NUL {
-            if strnequal(
-                p,
-                b"hit-enter\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
-            ) {
-                p = p.offset(
-                    ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as usize)
-                        as isize,
-                );
-                messages_flags_new |= kOptMoptFlagHitEnter as ::core::ffi::c_int;
-            } else if strnequal(
-                p,
-                b"wait:\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-            ) as ::core::ffi::c_int
-                != 0
-                && ascii_isdigit(*p.offset(
-                    ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-                        as isize,
-                ) as ::core::ffi::c_int) as ::core::ffi::c_int
-                    != 0
-            {
-                p = p.offset(
-                    ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-                        as isize,
-                );
-                messages_wait_new = getdigits_int(&raw mut p, false_0 != 0, INT_MAX);
-                messages_flags_new |= kOptMoptFlagWait as ::core::ffi::c_int;
-            } else if strnequal(
-                p,
-                b"history:\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
-            ) as ::core::ffi::c_int
-                != 0
-                && ascii_isdigit(*p.offset(
-                    ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as usize)
-                        as isize,
-                ) as ::core::ffi::c_int) as ::core::ffi::c_int
-                    != 0
-            {
-                p = p.offset(
-                    ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as usize)
-                        as isize,
-                );
-                messages_history_new = getdigits_int(&raw mut p, false_0 != 0, INT_MAX);
-                messages_flags_new |= kOptMoptFlagHistory as ::core::ffi::c_int;
-            } else if strnequal(
-                p,
-                b"progress:\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
-            ) {
-                p = p.offset(
-                    ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as usize)
-                        as isize,
-                );
-                messages_flags_new |= kOptMoptFlagProgress as ::core::ffi::c_int;
-                if *p as ::core::ffi::c_int == 'c' as ::core::ffi::c_int {
-                    progress_target_flag |= PROGRESS_TARGET_CMD;
-                    p = p.offset(1);
-                }
-            }
-            if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int
-                && *p as ::core::ffi::c_int != NUL
-            {
-                return FAIL;
-            }
-            if *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
-                p = p.offset(1);
-            }
-        }
-        if messages_flags_new
-            & (kOptMoptFlagHitEnter as ::core::ffi::c_int | kOptMoptFlagWait as ::core::ffi::c_int)
-            == 0
-        {
-            return FAIL;
-        }
-        if messages_flags_new & kOptMoptFlagHistory as ::core::ffi::c_int == 0 {
-            return FAIL;
-        }
-        '_c2rust_label: {
-            if messages_history_new >= 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"messages_history_new >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/message.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1322 as ::core::ffi::c_uint,
-                    b"int messagesopt_changed(void)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        if messages_history_new > 10000 as ::core::ffi::c_int {
-            return FAIL;
-        }
-        '_c2rust_label_0: {
-            if messages_wait_new >= 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"messages_wait_new >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/message.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1328 as ::core::ffi::c_uint,
-                    b"int messagesopt_changed(void)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        if messages_wait_new > 10000 as ::core::ffi::c_int {
-            return FAIL;
-        }
-        msg_flags.set(messages_flags_new);
-        msg_wait.set(messages_wait_new);
-        progress_msg_target.set(progress_target_flag);
-        msg_hist_max.set(messages_history_new);
-        msg_hist_clear(msg_hist_max.get());
-        return OK;
+        strnequal(p, word.as_ptr(), word.count_bytes())
+            && (!digit || ascii_isdigit(*p.add(word.count_bytes()) as c_int))
     }
 }
 
-pub unsafe fn ex_messages(mut eap: *mut exarg_T) {
+/// `'messagesopt'` was set: validate it and adopt it.
+///
+/// Answers `FAIL` without changing anything if the value is not usable.
+///
+/// # Safety
+/// Only that `p_mopt` holds a valid string.
+pub unsafe fn messagesopt_changed() -> c_int {
     unsafe {
-        if strcmp(
-            (*eap).arg,
-            b"clear\0".as_ptr() as *const ::core::ffi::c_char,
-        ) == 0 as ::core::ffi::c_int
-        {
-            msg_hist_clear(if (*eap).addr_count != 0 {
-                (*eap).line2 as ::core::ffi::c_int
+        let mut flags = 0;
+        let mut wait = 0;
+        let mut history = 0;
+        let mut progress_target = 0;
+
+        let mut p = p_mopt.get();
+        while *p != 0 {
+            if at_opt(p, OPT_HIT_ENTER, false) {
+                p = p.add(OPT_HIT_ENTER.count_bytes());
+                flags |= kOptMoptFlagHitEnter as c_int;
+            } else if at_opt(p, OPT_WAIT, true) {
+                p = p.add(OPT_WAIT.count_bytes());
+                wait = getdigits_int(&raw mut p, false, INT_MAX);
+                flags |= kOptMoptFlagWait as c_int;
+            } else if at_opt(p, OPT_HISTORY, true) {
+                p = p.add(OPT_HISTORY.count_bytes());
+                history = getdigits_int(&raw mut p, false, INT_MAX);
+                flags |= kOptMoptFlagHistory as c_int;
+            } else if at_opt(p, OPT_PROGRESS, false) {
+                p = p.add(OPT_PROGRESS.count_bytes());
+                flags |= kOptMoptFlagProgress as c_int;
+                if *p == b'c' as c_char {
+                    progress_target |= PROGRESS_TARGET_CMD;
+                    p = p.add(1);
+                }
+            }
+            // An unrecognised item leaves `p` where it was, so this rejects it.
+            if *p != b',' as c_char && *p != 0 {
+                return FAIL;
+            }
+            if *p == b',' as c_char {
+                p = p.add(1);
+            }
+        }
+
+        // Either "wait" or "hit-enter" is required.
+        if flags & (kOptMoptFlagHitEnter as c_int | kOptMoptFlagWait as c_int) == 0 {
+            return FAIL;
+        }
+        // "history" must be set, and both counts must be <= 10000.
+        if flags & kOptMoptFlagHistory as c_int == 0 {
+            return FAIL;
+        }
+        debug_assert!(history >= 0);
+        if history > 10000 {
+            return FAIL;
+        }
+        debug_assert!(wait >= 0);
+        if wait > 10000 {
+            return FAIL;
+        }
+
+        msg_flags.set(flags);
+        msg_wait.set(wait);
+        progress_msg_target.set(progress_target);
+
+        msg_hist_max.set(history);
+        msg_hist_clear(msg_hist_max.get());
+
+        OK
+    }
+}
+
+/// One history entry as the `msg_history_show` UI event carries it:
+/// `[kind, [[attr, text, hl_id], ..], append]`.
+///
+/// # Safety
+/// `entry` must be in the history list.
+unsafe fn entry_to_event(entry: *mut MessageHistoryEntry) -> Object {
+    unsafe {
+        let mut content = EMPTY_ARRAY;
+        for i in 0..(*entry).msg.size {
+            let chunk = *(*entry).msg.items.add(i);
+            let attr = if chunk.hl_id != 0 {
+                syn_id2attr(chunk.hl_id)
             } else {
-                0 as ::core::ffi::c_int
+                0
+            };
+            let mut content_entry = EMPTY_ARRAY;
+            array_push(&mut content_entry, Object::integer(attr.into()));
+            array_push(
+                &mut content_entry,
+                Object::string(copy_string(chunk.text, ptr::null_mut())),
+            );
+            array_push(&mut content_entry, Object::integer(chunk.hl_id.into()));
+            array_push(&mut content, Object::array(content_entry));
+        }
+
+        let mut out = EMPTY_ARRAY;
+        array_push(&mut out, Object::string(cstr_to_string((*entry).kind)));
+        array_push(&mut out, Object::array(content));
+        array_push(&mut out, Object::boolean((*entry).append));
+        Object::array(out)
+    }
+}
+
+/// `:messages`.
+///
+/// # Safety
+/// `eap` must point at a valid command argument block.
+pub unsafe fn ex_messages(eap: *mut exarg_T) {
+    unsafe {
+        if strcmp((*eap).arg, c"clear".as_ptr()) == 0 {
+            msg_hist_clear(if (*eap).addr_count != 0 {
+                (*eap).line2 as c_int
+            } else {
+                0
             });
             return;
         }
-        if *(*eap).arg as ::core::ffi::c_int != NUL {
-            emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
+        if *(*eap).arg != 0 {
+            emsg(gettext(&raw const e_invarg as *const c_char));
             return;
         }
-        let mut entries: Array = Array {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
-        };
-        let mut p: *mut MessageHistoryEntry = if (*eap).skip != 0 {
+
+        let mut entries = EMPTY_ARRAY;
+        let mut p = if (*eap).skip != 0 {
             msg_hist_temp.get()
         } else {
             msg_hist_first.get()
         };
-        let mut skip: ::core::ffi::c_int = if (*eap).addr_count != 0 {
-            msg_hist_len.get() - (*eap).line2 as ::core::ffi::c_int
+        let mut skip = if (*eap).addr_count != 0 {
+            msg_hist_len.get() - (*eap).line2 as c_int
         } else {
-            0 as ::core::ffi::c_int
+            0
         };
+
         while !p.is_null() {
-            if !((*p).temp as ::core::ffi::c_int != 0 && (*eap).skip == 0 || {
-                let c2rust_fresh24 = skip;
-                skip = skip - 1;
-                c2rust_fresh24 > 0 as ::core::ffi::c_int
-            }) {
-                if ui_has(kUIMessages) as ::core::ffi::c_int != 0 && msg_silent.get() == 0 {
-                    let mut entry: Array = Array {
-                        size: 0 as size_t,
-                        capacity: 0 as size_t,
-                        items: ::core::ptr::null_mut::<Object>(),
-                    };
-                    if entry.size == entry.capacity {
-                        entry.capacity = if entry.capacity != 0 {
-                            entry.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            8 as size_t
-                        };
-                        entry.items = xrealloc(
-                            entry.items as *mut ::core::ffi::c_void,
-                            ::core::mem::size_of::<Object>().wrapping_mul(entry.capacity),
-                        ) as *mut Object;
-                    } else {
-                    };
-                    let c2rust_fresh25 = entry.size;
-                    entry.size = entry.size.wrapping_add(1);
-                    *entry.items.offset(c2rust_fresh25 as isize) = object {
-                        type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed_11 {
-                            string: cstr_to_string((*p).kind),
-                        },
-                    };
-                    let mut content: Array = Array {
-                        size: 0 as size_t,
-                        capacity: 0 as size_t,
-                        items: ::core::ptr::null_mut::<Object>(),
-                    };
-                    let mut i: uint32_t = 0 as uint32_t;
-                    while (i as size_t) < (*p).msg.size {
-                        let mut chunk: HlMessageChunk = *(*p).msg.items.offset(i as isize);
-                        let mut content_entry: Array = Array {
-                            size: 0 as size_t,
-                            capacity: 0 as size_t,
-                            items: ::core::ptr::null_mut::<Object>(),
-                        };
-                        if content_entry.size == content_entry.capacity {
-                            content_entry.capacity = if content_entry.capacity != 0 {
-                                content_entry.capacity << 1 as ::core::ffi::c_int
-                            } else {
-                                8 as size_t
-                            };
-                            content_entry.items = xrealloc(
-                                content_entry.items as *mut ::core::ffi::c_void,
-                                ::core::mem::size_of::<Object>()
-                                    .wrapping_mul(content_entry.capacity),
-                            ) as *mut Object;
-                        } else {
-                        };
-                        let c2rust_fresh26 = content_entry.size;
-                        content_entry.size = content_entry.size.wrapping_add(1);
-                        *content_entry.items.offset(c2rust_fresh26 as isize) = object {
-                            type_0: kObjectTypeInteger,
-                            data: C2Rust_Unnamed_11 {
-                                integer: (if chunk.hl_id != 0 {
-                                    syn_id2attr(chunk.hl_id)
-                                } else {
-                                    0 as ::core::ffi::c_int
-                                }) as Integer,
-                            },
-                        };
-                        if content_entry.size == content_entry.capacity {
-                            content_entry.capacity = if content_entry.capacity != 0 {
-                                content_entry.capacity << 1 as ::core::ffi::c_int
-                            } else {
-                                8 as size_t
-                            };
-                            content_entry.items = xrealloc(
-                                content_entry.items as *mut ::core::ffi::c_void,
-                                ::core::mem::size_of::<Object>()
-                                    .wrapping_mul(content_entry.capacity),
-                            ) as *mut Object;
-                        } else {
-                        };
-                        let c2rust_fresh27 = content_entry.size;
-                        content_entry.size = content_entry.size.wrapping_add(1);
-                        *content_entry.items.offset(c2rust_fresh27 as isize) = object {
-                            type_0: kObjectTypeString,
-                            data: C2Rust_Unnamed_11 {
-                                string: copy_string(chunk.text, ::core::ptr::null_mut::<Arena>()),
-                            },
-                        };
-                        if content_entry.size == content_entry.capacity {
-                            content_entry.capacity = if content_entry.capacity != 0 {
-                                content_entry.capacity << 1 as ::core::ffi::c_int
-                            } else {
-                                8 as size_t
-                            };
-                            content_entry.items = xrealloc(
-                                content_entry.items as *mut ::core::ffi::c_void,
-                                ::core::mem::size_of::<Object>()
-                                    .wrapping_mul(content_entry.capacity),
-                            ) as *mut Object;
-                        } else {
-                        };
-                        let c2rust_fresh28 = content_entry.size;
-                        content_entry.size = content_entry.size.wrapping_add(1);
-                        *content_entry.items.offset(c2rust_fresh28 as isize) = object {
-                            type_0: kObjectTypeInteger,
-                            data: C2Rust_Unnamed_11 {
-                                integer: chunk.hl_id as Integer,
-                            },
-                        };
-                        if content.size == content.capacity {
-                            content.capacity = if content.capacity != 0 {
-                                content.capacity << 1 as ::core::ffi::c_int
-                            } else {
-                                8 as size_t
-                            };
-                            content.items = xrealloc(
-                                content.items as *mut ::core::ffi::c_void,
-                                ::core::mem::size_of::<Object>().wrapping_mul(content.capacity),
-                            ) as *mut Object;
-                        } else {
-                        };
-                        let c2rust_fresh29 = content.size;
-                        content.size = content.size.wrapping_add(1);
-                        *content.items.offset(c2rust_fresh29 as isize) = object {
-                            type_0: kObjectTypeArray,
-                            data: C2Rust_Unnamed_11 {
-                                array: content_entry,
-                            },
-                        };
-                        i = i.wrapping_add(1);
-                    }
-                    if entry.size == entry.capacity {
-                        entry.capacity = if entry.capacity != 0 {
-                            entry.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            8 as size_t
-                        };
-                        entry.items = xrealloc(
-                            entry.items as *mut ::core::ffi::c_void,
-                            ::core::mem::size_of::<Object>().wrapping_mul(entry.capacity),
-                        ) as *mut Object;
-                    } else {
-                    };
-                    let c2rust_fresh30 = entry.size;
-                    entry.size = entry.size.wrapping_add(1);
-                    *entry.items.offset(c2rust_fresh30 as isize) = object {
-                        type_0: kObjectTypeArray,
-                        data: C2Rust_Unnamed_11 { array: content },
-                    };
-                    if entry.size == entry.capacity {
-                        entry.capacity = if entry.capacity != 0 {
-                            entry.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            8 as size_t
-                        };
-                        entry.items = xrealloc(
-                            entry.items as *mut ::core::ffi::c_void,
-                            ::core::mem::size_of::<Object>().wrapping_mul(entry.capacity),
-                        ) as *mut Object;
-                    } else {
-                    };
-                    let c2rust_fresh31 = entry.size;
-                    entry.size = entry.size.wrapping_add(1);
-                    *entry.items.offset(c2rust_fresh31 as isize) = object {
-                        type_0: kObjectTypeBoolean,
-                        data: C2Rust_Unnamed_11 {
-                            boolean: (*p).append,
-                        },
-                    };
-                    if entries.size == entries.capacity {
-                        entries.capacity = if entries.capacity != 0 {
-                            entries.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            8 as size_t
-                        };
-                        entries.items = xrealloc(
-                            entries.items as *mut ::core::ffi::c_void,
-                            ::core::mem::size_of::<Object>().wrapping_mul(entries.capacity),
-                        ) as *mut Object;
-                    } else {
-                    };
-                    let c2rust_fresh32 = entries.size;
-                    entries.size = entries.size.wrapping_add(1);
-                    *entries.items.offset(c2rust_fresh32 as isize) = object {
-                        type_0: kObjectTypeArray,
-                        data: C2Rust_Unnamed_11 { array: entry },
-                    };
+            // Skip over count or temporary "g<" messages. The decrement sits
+            // inside the short circuit: a temporary entry does not consume one
+            // of the counted lines.
+            let temporary = (*p).temp && (*eap).skip == 0;
+            let counted_out = !temporary && {
+                let remaining = skip;
+                skip -= 1;
+                remaining > 0
+            };
+            if !temporary && !counted_out {
+                if ui_has(kUIMessages) && msg_silent.get() == 0 {
+                    array_push(&mut entries, entry_to_event(p));
                 }
                 if redirecting() || !ui_has(kUIMessages) {
-                    (*msg_silent.ptr()) += ui_has(kUIMessages) as ::core::ffi::c_int;
-                    let mut needs_clear: bool = false_0 != 0;
+                    // Under ext_messages the text has already gone to the UI
+                    // above; this pass exists only to feed the redirection, so
+                    // silence the display half of it.  `ui_has` is asked twice,
+                    // as upstream does, and deliberately not hoisted into a
+                    // local: `msg_multihl` can reach `wait_return`, which pumps
+                    // the event loop, which can service a UI attach or detach.
+                    msg_silent.set(msg_silent.get() + c_int::from(ui_has(kUIMessages)));
+                    let mut needs_clear = false;
                     msg_multihl(
-                        object {
-                            type_0: kObjectTypeNil,
-                            data: C2Rust_Unnamed_11 { boolean: false },
-                        },
+                        Object::NIL,
                         (*p).msg,
                         (*p).kind,
-                        false_0 != 0,
-                        false_0 != 0,
-                        ::core::ptr::null_mut::<MessageData>(),
+                        false,
+                        false,
+                        ptr::null_mut(),
                         &raw mut needs_clear,
                     );
-                    (*msg_silent.ptr()) -= ui_has(kUIMessages) as ::core::ffi::c_int;
+                    msg_silent.set(msg_silent.get() - c_int::from(ui_has(kUIMessages)));
                 }
             }
-            p = (*p).next as *mut MessageHistoryEntry;
+            p = (*p).next;
         }
-        if entries.size > 0 as size_t {
-            ui_call_msg_history_show(entries, (*eap).skip != 0 as ::core::ffi::c_int);
+
+        if entries.size > 0 {
+            ui_call_msg_history_show(entries, (*eap).skip != 0);
             api_free_array(entries);
         }
     }

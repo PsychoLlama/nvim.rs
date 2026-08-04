@@ -102,7 +102,7 @@
 {"symbol":"mouse_find_win_inner","kind":"fn","file":"crates/nvim/src/nvim/mouse.rs","class":"internal","refs":[]}
 {"symbol":"mpack_pack_number","kind":"fn","file":"crates/nvim/src/mpack/conv.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"msg","kind":"fn","file":"crates/nvim/src/nvim/message.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"msg_hist_last","kind":"static","file":"crates/nvim/src/nvim/message.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"msg_hist_last","kind":"static","file":"crates/nvim/src/nvim/message/history.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"mt_inspect","kind":"fn","file":"crates/nvim/src/nvim/marktree/inspect.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"mt_right_test","kind":"fn","file":"crates/nvim/src/nvim/marktree/check.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"multiqueue_free","kind":"fn","file":"crates/nvim/src/nvim/event/multiqueue.rs","class":"test","refs":["unit-specs"]}
