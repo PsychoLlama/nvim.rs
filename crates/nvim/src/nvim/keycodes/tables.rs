@@ -232,7 +232,8 @@ const fn key_name(key: c_int, is_alt: bool, name: &'static str) -> KeyName {
 }
 
 /// Every name the `<>` notation knows, **sorted by lower-cased name** — the
-/// order [`code_for_name`] binary searches and `SORTED` asserts below.
+/// order [`code_for_name`] binary searches and the `_SORTED` block below
+/// asserts at compile time.
 ///
 /// Where two rows share a name (`TAB` and `K_TAB` are both `Tab`) the first
 /// wins the lookup, so their relative order is load-bearing too.
