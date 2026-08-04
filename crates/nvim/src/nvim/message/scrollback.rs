@@ -221,7 +221,7 @@ pub(crate) unsafe extern "C" fn disp_sb_line(
             msg_col.set((*mp).sb_msg_col);
             let mut p: *mut ::core::ffi::c_char =
                 &raw mut (*mp).sb_text as *mut ::core::ffi::c_char;
-            msg_puts_display(p, -1 as ::core::ffi::c_int, (*mp).sb_hl_id, true_0);
+            msg_puts_display(p, -1 as ::core::ffi::c_int, (*mp).sb_hl_id, true);
             if (*mp).sb_eol as ::core::ffi::c_int != 0 || (*mp).sb_next.is_null() {
                 break;
             }
