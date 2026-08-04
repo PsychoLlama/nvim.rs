@@ -37,7 +37,6 @@
     "crates/nvim/src/nvim/cmdexpand/pum.rs": 4,
     "crates/nvim/src/nvim/cmdexpand/showmatch.rs": 23,
     "crates/nvim/src/nvim/cmdexpand/userfunc.rs": 18,
-    "crates/nvim/src/nvim/cmdexpand/wildkey.rs": 3,
     "crates/nvim/src/nvim/cmdhist.rs": 5,
     "crates/nvim/src/nvim/context.rs": 38,
     "crates/nvim/src/nvim/cursor_shape.rs": 76,

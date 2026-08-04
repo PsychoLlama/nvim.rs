@@ -151,7 +151,7 @@ pub use self::fromcontext::*;
 mod userfunc;
 pub use self::userfunc::*;
 mod wildkey;
-pub use self::wildkey::*;
+pub(crate) use self::wildkey::*;
 mod eval;
 pub use self::eval::*;
 mod bufpat;
