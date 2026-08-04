@@ -374,7 +374,7 @@ pub(crate) unsafe extern "C" fn expand_pattern_in_buf(
                             as *mut *mut ::core::ffi::c_char)
                             .offset(c2rust_fresh1 as isize);
                         *c2rust_lvalue_ptr = match_0;
-                        if ga.ga_len > TAG_MANY as ::core::ffi::c_int {
+                        if ga.ga_len > TAG_MANY {
                             break;
                         }
                     }

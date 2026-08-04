@@ -46,11 +46,8 @@ pub unsafe extern "C" fn f_getcompletion(
             },
         };
         let mut filtered: bool = false_0 != 0;
-        let mut options: ::core::ffi::c_int = WILD_SILENT as ::core::ffi::c_int
-            | WILD_USE_NL as ::core::ffi::c_int
-            | WILD_ADD_SLASH as ::core::ffi::c_int
-            | WILD_NO_BEEP as ::core::ffi::c_int
-            | WILD_HOME_REPLACE as ::core::ffi::c_int;
+        let mut options: ::core::ffi::c_int =
+            WILD_SILENT | WILD_USE_NL | WILD_ADD_SLASH | WILD_NO_BEEP | WILD_HOME_REPLACE;
         if tv_check_for_string_arg(argvars, 1 as ::core::ffi::c_int) == FAIL {
             return;
         }
@@ -65,10 +62,10 @@ pub unsafe extern "C" fn f_getcompletion(
             ) != 0;
         }
         if p_wic.get() != 0 {
-            options |= WILD_ICASE as ::core::ffi::c_int;
+            options |= WILD_ICASE;
         }
         if !filtered {
-            options |= WILD_KEEP_ALL as ::core::ffi::c_int;
+            options |= WILD_KEEP_ALL;
         }
         if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -163,7 +160,7 @@ pub unsafe extern "C" fn f_getcompletion(
                         .wrapping_sub(xpc.xp_pattern.offset_from(pattern_start) as size_t);
                 }
                 57 => {
-                    let mut context: ::core::ffi::c_int = EXPAND_SHELLCMDLINE as ::core::ffi::c_int;
+                    let mut context: ::core::ffi::c_int = EXPAND_SHELLCMDLINE;
                     set_context_for_wildcard_arg(
                         ::core::ptr::null_mut::<exarg_T>(),
                         xpc.xp_pattern,
@@ -181,7 +178,7 @@ pub unsafe extern "C" fn f_getcompletion(
                 _ => {}
             }
         }
-        if xpc.xp_context == EXPAND_LUA as ::core::ffi::c_int {
+        if xpc.xp_context == EXPAND_LUA {
             xpc.xp_col = strlen(xpc.xp_line) as ::core::ffi::c_int;
             nlua_expand_pat(&raw mut xpc);
             xpc.xp_pattern_len = xpc
@@ -202,7 +199,7 @@ pub unsafe extern "C" fn f_getcompletion(
             pat,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             options,
-            WILD_ALL_KEEP as ::core::ffi::c_int,
+            WILD_ALL_KEEP,
         );
         tv_list_alloc_ret(rettv, xpc.xp_numfiles as ptrdiff_t);
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

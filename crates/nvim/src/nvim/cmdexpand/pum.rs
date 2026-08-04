@@ -140,10 +140,9 @@ pub(crate) unsafe extern "C" fn skip_wildmenu_char(
 ) -> ::core::ffi::c_int {
     unsafe {
         if rem_backslash(s) as ::core::ffi::c_int != 0
-            && (*xp).xp_context != EXPAND_HELP as ::core::ffi::c_int
-            && (*xp).xp_context != EXPAND_PATTERN_IN_BUF as ::core::ffi::c_int
-            || ((*xp).xp_context == EXPAND_MENUS as ::core::ffi::c_int
-                || (*xp).xp_context == EXPAND_MENUNAMES as ::core::ffi::c_int)
+            && (*xp).xp_context != EXPAND_HELP
+            && (*xp).xp_context != EXPAND_PATTERN_IN_BUF
+            || ((*xp).xp_context == EXPAND_MENUS || (*xp).xp_context == EXPAND_MENUNAMES)
                 && (*s.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == '\t' as ::core::ffi::c_int
                     || *s.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -171,8 +170,8 @@ pub(crate) unsafe extern "C" fn wildmenu_match_len(
 ) -> ::core::ffi::c_int {
     unsafe {
         let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut emenu: ::core::ffi::c_int = ((*xp).xp_context == EXPAND_MENUS as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_MENUNAMES as ::core::ffi::c_int)
+        let mut emenu: ::core::ffi::c_int = ((*xp).xp_context == EXPAND_MENUS
+            || (*xp).xp_context == EXPAND_MENUNAMES)
             as ::core::ffi::c_int;
         if emenu != 0 && menu_is_separator(s) as ::core::ffi::c_int != 0 {
             return 1 as ::core::ffi::c_int;
@@ -208,7 +207,7 @@ pub(crate) unsafe extern "C" fn redraw_wildmenu(
         }
         let mut buf: *mut ::core::ffi::c_char = xmalloc(
             (Columns.get() as size_t)
-                .wrapping_mul(MB_MAXBYTES as ::core::ffi::c_int as size_t)
+                .wrapping_mul(MB_MAXBYTES as size_t)
                 .wrapping_add(1 as size_t),
         ) as *mut ::core::ffi::c_char;
         if match_0 == -1 as ::core::ffi::c_int {
@@ -323,9 +322,8 @@ pub(crate) unsafe extern "C" fn redraw_wildmenu(
             } else {
                 *matches.offset(i as isize)
             };
-            let mut emenu: ::core::ffi::c_int = ((*xp).xp_context
-                == EXPAND_MENUS as ::core::ffi::c_int
-                || (*xp).xp_context == EXPAND_MENUNAMES as ::core::ffi::c_int)
+            let mut emenu: ::core::ffi::c_int = ((*xp).xp_context == EXPAND_MENUS
+                || (*xp).xp_context == EXPAND_MENUNAMES)
                 as ::core::ffi::c_int;
             if emenu != 0 && menu_is_separator(s) as ::core::ffi::c_int != 0 {
                 strcpy(
@@ -387,7 +385,7 @@ pub(crate) unsafe extern "C" fn redraw_wildmenu(
                         (*cmdline_row.ptr()) += 1;
                         row += 1;
                     }
-                    wild_menu_showing.set(WM_SCROLLED as ::core::ffi::c_int);
+                    wild_menu_showing.set(WM_SCROLLED);
                 } else {
                     if (*lastwin.get()).w_status_height == 0 as ::core::ffi::c_int
                         && global_stl_height() == 0 as ::core::ffi::c_int
@@ -398,11 +396,11 @@ pub(crate) unsafe extern "C" fn redraw_wildmenu(
                         p_wmh.set(0 as OptInt);
                         last_status(false_0 != 0);
                     }
-                    wild_menu_showing.set(WM_SHOWN as ::core::ffi::c_int);
+                    wild_menu_showing.set(WM_SHOWN);
                 }
             }
             grid_line_start(
-                if wild_menu_showing.get() == WM_SCROLLED as ::core::ffi::c_int {
+                if wild_menu_showing.get() == WM_SCROLLED {
                     msg_grid_adj.ptr()
                 } else {
                     default_gridview.ptr()

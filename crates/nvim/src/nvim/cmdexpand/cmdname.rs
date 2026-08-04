@@ -25,23 +25,23 @@ pub(crate) unsafe extern "C" fn set_context_by_cmdname(
         's_685: {
             match cmdidx as ::core::ffi::c_int {
                 158 | 403 | 457 => {
-                    if (*xp).xp_context == EXPAND_FILES as ::core::ffi::c_int {
+                    if (*xp).xp_context == EXPAND_FILES {
                         (*xp).xp_context = if *get_findfunc() as ::core::ffi::c_int != NUL {
-                            EXPAND_FINDFUNC as ::core::ffi::c_int
+                            EXPAND_FINDFUNC
                         } else {
-                            EXPAND_FILES_IN_PATH as ::core::ffi::c_int
+                            EXPAND_FILES_IN_PATH
                         };
                     }
                     break 's_685;
                 }
                 61 | 71 | 225 | 226 | 448 | 449 => {
-                    if (*xp).xp_context == EXPAND_FILES as ::core::ffi::c_int {
-                        (*xp).xp_context = EXPAND_DIRS_IN_CDPATH as ::core::ffi::c_int;
+                    if (*xp).xp_context == EXPAND_FILES {
+                        (*xp).xp_context = EXPAND_DIRS_IN_CDPATH;
                     }
                     break 's_685;
                 }
                 176 => {
-                    (*xp).xp_context = EXPAND_HELP as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_HELP;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
@@ -52,7 +52,7 @@ pub(crate) unsafe extern "C" fn set_context_by_cmdname(
                 278 => return set_context_in_match_cmd(xp, arg),
                 93 => return set_context_in_user_cmd(xp, arg),
                 114 => {
-                    (*xp).xp_context = EXPAND_USER_COMMANDS as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_USER_COMMANDS;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
@@ -96,19 +96,11 @@ pub(crate) unsafe extern "C" fn set_context_by_cmdname(
                     break 's_685;
                 }
                 401 => {
-                    set_context_in_set_cmd(
-                        xp,
-                        arg as *mut ::core::ffi::c_char,
-                        OPT_GLOBAL as ::core::ffi::c_int,
-                    );
+                    set_context_in_set_cmd(xp, arg as *mut ::core::ffi::c_char, OPT_GLOBAL);
                     break 's_685;
                 }
                 402 => {
-                    set_context_in_set_cmd(
-                        xp,
-                        arg as *mut ::core::ffi::c_char,
-                        OPT_LOCAL as ::core::ffi::c_int,
-                    );
+                    set_context_in_set_cmd(xp, arg as *mut ::core::ffi::c_char, OPT_LOCAL);
                     break 's_685;
                 }
                 451 | 431 | 335 | 262 | 489 | 437 | 343 | 474 | 436 | 338 => {
@@ -116,15 +108,15 @@ pub(crate) unsafe extern "C" fn set_context_by_cmdname(
                         & kOptWopFlagTagfile as ::core::ffi::c_int as ::core::ffi::c_uint
                         != 0
                     {
-                        (*xp).xp_context = EXPAND_TAGS_LISTFILES as ::core::ffi::c_int;
+                        (*xp).xp_context = EXPAND_TAGS_LISTFILES;
                     } else {
-                        (*xp).xp_context = EXPAND_TAGS as ::core::ffi::c_int;
+                        (*xp).xp_context = EXPAND_TAGS;
                     }
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
                 18 => {
-                    (*xp).xp_context = EXPAND_AUGROUP as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_AUGROUP;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
@@ -139,7 +131,7 @@ pub(crate) unsafe extern "C" fn set_context_by_cmdname(
                 }
                 498 => return set_context_in_unlet_cmd(xp, arg),
                 168 | 115 => {
-                    (*xp).xp_context = EXPAND_USER_FUNC as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_USER_FUNC;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
@@ -164,7 +156,7 @@ pub(crate) unsafe extern "C" fn set_context_by_cmdname(
                 },
                 20 | 388 | 321 | 75 => {}
                 119 | 122 => {
-                    (*xp).xp_context = EXPAND_DIFF_BUFFERS as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_DIFF_BUFFERS;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
@@ -195,7 +187,7 @@ pub(crate) unsafe extern "C" fn set_context_by_cmdname(
                     );
                 }
                 276 | 293 | 514 | 309 | 191 | 82 | 247 | 412 | 540 => {
-                    (*xp).xp_context = EXPAND_MAPCLEAR as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_MAPCLEAR;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
@@ -232,27 +224,27 @@ pub(crate) unsafe extern "C" fn set_context_by_cmdname(
                     );
                 }
                 92 => {
-                    (*xp).xp_context = EXPAND_COLORS as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_COLORS;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
                 95 => {
-                    (*xp).xp_context = EXPAND_COMPILER as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_COMPILER;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
                 317 => {
-                    (*xp).xp_context = EXPAND_OWNSYNTAX as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_OWNSYNTAX;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
                 400 => {
-                    (*xp).xp_context = EXPAND_FILETYPE as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_FILETYPE;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
                 319 => {
-                    (*xp).xp_context = EXPAND_PACKADD as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_PACKADD;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
@@ -266,30 +258,30 @@ pub(crate) unsafe extern "C" fn set_context_by_cmdname(
                     break 's_685;
                 }
                 73 => {
-                    (*xp).xp_context = EXPAND_CHECKHEALTH as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_CHECKHEALTH;
                     break 's_685;
                 }
                 271 => {
-                    (*xp).xp_context = EXPAND_LSP as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_LSP;
                     break 's_685;
                 }
                 370 => {
-                    (*xp).xp_context = EXPAND_RETAB as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_RETAB;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
                 281 => {
-                    (*xp).xp_context = EXPAND_MESSAGES as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_MESSAGES;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
                 182 => {
-                    (*xp).xp_context = EXPAND_HISTORY as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_HISTORY;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
                 445 => {
-                    (*xp).xp_context = EXPAND_SYNTIME as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_SYNTIME;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
@@ -301,7 +293,7 @@ pub(crate) unsafe extern "C" fn set_context_by_cmdname(
                         }
                         arg = (*xp).xp_pattern.offset(1 as ::core::ffi::c_int as isize);
                     }
-                    (*xp).xp_context = EXPAND_ARGLIST as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_ARGLIST;
                     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                     break 's_685;
                 }
@@ -309,14 +301,14 @@ pub(crate) unsafe extern "C" fn set_context_by_cmdname(
                 397 => return set_context_in_scriptnames_cmd(xp, arg),
                 156 => return set_context_in_filetype_cmd(xp, arg),
                 264 | 552 => {
-                    (*xp).xp_context = EXPAND_LUA as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_LUA;
                     break 's_685;
                 }
                 _ => {
                     break 's_685;
                 }
             }
-            (*xp).xp_context = EXPAND_BUFFERS as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_BUFFERS;
             (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
         }
         return ::core::ptr::null::<::core::ffi::c_char>();
@@ -365,13 +357,13 @@ pub(crate) unsafe extern "C" fn set_one_cmd_context(
             cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
             cstack: ::core::ptr::null_mut::<cstack_T>(),
         };
-        let mut context: ::core::ffi::c_int = EXPAND_NOTHING as ::core::ffi::c_int;
+        let mut context: ::core::ffi::c_int = EXPAND_NOTHING;
         let mut forceit: bool = false_0 != 0;
         let mut usefilter: bool = false_0 != 0;
         ExpandInit(xp);
         (*xp).xp_pattern = buff as *mut ::core::ffi::c_char;
         (*xp).xp_line = buff as *mut ::core::ffi::c_char;
-        (*xp).xp_context = EXPAND_COMMANDS as ::core::ffi::c_int;
+        (*xp).xp_context = EXPAND_COMMANDS;
         ea.argt = 0 as uint32_t;
         let mut cmd: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         cmd = buff;
@@ -388,7 +380,7 @@ pub(crate) unsafe extern "C" fn set_one_cmd_context(
             return ::core::ptr::null::<::core::ffi::c_char>();
         }
         if *cmd as ::core::ffi::c_int == '"' as ::core::ffi::c_int {
-            (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_NOTHING;
             return ::core::ptr::null::<::core::ffi::c_char>();
         }
         cmd = skip_range(cmd, &raw mut (*xp).xp_context);
@@ -397,7 +389,7 @@ pub(crate) unsafe extern "C" fn set_one_cmd_context(
             return ::core::ptr::null::<::core::ffi::c_char>();
         }
         if *cmd as ::core::ffi::c_int == '"' as ::core::ffi::c_int {
-            (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_NOTHING;
             return ::core::ptr::null::<::core::ffi::c_char>();
         }
         if *cmd as ::core::ffi::c_int == '|' as ::core::ffi::c_int
@@ -410,7 +402,7 @@ pub(crate) unsafe extern "C" fn set_one_cmd_context(
         if p.is_null() {
             return ::core::ptr::null::<::core::ffi::c_char>();
         }
-        (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+        (*xp).xp_context = EXPAND_NOTHING;
         if *p as ::core::ffi::c_int == '!' as ::core::ffi::c_int {
             forceit = true_0 != 0;
             p = p.offset(1);
@@ -574,7 +566,7 @@ pub unsafe extern "C" fn set_cmd_context(
             (*xp).xp_context = (*ccline).xp_context;
             (*xp).xp_pattern = (*ccline).cmdbuff;
             (*xp).xp_arg = (*ccline).xp_arg;
-            if (*xp).xp_context == EXPAND_SHELLCMDLINE as ::core::ffi::c_int {
+            if (*xp).xp_context == EXPAND_SHELLCMDLINE {
                 let mut context: ::core::ffi::c_int = (*xp).xp_context;
                 set_context_for_wildcard_arg(
                     ::core::ptr::null_mut::<exarg_T>(),
@@ -604,17 +596,16 @@ pub unsafe extern "C" fn expand_cmdline(
 ) -> ::core::ffi::c_int {
     unsafe {
         let mut file_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut options: ::core::ffi::c_int =
-            WILD_ADD_SLASH as ::core::ffi::c_int | WILD_SILENT as ::core::ffi::c_int;
-        if (*xp).xp_context == EXPAND_UNSUCCESSFUL as ::core::ffi::c_int {
+        let mut options: ::core::ffi::c_int = WILD_ADD_SLASH | WILD_SILENT;
+        if (*xp).xp_context == EXPAND_UNSUCCESSFUL {
             beep_flush();
-            return EXPAND_UNSUCCESSFUL as ::core::ffi::c_int;
+            return EXPAND_UNSUCCESSFUL;
         }
-        if (*xp).xp_context == EXPAND_NOTHING as ::core::ffi::c_int {
-            return EXPAND_NOTHING as ::core::ffi::c_int;
+        if (*xp).xp_context == EXPAND_NOTHING {
+            return EXPAND_NOTHING;
         }
         '_c2rust_label: {
-            if str.offset(col as isize).offset_from((*xp).xp_pattern) >= 0 as isize {
+            if str.offset(col as isize).offset_from((*xp).xp_pattern) >= 0_isize {
             } else {
                 __assert_fail(
                     b"(str + col) - xp->xp_pattern >= 0\0".as_ptr() as *const ::core::ffi::c_char,
@@ -632,13 +623,13 @@ pub unsafe extern "C" fn expand_cmdline(
             file_str = addstar((*xp).xp_pattern, (*xp).xp_pattern_len, (*xp).xp_context);
         }
         if p_wic.get() != 0 {
-            options += WILD_ICASE as ::core::ffi::c_int;
+            options += WILD_ICASE;
         }
         if ExpandFromContext(xp, file_str, matches, matchcount, options) == FAIL {
             *matchcount = 0 as ::core::ffi::c_int;
             *matches = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
         }
         xfree(file_str as *mut ::core::ffi::c_void);
-        return EXPAND_OK as ::core::ffi::c_int;
+        return EXPAND_OK;
     }
 }

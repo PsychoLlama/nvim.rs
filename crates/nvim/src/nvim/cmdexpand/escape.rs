@@ -60,24 +60,23 @@ pub(crate) unsafe extern "C" fn wildescape(
 ) {
     unsafe {
         let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let vse_what: ::core::ffi::c_int =
-            if (*xp).xp_context == EXPAND_BUFFERS as ::core::ffi::c_int {
-                VSE_BUFFER as ::core::ffi::c_int
-            } else {
-                VSE_NONE as ::core::ffi::c_int
-            };
-        if (*xp).xp_context == EXPAND_FILES as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_FILES_IN_PATH as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_SHELLCMD as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_BUFFERS as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_DIRECTORIES as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_DIRS_IN_CDPATH as ::core::ffi::c_int
+        let vse_what: ::core::ffi::c_int = if (*xp).xp_context == EXPAND_BUFFERS {
+            VSE_BUFFER
+        } else {
+            VSE_NONE
+        };
+        if (*xp).xp_context == EXPAND_FILES
+            || (*xp).xp_context == EXPAND_FILES_IN_PATH
+            || (*xp).xp_context == EXPAND_SHELLCMD
+            || (*xp).xp_context == EXPAND_BUFFERS
+            || (*xp).xp_context == EXPAND_DIRECTORIES
+            || (*xp).xp_context == EXPAND_DIRS_IN_CDPATH
         {
             let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i < numfiles {
-                if (*xp).xp_backslash & XP_BS_THREE as ::core::ffi::c_int != 0 {
+                if (*xp).xp_backslash & XP_BS_THREE != 0 {
                     let mut pat: *mut ::core::ffi::c_char =
-                        (if (*xp).xp_backslash & XP_BS_COMMA as ::core::ffi::c_int != 0 {
+                        (if (*xp).xp_backslash & XP_BS_COMMA != 0 {
                             b" ,\0".as_ptr() as *const ::core::ffi::c_char
                         } else {
                             b" \0".as_ptr() as *const ::core::ffi::c_char
@@ -85,7 +84,7 @@ pub(crate) unsafe extern "C" fn wildescape(
                     p = vim_strsave_escaped(*files.offset(i as isize), pat);
                     xfree(*files.offset(i as isize) as *mut ::core::ffi::c_void);
                     *files.offset(i as isize) = p;
-                } else if (*xp).xp_backslash & XP_BS_COMMA as ::core::ffi::c_int != 0 {
+                } else if (*xp).xp_backslash & XP_BS_COMMA != 0 {
                     if !vim_strchr(*files.offset(i as isize), ',' as ::core::ffi::c_int).is_null() {
                         p = vim_strsave_escaped(
                             *files.offset(i as isize),
@@ -98,7 +97,7 @@ pub(crate) unsafe extern "C" fn wildescape(
                 p = vim_strsave_fnameescape(
                     *files.offset(i as isize),
                     if (*xp).xp_shell as ::core::ffi::c_int != 0 {
-                        VSE_SHELL as ::core::ffi::c_int
+                        VSE_SHELL
                     } else {
                         vse_what
                     },
@@ -117,13 +116,13 @@ pub(crate) unsafe extern "C" fn wildescape(
                 }
                 i += 1;
             }
-            (*xp).xp_backslash = XP_BS_NONE as ::core::ffi::c_int;
+            (*xp).xp_backslash = XP_BS_NONE;
             if **files.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == '+' as ::core::ffi::c_int
             {
                 escape_fname(files.offset(0 as ::core::ffi::c_int as isize));
             }
-        } else if (*xp).xp_context == EXPAND_TAGS as ::core::ffi::c_int {
+        } else if (*xp).xp_context == EXPAND_TAGS {
             let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i_0 < numfiles {
                 p = vim_strsave_escaped(
@@ -146,10 +145,10 @@ pub(crate) unsafe extern "C" fn ExpandEscape(
     mut options: ::core::ffi::c_int,
 ) {
     unsafe {
-        if options & WILD_HOME_REPLACE as ::core::ffi::c_int != 0 {
+        if options & WILD_HOME_REPLACE != 0 {
             tilde_replace(str, numfiles, files);
         }
-        if options & WILD_ESCAPE as ::core::ffi::c_int != 0 {
+        if options & WILD_ESCAPE != 0 {
             wildescape(xp, str, numfiles, files);
         }
     }

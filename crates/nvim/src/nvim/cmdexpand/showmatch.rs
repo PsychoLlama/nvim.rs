@@ -25,7 +25,7 @@ pub(crate) unsafe extern "C" fn showmatches_oneline(
         let mut lastlen: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
         let mut j: ::core::ffi::c_int = linenr;
         while j < numMatches {
-            if (*xp).xp_context == EXPAND_TAGS_LISTFILES as ::core::ffi::c_int {
+            if (*xp).xp_context == EXPAND_TAGS_LISTFILES {
                 msg_outtrans(*matches.offset(j as isize), HLF_D, false_0 != 0);
                 p = (*matches.offset(j as isize))
                     .offset(strlen(*matches.offset(j as isize)) as isize)
@@ -45,9 +45,9 @@ pub(crate) unsafe extern "C" fn showmatches_oneline(
                     msg_putchar(' ' as ::core::ffi::c_int);
                 }
                 let mut isdir: bool = false;
-                if (*xp).xp_context == EXPAND_FILES as ::core::ffi::c_int
-                    || (*xp).xp_context == EXPAND_SHELLCMD as ::core::ffi::c_int
-                    || (*xp).xp_context == EXPAND_BUFFERS as ::core::ffi::c_int
+                if (*xp).xp_context == EXPAND_FILES
+                    || (*xp).xp_context == EXPAND_SHELLCMD
+                    || (*xp).xp_context == EXPAND_BUFFERS
                 {
                     if (*xp).xp_numfiles != -1 as ::core::ffi::c_int {
                         let mut exp_path: *mut ::core::ffi::c_char =
@@ -126,7 +126,7 @@ pub unsafe extern "C" fn showmatches(
         let mut showtail: bool = false;
         if (*xp).xp_numfiles == -1 as ::core::ffi::c_int {
             set_expand_context(xp);
-            if (*xp).xp_context == EXPAND_LUA as ::core::ffi::c_int {
+            if (*xp).xp_context == EXPAND_LUA {
                 nlua_expand_pat(xp);
             }
             let mut retval: ::core::ffi::c_int = expand_cmdline(
@@ -136,7 +136,7 @@ pub unsafe extern "C" fn showmatches(
                 &raw mut numMatches,
                 &raw mut matches,
             );
-            if retval != EXPAND_OK as ::core::ffi::c_int {
+            if retval != EXPAND_OK {
                 return retval;
             }
             showtail = expand_showtail(xp);
@@ -154,7 +154,7 @@ pub unsafe extern "C" fn showmatches(
             });
             pum_clear();
             cmdline_pum_display(true_0 != 0);
-            return EXPAND_OK as ::core::ffi::c_int;
+            return EXPAND_OK;
         }
         if display_list {
             msg_didany.set(false_0 != 0);
@@ -188,9 +188,9 @@ pub unsafe extern "C" fn showmatches(
             while i < numMatches {
                 let mut len: ::core::ffi::c_int = 0;
                 if !showtail
-                    && ((*xp).xp_context == EXPAND_FILES as ::core::ffi::c_int
-                        || (*xp).xp_context == EXPAND_SHELLCMD as ::core::ffi::c_int
-                        || (*xp).xp_context == EXPAND_BUFFERS as ::core::ffi::c_int)
+                    && ((*xp).xp_context == EXPAND_FILES
+                        || (*xp).xp_context == EXPAND_SHELLCMD
+                        || (*xp).xp_context == EXPAND_BUFFERS)
                 {
                     home_replace(
                         ::core::ptr::null::<buf_T>(),
@@ -210,7 +210,7 @@ pub unsafe extern "C" fn showmatches(
                 maxlen = if maxlen > len { maxlen } else { len };
                 i += 1;
             }
-            if (*xp).xp_context == EXPAND_TAGS_LISTFILES as ::core::ffi::c_int {
+            if (*xp).xp_context == EXPAND_TAGS_LISTFILES {
                 lines = numMatches;
             } else {
                 maxlen += 2 as ::core::ffi::c_int;
@@ -220,7 +220,7 @@ pub unsafe extern "C" fn showmatches(
                 }
                 lines = (numMatches + columns - 1 as ::core::ffi::c_int) / columns;
             }
-            if (*xp).xp_context == EXPAND_TAGS_LISTFILES as ::core::ffi::c_int {
+            if (*xp).xp_context == EXPAND_TAGS_LISTFILES {
                 msg_puts_hl(
                     gettext(b"tagname\0".as_ptr() as *const ::core::ffi::c_char),
                     HLF_T,
@@ -249,7 +249,7 @@ pub unsafe extern "C" fn showmatches(
         if (*xp).xp_numfiles == -1 as ::core::ffi::c_int {
             FreeWild(numMatches, matches);
         }
-        return EXPAND_OK as ::core::ffi::c_int;
+        return EXPAND_OK;
     }
 }
 
@@ -280,9 +280,9 @@ pub(crate) unsafe extern "C" fn showmatches_gettail(
 
 pub(crate) unsafe extern "C" fn expand_showtail(mut xp: *mut expand_T) -> bool {
     unsafe {
-        if (*xp).xp_context != EXPAND_FILES as ::core::ffi::c_int
-            && (*xp).xp_context != EXPAND_SHELLCMD as ::core::ffi::c_int
-            && (*xp).xp_context != EXPAND_DIRECTORIES as ::core::ffi::c_int
+        if (*xp).xp_context != EXPAND_FILES
+            && (*xp).xp_context != EXPAND_SHELLCMD
+            && (*xp).xp_context != EXPAND_DIRECTORIES
         {
             return false_0 != 0;
         }
@@ -315,28 +315,27 @@ pub unsafe extern "C" fn addstar(
 ) -> *mut ::core::ffi::c_char {
     unsafe {
         let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if context != EXPAND_FILES as ::core::ffi::c_int
-            && context != EXPAND_FILES_IN_PATH as ::core::ffi::c_int
-            && context != EXPAND_SHELLCMD as ::core::ffi::c_int
-            && context != EXPAND_DIRECTORIES as ::core::ffi::c_int
-            && context != EXPAND_DIRS_IN_CDPATH as ::core::ffi::c_int
+        if context != EXPAND_FILES
+            && context != EXPAND_FILES_IN_PATH
+            && context != EXPAND_SHELLCMD
+            && context != EXPAND_DIRECTORIES
+            && context != EXPAND_DIRS_IN_CDPATH
         {
-            if context == EXPAND_FINDFUNC as ::core::ffi::c_int
-                || context == EXPAND_HELP as ::core::ffi::c_int
-                || context == EXPAND_COLORS as ::core::ffi::c_int
-                || context == EXPAND_COMPILER as ::core::ffi::c_int
-                || context == EXPAND_OWNSYNTAX as ::core::ffi::c_int
-                || context == EXPAND_FILETYPE as ::core::ffi::c_int
-                || context == EXPAND_KEYMAP as ::core::ffi::c_int
-                || context == EXPAND_PACKADD as ::core::ffi::c_int
-                || context == EXPAND_RUNTIME as ::core::ffi::c_int
-                || (context == EXPAND_TAGS_LISTFILES as ::core::ffi::c_int
-                    || context == EXPAND_TAGS as ::core::ffi::c_int)
+            if context == EXPAND_FINDFUNC
+                || context == EXPAND_HELP
+                || context == EXPAND_COLORS
+                || context == EXPAND_COMPILER
+                || context == EXPAND_OWNSYNTAX
+                || context == EXPAND_FILETYPE
+                || context == EXPAND_KEYMAP
+                || context == EXPAND_PACKADD
+                || context == EXPAND_RUNTIME
+                || (context == EXPAND_TAGS_LISTFILES || context == EXPAND_TAGS)
                     && *fname.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == '/' as ::core::ffi::c_int
-                || context == EXPAND_CHECKHEALTH as ::core::ffi::c_int
-                || context == EXPAND_LSP as ::core::ffi::c_int
-                || context == EXPAND_LUA as ::core::ffi::c_int
+                || context == EXPAND_CHECKHEALTH
+                || context == EXPAND_LSP
+                || context == EXPAND_LUA
             {
                 retval = xstrnsave(fname, len);
             } else {
@@ -349,14 +348,13 @@ pub unsafe extern "C" fn addstar(
                     {
                         new_len = new_len.wrapping_add(1);
                     }
-                    if context == EXPAND_BUFFERS as ::core::ffi::c_int
+                    if context == EXPAND_BUFFERS
                         && *fname.offset(i as isize) as ::core::ffi::c_int
                             == '.' as ::core::ffi::c_int
                     {
                         new_len = new_len.wrapping_add(1);
                     }
-                    if (context == EXPAND_USER_DEFINED as ::core::ffi::c_int
-                        || context == EXPAND_USER_LIST as ::core::ffi::c_int)
+                    if (context == EXPAND_USER_DEFINED || context == EXPAND_USER_LIST)
                         && *fname.offset(i as isize) as ::core::ffi::c_int
                             == '\\' as ::core::ffi::c_int
                     {
@@ -369,8 +367,8 @@ pub unsafe extern "C" fn addstar(
                 let mut j: size_t = 1 as size_t;
                 let mut i_0: size_t = 0 as size_t;
                 while i_0 < len {
-                    if context != EXPAND_USER_DEFINED as ::core::ffi::c_int
-                        && context != EXPAND_USER_LIST as ::core::ffi::c_int
+                    if context != EXPAND_USER_DEFINED
+                        && context != EXPAND_USER_LIST
                         && *fname.offset(i_0 as isize) as ::core::ffi::c_int
                             == '\\' as ::core::ffi::c_int
                         && {
@@ -398,7 +396,7 @@ pub unsafe extern "C" fn addstar(
                                 break 's_82;
                             }
                             46 => {
-                                if context == EXPAND_BUFFERS as ::core::ffi::c_int {
+                                if context == EXPAND_BUFFERS {
                                     let c2rust_fresh8 = j;
                                     j = j.wrapping_add(1);
                                     *retval.offset(c2rust_fresh8 as isize) =
@@ -406,9 +404,7 @@ pub unsafe extern "C" fn addstar(
                                 }
                             }
                             92 => {
-                                if context == EXPAND_USER_DEFINED as ::core::ffi::c_int
-                                    || context == EXPAND_USER_LIST as ::core::ffi::c_int
-                                {
+                                if context == EXPAND_USER_DEFINED || context == EXPAND_USER_LIST {
                                     let c2rust_fresh9 = j;
                                     j = j.wrapping_add(1);
                                     *retval.offset(c2rust_fresh9 as isize) =

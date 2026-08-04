@@ -21,7 +21,7 @@ pub(crate) unsafe extern "C" fn expand_files_and_dirs(
 ) -> ::core::ffi::c_int {
     unsafe {
         let mut free_pat: bool = false_0 != 0;
-        if (*xp).xp_backslash != XP_BS_NONE as ::core::ffi::c_int {
+        if (*xp).xp_backslash != XP_BS_NONE {
             free_pat = true_0 != 0;
             let mut pat_len: size_t = strlen(pat);
             pat = xstrnsave(pat, pat_len);
@@ -29,7 +29,7 @@ pub(crate) unsafe extern "C" fn expand_files_and_dirs(
             let mut p: *mut ::core::ffi::c_char = pat;
             while *p as ::core::ffi::c_int != NUL {
                 if *p as ::core::ffi::c_int == '\\' as ::core::ffi::c_int {
-                    if (*xp).xp_backslash & XP_BS_THREE as ::core::ffi::c_int != 0
+                    if (*xp).xp_backslash & XP_BS_THREE != 0
                         && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                             == '\\' as ::core::ffi::c_int
                         && *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -45,7 +45,7 @@ pub(crate) unsafe extern "C" fn expand_files_and_dirs(
                             (pat_end.offset_from(from) as size_t).wrapping_add(1 as size_t),
                         );
                         pat_end = pat_end.offset(-(3 as ::core::ffi::c_int as isize));
-                    } else if (*xp).xp_backslash & XP_BS_ONE as ::core::ffi::c_int != 0
+                    } else if (*xp).xp_backslash & XP_BS_ONE != 0
                         && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                             == ' ' as ::core::ffi::c_int
                     {
@@ -57,7 +57,7 @@ pub(crate) unsafe extern "C" fn expand_files_and_dirs(
                             (pat_end.offset_from(from_0) as size_t).wrapping_add(1 as size_t),
                         );
                         pat_end = pat_end.offset(-1);
-                    } else if (*xp).xp_backslash & XP_BS_COMMA as ::core::ffi::c_int != 0 {
+                    } else if (*xp).xp_backslash & XP_BS_COMMA != 0 {
                         if *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                             == '\\' as ::core::ffi::c_int
                             && *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -78,21 +78,20 @@ pub(crate) unsafe extern "C" fn expand_files_and_dirs(
             }
         }
         let mut ret: ::core::ffi::c_int = FAIL;
-        if (*xp).xp_context == EXPAND_FINDFUNC as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_FINDFUNC {
             ret = expand_findfunc(pat, matches, numMatches);
         } else {
-            if (*xp).xp_context == EXPAND_FILES as ::core::ffi::c_int {
-                flags |= EW_FILE as ::core::ffi::c_int;
-            } else if (*xp).xp_context == EXPAND_FILES_IN_PATH as ::core::ffi::c_int {
-                flags |= EW_FILE as ::core::ffi::c_int | EW_PATH as ::core::ffi::c_int;
-            } else if (*xp).xp_context == EXPAND_DIRS_IN_CDPATH as ::core::ffi::c_int {
-                flags = (flags | EW_DIR as ::core::ffi::c_int | EW_CDPATH as ::core::ffi::c_int)
-                    & !(EW_FILE as ::core::ffi::c_int);
+            if (*xp).xp_context == EXPAND_FILES {
+                flags |= EW_FILE;
+            } else if (*xp).xp_context == EXPAND_FILES_IN_PATH {
+                flags |= EW_FILE | EW_PATH;
+            } else if (*xp).xp_context == EXPAND_DIRS_IN_CDPATH {
+                flags = (flags | EW_DIR | EW_CDPATH) & !(EW_FILE);
             } else {
-                flags = (flags | EW_DIR as ::core::ffi::c_int) & !(EW_FILE as ::core::ffi::c_int);
+                flags = (flags | EW_DIR) & !(EW_FILE);
             }
-            if options & WILD_ICASE as ::core::ffi::c_int != 0 {
-                flags |= EW_ICASE as ::core::ffi::c_int;
+            if options & WILD_ICASE != 0 {
+                flags |= EW_ICASE;
             }
             ret = expand_wildcards_eval(&raw mut pat, numMatches, matches, flags);
         }
@@ -372,7 +371,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
     unsafe {
         static tab: GlobalCell<[expgen; 33]> = GlobalCell::new([
             expgen {
-                context: EXPAND_COMMANDS as ::core::ffi::c_int,
+                context: EXPAND_COMMANDS,
                 func: Some(
                     get_command_name
                         as unsafe extern "C" fn(
@@ -385,7 +384,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_FILETYPECMD as ::core::ffi::c_int,
+                context: EXPAND_FILETYPECMD,
                 func: Some(
                     get_filetypecmd_arg
                         as unsafe extern "C" fn(
@@ -398,7 +397,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_MAPCLEAR as ::core::ffi::c_int,
+                context: EXPAND_MAPCLEAR,
                 func: Some(
                     get_mapclear_arg
                         as unsafe extern "C" fn(
@@ -411,7 +410,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_MESSAGES as ::core::ffi::c_int,
+                context: EXPAND_MESSAGES,
                 func: Some(
                     get_messages_arg
                         as unsafe extern "C" fn(
@@ -424,7 +423,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_HISTORY as ::core::ffi::c_int,
+                context: EXPAND_HISTORY,
                 func: Some(
                     get_history_arg
                         as unsafe extern "C" fn(
@@ -437,7 +436,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_USER_COMMANDS as ::core::ffi::c_int,
+                context: EXPAND_USER_COMMANDS,
                 func: Some(
                     get_user_commands
                         as unsafe extern "C" fn(
@@ -450,7 +449,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_USER_ADDR_TYPE as ::core::ffi::c_int,
+                context: EXPAND_USER_ADDR_TYPE,
                 func: Some(
                     get_user_cmd_addr_type
                         as unsafe extern "C" fn(
@@ -463,7 +462,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_USER_CMD_FLAGS as ::core::ffi::c_int,
+                context: EXPAND_USER_CMD_FLAGS,
                 func: Some(
                     get_user_cmd_flags
                         as unsafe extern "C" fn(
@@ -476,7 +475,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_USER_NARGS as ::core::ffi::c_int,
+                context: EXPAND_USER_NARGS,
                 func: Some(
                     get_user_cmd_nargs
                         as unsafe extern "C" fn(
@@ -489,7 +488,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_USER_COMPLETE as ::core::ffi::c_int,
+                context: EXPAND_USER_COMPLETE,
                 func: Some(
                     get_user_cmd_complete
                         as unsafe extern "C" fn(
@@ -502,7 +501,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_USER_VARS as ::core::ffi::c_int,
+                context: EXPAND_USER_VARS,
                 func: Some(
                     get_user_var_name
                         as unsafe extern "C" fn(
@@ -515,7 +514,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_FUNCTIONS as ::core::ffi::c_int,
+                context: EXPAND_FUNCTIONS,
                 func: Some(
                     get_function_name
                         as unsafe extern "C" fn(
@@ -528,7 +527,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_USER_FUNC as ::core::ffi::c_int,
+                context: EXPAND_USER_FUNC,
                 func: Some(
                     get_user_func_name
                         as unsafe extern "C" fn(
@@ -541,7 +540,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_EXPRESSION as ::core::ffi::c_int,
+                context: EXPAND_EXPRESSION,
                 func: Some(
                     get_expr_name
                         as unsafe extern "C" fn(
@@ -554,7 +553,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_MENUS as ::core::ffi::c_int,
+                context: EXPAND_MENUS,
                 func: Some(
                     get_menu_name
                         as unsafe extern "C" fn(
@@ -567,7 +566,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_MENUNAMES as ::core::ffi::c_int,
+                context: EXPAND_MENUNAMES,
                 func: Some(
                     get_menu_names
                         as unsafe extern "C" fn(
@@ -580,7 +579,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_SYNTAX as ::core::ffi::c_int,
+                context: EXPAND_SYNTAX,
                 func: Some(
                     get_syntax_name
                         as unsafe extern "C" fn(
@@ -593,7 +592,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_SYNTIME as ::core::ffi::c_int,
+                context: EXPAND_SYNTIME,
                 func: Some(
                     get_syntime_arg
                         as unsafe extern "C" fn(
@@ -606,7 +605,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_HIGHLIGHT as ::core::ffi::c_int,
+                context: EXPAND_HIGHLIGHT,
                 func: Some(
                     get_highlight_name
                         as unsafe extern "C" fn(
@@ -619,7 +618,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: false_0,
             },
             expgen {
-                context: EXPAND_EVENTS as ::core::ffi::c_int,
+                context: EXPAND_EVENTS,
                 func: Some(
                     expand_get_event_name
                         as unsafe extern "C" fn(
@@ -632,7 +631,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: false_0,
             },
             expgen {
-                context: EXPAND_AUGROUP as ::core::ffi::c_int,
+                context: EXPAND_AUGROUP,
                 func: Some(
                     expand_get_augroup_name
                         as unsafe extern "C" fn(
@@ -645,7 +644,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: false_0,
             },
             expgen {
-                context: EXPAND_SIGN as ::core::ffi::c_int,
+                context: EXPAND_SIGN,
                 func: Some(
                     get_sign_name
                         as unsafe extern "C" fn(
@@ -658,7 +657,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_PROFILE as ::core::ffi::c_int,
+                context: EXPAND_PROFILE,
                 func: Some(
                     get_profile_name
                         as unsafe extern "C" fn(
@@ -671,7 +670,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_LANGUAGE as ::core::ffi::c_int,
+                context: EXPAND_LANGUAGE,
                 func: Some(
                     get_lang_arg
                         as unsafe extern "C" fn(
@@ -684,7 +683,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: false_0,
             },
             expgen {
-                context: EXPAND_LOCALES as ::core::ffi::c_int,
+                context: EXPAND_LOCALES,
                 func: Some(
                     get_locales
                         as unsafe extern "C" fn(
@@ -697,7 +696,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: false_0,
             },
             expgen {
-                context: EXPAND_ENV_VARS as ::core::ffi::c_int,
+                context: EXPAND_ENV_VARS,
                 func: Some(
                     get_env_name
                         as unsafe extern "C" fn(
@@ -710,7 +709,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_USER as ::core::ffi::c_int,
+                context: EXPAND_USER,
                 func: Some(
                     get_users
                         as unsafe extern "C" fn(
@@ -723,7 +722,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: false_0,
             },
             expgen {
-                context: EXPAND_ARGLIST as ::core::ffi::c_int,
+                context: EXPAND_ARGLIST,
                 func: Some(
                     get_arglist_name
                         as unsafe extern "C" fn(
@@ -736,7 +735,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: false_0,
             },
             expgen {
-                context: EXPAND_BREAKPOINT as ::core::ffi::c_int,
+                context: EXPAND_BREAKPOINT,
                 func: Some(
                     get_breakadd_arg
                         as unsafe extern "C" fn(
@@ -749,7 +748,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_SCRIPTNAMES as ::core::ffi::c_int,
+                context: EXPAND_SCRIPTNAMES,
                 func: Some(
                     get_scriptnames_arg
                         as unsafe extern "C" fn(
@@ -762,7 +761,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: false_0,
             },
             expgen {
-                context: EXPAND_RETAB as ::core::ffi::c_int,
+                context: EXPAND_RETAB,
                 func: Some(
                     get_retab_arg
                         as unsafe extern "C" fn(
@@ -775,7 +774,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: true_0,
             },
             expgen {
-                context: EXPAND_CHECKHEALTH as ::core::ffi::c_int,
+                context: EXPAND_CHECKHEALTH,
                 func: Some(
                     get_healthcheck_names
                         as unsafe extern "C" fn(
@@ -788,7 +787,7 @@ pub(crate) unsafe extern "C" fn ExpandOther(
                 escaped: false_0,
             },
             expgen {
-                context: EXPAND_LSP as ::core::ffi::c_int,
+                context: EXPAND_LSP,
                 func: Some(
                     get_lsp_arg
                         as unsafe extern "C" fn(

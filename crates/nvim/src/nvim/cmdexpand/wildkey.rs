@@ -28,7 +28,7 @@ pub unsafe extern "C" fn wildmenu_translate_key(
                 c = Ctrl_N;
             }
         }
-        if (*xp).xp_context == EXPAND_MENUNAMES as ::core::ffi::c_int
+        if (*xp).xp_context == EXPAND_MENUNAMES
             && (*cclp).cmdpos > 1 as ::core::ffi::c_int
             && *(*cclp)
                 .cmdbuff
@@ -137,7 +137,7 @@ pub(crate) unsafe extern "C" fn wildmenu_process_key_menunames(
             }
             key = p_wc.get() as ::core::ffi::c_int;
             KeyTyped.set(true_0 != 0);
-            (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_NOTHING;
         }
         return key;
     }
@@ -289,12 +289,12 @@ pub unsafe extern "C" fn wildmenu_process_key(
     mut xp: *mut expand_T,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*xp).xp_context == EXPAND_MENUNAMES as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_MENUNAMES {
             return wildmenu_process_key_menunames(cclp, key, xp);
         }
-        if (*xp).xp_context == EXPAND_FILES as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_DIRECTORIES as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_SHELLCMD as ::core::ffi::c_int
+        if (*xp).xp_context == EXPAND_FILES
+            || (*xp).xp_context == EXPAND_DIRECTORIES
+            || (*xp).xp_context == EXPAND_SHELLCMD
         {
             return wildmenu_process_key_filenames(cclp, key, xp);
         }
@@ -313,7 +313,7 @@ pub unsafe extern "C" fn wildmenu_cleanup(mut cclp: *mut CmdlineInfo) {
             RedrawingDisabled.set(0 as ::core::ffi::c_int);
         }
         set_no_hlsearch(true_0 != 0);
-        if wild_menu_showing.get() == WM_SCROLLED as ::core::ffi::c_int {
+        if wild_menu_showing.get() == WM_SCROLLED {
             (*cmdline_row.ptr()) -= 1;
             redrawcmd();
             wild_menu_showing.set(0 as ::core::ffi::c_int);

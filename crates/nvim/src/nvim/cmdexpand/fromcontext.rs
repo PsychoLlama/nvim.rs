@@ -14,24 +14,24 @@ use super::*;
 pub(crate) unsafe extern "C" fn map_wildopts_to_ewflags(
     mut options: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    let mut flags: ::core::ffi::c_int = EW_DIR as ::core::ffi::c_int;
-    if options & WILD_LIST_NOTFOUND as ::core::ffi::c_int != 0 {
-        flags |= EW_NOTFOUND as ::core::ffi::c_int;
+    let mut flags: ::core::ffi::c_int = EW_DIR;
+    if options & WILD_LIST_NOTFOUND != 0 {
+        flags |= EW_NOTFOUND;
     }
-    if options & WILD_ADD_SLASH as ::core::ffi::c_int != 0 {
-        flags |= EW_ADDSLASH as ::core::ffi::c_int;
+    if options & WILD_ADD_SLASH != 0 {
+        flags |= EW_ADDSLASH;
     }
-    if options & WILD_KEEP_ALL as ::core::ffi::c_int != 0 {
-        flags |= EW_KEEPALL as ::core::ffi::c_int;
+    if options & WILD_KEEP_ALL != 0 {
+        flags |= EW_KEEPALL;
     }
-    if options & WILD_SILENT as ::core::ffi::c_int != 0 {
-        flags |= EW_SILENT as ::core::ffi::c_int;
+    if options & WILD_SILENT != 0 {
+        flags |= EW_SILENT;
     }
-    if options & WILD_NOERROR as ::core::ffi::c_int != 0 {
-        flags |= EW_NOERROR as ::core::ffi::c_int;
+    if options & WILD_NOERROR != 0 {
+        flags |= EW_NOERROR;
     }
-    if options & WILD_ALLLINKS as ::core::ffi::c_int != 0 {
-        flags |= EW_ALLLINKS as ::core::ffi::c_int;
+    if options & WILD_ALLLINKS != 0 {
+        flags |= EW_ALLLINKS;
     }
     return flags;
 }
@@ -55,17 +55,17 @@ pub(crate) unsafe extern "C" fn ExpandFromContext(
         let mut flags: ::core::ffi::c_int = map_wildopts_to_ewflags(options);
         let fuzzy: bool = cmdline_fuzzy_complete(pat) as ::core::ffi::c_int != 0
             && cmdline_fuzzy_completion_supported(xp) as ::core::ffi::c_int != 0;
-        if (*xp).xp_context == EXPAND_FILES as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_DIRECTORIES as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_FILES_IN_PATH as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_FINDFUNC as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_DIRS_IN_CDPATH as ::core::ffi::c_int
+        if (*xp).xp_context == EXPAND_FILES
+            || (*xp).xp_context == EXPAND_DIRECTORIES
+            || (*xp).xp_context == EXPAND_FILES_IN_PATH
+            || (*xp).xp_context == EXPAND_FINDFUNC
+            || (*xp).xp_context == EXPAND_DIRS_IN_CDPATH
         {
             return expand_files_and_dirs(xp, pat, matches, numMatches, flags, options);
         }
         *matches = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
         *numMatches = 0 as ::core::ffi::c_int;
-        if (*xp).xp_context == EXPAND_HELP as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_HELP {
             if find_help_tags(
                 if *pat as ::core::ffi::c_int == NUL {
                     b"help\0".as_ptr() as *const ::core::ffi::c_char
@@ -82,35 +82,23 @@ pub(crate) unsafe extern "C" fn ExpandFromContext(
             }
             return FAIL;
         }
-        if (*xp).xp_context == EXPAND_SHELLCMD as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_SHELLCMD {
             expand_shellcmd(pat, matches, numMatches, flags);
             return OK;
         }
-        if (*xp).xp_context == EXPAND_OLD_SETTING as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_OLD_SETTING {
             return ExpandOldSetting(numMatches, matches);
         }
-        if (*xp).xp_context == EXPAND_BUFFERS as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_BUFFERS {
             return ExpandBufnames(pat, numMatches, matches, options);
         }
-        if (*xp).xp_context == EXPAND_DIFF_BUFFERS as ::core::ffi::c_int {
-            return ExpandBufnames(
-                pat,
-                numMatches,
-                matches,
-                options | BUF_DIFF_FILTER as ::core::ffi::c_int,
-            );
+        if (*xp).xp_context == EXPAND_DIFF_BUFFERS {
+            return ExpandBufnames(pat, numMatches, matches, options | BUF_DIFF_FILTER);
         }
-        if (*xp).xp_context == EXPAND_TAGS as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_TAGS_LISTFILES as ::core::ffi::c_int
-        {
-            return expand_tags(
-                (*xp).xp_context == EXPAND_TAGS as ::core::ffi::c_int,
-                pat,
-                numMatches,
-                matches,
-            );
+        if (*xp).xp_context == EXPAND_TAGS || (*xp).xp_context == EXPAND_TAGS_LISTFILES {
+            return expand_tags((*xp).xp_context == EXPAND_TAGS, pat, numMatches, matches);
         }
-        if (*xp).xp_context == EXPAND_COLORS as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_COLORS {
             let mut directories: [*mut ::core::ffi::c_char; 2] = [
                 b"colors\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -123,7 +111,7 @@ pub(crate) unsafe extern "C" fn ExpandFromContext(
                 &raw mut directories as *mut *mut ::core::ffi::c_char,
             );
         }
-        if (*xp).xp_context == EXPAND_COMPILER as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_COMPILER {
             let mut directories_0: [*mut ::core::ffi::c_char; 2] = [
                 b"compiler\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -136,7 +124,7 @@ pub(crate) unsafe extern "C" fn ExpandFromContext(
                 &raw mut directories_0 as *mut *mut ::core::ffi::c_char,
             );
         }
-        if (*xp).xp_context == EXPAND_OWNSYNTAX as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_OWNSYNTAX {
             let mut directories_1: [*mut ::core::ffi::c_char; 2] = [
                 b"syntax\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -149,7 +137,7 @@ pub(crate) unsafe extern "C" fn ExpandFromContext(
                 &raw mut directories_1 as *mut *mut ::core::ffi::c_char,
             );
         }
-        if (*xp).xp_context == EXPAND_FILETYPE as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_FILETYPE {
             let mut directories_2: [*mut ::core::ffi::c_char; 4] = [
                 b"syntax\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 b"indent\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -164,7 +152,7 @@ pub(crate) unsafe extern "C" fn ExpandFromContext(
                 &raw mut directories_2 as *mut *mut ::core::ffi::c_char,
             );
         }
-        if (*xp).xp_context == EXPAND_KEYMAP as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_KEYMAP {
             let mut directories_3: [*mut ::core::ffi::c_char; 2] = [
                 b"keymap\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -177,23 +165,23 @@ pub(crate) unsafe extern "C" fn ExpandFromContext(
                 &raw mut directories_3 as *mut *mut ::core::ffi::c_char,
             );
         }
-        if (*xp).xp_context == EXPAND_USER_LIST as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_USER_LIST {
             return ExpandUserList(xp, matches, numMatches);
         }
-        if (*xp).xp_context == EXPAND_USER_LUA as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_USER_LUA {
             return ExpandUserLua(xp, numMatches, matches);
         }
-        if (*xp).xp_context == EXPAND_PACKADD as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_PACKADD {
             return ExpandPackAddDir(pat, numMatches, matches);
         }
-        if (*xp).xp_context == EXPAND_RUNTIME as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_RUNTIME {
             return expand_runtime_cmd(pat, numMatches, matches);
         }
-        if (*xp).xp_context == EXPAND_PATTERN_IN_BUF as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_PATTERN_IN_BUF {
             return expand_pattern_in_buf(pat, (*xp).xp_search_dir, matches, numMatches);
         }
         let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if (*xp).xp_context == EXPAND_USER_FUNC as ::core::ffi::c_int
+        if (*xp).xp_context == EXPAND_USER_FUNC
             && strncmp(
                 pat,
                 b"^s:\0".as_ptr() as *const ::core::ffi::c_char,
@@ -210,7 +198,7 @@ pub(crate) unsafe extern "C" fn ExpandFromContext(
             );
             pat = tofree;
         }
-        if (*xp).xp_context == EXPAND_LUA as ::core::ffi::c_int {
+        if (*xp).xp_context == EXPAND_LUA {
             return nlua_expand_get_matches(numMatches, matches);
         }
         if !fuzzy {
@@ -228,19 +216,17 @@ pub(crate) unsafe extern "C" fn ExpandFromContext(
             }
             regmatch.rm_ic = ignorecase(pat) != 0;
         }
-        if (*xp).xp_context == EXPAND_SETTINGS as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_BOOL_SETTINGS as ::core::ffi::c_int
-        {
+        if (*xp).xp_context == EXPAND_SETTINGS || (*xp).xp_context == EXPAND_BOOL_SETTINGS {
             ret = ExpandSettings(xp, &raw mut regmatch, pat, numMatches, matches, fuzzy);
-        } else if (*xp).xp_context == EXPAND_STRING_SETTING as ::core::ffi::c_int {
+        } else if (*xp).xp_context == EXPAND_STRING_SETTING {
             ret = ExpandStringSetting(xp, &raw mut regmatch, numMatches, matches);
-        } else if (*xp).xp_context == EXPAND_SETTING_SUBTRACT as ::core::ffi::c_int {
+        } else if (*xp).xp_context == EXPAND_SETTING_SUBTRACT {
             ret = ExpandSettingSubtract(xp, &raw mut regmatch, numMatches, matches);
-        } else if (*xp).xp_context == EXPAND_MAPPINGS as ::core::ffi::c_int {
+        } else if (*xp).xp_context == EXPAND_MAPPINGS {
             ret = ExpandMappings(pat, &raw mut regmatch, numMatches, matches);
-        } else if (*xp).xp_context == EXPAND_ARGOPT as ::core::ffi::c_int {
+        } else if (*xp).xp_context == EXPAND_ARGOPT {
             ret = expand_argopt(pat, xp, &raw mut regmatch, matches, numMatches);
-        } else if (*xp).xp_context == EXPAND_USER_DEFINED as ::core::ffi::c_int {
+        } else if (*xp).xp_context == EXPAND_USER_DEFINED {
             ret = ExpandUserDefined(pat, xp, &raw mut regmatch, matches, numMatches);
         } else {
             ret = ExpandOther(pat, xp, &raw mut regmatch, matches, numMatches);
@@ -358,14 +344,14 @@ pub unsafe extern "C" fn ExpandGeneric(
             return;
         }
         let sort_matches: bool = !fuzzy
-            && (*xp).xp_context != EXPAND_MENUNAMES as ::core::ffi::c_int
-            && (*xp).xp_context != EXPAND_STRING_SETTING as ::core::ffi::c_int
-            && (*xp).xp_context != EXPAND_MENUS as ::core::ffi::c_int
-            && (*xp).xp_context != EXPAND_SCRIPTNAMES as ::core::ffi::c_int
-            && (*xp).xp_context != EXPAND_ARGOPT as ::core::ffi::c_int;
-        let funcsort: bool = (*xp).xp_context == EXPAND_EXPRESSION as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_FUNCTIONS as ::core::ffi::c_int
-            || (*xp).xp_context == EXPAND_USER_FUNC as ::core::ffi::c_int;
+            && (*xp).xp_context != EXPAND_MENUNAMES
+            && (*xp).xp_context != EXPAND_STRING_SETTING
+            && (*xp).xp_context != EXPAND_MENUS
+            && (*xp).xp_context != EXPAND_SCRIPTNAMES
+            && (*xp).xp_context != EXPAND_ARGOPT;
+        let funcsort: bool = (*xp).xp_context == EXPAND_EXPRESSION
+            || (*xp).xp_context == EXPAND_FUNCTIONS
+            || (*xp).xp_context == EXPAND_USER_FUNC;
         if sort_matches {
             if funcsort {
                 qsort(

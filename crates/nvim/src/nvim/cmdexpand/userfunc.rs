@@ -107,9 +107,7 @@ pub(crate) unsafe extern "C" fn expand_shellcmd(
             s = s.offset(1);
         }
         patlen = e.offset_from(pat) as size_t;
-        flags |= EW_FILE as ::core::ffi::c_int
-            | EW_EXEC as ::core::ffi::c_int
-            | EW_SHELLCMD as ::core::ffi::c_int;
+        flags |= EW_FILE | EW_EXEC | EW_SHELLCMD;
         let mut mustfree: bool = false_0 != 0;
         if *pat.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == '.' as ::core::ffi::c_int
@@ -161,7 +159,7 @@ pub(crate) unsafe extern "C" fn expand_shellcmd(
                     break;
                 }
                 did_curdir = true_0 != 0;
-                flags |= EW_DIR as ::core::ffi::c_int;
+                flags |= EW_DIR;
                 e = s_0;
                 pathlen = 0 as size_t;
                 seplen = 0 as size_t;
@@ -175,14 +173,14 @@ pub(crate) unsafe extern "C" fn expand_shellcmd(
                     == 0 as ::core::ffi::c_int
                 {
                     did_curdir = true_0 != 0;
-                    flags |= EW_DIR as ::core::ffi::c_int;
+                    flags |= EW_DIR;
                 } else {
-                    flags &= !(EW_DIR as ::core::ffi::c_int);
+                    flags &= !(EW_DIR);
                 }
                 seplen = (if after_pathsep(s_0, e) == 0 {
-                    ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as usize)
+                    ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1_usize)
                 } else {
-                    0 as usize
+                    0_usize
                 }) as size_t;
             }
             if pathlen
@@ -530,9 +528,9 @@ pub unsafe extern "C" fn globpath(
         };
         ExpandInit(&raw mut xpc);
         xpc.xp_context = if dirs as ::core::ffi::c_int != 0 {
-            EXPAND_DIRECTORIES as ::core::ffi::c_int
+            EXPAND_DIRECTORIES
         } else {
-            EXPAND_FILES as ::core::ffi::c_int
+            EXPAND_FILES
         };
         let mut filelen: size_t = strlen(file);
         while *path as ::core::ffi::c_int != NUL {
@@ -577,16 +575,10 @@ pub unsafe extern "C" fn globpath(
                     buf,
                     &raw mut p,
                     &raw mut num_p,
-                    WILD_SILENT as ::core::ffi::c_int | expand_options,
+                    WILD_SILENT | expand_options,
                 );
                 if num_p > 0 as ::core::ffi::c_int {
-                    ExpandEscape(
-                        &raw mut xpc,
-                        buf,
-                        num_p,
-                        p,
-                        WILD_SILENT as ::core::ffi::c_int | expand_options,
-                    );
+                    ExpandEscape(&raw mut xpc, buf, num_p, p, WILD_SILENT | expand_options);
                     ga_grow(ga, num_p);
                     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                     while i < num_p {

@@ -17,7 +17,7 @@ pub unsafe extern "C" fn set_expand_context(mut xp: *mut expand_T) {
             || (*ccline).cmdfirstc == '?' as ::core::ffi::c_int)
             && may_expand_pattern.get() as ::core::ffi::c_int != 0
         {
-            (*xp).xp_context = EXPAND_PATTERN_IN_BUF as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_PATTERN_IN_BUF;
             (*xp).xp_search_dir = (if (*ccline).cmdfirstc == '/' as ::core::ffi::c_int {
                 FORWARD as ::core::ffi::c_int
             } else {
@@ -33,7 +33,7 @@ pub unsafe extern "C" fn set_expand_context(mut xp: *mut expand_T) {
             && (*ccline).cmdfirstc != '=' as ::core::ffi::c_int
             && (*ccline).input_fn == 0
         {
-            (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_NOTHING;
             return;
         }
         set_cmd_context(
@@ -116,7 +116,7 @@ pub(crate) unsafe extern "C" fn set_cmd_index(
             }
             let mut len: size_t = p.offset_from(cmd) as size_t;
             if len == 0 as size_t {
-                (*xp).xp_context = EXPAND_UNSUCCESSFUL as ::core::ffi::c_int;
+                (*xp).xp_context = EXPAND_UNSUCCESSFUL;
                 return ::core::ptr::null::<::core::ffi::c_char>();
             }
             (*eap).cmdidx = excmd_get_cmdidx(cmd, len);
@@ -183,7 +183,7 @@ pub(crate) unsafe extern "C" fn set_cmd_index(
             }
         }
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_SIZE as ::core::ffi::c_int {
-            (*xp).xp_context = EXPAND_UNSUCCESSFUL as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_UNSUCCESSFUL;
             return ::core::ptr::null::<::core::ffi::c_char>();
         }
         return p;
@@ -243,16 +243,16 @@ pub(crate) unsafe extern "C" fn set_context_for_wildcard_arg(
         if !bow.is_null() && in_quote as ::core::ffi::c_int != 0 {
             (*xp).xp_pattern = bow as *mut ::core::ffi::c_char;
         }
-        (*xp).xp_context = EXPAND_FILES as ::core::ffi::c_int;
+        (*xp).xp_context = EXPAND_FILES;
         if usefilter as ::core::ffi::c_int != 0
             || !eap.is_null()
                 && ((*eap).cmdidx as ::core::ffi::c_int == CMD_bang as ::core::ffi::c_int
                     || (*eap).cmdidx as ::core::ffi::c_int == CMD_terminal as ::core::ffi::c_int)
-            || *complp == EXPAND_SHELLCMDLINE as ::core::ffi::c_int
+            || *complp == EXPAND_SHELLCMDLINE
         {
             (*xp).xp_shell = true_0 != 0;
             if (*xp).xp_pattern == skipwhite(arg) {
-                (*xp).xp_context = EXPAND_SHELLCMD as ::core::ffi::c_int;
+                (*xp).xp_context = EXPAND_SHELLCMD;
             }
         }
         if *(*xp).xp_pattern as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
@@ -264,12 +264,10 @@ pub(crate) unsafe extern "C" fn set_context_for_wildcard_arg(
                 p = p.offset(1);
             }
             if *p as ::core::ffi::c_int == NUL {
-                (*xp).xp_context = EXPAND_ENV_VARS as ::core::ffi::c_int;
+                (*xp).xp_context = EXPAND_ENV_VARS;
                 (*xp).xp_pattern = (*xp).xp_pattern.offset(1);
-                if *complp != EXPAND_USER_DEFINED as ::core::ffi::c_int
-                    && *complp != EXPAND_USER_LIST as ::core::ffi::c_int
-                {
-                    *complp = EXPAND_ENV_VARS as ::core::ffi::c_int;
+                if *complp != EXPAND_USER_DEFINED && *complp != EXPAND_USER_LIST {
+                    *complp = EXPAND_ENV_VARS;
                 }
             }
         }
@@ -285,7 +283,7 @@ pub(crate) unsafe extern "C" fn set_context_for_wildcard_arg(
                 && p > user as *const ::core::ffi::c_char
                 && match_user(CStr::from_ptr(user)) != UserMatch::None
             {
-                (*xp).xp_context = EXPAND_USER as ::core::ffi::c_int;
+                (*xp).xp_context = EXPAND_USER;
                 (*xp).xp_pattern = (*xp).xp_pattern.offset(1);
             }
         }
@@ -303,7 +301,7 @@ pub(crate) unsafe extern "C" fn set_context_in_argopt(
         } else {
             (*xp).xp_pattern = p.offset(1 as ::core::ffi::c_int as isize);
         }
-        (*xp).xp_context = EXPAND_ARGOPT as ::core::ffi::c_int;
+        (*xp).xp_context = EXPAND_ARGOPT;
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
 }
@@ -321,7 +319,7 @@ pub(crate) unsafe extern "C" fn set_context_in_filter_cmd(
             );
         }
         if arg.is_null() || *arg as ::core::ffi::c_int == NUL {
-            (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_NOTHING;
             return ::core::ptr::null::<::core::ffi::c_char>();
         }
         return skipwhite(arg);
@@ -337,7 +335,7 @@ pub(crate) unsafe extern "C" fn set_context_in_match_cmd(
             set_context_in_echohl_cmd(xp, arg);
             arg = skipwhite(skiptowhite(arg));
             if *arg as ::core::ffi::c_int != NUL {
-                (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+                (*xp).xp_context = EXPAND_NOTHING;
                 arg = skip_regexp(
                     (arg as *mut ::core::ffi::c_char).offset(1 as ::core::ffi::c_int as isize),
                     *arg as uint8_t as ::core::ffi::c_int,
@@ -456,7 +454,7 @@ pub(crate) unsafe extern "C" fn find_cmd_after_isearch_cmd(
                 )
                 .is_null()
             {
-                (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+                (*xp).xp_context = EXPAND_NOTHING;
             } else {
                 return arg;
             }
@@ -477,10 +475,10 @@ pub(crate) unsafe extern "C" fn set_context_in_unlet_cmd(
             }
             arg = (*xp).xp_pattern.offset(1 as ::core::ffi::c_int as isize);
         }
-        (*xp).xp_context = EXPAND_USER_VARS as ::core::ffi::c_int;
+        (*xp).xp_context = EXPAND_USER_VARS;
         (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
         if *(*xp).xp_pattern as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
-            (*xp).xp_context = EXPAND_ENV_VARS as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_ENV_VARS;
             (*xp).xp_pattern = (*xp).xp_pattern.offset(1);
         }
         return ::core::ptr::null::<::core::ffi::c_char>();
@@ -494,7 +492,7 @@ pub(crate) unsafe extern "C" fn set_context_in_lang_cmd(
     unsafe {
         let mut p: *const ::core::ffi::c_char = skiptowhite(arg);
         if *p as ::core::ffi::c_int == NUL {
-            (*xp).xp_context = EXPAND_LANGUAGE as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_LANGUAGE;
             (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
         } else if strncmp(
             arg,
@@ -517,10 +515,10 @@ pub(crate) unsafe extern "C" fn set_context_in_lang_cmd(
                 p.offset_from(arg) as size_t,
             ) == 0 as ::core::ffi::c_int
         {
-            (*xp).xp_context = EXPAND_LOCALES as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_LOCALES;
             (*xp).xp_pattern = skipwhite(p);
         } else {
-            (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_NOTHING;
         }
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
@@ -532,7 +530,7 @@ pub(crate) unsafe extern "C" fn set_context_in_breakadd_cmd(
     mut cmdidx: cmdidx_T,
 ) -> *const ::core::ffi::c_char {
     unsafe {
-        (*xp).xp_context = EXPAND_BREAKPOINT as ::core::ffi::c_int;
+        (*xp).xp_context = EXPAND_BREAKPOINT;
         (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
         if cmdidx as ::core::ffi::c_int == CMD_breakadd as ::core::ffi::c_int {
             breakpt_expand_what.set(EXP_BREAKPT_ADD);
@@ -562,7 +560,7 @@ pub(crate) unsafe extern "C" fn set_context_in_breakadd_cmd(
             if ascii_isdigit(*p as ::core::ffi::c_int) {
                 p = skipdigits(p);
                 if *p as ::core::ffi::c_int != ' ' as ::core::ffi::c_int {
-                    (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+                    (*xp).xp_context = EXPAND_NOTHING;
                     return ::core::ptr::null::<::core::ffi::c_char>();
                 }
                 p = skipwhite(p);
@@ -573,9 +571,9 @@ pub(crate) unsafe extern "C" fn set_context_in_breakadd_cmd(
                 4 as size_t,
             ) == 0 as ::core::ffi::c_int
             {
-                (*xp).xp_context = EXPAND_FILES as ::core::ffi::c_int;
+                (*xp).xp_context = EXPAND_FILES;
             } else {
-                (*xp).xp_context = EXPAND_USER_FUNC as ::core::ffi::c_int;
+                (*xp).xp_context = EXPAND_USER_FUNC;
             }
             (*xp).xp_pattern = p as *mut ::core::ffi::c_char;
         } else if strncmp(
@@ -584,7 +582,7 @@ pub(crate) unsafe extern "C" fn set_context_in_breakadd_cmd(
             5 as size_t,
         ) == 0 as ::core::ffi::c_int
         {
-            (*xp).xp_context = EXPAND_EXPRESSION as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_EXPRESSION;
             (*xp).xp_pattern = skipwhite(p.offset(5 as ::core::ffi::c_int as isize));
         }
         return ::core::ptr::null::<::core::ffi::c_char>();
@@ -596,13 +594,13 @@ pub(crate) unsafe extern "C" fn set_context_in_scriptnames_cmd(
     mut arg: *const ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
     unsafe {
-        (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+        (*xp).xp_context = EXPAND_NOTHING;
         (*xp).xp_pattern = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut p: *mut ::core::ffi::c_char = skipwhite(arg);
         if ascii_isdigit(*p as ::core::ffi::c_int) {
             return ::core::ptr::null::<::core::ffi::c_char>();
         }
-        (*xp).xp_context = EXPAND_SCRIPTNAMES as ::core::ffi::c_int;
+        (*xp).xp_context = EXPAND_SCRIPTNAMES;
         (*xp).xp_pattern = p;
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
@@ -613,7 +611,7 @@ pub(crate) unsafe extern "C" fn set_context_in_filetype_cmd(
     mut arg: *const ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
     unsafe {
-        (*xp).xp_context = EXPAND_FILETYPECMD as ::core::ffi::c_int;
+        (*xp).xp_context = EXPAND_FILETYPECMD;
         (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
         filetype_expand_what.set(EXP_FILETYPECMD_ALL);
         let mut p: *mut ::core::ffi::c_char = skipwhite(arg);
@@ -628,7 +626,7 @@ pub(crate) unsafe extern "C" fn set_context_in_filetype_cmd(
                 6 as size_t,
             ) == 0 as ::core::ffi::c_int
             {
-                val |= EXPAND_FILETYPECMD_PLUGIN as ::core::ffi::c_int;
+                val |= EXPAND_FILETYPECMD_PLUGIN;
                 p = skipwhite(p.offset(6 as ::core::ffi::c_int as isize));
             } else {
                 if strncmp(
@@ -639,17 +637,15 @@ pub(crate) unsafe extern "C" fn set_context_in_filetype_cmd(
                 {
                     break;
                 }
-                val |= EXPAND_FILETYPECMD_INDENT as ::core::ffi::c_int;
+                val |= EXPAND_FILETYPECMD_INDENT;
                 p = skipwhite(p.offset(6 as ::core::ffi::c_int as isize));
             }
         }
-        if val & EXPAND_FILETYPECMD_PLUGIN as ::core::ffi::c_int != 0
-            && val & EXPAND_FILETYPECMD_INDENT as ::core::ffi::c_int != 0
-        {
+        if val & EXPAND_FILETYPECMD_PLUGIN != 0 && val & EXPAND_FILETYPECMD_INDENT != 0 {
             filetype_expand_what.set(EXP_FILETYPECMD_ONOFF);
-        } else if val & EXPAND_FILETYPECMD_PLUGIN as ::core::ffi::c_int != 0 {
+        } else if val & EXPAND_FILETYPECMD_PLUGIN != 0 {
             filetype_expand_what.set(EXP_FILETYPECMD_INDENT);
-        } else if val & EXPAND_FILETYPECMD_INDENT as ::core::ffi::c_int != 0 {
+        } else if val & EXPAND_FILETYPECMD_INDENT != 0 {
             filetype_expand_what.set(EXP_FILETYPECMD_PLUGIN);
         }
         (*xp).xp_pattern = p;
@@ -676,7 +672,7 @@ pub(crate) unsafe extern "C" fn set_context_with_pattern(mut xp: *mut expand_T) 
         }
         (*xp).xp_pattern = (*ccline).cmdbuff.offset(skiplen as isize);
         (*xp).xp_pattern_len = ((*ccline).cmdpos - skiplen) as size_t;
-        (*xp).xp_context = EXPAND_PATTERN_IN_BUF as ::core::ffi::c_int;
+        (*xp).xp_context = EXPAND_PATTERN_IN_BUF;
         (*xp).xp_search_dir = FORWARD;
     }
 }
