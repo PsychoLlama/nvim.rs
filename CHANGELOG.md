@@ -12,6 +12,9 @@ and this project adheres to [CalVer](https://calver.org/).
 - Dropped the dead half of every transpiled module preamble: the `types`
   re-export blobs and the per-module copies of the constants, `#define`s and
   type aliases each C translation unit could see.
+- Rewrote the input layer: key codes, the message family and the typeahead
+  core (the stuff/redo/record buffers, `vgetc`, `vgetorpeek` and the mapping
+  match) are hand-written Rust rather than transpiled C.
 
 ## [2026.08.02-af6bcec290]
 
