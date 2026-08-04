@@ -317,11 +317,7 @@ pub(crate) unsafe extern "C" fn command_line_execute(
             set_vim_var_char((*s).c); // set v:char
             trigger_cmd_autocmd((*s).cmdline_type, EVENT_CMDLINELEAVEPRE);
             (*s).event_cmdlineleavepre_triggered = true;
-            if ((*s).c == ESC || (*s).c == Ctrl_C)
-                && (*wim_flags.ptr())[0] as ::core::ffi::c_int
-                    & kOptWimFlagList as ::core::ffi::c_int
-                    != 0
-            {
+            if ((*s).c == ESC || (*s).c == Ctrl_C) && wim_has(0, kOptWimFlagList) {
                 set_no_hlsearch(true);
             }
         }
@@ -443,22 +439,15 @@ pub(crate) unsafe extern "C" fn command_line_execute(
             ) == OK
         {
             if (*s).xpc.xp_numfiles > 1
-                && ((!(*s).did_wild_list
-                    && (*wim_flags.ptr())[(*s).wim_index as usize] as ::core::ffi::c_int
-                        & kOptWimFlagList as ::core::ffi::c_int
-                        != 0)
+                && ((!(*s).did_wild_list && wim_has((*s).wim_index, kOptWimFlagList))
                     || p_wmnu.get() != 0)
             {
                 // Trigger the popup menu when wildoptions=pum.
                 showmatches(
                     &raw mut (*s).xpc,
                     p_wmnu.get() != 0,
-                    (*wim_flags.ptr())[(*s).wim_index as usize] as ::core::ffi::c_int
-                        & kOptWimFlagList as ::core::ffi::c_int
-                        != 0,
-                    (*wim_flags.ptr())[0] as ::core::ffi::c_int
-                        & kOptWimFlagNoselect as ::core::ffi::c_int
-                        != 0,
+                    wim_has((*s).wim_index, kOptWimFlagList),
+                    wim_has(0, kOptWimFlagNoselect),
                 );
             }
             nextwild(

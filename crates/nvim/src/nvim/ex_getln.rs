@@ -5,7 +5,7 @@ use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_array, arena_array, cstr_as_string, try_enter, try_leave,
 };
 use crate::src::nvim::api::vim::nvim_create_buf;
-use crate::src::nvim::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
+use crate::src::nvim::ascii::{ascii_isalpha, ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::src::nvim::autocmd::{
     EVENT_CMDLINECHANGED, EVENT_CMDLINEENTER, EVENT_CMDLINELEAVE, EVENT_CMDLINELEAVEPRE,
     EVENT_CMDWINENTER, EVENT_CMDWINLEAVE, EVENT_CURSORMOVEDC, apply_autocmds, aucmd_prepbuf,

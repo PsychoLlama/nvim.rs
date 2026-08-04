@@ -296,9 +296,7 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                     &raw mut (*s).xpc,
                     false,
                     true,
-                    (*wim_flags.ptr())[0] as ::core::ffi::c_int
-                        & kOptWimFlagNoselect as ::core::ffi::c_int
-                        != 0,
+                    wim_has(0, kOptWimFlagNoselect),
                 ) == EXPAND_NOTHING
                 {
                     return None; // use ^D as a normal character instead

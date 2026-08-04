@@ -9,63 +9,58 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::options::OptWimFlags;
 
-pub(crate) unsafe extern "C" fn command_line_wildchar_complete(
-    mut s: *mut CommandLineState,
+/// Whether stage `idx` of `'wildmode'` carries `flag` (a `kOptWimFlag*`).
+///
+/// `wim_flags` has four entries — `'wildmode'` takes at most four
+/// comma-separated stages — and [`check_opt_wim`] fills the unused tail with
+/// a copy of the last one, so every index answers something.
+pub(crate) fn wim_has(idx: ::core::ffi::c_int, flag: OptWimFlags) -> bool {
+    wim_flags.get()[idx as usize] as OptWimFlags & flag != 0
+}
+
+/// One `'wildchar'` press: run the current `'wildmode'` stage.
+pub(crate) unsafe fn command_line_wildchar_complete(
+    s: *mut CommandLineState,
 ) -> ::core::ffi::c_int {
     unsafe {
-        let mut res: ::core::ffi::c_int = 0;
-        let mut options: ::core::ffi::c_int = WILD_NO_BEEP;
-        let mut escape: bool = (*s).firstc != '@' as ::core::ffi::c_int;
-        let mut redraw_if_menu_empty: bool = (*s).c == K_WILD;
-        let mut wim_noselect: bool = p_wmnu.get() != 0
-            && (*wim_flags.ptr())[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-                & kOptWimFlagNoselect as ::core::ffi::c_int
-                != 0 as ::core::ffi::c_int;
-        if (*wim_flags.ptr())[(*s).wim_index as usize] as ::core::ffi::c_int
-            & kOptWimFlagLastused as ::core::ffi::c_int
-            != 0
-        {
+        let cc = ccline.ptr();
+        let res;
+        let mut options = WILD_NO_BEEP;
+        let escape = (*s).firstc != '@' as ::core::ffi::c_int;
+        let redraw_if_menu_empty = (*s).c == K_WILD;
+        let wim_noselect = p_wmnu.get() != 0 && wim_has(0, kOptWimFlagNoselect);
+
+        if wim_has((*s).wim_index, kOptWimFlagLastused) {
             options |= WILD_BUFLASTUSED;
         }
-        if (*s).xpc.xp_numfiles > 0 as ::core::ffi::c_int {
-            if (*s).xpc.xp_numfiles > 1 as ::core::ffi::c_int
+
+        if (*s).xpc.xp_numfiles > 0 {
+            // Typed 'wildchar' at least twice. If "list" is present, list the
+            // matches unless they are already listed.
+            if (*s).xpc.xp_numfiles > 1
                 && !(*s).did_wild_list
-                && (*wim_flags.ptr())[(*s).wim_index as usize] as ::core::ffi::c_int
-                    & kOptWimFlagList as ::core::ffi::c_int
-                    != 0
+                && wim_has((*s).wim_index, kOptWimFlagList)
             {
-                showmatches(&raw mut (*s).xpc, false_0 != 0, true_0 != 0, wim_noselect);
+                showmatches(&raw mut (*s).xpc, false, true, wim_noselect);
                 redrawcmd();
-                (*s).did_wild_list = true_0 != 0;
+                (*s).did_wild_list = true;
             }
-            if (*wim_flags.ptr())[(*s).wim_index as usize] as ::core::ffi::c_int
-                & kOptWimFlagLongest as ::core::ffi::c_int
-                != 0
-            {
+            if wim_has((*s).wim_index, kOptWimFlagLongest) {
                 res = nextwild(&raw mut (*s).xpc, WILD_LONGEST, options, escape);
-            } else if (*wim_flags.ptr())[(*s).wim_index as usize] as ::core::ffi::c_int
-                & kOptWimFlagFull as ::core::ffi::c_int
-                != 0
-            {
+            } else if wim_has((*s).wim_index, kOptWimFlagFull) {
                 res = nextwild(&raw mut (*s).xpc, WILD_NEXT, options, escape);
             } else {
-                res = OK;
+                res = OK; // don't insert 'wildchar' now
             }
         } else {
-            let mut wim_longest: bool = (*wim_flags.ptr())[0 as ::core::ffi::c_int as usize]
-                as ::core::ffi::c_int
-                & kOptWimFlagLongest as ::core::ffi::c_int
-                != 0;
-            let mut wim_list: bool = (*wim_flags.ptr())[0 as ::core::ffi::c_int as usize]
-                as ::core::ffi::c_int
-                & kOptWimFlagList as ::core::ffi::c_int
-                != 0;
-            let mut wim_full: bool = (*wim_flags.ptr())[0 as ::core::ffi::c_int as usize]
-                as ::core::ffi::c_int
-                & kOptWimFlagFull as ::core::ffi::c_int
-                != 0;
-            (*s).wim_index = 0 as ::core::ffi::c_int;
+            // Typed 'wildchar' for the first time.
+            let wim_longest = wim_has(0, kOptWimFlagLongest);
+            let wim_list = wim_has(0, kOptWimFlagList);
+            let wim_full = wim_has(0, kOptWimFlagFull);
+
+            (*s).wim_index = 0;
             if (*s).c as OptInt == p_wc.get()
                 || (*s).c as OptInt == p_wcm.get()
                 || (*s).c == K_WILD
@@ -77,69 +72,55 @@ pub(crate) unsafe extern "C" fn command_line_wildchar_complete(
                 }
                 (*s).xpc.xp_pre_incsearch_pos = (*s).is_state.search_start;
             }
-            let mut cmdpos_before: ::core::ffi::c_int = (*ccline.ptr()).cmdpos;
+            let cmdpos_before = (*cc).cmdpos;
+
+            // If 'wildmode' starts with "longest", get the longest common
+            // part.
             if wim_longest {
                 res = nextwild(&raw mut (*s).xpc, WILD_LONGEST, options, escape);
             } else {
-                if wim_noselect as ::core::ffi::c_int != 0 || wim_list as ::core::ffi::c_int != 0 {
+                if wim_noselect || wim_list {
                     options |= WILD_NOSELECT;
                 }
                 res = nextwild(&raw mut (*s).xpc, WILD_EXPAND_KEEP, options, escape);
             }
-            if redraw_if_menu_empty as ::core::ffi::c_int != 0
-                && (*s).xpc.xp_numfiles <= 0 as ::core::ffi::c_int
-            {
+
+            // Remove the popup menu if no completion items are available.
+            if redraw_if_menu_empty && (*s).xpc.xp_numfiles <= 0 {
                 pum_check_clear();
             }
+
+            // If interrupted while completing, behave as if it failed.
             if got_int.get() {
-                vpeekc();
-                got_int.set(false_0 != 0);
+                vpeekc(); // remove <C-C> from the input stream
+                got_int.set(false); // don't abandon the command line
                 ExpandOne(
                     &raw mut (*s).xpc,
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    0 as ::core::ffi::c_int,
+                    0,
                     WILD_FREE,
                 );
-                (*s).xpc.xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+                (*s).xpc.xp_context = EXPAND_NOTHING;
                 return CMDLINE_CHANGED;
             }
-            if res == OK
-                && (*s).xpc.xp_numfiles
-                    > (if wim_noselect as ::core::ffi::c_int != 0 {
-                        0 as ::core::ffi::c_int
-                    } else {
-                        1 as ::core::ffi::c_int
-                    })
-            {
+
+            // Display the matches.
+            if res == OK && (*s).xpc.xp_numfiles > if wim_noselect { 0 } else { 1 } {
                 if wim_longest {
-                    let mut found_longest_prefix: bool = (*ccline.ptr()).cmdpos != cmdpos_before;
-                    if wim_list as ::core::ffi::c_int != 0
-                        || p_wmnu.get() != 0 && wim_full as ::core::ffi::c_int != 0
-                    {
-                        showmatches(&raw mut (*s).xpc, p_wmnu.get() != 0, wim_list, true_0 != 0);
+                    let found_longest_prefix = (*cc).cmdpos != cmdpos_before;
+                    if wim_list || (p_wmnu.get() != 0 && wim_full) {
+                        showmatches(&raw mut (*s).xpc, p_wmnu.get() != 0, wim_list, true);
                     } else if !found_longest_prefix {
-                        let mut wim_list_next: bool = (*wim_flags.ptr())
-                            [1 as ::core::ffi::c_int as usize]
-                            as ::core::ffi::c_int
-                            & kOptWimFlagList as ::core::ffi::c_int
-                            != 0;
-                        let mut wim_full_next: bool = (*wim_flags.ptr())
-                            [1 as ::core::ffi::c_int as usize]
-                            as ::core::ffi::c_int
-                            & kOptWimFlagFull as ::core::ffi::c_int
-                            != 0;
-                        let mut wim_noselect_next: bool = (*wim_flags.ptr())
-                            [1 as ::core::ffi::c_int as usize]
-                            as ::core::ffi::c_int
-                            & kOptWimFlagNoselect as ::core::ffi::c_int
-                            != 0;
-                        if wim_list_next as ::core::ffi::c_int != 0
-                            || p_wmnu.get() != 0
-                                && (wim_full_next as ::core::ffi::c_int != 0
-                                    || wim_noselect_next as ::core::ffi::c_int != 0)
+                        // Nothing was inserted, so look at what the *next*
+                        // 'wildmode' stage asks for and do that now.
+                        let wim_list_next = wim_has(1, kOptWimFlagList);
+                        let wim_full_next = wim_has(1, kOptWimFlagFull);
+                        let wim_noselect_next = wim_has(1, kOptWimFlagNoselect);
+                        if wim_list_next
+                            || (p_wmnu.get() != 0 && (wim_full_next || wim_noselect_next))
                         {
-                            if wim_full_next as ::core::ffi::c_int != 0 && !wim_noselect_next {
+                            if wim_full_next && !wim_noselect_next {
                                 nextwild(&raw mut (*s).xpc, WILD_NEXT, options, escape);
                             } else {
                                 showmatches(
@@ -150,141 +131,101 @@ pub(crate) unsafe extern "C" fn command_line_wildchar_complete(
                                 );
                             }
                             if wim_list_next {
-                                (*s).did_wild_list = true_0 != 0;
+                                (*s).did_wild_list = true;
                             }
                         }
                     }
-                } else if wim_list as ::core::ffi::c_int != 0
-                    || p_wmnu.get() != 0
-                        && (wim_full as ::core::ffi::c_int != 0
-                            || wim_noselect as ::core::ffi::c_int != 0)
-                {
+                } else if wim_list || (p_wmnu.get() != 0 && (wim_full || wim_noselect)) {
                     showmatches(&raw mut (*s).xpc, p_wmnu.get() != 0, wim_list, wim_noselect);
                 } else {
                     vim_beep(kOptBoFlagWildmode as ::core::ffi::c_int as ::core::ffi::c_uint);
                 }
+
                 redrawcmd();
                 if wim_list {
-                    (*s).did_wild_list = true_0 != 0;
+                    (*s).did_wild_list = true;
                 }
-            } else if (*s).xpc.xp_numfiles == -1 as ::core::ffi::c_int {
-                (*s).xpc.xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+            } else if (*s).xpc.xp_numfiles == -1 {
+                (*s).xpc.xp_context = EXPAND_NOTHING;
             }
         }
-        if (*s).wim_index < 3 as ::core::ffi::c_int {
+
+        if (*s).wim_index < 3 {
             (*s).wim_index += 1;
         }
+
         if (*s).c == ESC {
-            (*s).gotesc = true_0 != 0;
+            (*s).gotesc = true;
         }
-        return if res == OK {
+
+        if res == OK {
             CMDLINE_CHANGED
         } else {
             CMDLINE_NOT_CHANGED
-        };
+        }
     }
 }
 
-pub unsafe extern "C" fn check_opt_wim() -> ::core::ffi::c_int {
+/// The `'wildmode'` words, in the order `check_opt_wim` tests them.  Keep in
+/// sync with `opt_wim_values`.
+const WIM_WORDS: [(&[u8], OptWimFlags); 5] = [
+    (b"longest", kOptWimFlagLongest),
+    (b"full", kOptWimFlagFull),
+    (b"list", kOptWimFlagList),
+    (b"lastused", kOptWimFlagLastused),
+    (b"noselect", kOptWimFlagNoselect),
+];
+
+/// Read the `'wildmode'` option and fill `wim_flags[]`.  Answers `FAIL` on a
+/// malformed value, leaving `wim_flags` alone.
+pub unsafe fn check_opt_wim() -> ::core::ffi::c_int {
     unsafe {
         let mut new_wim_flags: [uint8_t; 4] = [0; 4];
-        let mut i: ::core::ffi::c_int = 0;
-        let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        i = 0 as ::core::ffi::c_int;
-        while i < 4 as ::core::ffi::c_int {
-            new_wim_flags[i as usize] = 0 as uint8_t;
-            i += 1;
-        }
-        let mut p: *mut ::core::ffi::c_char = p_wim.get();
+        let mut idx = 0usize;
+
+        let mut p = p_wim.get();
         while *p != 0 {
-            i = 0 as ::core::ffi::c_int;
-            while *p.offset(i as isize) as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-                && *p.offset(i as isize) as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-                || *p.offset(i as isize) as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-                    && *p.offset(i as isize) as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-            {
-                i += 1;
+            // The stage name runs to the first non-alphabetic byte, which has
+            // to be one of the separators.
+            let mut len = 0isize;
+            while ascii_isalpha(*p.offset(len) as ::core::ffi::c_int) {
+                len += 1;
             }
-            if *p.offset(i as isize) as ::core::ffi::c_int != NUL
-                && *p.offset(i as isize) as ::core::ffi::c_int != ',' as ::core::ffi::c_int
-                && *p.offset(i as isize) as ::core::ffi::c_int != ':' as ::core::ffi::c_int
+            let after = *p.offset(len) as ::core::ffi::c_int;
+            if after != NUL
+                && after != ',' as ::core::ffi::c_int
+                && after != ':' as ::core::ffi::c_int
             {
                 return FAIL;
             }
-            if i == 7 as ::core::ffi::c_int
-                && strncmp(
-                    p,
-                    b"longest\0".as_ptr() as *const ::core::ffi::c_char,
-                    7 as size_t,
-                ) == 0 as ::core::ffi::c_int
-            {
-                new_wim_flags[idx as usize] = (new_wim_flags[idx as usize] as ::core::ffi::c_int
-                    | kOptWimFlagLongest as ::core::ffi::c_int)
-                    as uint8_t;
-            } else if i == 4 as ::core::ffi::c_int
-                && strncmp(
-                    p,
-                    b"full\0".as_ptr() as *const ::core::ffi::c_char,
-                    4 as size_t,
-                ) == 0 as ::core::ffi::c_int
-            {
-                new_wim_flags[idx as usize] = (new_wim_flags[idx as usize] as ::core::ffi::c_int
-                    | kOptWimFlagFull as ::core::ffi::c_int)
-                    as uint8_t;
-            } else if i == 4 as ::core::ffi::c_int
-                && strncmp(
-                    p,
-                    b"list\0".as_ptr() as *const ::core::ffi::c_char,
-                    4 as size_t,
-                ) == 0 as ::core::ffi::c_int
-            {
-                new_wim_flags[idx as usize] = (new_wim_flags[idx as usize] as ::core::ffi::c_int
-                    | kOptWimFlagList as ::core::ffi::c_int)
-                    as uint8_t;
-            } else if i == 8 as ::core::ffi::c_int
-                && strncmp(
-                    p,
-                    b"lastused\0".as_ptr() as *const ::core::ffi::c_char,
-                    8 as size_t,
-                ) == 0 as ::core::ffi::c_int
-            {
-                new_wim_flags[idx as usize] = (new_wim_flags[idx as usize] as ::core::ffi::c_int
-                    | kOptWimFlagLastused as ::core::ffi::c_int)
-                    as uint8_t;
-            } else if i == 8 as ::core::ffi::c_int
-                && strncmp(
-                    p,
-                    b"noselect\0".as_ptr() as *const ::core::ffi::c_char,
-                    8 as size_t,
-                ) == 0 as ::core::ffi::c_int
-            {
-                new_wim_flags[idx as usize] = (new_wim_flags[idx as usize] as ::core::ffi::c_int
-                    | kOptWimFlagNoselect as ::core::ffi::c_int)
-                    as uint8_t;
-            } else {
+
+            let word = ::core::slice::from_raw_parts(p as *const u8, len as usize);
+            let Some(&(_, flag)) = WIM_WORDS.iter().find(|(name, _)| *name == word) else {
                 return FAIL;
-            }
-            p = p.offset(i as isize);
+            };
+            new_wim_flags[idx] |= flag as uint8_t;
+
+            p = p.offset(len);
             if *p as ::core::ffi::c_int == NUL {
                 break;
             }
             if *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
-                if idx == 3 as ::core::ffi::c_int {
+                if idx == 3 {
                     return FAIL;
                 }
                 idx += 1;
             }
             p = p.offset(1);
         }
-        while idx < 3 as ::core::ffi::c_int {
-            new_wim_flags[(idx + 1 as ::core::ffi::c_int) as usize] = new_wim_flags[idx as usize];
+
+        // Fill the remaining entries with the last flag.
+        while idx < 3 {
+            new_wim_flags[idx + 1] = new_wim_flags[idx];
             idx += 1;
         }
-        i = 0 as ::core::ffi::c_int;
-        while i < 4 as ::core::ffi::c_int {
-            (*wim_flags.ptr())[i as usize] = new_wim_flags[i as usize];
-            i += 1;
-        }
-        return OK;
+
+        // Only when there are no errors is wim_flags[] changed.
+        wim_flags.set(new_wim_flags);
+        OK
     }
 }

@@ -18,6 +18,15 @@ pub fn ascii_isdigit(c: c_int) -> bool {
     (c_int::from(b'0')..=c_int::from(b'9')).contains(&c)
 }
 
+/// `ASCII_ISALPHA`: an unaccented Latin letter.
+pub fn ascii_isalpha(c: c_int) -> bool {
+    // Unsigned, so that a negative byte fails both ranges rather than
+    // wrapping into one of them -- which is what the C macro's cast does.
+    let c = c as ::core::ffi::c_uint;
+    (c >= 'A' as ::core::ffi::c_uint && c <= 'Z' as ::core::ffi::c_uint)
+        || (c >= 'a' as ::core::ffi::c_uint && c <= 'z' as ::core::ffi::c_uint)
+}
+
 /// A binary digit.
 pub fn ascii_isbdigit(c: c_int) -> bool {
     c == c_int::from(b'0') || c == c_int::from(b'1')
