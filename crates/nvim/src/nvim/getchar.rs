@@ -20,7 +20,7 @@ use crate::src::nvim::ex_docmd::update_topline_cursor;
 use crate::src::nvim::ex_getln::{
     get_cmdline_info, putcmdline, redrawcmd, redrawcmdline, unputcmdline,
 };
-use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat_len, ga_grow, ga_init};
+use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat_len, ga_grow};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::input::get_keystroke;
 use crate::src::nvim::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
@@ -81,10 +81,9 @@ use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, CharsizeArg, CharsizeKind, Error, EvalFuncData, FileDescriptor,
     Integer, LuaRef, LuaRetMode, MotionType, MultiQueue, Object, OptInt, RemapValues, ScopeType,
     SpecialVarValue, StrCharInfo, String_0, TriState, VV_MOUSE_COL, VV_MOUSE_LNUM, VV_MOUSE_WIN,
-    VV_MOUSE_WINID, VarLockStatus, VarType, buffblock, buffblock_T, buffheader_T, colnr_T, dict_T,
-    flush_buffers_T, garray_T, kFalse, kNone, key_extra, linenr_T, mapblock_T, oparg_T, pos_T,
-    ptrdiff_t, save_redo_T, size_t, tasave_T, typebuf_T, typval_T, uint8_t, uint64_t, varnumber_T,
-    win_T,
+    VV_MOUSE_WINID, VarLockStatus, VarType, buffblock, buffblock_T, buffheader_T, colnr_T,
+    flush_buffers_T, garray_T, kFalse, kNone, key_extra, linenr_T, mapblock_T, oparg_T, ptrdiff_t,
+    save_redo_T, size_t, tasave_T, typebuf_T, typval_T, uint8_t, uint64_t, varnumber_T,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::src::nvim::undo::u_sync;

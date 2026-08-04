@@ -2,201 +2,197 @@
 //!
 //! [`openscript`] pushes a file onto the `scriptin` stack (up to `NSCRIPT`
 //! deep) and `inchar` reads a byte at a time from the innermost one until
-//! EOF, when [`closescript`] pops it.  [`updatescript`] is the other
+//! EOF, when [`closescript`] pops it. [`updatescript`] is the other
 //! direction: the `'scriptout'` copy of what was typed.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int};
 
-pub unsafe extern "C" fn openscript(mut name: *mut ::core::ffi::c_char, mut directly: bool) {
+/// The `scriptin` entry `curscript` names.
+///
+/// # Safety
+/// `at` must be a valid index into the stack.
+pub(crate) unsafe fn script_at(at: c_int) -> *mut FileDescriptor {
+    unsafe { scriptin.ptr().cast::<FileDescriptor>().offset(at as isize) }
+}
+
+/// Open a script file for `:source!`, and with `directly` run its commands
+/// there and then.
+///
+/// # Safety
+/// `name` must point at a NUL-terminated file name.
+pub unsafe fn openscript(name: *mut c_char, directly: bool) {
     unsafe {
-        if curscript.get() + 1 as ::core::ffi::c_int == NSCRIPT as ::core::ffi::c_int {
-            emsg(gettext(&raw const e_nesting as *const ::core::ffi::c_char));
+        if curscript.get() + 1 == NSCRIPT as c_int {
+            emsg(gettext(&raw const e_nesting as *const c_char));
             return;
         }
+        // Not in the sandbox: the commands would run later, possibly outside
+        // it.
         if check_secure() {
             return;
         }
         if ignore_script.get() {
+            // Not reading from a script, so don't open one either.
             return;
         }
-        (*curscript.ptr()) += 1;
-        expand_env(name, NameBuff.ptr() as *mut ::core::ffi::c_char, MAXPATHL);
-        let mut error: ::core::ffi::c_int = file_open(
-            (scriptin.ptr() as *mut FileDescriptor).offset(curscript.get() as isize),
-            NameBuff.ptr() as *mut ::core::ffi::c_char,
-            kFileReadOnly as ::core::ffi::c_int,
-            0 as ::core::ffi::c_int,
+
+        *curscript.ptr() += 1;
+        // NameBuff is the scratch space for the expanded name.
+        expand_env(name, NameBuff.ptr().cast(), MAXPATHL);
+        let error = file_open(
+            script_at(curscript.get()),
+            NameBuff.ptr().cast(),
+            kFileReadOnly as c_int,
+            0,
         );
         if error != 0 {
             semsg(
-                gettext(&raw const e_notopen_2 as *const ::core::ffi::c_char),
+                gettext(&raw const e_notopen_2 as *const c_char),
                 name,
                 uv_strerror(error),
             );
-            (*curscript.ptr()) -= 1;
+            *curscript.ptr() -= 1;
             return;
         }
         save_typebuf();
-        if directly {
-            let mut oa: oparg_T = oparg_T {
-                op_type: 0,
-                regname: 0,
-                motion_type: kMTCharWise,
-                motion_force: 0,
-                use_reg_one: false,
-                inclusive: false,
-                end_adjusted: false,
-                start: pos_T {
-                    lnum: 0,
-                    col: 0,
-                    coladd: 0,
-                },
-                end: pos_T {
-                    lnum: 0,
-                    col: 0,
-                    coladd: 0,
-                },
-                cursor_start: pos_T {
-                    lnum: 0,
-                    col: 0,
-                    coladd: 0,
-                },
-                line_count: 0,
-                empty: false,
-                is_VIsual: false,
-                start_vcol: 0,
-                end_vcol: 0,
-                prev_opcount: 0,
-                prev_count0: 0,
-                excl_tr_ws: false,
-            };
-            let mut save_State: ::core::ffi::c_int = State.get();
-            let mut save_restart_edit: ::core::ffi::c_int = restart_edit.get();
-            let mut save_finish_op: ::core::ffi::c_int = finish_op.get() as ::core::ffi::c_int;
-            let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
-            State.set(MODE_NORMAL);
-            msg_scroll.set(false_0);
-            restart_edit.set(0 as ::core::ffi::c_int);
-            clear_oparg(&raw mut oa);
-            finish_op.set(false_0 != 0);
-            let mut oldcurscript: ::core::ffi::c_int = curscript.get();
-            loop {
-                update_topline_cursor();
-                normal_cmd(&raw mut oa, false_0 != 0);
-                vpeekc();
-                if curscript.get() < oldcurscript {
-                    break;
-                }
-            }
-            State.set(save_State);
-            msg_scroll.set(save_msg_scroll);
-            restart_edit.set(save_restart_edit);
-            finish_op.set(save_finish_op != 0);
+
+        if !directly {
+            return;
         }
+
+        // Run the commands right now, which is what `:source!` after
+        // `:global` or `:argdo`, or inside a loop, or with another command
+        // following, needs. The display is not updated while this runs. Not
+        // done always -- "make test" would fail.
+        let save_state = State.get();
+        let save_restart_edit = restart_edit.get();
+        let save_finish_op = finish_op.get();
+        let save_msg_scroll = msg_scroll.get();
+
+        State.set(MODE_NORMAL);
+        msg_scroll.set(0); // no message scrolling in Normal mode
+        restart_edit.set(0); // don't go to Insert mode
+        let mut oa: oparg_T = core::mem::zeroed();
+        clear_oparg(&raw mut oa);
+        finish_op.set(false);
+
+        let started_at = curscript.get();
+        while {
+            update_topline_cursor(); // cursor position and topline
+            normal_cmd(&raw mut oa, false); // one command
+            vpeekc(); // check for end of file
+            curscript.get() >= started_at
+        } {}
+
+        State.set(save_state);
+        msg_scroll.set(save_msg_scroll);
+        restart_edit.set(save_restart_edit);
+        finish_op.set(save_finish_op);
     }
 }
 
-pub(crate) unsafe extern "C" fn closescript() {
+/// Close the innermost script and put back the typeahead it displaced.
+///
+/// # Safety
+/// A script must be open.
+pub(crate) unsafe fn closescript() {
     unsafe {
-        '_c2rust_label: {
-            if curscript.get() >= 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"curscript >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/getchar.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1450 as ::core::ffi::c_uint,
-                    b"void closescript(void)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(curscript.get() >= 0);
         free_typebuf();
         typebuf.set((*saved_typebuf.ptr())[curscript.get() as usize]);
-        file_close(
-            (scriptin.ptr() as *mut FileDescriptor).offset(curscript.get() as isize),
-            false_0 != 0,
-        );
-        (*curscript.ptr()) -= 1;
+
+        file_close(script_at(curscript.get()), false);
+        *curscript.ptr() -= 1;
     }
 }
 
-pub unsafe extern "C" fn open_scriptin(mut scriptin_name: *mut ::core::ffi::c_char) -> bool {
+/// Open the `-s` script, which is always the outermost one.
+///
+/// The name `-` means standard input. Answers false, with a message on
+/// stderr, when the file cannot be read.
+///
+/// # Safety
+/// `scriptin_name` must point at a NUL-terminated file name.
+pub unsafe fn open_scriptin(scriptin_name: *mut c_char) -> bool {
     unsafe {
-        '_c2rust_label: {
-            if curscript.get() == -1 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"curscript == -1\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/getchar.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1471 as ::core::ffi::c_uint,
-                    b"_Bool open_scriptin(char *)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        (*curscript.ptr()) += 1;
-        let mut error: ::core::ffi::c_int = 0;
-        if strequal(scriptin_name, b"-\0".as_ptr() as *const ::core::ffi::c_char) {
-            error = file_open_stdin(
-                (scriptin.ptr() as *mut FileDescriptor).offset(0 as ::core::ffi::c_int as isize),
-            );
+        debug_assert!(curscript.get() == -1);
+        *curscript.ptr() += 1;
+
+        let error = if strequal(scriptin_name, c"-".as_ptr()) {
+            file_open_stdin(script_at(0))
         } else {
-            error = file_open(
-                (scriptin.ptr() as *mut FileDescriptor).offset(0 as ::core::ffi::c_int as isize),
+            file_open(
+                script_at(0),
                 scriptin_name,
-                kFileReadOnly as ::core::ffi::c_int | kFileNonBlocking as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
-            );
-        }
+                kFileReadOnly as c_int | kFileNonBlocking as c_int,
+                0,
+            )
+        };
         if error != 0 {
             fprintf(
                 stderr,
-                gettext(b"Cannot open for reading: \"%s\": %s\n\0".as_ptr()
-                    as *const ::core::ffi::c_char),
+                gettext(c"Cannot open for reading: \"%s\": %s\n".as_ptr()),
                 scriptin_name,
                 uv_strerror(error),
             );
-            (*curscript.ptr()) -= 1;
-            return false_0 != 0;
+            *curscript.ptr() -= 1;
+            return false;
         }
         save_typebuf();
-        return true_0 != 0;
+        true
     }
 }
 
-pub unsafe extern "C" fn using_script() -> ::core::ffi::c_int {
-    return (curscript.get() >= 0 as ::core::ffi::c_int) as ::core::ffi::c_int;
+/// Whether keys are being read from a script file.
+pub fn using_script() -> c_int {
+    c_int::from(curscript.get() >= 0)
 }
 
-pub unsafe extern "C" fn before_blocking() {
+/// Called just before a blocking wait, so after waiting `'updatetime'` for a
+/// character to arrive.
+///
+/// # Safety
+/// Callable at any time.
+pub unsafe fn before_blocking() {
     unsafe {
-        updatescript(0 as ::core::ffi::c_int);
+        updatescript(0);
         if may_garbage_collect.get() {
-            garbage_collect(false_0 != 0);
+            garbage_collect(false);
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn updatescript(mut c: ::core::ffi::c_int) {
+/// Copy a typed character to the `'scriptout'` file, and sync memfiles when
+/// enough have gone by.
+///
+/// `c == 0` means "we have been waiting a while", which syncs unconditionally
+/// and is where the idle fsync happens; otherwise the sync waits until
+/// `'updatecount'` characters have been typed.
+///
+/// # Safety
+/// Callable at any time.
+pub(crate) unsafe fn updatescript(c: c_int) {
     unsafe {
-        static count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-        if c != 0 && !(*scriptout.ptr()).is_null() {
+        /// Characters typed since the last sync.
+        static count: GlobalCell<c_int> = GlobalCell::new(0);
+
+        if c != 0 && !scriptout.get().is_null() {
             putc(c, scriptout.get());
         }
-        let mut idle: bool = c == 0 as ::core::ffi::c_int;
-        if idle as ::core::ffi::c_int != 0
-            || p_uc.get() > 0 as OptInt && {
-                (*count.ptr()) += 1;
+        let idle = c == 0;
+        if idle
+            || (p_uc.get() > 0 && {
+                *count.ptr() += 1;
                 count.get() as OptInt >= p_uc.get()
-            }
+            })
         {
-            ml_sync_all(
-                idle as ::core::ffi::c_int,
-                true_0,
-                p_fs.get() != 0 || idle as ::core::ffi::c_int != 0,
-            );
-            count.set(0 as ::core::ffi::c_int);
+            // Always fsync at idle (CursorHold).
+            ml_sync_all(c_int::from(idle), 1, p_fs.get() != 0 || idle);
+            count.set(0);
         }
     }
 }
