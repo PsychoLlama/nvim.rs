@@ -16,6 +16,13 @@ use crate::src::nvim::types::key_extra;
 
 use super::{extra, termcap};
 
+/// C's `IS_SPECIAL`: whether `c` is a key code rather than a character.
+/// Every key that is not a printable character travels as a *negative*
+/// `c_int`, which is the whole of the test.
+pub const fn is_special(c: c_int) -> bool {
+    c < 0
+}
+
 /// The ASCII characters the `<>` notation has names for.
 pub const NUL: c_int = 0x00;
 pub const BS: c_int = 0x08;
