@@ -134,7 +134,6 @@ pub const VAR_LIST: VarType = 4;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_31 = c_uint;
-pub const MAXCOL: C2Rust_Unnamed_31 = 2147483647;
 pub const kDirectionNotSet: Direction = 0;
 pub const kCdScopeGlobal: CdScope = 2;
 pub const kCdScopeTabpage: CdScope = 1;

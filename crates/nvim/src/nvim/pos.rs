@@ -13,6 +13,10 @@ use crate::src::nvim::types::pos_T;
 /// range resolve to, and the sentinel a "no line" mark carries.
 pub const MAXLNUM: ::core::ffi::c_uint = 2147483647;
 
+/// One past the last addressable column: the sentinel meaning "to the end of
+/// the line", which is `INT_MAX` because `colnr_T` is `int`.
+pub const MAXCOL: ::core::ffi::c_int = ::core::ffi::c_int::MAX;
+
 /// Whether two positions name the same place, `coladd` included.
 pub fn equalpos(a: pos_T, b: pos_T) -> bool {
     a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd

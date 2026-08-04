@@ -11,6 +11,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::pos::MAXCOL;
 
 /// Does this window's block define any syntax at all?
 pub unsafe fn syntax_present(win: *mut win_T) -> bool {

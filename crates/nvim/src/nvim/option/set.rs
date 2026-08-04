@@ -54,8 +54,8 @@ use crate::src::nvim::ui::ui_call_option_set;
 use crate::src::nvim::window::set_winbar;
 
 use super::{
-    IOSIZE, MAXCOL, NO_LOCAL_UNDOLEVEL, NUL, NUMBUFLEN, OPT_GLOBAL, OPT_LOCAL, OPT_MODELINE,
-    SID_NONE, check_redraw, do_spelllang_source, do_syntax_autocmd, find_tty_option_end, get_varp,
+    IOSIZE, NO_LOCAL_UNDOLEVEL, NUL, NUMBUFLEN, OPT_GLOBAL, OPT_LOCAL, OPT_MODELINE, SID_NONE,
+    check_redraw, do_spelllang_source, do_syntax_autocmd, find_tty_option_end, get_varp,
     get_varp_scope, insecure_flag, is_option_hidden, kOptFlagCurswant, kOptFlagHLOnly,
     kOptFlagInsecure, kOptFlagRedrAll, kOptFlagSecure, kOptFlagUIOption, kOptFlagWasSet,
     kOptScopeBuf, kOptScopeWin, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber,
@@ -63,6 +63,7 @@ use super::{
     option_is_global_only, option_scope_idx, optval_copy, optval_equal, optval_free,
     optval_from_varp, set_option_varp, validate_option_value,
 };
+use crate::src::nvim::pos::MAXCOL;
 
 /// The message buffer the callbacks format into. `set_option` hands its
 /// address to every `did_set_*`, so it cannot live on the stack of a

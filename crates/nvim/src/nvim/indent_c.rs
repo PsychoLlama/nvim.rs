@@ -17,7 +17,7 @@ use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
 use crate::src::nvim::option::{copy_option_part, skip_to_option_part};
 use crate::src::nvim::os::libc::{__assert_fail, atoi, strcpy, strlen, strncmp, tolower};
 use crate::src::nvim::plines::getvcol;
-use crate::src::nvim::pos::{MAXLNUM, lt};
+use crate::src::nvim::pos::{MAXCOL, MAXLNUM, lt};
 use crate::src::nvim::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::strings::vim_strchr;
@@ -27,7 +27,6 @@ use crate::src::nvim::types::{
     uintmax_t, varnumber_T,
 };
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_0 = 2147483647;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

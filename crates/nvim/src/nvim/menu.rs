@@ -34,6 +34,7 @@ use crate::src::nvim::os::libc::{
     strncmp,
 };
 use crate::src::nvim::popupmenu::pum_show_popupmenu;
+use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_HITRETURN, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL,
     MODE_TERMINAL, MODE_VISUAL, get_real_state,
@@ -70,7 +71,6 @@ pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
 pub const kFloatRelativeEditor: FloatRelative = 0;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_12 = 2147483647;
 pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kListLenUnknown: ListLenSpecials = -1;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;

@@ -24,17 +24,16 @@ use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::memline::ml_get;
 use crate::src::nvim::normal::{
-    BL_FIX, BL_SOL, BL_WHITE, CA_NO_ADJ_OP_END, CAR, CPO_CHANGEW, Ctrl_H, FAIL, MAXCOL,
-    MOD_MASK_CTRL, MOD_MASK_SHIFT, NUL, OP_CHANGE, OP_DELETE, OP_NOP, TAB, adjust_for_sel,
-    clearopbeep, false_0, kMTCharWise, kMTLineWise, may_fold_open, nv_page, true_0,
-    unadjust_for_sel,
+    BL_FIX, BL_SOL, BL_WHITE, CA_NO_ADJ_OP_END, CAR, CPO_CHANGEW, Ctrl_H, FAIL, MOD_MASK_CTRL,
+    MOD_MASK_SHIFT, NUL, OP_CHANGE, OP_DELETE, OP_NOP, TAB, adjust_for_sel, clearopbeep, false_0,
+    kMTCharWise, kMTLineWise, may_fold_open, nv_page, true_0, unadjust_for_sel,
 };
 use crate::src::nvim::option::{get_showbreak_value, get_ve_flags};
 use crate::src::nvim::options::{
     kOptFdoFlagBlock, kOptFdoFlagHor, kOptFdoFlagJump, kOptFdoFlagPercent, kOptVeFlagOnemore,
 };
 use crate::src::nvim::plines::{getvcol, linetabsize, plines_win, win_get_fill};
-use crate::src::nvim::pos::lt;
+use crate::src::nvim::pos::{MAXCOL, lt};
 use crate::src::nvim::quickfix::qf_view_result;
 use crate::src::nvim::search::{BACKWARD, FORWARD, findmatch, searchc};
 use crate::src::nvim::state::virtual_active;

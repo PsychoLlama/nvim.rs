@@ -103,7 +103,6 @@ pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
 pub const kFloatRelativeEditor: FloatRelative = 0;
-pub const MAXCOL: c_uint = 2147483647;
 pub const kZIndexCmdlinePopupMenu: c_uint = 250;
 pub const kZIndexPopupMenu: c_uint = 100;
 pub const kZIndexFloatDefault: c_uint = 50;

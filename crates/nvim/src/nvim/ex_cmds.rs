@@ -121,7 +121,7 @@ use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::path::{fix_fname, invocation_path_tail};
 use crate::src::nvim::plines::linetabsize_str;
 use crate::src::nvim::plines::{getvcol, plines_m_win_fill};
-use crate::src::nvim::pos::{MAXLNUM, equalpos};
+use crate::src::nvim::pos::{MAXCOL, MAXLNUM, equalpos};
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit, profile_zero};
 use crate::src::nvim::regexp::vim_regexec_multi;
 use crate::src::nvim::regexp::{
@@ -186,7 +186,6 @@ pub const VAR_UNKNOWN: VarType = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_17 = 0;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;

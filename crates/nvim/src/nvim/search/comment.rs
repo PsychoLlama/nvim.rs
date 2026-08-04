@@ -11,9 +11,8 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::pos::MAXCOL;
 use core::ffi::{c_char, c_int, c_void};
-
-const MAXCOL: c_int = super::MAXCOL as c_int;
 
 /// Whether a raw string starting at `linep[startpos.col - 1]` ends
 /// between `startpos` and `endpos`.

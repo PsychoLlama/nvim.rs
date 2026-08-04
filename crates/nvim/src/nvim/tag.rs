@@ -117,7 +117,6 @@ pub const VAR_LIST: VarType = 4;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_14 = 2147483647;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
 pub const EXPAND_FILES: C2Rust_Unnamed_16 = 2;
 pub const OPTION_MAGIC_OFF: optmagic_T = 2;

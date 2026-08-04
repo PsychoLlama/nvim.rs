@@ -68,7 +68,6 @@ const KS_ZERO: c_int = 255;
 const KS_SPECIAL: c_int = 254;
 const EOL_MAC: c_int = 2;
 const ERANGE: c_int = 34;
-const MAXCOL: c_int = 2147483647;
 const OK: c_int = 1;
 const FAIL: c_int = 0;
 

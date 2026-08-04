@@ -14,6 +14,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::pos::MAXCOL;
 
 impl Cells {
     /// Show the `'listchars'` "precedes" character in column zero of a row

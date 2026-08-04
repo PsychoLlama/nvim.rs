@@ -12,11 +12,11 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::types::{kFalse, kNone, kTrue};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-const MAXCOL: c_int = super::MAXCOL as c_int;
 const FM_BACKWARD: c_int = super::FM_BACKWARD as c_int;
 const FM_FORWARD: c_int = super::FM_FORWARD as c_int;
 const FM_BLOCKSTOP: c_int = super::FM_BLOCKSTOP as c_int;

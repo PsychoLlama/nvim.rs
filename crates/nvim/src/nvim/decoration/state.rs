@@ -47,6 +47,7 @@ use crate::src::nvim::marktree::{
     marktree_itr_next, marktree_itr_step_overlap,
 };
 use crate::src::nvim::memory::xfree;
+use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::types::{
     DecorInline, DecorPriority, DecorPriorityInternal, DecorRange, DecorRange_data,
     DecorRange_data_ui, DecorRangeSlot, DecorSignHighlight, DecorState, DecorVirtText, MTPair,
@@ -54,8 +55,6 @@ use crate::src::nvim::types::{
 };
 use ::core::ffi::c_int;
 use ::core::{mem, ptr};
-
-const MAXCOL: c_int = c_int::MAX;
 
 /// `draw_col` sentinels, in the order the drawing code goes through them.
 /// A new virtual-position range starts at [`DRAW_COL_NEW`]; the column loop

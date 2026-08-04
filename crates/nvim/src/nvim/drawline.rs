@@ -68,7 +68,7 @@ use crate::src::nvim::options::{
 };
 use crate::src::nvim::os::libc::{abs, memcpy, memset, snprintf, strlen};
 use crate::src::nvim::plines::{getvcol, getvvcol, init_charsize_arg, win_charsize};
-use crate::src::nvim::pos::ltoreq;
+use crate::src::nvim::pos::{MAXCOL, ltoreq};
 use crate::src::nvim::quickfix::qf_current_entry;
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::spell::{
@@ -104,11 +104,6 @@ mod attrs;
 mod chars;
 mod rows;
 mod special;
-/// A column past any real one -- "to the end of the line".
-///
-/// Still declared per module tree-wide (40 copies); `pos.rs` is the home it
-/// wants, and that is the standing tree-wide constant job.
-pub const MAXCOL: ::core::ffi::c_int = ::core::ffi::c_int::MAX;
 /// A `DecorRange` that draws virtual text of its own.
 /// A `DecorRange` that draws nothing and reports its position to the UI.
 /// Columns of a `:terminal` line whose attributes `win_line` will look up.

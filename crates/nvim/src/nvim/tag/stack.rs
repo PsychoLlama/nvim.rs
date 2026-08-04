@@ -10,6 +10,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::highlight_group::HLF_D;
+use crate::src::nvim::pos::MAXCOL;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

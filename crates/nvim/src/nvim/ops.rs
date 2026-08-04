@@ -68,7 +68,7 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::plines::linetabsize_str;
 use crate::src::nvim::plines::{getvcol, getvcols, getvvcol, init_charsize_arg, win_charsize};
-use crate::src::nvim::pos::{equalpos, lt, ltoreq};
+use crate::src::nvim::pos::{MAXCOL, equalpos, lt, ltoreq};
 use crate::src::nvim::register::{
     do_autocmd_textyankpost, get_y_register, get_yank_register, op_yank, op_yank_reg,
     shift_delete_registers, valid_yank_reg,
@@ -107,7 +107,6 @@ pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_14 = 2147483647;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const NUMBUFLEN: C2Rust_Unnamed_16 = 65;
 pub const kExtmarkUndo: ExtmarkOp = 1;

@@ -19,7 +19,7 @@ use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::r#move::adjust_skipcol;
 use crate::src::nvim::normal::unadjust_for_sel;
 use crate::src::nvim::os::libc::snprintf;
-use crate::src::nvim::pos::{clearpos, equalpos, lt, ltoreq};
+use crate::src::nvim::pos::{MAXCOL, clearpos, equalpos, lt, ltoreq};
 use crate::src::nvim::search::{BACKWARD, FORWARD, findmatch, findmatchlimit, linewhite};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
@@ -27,7 +27,6 @@ use crate::src::nvim::types::{
     colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t, typval_T, uint8_t,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed = 2147483647;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

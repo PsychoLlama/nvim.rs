@@ -63,7 +63,6 @@ pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;
 pub const NUL: c_int = 0;
 pub const TAB: c_int = '\t' as c_int;
-pub const MAXCOL: c_uint = 2147483647;
 pub const MAXPATHL: c_int = 4096;
 pub const IOSIZE: c_int = 1024 + 1;
 pub const BL_WHITE: c_uint = 1;

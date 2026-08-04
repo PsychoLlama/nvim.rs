@@ -29,14 +29,14 @@ use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memline::{ml_get_len, ml_get_pos};
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::normal::{
-    CA_NO_ADJ_OP_END, Ctrl_Q, Ctrl_V, MAXCOL, NUL, OP_NOP, TAB, VIsual_mode_orig, clearopbeep,
-    false_0, may_clear_cmdline, nv_down, nv_g_cmd, nv_operator, nv_right, true_0,
+    CA_NO_ADJ_OP_END, Ctrl_Q, Ctrl_V, NUL, OP_NOP, TAB, VIsual_mode_orig, clearopbeep, false_0,
+    may_clear_cmdline, nv_down, nv_g_cmd, nv_operator, nv_right, true_0,
 };
 use crate::src::nvim::ops::adjust_cursor_eol;
 use crate::src::nvim::option::get_ve_flags;
 use crate::src::nvim::options::kOptVeFlagBlock;
 use crate::src::nvim::plines::{getvcol, getvcols};
-use crate::src::nvim::pos::{equalpos, lt};
+use crate::src::nvim::pos::{MAXCOL, equalpos, lt};
 use crate::src::nvim::state::{may_trigger_modechanged, virtual_active};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::textobject::{

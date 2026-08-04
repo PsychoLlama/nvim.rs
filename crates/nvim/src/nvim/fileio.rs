@@ -136,7 +136,6 @@ pub type C2Rust_Unnamed_5 = ::core::ffi::c_int;
 pub const UV_ENOENT: C2Rust_Unnamed_5 = -2;
 pub const UV_EFBIG: C2Rust_Unnamed_5 = -27;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_20 = 2147483647;
 pub const kOptValTypeString: OptValType = 2;
 pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
 pub const CMOD_LOCKMARKS: C2Rust_Unnamed_23 = 2048;

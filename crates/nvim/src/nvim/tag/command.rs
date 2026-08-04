@@ -14,6 +14,7 @@
 use super::*;
 use crate::src::nvim::file_search::Name;
 use crate::src::nvim::highlight_group::HLF_W;
+use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::types::VV_SWAPCOMMAND;
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;

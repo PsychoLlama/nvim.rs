@@ -14,6 +14,7 @@ use core::ffi::c_int;
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::pos::MAXCOL;
 
 /// Where `ml_updatechunk` last left off. Appending runs down the buffer in
 /// order, so the next call almost always wants the same chunk or the next

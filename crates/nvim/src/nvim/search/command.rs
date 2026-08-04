@@ -13,6 +13,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::pos::MAXCOL;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -29,7 +30,6 @@ const SEARCH_MARK: c_int = super::SEARCH_MARK as c_int;
 const SEARCH_KEEP: c_int = super::SEARCH_KEEP as c_int;
 const SEARCH_PEEK: c_int = super::SEARCH_PEEK as c_int;
 const SEARCH_MSG: c_int = super::SEARCH_MSG as c_int;
-const MAXCOL: c_int = super::MAXCOL as c_int;
 const RE_LAST: c_int = super::RE_LAST as c_int;
 const RE_SEARCH: c_int = super::RE_SEARCH as c_int;
 const CMOD_KEEPPATTERNS: c_int = super::CMOD_KEEPPATTERNS as c_int;

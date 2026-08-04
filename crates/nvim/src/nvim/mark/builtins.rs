@@ -9,6 +9,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::*;
+use crate::src::nvim::pos::MAXCOL;
 
 /// Add information about mark 'mname' to list 'l'
 pub(super) unsafe extern "C" fn add_mark(

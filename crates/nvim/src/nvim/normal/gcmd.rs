@@ -19,7 +19,7 @@ use crate::src::nvim::memline::goto_byte;
 use crate::src::nvim::message::show_sb_text;
 use crate::src::nvim::mouse::do_mouse;
 use crate::src::nvim::normal::{
-    Ctrl_H, MAXCOL, MOD_MASK_CTRL, NUL, OK, OP_NOP, VALID_WCOL, adjust_for_sel, check_text_locked,
+    Ctrl_H, MOD_MASK_CTRL, NUL, OK, OP_NOP, VALID_WCOL, adjust_for_sel, check_text_locked,
     checkclearop, checkclearopq, clearopbeep, false_0, invoke_edit, kMTCharWise, kMTLineWise,
     nv_Replace, nv_addsub, nv_edit, nv_gd, nv_gomark, nv_goto, nv_gotofile, nv_gv_cmd, nv_ident,
     nv_join, nv_operator, nv_pcmark, nv_put, nv_screengo, nv_visual, nv_vreplace, true_0,
@@ -43,6 +43,7 @@ use crate::src::nvim::r#move::{
     adjust_skipcol, sms_marker_overlap, update_curswant_force, validate_cheight, validate_virtcol,
     win_col_off, win_col_off2,
 };
+use crate::src::nvim::pos::MAXCOL;
 
 /// The mouse keys `g` accepts, which it re-sends as their CTRL-modified form.
 /// The key that means "nothing happened"; `g` swallows it.

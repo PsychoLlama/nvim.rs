@@ -131,11 +131,6 @@ unsafe extern "C" {
     fn re_multiline(prog: *const regprog_T) -> ::core::ffi::c_int;
     fn vim_regfree(prog: *mut regprog_T);
 }
-/// A column past any real one -- "to the end of the line".
-///
-/// Still declared per module tree-wide (40 copies); `pos.rs` is the home it
-/// wants, and that is the standing tree-wide constant job.
-pub const MAXCOL: ::core::ffi::c_int = ::core::ffi::c_int::MAX;
 /// `'shortmess'` flags this module tests.
 pub const SHM_RECORDING: ::core::ffi::c_int = b'q' as ::core::ffi::c_int;
 pub const SHM_COMPLETIONMENU: ::core::ffi::c_int = b'c' as ::core::ffi::c_int;

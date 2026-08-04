@@ -76,7 +76,6 @@ pub(crate) use self::stropt::*;
 pub(crate) use self::validate::*;
 pub use self::value::*;
 pub const VAR_STRING: VarType = 2;
-pub const MAXCOL: c_uint = 2147483647;
 pub const NUMBUFLEN: c_uint = 65;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;

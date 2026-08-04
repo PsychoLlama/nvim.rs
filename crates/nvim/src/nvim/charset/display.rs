@@ -18,10 +18,11 @@ use crate::src::nvim::types::{StringBuilder, buf_T, garray_T, size_t, ssize_t, u
 
 use super::transchar as render;
 use super::{
-    CT_CELL_MASK, EOL_MAC, MAXCOL, NL, NUL, TAB, chartab_initialized, g_chartab, kOptDyFlagUhex,
+    CT_CELL_MASK, EOL_MAC, NL, NUL, TAB, chartab_initialized, g_chartab, kOptDyFlagUhex,
     vim_isprintc,
 };
 use crate::src::nvim::keycodes::K_SPECIAL;
+use crate::src::nvim::pos::MAXCOL;
 
 const CAR: c_int = 13;
 const KS_ZERO: c_int = 255;

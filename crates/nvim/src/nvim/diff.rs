@@ -60,7 +60,7 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::os::shell::call_shell;
 use crate::src::nvim::path::FullName_save;
-use crate::src::nvim::pos::MAXLNUM;
+use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
 use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::src::nvim::types::{
@@ -99,7 +99,6 @@ pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeBoolean: OptValType = 0;
 pub const kOptScopeWin: OptScope = 1;

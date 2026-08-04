@@ -11,6 +11,7 @@
 use super::*;
 use crate::src::nvim::file_search::Name;
 use crate::src::nvim::highlight_group::{HLF_CM, HLF_D, HLF_T};
+use crate::src::nvim::pos::MAXCOL;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

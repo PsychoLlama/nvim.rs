@@ -6,7 +6,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{curbuf, curwin, listcmd_busy, namedfm};
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::__assert_fail;
-use crate::src::nvim::pos::{MAXLNUM, lt};
+use crate::src::nvim::pos::{MAXCOL, MAXLNUM, lt};
 use crate::src::nvim::textobject::{findpar, findsent};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;

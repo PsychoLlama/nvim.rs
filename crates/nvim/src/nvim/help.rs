@@ -26,6 +26,7 @@ use crate::src::nvim::os::libc::{
     strchr, strcmp, strcpy, strlen, strncmp,
 };
 use crate::src::nvim::path::{FreeWild, add_pathsep, gen_expand_wildcards, path_full_compare};
+use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::runtime::do_in_path;
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::src::nvim::tag::{do_tag, find_tags};
@@ -39,7 +40,6 @@ use crate::src::nvim::types::{
 };
 use crate::src::nvim::window::{win_close, win_enter, win_setheight, win_split};
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed = 2147483647;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

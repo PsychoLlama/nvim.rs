@@ -91,7 +91,7 @@ use crate::src::nvim::path::{FreeWild, expand_wildcards, path_tail, vim_ispathse
 use crate::src::nvim::popupmenu::{
     pum_clear, pum_display, pum_get_height, pum_set_event_info, pum_undisplay, pum_visible,
 };
-use crate::src::nvim::pos::{MAXLNUM, equalpos};
+use crate::src::nvim::pos::{MAXCOL, MAXLNUM, equalpos};
 use crate::src::nvim::register::get_register_name;
 use crate::src::nvim::register::{copy_register, free_register, valid_yank_reg};
 use crate::src::nvim::search::{
@@ -164,7 +164,6 @@ pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;

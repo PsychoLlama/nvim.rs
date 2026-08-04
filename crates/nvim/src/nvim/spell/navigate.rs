@@ -44,7 +44,7 @@ use crate::src::nvim::option::shortmess;
 use crate::src::nvim::options::kOptSpoFlagNoplainbuffer;
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{gettext, memset, strcpy, strlen};
-use crate::src::nvim::pos::clearpos;
+use crate::src::nvim::pos::{MAXCOL, clearpos};
 use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::syntax::{syn_get_id, syntax_present};
@@ -54,7 +54,7 @@ use crate::src::nvim::types::{
 };
 
 use super::check::{check_need_cap, no_spell_checking, spell_check};
-use super::{MAXCOL, MAXWLEN, NUL, SHM_SEARCH, SMT_BAD, SMT_RARE};
+use super::{MAXWLEN, NUL, SHM_SEARCH, SMT_BAD, SMT_RARE};
 use crate::src::nvim::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPR};
 use crate::src::nvim::spell::SMT_ALL;
 

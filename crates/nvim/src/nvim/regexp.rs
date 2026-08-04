@@ -53,7 +53,6 @@ pub const _ISpunct: c_uint = 4;
 pub const _IScntrl: c_uint = 2;
 pub const _ISgraph: c_uint = 32768;
 pub const _ISalpha: c_uint = 1024;
-pub const MAXCOL: c_uint = 2147483647;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_PARTIAL: VarType = 9;
 pub const VAR_LIST: VarType = 4;

@@ -56,7 +56,6 @@ const kExtmarkUndo: ExtmarkOp = 1;
 const kOptIndentexpr: OptIndex = 148;
 const kOptValTypeString: OptValType = 2;
 const kOptVartabstop: OptIndex = 338;
-const MAXCOL: ::core::ffi::c_int = 2147483647;
 const NUL: ::core::ffi::c_int = 0;
 const TAB: ::core::ffi::c_int = 9;
 const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

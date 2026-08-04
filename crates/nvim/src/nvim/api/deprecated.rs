@@ -31,7 +31,7 @@ use crate::src::nvim::option::{
     optval_as_object, set_option_value_for,
 };
 use crate::src::nvim::options::kOptInvalid;
-use crate::src::nvim::pos::MAXLNUM;
+use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
 use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Boolean, Buffer, DecorExt, DecorHighlightInline, DecorInline,
@@ -63,7 +63,6 @@ pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub const kRetObject: LuaRetMode = 0;
 pub const OPT_GLOBAL: C2Rust_Unnamed_17 = 1;
 pub const kOptScopeBuf: OptScope = 2;

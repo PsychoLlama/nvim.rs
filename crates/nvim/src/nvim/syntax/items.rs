@@ -13,6 +13,7 @@ use core::ffi::c_int;
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::pos::MAXCOL;
 
 /// Number of items on the current state stack.
 #[inline(always)]

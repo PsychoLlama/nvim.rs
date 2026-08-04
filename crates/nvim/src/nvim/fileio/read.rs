@@ -15,6 +15,7 @@ use core::ffi::{c_char, c_int};
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::memfile::MfDirty;
+use crate::src::nvim::pos::MAXCOL;
 /// What the read is being asked to do, decoded from `readfile`'s `flags`.
 #[derive(Clone, Copy)]
 pub(crate) struct How {

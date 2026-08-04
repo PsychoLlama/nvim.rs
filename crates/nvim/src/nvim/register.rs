@@ -70,7 +70,7 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::plines::{getvcol, init_charsize_arg, win_charsize};
-use crate::src::nvim::pos::MAXLNUM;
+use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
 use crate::src::nvim::search::{BACKWARD, FORWARD, last_search_pat, set_last_search_pat};
 use crate::src::nvim::state::REPLACE_FLAG;
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped_ext};
@@ -107,7 +107,6 @@ pub const VAR_UNKNOWN: VarType = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_14 = 2147483647;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;

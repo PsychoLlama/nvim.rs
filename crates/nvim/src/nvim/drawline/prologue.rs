@@ -20,6 +20,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::decoration::kMTMetaInline;
+use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::spell::SMT_ALL;
 
 /// Work out everything about `wlv.lnum` that does not depend on which cell is

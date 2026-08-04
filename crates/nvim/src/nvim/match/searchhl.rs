@@ -12,6 +12,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::pos::MAXCOL;
 
 /// Where `'hlsearch'` sits in the match list's priority order.
 ///

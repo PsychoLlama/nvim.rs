@@ -37,6 +37,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::pos::MAXCOL;
 
 /// The filler that stands in for the half of a double-width character that
 /// did not fit, at either edge of the text.

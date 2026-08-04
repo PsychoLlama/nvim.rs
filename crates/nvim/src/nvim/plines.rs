@@ -33,7 +33,7 @@ use crate::src::nvim::mbyte::{utf_ptr2StrCharInfo, utf_ptr2char, utfc_next, utfc
 use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::r#move::{win_col_off, win_col_off2};
 use crate::src::nvim::option::get_showbreak_value;
-use crate::src::nvim::pos::{lt, ltoreq};
+use crate::src::nvim::pos::{MAXCOL, lt, ltoreq};
 use crate::src::nvim::state::{MODE_NORMAL, virtual_active};
 use crate::src::nvim::types::{
     CharSize, CharsizeArg, CharsizeKind, MarkTree, MarkTreeIter, MetaFilter, MetaIndex,
@@ -43,9 +43,6 @@ use crate::src::nvim::types::{
 
 use ::core::ffi::{c_char, c_int, c_long};
 
-/// The largest column number, and the "no limit" argument to every function
-/// here that takes a byte length.
-const MAXCOL: c_int = c_int::MAX;
 /// Cells a byte that is not part of a valid UTF-8 sequence occupies: it is
 /// shown as `<xx>`.
 const INVALID_BYTE_CELLS: c_int = 4;

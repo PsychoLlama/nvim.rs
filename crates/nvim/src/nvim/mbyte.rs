@@ -27,6 +27,7 @@ use crate::src::nvim::os::libc::{
     memmove, qsort, setlocale, snprintf, strchr, strcmp, strcpy, strlen, strncasecmp, strncmp,
     tolower, toupper,
 };
+use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
     BoolVarValue, CharBoundsOff, CharInfo, EvalFuncData, GraphemeState, ScopeType, SpecialVarValue,
@@ -68,7 +69,6 @@ pub const _ISgraph: C2Rust_Unnamed = 32768;
 pub const _ISalpha: C2Rust_Unnamed = 1024;
 pub type wint_t = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_2 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_2 = 2147483647;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

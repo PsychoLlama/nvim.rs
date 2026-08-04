@@ -20,6 +20,7 @@ use crate::src::nvim::message::emsg;
 use crate::src::nvim::r#move::{update_topline, validate_cursor};
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::plines::{win_get_fill, win_text_height};
+use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Boolean, Buffer, Dict, Error, Integer, KeyDict_win_text_height,
@@ -51,7 +52,6 @@ pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_13 = 2147483647;
 pub const kRetLuaref: LuaRetMode = 2;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;

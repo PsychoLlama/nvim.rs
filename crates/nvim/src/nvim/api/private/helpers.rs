@@ -35,6 +35,7 @@ use crate::src::nvim::map::mh_get_int;
 use crate::src::nvim::mark::setmark_pos;
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::os::libc::vsnprintf;
+use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::runtime::script_is_lua;
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
 use crate::src::nvim::types::{
@@ -72,7 +73,6 @@ const MH_TOMBSTONE: uint32_t = u32::MAX;
 const NUL: c_char = 0;
 const NL: c_char = b'\n' as c_char;
 const CAR: c_char = b'\r' as c_char;
-const MAXCOL: Integer = 2147483647;
 
 /// `current_sctx.sc_sid` for a call that came from Lua, and for one that came
 /// from an RPC client.
@@ -336,7 +336,7 @@ pub(crate) unsafe fn set_mark(
             col = 0;
             deleting = true;
         } else {
-            if col > MAXCOL {
+            if col > MAXCOL as Integer {
                 api_err_invalid(err, c"column".as_ptr(), c"out of range".as_ptr(), 0, false);
                 return false;
             }

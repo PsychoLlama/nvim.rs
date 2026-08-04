@@ -33,7 +33,7 @@ use crate::src::nvim::memory::xfree;
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::{
     BL_WHITE, CA_COMMAND_BUSY, CAR, Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, DEL, ESC, FO_OPEN_COMS,
-    MAXCOL, ML_DEL_MESSAGE, ML_EMPTY, NL, NUL, OP_DELETE, OP_NOP, OP_NR_ADD, OP_NR_SUB, OP_TILDE,
+    ML_DEL_MESSAGE, ML_EMPTY, NL, NUL, OP_DELETE, OP_NOP, OP_NR_ADD, OP_NR_SUB, OP_TILDE,
     OPENLINE_DO_COM, PUT_BLOCK_INNER, PUT_CURSEND, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD,
     PUT_LINE_SPLIT, REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB, VALID_CROW, VIsual_mode_orig,
     checkclearop, checkclearopq, clearop, clearopbeep, false_0, nv_object, nv_operator, prep_redo,
@@ -43,6 +43,7 @@ use crate::src::nvim::ops::{do_join, do_pending_operator, op_addsub, swapchar};
 use crate::src::nvim::option::get_ve_flags;
 use crate::src::nvim::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptVeFlagAll};
 use crate::src::nvim::os::libc::{gettext, strlen};
+use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::register::{copy_register, do_put, free_register};
 use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::state::{MODE_INSERT, MODE_REPLACE, virtual_active};

@@ -39,7 +39,7 @@ use crate::src::nvim::memline::ml_get_buf_len;
 use crate::src::nvim::memory::{strequal, xfree, xrealloc};
 use crate::src::nvim::r#move::changed_window_setting;
 use crate::src::nvim::os::libc::__assert_fail;
-use crate::src::nvim::pos::MAXLNUM;
+use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
 use crate::src::nvim::sign::init_sign_text;
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
@@ -76,7 +76,6 @@ pub const VAR_UNKNOWN: VarType = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const kSHConcealLines: C2Rust_Unnamed_18 = 128;
 pub const kSHConceal: C2Rust_Unnamed_18 = 64;

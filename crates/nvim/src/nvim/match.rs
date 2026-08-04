@@ -65,7 +65,6 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
 }
 
-pub const MAXCOL: c_int = 2147483647;
 pub const VAR_DICT: VarType = 5;
 pub const VAR_LIST: VarType = 4;
 pub const VAR_NUMBER: VarType = 1;

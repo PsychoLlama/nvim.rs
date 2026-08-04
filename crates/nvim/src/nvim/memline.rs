@@ -105,7 +105,6 @@ pub use self::offsets::*;
 mod lines;
 pub use self::lines::*;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_13 = 2147483647;
 pub const kOptValTypeString: OptValType = 2;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_16 = 8192;

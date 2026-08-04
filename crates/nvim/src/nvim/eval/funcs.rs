@@ -119,7 +119,6 @@ pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub const kProcTypePty: ProcType = 1;
 pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_32 = 2147483647;
 pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kListLenShouldKnow: ListLenSpecials = -2;
 pub const kListLenUnknown: ListLenSpecials = -1;

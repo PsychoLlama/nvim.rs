@@ -14,6 +14,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::types::{kFalse, kTrue};
 
 /// How tall a preview split starts out.

@@ -34,7 +34,7 @@ use crate::src::nvim::plines::{
     getvcol, getvvcol, linetabsize_eol, plines_m_win, plines_win, plines_win_full,
     plines_win_nofill, win_get_fill, win_may_fill,
 };
-use crate::src::nvim::pos::equalpos;
+use crate::src::nvim::pos::{MAXCOL, equalpos};
 use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
@@ -45,7 +45,6 @@ use crate::src::nvim::types::{
 use crate::src::nvim::window::win_fdccol_count;
 use crate::src::nvim::winfloat::win_check_anchored_floats;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed = 2147483647;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

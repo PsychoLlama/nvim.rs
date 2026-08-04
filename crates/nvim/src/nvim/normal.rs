@@ -53,7 +53,6 @@ mod misc;
 pub(crate) use self::misc::*;
 pub const _ISlower: c_uint = 512;
 pub const _ISupper: c_uint = 256;
-pub const MAXCOL: c_uint = 2147483647;
 pub const kDirectionNotSet: Direction = 0;
 pub const kMarkChangedCursor: MarkMoveRes = 32;
 pub const kMarkChangedLine: MarkMoveRes = 16;

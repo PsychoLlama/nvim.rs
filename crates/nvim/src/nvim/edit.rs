@@ -124,7 +124,7 @@ use crate::src::nvim::plines::{
     charsize_nowrap, getvcol, getvcol_nolist, init_charsize_arg, win_charsize, win_chartabsize,
 };
 use crate::src::nvim::popupmenu::{pum_check_clear, pum_visible};
-use crate::src::nvim::pos::equalpos;
+use crate::src::nvim::pos::{MAXCOL, equalpos};
 use crate::src::nvim::register::is_literal_register;
 use crate::src::nvim::register::{
     do_put, get_expr_register, get_yank_register, insert_reg, valid_yank_reg,
@@ -182,7 +182,6 @@ pub const VAR_UNKNOWN: VarType = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_14 = 2147483647;
 pub const kDirectionNotSet: Direction = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_17 = 8192;

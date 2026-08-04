@@ -124,7 +124,7 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::path::vim_ispathsep;
 use crate::src::nvim::popupmenu::{pum_check_clear, pum_undisplay};
-use crate::src::nvim::pos::{MAXLNUM, clearpos, equalpos, lt};
+use crate::src::nvim::pos::{MAXCOL, MAXLNUM, clearpos, equalpos, lt};
 use crate::src::nvim::profile::profile_setlimit;
 use crate::src::nvim::regexp::skip_regexp_ex;
 use crate::src::nvim::register::is_literal_register;
@@ -200,7 +200,6 @@ pub const VAR_UNKNOWN: VarType = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub const kMHExisting: MHPutStatus = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;

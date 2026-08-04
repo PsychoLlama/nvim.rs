@@ -32,7 +32,7 @@ use crate::src::nvim::memory::{
 use crate::src::nvim::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
 use crate::src::nvim::ops::get_region_bytecount;
 use crate::src::nvim::os::libc::{memcpy, strchr, strlen};
-use crate::src::nvim::pos::MAXLNUM;
+use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
@@ -73,7 +73,6 @@ pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
 pub const kFloatRelativeEditor: FloatRelative = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;

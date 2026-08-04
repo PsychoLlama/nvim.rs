@@ -125,7 +125,6 @@ unsafe extern "C" {
 pub const VAR_LIST: VarType = 4;
 pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_12 = 2147483647;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const BACKWARD_FILE: Direction = -3;
 pub const FORWARD_FILE: Direction = 3;

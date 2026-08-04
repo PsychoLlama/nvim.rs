@@ -32,6 +32,7 @@ use crate::src::nvim::os::env::home_replace_save;
 use crate::src::nvim::os::fs::{os_chdir, os_dirname, os_isdir};
 use crate::src::nvim::os::libc::{fclose, fprintf, fputs, gettext, putc, strcpy, strlen};
 use crate::src::nvim::path::{add_pathsep, vim_FullName, vim_ispathsep};
+use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::runtime::do_source;
 use crate::src::nvim::strings::vim_strsave_escaped;
 use crate::src::nvim::types::{
@@ -41,7 +42,6 @@ use crate::src::nvim::types::{
 };
 use crate::src::nvim::window::tabpage_index;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed = 2147483647;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

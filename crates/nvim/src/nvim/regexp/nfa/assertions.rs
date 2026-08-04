@@ -12,9 +12,10 @@ use super::run::nfa_re_num_cmp;
 use crate::src::nvim::main::curwin;
 use crate::src::nvim::mark::mark_get;
 use crate::src::nvim::plines::win_linetabsize;
+use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::regexp::{
-    MAXCOL, MB_MAXBYTES, NFA_COL, NFA_LNUM, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT, NFA_VCOL,
-    kMarkBufLocal, nfa_state_T, reg_getline, reg_getline_len, reg_match_visual, rex,
+    MB_MAXBYTES, NFA_COL, NFA_LNUM, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT, NFA_VCOL, kMarkBufLocal,
+    nfa_state_T, reg_getline, reg_getline_len, reg_match_visual, rex,
 };
 use crate::src::nvim::types::{colnr_T, fmark_T, linenr_T, uint8_t, win_T};
 

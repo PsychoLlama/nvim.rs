@@ -4,7 +4,7 @@
 
 use super::args::{Args, frame};
 use super::{
-    Ctrl_V, FAIL, MAXCOL, NUL, OK, OP_NOP, VAR_DICT, kListLenMayKnow, kMTBlockWise, kMTCharWise,
+    Ctrl_V, FAIL, NUL, OK, OP_NOP, VAR_DICT, kListLenMayKnow, kMTBlockWise, kMTCharWise,
     kMTLineWise,
 };
 use crate::src::nvim::api::private::helpers::cbuf_to_string;
@@ -28,7 +28,7 @@ use crate::src::nvim::normal::unadjust_for_sel_inner;
 use crate::src::nvim::ops::{block_prep, charwise_block_prep, reset_lbr, restore_lbr};
 use crate::src::nvim::os::libc::{gettext, memmove, memset};
 use crate::src::nvim::plines::getvvcol;
-use crate::src::nvim::pos::{equalpos, lt};
+use crate::src::nvim::pos::{MAXCOL, equalpos, lt};
 use crate::src::nvim::state::virtual_active;
 use crate::src::nvim::types::{
     EvalFuncData, MotionType, String_0, TriState, block_def, buf_T, colnr_T, linenr_T, oparg_T,

@@ -122,8 +122,6 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-/// The largest possible column number.
-pub const MAXCOL: ::core::ffi::c_uint = 2147483647;
 /// How many `\(..\)` submatches a pattern can have.
 pub const NSUBEXP: ::core::ffi::c_uint = 10;
 /// Size of `expand_T::xp_buf`, the scratch buffer a completion callback may

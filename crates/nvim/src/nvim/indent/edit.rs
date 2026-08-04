@@ -26,6 +26,7 @@ use crate::src::nvim::option::set_option_direct;
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{gettext, memmove, memset, ngettext, snprintf, strncmp};
 use crate::src::nvim::plines::{getvcol_nolist, init_charsize_arg, win_charsize, win_chartabsize};
+use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::search::findmatch;
 use crate::src::nvim::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG};
 use crate::src::nvim::strings::xstrnsave;

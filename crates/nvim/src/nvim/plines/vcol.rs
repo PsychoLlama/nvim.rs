@@ -8,6 +8,7 @@
 //! functions.
 
 use super::*;
+use crate::src::nvim::pos::MAXCOL;
 
 /// Virtual column of `pos`, in up to three flavours:
 ///

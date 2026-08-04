@@ -7,6 +7,7 @@
 //! one), diff filler, and virtual lines.
 
 use super::*;
+use crate::src::nvim::pos::MAXCOL;
 
 /// Whether there may be filler lines anywhere in `wp`.
 ///

@@ -24,7 +24,7 @@ use core::ffi::{c_char, c_int};
 use super::api::with_rex;
 use super::submatch::{clear_submatch_list, fill_submatch_list};
 use super::{
-    CAR, Ctrl_H, E_SUBSTITUTE_NESTING_TOO_DEEP, MAXCOL, NL, NUL, REGSUB_BACKSLASH, REGSUB_COPY,
+    CAR, Ctrl_H, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, NUL, REGSUB_BACKSLASH, REGSUB_COPY,
     REGSUB_MAGIC, TAB, VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN,
     can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len, reg_prev_sub, reg_prev_sublen,
     regsubmatch_T, rex, rsm,
@@ -41,6 +41,7 @@ use crate::src::nvim::mbyte::{
 use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
 use crate::src::nvim::message::{emsg, iemsg};
 use crate::src::nvim::os::libc::{gettext, memmove, strcpy, strlen, strncmp};
+use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::src::nvim::types::{
     funcexe_T, linenr_T, partial_T, regmatch_T, regmmatch_T, staticList10_T, typval_T,

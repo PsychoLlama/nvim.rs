@@ -79,8 +79,6 @@ pub use slang::{
 };
 pub use soundfold::{eval_soundfold, spell_soundfold};
 
-pub const MAXCOL: c_uint = 2147483647;
-
 pub const kOptValTypeBoolean: crate::src::nvim::types::OptValType = 0;
 pub const SHM_SEARCH: c_uint = 115;
 pub const OPT_LOCAL: c_uint = 2;

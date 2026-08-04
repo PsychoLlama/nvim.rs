@@ -10,6 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::pos::MAXCOL;
 
 /// A read-only pointer to line `lnum` of the current buffer. Never NULL.
 ///
