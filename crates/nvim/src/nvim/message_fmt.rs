@@ -34,7 +34,7 @@ pub fn emsg_fmt(args: fmt::Arguments<'_>) -> bool {
     // SAFETY: reads message-state globals; main thread, like every message
     // call. Checked before formatting so suppressed errors cost nothing,
     // matching the variadic wrapper.
-    if unsafe { emsg_not_now() } != 0 {
+    if unsafe { emsg_not_now() } {
         return true;
     }
     let text = to_message(args);

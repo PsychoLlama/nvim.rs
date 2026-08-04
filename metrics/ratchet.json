@@ -334,7 +334,7 @@
     "crates/nvim/src/nvim/menu.rs": {"lines": 2509, "unsafe": 45},
     "crates/nvim/src/nvim/message.rs": {"no_mangle": 2, "unsafe": 18, "variadic": 2},
     "crates/nvim/src/nvim/message/dialog.rs": {"unsafe": 9},
-    "crates/nvim/src/nvim/message/errors.rs": {"no_mangle": 1, "unsafe": 23, "variadic": 6},
+    "crates/nvim/src/nvim/message/errors.rs": {"no_mangle": 1, "unsafe": 22, "variadic": 6},
     "crates/nvim/src/nvim/message/ext.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/message/grid.rs": {"unsafe": 16},
     "crates/nvim/src/nvim/message/history.rs": {"no_mangle": 1, "unsafe": 10},

@@ -95,11 +95,11 @@ use crate::src::nvim::types::ui::{kUIMessages, kUIMultigrid};
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, CMD_index, Dict, Error, Event, FILE, HlMessage, HlMessageChunk,
     Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ScopeType, SpecialVarValue, String_0,
-    VV_ERRMSG, VV_SCROLLSTART, VV_STATUSMSG, VV_WARNINGMSG, VarLockStatus, VarType, buf_T,
-    cmd_addr_T, colnr_T, estack_T, estack_arg_T, exarg_T, flush_buffers_T, garray_T, int64_t,
-    kObjectTypeInteger, kObjectTypeNil, key_extra, linenr_T, object,
-    object_data as C2Rust_Unnamed_11, ptrdiff_t, regmatch_T, sattr_T, schar_T, size_t, ssize_t,
-    typval_T, typval_vval_union, uint8_t, uint32_t, uint64_t,
+    VV_ERRMSG, VV_SCROLLSTART, VV_STATUSMSG, VV_WARNINGMSG, VarLockStatus, VarType, cmd_addr_T,
+    colnr_T, estack_T, estack_arg_T, exarg_T, flush_buffers_T, garray_T, int64_t,
+    kObjectTypeInteger, kObjectTypeNil, key_extra, object, object_data as C2Rust_Unnamed_11,
+    ptrdiff_t, regmatch_T, sattr_T, schar_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t,
+    uint32_t, uint64_t,
 };
 use crate::src::nvim::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
@@ -772,10 +772,6 @@ pub unsafe extern "C" fn smsg_keep(
         ) as ::core::ffi::c_int;
     }
 }
-static last_sourcing_lnum: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(0 as ::core::ffi::c_int);
-static last_sourcing_name: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 pub unsafe extern "C" fn msg_trunc(
     mut s: *mut ::core::ffi::c_char,
     mut force: bool,

@@ -1,611 +1,561 @@
 //! The `emsg` family: errors, warnings and where they came from.
 //!
-//! [`emsg_multiline`] is the funnel — it consults `'debug'`, the `:try`
-//! stack and `v:errmsg` before anything is displayed — and
+//! [`emsg_multiline`] is the funnel -- it consults `'debug'`, the `:try`
+//! stack and `v:errmsg` before anything is displayed -- and
 //! [`get_emsg_source`] is what prefixes the message with the script and line
 //! that raised it.
+//!
+//! The `s`-prefixed entry points ([`semsg`], [`siemsg`], [`swmsg`],
+//! [`msg_schedule_semsg`] and friends) stay C variadics. They are called
+//! ~650 times across the tree as `printf`-style forwarders; turning them into
+//! Rust macros is a tree-wide change, not a rewrite of this file.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{VaList, c_char, c_int, c_long, c_void};
+use core::ptr;
 
-pub unsafe extern "C" fn reset_last_sourcing() {
+/// The script/function the last error was reported from.
+static last_sourcing_name: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+
+/// The line the last error was reported from.
+static last_sourcing_lnum: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// Forget where the last error came from, so the next one names its source
+/// again.
+///
+/// # Safety
+/// Only that nothing else holds the stored name.
+pub unsafe fn reset_last_sourcing() {
     unsafe {
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            last_sourcing_name.ptr() as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL;
-        let _ = *ptr_;
-        last_sourcing_lnum.set(0 as ::core::ffi::c_int);
+        xfree(last_sourcing_name.get().cast());
+        last_sourcing_name.set(ptr::null_mut());
+        last_sourcing_lnum.set(0);
     }
 }
 
-pub(crate) unsafe extern "C" fn other_sourcing_name() -> bool {
+/// Is the innermost script/function a different one from the last error's?
+///
+/// # Safety
+/// Only that the exec stack is well formed.
+unsafe fn other_sourcing_name() -> bool {
     unsafe {
-        if !(*exestack.ptr()).ga_data.is_null()
-            && (*exestack.ptr()).ga_len > 0 as ::core::ffi::c_int
-            && !(*((*exestack.ptr()).ga_data as *mut estack_T)
-                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_name
-            .is_null()
-        {
-            if !(*last_sourcing_name.ptr()).is_null() {
-                return strcmp(
-                    (*((*exestack.ptr()).ga_data as *mut estack_T)
-                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_name,
-                    last_sourcing_name.get(),
-                ) != 0 as ::core::ffi::c_int;
+        if exestack_has_name() {
+            if !last_sourcing_name.get().is_null() {
+                return strcmp((*sourcing_top()).es_name, last_sourcing_name.get()) != 0;
             }
-            return true_0 != 0;
+            return true;
         }
-        return false_0 != 0;
+        false
     }
 }
 
-pub(crate) unsafe extern "C" fn get_emsg_source() -> *mut ::core::ffi::c_char {
+/// Is there an innermost exec-stack entry, and does it name a source?
+///
+/// # Safety
+/// Only that the exec stack is well formed.
+unsafe fn exestack_has_name() -> bool {
     unsafe {
-        if !(*exestack.ptr()).ga_data.is_null()
-            && (*exestack.ptr()).ga_len > 0 as ::core::ffi::c_int
-            && !(*((*exestack.ptr()).ga_data as *mut estack_T)
-                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_name
-            .is_null()
-            && other_sourcing_name() as ::core::ffi::c_int != 0
+        !(*exestack.ptr()).ga_data.is_null()
+            && (*exestack.ptr()).ga_len > 0
+            && !(*sourcing_top()).es_name.is_null()
+    }
+}
+
+/// An allocated "Error in <script>:" line, or null when the source has
+/// already been reported.
+///
+/// # Safety
+/// Only that the exec stack is well formed.
+unsafe fn get_emsg_source() -> *mut c_char {
+    unsafe {
+        if !exestack_has_name() || !other_sourcing_name() {
+            return ptr::null_mut();
+        }
+        let tofree = estack_sfile(ESTACK_NONE);
+        let sname = if tofree.is_null() {
+            (*sourcing_top()).es_name
+        } else {
+            tofree
+        };
+        let p = gettext(c"Error in %s:".as_ptr());
+        let buf_len = strlen(sname) + strlen(p) + 1;
+        let buf: *mut c_char = xmalloc(buf_len).cast();
+        snprintf(buf, buf_len, p, sname);
+        xfree(tofree.cast());
+        buf
+    }
+}
+
+/// An allocated "line NNNN:" line, or null when the line has already been
+/// reported (or there is none).
+///
+/// # Safety
+/// Only that the exec stack is well formed.
+unsafe fn get_emsg_lnum() -> *mut c_char {
+    unsafe {
+        // Show the source of the error, but not if it is the same as the last
+        // time.
+        if (*sourcing_top()).es_name.is_null()
+            || !(other_sourcing_name() || (*sourcing_top()).es_lnum != last_sourcing_lnum.get())
+            || (*sourcing_top()).es_lnum == 0
         {
-            let mut sname: *mut ::core::ffi::c_char = estack_sfile(ESTACK_NONE);
-            let mut tofree: *mut ::core::ffi::c_char = sname;
-            if sname.is_null() {
-                sname = (*((*exestack.ptr()).ga_data as *mut estack_T)
-                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                .es_name;
-            }
-            let p: *const ::core::ffi::c_char =
-                gettext(b"Error in %s:\0".as_ptr() as *const ::core::ffi::c_char);
-            let buf_len: size_t = strlen(sname)
-                .wrapping_add(strlen(p))
-                .wrapping_add(1 as size_t);
-            let buf: *mut ::core::ffi::c_char = xmalloc(buf_len) as *mut ::core::ffi::c_char;
-            snprintf(buf, buf_len, p, sname);
-            xfree(tofree as *mut ::core::ffi::c_void);
-            return buf;
+            return ptr::null_mut();
         }
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        let p = gettext(c"line %4d:".as_ptr());
+        let buf_len = 20 + strlen(p);
+        let buf: *mut c_char = xmalloc(buf_len).cast();
+        snprintf(buf, buf_len, p, (*sourcing_top()).es_lnum);
+        buf
     }
 }
 
-pub(crate) unsafe extern "C" fn get_emsg_lnum() -> *mut ::core::ffi::c_char {
+/// Display the source of an error message, if it has not been shown already.
+///
+/// # Safety
+/// Only that the exec stack is well formed.
+pub unsafe fn msg_source(hl_id: c_int) {
     unsafe {
-        if !(*((*exestack.ptr()).ga_data as *mut estack_T)
-            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-        .es_name
-        .is_null()
-            && (other_sourcing_name() as ::core::ffi::c_int != 0
-                || (*((*exestack.ptr()).ga_data as *mut estack_T)
-                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                .es_lnum
-                    != last_sourcing_lnum.get() as linenr_T)
-            && (*((*exestack.ptr()).ga_data as *mut estack_T)
-                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_lnum
-                != 0 as linenr_T
-        {
-            let p: *const ::core::ffi::c_char =
-                gettext(b"line %4d:\0".as_ptr() as *const ::core::ffi::c_char);
-            let buf_len: size_t = (20 as size_t).wrapping_add(strlen(p));
-            let buf: *mut ::core::ffi::c_char = xmalloc(buf_len) as *mut ::core::ffi::c_char;
-            snprintf(
-                buf,
-                buf_len,
-                p,
-                (*((*exestack.ptr()).ga_data as *mut estack_T)
-                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                .es_lnum,
-            );
-            return buf;
-        }
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
-    }
-}
-
-pub unsafe extern "C" fn msg_source(mut hl_id: ::core::ffi::c_int) {
-    unsafe {
-        static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+        static recursive: GlobalCell<bool> = GlobalCell::new(false);
         if recursive.get() {
             return;
         }
-        recursive.set(true_0 != 0);
-        (*no_wait_return.ptr()) += 1;
-        let mut p: *mut ::core::ffi::c_char = get_emsg_source();
+        recursive.set(true);
+
+        no_wait_return.set(no_wait_return.get() + 1);
+        let p = get_emsg_source();
         if !p.is_null() {
             msg_scroll.set(true_0);
             msg(p, hl_id);
-            xfree(p as *mut ::core::ffi::c_void);
+            xfree(p.cast());
         }
-        p = get_emsg_lnum();
+        let p = get_emsg_lnum();
         if !p.is_null() {
             msg(p, HLF_N);
-            xfree(p as *mut ::core::ffi::c_void);
-            last_sourcing_lnum.set(
-                (*((*exestack.ptr()).ga_data as *mut estack_T)
-                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                .es_lnum as ::core::ffi::c_int,
-            );
+            xfree(p.cast());
+            last_sourcing_lnum.set((*sourcing_top()).es_lnum as c_int);
         }
-        if (*((*exestack.ptr()).ga_data as *mut estack_T)
-            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-        .es_name
-        .is_null()
-            || other_sourcing_name() as ::core::ffi::c_int != 0
-        {
-            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                last_sourcing_name.ptr() as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr_);
-            *ptr_ = NULL;
-            let _ = *ptr_;
-            if !(*((*exestack.ptr()).ga_data as *mut estack_T)
-                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_name
-            .is_null()
-            {
-                last_sourcing_name.set(xstrdup(
-                    (*((*exestack.ptr()).ga_data as *mut estack_T)
-                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_name,
-                ));
+
+        // Remember the source name and line number, so we can tell when
+        // the message changes.
+        if (*sourcing_top()).es_name.is_null() || other_sourcing_name() {
+            xfree(last_sourcing_name.get().cast());
+            last_sourcing_name.set(ptr::null_mut());
+            if !(*sourcing_top()).es_name.is_null() {
+                last_sourcing_name.set(xstrdup((*sourcing_top()).es_name));
                 if !redirecting() {
-                    msg_putchar_hl('\n' as ::core::ffi::c_int, hl_id);
+                    msg_putchar_hl(b'\n' as c_int, hl_id);
                 }
             }
         }
-        (*no_wait_return.ptr()) -= 1;
-        recursive.set(false_0 != 0);
+        no_wait_return.set(no_wait_return.get() - 1);
+        recursive.set(false);
     }
 }
 
-pub(crate) unsafe extern "C" fn emsg_not_now() -> ::core::ffi::c_int {
+/// Is this a bad time to show an error?
+///
+/// # Safety
+/// Only that `'debug'` holds a valid string.
+pub(crate) unsafe fn emsg_not_now() -> bool {
     unsafe {
-        if emsg_off.get() > 0 as ::core::ffi::c_int
-            && vim_strchr(p_debug.get(), 'm' as ::core::ffi::c_int).is_null()
-            && vim_strchr(p_debug.get(), 't' as ::core::ffi::c_int).is_null()
-            || emsg_skip.get() > 0 as ::core::ffi::c_int
-        {
-            return true_0;
-        }
-        return false_0;
+        (emsg_off.get() > 0
+            && vim_strchr(p_debug.get(), b'm' as c_int).is_null()
+            && vim_strchr(p_debug.get(), b't' as c_int).is_null())
+            || emsg_skip.get() > 0
     }
 }
 
-pub unsafe extern "C" fn emsg_multiline(
-    mut s: *const ::core::ffi::c_char,
-    mut kind: *const ::core::ffi::c_char,
-    mut hl_id: ::core::ffi::c_int,
-    mut multiline: bool,
+/// Show an error message, possibly spanning several lines.
+///
+/// Answers true when the message was shown (or deliberately swallowed).
+/// `kind` is the `ext_messages` kind; `multiline` keeps embedded newlines
+/// rather than escaping them.
+///
+/// # Safety
+/// `s` must be a valid C string; `kind` may be null.
+pub unsafe fn emsg_multiline(
+    s: *const c_char,
+    kind: *const c_char,
+    hl_id: c_int,
+    multiline: bool,
 ) -> bool {
     unsafe {
-        let mut ignore: bool = false_0 != 0;
-        if emsg_not_now() != 0 {
-            return true_0 != 0;
+        if emsg_not_now() {
+            return true;
         }
-        (*called_emsg.ptr()) += 1;
-        let mut severe: bool = emsg_severe.get();
-        emsg_severe.set(false_0 != 0);
-        if emsg_off.get() == 0 || !vim_strchr(p_debug.get(), 't' as ::core::ffi::c_int).is_null() {
-            if cause_errthrow(
-                s,
-                multiline,
-                is_multihl.get() > 1 as ::core::ffi::c_int,
-                severe,
-                &raw mut ignore,
-            ) {
+        called_emsg.set(called_emsg.get() + 1);
+
+        // Reset the "severe" flag: it applies to this message only.
+        let severe = emsg_severe.get();
+        emsg_severe.set(false);
+
+        if emsg_off.get() == 0 || !vim_strchr(p_debug.get(), b't' as c_int).is_null() {
+            // Cause a throw of an error exception if appropriate. Don't display
+            // the error message in this case.
+            let mut ignore = false;
+            if cause_errthrow(s, multiline, is_multihl.get() > 1, severe, &raw mut ignore) {
                 if !ignore {
-                    (*did_emsg.ptr()) += 1;
+                    did_emsg.set(did_emsg.get() + 1);
                 }
-                return true_0 != 0;
+                return true;
             }
-            if in_assert_fails.get() as ::core::ffi::c_int != 0
-                && (*emsg_assert_fails_msg.ptr()).is_null()
-            {
+
+            if in_assert_fails.get() && emsg_assert_fails_msg.get().is_null() {
                 emsg_assert_fails_msg.set(xstrdup(s));
-                emsg_assert_fails_lnum.set(
-                    (*((*exestack.ptr()).ga_data as *mut estack_T)
-                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_lnum as ::core::ffi::c_long,
-                );
-                xfree(emsg_assert_fails_context.get() as *mut ::core::ffi::c_void);
-                emsg_assert_fails_context.set(xstrdup(
-                    if (*((*exestack.ptr()).ga_data as *mut estack_T)
-                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_name
-                    .is_null()
-                    {
-                        b"\0".as_ptr() as *const ::core::ffi::c_char
-                    } else {
-                        (*((*exestack.ptr()).ga_data as *mut estack_T)
-                            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                        .es_name as *const ::core::ffi::c_char
-                    },
-                ));
+                emsg_assert_fails_lnum.set((*sourcing_top()).es_lnum as c_long);
+                xfree(emsg_assert_fails_context.get().cast());
+                emsg_assert_fails_context.set(xstrdup(if (*sourcing_top()).es_name.is_null() {
+                    c"".as_ptr()
+                } else {
+                    (*sourcing_top()).es_name
+                }));
             }
-            set_vim_var_string(VV_ERRMSG, s, -1 as ptrdiff_t);
-            if emsg_silent.get() != 0 as ::core::ffi::c_int {
+
+            // set "v:errmsg", also when using ":silent! cmd"
+            set_vim_var_string(VV_ERRMSG, s, -1);
+
+            // When using ":silent! cmd" don't display the error message, but
+            // do write it to the redirection and the log.
+            if emsg_silent.get() != 0 {
                 if !emsg_noredir.get() {
                     msg_start();
-                    let mut p: *mut ::core::ffi::c_char = get_emsg_source();
-                    if !p.is_null() {
-                        let p_len: size_t = strlen(p);
-                        *p.offset(p_len as isize) = '\n' as ::core::ffi::c_char;
-                        redir_write(p, p_len as ptrdiff_t + 1 as ptrdiff_t);
-                        xfree(p as *mut ::core::ffi::c_void);
-                    }
-                    p = get_emsg_lnum();
-                    if !p.is_null() {
-                        let p_len_0: size_t = strlen(p);
-                        *p.offset(p_len_0 as isize) = '\n' as ::core::ffi::c_char;
-                        redir_write(p, p_len_0 as ptrdiff_t + 1 as ptrdiff_t);
-                        xfree(p as *mut ::core::ffi::c_void);
-                    }
+                    // Each source line is redirected with a newline appended.
+                    // Both helpers size their buffer for one byte more than
+                    // the text, so the terminator's slot takes it.
+                    //
+                    // Called one at a time rather than collected first: the
+                    // redirection in between can reach `:redir => var`, and
+                    // `get_emsg_lnum`'s answer depends on state a redirection
+                    // could in principle move.
+                    let write_line = |line: *mut c_char| {
+                        if !line.is_null() {
+                            let len = strlen(line);
+                            *line.add(len) = b'\n' as c_char;
+                            redir_write(line, len as ptrdiff_t + 1);
+                            xfree(line.cast());
+                        }
+                    };
+                    write_line(get_emsg_source());
+                    write_line(get_emsg_lnum());
                     redir_write(s, strlen(s) as ptrdiff_t);
                 }
-                if !(*((*exestack.ptr()).ga_data as *mut estack_T)
-                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                .es_name
-                .is_null()
-                    && (*((*exestack.ptr()).ga_data as *mut estack_T)
-                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_lnum
-                        != 0 as linenr_T
-                {
+                if !(*sourcing_top()).es_name.is_null() && (*sourcing_top()).es_lnum != 0 {
                     logmsg(
                         LOGLVL_DBG,
-                        ::core::ptr::null::<::core::ffi::c_char>(),
-                        b"emsg_multiline\0".as_ptr() as *const ::core::ffi::c_char,
-                        845 as ::core::ffi::c_int,
-                        true_0 != 0,
-                        b"(:silent) %s (%s (line %d))\0".as_ptr() as *const ::core::ffi::c_char,
+                        ptr::null(),
+                        c"emsg_multiline".as_ptr(),
+                        845,
+                        true,
+                        c"(:silent) %s (%s (line %d))".as_ptr(),
                         s,
-                        (*((*exestack.ptr()).ga_data as *mut estack_T)
-                            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                        .es_name,
-                        (*((*exestack.ptr()).ga_data as *mut estack_T)
-                            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                        .es_lnum,
+                        (*sourcing_top()).es_name,
+                        (*sourcing_top()).es_lnum,
                     );
                 } else {
                     logmsg(
                         LOGLVL_DBG,
-                        ::core::ptr::null::<::core::ffi::c_char>(),
-                        b"emsg_multiline\0".as_ptr() as *const ::core::ffi::c_char,
-                        847 as ::core::ffi::c_int,
-                        true_0 != 0,
-                        b"(:silent) %s\0".as_ptr() as *const ::core::ffi::c_char,
+                        ptr::null(),
+                        c"emsg_multiline".as_ptr(),
+                        847,
+                        true,
+                        c"(:silent) %s".as_ptr(),
                         s,
                     );
                 }
-                return true_0 != 0;
+                return true;
             }
-            if !(*((*exestack.ptr()).ga_data as *mut estack_T)
-                .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_name
-            .is_null()
-                && (*((*exestack.ptr()).ga_data as *mut estack_T)
-                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                .es_lnum
-                    != 0 as linenr_T
-            {
+
+            if !(*sourcing_top()).es_name.is_null() && (*sourcing_top()).es_lnum != 0 {
                 logmsg(
                     LOGLVL_INF,
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                    b"emsg_multiline\0".as_ptr() as *const ::core::ffi::c_char,
-                    855 as ::core::ffi::c_int,
-                    true_0 != 0,
-                    b"%s (%s (line %d))\0".as_ptr() as *const ::core::ffi::c_char,
+                    ptr::null(),
+                    c"emsg_multiline".as_ptr(),
+                    855,
+                    true,
+                    c"%s (%s (line %d))".as_ptr(),
                     s,
-                    (*((*exestack.ptr()).ga_data as *mut estack_T)
-                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_name,
-                    (*((*exestack.ptr()).ga_data as *mut estack_T)
-                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_lnum,
+                    (*sourcing_top()).es_name,
+                    (*sourcing_top()).es_lnum,
                 );
             } else {
                 logmsg(
                     LOGLVL_INF,
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                    b"emsg_multiline\0".as_ptr() as *const ::core::ffi::c_char,
-                    857 as ::core::ffi::c_int,
-                    true_0 != 0,
-                    b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+                    ptr::null(),
+                    c"emsg_multiline".as_ptr(),
+                    857,
+                    true,
+                    c"%s".as_ptr(),
                     s,
                 );
             }
-            ex_exitval.set(1 as ::core::ffi::c_int);
-            msg_silent.set(0 as ::core::ffi::c_int);
-            cmd_silent.set(false_0 != 0);
+
+            ex_exitval.set(1);
+
+            // Reset msg_silent, an error causes messages to be visible again.
+            msg_silent.set(0);
+            cmd_silent.set(false);
+
             if global_busy.get() != 0 {
-                (*global_busy.ptr()) += 1;
+                // Break out of the :global command.
+                global_busy.set(global_busy.get() + 1);
             }
+
+            // Now that we have a message, flush the input buffer or beep.
             if p_eb.get() != 0 {
                 beep_flush();
             } else {
                 flush_buffers(FLUSH_MINIMAL);
             }
-            (*did_emsg.ptr()) += 1;
+            did_emsg.set(did_emsg.get() + 1);
         }
-        emsg_on_display.set(true_0 != 0);
-        if msg_scrolled.get() != 0 as ::core::ffi::c_int {
-            need_wait_return.set(true_0 != 0);
+
+        emsg_on_display.set(true); // remember there is an error message
+        if msg_scrolled.get() != 0 {
+            need_wait_return.set(true); // needed in case emsg() is called after wait_return() has cleared it
         }
         msg_ext_set_kind(kind);
-        msg_scroll.set(true_0);
-        let mut save_msg_skip_flush: bool = msg_ext_skip_flush.get();
-        msg_ext_skip_flush.set(true_0 != 0);
+        msg_scroll.set(true_0); // don't overwrite a previous message
+
+        // Skip the flush until the whole message has been written, so that the
+        // source line and the error arrive as one ext_messages event.
+        let save_msg_skip_flush = msg_ext_skip_flush.get();
+        msg_ext_skip_flush.set(true);
         msg_source(hl_id);
-        msg_nowait.set(false_0 != 0);
-        let mut rv: ::core::ffi::c_int =
-            msg_keep(s, hl_id, false_0 != 0, multiline) as ::core::ffi::c_int;
+        msg_nowait.set(false); // wait for this msg
+        let rv = msg_keep(s, hl_id, false, multiline);
         msg_ext_skip_flush.set(save_msg_skip_flush);
-        return rv != 0;
+        rv
     }
 }
 
+/// Show an error message. Exported for the unit specs.
+///
+/// # Safety
+/// `s` must be a valid C string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn emsg(mut s: *const ::core::ffi::c_char) -> bool {
-    unsafe {
-        return emsg_multiline(
-            s,
-            b"emsg\0".as_ptr() as *const ::core::ffi::c_char,
-            HLF_E,
-            false_0 != 0,
-        );
-    }
+pub unsafe extern "C" fn emsg(s: *const c_char) -> bool {
+    unsafe { emsg_multiline(s, c"emsg".as_ptr(), HLF_E, false) }
 }
 
-pub unsafe extern "C" fn emsg_invreg(mut name: ::core::ffi::c_int) {
+/// "E354: Invalid register name" for register `name`.
+///
+/// # Safety
+/// Only that `name` is a character code.
+pub unsafe fn emsg_invreg(name: c_int) {
     unsafe {
         semsg(
-            gettext(b"E354: Invalid register name: '%s'\0".as_ptr() as *const ::core::ffi::c_char),
-            transchar_buf(::core::ptr::null::<buf_T>(), name),
+            gettext(c"E354: Invalid register name: '%s'".as_ptr()),
+            transchar_buf(ptr::null(), name),
         );
     }
 }
 
-pub unsafe extern "C" fn semsg(fmt: *const ::core::ffi::c_char, mut c2rust_args: ...) -> bool {
-    unsafe {
-        let mut ret: bool = false;
-        let mut ap: ::core::ffi::VaList;
-        ap = c2rust_args.clone();
-        ret = semsgv(fmt, ap);
-        return ret;
-    }
+/// [`emsg`] with `printf` formatting.
+///
+/// # Safety
+/// `fmt` and the arguments must agree, as for `printf`.
+pub unsafe extern "C" fn semsg(fmt: *const c_char, mut c2rust_args: ...) -> bool {
+    unsafe { semsgv(fmt, c2rust_args.clone()) }
 }
 
+/// [`emsg_multiline`] with `printf` formatting.
+///
+/// # Safety
+/// As [`semsg`].
 pub unsafe extern "C" fn semsg_multiline(
-    mut kind: *const ::core::ffi::c_char,
-    fmt: *const ::core::ffi::c_char,
+    kind: *const c_char,
+    fmt: *const c_char,
     mut c2rust_args: ...
 ) -> bool {
     unsafe {
-        let mut ret: bool = false;
-        let mut ap: ::core::ffi::VaList;
-        static errbuf: GlobalCell<[::core::ffi::c_char; 8192]> = GlobalCell::new([0; 8192]);
-        if emsg_not_now() != 0 {
-            return true_0 != 0;
+        // A multiline error can be much longer than one line's worth.
+        static errbuf: GlobalCell<[c_char; 8192]> = GlobalCell::new([0; 8192]);
+        if emsg_not_now() {
+            return true;
         }
-        ap = c2rust_args.clone();
         vim_vsnprintf(
-            errbuf.ptr() as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 8192]>(),
+            errbuf.ptr().cast(),
+            ::core::mem::size_of::<[c_char; 8192]>(),
             fmt,
-            ap,
+            c2rust_args.clone(),
         );
-        ret = emsg_multiline(
-            errbuf.ptr() as *mut ::core::ffi::c_char,
-            kind,
-            HLF_E,
-            true_0 != 0,
-        );
-        return ret;
+        emsg_multiline(errbuf.ptr().cast(), kind, HLF_E, true)
     }
 }
 
-pub(crate) unsafe extern "C" fn semsgv(
-    mut fmt: *const ::core::ffi::c_char,
-    mut ap: ::core::ffi::VaList,
-) -> bool {
+/// The `va_list` half of [`semsg`], shared with [`siemsg`].
+///
+/// # Safety
+/// `fmt` and `ap` must agree, as for `vprintf`.
+pub(crate) unsafe fn semsgv(fmt: *const c_char, ap: VaList) -> bool {
     unsafe {
-        static errbuf: GlobalCell<[::core::ffi::c_char; 1025]> = GlobalCell::new([0; 1025]);
-        if emsg_not_now() != 0 {
-            return true_0 != 0;
+        static errbuf: GlobalCell<[c_char; 1025]> = GlobalCell::new([0; 1025]);
+        if emsg_not_now() {
+            return true;
         }
         vim_vsnprintf(
-            errbuf.ptr() as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
+            errbuf.ptr().cast(),
+            ::core::mem::size_of::<[c_char; 1025]>(),
             fmt,
             ap,
         );
-        return emsg(errbuf.ptr() as *mut ::core::ffi::c_char);
+        emsg(errbuf.ptr().cast())
     }
 }
 
-pub unsafe extern "C" fn iemsg(mut s: *const ::core::ffi::c_char) {
+/// An internal error: same as [`emsg`], but skipped when errors are off.
+///
+/// # Safety
+/// `s` must be a valid C string.
+pub unsafe fn iemsg(s: *const c_char) {
     unsafe {
-        if emsg_not_now() != 0 {
+        if emsg_not_now() {
             return;
         }
         emsg(s);
     }
 }
 
-pub unsafe extern "C" fn siemsg(mut s: *const ::core::ffi::c_char, mut c2rust_args: ...) {
+/// [`iemsg`] with `printf` formatting.
+///
+/// # Safety
+/// As [`semsg`].
+pub unsafe extern "C" fn siemsg(s: *const c_char, mut c2rust_args: ...) {
     unsafe {
-        if emsg_not_now() != 0 {
+        if emsg_not_now() {
             return;
         }
-        let mut ap: ::core::ffi::VaList;
-        ap = c2rust_args.clone();
-        semsgv(s, ap);
+        semsgv(s, c2rust_args.clone());
     }
 }
 
-pub unsafe extern "C" fn internal_error(mut where_0: *const ::core::ffi::c_char) {
+/// "E5555: API call: <where>", for a reached-the-unreachable case.
+///
+/// # Safety
+/// `where_0` must be a valid C string.
+pub unsafe fn internal_error(where_0: *const c_char) {
     unsafe {
-        siemsg(
-            gettext(&raw const e_intern2 as *const ::core::ffi::c_char),
-            where_0,
-        );
+        siemsg(gettext(&raw const e_intern2 as *const c_char), where_0);
     }
 }
 
-pub(crate) unsafe extern "C" fn msg_semsg_event(mut argv: *mut *mut ::core::ffi::c_void) {
+/// Deferred-event handler for [`msg_schedule_semsg`].
+///
+/// # Safety
+/// `argv[0]` must be an allocated C string this call takes ownership of.
+pub(crate) unsafe extern "C" fn msg_semsg_event(argv: *mut *mut c_void) {
     unsafe {
-        let mut s: *mut ::core::ffi::c_char =
-            *argv.offset(0 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
+        let s: *mut c_char = (*argv).cast();
         emsg(s);
-        xfree(s as *mut ::core::ffi::c_void);
+        xfree(s.cast());
     }
 }
 
-pub unsafe extern "C" fn msg_schedule_semsg(fmt: *const ::core::ffi::c_char, mut c2rust_args: ...) {
+/// [`semsg`], but deferred to the main loop.
+///
+/// For the places that cannot show a message where they are -- inside a
+/// libuv callback, or with the screen mid-update.
+///
+/// # Safety
+/// As [`semsg`].
+pub unsafe extern "C" fn msg_schedule_semsg(fmt: *const c_char, mut c2rust_args: ...) {
     unsafe {
-        let mut ap: ::core::ffi::VaList;
-        ap = c2rust_args.clone();
         vim_vsnprintf(
-            IObuff.ptr() as *mut ::core::ffi::c_char,
+            IObuff.ptr().cast(),
             IOSIZE as size_t,
             fmt,
-            ap,
+            c2rust_args.clone(),
         );
-        let mut s: *mut ::core::ffi::c_char = xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char);
+        let s = xstrdup(IObuff.ptr().cast());
         loop_schedule_deferred(
             main_loop.ptr(),
-            Event {
-                handler: Some(
-                    msg_semsg_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
-                ),
-                argv: [
-                    s as *mut ::core::ffi::c_void,
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ],
-            },
+            Event::new(Some(msg_semsg_event), [s.cast::<c_void>()]),
         );
     }
 }
 
-pub(crate) unsafe extern "C" fn msg_semsg_multiline_event(mut argv: *mut *mut ::core::ffi::c_void) {
+/// Deferred-event handler for [`msg_schedule_semsg_multiline`].
+///
+/// # Safety
+/// As [`msg_semsg_event`].
+pub(crate) unsafe extern "C" fn msg_semsg_multiline_event(argv: *mut *mut c_void) {
     unsafe {
-        let mut s: *mut ::core::ffi::c_char =
-            *argv.offset(0 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
-        emsg_multiline(
-            s,
-            b"emsg\0".as_ptr() as *const ::core::ffi::c_char,
-            HLF_E,
-            true_0 != 0,
-        );
-        xfree(s as *mut ::core::ffi::c_void);
+        let s: *mut c_char = (*argv).cast();
+        emsg_multiline(s, c"emsg".as_ptr(), HLF_E, true);
+        xfree(s.cast());
     }
 }
 
-pub unsafe extern "C" fn msg_schedule_semsg_multiline(
-    fmt: *const ::core::ffi::c_char,
-    mut c2rust_args: ...
-) {
+/// [`semsg_multiline`], but deferred to the main loop.
+///
+/// # Safety
+/// As [`semsg`].
+pub unsafe extern "C" fn msg_schedule_semsg_multiline(fmt: *const c_char, mut c2rust_args: ...) {
     unsafe {
-        let mut ap: ::core::ffi::VaList;
-        ap = c2rust_args.clone();
         vim_vsnprintf(
-            IObuff.ptr() as *mut ::core::ffi::c_char,
+            IObuff.ptr().cast(),
             IOSIZE as size_t,
             fmt,
-            ap,
+            c2rust_args.clone(),
         );
-        let mut s: *mut ::core::ffi::c_char = xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char);
+        let s = xstrdup(IObuff.ptr().cast());
         loop_schedule_deferred(
             main_loop.ptr(),
-            Event {
-                handler: Some(
-                    msg_semsg_multiline_event
-                        as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
-                ),
-                argv: [
-                    s as *mut ::core::ffi::c_void,
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ],
-            },
+            Event::new(Some(msg_semsg_multiline_event), [s.cast::<c_void>()]),
         );
     }
 }
 
-pub unsafe extern "C" fn give_warning(
-    mut message: *const ::core::ffi::c_char,
-    mut hl: bool,
-    mut hist: bool,
-) {
+/// Show a warning, which `'warningmsg'` highlighting and `v:warningmsg` pick
+/// up. Repeated after a redraw, unlike an error.
+///
+/// # Safety
+/// `message` must be a valid C string.
+pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
     unsafe {
-        if msg_silent.get() != 0 as ::core::ffi::c_int {
+        // Don't do this for ":silent".
+        if msg_silent.get() != 0 {
             return;
         }
-        let mut save_msg_hist_off: bool = msg_hist_off.get();
+        let save_msg_hist_off = msg_hist_off.get();
         msg_hist_off.set(!hist);
-        (*no_wait_return.ptr()) += 1;
-        set_vim_var_string(VV_WARNINGMSG, message, -1 as ptrdiff_t);
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            keep_msg.ptr() as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL;
-        let _ = *ptr_;
-        if hl {
-            keep_msg_hl_id.set(HLF_W);
-        } else {
-            keep_msg_hl_id.set(0 as ::core::ffi::c_int);
+
+        no_wait_return.set(no_wait_return.get() + 1);
+        set_vim_var_string(VV_WARNINGMSG, message, -1);
+        xfree(keep_msg.get().cast());
+        keep_msg.set(ptr::null_mut());
+        keep_msg_hl_id.set(if hl { HLF_W } else { 0 });
+
+        if msg_ext_kind.get().is_null() {
+            msg_ext_set_kind(c"wmsg".as_ptr());
         }
-        if (*msg_ext_kind.ptr()).is_null() {
-            msg_ext_set_kind(b"wmsg\0".as_ptr() as *const ::core::ffi::c_char);
-        }
-        if msg(message, keep_msg_hl_id.get()) as ::core::ffi::c_int != 0
-            && msg_scrolled.get() == 0 as ::core::ffi::c_int
-        {
+        if msg(message, keep_msg_hl_id.get()) && msg_scrolled.get() == 0 {
             set_keep_msg(message, keep_msg_hl_id.get());
         }
-        msg_didout.set(false_0 != 0);
-        msg_nowait.set(true_0 != 0);
-        msg_col.set(0 as ::core::ffi::c_int);
-        (*no_wait_return.ptr()) -= 1;
+        msg_didout.set(false); // overwrite this message
+        msg_nowait.set(true); // don't wait for this message
+        msg_col.set(0);
+
+        no_wait_return.set(no_wait_return.get() - 1);
         msg_hist_off.set(save_msg_hist_off);
     }
 }
 
-pub unsafe extern "C" fn swmsg(
-    mut hl: bool,
-    fmt: *const ::core::ffi::c_char,
-    mut c2rust_args: ...
-) {
+/// [`give_warning`] with `printf` formatting.
+///
+/// # Safety
+/// As [`semsg`].
+pub unsafe extern "C" fn swmsg(hl: bool, fmt: *const c_char, mut c2rust_args: ...) {
     unsafe {
-        let mut args: ::core::ffi::VaList;
-        args = c2rust_args.clone();
         vim_vsnprintf(
-            IObuff.ptr() as *mut ::core::ffi::c_char,
+            IObuff.ptr().cast(),
             IOSIZE as size_t,
             fmt,
-            args,
+            c2rust_args.clone(),
         );
-        give_warning(IObuff.ptr() as *mut ::core::ffi::c_char, hl, true_0 != 0);
+        give_warning(IObuff.ptr().cast(), hl, true);
     }
 }
