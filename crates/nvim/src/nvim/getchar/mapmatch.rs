@@ -503,22 +503,29 @@ unsafe fn apply_mapping(mp: *mut mapblock_T, keylen: c_int, mapdepth: *mut c_int
                 gotchars(map_str.cast(), strlen(map_str));
             }
 
-            let starts_with_lhs = if save_m_expr {
-                strncmp(map_str, save_m_keys, keylen as usize) == 0
-                    || (!save_alt_m_keys.is_null()
-                        && strncmp(map_str, save_alt_m_keys, save_alt_m_keylen as usize) == 0)
-            } else {
-                strncmp(map_str, (*mp).m_keys, keylen as usize) == 0
-                    || (!(*mp).m_alt.is_null()
-                        && strncmp(
-                            map_str,
-                            (*(*mp).m_alt).m_keys,
-                            (*(*mp).m_alt).m_keylen as usize,
-                        ) == 0)
+            // Whether the RHS starts with the LHS, which is what decides
+            // between remapping all of it and skipping the first byte. Kept
+            // as a closure rather than a `let`, because upstream only
+            // evaluates it for a `:map` -- for a `:noremap` the two
+            // `strncmp`s are skipped, and `mapresolve` notices.
+            let starts_with_lhs = || {
+                if save_m_expr {
+                    strncmp(map_str, save_m_keys, keylen as usize) == 0
+                        || (!save_alt_m_keys.is_null()
+                            && strncmp(map_str, save_alt_m_keys, save_alt_m_keylen as usize) == 0)
+                } else {
+                    strncmp(map_str, (*mp).m_keys, keylen as usize) == 0
+                        || (!(*mp).m_alt.is_null()
+                            && strncmp(
+                                map_str,
+                                (*(*mp).m_alt).m_keys,
+                                (*(*mp).m_alt).m_keylen as usize,
+                            ) == 0)
+                }
             };
             let noremap = if save_m_noremap != REMAP_YES {
                 save_m_noremap
-            } else if starts_with_lhs {
+            } else if starts_with_lhs() {
                 REMAP_SKIP
             } else {
                 REMAP_YES
