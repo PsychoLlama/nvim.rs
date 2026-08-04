@@ -8,225 +8,205 @@
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int, c_uint};
+use core::{mem, ptr};
 
-pub(crate) unsafe extern "C" fn store_sb_text(
-    mut sb_str: *mut *const ::core::ffi::c_char,
-    mut s: *const ::core::ffi::c_char,
-    mut hl_id: ::core::ffi::c_int,
-    mut sb_col: *mut ::core::ffi::c_int,
-    mut finish: ::core::ffi::c_int,
+/// A chunk's text lives in the same allocation, right after the header.
+///
+/// # Safety
+/// `mp` must point at a chunk allocated by [`store_sb_text`].
+unsafe fn sb_text(mp: *mut msgchunk_T) -> *mut c_char {
+    // Not `(*mp).sb_text.as_mut_ptr()`: the field is a zero-length array, so
+    // the autoref covers no bytes and the pointer carries no provenance for
+    // the text that follows it.
+    unsafe { (&raw mut (*mp).sb_text).cast() }
+}
+
+/// Remember `*sb_str ..= s` for scrolling back over later.
+///
+/// `finish` marks the chunk as ending its screen line. `sb_col` is the column
+/// the run started at, so the pager can put it back where it was.
+///
+/// # Safety
+/// `*sb_str` and `s` must point into the same readable buffer, with `s` at or
+/// after `*sb_str`.
+pub(crate) unsafe fn store_sb_text(
+    sb_str: *mut *const c_char,
+    s: *const c_char,
+    hl_id: c_int,
+    sb_col: *mut c_int,
+    finish: c_int,
 ) {
     unsafe {
-        let mut mp: *mut msgchunk_T = ::core::ptr::null_mut::<msgchunk_T>();
-        if do_clear_sb_text.get() as ::core::ffi::c_uint
-            == SB_CLEAR_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
-            || do_clear_sb_text.get() as ::core::ffi::c_uint
-                == SB_CLEAR_CMDLINE_DONE as ::core::ffi::c_int as ::core::ffi::c_uint
+        if do_clear_sb_text.get() == SB_CLEAR_ALL || do_clear_sb_text.get() == SB_CLEAR_CMDLINE_DONE
         {
-            clear_sb_text(
-                do_clear_sb_text.get() as ::core::ffi::c_uint
-                    == SB_CLEAR_ALL as ::core::ffi::c_int as ::core::ffi::c_uint,
-            );
-            msg_sb_eol();
-            if do_clear_sb_text.get() as ::core::ffi::c_uint
-                == SB_CLEAR_CMDLINE_DONE as ::core::ffi::c_int as ::core::ffi::c_uint
+            clear_sb_text(do_clear_sb_text.get() == SB_CLEAR_ALL);
+            msg_sb_eol(); // prevent messages from overlapping
+            if do_clear_sb_text.get() == SB_CLEAR_CMDLINE_DONE
                 && s > *sb_str
-                && **sb_str as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
+                && **sb_str == b'\n' as c_char
             {
-                *sb_str = (*sb_str).offset(1);
+                *sb_str = (*sb_str).add(1);
             }
             do_clear_sb_text.set(SB_CLEAR_NONE);
         }
+
         if s > *sb_str {
-            mp = xmalloc(
-                (28 as size_t)
-                    .wrapping_add(s.offset_from(*sb_str) as size_t)
-                    .wrapping_add(1 as size_t),
-            ) as *mut msgchunk_T;
-            (*mp).sb_eol = finish as ::core::ffi::c_char;
+            let len = s.offset_from(*sb_str) as size_t;
+            let mp: *mut msgchunk_T =
+                xmalloc(mem::offset_of!(msgchunk_T, sb_text) + len + 1).cast();
+            (*mp).sb_eol = finish as c_char;
             (*mp).sb_msg_col = *sb_col;
             (*mp).sb_hl_id = hl_id;
-            memcpy(
-                &raw mut (*mp).sb_text as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
-                *sb_str as *const ::core::ffi::c_void,
-                s.offset_from(*sb_str) as size_t,
-            );
-            *(&raw mut (*mp).sb_text as *mut ::core::ffi::c_char)
-                .offset(s.offset_from(*sb_str) as isize) = NUL as ::core::ffi::c_char;
-            if (*last_msgchunk.ptr()).is_null() {
-                last_msgchunk.set(mp);
-                (*mp).sb_prev = ::core::ptr::null_mut::<msgchunk_T>();
-            } else {
-                (*mp).sb_prev = last_msgchunk.get();
+            ptr::copy_nonoverlapping(*sb_str, sb_text(mp), len);
+            *sb_text(mp).add(len) = 0;
+
+            (*mp).sb_prev = last_msgchunk.get();
+            (*mp).sb_next = ptr::null_mut();
+            if !last_msgchunk.get().is_null() {
                 (*last_msgchunk.get()).sb_next = mp;
-                last_msgchunk.set(mp);
             }
-            (*mp).sb_next = ::core::ptr::null_mut::<msgchunk_T>();
-        } else if finish != 0 && !(*last_msgchunk.ptr()).is_null() {
-            (*last_msgchunk.get()).sb_eol = true_0 as ::core::ffi::c_char;
+            last_msgchunk.set(mp);
+        } else if finish != 0 && !last_msgchunk.get().is_null() {
+            (*last_msgchunk.get()).sb_eol = true_0 as c_char;
         }
+
         *sb_str = s;
-        *sb_col = 0 as ::core::ffi::c_int;
+        *sb_col = 0;
     }
 }
 
-pub unsafe extern "C" fn may_clear_sb_text() {
+/// Finished showing messages: clear the scroll-back text on the next one.
+pub unsafe fn may_clear_sb_text() {
     unsafe {
-        msg_ext_ui_flush();
+        msg_ext_ui_flush(); // ensure messages until now are emitted
         do_clear_sb_text.set(SB_CLEAR_ALL);
-        do_clear_hist_temp.set(true_0 != 0);
+        do_clear_hist_temp.set(true);
     }
 }
 
-pub unsafe extern "C" fn sb_text_start_cmdline() {
+/// Starting to edit the command line: do not clear messages now.
+pub unsafe fn sb_text_start_cmdline() {
     unsafe {
-        if do_clear_sb_text.get() as ::core::ffi::c_uint
-            == SB_CLEAR_CMDLINE_BUSY as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if do_clear_sb_text.get() == SB_CLEAR_CMDLINE_BUSY {
+            // A recursive command line: the outer one need not be remembered,
+            // it will be redrawn when this level returns.
             sb_text_restart_cmdline();
         } else {
             msg_sb_eol();
             do_clear_sb_text.set(SB_CLEAR_CMDLINE_BUSY);
-        };
+        }
     }
 }
 
-pub unsafe extern "C" fn sb_text_restart_cmdline() {
+/// Redrawing the command line: drop the last unfinished line.
+pub unsafe fn sb_text_restart_cmdline() {
     unsafe {
+        // Needed when returning from a nested command line.
         do_clear_sb_text.set(SB_CLEAR_CMDLINE_BUSY);
-        if (*last_msgchunk.ptr()).is_null()
-            || (*last_msgchunk.get()).sb_eol as ::core::ffi::c_int != 0
-        {
+        if last_msgchunk.get().is_null() || (*last_msgchunk.get()).sb_eol != 0 {
+            // No unfinished line: don't clear anything.
             return;
         }
-        let mut tofree: *mut msgchunk_T = msg_sb_start(last_msgchunk.get());
+
+        let mut tofree = msg_sb_start(last_msgchunk.get());
         last_msgchunk.set((*tofree).sb_prev);
-        if !(*last_msgchunk.ptr()).is_null() {
-            (*last_msgchunk.get()).sb_next = ::core::ptr::null_mut::<msgchunk_T>();
+        if !last_msgchunk.get().is_null() {
+            (*last_msgchunk.get()).sb_next = ptr::null_mut();
         }
         while !tofree.is_null() {
-            let mut tofree_next: *mut msgchunk_T = (*tofree).sb_next;
-            xfree(tofree as *mut ::core::ffi::c_void);
-            tofree = tofree_next;
+            let next = (*tofree).sb_next;
+            xfree(tofree.cast());
+            tofree = next;
         }
     }
 }
 
-pub unsafe extern "C" fn sb_text_end_cmdline() {
+/// Finished editing the command line: clear the old lines, but the last one
+/// only later.
+pub unsafe fn sb_text_end_cmdline() {
     do_clear_sb_text.set(SB_CLEAR_CMDLINE_DONE);
 }
 
-pub unsafe extern "C" fn clear_sb_text(mut all: bool) {
+/// Forget the remembered text. With `all` false the last screen line is kept.
+pub unsafe fn clear_sb_text(all: bool) {
     unsafe {
-        let mut mp: *mut msgchunk_T = ::core::ptr::null_mut::<msgchunk_T>();
-        let mut lastp: *mut *mut msgchunk_T = ::core::ptr::null_mut::<*mut msgchunk_T>();
-        if all {
-            lastp = last_msgchunk.ptr();
+        // The slot holding the newest chunk to drop: either the list head, or
+        // the `sb_prev` of the line that is being kept.
+        let lastp = if all {
+            last_msgchunk.ptr()
         } else {
-            if (*last_msgchunk.ptr()).is_null() {
+            if last_msgchunk.get().is_null() {
                 return;
             }
-            lastp = &raw mut (*(msg_sb_start
-                as unsafe extern "C" fn(*mut msgchunk_T) -> *mut msgchunk_T)(
-                last_msgchunk.get()
-            ))
-            .sb_prev;
-        }
+            &raw mut (*msg_sb_start(last_msgchunk.get())).sb_prev
+        };
         while !(*lastp).is_null() {
-            mp = (**lastp).sb_prev;
-            xfree(*lastp as *mut ::core::ffi::c_void);
-            *lastp = mp;
+            let prev = (**lastp).sb_prev;
+            xfree((*lastp).cast());
+            *lastp = prev;
         }
     }
 }
 
-pub unsafe extern "C" fn show_sb_text() {
+/// The `g<` command.
+pub unsafe fn show_sb_text() {
     unsafe {
         if ui_has(kUIMessages) {
-            let mut ea: exarg_T = exarg {
-                arg: b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                args: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-                arglens: ::core::ptr::null_mut::<size_t>(),
-                argc: 0,
-                nextcmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                cmdlinep: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-                cmdline_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                cmdidx: CMD_append,
-                argt: 0,
+            let mut ea = exarg_T {
+                arg: c"".as_ptr().cast_mut(),
                 skip: true_0,
-                forceit: 0,
-                addr_count: 0,
-                line1: 0,
-                line2: 0,
-                addr_type: ADDR_LINES,
-                flags: 0,
-                do_ecmd_cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                do_ecmd_lnum: 0,
-                append: 0,
-                usefilter: 0,
-                amount: 0,
-                regname: 0,
-                force_bin: 0,
-                read_edit: 0,
-                mkdir_p: 0,
-                force_ff: 0,
-                force_enc: 0,
-                bad_char: 0,
-                useridx: 0,
-                errmsg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ea_getline: None,
-                cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                cstack: ::core::ptr::null_mut::<cstack_T>(),
+                ..exarg_T::default()
             };
             ex_messages(&raw mut ea);
             return;
         }
-        let mut mp: *mut msgchunk_T = msg_sb_start(last_msgchunk.get());
+        // Only show something when there is more than one line: a command
+        // with no output would otherwise leave one line looking odd.
+        let mp = msg_sb_start(last_msgchunk.get());
         if mp.is_null() || (*mp).sb_prev.is_null() {
-            vim_beep(kOptBoFlagMess as ::core::ffi::c_int as ::core::ffi::c_uint);
+            vim_beep(kOptBoFlagMess as c_uint);
         } else {
-            do_more_prompt('G' as ::core::ffi::c_int);
+            do_more_prompt(b'G' as c_int);
             wait_return(false_0);
-        };
+        }
     }
 }
 
-pub(crate) unsafe extern "C" fn msg_sb_start(mut mps: *mut msgchunk_T) -> *mut msgchunk_T {
+/// Walk back to the chunk that starts the screen line `mps` is part of.
+pub(crate) unsafe fn msg_sb_start(mps: *mut msgchunk_T) -> *mut msgchunk_T {
     unsafe {
-        let mut mp: *mut msgchunk_T = mps;
+        let mut mp = mps;
         while !mp.is_null() && !(*mp).sb_prev.is_null() && (*(*mp).sb_prev).sb_eol == 0 {
             mp = (*mp).sb_prev;
         }
-        return mp;
+        mp
     }
 }
 
-pub unsafe extern "C" fn msg_sb_eol() {
+/// Mark the last chunk as finishing its screen line.
+pub unsafe fn msg_sb_eol() {
     unsafe {
-        if !(*last_msgchunk.ptr()).is_null() {
-            (*last_msgchunk.get()).sb_eol = true_0 as ::core::ffi::c_char;
+        if !last_msgchunk.get().is_null() {
+            (*last_msgchunk.get()).sb_eol = true_0 as c_char;
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn disp_sb_line(
-    mut row: ::core::ffi::c_int,
-    mut smp: *mut msgchunk_T,
-) -> *mut msgchunk_T {
+/// Redisplay one remembered screen line at `row`, answering the chunk the
+/// next line starts at (null at the end of the list).
+pub(crate) unsafe fn disp_sb_line(row: c_int, smp: *mut msgchunk_T) -> *mut msgchunk_T {
     unsafe {
-        let mut mp: *mut msgchunk_T = smp;
+        let mut mp = smp;
         loop {
             msg_row.set(row);
             msg_col.set((*mp).sb_msg_col);
-            let mut p: *mut ::core::ffi::c_char =
-                &raw mut (*mp).sb_text as *mut ::core::ffi::c_char;
-            msg_puts_display(p, -1 as ::core::ffi::c_int, (*mp).sb_hl_id, true);
-            if (*mp).sb_eol as ::core::ffi::c_int != 0 || (*mp).sb_next.is_null() {
+            msg_puts_display(sb_text(mp), -1, (*mp).sb_hl_id, true);
+            if (*mp).sb_eol != 0 || (*mp).sb_next.is_null() {
                 break;
             }
             mp = (*mp).sb_next;
         }
-        return (*mp).sb_next;
+        (*mp).sb_next
     }
 }

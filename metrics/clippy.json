@@ -105,7 +105,6 @@
     "crates/nvim/src/nvim/message/progress.rs": 37,
     "crates/nvim/src/nvim/message/prompt.rs": 14,
     "crates/nvim/src/nvim/message/redir.rs": 7,
-    "crates/nvim/src/nvim/message/scrollback.rs": 2,
     "crates/nvim/src/nvim/mouse.rs": 27,
     "crates/nvim/src/nvim/move.rs": 29,
     "crates/nvim/src/nvim/msgpack_rpc/unpacker.rs": 1,
