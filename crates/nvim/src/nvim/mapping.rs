@@ -1,10 +1,11 @@
 //! Mappings and abbreviations: the `:map` family and the table behind it.
 //!
 //! The module is carved into children along the code's own seams — see each
-//! child's own docs.  Everything here is the preamble the transpile left
-//! behind: the constants, the two module statics ([`maphash`] and
-//! `first_abbr`) and the error texts, which the children reach through
-//! `use super::*`.
+//! child's own docs.  Everything left here is what they share: the constants
+//! the transpile hoisted out of `mapping.c`'s includes, the [`MapArguments`]
+//! struct every `:map` command is parsed into, and the six error texts.  The
+//! children reach all of it through `use super::*`; the two tables
+//! themselves live in [`table`].
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -116,7 +117,6 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kListLenUnknown: ListLenSpecials = -1;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const MAXMAPLEN: C2Rust_Unnamed_13 = 50;
@@ -124,13 +124,7 @@ pub type C2Rust_Unnamed_15 = ::core::ffi::c_int;
 pub const EXPAND_MAPPINGS: C2Rust_Unnamed_15 = 16;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_15 = 0;
 pub const CMD_unmap: CMD_index = 500;
-pub const CMD_snext: CMD_index = 414;
 pub const CMD_map: CMD_index = 275;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
 pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_17 = -2147483648;
 pub const REMAP_SCRIPT: RemapValues = -2;
@@ -173,7 +167,6 @@ pub const MAPTYPE_UNMAP_LHS: C2Rust_Unnamed_21 = 3;
 pub const MAPTYPE_MAP: C2Rust_Unnamed_21 = 0;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = Array {
     size: 0 as size_t,
@@ -196,7 +189,6 @@ pub const CPO_BSLASH: ::core::ffi::c_int = 'B' as ::core::ffi::c_int;
 pub const MAX_MAPHASH: usize = 256;
 pub const FC_LUAREF: ::core::ffi::c_int = 0x800 as ::core::ffi::c_int;
 pub const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
-pub const KS_ZERO: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
@@ -236,9 +228,6 @@ pub const MAP_ARGUMENTS_INIT: MapArguments = map_arguments {
     orig_rhs_len: 0,
     desc: ::core::ptr::null_mut(),
 };
-pub const SCHAR_MAX: ::core::ffi::c_int = __SCHAR_MAX__;
-pub const UCHAR_MAX: ::core::ffi::c_int =
-    SCHAR_MAX * 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const __SCHAR_MAX__: ::core::ffi::c_int = 127 as ::core::ffi::c_int;
+/// The largest value a `'langmap'` pair's target can have and still fit in
+/// `langmap_mapchar`.
+pub const UCHAR_MAX: ::core::ffi::c_int = 255;
