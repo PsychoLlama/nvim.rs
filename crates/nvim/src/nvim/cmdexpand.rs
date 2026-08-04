@@ -116,11 +116,11 @@ use crate::src::nvim::types::ui::{kUICmdline, kUIMessages, kUIPopupmenu, kUIWild
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, CMD_index, CmdlineInfo, CompleteListItemGetter, Direction, Error,
     EvalFuncData, LuaRetMode, Object, OptInt, ScopeType, SpecialVarValue, VarLockStatus, VarType,
-    buf_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T, dict_T, exarg_T, expand_T, fuzmatch_str_T,
-    garray_T, hash_T, hashitem_T, hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, linenr_T,
-    list_T, listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, regprog_T, schar_T, scriptitem_T,
-    sctx_T, searchit_arg_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t, uint32_t,
-    varnumber_T, win_T, xp_prefix_T,
+    buf_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T, fuzmatch_str_T, garray_T,
+    hash_T, hashitem_T, hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, linenr_T, list_T,
+    listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, regprog_T, schar_T, scriptitem_T, sctx_T,
+    searchit_arg_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t, uint32_t, varnumber_T,
+    win_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has, vim_beep};
 use crate::src::nvim::usercmd::{
@@ -132,6 +132,8 @@ use crate::src::nvim::window::{global_stl_height, last_status};
 use core::ffi::CStr;
 
 // The carve of the transpiled module; see each child's docs.
+mod cmdidx;
+pub(crate) use self::cmdidx::*;
 mod escape;
 pub use self::escape::*;
 mod expandone;
@@ -261,26 +263,6 @@ pub const EXPAND_COMMANDS: C2Rust_Unnamed_14 = 1;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_14 = 0;
 pub const EXPAND_OK: C2Rust_Unnamed_14 = -1;
 pub const EXPAND_UNSUCCESSFUL: C2Rust_Unnamed_14 = -2;
-pub const CMD_SIZE: CMD_index = 557;
-pub const CMD_rshift: CMD_index = 553;
-pub const CMD_lshift: CMD_index = 551;
-pub const CMD_bang: CMD_index = 548;
-pub const CMD_write: CMD_index = 522;
-pub const CMD_update: CMD_index = 503;
-pub const CMD_terminal: CMD_index = 471;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_substitute: CMD_index = 382;
-pub const CMD_redir: CMD_index = 363;
-pub const CMD_read: CMD_index = 360;
-pub const CMD_k: CMD_index = 205;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_breakdel: CMD_index = 36;
-pub const CMD_breakadd: CMD_index = 35;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
-pub const CMD_append: CMD_index = 0;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_int;
 pub const WILD_PUM_WANT: C2Rust_Unnamed_18 = 13;

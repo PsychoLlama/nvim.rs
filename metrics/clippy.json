@@ -31,7 +31,6 @@
     "crates/nvim/src/nvim/change.rs": 38,
     "crates/nvim/src/nvim/clipboard.rs": 7,
     "crates/nvim/src/nvim/cmdexpand/bufpat.rs": 4,
-    "crates/nvim/src/nvim/cmdexpand/cmdname.rs": 7,
     "crates/nvim/src/nvim/cmdexpand/eval.rs": 8,
     "crates/nvim/src/nvim/cmdexpand/pum.rs": 4,
     "crates/nvim/src/nvim/cmdexpand/showmatch.rs": 23,
