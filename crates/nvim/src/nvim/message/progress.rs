@@ -1,408 +1,222 @@
 //! Progress messages: `nvim_echo`'s `progress` kind.
 //!
 //! A progress message carries an id and a status, replaces its previous self
-//! in the history rather than appending ([`crate::src::nvim::message::msg_hist_add_multihl`]),
-//! and fires the `Progress` autocommand ([`do_autocmd_progress`]).
+//! in the history rather than appending
+//! ([`crate::src::nvim::message::msg_hist_add_multihl`]), and fires the
+//! `Progress` autocommand ([`do_autocmd_progress`]).
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::builders::{ArrayBuf, DictBuf, static_cstring};
+use core::ffi::{CStr, c_char, c_int, c_long};
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn format_progress_message(
-    mut hl_msg: HlMessage,
-    mut msg_data: *mut MessageData,
+/// The highlight group a progress message's title takes from its status.
+///
+/// An unrecognised status -- and a null one -- leaves the title unhighlighted.
+///
+/// # Safety
+/// `status` must be a null pointer or a valid C string.
+unsafe fn status_hl_id(status: *const c_char) -> c_int {
+    let group: &CStr = unsafe {
+        if status.is_null() {
+            return 0;
+        } else if strequal(status, c"success".as_ptr()) {
+            c"OkMsg"
+        } else if strequal(status, c"failed".as_ptr()) {
+            c"ErrorMsg"
+        } else if strequal(status, c"running".as_ptr()) {
+            c"MoreMsg"
+        } else if strequal(status, c"cancel".as_ptr()) {
+            c"WarningMsg"
+        } else {
+            return 0;
+        }
+    };
+    unsafe { syn_check_group(group.as_ptr(), group.count_bytes()) }
+}
+
+/// Prefix `hl_msg` with the "title: percent% " a progress message displays as.
+///
+/// Answers `hl_msg` itself when there is neither a title nor a percentage, so
+/// the caller can tell whether it now owns a second message: the returned
+/// chunks are copies, the argument's are not.
+///
+/// # Safety
+/// `msg_data` must point at a valid message data block, and `hl_msg` must own
+/// its chunks.
+pub(crate) unsafe fn format_progress_message(
+    hl_msg: HlMessage,
+    msg_data: *mut MessageData,
 ) -> HlMessage {
     unsafe {
-        let mut updated_msg: HlMessage = HlMessage {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<HlMessageChunk>(),
-        };
-        if (*msg_data).title.size != 0 as size_t {
-            let mut hl_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            if (*msg_data).status.data.is_null() {
-                hl_id = 0 as ::core::ffi::c_int;
-            } else if strequal(
-                (*msg_data).status.data,
-                b"success\0".as_ptr() as *const ::core::ffi::c_char,
-            ) {
-                hl_id = syn_check_group(
-                    b"OkMsg\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-                );
-            } else if strequal(
-                (*msg_data).status.data,
-                b"failed\0".as_ptr() as *const ::core::ffi::c_char,
-            ) {
-                hl_id = syn_check_group(
-                    b"ErrorMsg\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
-                );
-            } else if strequal(
-                (*msg_data).status.data,
-                b"running\0".as_ptr() as *const ::core::ffi::c_char,
-            ) {
-                hl_id = syn_check_group(
-                    b"MoreMsg\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-                );
-            } else if strequal(
-                (*msg_data).status.data,
-                b"cancel\0".as_ptr() as *const ::core::ffi::c_char,
-            ) {
-                hl_id = syn_check_group(
-                    b"WarningMsg\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 11]>().wrapping_sub(1 as size_t),
-                );
-            }
-            if updated_msg.size == updated_msg.capacity {
-                updated_msg.capacity = if updated_msg.capacity != 0 {
-                    updated_msg.capacity << 1 as ::core::ffi::c_int
-                } else {
-                    8 as size_t
-                };
-                updated_msg.items = xrealloc(
-                    updated_msg.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<HlMessageChunk>().wrapping_mul(updated_msg.capacity),
-                ) as *mut HlMessageChunk;
-            } else {
-            };
-            let c2rust_fresh9 = updated_msg.size;
-            updated_msg.size = updated_msg.size.wrapping_add(1);
-            *updated_msg.items.offset(c2rust_fresh9 as isize) = HlMessageChunk {
-                text: copy_string((*msg_data).title, ::core::ptr::null_mut::<Arena>()),
-                hl_id: hl_id,
-            };
-            if updated_msg.size == updated_msg.capacity {
-                updated_msg.capacity = if updated_msg.capacity != 0 {
-                    updated_msg.capacity << 1 as ::core::ffi::c_int
-                } else {
-                    8 as size_t
-                };
-                updated_msg.items = xrealloc(
-                    updated_msg.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<HlMessageChunk>().wrapping_mul(updated_msg.capacity),
-                ) as *mut HlMessageChunk;
-            } else {
-            };
-            let c2rust_fresh10 = updated_msg.size;
-            updated_msg.size = updated_msg.size.wrapping_add(1);
-            *updated_msg.items.offset(c2rust_fresh10 as isize) = HlMessageChunk {
-                text: cstr_to_string(b": \0".as_ptr() as *const ::core::ffi::c_char),
-                hl_id: 0 as ::core::ffi::c_int,
-            };
+        let mut updated = EMPTY_HL_MESSAGE;
+
+        if (*msg_data).title.size != 0 {
+            hl_msg_push(
+                &mut updated,
+                HlMessageChunk {
+                    text: copy_string((*msg_data).title, ptr::null_mut()),
+                    hl_id: status_hl_id((*msg_data).status.data),
+                },
+            );
+            hl_msg_push(
+                &mut updated,
+                HlMessageChunk {
+                    text: cstr_to_string(c": ".as_ptr()),
+                    hl_id: 0,
+                },
+            );
         }
-        if (*msg_data).percent > 0 as Integer {
-            let mut percent_buf: [::core::ffi::c_char; 10] = [0; 10];
+
+        if (*msg_data).percent > 0 {
+            let mut percent_buf = [0 as c_char; 10];
             vim_snprintf(
-                &raw mut percent_buf as *mut ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 10]>(),
-                b"%3ld%% \0".as_ptr() as *const ::core::ffi::c_char,
-                (*msg_data).percent as ::core::ffi::c_long,
+                percent_buf.as_mut_ptr(),
+                percent_buf.len(),
+                c"%3ld%% ".as_ptr(),
+                (*msg_data).percent as c_long,
             );
-            let mut percent: String_0 =
-                cstr_to_string(&raw mut percent_buf as *mut ::core::ffi::c_char);
-            let mut hl_id_0: ::core::ffi::c_int = syn_check_group(
-                b"WarningMsg\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 11]>().wrapping_sub(1 as size_t),
+            hl_msg_push(
+                &mut updated,
+                HlMessageChunk {
+                    text: cstr_to_string(percent_buf.as_ptr()),
+                    hl_id: syn_check_group(c"WarningMsg".as_ptr(), c"WarningMsg".count_bytes()),
+                },
             );
-            if updated_msg.size == updated_msg.capacity {
-                updated_msg.capacity = if updated_msg.capacity != 0 {
-                    updated_msg.capacity << 1 as ::core::ffi::c_int
-                } else {
-                    8 as size_t
-                };
-                updated_msg.items = xrealloc(
-                    updated_msg.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<HlMessageChunk>().wrapping_mul(updated_msg.capacity),
-                ) as *mut HlMessageChunk;
-            } else {
-            };
-            let c2rust_fresh11 = updated_msg.size;
-            updated_msg.size = updated_msg.size.wrapping_add(1);
-            *updated_msg.items.offset(c2rust_fresh11 as isize) = HlMessageChunk {
-                text: percent,
-                hl_id: hl_id_0,
-            };
         }
-        if updated_msg.size != 0 as size_t {
-            let mut i: uint32_t = 0 as uint32_t;
-            while (i as size_t) < hl_msg.size {
-                if updated_msg.size == updated_msg.capacity {
-                    updated_msg.capacity = if updated_msg.capacity != 0 {
-                        updated_msg.capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        8 as size_t
-                    };
-                    updated_msg.items = xrealloc(
-                        updated_msg.items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<HlMessageChunk>().wrapping_mul(updated_msg.capacity),
-                    ) as *mut HlMessageChunk;
-                } else {
-                };
-                let c2rust_fresh12 = updated_msg.size;
-                updated_msg.size = updated_msg.size.wrapping_add(1);
-                *updated_msg.items.offset(c2rust_fresh12 as isize) = HlMessageChunk {
-                    text: copy_string(
-                        (*hl_msg.items.offset(i as isize)).text,
-                        ::core::ptr::null_mut::<Arena>(),
-                    ),
-                    hl_id: (*hl_msg.items.offset(i as isize)).hl_id,
-                };
-                i = i.wrapping_add(1);
-            }
-            return updated_msg;
-        } else {
+
+        if updated.size == 0 {
             return hl_msg;
-        };
+        }
+        for i in 0..hl_msg.size {
+            let chunk = *hl_msg.items.add(i);
+            hl_msg_push(
+                &mut updated,
+                HlMessageChunk {
+                    text: copy_string(chunk.text, ptr::null_mut()),
+                    hl_id: chunk.hl_id,
+                },
+            );
+        }
+        updated
     }
 }
 
-pub unsafe extern "C" fn msg_progress(
-    mut s: *mut ::core::ffi::c_char,
-    mut id: *mut ::core::ffi::c_char,
-    mut status: *mut ::core::ffi::c_char,
-    mut hl_id: ::core::ffi::c_int,
-    mut hist: bool,
-    mut trunc: bool,
-) -> *mut ::core::ffi::c_char {
+/// Show `s` as a progress message from `id`, in state `status`.
+///
+/// Answers the string that was actually shown, which `trunc` may have moved
+/// past the head of `s`.
+///
+/// # Safety
+/// Every pointer argument must be null or a valid C string, and `s` must
+/// remain valid until the message has been emitted.
+pub unsafe fn msg_progress(
+    mut s: *mut c_char,
+    id: *mut c_char,
+    status: *mut c_char,
+    hl_id: c_int,
+    hist: bool,
+    trunc: bool,
+) -> *mut c_char {
     unsafe {
-        let mut err: Error = Error {
+        let mut err = Error {
             type_0: kErrorTypeNone,
-            msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            msg: ptr::null_mut(),
         };
-        let mut opts: KeyDict_echo_opts = KeyDict_echo_opts {
+        let mut opts = KeyDict_echo_opts {
             is_set__echo_opts_: 0,
             err: false,
             verbose: false,
             _truncate: false,
-            kind: cstr_as_string(b"progress\0".as_ptr() as *const ::core::ffi::c_char),
-            id: object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed_11 {
-                    string: cstr_as_string(id),
-                },
-            },
+            kind: static_cstring(c"progress"),
+            id: Object::string(cstr_as_string(id)),
+            // Not `static_cstring(c"")`: upstream leaves this field zeroed,
+            // so `title.data` is null rather than a pointer to "".
             title: String_0 {
-                data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                data: ptr::null_mut(),
                 size: 0,
             },
             status: cstr_as_string(status),
             percent: 0,
-            source: cstr_as_string(b"nvim\0".as_ptr() as *const ::core::ffi::c_char),
+            source: static_cstring(c"nvim"),
             data: Dict {
                 size: 0,
                 capacity: 0,
-                items: ::core::ptr::null_mut::<KeyValuePair>(),
+                items: ptr::null_mut(),
             },
         };
-        if hist as ::core::ffi::c_int != 0
-            && (!trunc || ui_has(kUIMessages) as ::core::ffi::c_int != 0)
-        {
-            msg_hist_add(s, -1 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
+
+        // Under ext_messages the UI keeps the untruncated text, so history
+        // gets the original either way; on a grid it gets what fits.
+        if hist && (!trunc || ui_has(kUIMessages)) {
+            msg_hist_add(s, -1, 0);
         }
         if trunc {
-            s = msg_may_trunc(false_0 != 0, s);
+            s = msg_may_trunc(false, s);
         }
-        let mut chunk: Array = Array {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
-        };
-        let mut chunk__items: [Object; 2] = [Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed_11 { boolean: false },
-        }; 2];
-        chunk.capacity = 2 as size_t;
-        chunk.items = &raw mut chunk__items as *mut Object;
-        let mut chunks: Array = Array {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
-        };
-        let mut chunks__items: [Object; 1] = [Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed_11 { boolean: false },
-        }; 1];
-        chunks.capacity = 1 as size_t;
-        chunks.items = &raw mut chunks__items as *mut Object;
-        let c2rust_fresh13 = chunk.size;
-        chunk.size = chunk.size.wrapping_add(1);
-        *chunk.items.offset(c2rust_fresh13 as isize) = object {
-            type_0: kObjectTypeString,
-            data: C2Rust_Unnamed_11 {
-                string: cstr_as_string(s),
-            },
-        };
-        let c2rust_fresh14 = chunk.size;
-        chunk.size = chunk.size.wrapping_add(1);
-        *chunk.items.offset(c2rust_fresh14 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed_11 {
-                integer: hl_id as Integer,
-            },
-        };
-        let c2rust_fresh15 = chunks.size;
-        chunks.size = chunks.size.wrapping_add(1);
-        *chunks.items.offset(c2rust_fresh15 as isize) = object {
-            type_0: kObjectTypeArray,
-            data: C2Rust_Unnamed_11 { array: chunk },
-        };
-        nvim_echo(chunks, false_0 != 0, &raw mut opts, &raw mut err);
+
+        let mut chunk = ArrayBuf::<2>::new();
+        chunk.push(Object::string(cstr_as_string(s)));
+        chunk.push(Object::integer(hl_id.into()));
+        let mut chunks = ArrayBuf::<1>::new();
+        chunks.push(chunk.object());
+
+        nvim_echo(chunks.array(), false, &raw mut opts, &raw mut err);
         ui_flush();
-        return s;
+        s
     }
 }
 
-pub unsafe extern "C" fn do_autocmd_progress(
-    mut msg_id: Object,
-    mut msg_0: HlMessage,
-    mut msg_data: *mut MessageData,
-) {
+/// Fire the `Progress` autocommand for a progress message.
+///
+/// # Safety
+/// `msg` must be a valid message and `msg_data` null or a valid data block.
+pub unsafe fn do_autocmd_progress(msg_id: Object, msg: HlMessage, msg_data: *mut MessageData) {
     unsafe {
         if !has_event(EVENT_PROGRESS) {
             return;
         }
-        let mut data: Dict = Dict {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<KeyValuePair>(),
-        };
-        let mut data__items: [KeyValuePair; 7] = [KeyValuePair {
-            key: String_0 {
-                data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                size: 0,
-            },
-            value: Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed_11 { boolean: false },
-            },
-        }; 7];
-        data.capacity = 7 as size_t;
-        data.items = &raw mut data__items as *mut KeyValuePair;
-        let mut messages: Array = Array {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
-        };
-        let mut i: size_t = 0 as size_t;
-        while i < msg_0.size {
-            if messages.size == messages.capacity {
-                messages.capacity = if messages.capacity != 0 {
-                    messages.capacity << 1 as ::core::ffi::c_int
-                } else {
-                    8 as size_t
-                };
-                messages.items = xrealloc(
-                    messages.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<Object>().wrapping_mul(messages.capacity),
-                ) as *mut Object;
-            } else {
-            };
-            let c2rust_fresh16 = messages.size;
-            messages.size = messages.size.wrapping_add(1);
-            *messages.items.offset(c2rust_fresh16 as isize) = object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed_11 {
-                    string: (*msg_0.items.offset(i as isize)).text,
-                },
-            };
-            i = i.wrapping_add(1);
+
+        // The chunk strings are borrowed, not copied: the autocommand runs
+        // before this returns, and `messages` is freed at the end of it.
+        let mut messages = EMPTY_ARRAY;
+        for i in 0..msg.size {
+            array_push(&mut messages, Object::string((*msg.items.add(i)).text));
         }
-        let c2rust_fresh17 = data.size;
-        data.size = data.size.wrapping_add(1);
-        *data.items.offset(c2rust_fresh17 as isize) = key_value_pair {
-            key: cstr_as_string(b"id\0".as_ptr() as *const ::core::ffi::c_char),
-            value: msg_id,
-        };
-        let c2rust_fresh18 = data.size;
-        data.size = data.size.wrapping_add(1);
-        *data.items.offset(c2rust_fresh18 as isize) = key_value_pair {
-            key: cstr_as_string(b"text\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeArray,
-                data: C2Rust_Unnamed_11 { array: messages },
-            },
-        };
+
+        let mut data = DictBuf::<7>::new();
+        data.insert(c"id", msg_id);
+        data.insert(c"text", Object::array(messages));
         if !msg_data.is_null() {
-            let c2rust_fresh19 = data.size;
-            data.size = data.size.wrapping_add(1);
-            *data.items.offset(c2rust_fresh19 as isize) = key_value_pair {
-                key: cstr_as_string(b"percent\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed_11 {
-                        integer: (*msg_data).percent,
-                    },
-                },
-            };
-            let c2rust_fresh20 = data.size;
-            data.size = data.size.wrapping_add(1);
-            *data.items.offset(c2rust_fresh20 as isize) = key_value_pair {
-                key: cstr_as_string(b"source\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed_11 {
-                        string: (*msg_data).source,
-                    },
-                },
-            };
-            let c2rust_fresh21 = data.size;
-            data.size = data.size.wrapping_add(1);
-            *data.items.offset(c2rust_fresh21 as isize) = key_value_pair {
-                key: cstr_as_string(b"status\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed_11 {
-                        string: (*msg_data).status,
-                    },
-                },
-            };
-            let c2rust_fresh22 = data.size;
-            data.size = data.size.wrapping_add(1);
-            *data.items.offset(c2rust_fresh22 as isize) = key_value_pair {
-                key: cstr_as_string(b"title\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed_11 {
-                        string: (*msg_data).title,
-                    },
-                },
-            };
-            let c2rust_fresh23 = data.size;
-            data.size = data.size.wrapping_add(1);
-            *data.items.offset(c2rust_fresh23 as isize) = key_value_pair {
-                key: cstr_as_string(b"data\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeDict,
-                    data: C2Rust_Unnamed_11 {
-                        dict: (*msg_data).data,
-                    },
-                },
-            };
+            data.insert(c"percent", Object::integer((*msg_data).percent));
+            data.insert(c"source", Object::string((*msg_data).source));
+            data.insert(c"status", Object::string((*msg_data).status));
+            data.insert(c"title", Object::string((*msg_data).title));
+            data.insert(c"data", Object::dict((*msg_data).data));
         }
-        let mut c2rust_lvalue: Object = object {
-            type_0: kObjectTypeDict,
-            data: C2Rust_Unnamed_11 { dict: data },
+
+        // The autocommand pattern is the message's source, so an autocommand
+        // can match one producer's progress.
+        let pattern = if !msg_data.is_null() && (*msg_data).source.size > 0 {
+            (*msg_data).source.data
+        } else {
+            c"".as_ptr().cast_mut()
         };
+        let mut event_data = data.object();
         apply_autocmds_group(
             EVENT_PROGRESS,
-            (if !msg_data.is_null() && (*msg_data).source.size > 0 as size_t {
-                (*msg_data).source.data as *const ::core::ffi::c_char
-            } else {
-                b"\0".as_ptr() as *const ::core::ffi::c_char
-            }) as *mut ::core::ffi::c_char,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            true_0 != 0,
-            AUGROUP_ALL as ::core::ffi::c_int,
-            ::core::ptr::null_mut::<buf_T>(),
-            ::core::ptr::null_mut::<exarg_T>(),
-            &raw mut c2rust_lvalue,
+            pattern,
+            ptr::null_mut(),
+            true,
+            AUGROUP_ALL as c_int,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            &raw mut event_data,
         );
-        xfree(messages.items as *mut ::core::ffi::c_void);
-        messages.capacity = 0 as size_t;
-        messages.size = messages.capacity;
-        messages.items = ::core::ptr::null_mut::<Object>();
+
+        xfree(messages.items.cast());
     }
 }

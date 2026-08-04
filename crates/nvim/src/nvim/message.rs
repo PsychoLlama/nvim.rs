@@ -94,11 +94,10 @@ use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::ui::{kUIMessages, kUIMultigrid};
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Boolean, CMD_index, Dict, Error, Event, FILE, HlMessage,
-    HlMessageChunk, Integer, KeyDict_echo_opts, KeyValuePair, MessageData, Object, OptInt,
-    ScopeType, ScreenGrid, SpecialVarValue, String_0, VV_ERRMSG, VV_SCROLLSTART, VV_STATUSMSG,
-    VV_WARNINGMSG, VarLockStatus, VarType, buf_T, cmd_addr_T, colnr_T, estack_T, estack_arg_T,
-    exarg_T, flush_buffers_T, garray_T, int64_t, kObjectTypeArray, kObjectTypeDict,
-    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, key_extra, key_value_pair, linenr_T,
+    HlMessageChunk, Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ScopeType, ScreenGrid,
+    SpecialVarValue, String_0, VV_ERRMSG, VV_SCROLLSTART, VV_STATUSMSG, VV_WARNINGMSG,
+    VarLockStatus, VarType, buf_T, cmd_addr_T, colnr_T, estack_T, estack_arg_T, exarg_T,
+    flush_buffers_T, garray_T, int64_t, kObjectTypeInteger, kObjectTypeNil, key_extra, linenr_T,
     object, object_data as C2Rust_Unnamed_11, ptrdiff_t, regmatch_T, sattr_T, schar_T, size_t,
     ssize_t, typval_T, typval_vval_union, uint8_t, uint32_t, uint64_t,
 };

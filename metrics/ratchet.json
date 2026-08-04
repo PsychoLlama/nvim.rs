@@ -339,7 +339,7 @@
     "crates/nvim/src/nvim/message/grid.rs": {"unsafe": 16},
     "crates/nvim/src/nvim/message/history.rs": {"no_mangle": 1, "unsafe": 10},
     "crates/nvim/src/nvim/message/outtrans.rs": {"unsafe": 14},
-    "crates/nvim/src/nvim/message/progress.rs": {"unsafe": 3},
+    "crates/nvim/src/nvim/message/progress.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/message/prompt.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/message/prtline.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/message/puts.rs": {"unsafe": 10},

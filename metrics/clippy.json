@@ -100,7 +100,6 @@
     "crates/nvim/src/nvim/message/dialog.rs": 10,
     "crates/nvim/src/nvim/message/errors.rs": 17,
     "crates/nvim/src/nvim/message/grid.rs": 11,
-    "crates/nvim/src/nvim/message/progress.rs": 37,
     "crates/nvim/src/nvim/message/prompt.rs": 14,
     "crates/nvim/src/nvim/mouse.rs": 27,
     "crates/nvim/src/nvim/move.rs": 29,
