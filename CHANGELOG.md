@@ -17,6 +17,10 @@ and this project adheres to [CalVer](https://calver.org/).
   match) and mappings themselves (`:map` and friends, `maparg()`/`mapset()`,
   `nvim_set_keymap`, abbreviations and `'langmap'`) are hand-written Rust
   rather than transpiled C.
+- Rewrote command-line completion, covering `<Tab>` and the wildmenu, the
+  popup menu, every `EXPAND_*` source from file names to `:command
+-complete=customlist,` and buffer-text search patterns, and
+  `getcompletion()`.
 
 ## [2026.08.02-af6bcec290]
 
