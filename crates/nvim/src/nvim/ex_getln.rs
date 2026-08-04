@@ -157,7 +157,7 @@ use crate::src::nvim::types::{
     OptVal, OptValData, OptValType, ParserHighlight, ParserHighlightChunk, ParserLine,
     ParserPosition, ParserState, RemapValues, ScopeType, Set_ptr_t, SpecialVarValue, String_0,
     TryState, UndoObjectType, VarLockStatus, VarType, VimState, aco_save_T, buf_T, bufref_T,
-    cmd_addr_T, cmdmod_T, colnr_T, cstack_T, dict_T, dictitem_T, disptick_T, dobuf_action_values,
+    cmd_addr_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T, dobuf_action_values,
     dobuf_start_values, event_T, exarg, exarg_T, except_T, expand_T, garray_T, handle_T,
     hashitem_T, hashtab_T, int64_t, kObjectTypeArray, kObjectTypeInteger, kObjectTypeString,
     key_extra, linenr_T, list_T, listitem_T, magic_T, msglist_T, object,
