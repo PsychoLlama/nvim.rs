@@ -10,37 +10,42 @@
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ptr;
 
-pub unsafe extern "C" fn msg_id_exists(mut id: int64_t) -> bool {
-    return id > 0 as int64_t && id < msg_id_next.get();
+/// Has `id` been handed out as a message id?
+pub fn msg_id_exists(id: int64_t) -> bool {
+    id > 0 && id < msg_id_next.get()
 }
 
-pub(crate) unsafe extern "C" fn ui_ext_msg_set_pos(
-    mut row: ::core::ffi::c_int,
-    mut scrolled: bool,
-) {
+/// Tell the UI where the message grid now sits.
+///
+/// # Safety
+/// The message grid must be allocated and `curwin` valid.
+pub(crate) unsafe fn ui_ext_msg_set_pos(row: c_int, scrolled: bool) {
     unsafe {
-        let mut buf: [::core::ffi::c_char; 32] = [0; 32];
-        let mut size: size_t = schar_get(
-            &raw mut buf as *mut ::core::ffi::c_char,
-            (*curwin.get()).w_p_fcs_chars.msgsep,
-        );
+        let mut sep = [0 as c_char; 32];
+        let size = schar_get(sep.as_mut_ptr(), (*curwin.get()).w_p_fcs_chars.msgsep);
         ui_call_msg_set_pos(
-            (*msg_grid.ptr()).handle as Integer,
-            row as Integer,
-            scrolled as Boolean,
+            (*msg_grid.ptr()).handle.into(),
+            row.into(),
+            scrolled,
             String_0 {
-                data: &raw mut buf as *mut ::core::ffi::c_char,
-                size: size,
+                data: sep.as_mut_ptr(),
+                size,
             },
-            (*msg_grid.ptr()).zindex as Integer,
-            (*msg_grid.ptr()).comp_index as ::core::ffi::c_int as Integer,
+            (*msg_grid.ptr()).zindex.into(),
+            (*msg_grid.ptr()).comp_index as Integer,
         );
-        (*msg_grid.ptr()).pending_comp_index_update = false_0 != 0;
+        (*msg_grid.ptr()).pending_comp_index_update = false;
     }
 }
 
-pub unsafe extern "C" fn msg_grid_set_pos(mut row: ::core::ffi::c_int, mut scrolled: bool) {
+/// Move the message grid to `row`, telling the UI unless output is throttled.
+///
+/// # Safety
+/// The message grid must be initialised.
+pub unsafe fn msg_grid_set_pos(row: c_int, scrolled: bool) {
     unsafe {
         if !(*msg_grid.ptr()).throttled {
             ui_ext_msg_set_pos(row, scrolled);
@@ -53,91 +58,95 @@ pub unsafe extern "C" fn msg_grid_set_pos(mut row: ::core::ffi::c_int, mut scrol
     }
 }
 
-pub unsafe extern "C" fn msg_use_grid() -> bool {
-    unsafe {
-        return !(*default_grid.ptr()).chars.is_null() && !ui_has(kUIMessages);
-    }
+/// Are messages drawn on a grid at all?
+///
+/// They are not before the first redraw, and not under `ext_messages`.
+///
+/// # Safety
+/// Only that the default grid is initialised.
+pub unsafe fn msg_use_grid() -> bool {
+    unsafe { !(*default_grid.ptr()).chars.is_null() && !ui_has(kUIMessages) }
 }
 
-pub unsafe extern "C" fn msg_grid_validate() {
+/// Allocate, resize, reposition or free the message grid to match the screen.
+///
+/// # Safety
+/// Only that the grids are initialised.
+pub unsafe fn msg_grid_validate() {
     unsafe {
         grid_assign_handle(msg_grid.ptr());
-        let mut should_alloc: bool = msg_use_grid();
-        let mut max_rows: ::core::ffi::c_int = Rows.get() - p_ch.get() as ::core::ffi::c_int;
-        if should_alloc as ::core::ffi::c_int != 0
+        let should_alloc = msg_use_grid();
+        let max_rows = Rows.get() - p_ch.get() as c_int;
+
+        if should_alloc
             && ((*msg_grid.ptr()).rows != Rows.get()
                 || (*msg_grid.ptr()).cols != Columns.get()
                 || (*msg_grid.ptr()).chars.is_null())
         {
-            grid_alloc(
-                msg_grid.ptr(),
-                Rows.get(),
-                Columns.get(),
-                false_0 != 0,
-                true_0 != 0,
-            );
-            (*msg_grid.ptr()).zindex = kZIndexMessages as ::core::ffi::c_int;
-            xfree((*msg_grid.ptr()).dirty_col as *mut ::core::ffi::c_void);
-            (*msg_grid.ptr()).dirty_col = xcalloc(
-                Rows.get() as size_t,
-                ::core::mem::size_of::<::core::ffi::c_int>(),
-            ) as *mut ::core::ffi::c_int;
-            let mut pos: ::core::ffi::c_int = if State.get() & MODE_ASKMORE != 0 {
-                0 as ::core::ffi::c_int
-            } else if max_rows - msg_scrolled.get() > 0 as ::core::ffi::c_int {
-                max_rows - msg_scrolled.get()
+            // Force a valid screen size.
+            grid_alloc(msg_grid.ptr(), Rows.get(), Columns.get(), false, true);
+            (*msg_grid.ptr()).zindex = kZIndexMessages as c_int;
+            xfree((*msg_grid.ptr()).dirty_col.cast());
+            (*msg_grid.ptr()).dirty_col =
+                xcalloc(Rows.get() as size_t, ::core::mem::size_of::<c_int>()).cast();
+
+            // Tell the compositor to put the grid at the bottom, or at the top
+            // while the pager owns the screen.
+            let pos = if State.get() & MODE_ASKMORE != 0 {
+                0
             } else {
-                0 as ::core::ffi::c_int
+                (max_rows - msg_scrolled.get()).max(0)
             };
-            (*msg_grid.ptr()).throttled = false_0 != 0;
+            (*msg_grid.ptr()).throttled = false; // don't throttle in 'cmdheight' area
             msg_grid_set_pos(pos, msg_scrolled.get() != 0);
             ui_comp_put_grid(
                 msg_grid.ptr(),
                 pos,
-                0 as ::core::ffi::c_int,
+                0,
                 (*msg_grid.ptr()).rows,
                 (*msg_grid.ptr()).cols,
-                false_0 != 0,
-                true_0 != 0,
+                false,
+                true,
             );
             ui_call_grid_resize(
-                (*msg_grid.ptr()).handle as Integer,
-                (*msg_grid.ptr()).cols as Integer,
-                (*msg_grid.ptr()).rows as Integer,
+                (*msg_grid.ptr()).handle.into(),
+                (*msg_grid.ptr()).cols.into(),
+                (*msg_grid.ptr()).rows.into(),
             );
+
             msg_scrolled_at_flush.set(msg_scrolled.get());
-            (*msg_grid.ptr()).mouse_enabled = false_0 != 0;
+            (*msg_grid.ptr()).mouse_enabled = false;
             (*msg_grid_adj.ptr()).target = msg_grid.ptr();
         } else if !should_alloc && !(*msg_grid.ptr()).chars.is_null() {
+            // Note: we run this both on moving to ext_messages, and on
+            // resizing the screen while ext_messages is active.
             ui_comp_remove_grid(msg_grid.ptr());
             grid_free(msg_grid.ptr());
-            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                &raw mut (*msg_grid.ptr()).dirty_col as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr_);
-            *ptr_ = NULL;
-            let _ = *ptr_;
-            ui_call_grid_destroy((*msg_grid.ptr()).handle as Integer);
-            (*msg_grid.ptr()).throttled = false_0 != 0;
-            (*msg_grid_adj.ptr()).row_offset = 0 as ::core::ffi::c_int;
+            xfree((*msg_grid.ptr()).dirty_col.cast::<c_void>());
+            (*msg_grid.ptr()).dirty_col = ptr::null_mut();
+            ui_call_grid_destroy((*msg_grid.ptr()).handle.into());
+            (*msg_grid.ptr()).throttled = false;
+            (*msg_grid_adj.ptr()).row_offset = 0;
             (*msg_grid_adj.ptr()).target = default_grid.ptr();
-            redraw_cmdline.set(true_0 != 0);
+            redraw_cmdline.set(true);
         } else if !(*msg_grid.ptr()).chars.is_null()
             && msg_scrolled.get() == 0
             && msg_grid_pos.get() != max_rows
         {
-            let mut diff: ::core::ffi::c_int = msg_grid_pos.get() - max_rows;
-            msg_grid_set_pos(max_rows, false_0 != 0);
-            if diff > 0 as ::core::ffi::c_int {
+            let diff = msg_grid_pos.get() - max_rows;
+            msg_grid_set_pos(max_rows, false);
+            if diff > 0 {
                 grid_clear(
                     msg_grid_adj.ptr(),
                     Rows.get() - diff,
                     Rows.get(),
-                    0 as ::core::ffi::c_int,
+                    0,
                     Columns.get(),
-                    *(*hl_attr_active.ptr()).offset(HLF_MSG as isize),
+                    hl_attr(HLF_MSG as c_int),
                 );
             }
         }
+
         if !(*msg_grid.ptr()).chars.is_null()
             && msg_scrolled.get() == 0
             && cmdline_row.get() < msg_grid_pos.get()
@@ -147,7 +156,11 @@ pub unsafe extern "C" fn msg_grid_validate() {
     }
 }
 
-pub unsafe extern "C" fn msg_line_flush() {
+/// Send the line being built to the UI, mirrored if `'rightleft'` applies.
+///
+/// # Safety
+/// A grid line must be under construction.
+pub unsafe fn msg_line_flush() {
     unsafe {
         if cmdmsg_rl.get() {
             grid_line_mirror((*msg_grid.ptr()).cols);
@@ -156,339 +169,323 @@ pub unsafe extern "C" fn msg_line_flush() {
     }
 }
 
-pub unsafe extern "C" fn msg_cursor_goto(mut row: ::core::ffi::c_int, mut col: ::core::ffi::c_int) {
+/// Put the cursor at `row`/`col` of the message area.
+///
+/// # Safety
+/// Only that the grids are initialised.
+pub unsafe fn msg_cursor_goto(row: c_int, mut col: c_int) {
     unsafe {
+        let mut row = row;
         if cmdmsg_rl.get() {
-            col = Columns.get() - 1 as ::core::ffi::c_int - col;
+            col = Columns.get() - 1 - col;
         }
-        let mut grid: *mut ScreenGrid = grid_adjust(msg_grid_adj.ptr(), &raw mut row, &raw mut col);
+        let grid = grid_adjust(msg_grid_adj.ptr(), &raw mut row, &raw mut col);
         ui_grid_cursor_goto((*grid).handle, row, col);
     }
 }
 
-pub unsafe extern "C" fn msg_scrollsize() -> ::core::ffi::c_int {
-    return msg_scrolled.get()
-        + p_ch.get() as ::core::ffi::c_int
-        + (if p_ch.get() > 0 as OptInt || msg_scrolled.get() > 1 as ::core::ffi::c_int {
-            1 as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        });
+/// How many screen lines the message area currently occupies.
+pub fn msg_scrollsize() -> c_int {
+    msg_scrolled.get() + p_ch.get() as c_int + c_int::from(p_ch.get() > 0 || msg_scrolled.get() > 1)
 }
 
-pub unsafe extern "C" fn msg_do_throttle() -> bool {
-    unsafe {
-        return msg_use_grid() as ::core::ffi::c_int != 0
-            && rdb_flags.get()
-                & kOptRdbFlagNothrottle as ::core::ffi::c_int as ::core::ffi::c_uint
-                == 0;
-    }
+/// Should message output be batched into one scroll at flush time?
+///
+/// # Safety
+/// See [`msg_use_grid`].
+pub unsafe fn msg_do_throttle() -> bool {
+    unsafe { msg_use_grid() && rdb_flags.get() & kOptRdbFlagNothrottle as c_uint == 0 }
 }
 
-pub unsafe extern "C" fn msg_scroll_up(mut may_throttle: bool, mut zerocmd: bool) {
+/// Scroll the message area up one line.
+///
+/// `zerocmd` is set when this is making room under `'cmdheight'` zero, where
+/// the freed line has to be cleared rather than scrolled into.
+///
+/// # Safety
+/// Only that the grids are initialised.
+pub unsafe fn msg_scroll_up(may_throttle: bool, zerocmd: bool) {
     unsafe {
-        if may_throttle as ::core::ffi::c_int != 0 && msg_do_throttle() as ::core::ffi::c_int != 0 {
-            (*msg_grid.ptr()).throttled = true_0 != 0;
+        if may_throttle && msg_do_throttle() {
+            (*msg_grid.ptr()).throttled = true;
         }
-        msg_did_scroll.set(true_0 != 0);
-        if msg_grid_pos.get() > 0 as ::core::ffi::c_int {
-            msg_grid_set_pos(msg_grid_pos.get() - 1 as ::core::ffi::c_int, !zerocmd);
-            if zerocmd as ::core::ffi::c_int != 0 && !(*msg_grid.ptr()).chars.is_null() {
+        msg_did_scroll.set(true);
+        if msg_grid_pos.get() > 0 {
+            msg_grid_set_pos(msg_grid_pos.get() - 1, !zerocmd);
+            if zerocmd && !(*msg_grid.ptr()).chars.is_null() {
+                // When zerocmd is true, we're scrolling the first line of
+                // msg_grid onto the screen; it must be cleared first.
                 grid_clear_line(
                     msg_grid.ptr(),
-                    *(*msg_grid.ptr())
-                        .line_offset
-                        .offset(0 as ::core::ffi::c_int as isize),
+                    *(*msg_grid.ptr()).line_offset,
                     (*msg_grid.ptr()).cols,
-                    false_0 != 0,
+                    false,
                 );
             }
         } else {
             grid_del_lines(
                 msg_grid.ptr(),
-                0 as ::core::ffi::c_int,
-                1 as ::core::ffi::c_int,
+                0,
+                1,
                 (*msg_grid.ptr()).rows,
-                0 as ::core::ffi::c_int,
+                0,
                 (*msg_grid.ptr()).cols,
             );
-            memmove(
-                (*msg_grid.ptr()).dirty_col as *mut ::core::ffi::c_void,
-                (*msg_grid.ptr())
-                    .dirty_col
-                    .offset(1 as ::core::ffi::c_int as isize)
-                    as *const ::core::ffi::c_void,
-                (((*msg_grid.ptr()).rows - 1 as ::core::ffi::c_int) as size_t)
-                    .wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
+            // The dirty columns move up with the lines they describe.
+            ptr::copy(
+                (*msg_grid.ptr()).dirty_col.add(1),
+                (*msg_grid.ptr()).dirty_col,
+                ((*msg_grid.ptr()).rows - 1) as usize,
             );
             *(*msg_grid.ptr())
                 .dirty_col
-                .offset(((*msg_grid.ptr()).rows - 1 as ::core::ffi::c_int) as isize) =
-                0 as ::core::ffi::c_int;
+                .add(((*msg_grid.ptr()).rows - 1) as usize) = 0;
         }
+        // Ensure the message area is cleared to the default background.
         grid_clear(
             msg_grid_adj.ptr(),
-            Rows.get() - 1 as ::core::ffi::c_int,
+            Rows.get() - 1,
             Rows.get(),
-            0 as ::core::ffi::c_int,
+            0,
             Columns.get(),
-            *(*hl_attr_active.ptr()).offset(HLF_MSG as isize),
+            hl_attr(HLF_MSG as c_int),
         );
     }
 }
 
-pub unsafe extern "C" fn msg_scroll_flush() {
+/// Send everything a throttled run of messages accumulated, as one scroll
+/// plus the dirty part of each line.
+///
+/// # Safety
+/// Only that the grids are initialised.
+pub unsafe fn msg_scroll_flush() {
     unsafe {
         if (*msg_grid.ptr()).throttled {
-            (*msg_grid.ptr()).throttled = false_0 != 0;
-            let mut pos_delta: ::core::ffi::c_int =
-                msg_grid_pos_at_flush.get() - msg_grid_pos.get();
-            '_c2rust_label: {
-                if pos_delta >= 0 as ::core::ffi::c_int {
-                } else {
-                    __assert_fail(
-                        b"pos_delta >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/message.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        2689 as ::core::ffi::c_uint,
-                        b"void msg_scroll_flush(void)\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            let mut delta: ::core::ffi::c_int =
-                if msg_scrolled.get() - msg_scrolled_at_flush.get() < (*msg_grid.ptr()).rows {
-                    msg_scrolled.get() - msg_scrolled_at_flush.get()
-                } else {
-                    (*msg_grid.ptr()).rows
-                };
-            if pos_delta > 0 as ::core::ffi::c_int {
-                ui_ext_msg_set_pos(msg_grid_pos.get(), true_0 != 0);
+            (*msg_grid.ptr()).throttled = false;
+            let pos_delta = msg_grid_pos_at_flush.get() - msg_grid_pos.get();
+            debug_assert!(pos_delta >= 0);
+            let delta =
+                (msg_scrolled.get() - msg_scrolled_at_flush.get()).min((*msg_grid.ptr()).rows);
+
+            if pos_delta > 0 {
+                ui_ext_msg_set_pos(msg_grid_pos.get(), true);
             }
-            let mut to_scroll: ::core::ffi::c_int =
-                delta - pos_delta - msg_grid_scroll_discount.get();
-            '_c2rust_label_0: {
-                if to_scroll >= 0 as ::core::ffi::c_int {
-                } else {
-                    __assert_fail(
-                        b"to_scroll >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/message.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        2697 as ::core::ffi::c_uint,
-                        b"void msg_scroll_flush(void)\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            if to_scroll > 0 as ::core::ffi::c_int && msg_grid_pos.get() == 0 as ::core::ffi::c_int
-            {
+
+            let to_scroll = delta - pos_delta - msg_grid_scroll_discount.get();
+            debug_assert!(to_scroll >= 0);
+
+            // No scrolling to do while the grid is still moving down: the
+            // repositioning above already showed the new lines.
+            if to_scroll > 0 && msg_grid_pos.get() == 0 {
                 ui_call_grid_scroll(
-                    (*msg_grid.ptr()).handle as Integer,
-                    0 as Integer,
-                    Rows.get() as Integer,
-                    0 as Integer,
-                    Columns.get() as Integer,
-                    to_scroll as Integer,
-                    0 as Integer,
+                    (*msg_grid.ptr()).handle.into(),
+                    0,
+                    Rows.get().into(),
+                    0,
+                    Columns.get().into(),
+                    to_scroll.into(),
+                    0,
                 );
             }
-            let mut i: ::core::ffi::c_int = if Rows.get()
-                - (if delta > 1 as ::core::ffi::c_int {
-                    delta
-                } else {
-                    1 as ::core::ffi::c_int
-                })
-                > 0 as ::core::ffi::c_int
-            {
-                Rows.get()
-                    - (if delta > 1 as ::core::ffi::c_int {
-                        delta
-                    } else {
-                        1 as ::core::ffi::c_int
-                    })
-            } else {
-                0 as ::core::ffi::c_int
-            };
+
+            // `Rows` is re-read each time round, as upstream does: it is a
+            // global that a resize changes, and this loop talks to the UI.
+            let mut i = (Rows.get() - delta.max(1)).max(0);
             while i < Rows.get() {
-                let mut row: ::core::ffi::c_int = i - msg_grid_pos.get();
-                '_c2rust_label_1: {
-                    if row >= 0 as ::core::ffi::c_int {
-                    } else {
-                        __assert_fail(
-                            b"row >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/message.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                            2707 as ::core::ffi::c_uint,
-                            b"void msg_scroll_flush(void)\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
-                    }
-                };
+                let row = i - msg_grid_pos.get();
+                debug_assert!(row >= 0);
                 ui_line(
                     msg_grid.ptr(),
                     row,
-                    false_0 != 0,
-                    0 as ::core::ffi::c_int,
-                    *(*msg_grid.ptr()).dirty_col.offset(row as isize),
+                    false,
+                    0,
+                    *(*msg_grid.ptr()).dirty_col.add(row as usize),
                     (*msg_grid.ptr()).cols,
-                    *(*hl_attr_active.ptr()).offset(HLF_MSG as isize),
-                    false_0 != 0,
+                    hl_attr(HLF_MSG as c_int),
+                    false,
                 );
-                *(*msg_grid.ptr()).dirty_col.offset(row as isize) = 0 as ::core::ffi::c_int;
+                *(*msg_grid.ptr()).dirty_col.add(row as usize) = 0;
                 i += 1;
             }
         }
         msg_scrolled_at_flush.set(msg_scrolled.get());
-        msg_grid_scroll_discount.set(0 as ::core::ffi::c_int);
+        msg_grid_scroll_discount.set(0);
         msg_grid_pos_at_flush.set(msg_grid_pos.get());
     }
 }
 
-pub unsafe extern "C" fn msg_reset_scroll() {
+/// The messages are gone: put the grid back under `'cmdheight'` and clear it.
+///
+/// # Safety
+/// Only that the grids are initialised.
+pub unsafe fn msg_reset_scroll() {
     unsafe {
         if ui_has(kUIMessages) {
+            // TODO(bfredl): some duplicate logic with update_screen(). Later
+            // on we should properly disentangle message clear with full screen
+            // redraw.
             return;
         }
-        (*msg_grid.ptr()).throttled = false_0 != 0;
-        msg_grid_set_pos(Rows.get() - p_ch.get() as ::core::ffi::c_int, false_0 != 0);
-        clear_cmdline.set(true_0 != 0);
+        (*msg_grid.ptr()).throttled = false;
+        // TODO(bfredl): calculate the conflict in the compositor instead.
+        msg_grid_set_pos(Rows.get() - p_ch.get() as c_int, false);
+        clear_cmdline.set(true);
         if !(*msg_grid.ptr()).chars.is_null() {
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i
-                < (if msg_scrollsize() < (*msg_grid.ptr()).rows {
-                    msg_scrollsize()
-                } else {
-                    (*msg_grid.ptr()).rows
-                })
-            {
+            // The bound is re-evaluated each time round, as upstream does.
+            let mut i = 0;
+            while i < msg_scrollsize().min((*msg_grid.ptr()).rows) {
                 grid_clear_line(
                     msg_grid.ptr(),
-                    *(*msg_grid.ptr()).line_offset.offset(i as isize),
+                    *(*msg_grid.ptr()).line_offset.add(i as usize),
                     (*msg_grid.ptr()).cols,
-                    false_0 != 0,
+                    false,
                 );
                 i += 1;
             }
         }
-        msg_scrolled.set(0 as ::core::ffi::c_int);
-        msg_scrolled_at_flush.set(0 as ::core::ffi::c_int);
-        msg_grid_scroll_discount.set(0 as ::core::ffi::c_int);
+        msg_scrolled.set(0);
+        msg_scrolled_at_flush.set(0);
+        msg_grid_scroll_discount.set(0);
     }
 }
 
-pub unsafe extern "C" fn msg_ui_refresh() {
+/// The UI reattached or resized: restate the grid's size and position.
+///
+/// # Safety
+/// Only that the grids are initialised.
+pub unsafe fn msg_ui_refresh() {
     unsafe {
-        if ui_has(kUIMultigrid) as ::core::ffi::c_int != 0 && !(*msg_grid.ptr()).chars.is_null() {
+        if ui_has(kUIMultigrid) && !(*msg_grid.ptr()).chars.is_null() {
             ui_call_grid_resize(
-                (*msg_grid.ptr()).handle as Integer,
-                (*msg_grid.ptr()).cols as Integer,
-                (*msg_grid.ptr()).rows as Integer,
+                (*msg_grid.ptr()).handle.into(),
+                (*msg_grid.ptr()).cols.into(),
+                (*msg_grid.ptr()).rows.into(),
             );
             ui_ext_msg_set_pos(msg_grid_pos.get(), msg_scrolled.get() != 0);
         }
     }
 }
 
-pub unsafe extern "C" fn msg_ui_flush() {
+/// The compositor restacked the grid: tell the UI its new position.
+///
+/// # Safety
+/// Only that the grids are initialised.
+pub unsafe fn msg_ui_flush() {
     unsafe {
-        if ui_has(kUIMultigrid) as ::core::ffi::c_int != 0
+        if ui_has(kUIMultigrid)
             && !(*msg_grid.ptr()).chars.is_null()
-            && (*msg_grid.ptr()).pending_comp_index_update as ::core::ffi::c_int != 0
+            && (*msg_grid.ptr()).pending_comp_index_update
         {
             ui_ext_msg_set_pos(msg_grid_pos.get(), msg_scrolled.get() != 0);
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn inc_msg_scrolled() {
+/// One more line of messages has scrolled off; remember where it started.
+///
+/// # Safety
+/// The exec stack must be non-empty. See [`sourcing_top`].
+pub(crate) unsafe fn inc_msg_scrolled() {
     unsafe {
-        if *get_vim_var_str(VV_SCROLLSTART) as ::core::ffi::c_int == NUL {
-            let mut p: String_0 = String_0 {
-                data: (*((*exestack.ptr()).ga_data as *mut estack_T)
-                    .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                .es_name,
+        if *get_vim_var_str(VV_SCROLLSTART) == 0 {
+            // v:scrollstart is empty: set it to the script/function name and
+            // line number the scrolling started at.
+            let mut p = String_0 {
+                data: (*sourcing_top()).es_name,
                 size: 0,
             };
-            let mut tofree: *mut ::core::ffi::c_char =
-                ::core::ptr::null_mut::<::core::ffi::c_char>();
+            let mut tofree: *mut c_char = ptr::null_mut();
             if p.data.is_null() {
-                p = cstr_as_string(gettext(b"Unknown\0".as_ptr() as *const ::core::ffi::c_char));
+                p = cstr_as_string(gettext(c"Unknown".as_ptr()));
             } else {
-                let mut tofreesize: size_t = strlen(p.data).wrapping_add(40 as size_t);
-                tofree = xmalloc(tofreesize) as *mut ::core::ffi::c_char;
+                let tofreesize = strlen(p.data) + 40;
+                tofree = xmalloc(tofreesize).cast();
                 p.size = vim_snprintf_safelen(
                     tofree,
                     tofreesize,
-                    gettext(b"%s line %ld\0".as_ptr() as *const ::core::ffi::c_char),
+                    gettext(c"%s line %ld".as_ptr()),
                     p.data,
-                    (*((*exestack.ptr()).ga_data as *mut estack_T)
-                        .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_lnum as int64_t,
+                    (*sourcing_top()).es_lnum as int64_t,
                 );
                 p.data = tofree;
             }
             set_vim_var_string(VV_SCROLLSTART, p.data, p.size as ptrdiff_t);
-            xfree(tofree as *mut ::core::ffi::c_void);
+            xfree(tofree.cast());
         }
-        (*msg_scrolled.ptr()) += 1;
+        msg_scrolled.set(msg_scrolled.get() + 1);
         set_must_redraw(UPD_VALID);
     }
 }
 
-pub unsafe extern "C" fn msg_clr_eos() {
+/// Clear from the cursor to the end of the message area, unless silenced.
+///
+/// # Safety
+/// Only that the grids are initialised.
+pub unsafe fn msg_clr_eos() {
     unsafe {
-        if msg_silent.get() == 0 as ::core::ffi::c_int {
+        if msg_silent.get() == 0 {
             msg_clr_eos_force();
         }
     }
 }
 
-pub unsafe extern "C" fn msg_clr_eos_force() {
+/// [`msg_clr_eos`], `'shortmess'` and `:silent` notwithstanding.
+///
+/// # Safety
+/// Only that the grids are initialised.
+pub unsafe fn msg_clr_eos_force() {
     unsafe {
         if ui_has(kUIMessages) {
             return;
         }
-        let mut msg_startcol: ::core::ffi::c_int = if cmdmsg_rl.get() as ::core::ffi::c_int != 0 {
-            0 as ::core::ffi::c_int
+        let (msg_startcol, msg_endcol) = if cmdmsg_rl.get() {
+            (0, Columns.get() - msg_col.get())
         } else {
-            msg_col.get()
+            (msg_col.get(), Columns.get())
         };
-        let mut msg_endcol: ::core::ffi::c_int = if cmdmsg_rl.get() as ::core::ffi::c_int != 0 {
-            Columns.get() - msg_col.get()
-        } else {
-            Columns.get()
-        };
+
+        // Avoid clearing the line the grid is about to be moved off.
         if !(*msg_grid.ptr()).chars.is_null() && msg_row.get() < msg_grid_pos.get() {
             msg_grid_validate();
             if msg_row.get() < msg_grid_pos.get() {
                 msg_row.set(msg_grid_pos.get());
             }
         }
+
         grid_clear(
             msg_grid_adj.ptr(),
             msg_row.get(),
-            msg_row.get() + 1 as ::core::ffi::c_int,
+            msg_row.get() + 1,
             msg_startcol,
             msg_endcol,
-            *(*hl_attr_active.ptr()).offset(HLF_MSG as isize),
+            hl_attr(HLF_MSG as c_int),
         );
         grid_clear(
             msg_grid_adj.ptr(),
-            msg_row.get() + 1 as ::core::ffi::c_int,
+            msg_row.get() + 1,
             Rows.get(),
-            0 as ::core::ffi::c_int,
+            0,
             Columns.get(),
-            *(*hl_attr_active.ptr()).offset(HLF_MSG as isize),
+            hl_attr(HLF_MSG as c_int),
         );
-        redraw_cmdline.set(true_0 != 0);
-        if msg_row.get() < Rows.get() - 1 as ::core::ffi::c_int
-            || msg_col.get() == 0 as ::core::ffi::c_int
-        {
-            clear_cmdline.set(false_0 != 0);
-            mode_displayed.set(false_0 != 0);
-            cmdline_was_last_drawn.set(false_0 != 0);
+
+        redraw_cmdline.set(true);
+        if msg_row.get() < Rows.get() - 1 || msg_col.get() == 0 {
+            clear_cmdline.set(false);
+            mode_displayed.set(false);
+            cmdline_was_last_drawn.set(false);
         }
     }
 }
 
-pub unsafe extern "C" fn msg_clr_cmdline() {
+/// Clear the command line.
+///
+/// # Safety
+/// Only that the grids are initialised.
+pub unsafe fn msg_clr_cmdline() {
     unsafe {
         msg_row.set(cmdline_row.get());
-        msg_col.set(0 as ::core::ffi::c_int);
+        msg_col.set(0);
         msg_clr_eos_force();
     }
 }

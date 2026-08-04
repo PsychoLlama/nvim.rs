@@ -93,13 +93,13 @@ use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, 
 use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::ui::{kUIMessages, kUIMultigrid};
 use crate::src::nvim::types::{
-    Arena, Array, BoolVarValue, Boolean, CMD_index, Dict, Error, Event, FILE, HlMessage,
-    HlMessageChunk, Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ScopeType, ScreenGrid,
-    SpecialVarValue, String_0, VV_ERRMSG, VV_SCROLLSTART, VV_STATUSMSG, VV_WARNINGMSG,
-    VarLockStatus, VarType, buf_T, cmd_addr_T, colnr_T, estack_T, estack_arg_T, exarg_T,
-    flush_buffers_T, garray_T, int64_t, kObjectTypeInteger, kObjectTypeNil, key_extra, linenr_T,
-    object, object_data as C2Rust_Unnamed_11, ptrdiff_t, regmatch_T, sattr_T, schar_T, size_t,
-    ssize_t, typval_T, typval_vval_union, uint8_t, uint32_t, uint64_t,
+    Arena, Array, BoolVarValue, CMD_index, Dict, Error, Event, FILE, HlMessage, HlMessageChunk,
+    Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ScopeType, SpecialVarValue, String_0,
+    VV_ERRMSG, VV_SCROLLSTART, VV_STATUSMSG, VV_WARNINGMSG, VarLockStatus, VarType, buf_T,
+    cmd_addr_T, colnr_T, estack_T, estack_arg_T, exarg_T, flush_buffers_T, garray_T, int64_t,
+    kObjectTypeInteger, kObjectTypeNil, key_extra, linenr_T, object,
+    object_data as C2Rust_Unnamed_11, ptrdiff_t, regmatch_T, sattr_T, schar_T, size_t, ssize_t,
+    typval_T, typval_vval_union, uint8_t, uint32_t, uint64_t,
 };
 use crate::src::nvim::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
@@ -273,6 +273,28 @@ static msg_ext_append: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static msg_grid_pos_at_flush: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 static msg_id_next: GlobalCell<int64_t> = GlobalCell::new(1 as int64_t);
+
+/// The active attribute for highlight group `hlf`, i.e. C's `HL_ATTR`.
+///
+/// # Safety
+/// `hlf` must be one of the `HLF_*` indices, and the highlight table must
+/// have been built (it is, from the first redraw onwards).
+unsafe fn hl_attr(hlf: ::core::ffi::c_int) -> ::core::ffi::c_int {
+    unsafe { *hl_attr_active.get().add(hlf as usize) }
+}
+
+/// The innermost entry of the `:source`/function call stack, which is what
+/// C's `SOURCING_NAME` and `SOURCING_LNUM` read.
+///
+/// # Safety
+/// The exec stack must be non-empty, which it is whenever anything is
+/// running -- the outermost entry is pushed before `main()` sources a thing.
+unsafe fn sourcing_top() -> *mut estack_T {
+    unsafe {
+        let stack = (*exestack.ptr()).ga_data as *mut estack_T;
+        stack.add(((*exestack.ptr()).ga_len - 1) as usize)
+    }
+}
 
 /// An [`Array`] owning nothing, C's `ARRAY_DICT_INIT`.
 pub(crate) const EMPTY_ARRAY: Array = Array {
