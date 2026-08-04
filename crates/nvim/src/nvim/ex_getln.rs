@@ -123,8 +123,7 @@ use crate::src::nvim::options::{
 use crate::src::nvim::os::env::home_replace_save;
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, gettext, memcpy, memmove, memset, strcmp, strcpy, strlen, strncasecmp,
-    strncmp, strrchr,
+    abort, gettext, memcpy, memmove, memset, strcmp, strcpy, strlen, strncasecmp, strncmp, strrchr,
 };
 use crate::src::nvim::path::vim_ispathsep;
 use crate::src::nvim::popupmenu::{pum_check_clear, pum_undisplay};
@@ -508,7 +507,6 @@ pub type C2Rust_Unnamed_55 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_56 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_57 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_58 = ::core::ffi::c_int;
-static prev_prompt_id: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
@@ -780,11 +778,3 @@ pub const UINT_MAX: ::core::ffi::c_uint = (INT_MAX as ::core::ffi::c_uint)
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
-unsafe extern "C" fn c2rust_run_static_initializers() {
-    prev_prompt_id.set(UINT_MAX);
-}
-#[used]
-#[cfg_attr(target_os = "linux", unsafe(link_section = ".init_array"))]
-#[cfg_attr(target_os = "windows", unsafe(link_section = ".CRT$XIB"))]
-#[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__mod_init_func"))]
-static INIT_ARRAY: [unsafe extern "C" fn(); 1] = [c2rust_run_static_initializers];
