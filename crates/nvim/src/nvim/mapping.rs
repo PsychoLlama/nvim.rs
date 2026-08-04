@@ -27,7 +27,7 @@ use crate::src::nvim::eval::{eval_to_string, last_set_msg};
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::ex_session::put_eol;
 use crate::src::nvim::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
-use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_grow, ga_init};
+use crate::src::nvim::garray::{ga_append, ga_concat, ga_grow, ga_init};
 use crate::src::nvim::getchar::{ins_typebuf, noremap_keys};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::HLF_8;
@@ -172,12 +172,6 @@ pub struct map_arguments {
 pub const MAPTYPE_UNMAP: C2Rust_Unnamed_21 = 1;
 pub const MAPTYPE_NOREMAP: C2Rust_Unnamed_21 = 2;
 pub const MAPTYPE_UNMAP_LHS: C2Rust_Unnamed_21 = 3;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct langmap_entry_T {
-    pub from: ::core::ffi::c_int,
-    pub to: ::core::ffi::c_int,
-}
 pub const MAPTYPE_MAP: C2Rust_Unnamed_21 = 0;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
@@ -187,13 +181,6 @@ pub const ARRAY_DICT_INIT: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
-};
-pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
-    ga_len: 0 as ::core::ffi::c_int,
-    ga_maxlen: 0 as ::core::ffi::c_int,
-    ga_itemsize: 0 as ::core::ffi::c_int,
-    ga_growsize: 1 as ::core::ffi::c_int,
-    ga_data: NULL_0,
 };
 pub const KEYSET_OPTIDX_keymap__desc: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_keymap__callback: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
@@ -639,7 +626,6 @@ static e_illegal_map_mode_string_str: GlobalCell<[::core::ffi::c_char; 37]> =
 static expand_mapmodes: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static expand_isabbrev: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static expand_buffer: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static langmap_mapga: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
 pub const SCHAR_MAX: ::core::ffi::c_int = __SCHAR_MAX__;
 pub const UCHAR_MAX: ::core::ffi::c_int =
     SCHAR_MAX * 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
