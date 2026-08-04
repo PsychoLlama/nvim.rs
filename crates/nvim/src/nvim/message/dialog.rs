@@ -8,395 +8,423 @@
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
-pub unsafe extern "C" fn do_dialog(
-    mut _type_0: ::core::ffi::c_int,
-    mut _title: *const ::core::ffi::c_char,
-    mut message: *const ::core::ffi::c_char,
-    mut buttons: *const ::core::ffi::c_char,
-    mut dfltbutton: ::core::ffi::c_int,
-    mut _textfield: *const ::core::ffi::c_char,
-    mut ex_cmd: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// How many buttons can carry a hotkey. Buttons past this share the default.
+const HAS_HOTKEY_LEN: usize = 30;
+
+/// Bytes reserved per hotkey, which may be a multibyte character.
+const HOTK_LEN: c_int = MB_MAXBYTES as c_int;
+
+/// Nonzero while the confirm message is being written, so `q` at the more
+/// prompt cannot truncate it away.
+pub(crate) static confirm_msg_used: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// The dialog's message text, as [`display_confirm_msg`] prints it.
+pub(crate) static confirm_msg: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+
+/// The rendered button list, used as the command-line prompt.
+pub(crate) static confirm_buttons: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+
+/// Ask the user to pick one of `buttons`, answering its 1-based index.
+///
+/// Answers 0 if the dialog was cancelled, and `dfltbutton` if there is no UI
+/// to ask through -- without one Nvim would wait for input forever.
+///
+/// `buttons` is `"Button1\nButton2\n..."`, with `&` marking a hotkey letter.
+/// `ex_cmd` allows `:` to dismiss the dialog and start an Ex command.
+///
+/// # Safety
+/// `message` and `buttons` must be valid C strings.
+pub unsafe fn do_dialog(
+    _type_0: c_int,
+    _title: *const c_char,
+    message: *const c_char,
+    buttons: *const c_char,
+    dfltbutton: c_int,
+    _textfield: *const c_char,
+    ex_cmd: c_int,
+) -> c_int {
     unsafe {
-        let mut retval: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut i: ::core::ffi::c_int = 0;
         if silent_mode.get() {
             return dfltbutton;
         }
-        let mut save_msg_silent: ::core::ffi::c_int = msg_silent.get();
-        let mut oldState: ::core::ffi::c_int = State.get();
-        msg_silent.set(0 as ::core::ffi::c_int);
-        (*no_wait_return.ptr()) += 1;
-        let mut hotkeys: *mut ::core::ffi::c_char =
-            msg_show_console_dialog(message, buttons, dfltbutton);
+
+        let save_msg_silent = msg_silent.get();
+        let old_state = State.get();
+        msg_silent.set(0); // if the dialog prompts for input, the user needs to see it
+        // We wait for a keypress, so don't make the user press RETURN as well.
+        no_wait_return.set(no_wait_return.get() + 1);
+
+        let hotkeys = msg_show_console_dialog(message, buttons, dfltbutton);
+        let mut retval = 0;
         loop {
+            // Without a UI Nvim waits for input forever.
             if ui_active() == 0 && input_available() == 0 {
                 retval = dfltbutton;
                 break;
-            } else {
-                let mut c: ::core::ffi::c_int = prompt_for_input(
-                    confirm_buttons.get(),
-                    HLF_M,
-                    true_0 != 0,
-                    ::core::ptr::null_mut::<bool>(),
-                );
-                match c {
-                    CAR | NUL => {
-                        retval = dfltbutton;
-                        break;
-                    }
-                    Ctrl_C | ESC => {
-                        retval = 0 as ::core::ffi::c_int;
-                        break;
-                    }
-                    _ => {
-                        if c < 0 as ::core::ffi::c_int {
-                            msg_didany.set(false_0 != 0);
-                            msg_didout.set(msg_didany.get());
-                        } else if c == ':' as ::core::ffi::c_int && ex_cmd != 0 {
-                            retval = dfltbutton;
-                            ins_char_typebuf(
-                                ':' as ::core::ffi::c_int,
-                                0 as ::core::ffi::c_int,
-                                false_0 != 0,
-                            );
+            }
+
+            // Get a typed character directly from the user.
+            let mut c = prompt_for_input(confirm_buttons.get(), HLF_M, true, ptr::null_mut());
+            match c {
+                CAR | NUL => {
+                    // User accepts the default option.
+                    retval = dfltbutton;
+                    break;
+                }
+                Ctrl_C | ESC => {
+                    // User aborts/cancels.
+                    retval = 0;
+                    break;
+                }
+                _ if c < 0 => {
+                    // Special keys are ignored here.
+                    msg_didany.set(false);
+                    msg_didout.set(false);
+                }
+                _ if c == b':' as c_int && ex_cmd != 0 => {
+                    retval = dfltbutton;
+                    ins_char_typebuf(b':' as c_int, 0, false);
+                    break;
+                }
+                _ => {
+                    // Could be a hotkey. Lowercase it, as the ones in
+                    // "hotkeys" are, and count how many buttons precede it.
+                    c = mb_tolower(c);
+                    retval = 1;
+                    let mut i = 0;
+                    while *hotkeys.add(i) != 0 {
+                        if utf_ptr2char(hotkeys.add(i)) == c {
                             break;
-                        } else {
-                            c = mb_tolower(c);
-                            retval = 1 as ::core::ffi::c_int;
-                            i = 0 as ::core::ffi::c_int;
-                            while *hotkeys.offset(i as isize) != 0 {
-                                if utf_ptr2char(hotkeys.offset(i as isize)) == c {
-                                    break;
-                                }
-                                i += utfc_ptr2len(hotkeys.offset(i as isize))
-                                    - 1 as ::core::ffi::c_int;
-                                retval += 1;
-                                i += 1;
-                            }
-                            if *hotkeys.offset(i as isize) != 0 {
-                                break;
-                            }
-                            msg_didany.set(false_0 != 0);
-                            msg_didout.set(msg_didany.get());
                         }
+                        i += utfc_ptr2len(hotkeys.add(i)) as usize;
+                        retval += 1;
                     }
+                    if *hotkeys.add(i) != 0 {
+                        break;
+                    }
+                    // No hotkey match, so keep waiting.
+                    msg_didany.set(false);
+                    msg_didout.set(false);
                 }
             }
         }
-        xfree(hotkeys as *mut ::core::ffi::c_void);
-        xfree(confirm_msg.get() as *mut ::core::ffi::c_void);
-        confirm_msg.set(::core::ptr::null_mut::<::core::ffi::c_char>());
+
+        xfree(hotkeys.cast());
+        xfree(confirm_msg.get().cast());
+        confirm_msg.set(ptr::null_mut());
+
         msg_silent.set(save_msg_silent);
-        State.set(oldState);
+        State.set(old_state);
         setmouse();
-        (*no_wait_return.ptr()) -= 1;
+        no_wait_return.set(no_wait_return.get() - 1);
         msg_end_prompt();
-        return retval;
+
+        retval
     }
 }
 
-pub(crate) unsafe extern "C" fn copy_char(
-    mut from: *const ::core::ffi::c_char,
-    mut to: *mut ::core::ffi::c_char,
-    mut lowercase: bool,
-) -> ::core::ffi::c_int {
+/// Copy one (possibly multibyte) character from `from` to `to`, answering its
+/// length in bytes.
+///
+/// # Safety
+/// `from` must be a valid C string and `to` must have room for the character.
+unsafe fn copy_char(from: *const c_char, to: *mut c_char, lowercase: bool) -> c_int {
     unsafe {
         if lowercase {
-            let mut c: ::core::ffi::c_int = mb_tolower(utf_ptr2char(from));
-            return utf_char2bytes(c, to);
+            return utf_char2bytes(mb_tolower(utf_ptr2char(from)), to);
         }
-        let mut len: ::core::ffi::c_int = utfc_ptr2len(from);
-        memmove(
-            to as *mut ::core::ffi::c_void,
-            from as *const ::core::ffi::c_void,
-            len as size_t,
-        );
-        return len;
+        let len = utfc_ptr2len(from);
+        ptr::copy(from, to, len as usize);
+        len
     }
 }
 
-pub(crate) unsafe extern "C" fn console_dialog_alloc(
-    mut message: *const ::core::ffi::c_char,
-    mut buttons: *const ::core::ffi::c_char,
-    mut has_hotkey: *mut bool,
-) -> *mut ::core::ffi::c_char {
+/// Size and allocate the dialog's three buffers, and record which buttons
+/// name their own hotkey.
+///
+/// Answers the hotkey buffer; the message and button buffers go into
+/// [`confirm_msg`] and [`confirm_buttons`].
+///
+/// # Safety
+/// `message` and `buttons` must be valid C strings.
+unsafe fn console_dialog_alloc(
+    message: *const c_char,
+    buttons: *const c_char,
+    has_hotkey: &mut [bool; HAS_HOTKEY_LEN],
+) -> *mut c_char {
     unsafe {
-        let mut lenhotkey: ::core::ffi::c_int = MB_MAXBYTES as ::core::ffi::c_int;
-        *has_hotkey.offset(0 as ::core::ffi::c_int as isize) = false_0 != 0;
-        let mut msg_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut button_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut r: *const ::core::ffi::c_char = buttons;
+        let mut lenhotkey = HOTK_LEN; // count first button
+        has_hotkey[0] = false;
+
+        // Compute the size of memory to allocate.
+        let mut msg_len = 0;
+        let mut button_len = 0;
+        let mut idx = 0;
+        let mut r = buttons;
         while *r != 0 {
-            if *r as ::core::ffi::c_int == DLG_BUTTON_SEP as ::core::ffi::c_int {
-                button_len += 3 as ::core::ffi::c_int;
-                lenhotkey += MB_MAXBYTES as ::core::ffi::c_int;
-                if idx < HAS_HOTKEY_LEN - 1 as ::core::ffi::c_int {
+            if *r == DLG_BUTTON_SEP as c_char {
+                button_len += 3; // '\n' -> ', '; 'x' -> '(x)'
+                lenhotkey += HOTK_LEN; // each button needs a hotkey
+                if idx < HAS_HOTKEY_LEN - 1 {
                     idx += 1;
-                    *has_hotkey.offset(idx as isize) = false_0 != 0;
+                    has_hotkey[idx] = false;
                 }
-            } else if *r as ::core::ffi::c_int == DLG_HOTKEY_CHAR as ::core::ffi::c_int {
-                r = r.offset(1);
-                button_len += 1;
-                if idx < HAS_HOTKEY_LEN - 1 as ::core::ffi::c_int {
-                    *has_hotkey.offset(idx as isize) = true_0 != 0;
+            } else if *r == DLG_HOTKEY_CHAR as c_char {
+                r = r.add(1);
+                button_len += 1; // '&a' -> '[a]'
+                if idx < HAS_HOTKEY_LEN - 1 {
+                    has_hotkey[idx] = true;
                 }
             }
-            r = r.offset(utfc_ptr2len(r as *mut ::core::ffi::c_char) as isize);
+            r = r.add(utfc_ptr2len(r) as usize);
         }
-        msg_len += strlen(message) as ::core::ffi::c_int + 3 as ::core::ffi::c_int;
-        button_len += strlen(buttons) as ::core::ffi::c_int + 3 as ::core::ffi::c_int;
-        lenhotkey += 1;
-        if !*has_hotkey.offset(0 as ::core::ffi::c_int as isize) {
-            button_len += 2 as ::core::ffi::c_int;
+
+        msg_len += strlen(message) as c_int + 3; // for the NLs and NUL
+        button_len += strlen(buttons) as c_int + 3; // for the ": " and NUL
+        lenhotkey += 1; // for the NUL
+
+        // If no hotkey is specified, the first char is used.
+        if !has_hotkey[0] {
+            button_len += 2; // "x" -> "[x]"
         }
-        confirm_msg.set(xmalloc(msg_len as size_t) as *mut ::core::ffi::c_char);
+
+        confirm_msg.set(xmalloc(msg_len as size_t).cast());
         snprintf(
             confirm_msg.get(),
             msg_len as size_t,
-            if ui_has(kUIMessages) as ::core::ffi::c_int != 0 {
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char
+            if ui_has(kUIMessages) {
+                c"%s".as_ptr()
             } else {
-                b"\n%s\n\0".as_ptr() as *const ::core::ffi::c_char
+                c"\n%s\n".as_ptr()
             },
             message,
         );
-        xfree(confirm_buttons.get() as *mut ::core::ffi::c_void);
-        confirm_buttons.set(xmalloc(button_len as size_t) as *mut ::core::ffi::c_char);
-        return xmalloc(lenhotkey as size_t) as *mut ::core::ffi::c_char;
+
+        xfree(confirm_buttons.get().cast());
+        confirm_buttons.set(xmalloc(button_len as size_t).cast());
+
+        xmalloc(lenhotkey as size_t).cast()
     }
 }
 
-pub(crate) unsafe extern "C" fn msg_show_console_dialog(
-    mut message: *const ::core::ffi::c_char,
-    mut buttons: *const ::core::ffi::c_char,
-    mut dfltbutton: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+/// Format the dialog and display it, answering the allocated hotkey string.
+///
+/// A button with no `&` takes the first character of its name as its hotkey.
+///
+/// # Safety
+/// `message` and `buttons` must be valid C strings.
+unsafe fn msg_show_console_dialog(
+    message: *const c_char,
+    buttons: *const c_char,
+    dfltbutton: c_int,
+) -> *mut c_char {
     unsafe {
-        let mut has_hotkey: [bool; 30] = [
-            false_0 != 0,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-        ];
-        let mut hotk: *mut ::core::ffi::c_char =
-            console_dialog_alloc(message, buttons, &raw mut has_hotkey as *mut bool);
-        copy_confirm_hotkeys(
-            buttons,
-            dfltbutton,
-            &raw mut has_hotkey as *mut bool as *const bool,
-            hotk,
-        );
+        let mut has_hotkey = [false; HAS_HOTKEY_LEN];
+        let hotk = console_dialog_alloc(message, buttons, &mut has_hotkey);
+        copy_confirm_hotkeys(buttons, dfltbutton, &has_hotkey, hotk);
         display_confirm_msg();
-        return hotk;
+        hotk
     }
 }
 
-pub(crate) unsafe extern "C" fn copy_confirm_hotkeys(
-    mut buttons: *const ::core::ffi::c_char,
-    mut default_button_idx: ::core::ffi::c_int,
-    mut has_hotkey: *const bool,
-    mut hotkeys_ptr: *mut ::core::ffi::c_char,
+/// Render the button list into [`confirm_buttons`] and the hotkey letters,
+/// in order, into `hotkeys_ptr`.
+///
+/// # Safety
+/// `buttons` must be a valid C string, and `hotkeys_ptr` must point at a
+/// buffer [`console_dialog_alloc`] sized for it.
+unsafe fn copy_confirm_hotkeys(
+    buttons: *const c_char,
+    mut default_button_idx: c_int,
+    has_hotkey: &[bool; HAS_HOTKEY_LEN],
+    hotkeys_ptr: *mut c_char,
 ) {
     unsafe {
-        *hotkeys_ptr.offset(copy_char(buttons, hotkeys_ptr, true_0 != 0) as isize) =
-            NUL as ::core::ffi::c_char;
-        let mut first_hotkey: bool = false_0 != 0;
-        if !*has_hotkey.offset(0 as ::core::ffi::c_int as isize) {
-            first_hotkey = true_0 != 0;
-        }
-        let mut msgp: *mut ::core::ffi::c_char = confirm_buttons.get();
-        let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut r: *const ::core::ffi::c_char = buttons;
+        let mut hotkeys_ptr = hotkeys_ptr;
+        // Define the first default hotkey. The hotkey string is kept NUL
+        // terminated throughout, to avoid reading past the end.
+        *hotkeys_ptr.add(copy_char(buttons, hotkeys_ptr, true) as usize) = 0;
+
+        // Is the first char of the button a hotkey? It is when the button
+        // does not name one itself.
+        let mut first_hotkey = !has_hotkey[0];
+
+        // Remember where the choices start; sent as the cmdline prompt.
+        let mut msgp = confirm_buttons.get();
+        // Takes the cursor by reference rather than capturing it: a closure
+        // capturing `msgp` would hold the borrow for the whole loop.
+        let push = |msgp: &mut *mut c_char, c: u8| {
+            **msgp = c as c_char;
+            *msgp = msgp.add(1);
+        };
+
+        let mut idx = 0;
+        let mut r = buttons;
         while *r != 0 {
-            if *r as ::core::ffi::c_int == DLG_BUTTON_SEP as ::core::ffi::c_int {
-                let c2rust_fresh39 = msgp;
-                msgp = msgp.offset(1);
-                *c2rust_fresh39 = ',' as ::core::ffi::c_char;
-                let c2rust_fresh40 = msgp;
-                msgp = msgp.offset(1);
-                *c2rust_fresh40 = ' ' as ::core::ffi::c_char;
-                hotkeys_ptr = hotkeys_ptr.offset(strlen(hotkeys_ptr) as isize);
-                *hotkeys_ptr.offset(copy_char(
-                    r.offset(1 as ::core::ffi::c_int as isize),
-                    hotkeys_ptr,
-                    true_0 != 0,
-                ) as isize) = NUL as ::core::ffi::c_char;
+            if *r == DLG_BUTTON_SEP as c_char {
+                push(&mut msgp, b','); // '\n' -> ', '
+                push(&mut msgp, b' ');
+
+                // Advance to the next hotkey and set the default one.
+                hotkeys_ptr = hotkeys_ptr.add(strlen(hotkeys_ptr));
+                *hotkeys_ptr.add(copy_char(r.add(1), hotkeys_ptr, true) as usize) = 0;
+
                 if default_button_idx != 0 {
                     default_button_idx -= 1;
                 }
-                if idx < HAS_HOTKEY_LEN - 1 as ::core::ffi::c_int && {
+                // If no hotkey is specified, the first char is used. The
+                // increment is inside the short circuit, as upstream's
+                // `has_hotkey[++idx]` is.
+                if idx < HAS_HOTKEY_LEN - 1 && {
                     idx += 1;
-                    !*has_hotkey.offset(idx as isize)
+                    !has_hotkey[idx]
                 } {
-                    first_hotkey = true_0 != 0;
+                    first_hotkey = true;
                 }
-            } else if *r as ::core::ffi::c_int == DLG_HOTKEY_CHAR as ::core::ffi::c_int
-                || first_hotkey as ::core::ffi::c_int != 0
-            {
-                if *r as ::core::ffi::c_int == DLG_HOTKEY_CHAR as ::core::ffi::c_int {
-                    r = r.offset(1);
+            } else if *r == DLG_HOTKEY_CHAR as c_char || first_hotkey {
+                if *r == DLG_HOTKEY_CHAR as c_char {
+                    r = r.add(1);
                 }
-                first_hotkey = false_0 != 0;
-                if *r as ::core::ffi::c_int == DLG_HOTKEY_CHAR as ::core::ffi::c_int {
-                    let c2rust_fresh41 = msgp;
-                    msgp = msgp.offset(1);
-                    *c2rust_fresh41 = *r;
+                first_hotkey = false;
+                if *r == DLG_HOTKEY_CHAR as c_char {
+                    push(&mut msgp, *r as u8); // '&&a' -> '&a'
                 } else {
-                    let c2rust_fresh42 = msgp;
-                    msgp = msgp.offset(1);
-                    *c2rust_fresh42 = (if default_button_idx == 1 as ::core::ffi::c_int {
-                        '[' as ::core::ffi::c_int
-                    } else {
-                        '(' as ::core::ffi::c_int
-                    }) as ::core::ffi::c_char;
-                    msgp = msgp.offset(copy_char(r, msgp, false_0 != 0) as isize);
-                    let c2rust_fresh43 = msgp;
-                    msgp = msgp.offset(1);
-                    *c2rust_fresh43 = (if default_button_idx == 1 as ::core::ffi::c_int {
-                        ']' as ::core::ffi::c_int
-                    } else {
-                        ')' as ::core::ffi::c_int
-                    }) as ::core::ffi::c_char;
-                    *hotkeys_ptr.offset(copy_char(r, hotkeys_ptr, true_0 != 0) as isize) =
-                        NUL as ::core::ffi::c_char;
+                    // '&a' -> '[a]', or '(a)' when it is not the default.
+                    let default = default_button_idx == 1;
+                    push(&mut msgp, if default { b'[' } else { b'(' });
+                    msgp = msgp.add(copy_char(r, msgp, false) as usize);
+                    push(&mut msgp, if default { b']' } else { b')' });
+
+                    // Redefine the hotkey.
+                    *hotkeys_ptr.add(copy_char(r, hotkeys_ptr, true) as usize) = 0;
                 }
             } else {
-                msgp = msgp.offset(copy_char(r, msgp, false_0 != 0) as isize);
+                // Everything else is copied literally.
+                msgp = msgp.add(copy_char(r, msgp, false) as usize);
             }
-            r = r.offset(utfc_ptr2len(r as *mut ::core::ffi::c_char) as isize);
+            r = r.add(utfc_ptr2len(r) as usize);
         }
-        let c2rust_fresh44 = msgp;
-        msgp = msgp.offset(1);
-        *c2rust_fresh44 = ':' as ::core::ffi::c_char;
-        let c2rust_fresh45 = msgp;
-        msgp = msgp.offset(1);
-        *c2rust_fresh45 = ' ' as ::core::ffi::c_char;
-        *msgp = NUL as ::core::ffi::c_char;
+
+        push(&mut msgp, b':');
+        push(&mut msgp, b' ');
+        *msgp = 0;
     }
 }
 
-pub(crate) unsafe extern "C" fn display_confirm_msg() {
+/// Display the `:confirm` message. Also called when the screen is resized.
+///
+/// # Safety
+/// Only that [`confirm_msg`] is null or a valid C string.
+pub(crate) unsafe fn display_confirm_msg() {
     unsafe {
-        (*confirm_msg_used.ptr()) += 1;
-        if !(*confirm_msg.ptr()).is_null() {
-            msg_ext_set_kind(b"confirm\0".as_ptr() as *const ::core::ffi::c_char);
-            msg_puts_hl(confirm_msg.get(), HLF_M, false_0 != 0);
+        // Avoid that 'q' at the more prompt truncates the message here.
+        confirm_msg_used.set(confirm_msg_used.get() + 1);
+        if !confirm_msg.get().is_null() {
+            msg_ext_set_kind(c"confirm".as_ptr());
+            msg_puts_hl(confirm_msg.get(), HLF_M, false);
         }
-        (*confirm_msg_used.ptr()) -= 1;
+        confirm_msg_used.set(confirm_msg_used.get() - 1);
     }
 }
 
-pub unsafe extern "C" fn vim_dialog_yesno(
-    mut type_0: ::core::ffi::c_int,
-    mut title: *mut ::core::ffi::c_char,
-    mut message: *mut ::core::ffi::c_char,
-    mut dflt: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// A yes/no dialog.
+///
+/// # Safety
+/// `title` may be null; `message` must be a valid C string.
+pub unsafe fn vim_dialog_yesno(
+    type_0: c_int,
+    title: *mut c_char,
+    message: *mut c_char,
+    dflt: c_int,
+) -> c_int {
     unsafe {
+        let title = if title.is_null() {
+            gettext(c"Question".as_ptr())
+        } else {
+            title
+        };
         if do_dialog(
             type_0,
-            if title.is_null() {
-                gettext(b"Question\0".as_ptr() as *const ::core::ffi::c_char)
-            } else {
-                title
-            },
+            title,
             message,
-            gettext(b"&Yes\n&No\0".as_ptr() as *const ::core::ffi::c_char),
+            gettext(c"&Yes\n&No".as_ptr()),
             dflt,
-            ::core::ptr::null::<::core::ffi::c_char>(),
+            ptr::null(),
             false_0,
-        ) == 1 as ::core::ffi::c_int
+        ) == 1
         {
-            return VIM_YES as ::core::ffi::c_int;
+            return VIM_YES as c_int;
         }
-        return VIM_NO as ::core::ffi::c_int;
+        VIM_NO as c_int
     }
 }
 
-pub unsafe extern "C" fn vim_dialog_yesnocancel(
-    mut type_0: ::core::ffi::c_int,
-    mut title: *mut ::core::ffi::c_char,
-    mut message: *mut ::core::ffi::c_char,
-    mut dflt: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// A yes/no/cancel dialog.
+///
+/// # Safety
+/// As [`vim_dialog_yesno`].
+pub unsafe fn vim_dialog_yesnocancel(
+    type_0: c_int,
+    title: *mut c_char,
+    message: *mut c_char,
+    dflt: c_int,
+) -> c_int {
     unsafe {
+        let title = if title.is_null() {
+            gettext(c"Question".as_ptr())
+        } else {
+            title
+        };
         match do_dialog(
             type_0,
-            if title.is_null() {
-                gettext(b"Question\0".as_ptr() as *const ::core::ffi::c_char)
-            } else {
-                title
-            },
+            title,
             message,
-            gettext(b"&Yes\n&No\n&Cancel\0".as_ptr() as *const ::core::ffi::c_char),
+            gettext(c"&Yes\n&No\n&Cancel".as_ptr()),
             dflt,
-            ::core::ptr::null::<::core::ffi::c_char>(),
+            ptr::null(),
             false_0,
         ) {
-            1 => return VIM_YES as ::core::ffi::c_int,
-            2 => return VIM_NO as ::core::ffi::c_int,
-            _ => {}
+            1 => VIM_YES as c_int,
+            2 => VIM_NO as c_int,
+            _ => VIM_CANCEL as c_int,
         }
-        return VIM_CANCEL as ::core::ffi::c_int;
     }
 }
 
-pub unsafe extern "C" fn vim_dialog_yesnoallcancel(
-    mut type_0: ::core::ffi::c_int,
-    mut title: *mut ::core::ffi::c_char,
-    mut message: *mut ::core::ffi::c_char,
-    mut dflt: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// A yes/no/all/discard/cancel dialog, for `:wq` over several changed buffers.
+///
+/// # Safety
+/// As [`vim_dialog_yesno`].
+pub unsafe fn vim_dialog_yesnoallcancel(
+    type_0: c_int,
+    title: *mut c_char,
+    message: *mut c_char,
+    dflt: c_int,
+) -> c_int {
     unsafe {
+        // Note: unlike its two siblings, this default title is not translated.
+        let title = if title.is_null() {
+            c"Question".as_ptr()
+        } else {
+            title.cast_const()
+        };
         match do_dialog(
             type_0,
-            if title.is_null() {
-                b"Question\0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                title as *const ::core::ffi::c_char
-            },
+            title,
             message,
-            gettext(b"&Yes\n&No\nSave &All\n&Discard All\n&Cancel\0".as_ptr()
-                as *const ::core::ffi::c_char),
+            gettext(c"&Yes\n&No\nSave &All\n&Discard All\n&Cancel".as_ptr()),
             dflt,
-            ::core::ptr::null::<::core::ffi::c_char>(),
+            ptr::null(),
             false_0,
         ) {
-            1 => return VIM_YES as ::core::ffi::c_int,
-            2 => return VIM_NO as ::core::ffi::c_int,
-            3 => return VIM_ALL as ::core::ffi::c_int,
-            4 => return VIM_DISCARDALL as ::core::ffi::c_int,
-            _ => {}
+            1 => VIM_YES as c_int,
+            2 => VIM_NO as c_int,
+            3 => VIM_ALL as c_int,
+            4 => VIM_DISCARDALL as c_int,
+            _ => VIM_CANCEL as c_int,
         }
-        return VIM_CANCEL as ::core::ffi::c_int;
     }
 }

@@ -241,11 +241,6 @@ pub const ESC: ::core::ffi::c_int = 27;
 pub const Ctrl_B: ::core::ffi::c_int = 2;
 pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const Ctrl_F: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
-static confirm_msg_used: GlobalCell<::core::ffi::c_int> = GlobalCell::new(false_0);
-static confirm_msg: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-static confirm_buttons: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 pub const PROGRESS_TARGET_CMD: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 static keep_msg_more: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static msg_ext_kind: GlobalCell<*const ::core::ffi::c_char> =
@@ -914,7 +909,6 @@ pub unsafe extern "C" fn msgmore(mut n: ::core::ffi::c_int) {
 static last_msgchunk: GlobalCell<*mut msgchunk_T> =
     GlobalCell::new(::core::ptr::null_mut::<msgchunk_T>());
 static do_clear_sb_text: GlobalCell<sb_clear_T> = GlobalCell::new(SB_CLEAR_NONE);
-pub const HAS_HOTKEY_LEN: ::core::ffi::c_int = 30 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
 pub const KS_ZERO: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
