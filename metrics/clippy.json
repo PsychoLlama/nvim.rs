@@ -67,7 +67,6 @@
     "crates/nvim/src/nvim/ex_eval.rs": 66,
     "crates/nvim/src/nvim/ex_getln/cmdpreview.rs": 7,
     "crates/nvim/src/nvim/ex_getln/color.rs": 34,
-    "crates/nvim/src/nvim/ex_getln/draw.rs": 1,
     "crates/nvim/src/nvim/ex_getln/incsearch.rs": 34,
     "crates/nvim/src/nvim/ex_session.rs": 97,
     "crates/nvim/src/nvim/extmark.rs": 21,
