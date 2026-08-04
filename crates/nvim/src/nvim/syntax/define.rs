@@ -12,6 +12,8 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::regexp::RE_MAGIC;
+use crate::src::nvim::runtime::DIP_ALL;
 
 /// Adjust an item's flags when it is declared in a `:syntax include`d file.
 ///

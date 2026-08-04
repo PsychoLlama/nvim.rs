@@ -13,6 +13,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::regexp::RE_MAGIC;
 
 /// Split off a `:syntax` command's group-name argument.
 ///

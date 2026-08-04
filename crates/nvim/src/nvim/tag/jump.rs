@@ -10,6 +10,8 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::search::SEARCH_KEEP;
+use crate::src::nvim::window::WSP_VERT;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 

@@ -45,8 +45,8 @@ use crate::src::nvim::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{gettext, strlen, strncasecmp};
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit};
-use crate::src::nvim::regexp::skip_regexp;
 use crate::src::nvim::regexp::vim_regexec_multi;
+use crate::src::nvim::regexp::{RE_MAGIC, skip_regexp};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
     EvalFuncData, ListLenSpecials, VarType, colnr_T, dict_T, dictitem_T, exarg_T, int64_t,
@@ -76,7 +76,6 @@ pub const FAIL: c_int = 0;
 /// The `'cpoptions'` flag that makes a search continue at the end of the
 /// previous match rather than one character past its start.
 pub const CPO_SEARCH: c_int = 'c' as c_int;
-pub const RE_MAGIC: c_int = 1;
 
 /// The scratch buffer `tv_get_string_buf_chk` needs to render a non-string
 /// argument into.

@@ -13,6 +13,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::window::{WSP_ABOVE, WSP_HELP, WSP_NEWLOC, WSP_TOP};
 use core::ffi::{c_int, c_uint};
 use core::ptr;
 

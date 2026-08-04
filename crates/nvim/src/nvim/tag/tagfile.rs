@@ -12,6 +12,7 @@
 use super::*;
 use crate::src::nvim::file_search::Name;
 use crate::src::nvim::path::tail_index;
+use crate::src::nvim::runtime::DIP_ALL;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

@@ -66,10 +66,6 @@ pub use self::init::*;
 pub use self::resolve::*;
 pub(crate) use self::visited::*;
 
-pub const kCdScopeGlobal: CdScope = 2;
-pub const kCdScopeTabpage: CdScope = 1;
-pub const kCdScopeWindow: CdScope = 0;
-pub const kCdScopeInvalid: CdScope = -1;
 pub const kCdCauseAuto: CdCause = 2;
 pub const kCdCauseWindow: CdCause = 1;
 pub const kCdCauseOther: CdCause = -1;

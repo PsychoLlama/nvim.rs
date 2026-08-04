@@ -36,10 +36,10 @@ use super::aff::{AffState, str_equal};
 use super::flags::{aff_process_flags, affitem2flag, check_renumber};
 use super::wordtree::tree_add_word;
 use super::{
-    AH_KEY_LEN, MAXLINELEN, NUL, PFX_FLAGS, RE_MAGIC, RE_STRICT, RE_STRING, WFP_COMPFORBID,
-    WFP_COMPPERMIT, WFP_NC, WFP_UP, affentry_T, afffile_T, affheader_T, e_afftrailing, spellinfo_T,
-    vim_regcomp, vim_regfree,
+    AH_KEY_LEN, MAXLINELEN, NUL, PFX_FLAGS, WFP_COMPFORBID, WFP_COMPPERMIT, WFP_NC, WFP_UP,
+    affentry_T, afffile_T, affheader_T, e_afftrailing, spellinfo_T, vim_regcomp, vim_regfree,
 };
+use crate::src::nvim::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
 
 /// The header line of a `PFX`/`SFX` block. Returns false to stop reading.
 ///

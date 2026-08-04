@@ -72,11 +72,11 @@ use crate::src::nvim::spellfile::{ex_mkspell, ex_spell};
 use crate::src::nvim::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::src::nvim::tag::do_tags;
 use crate::src::nvim::types::{
-    BoolVarValue, CMD_index, Callback, Callback_data as C2Rust_Unnamed_20, CdCause, CdScope,
-    ChannelPart, Direction, LineGetter, LuaRetMode, MarkGet, MotionType, OptValType, RemapValues,
-    TriState, VarLockStatus, VarType, cmd_addr_T, dobuf_action_values, dobuf_start_values,
-    estack_arg_T, etype_T, exarg_T, except_T, garray_T, handle_T, kNone, key_extra, linenr_T,
-    optmagic_T, uint8_t, uint16_t, uint32_t,
+    BoolVarValue, CMD_index, Callback, Callback_data as C2Rust_Unnamed_20, CdCause, ChannelPart,
+    Direction, LineGetter, LuaRetMode, MarkGet, MotionType, OptValType, RemapValues, TriState,
+    VarLockStatus, VarType, cmd_addr_T, dobuf_action_values, dobuf_start_values, estack_arg_T,
+    etype_T, exarg_T, except_T, garray_T, handle_T, kNone, key_extra, linenr_T, optmagic_T,
+    uint8_t, uint16_t, uint32_t,
 };
 use crate::src::nvim::undo::{ex_undojoin, ex_undolist};
 use crate::src::nvim::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -135,9 +135,6 @@ pub const VAR_STRING: VarType = 2;
 pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_31 = c_uint;
 pub const kDirectionNotSet: Direction = 0;
-pub const kCdScopeGlobal: CdScope = 2;
-pub const kCdScopeTabpage: CdScope = 1;
-pub const kCdScopeWindow: CdScope = 0;
 pub const kCdCauseManual: CdCause = 0;
 pub type C2Rust_Unnamed_33 = c_int;
 pub const EXPAND_FILES: C2Rust_Unnamed_33 = 2;
@@ -459,7 +456,6 @@ pub const OP_LSHIFT: C2Rust_Unnamed_67 = 4;
 pub const OP_RSHIFT: C2Rust_Unnamed_67 = 5;
 pub const OP_YANK: C2Rust_Unnamed_67 = 2;
 pub const OP_DELETE: C2Rust_Unnamed_67 = 1;
-pub const WSP_VERT: C2Rust_Unnamed_66 = 2;
 pub const FNAME_MESS: C2Rust_Unnamed_56 = 1;
 pub const DT_LTAG: C2Rust_Unnamed_65 = 11;
 pub const DT_TAG: C2Rust_Unnamed_65 = 1;
@@ -481,7 +477,6 @@ pub const ACTION_GOTO: C2Rust_Unnamed_62 = 2;
 pub const ACTION_SHOW_ALL: C2Rust_Unnamed_62 = 4;
 pub const ACTION_SHOW: C2Rust_Unnamed_62 = 1;
 pub const kRetNilBool: LuaRetMode = 1;
-pub const DIP_ALL: C2Rust_Unnamed_60 = 1;
 pub const CHECK_PATH: C2Rust_Unnamed_61 = 3;
 pub const ESTACK_SCRIPT: estack_arg_T = 3;
 pub const ESTACK_STACK: estack_arg_T = 2;
@@ -490,11 +485,6 @@ pub const FNAME_HYP: C2Rust_Unnamed_56 = 4;
 pub const FIND_STRING: C2Rust_Unnamed_58 = 2;
 pub const FIND_EVAL: C2Rust_Unnamed_58 = 4;
 pub const FIND_IDENT: C2Rust_Unnamed_58 = 1;
-pub const WSP_TOP: C2Rust_Unnamed_66 = 8;
-pub const WSP_BELOW: C2Rust_Unnamed_66 = 64;
-pub const WSP_ABOVE: C2Rust_Unnamed_66 = 128;
-pub const WSP_HOR: C2Rust_Unnamed_66 = 4;
-pub const WSP_BOT: C2Rust_Unnamed_66 = 16;
 pub const OPT_GLOBAL: C2Rust_Unnamed_59 = 1;
 pub type C2Rust_Unnamed_56 = c_uint;
 pub type C2Rust_Unnamed_58 = c_uint;
@@ -1312,4 +1302,3 @@ static cmdidxs2: GlobalCell<[[uint8_t; 26]; 26]> = GlobalCell::new([
     ],
 ]);
 pub const false_0: c_int = 0 as c_int;
-pub const RE_MAGIC: c_int = 1 as c_int;

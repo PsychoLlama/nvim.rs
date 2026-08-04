@@ -124,9 +124,9 @@ use crate::src::nvim::types::{
     VirtTextChunk, WinConfig, WinInfo, WinSplit, WinStyle, Window, aucmdwin_T, bln_values, buf_T,
     bufref_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, dobuf_action_values, dobuf_start_values,
     exarg_T, except_T, frame_T, garray_T, getf_values, handle_T, hashitem_T, hashtab_T, int64_t,
-    linenr_T, list_T, lpos_T, msglist_T, oparg_T, optset_T, pos_T, ptr_t, ptrdiff_t, qf_info_T,
-    save_v_event_T, scid_T, size_t, switchwin_T, tabpage_T, taggy_T, typval_T, typval_vval_union,
-    uint32_t, varnumber_T, win_T,
+    kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, linenr_T, list_T, lpos_T, msglist_T, oparg_T,
+    optset_T, pos_T, ptr_t, ptrdiff_t, qf_info_T, save_v_event_T, scid_T, size_t, switchwin_T,
+    tabpage_T, taggy_T, typval_T, typval_vval_union, uint32_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_call_grid_destroy, ui_call_win_close, ui_call_win_external_pos, ui_call_win_float_pos,
@@ -175,9 +175,6 @@ pub const kZIndexFloatDefault: C2Rust_Unnamed_14 = 50;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const NUMBUFLEN: C2Rust_Unnamed_15 = 65;
 pub const kDirectionNotSet: Direction = 0;
-pub const kCdScopeGlobal: CdScope = 2;
-pub const kCdScopeTabpage: CdScope = 1;
-pub const kCdScopeWindow: CdScope = 0;
 pub const kCdCauseWindow: CdCause = 1;
 pub const kCdCauseManual: CdCause = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
@@ -491,17 +488,17 @@ pub const ACTION_SPLIT: C2Rust_Unnamed_31 = 3;
 pub const ACTION_GOTO: C2Rust_Unnamed_31 = 2;
 pub const ACTION_SHOW: C2Rust_Unnamed_31 = 1;
 pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
-pub const WSP_QUICKFIX: C2Rust_Unnamed_32 = 1024;
-pub const WSP_NOENTER: C2Rust_Unnamed_32 = 512;
-pub const WSP_NEWLOC: C2Rust_Unnamed_32 = 256;
-pub const WSP_ABOVE: C2Rust_Unnamed_32 = 128;
-pub const WSP_BELOW: C2Rust_Unnamed_32 = 64;
-pub const WSP_HELP: C2Rust_Unnamed_32 = 32;
-pub const WSP_BOT: C2Rust_Unnamed_32 = 16;
-pub const WSP_TOP: C2Rust_Unnamed_32 = 8;
-pub const WSP_HOR: C2Rust_Unnamed_32 = 4;
-pub const WSP_VERT: C2Rust_Unnamed_32 = 2;
-pub const WSP_ROOM: C2Rust_Unnamed_32 = 1;
+pub const WSP_QUICKFIX: ::core::ffi::c_uint = 1024;
+pub const WSP_NOENTER: ::core::ffi::c_uint = 512;
+pub const WSP_NEWLOC: ::core::ffi::c_uint = 256;
+pub const WSP_ABOVE: ::core::ffi::c_uint = 128;
+pub const WSP_BELOW: ::core::ffi::c_uint = 64;
+pub const WSP_HELP: ::core::ffi::c_uint = 32;
+pub const WSP_BOT: ::core::ffi::c_uint = 16;
+pub const WSP_TOP: ::core::ffi::c_uint = 8;
+pub const WSP_HOR: ::core::ffi::c_uint = 4;
+pub const WSP_VERT: ::core::ffi::c_uint = 2;
+pub const WSP_ROOM: ::core::ffi::c_uint = 1;
 pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
 pub const STATUS_HEIGHT: C2Rust_Unnamed_33 = 1;
 pub const MIN_LINES: C2Rust_Unnamed_33 = 2;

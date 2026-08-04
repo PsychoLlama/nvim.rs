@@ -110,9 +110,6 @@ pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;
 pub const MAXSUFLEN: c_int = 30;
 pub const ENV_SEPCHAR: c_int = ':' as c_int;
-pub const RE_MAGIC: c_int = 1;
-pub const RE_STRING: c_int = 2;
-pub const RE_NOBREAK: c_int = 16;
 
 /// The full path of `fname`, in a string the caller owns.
 ///

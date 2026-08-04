@@ -23,6 +23,11 @@ use crate::src::nvim::types::{
     magic_T, proftime_T, regengine, regengine_T, regmatch_T, regmmatch_T, size_t, uint8_t, win_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint};
+/// Last-pattern selectors and the regexp-engine/flag bits.
+pub const RE_SEARCH: ::core::ffi::c_int = 0;
+pub const RE_SUBST: ::core::ffi::c_int = 1;
+pub const RE_BOTH: ::core::ffi::c_int = 2;
+pub const RE_LAST: ::core::ffi::c_int = 2;
 
 // The bodies, split along the seam upstream's `#include`s left in regexp.c:
 // the shared layer and the pattern parser here, one module per engine below.
@@ -640,15 +645,15 @@ pub const BRACE_COMPLEX: c_int = 140;
 pub const NOPEN: c_int = 150;
 pub const NCLOSE: c_int = 151;
 pub const MULTIBYTECODE: c_int = 200;
-pub const RE_BOF: c_int = 201;
-pub const RE_EOF: c_int = 202;
+pub const RE_BOF: ::core::ffi::c_int = 201;
+pub const RE_EOF: ::core::ffi::c_int = 202;
 pub const CURSOR: c_int = 203;
-pub const RE_LNUM: c_int = 204;
-pub const RE_COL: c_int = 205;
-pub const RE_VCOL: c_int = 206;
-pub const RE_MARK: c_int = 207;
-pub const RE_VISUAL: c_int = 208;
-pub const RE_COMPOSING: c_int = 209;
+pub const RE_LNUM: ::core::ffi::c_int = 204;
+pub const RE_COL: ::core::ffi::c_int = 205;
+pub const RE_VCOL: ::core::ffi::c_int = 206;
+pub const RE_MARK: ::core::ffi::c_int = 207;
+pub const RE_VISUAL: ::core::ffi::c_int = 208;
+pub const RE_COMPOSING: ::core::ffi::c_int = 209;
 pub const HASWIDTH: c_int = 0x1 as c_int;
 pub const SIMPLE: c_int = 0x2 as c_int;
 pub const SPSTART: c_int = 0x4 as c_int;
@@ -724,11 +729,11 @@ pub const MAX_MCO: c_int = 6;
 pub const CPO_LITERAL: c_int = 'l' as c_int;
 pub const INT_MAX: c_int = __INT_MAX__;
 pub const false_0: c_int = 0;
-pub const RE_MAGIC: c_int = 1;
-pub const RE_STRING: c_int = 2;
-pub const RE_STRICT: c_int = 4;
-pub const RE_AUTO: c_int = 8;
-pub const RE_NOBREAK: c_int = 16;
+pub const RE_MAGIC: ::core::ffi::c_int = 1;
+pub const RE_STRING: ::core::ffi::c_int = 2;
+pub const RE_STRICT: ::core::ffi::c_int = 4;
+pub const RE_AUTO: ::core::ffi::c_int = 8;
+pub const RE_NOBREAK: ::core::ffi::c_int = 16;
 pub const REX_SET: c_int = 1;
 pub const REX_USE: c_int = 2;
 pub const REX_ALL: c_int = REX_SET | REX_USE;

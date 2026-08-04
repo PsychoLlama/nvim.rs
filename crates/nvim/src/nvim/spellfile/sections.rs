@@ -42,10 +42,11 @@ use crate::src::nvim::types::{
 
 use super::read::read_nonnul_bytes;
 use super::{
-    CF_UPPER, CF_WORD, COMPOUND_MAX_LEN, EOF, MAXREGIONS, MAXWLEN, NUL, RE_MAGIC, RE_STRICT,
-    RE_STRING, SAL_COLLAPSE, SAL_F0LLOWUP, SAL_REM_ACCENTS, SP_FORMERROR, SP_OTHERERROR,
-    SP_TRUNCERROR, e_duplicate_char_in_map_entry, set_spell_finish, vim_regcomp,
+    CF_UPPER, CF_WORD, COMPOUND_MAX_LEN, EOF, MAXREGIONS, MAXWLEN, NUL, SAL_COLLAPSE, SAL_F0LLOWUP,
+    SAL_REM_ACCENTS, SP_FORMERROR, SP_OTHERERROR, SP_TRUNCERROR, e_duplicate_char_in_map_entry,
+    set_spell_finish, vim_regcomp,
 };
+use crate::src::nvim::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
 
 /// Read a length-prefixed string, with the length in `cnt_bytes` bytes.
 ///

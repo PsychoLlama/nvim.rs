@@ -92,10 +92,12 @@ use crate::src::nvim::popupmenu::{
     pum_clear, pum_display, pum_get_height, pum_set_event_info, pum_undisplay, pum_visible,
 };
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM, equalpos};
+use crate::src::nvim::regexp::{RE_LAST, RE_MAGIC};
 use crate::src::nvim::register::get_register_name;
 use crate::src::nvim::register::{copy_register, free_register, valid_yank_reg};
 use crate::src::nvim::search::{
-    BACKWARD, FORWARD, find_pattern_in_path, ignorecase, search_for_exact_line, searchit,
+    BACKWARD, FORWARD, SEARCH_KEEP, SEARCH_NFMSG, find_pattern_in_path, ignorecase,
+    search_for_exact_line, searchit,
 };
 use crate::src::nvim::spell::{
     SMT_ALL, expand_spelling, spell_dump_compl, spell_expand_check_cap, spell_move_to,
@@ -271,9 +273,6 @@ pub struct ins_compl_next_state_T {
     pub func_cb: *mut Callback,
 }
 pub const KE_IGNORE: key_extra = 53;
-pub const RE_LAST: C2Rust_Unnamed_33 = 2;
-pub const SEARCH_NFMSG: C2Rust_Unnamed_32 = 8;
-pub const SEARCH_KEEP: C2Rust_Unnamed_32 = 1024;
 pub const NUM_REGISTERS: C2Rust_Unnamed_29 = 39;
 pub const EW_SILENT: C2Rust_Unnamed_28 = 32;
 pub const EW_ADDSLASH: C2Rust_Unnamed_28 = 8;
@@ -7563,4 +7562,3 @@ pub unsafe extern "C" fn f_preinserted(
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

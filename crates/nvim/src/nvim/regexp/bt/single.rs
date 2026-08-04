@@ -18,16 +18,17 @@ use crate::src::nvim::mbyte::{
 use crate::src::nvim::os::libc::strlen;
 use crate::src::nvim::plines::win_linetabsize;
 use crate::src::nvim::pos::MAXCOL;
-use crate::src::nvim::regexp::kMarkBufLocal;
 use crate::src::nvim::regexp::{
     ALPHA, ANY, ANYBUT, ANYOF, BACKREF, BHPOS, BOL, BOW, CURSOR, DIGIT, END, EOL, EOW, EXACTLY,
     FNAME, HEAD, HEX, IDENT, KWORD, LOWER, MULTIBYTECODE, NALPHA, NDIGIT, NEWL, NHEAD, NHEX,
     NLOWER, NOCTAL, NOTHING, NUL, NUPPER, NWHITE, NWORD, OCTAL, PRINT, RA_CONT, RA_MATCH,
-    RA_NOMATCH, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL,
-    RI_ALPHA, RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WORD, SFNAME,
-    SIDENT, SKWORD, SPRINT, UPPER, WHITE, WORD, ZREF, behind_pos, cleanup_subexpr,
+    RA_NOMATCH, RI_ALPHA, RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER,
+    RI_WORD, SFNAME, SIDENT, SKWORD, SPRINT, UPPER, WHITE, WORD, ZREF, behind_pos, cleanup_subexpr,
     cleanup_zsubexpr, cstrchr, cstrncmp, match_with_backref, reg_getline, reg_getline_len,
     reg_match_visual, reg_nextline, reg_prev_class, reg_save_equal, rex,
+};
+use crate::src::nvim::regexp::{
+    RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, kMarkBufLocal,
 };
 use crate::src::nvim::types::{
     GraphemeState, colnr_T, fmark_T, linenr_T, size_t, uint8_t, uint32_t, uint64_t,

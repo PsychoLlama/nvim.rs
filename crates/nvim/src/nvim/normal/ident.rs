@@ -29,16 +29,19 @@ use crate::src::nvim::memory::{strequal, xfree, xmalloc, xrealloc};
 use crate::src::nvim::message::{emsg, messaging};
 use crate::src::nvim::normal::{
     BL_FIX, BL_SOL, Ctrl_RSB, DT_POP, ECMD_HIDE, ECMD_LAST, FIND_EVAL, FIND_IDENT, FIND_STRING,
-    FM_FORWARD, HIST_SEARCH, NUL, OK, OP_NOP, POUND, RE_LAST, SEARCH_START, SHM_SEARCHCOUNT,
-    VSE_NONE, check_text_or_curbuf_locked, checkclearopq, clearop, clearopbeep, false_0,
-    get_visual_text, normal_search, true_0,
+    FM_FORWARD, HIST_SEARCH, NUL, OK, OP_NOP, POUND, SHM_SEARCHCOUNT, VSE_NONE,
+    check_text_or_curbuf_locked, checkclearopq, clearop, clearopbeep, false_0, get_visual_text,
+    normal_search, true_0,
 };
 use crate::src::nvim::ops::clear_oparg;
 use crate::src::nvim::option::{magic_isset, shortmess};
 use crate::src::nvim::options::kOptFdoFlagSearch;
 use crate::src::nvim::os::libc::{gettext, snprintf, strcmp, strcpy, strlen};
 use crate::src::nvim::pos::clearpos;
-use crate::src::nvim::search::{BACKWARD, FORWARD, findmatchlimit, reset_search_dir, searchit};
+use crate::src::nvim::regexp::RE_LAST;
+use crate::src::nvim::search::{
+    BACKWARD, FORWARD, SEARCH_START, findmatchlimit, reset_search_dir, searchit,
+};
 use crate::src::nvim::state::MODE_TERMINAL;
 use crate::src::nvim::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::src::nvim::tag::do_tag;

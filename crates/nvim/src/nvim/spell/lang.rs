@@ -46,7 +46,7 @@ use crate::src::nvim::os::libc::{
     gettext, memmove, snprintf, strcasecmp, strcmp, strcpy, strlen, strncmp,
 };
 use crate::src::nvim::path::{path_fnamecmp, path_full_compare, path_tail};
-use crate::src::nvim::regexp::{vim_regcomp, vim_regfree};
+use crate::src::nvim::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::src::nvim::spellfile::spell_load_file;
 use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_strchr, xstrnsave};
 use crate::src::nvim::types::{
@@ -57,9 +57,10 @@ use crate::src::nvim::window::win_valid_any_tab;
 use super::chartab::init_spell_chartab;
 use super::slang::slang_free;
 use super::{
-    DIP_ALL, MAXPATHL, MAXWLEN, NUL, RE_MAGIC, REGION_ALL, SPL_FNAME_TMPL, first_lang,
-    int_wordlist, kEqualFiles, repl_from, repl_to, spelload_T,
+    MAXPATHL, MAXWLEN, NUL, REGION_ALL, SPL_FNAME_TMPL, first_lang, int_wordlist, kEqualFiles,
+    repl_from, repl_to, spelload_T,
 };
+use crate::src::nvim::runtime::DIP_ALL;
 
 /// `ASCII_ISALPHA`: an unaccented Latin letter.
 fn ascii_isalpha(c: c_int) -> bool {

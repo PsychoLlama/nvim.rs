@@ -85,6 +85,7 @@ use crate::src::nvim::types::{
 use crate::src::nvim::ui::{ui_add_cb, ui_flush, ui_has, ui_remove_cb};
 use crate::src::nvim::undo::u_save;
 use crate::src::nvim::usercmd::{uc_mods, uc_split_args_iter};
+use crate::src::nvim::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 unsafe extern "C" {
     fn lua_getstack(
         L: *mut lua_State,
@@ -198,14 +199,7 @@ pub const kThreadCallback: luv_err_type = 2;
 pub const kThread: luv_err_type = 1;
 pub type luv_err_t = luv_err_type;
 pub type luv_err_type = ::core::ffi::c_uint;
-pub const WSP_HOR: C2Rust_Unnamed_33 = 4;
-pub const WSP_VERT: C2Rust_Unnamed_33 = 2;
-pub const WSP_BOT: C2Rust_Unnamed_33 = 16;
-pub const WSP_TOP: C2Rust_Unnamed_33 = 8;
-pub const WSP_BELOW: C2Rust_Unnamed_33 = 64;
-pub const WSP_ABOVE: C2Rust_Unnamed_33 = 128;
 pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
-pub const WSP_ROOM: C2Rust_Unnamed_33 = 1;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_MULTRET: ::core::ffi::c_int = -1 as ::core::ffi::c_int;

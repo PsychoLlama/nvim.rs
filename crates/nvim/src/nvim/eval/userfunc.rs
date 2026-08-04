@@ -69,7 +69,7 @@ use crate::src::nvim::profile::{
     profile_self, profile_start, profile_sub_wait, profile_zero, script_prof_restore,
     script_prof_save,
 };
-use crate::src::nvim::regexp::skip_regexp;
+use crate::src::nvim::regexp::{RE_MAGIC, skip_regexp};
 use crate::src::nvim::runtime::{
     autoload_name, estack_pop, estack_push_ufunc, exestack, get_sourced_lnum, script_autoload,
     script_items,
@@ -5519,7 +5519,6 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
 pub const MSG_BUF_CLEN: ::core::ffi::c_int = MSG_BUF_LEN / 6 as ::core::ffi::c_int;

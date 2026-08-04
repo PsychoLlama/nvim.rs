@@ -12,6 +12,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::types::kFalse;
+use crate::src::nvim::window::{WSP_BELOW, WSP_BOT, WSP_NEWLOC, WSP_QUICKFIX, WSP_VERT};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

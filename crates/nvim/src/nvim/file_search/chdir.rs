@@ -9,6 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::{kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 use std::ffi::CStr;

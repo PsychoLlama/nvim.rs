@@ -39,7 +39,7 @@ use crate::src::nvim::os::libc::{__assert_fail, gettext, snprintf, strlen};
 use crate::src::nvim::path::vim_FullName;
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
-use crate::src::nvim::runtime::source_runtime_vim_lua;
+use crate::src::nvim::runtime::{DIP_ALL, source_runtime_vim_lua};
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::types::{
     BoolVarValue, CMD_index, ScopeType, SpecialVarValue, VV_SWAPCOMMAND, VarLockStatus, VarType,
@@ -104,7 +104,6 @@ pub const CCGD_MULTWIN: C2Rust_Unnamed_19 = 2;
 pub const CCGD_AW: C2Rust_Unnamed_19 = 1;
 pub const DOCMD_NOWAIT: C2Rust_Unnamed_20 = 2;
 pub const DOCMD_VERBOSE: C2Rust_Unnamed_20 = 1;
-pub const DIP_ALL: C2Rust_Unnamed_21 = 1;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

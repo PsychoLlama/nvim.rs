@@ -13,18 +13,11 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
+use crate::src::nvim::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
 use crate::src::nvim::types::VV_SEARCHFORWARD;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
-
-/// Index of the pattern `/` and `?` use.
-const RE_SEARCH: c_int = super::RE_SEARCH as c_int;
-/// Index of the pattern `:substitute` uses.
-const RE_SUBST: c_int = super::RE_SUBST as c_int;
-/// `pat_save`: remember the pattern as both (`:global`).
-const RE_BOTH: c_int = super::RE_BOTH as c_int;
-/// `pat_use`: fill an empty pattern in from whichever was used last.
-const RE_LAST: c_int = super::RE_LAST as c_int;
 
 /// The offset ShaDa does not store, and the one a zeroed slot has.
 const NO_OFFSET: SearchOffset = SearchOffset {

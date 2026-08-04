@@ -123,11 +123,15 @@ use crate::src::nvim::plines::linetabsize_str;
 use crate::src::nvim::plines::{getvcol, plines_m_win_fill};
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM, equalpos};
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit, profile_zero};
-use crate::src::nvim::regexp::vim_regexec_multi;
+use crate::src::nvim::regexp::{
+    RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST, vim_regexec_multi,
+};
 use crate::src::nvim::regexp::{
     regtilde, skip_regexp, skip_regexp_err, skip_regexp_ex, vim_regsub_multi,
 };
-use crate::src::nvim::search::{get_search_pat, last_search_pat, save_re_pat, search_regcomp};
+use crate::src::nvim::search::{
+    SEARCH_HIS, get_search_pat, last_search_pat, save_re_pat, search_regcomp,
+};
 use crate::src::nvim::spell::parse_spelllang;
 use crate::src::nvim::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
 use crate::src::nvim::strings::{
@@ -302,11 +306,6 @@ pub const CCGD_FORCEIT: C2Rust_Unnamed_35 = 4;
 pub const CCGD_MULTWIN: C2Rust_Unnamed_35 = 2;
 pub const CCGD_AW: C2Rust_Unnamed_35 = 1;
 pub const DOCMD_NOWAIT: C2Rust_Unnamed_36 = 2;
-pub const SEARCH_HIS: C2Rust_Unnamed_44 = 32;
-pub const RE_LAST: C2Rust_Unnamed_45 = 2;
-pub const RE_BOTH: C2Rust_Unnamed_45 = 2;
-pub const RE_SEARCH: C2Rust_Unnamed_45 = 0;
-pub const RE_SUBST: C2Rust_Unnamed_45 = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct SubResult {
@@ -6061,6 +6060,5 @@ pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const DBL_MAX: ::core::ffi::c_double = __DBL_MAX__;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 pub const __DBL_MAX__: ::core::ffi::c_double = 1.7976931348623157e+308f64;

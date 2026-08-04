@@ -48,7 +48,7 @@ use crate::src::nvim::keycodes::{
     K_KPAGEUP, K_LEFT, K_PAGEDOWN, K_PAGEUP, K_PASTE_START, K_RIGHT, K_S_END, K_S_HOME, K_S_LEFT,
     K_S_RIGHT, K_SELECT, K_UNDO, K_UP,
 };
-use crate::src::nvim::search::{BACKWARD, FORWARD};
+use crate::src::nvim::search::{BACKWARD, FORWARD, SEARCH_REV};
 mod misc;
 pub(crate) use self::misc::*;
 pub const _ISlower: c_uint = 512;
@@ -156,12 +156,7 @@ pub const PUT_LINE: c_uint = 8;
 pub const PUT_BLOCK_INNER: c_uint = 64;
 pub const PUT_CURSEND: c_uint = 2;
 pub const PUT_FIXINDENT: c_uint = 1;
-pub const SEARCH_START: c_uint = 256;
 pub const FM_FORWARD: c_uint = 2;
-pub const RE_LAST: c_uint = 2;
-pub const SEARCH_MSG: c_uint = 12;
-pub const SEARCH_ECHO: c_uint = 2;
-pub const SEARCH_OPT: c_uint = 16;
 pub const OP_CHANGE: c_uint = 3;
 pub const OP_NR_SUB: c_uint = 29;
 pub const OP_NR_ADD: c_uint = 28;
@@ -173,7 +168,6 @@ pub const SMT_BAD: smt_T = 1;
 pub const OP_FOLD: c_uint = 19;
 pub const OP_LOWER: c_uint = 12;
 pub const OP_FORMAT: c_uint = 9;
-pub const SEARCH_MARK: c_uint = 512;
 pub const FM_BACKWARD: c_uint = 1;
 pub const ACTION_GOTO: c_uint = 2;
 pub const ACTION_SHOW: c_uint = 1;
@@ -181,7 +175,6 @@ pub const ACTION_SHOW_ALL: c_uint = 4;
 pub const FIND_ANY: c_uint = 1;
 pub const FIND_DEFINE: c_uint = 2;
 pub const OP_UPPER: c_uint = 11;
-pub const SEARCH_REV: c_uint = 1;
 pub const OP_ROT13: c_uint = 15;
 pub const DT_POP: c_uint = 2;
 #[derive(Copy, Clone)]

@@ -28,7 +28,7 @@ use crate::src::nvim::message::{
 };
 use crate::src::nvim::os::libc::{gettext, snprintf};
 use crate::src::nvim::os::time::os_time;
-use crate::src::nvim::regexp::{vim_regcomp, vim_regexec, vim_regfree};
+use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::strings::xstrnsave;
 use crate::src::nvim::types::{
     AdditionalData, EvalFuncData, HistoryType, OptInt, Timestamp, VarType, exarg_T, expand_T,
@@ -50,8 +50,6 @@ const OK: c_int = 1;
 const FAIL: c_int = 0;
 /// `cmdmod_T.cmod_flags` bit for `:keeppatterns`.
 const CMOD_KEEPPATTERNS: c_int = 4096;
-const RE_MAGIC: c_int = 1;
-const RE_STRING: c_int = 2;
 const IOSIZE: c_int = 1024 + 1;
 
 /// Names accepted by `:history` and `histget()` etc., indexed by history

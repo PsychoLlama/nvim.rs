@@ -11,13 +11,11 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::regexp::RE_LAST;
+use crate::src::nvim::search::{SEARCH_KEEP, SEARCH_STAT_DEF_TIMEOUT};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-/// `pat_use`: count with whichever pattern was used last.
-const RE_LAST: c_int = super::RE_LAST as c_int;
-/// Counting must not disturb the remembered pattern.
-const SEARCH_KEEP: c_int = super::SEARCH_KEEP as c_int;
 /// How much room `[>999/>999]` and its `W ` prefix need.
 const STAT_BUF_LEN: usize = super::SEARCH_STAT_BUF_LEN as usize;
 

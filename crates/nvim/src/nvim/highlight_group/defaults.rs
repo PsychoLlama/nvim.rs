@@ -16,10 +16,10 @@ use crate::src::nvim::main::{
     cterm_normal_bg_color, cterm_normal_fg_color, curbuf, normal_bg, normal_fg, normal_sp, p_bg,
 };
 use crate::src::nvim::memory::{xfree, xstrdup};
-use crate::src::nvim::runtime::source_runtime_vim_lua;
+use crate::src::nvim::runtime::{DIP_OPT, DIP_START, source_runtime_vim_lua};
 use crate::src::nvim::types::RgbValue;
 
-use super::{DIP_OPT, DIP_START, OK, do_highlight};
+use super::{OK, do_highlight};
 
 /// The groups whose definition does not depend on `'background'`.
 static HIGHLIGHT_INIT_BOTH: [&CStr; 174] = [

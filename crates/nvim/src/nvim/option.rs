@@ -167,7 +167,6 @@ pub const OPT_MODELINE: c_int = 4;
 pub const OPT_LOCAL: c_int = 2;
 pub const OPT_GLOBAL: c_int = 1;
 pub const STATUS_HEIGHT: c_uint = 1;
-pub const DIP_ALL: c_uint = 1;
 pub const MIN_COLUMNS: c_uint = 12;
 pub const kListchars: CharsOption = 1;
 pub const kFillchars: CharsOption = 0;

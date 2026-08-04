@@ -27,8 +27,9 @@ use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::pos::equalpos;
 use crate::src::nvim::profile::profile_setlimit;
+use crate::src::nvim::regexp::RE_SEARCH;
 use crate::src::nvim::search::{
-    BACKWARD, FORWARD, RE_SEARCH, SEARCH_COL, SEARCH_END, SEARCH_KEEP, SEARCH_START, searchit,
+    BACKWARD, FORWARD, SEARCH_COL, SEARCH_END, SEARCH_KEEP, SEARCH_START, searchit,
 };
 use crate::src::nvim::types::{
     Direction, EvalFuncData, OptVal, OptValData, int64_t, linenr_T, pos_T, searchit_arg_T,

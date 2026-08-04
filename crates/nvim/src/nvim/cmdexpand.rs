@@ -89,11 +89,15 @@ use crate::src::nvim::popupmenu::{
 };
 use crate::src::nvim::pos::ltoreq;
 use crate::src::nvim::profile::{get_profile_name, set_context_in_profile_cmd};
-use crate::src::nvim::regexp::skip_regexp;
+use crate::src::nvim::regexp::{RE_LAST, RE_MAGIC, RE_STRING, skip_regexp};
 use crate::src::nvim::runtime::{
-    ExpandPackAddDir, ExpandRTDir, expand_runtime_cmd, script_items, set_context_in_runtime_cmd,
+    DIP_OPT, DIP_START, ExpandPackAddDir, ExpandRTDir, expand_runtime_cmd, script_items,
+    set_context_in_runtime_cmd,
 };
-use crate::src::nvim::search::{BACKWARD, FORWARD, ignorecase, pat_has_uppercase, searchit};
+use crate::src::nvim::search::{
+    BACKWARD, FORWARD, SEARCH_NFMSG, SEARCH_NOOF, SEARCH_OPT, SEARCH_PEEK, SEARCH_START,
+    ignorecase, pat_has_uppercase, searchit,
+};
 use crate::src::nvim::sign::{get_sign_name, set_context_in_sign_cmd};
 use crate::src::nvim::statusline::fillchar_status;
 use crate::src::nvim::strings::{
@@ -311,14 +315,6 @@ pub type user_expand_func_T = Option<
     ) -> *mut ::core::ffi::c_void,
 >;
 pub const TAG_MANY: C2Rust_Unnamed_32 = 300;
-pub const RE_LAST: C2Rust_Unnamed_31 = 2;
-pub const SEARCH_START: C2Rust_Unnamed_30 = 256;
-pub const SEARCH_NFMSG: C2Rust_Unnamed_30 = 8;
-pub const SEARCH_PEEK: C2Rust_Unnamed_30 = 2048;
-pub const SEARCH_NOOF: C2Rust_Unnamed_30 = 128;
-pub const SEARCH_OPT: C2Rust_Unnamed_30 = 16;
-pub const DIP_OPT: C2Rust_Unnamed_29 = 16;
-pub const DIP_START: C2Rust_Unnamed_29 = 8;
 pub const EW_DIR: C2Rust_Unnamed_28 = 1;
 pub const EW_ALLLINKS: C2Rust_Unnamed_28 = 4096;
 pub const EW_NOERROR: C2Rust_Unnamed_28 = 512;
@@ -5821,5 +5817,3 @@ unsafe extern "C" fn expand_pattern_in_buf(
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const RE_STRING: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

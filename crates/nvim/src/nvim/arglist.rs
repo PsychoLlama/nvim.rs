@@ -101,6 +101,7 @@ use flag::*;
 mod all;
 mod eval;
 
+use crate::src::nvim::regexp::RE_MAGIC;
 pub use all::{arg_all, ex_all};
 pub use eval::{f_argc, f_argidx, f_arglistid, f_argv};
 
@@ -898,4 +899,3 @@ pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;
 pub const true_0: c_int = 1;
 pub const false_0: c_int = 0;
-pub const RE_MAGIC: c_int = 1;

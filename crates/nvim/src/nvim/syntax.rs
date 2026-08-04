@@ -156,8 +156,6 @@ pub const MAX_HL_ID: ::core::ffi::c_uint = 20000;
 pub(crate) const SYNID_ALLBUT: ::core::ffi::c_int = MAX_HL_ID as ::core::ffi::c_int;
 /// `do_source` flag: this is not a plugin or a package.
 pub const DOSO_NONE: ::core::ffi::c_uint = 0;
-/// `source_runtime` flag: source every match, not just the first.
-pub const DIP_ALL: ::core::ffi::c_uint = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct stateitem_T {
@@ -409,6 +407,5 @@ pub const ITEM_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const ITEM_MATCHGROUP: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const REX_SET: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const REX_USE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

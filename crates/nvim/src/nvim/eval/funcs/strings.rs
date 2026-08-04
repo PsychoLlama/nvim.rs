@@ -5,8 +5,8 @@
 use super::args::{Args, frame};
 use super::wrappers::non_zero_arg;
 use super::{
-    CONV_NONE, FAIL, GA_EMPTY_INIT_VALUE, NSUBEXP, NUL, RE_MAGIC, RE_STRING, VAR_BLOB, VAR_LIST,
-    VAR_STRING, VSE_NONE, kListLenMayKnow,
+    CONV_NONE, FAIL, GA_EMPTY_INIT_VALUE, NSUBEXP, NUL, VAR_BLOB, VAR_LIST, VAR_STRING, VSE_NONE,
+    kListLenMayKnow,
 };
 use crate::semsg;
 use crate::src::nvim::cursor::get_cursor_pos_ptr;
@@ -33,7 +33,7 @@ use crate::src::nvim::message::{emsg, str2special_save};
 use crate::src::nvim::os::libc::{gettext, memmove, mktime, strftime, strlen, time};
 use crate::src::nvim::os::time::{os_localtime_r, os_strptime, tm_zeroed};
 use crate::src::nvim::regexp::{
-    reg_submatch, reg_submatch_list, vim_regcomp, vim_regexec_nl, vim_regfree,
+    RE_MAGIC, RE_STRING, reg_submatch, reg_submatch_list, vim_regcomp, vim_regexec_nl, vim_regfree,
 };
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::sha256::hex_digest;

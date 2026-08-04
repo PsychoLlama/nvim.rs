@@ -10,9 +10,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr::{copy_nonoverlapping, null_mut};
 
 use crate::src::nvim::api::private::helpers::cstr_as_string;
-use crate::src::nvim::eval::{
-    NUL, RE_MAGIC, RE_STRING, REGSUB_COPY, REGSUB_MAGIC, kOptValTypeString,
-};
+use crate::src::nvim::eval::{NUL, REGSUB_COPY, REGSUB_MAGIC, kOptValTypeString};
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::main::{empty_string_option, p_cpo, p_ic};
 use crate::src::nvim::mbyte::utfc_ptr2len;
@@ -20,7 +18,9 @@ use crate::src::nvim::option::set_option_value_give_err;
 use crate::src::nvim::options::kOptCpoptions;
 use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::libc::strcpy;
-use crate::src::nvim::regexp::{vim_regcomp, vim_regexec_nl, vim_regfree, vim_regsub};
+use crate::src::nvim::regexp::{
+    RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree, vim_regsub,
+};
 use crate::src::nvim::strings::xstrnsave;
 use crate::src::nvim::types::{
     OptVal, OptValData, colnr_T, garray_T, regmatch_T, regprog_T, size_t, typval_T,

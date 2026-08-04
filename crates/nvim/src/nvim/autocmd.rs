@@ -60,6 +60,7 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::time::os_now;
 use crate::src::nvim::path::{FullName_save, path_fnamecmp, path_tail};
 use crate::src::nvim::profile::{prof_child_enter, prof_child_exit};
+use crate::src::nvim::regexp::RE_MAGIC;
 use crate::src::nvim::runtime::{estack_pop, estack_push, exestack};
 use crate::src::nvim::search::{restore_search_patterns, save_search_patterns};
 use crate::src::nvim::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
@@ -5728,4 +5729,3 @@ unsafe extern "C" fn event_name2nr_hash(
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

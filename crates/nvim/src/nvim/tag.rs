@@ -137,9 +137,7 @@ pub const OPT_LOCAL: C2Rust_Unnamed_28 = 2;
 pub const OPT_GLOBAL: C2Rust_Unnamed_28 = 1;
 pub const kEqualFiles: file_comparison = 1;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
-pub const DIP_ALL: C2Rust_Unnamed_29 = 1;
 pub type C2Rust_Unnamed_30 = ::core::ffi::c_uint;
-pub const SEARCH_KEEP: C2Rust_Unnamed_30 = 1024;
 pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
 pub const LSIZE: C2Rust_Unnamed_31 = 512;
 pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
@@ -182,7 +180,6 @@ pub struct TagParts {
     pub user_data_end: *mut ::core::ffi::c_char,
     pub tagline: linenr_T,
 }
-pub const WSP_VERT: C2Rust_Unnamed_34 = 2;
 pub const MT_IC_OFF: C2Rust_Unnamed_35 = 4;
 pub const MT_MASK: C2Rust_Unnamed_35 = 7;
 pub const MT_COUNT: C2Rust_Unnamed_35 = 16;
@@ -245,4 +242,3 @@ pub unsafe fn tag_freematch() {
 pub const ML_EXTRA: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

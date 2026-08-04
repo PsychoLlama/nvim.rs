@@ -13,13 +13,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::pos::MAXCOL;
-
-/// Where `'hlsearch'` sits in the match list's priority order.
-///
-/// Only a match added at a *negative* priority sorts below it, which is what
-/// makes the `mit_priority > SEARCH_HL_PRIORITY` tests in [`update_search_hl`]
-/// and [`get_search_match_hl`] observable at all.
-pub(crate) const SEARCH_HL_PRIORITY: c_int = 0;
+use crate::src::nvim::search::SEARCH_HL_PRIORITY;
 
 /// Walks `search_hl` together with a window's match list.
 ///

@@ -11,24 +11,16 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::pos::MAXCOL;
+use crate::src::nvim::regexp::RE_SEARCH;
+use crate::src::nvim::search::{
+    SEARCH_COL, SEARCH_END, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, SEARCH_NOOF, SEARCH_PEEK,
+    SEARCH_START,
+};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-/// Which remembered pattern an empty `pat` falls back on.
-const RE_SEARCH: c_int = super::RE_SEARCH as c_int;
-
 // The `SEARCH_*` option flags, retyped for this module: c2rust left the
 // family as `c_uint` and `options` is a `c_int`.
-const SEARCH_HIS: c_int = super::SEARCH_HIS as c_int;
-const SEARCH_END: c_int = super::SEARCH_END as c_int;
-const SEARCH_NOOF: c_int = super::SEARCH_NOOF as c_int;
-const SEARCH_START: c_int = super::SEARCH_START as c_int;
-const SEARCH_KEEP: c_int = super::SEARCH_KEEP as c_int;
-const SEARCH_PEEK: c_int = super::SEARCH_PEEK as c_int;
-const SEARCH_COL: c_int = super::SEARCH_COL as c_int;
-/// Both message bits: `options & SEARCH_MSG == SEARCH_MSG` asks for the
-/// "not found" message as well as the echo.
-const SEARCH_MSG: c_int = super::SEARCH_MSG as c_int;
 
 /// One `vim_regexec_multi` result: where the match starts, where it ends
 /// (both relative to the line the search was run from) and the number of

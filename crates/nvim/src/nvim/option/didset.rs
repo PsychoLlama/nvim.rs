@@ -51,7 +51,7 @@ use crate::src::nvim::optionstr::check_signcolumn;
 use crate::src::nvim::os::libc::{gettext, strcmp, strncmp};
 use crate::src::nvim::popupmenu::{pum_drawn, pum_redraw};
 use crate::src::nvim::quickfix::{ll_resize_stack, qf_resize_stack};
-use crate::src::nvim::runtime::source_runtime_vim_lua;
+use crate::src::nvim::runtime::{DIP_ALL, source_runtime_vim_lua};
 use crate::src::nvim::spell::parse_spelllang;
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::terminal::on_scrollback_option_changed;
@@ -67,8 +67,8 @@ use crate::src::nvim::window::{
 use crate::src::nvim::winfloat::win_float_update_statusline;
 
 use super::{
-    B_IMODE_NONE, B_IMODE_USE_INSERT, BF_SYN_SET, Ctrl_C, DIP_ALL, NO_SCREEN, NUL, OPT_GLOBAL,
-    OPT_LOCAL, STATUS_HEIGHT, check_blending, did_set_title, kOptValTypeNumber, kOptValTypeString,
+    B_IMODE_NONE, B_IMODE_USE_INSERT, BF_SYN_SET, Ctrl_C, NO_SCREEN, NUL, OPT_GLOBAL, OPT_LOCAL,
+    STATUS_HEIGHT, check_blending, did_set_title, kOptValTypeNumber, kOptValTypeString,
     option_was_set, redraw_titles, set_option_value, set_option_varp, set_options_bin,
 };
 use crate::src::nvim::highlight_group::HLF_W;

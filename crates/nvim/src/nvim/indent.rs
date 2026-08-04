@@ -34,6 +34,7 @@ pub mod tabstop;
 
 // Split out for size. The names below are what the rest of the tree calls,
 // and it calls them as `indent::*`.
+use crate::src::nvim::regexp::RE_MAGIC;
 use crate::src::nvim::state::MODE_INSERT;
 pub use breakindent::{briopt_check, get_breakindent_win};
 pub use edit::{
@@ -689,7 +690,3 @@ pub unsafe extern "C" fn get_number_indent(mut lnum: linenr_T) -> ::core::ffi::c
     );
     return col;
 }
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const RE_STRING: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const RE_STRICT: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const RE_AUTO: ::core::ffi::c_int = 8 as ::core::ffi::c_int;

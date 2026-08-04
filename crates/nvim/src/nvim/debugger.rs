@@ -22,6 +22,7 @@ use crate::src::nvim::message::{emsg, msg, msg_starthere, semsg, smsg};
 use crate::src::nvim::os::env::{expand_env_save, home_replace};
 use crate::src::nvim::os::libc::{atoi, gettext, memmove, strcmp, strcpy, strlen, strncmp, strstr};
 use crate::src::nvim::path::fix_fname;
+use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING};
 use crate::src::nvim::runtime::{estack_sfile, exestack};
 use crate::src::nvim::state::MODE_NORMAL;
 use crate::src::nvim::types::{
@@ -1092,5 +1093,3 @@ pub unsafe extern "C" fn dbg_breakpoint(mut name: *mut ::core::ffi::c_char, mut 
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const RE_STRING: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

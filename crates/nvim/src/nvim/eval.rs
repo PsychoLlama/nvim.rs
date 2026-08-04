@@ -227,6 +227,4 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
 pub const PROF_YES: c_int = 1 as c_int;
 pub const KS_EXTRA: c_int = 253 as c_int;
 pub const INT_MAX: c_int = __INT_MAX__;
-pub const RE_MAGIC: c_int = 1 as c_int;
-pub const RE_STRING: c_int = 2 as c_int;
 pub const __INT_MAX__: c_int = 2147483647 as c_int;

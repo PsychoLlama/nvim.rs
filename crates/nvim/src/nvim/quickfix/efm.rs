@@ -15,6 +15,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

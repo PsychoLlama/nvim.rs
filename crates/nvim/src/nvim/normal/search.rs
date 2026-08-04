@@ -21,16 +21,15 @@ use crate::src::nvim::main::{
 use crate::src::nvim::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark};
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::{
-    KMarkNoContext, MOD_MASK_CTRL, OP_NOP, OP_ROT13, SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG,
-    SEARCH_OPT, TAB, checkclearop, checkclearopq, clearop, clearopbeep, e_changelist_is_empty,
-    false_0, kMTCharWise, kMTLineWise, kMarkAll, kMarkBeginLine, kMarkChangedCursor,
-    kMarkChangedLine, kMarkContext, kMarkJumpList, kMarkMoveFailed, kMarkMoveSuccess, kMarkSetView,
-    kMarkSwitchedBuf, nv_operator, true_0,
+    KMarkNoContext, MOD_MASK_CTRL, OP_NOP, OP_ROT13, TAB, checkclearop, checkclearopq, clearop,
+    clearopbeep, e_changelist_is_empty, false_0, kMTCharWise, kMTLineWise, kMarkAll,
+    kMarkBeginLine, kMarkChangedCursor, kMarkChangedLine, kMarkContext, kMarkJumpList,
+    kMarkMoveFailed, kMarkMoveSuccess, kMarkSetView, kMarkSwitchedBuf, nv_operator, true_0,
 };
 use crate::src::nvim::options::{kOptFdoFlagMark, kOptFdoFlagSearch, kOptJopFlagView};
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::pos::equalpos;
-use crate::src::nvim::search::do_search;
+use crate::src::nvim::search::{SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search};
 use crate::src::nvim::state::virtual_active;
 use crate::src::nvim::types::{MarkMove, MarkMoveRes, cmdarg_T, fmark_T, searchit_arg_T, size_t};
 use crate::src::nvim::window::goto_tabpage_lastused;

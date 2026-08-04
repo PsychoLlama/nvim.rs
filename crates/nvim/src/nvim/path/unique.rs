@@ -15,6 +15,7 @@ use std::ffi::CStr;
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING};
 
 /// Shorten the directory part of `str` in place, keeping `trim_len`
 /// characters of each component: `"~/foo/../.bar/fname"` with a `trim_len`

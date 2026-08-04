@@ -76,9 +76,6 @@ pub const VAR_STRING: VarType = 2;
 pub const kListLenUnknown: ListLenSpecials = -1;
 pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const LOWEST_WIN_ID: c_uint = 1000;
-pub const WSP_VERT: c_uint = 2;
-pub const WSP_BELOW: c_uint = 64;
-pub const WSP_ABOVE: c_uint = 128;
 use crate::src::nvim::window::{
     check_split_disallowed, find_tabpage, goto_tabpage_tp, goto_tabpage_win, tabpage_index,
     unuse_tabpage, use_tabpage, valid_tabpage, win_drag_status_line, win_drag_vsep_line,

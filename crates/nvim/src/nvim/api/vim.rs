@@ -93,7 +93,8 @@ use crate::src::nvim::os::proc::os_proc_children;
 use crate::src::nvim::popupmenu::{pum_ext_select_item, pum_set_info};
 use crate::src::nvim::register::{do_put, finish_yankreg_from_object, prepare_yankreg_from_object};
 use crate::src::nvim::runtime::{
-    do_in_runtimepath, do_source, get_lib_dir, runtime_get_named, runtime_inspect, script_autoload,
+    DIP_ALL, DIP_DIRFILE, do_in_runtimepath, do_source, get_lib_dir, runtime_get_named,
+    runtime_inspect, script_autoload,
 };
 use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::state::get_mode;
@@ -107,7 +108,7 @@ use crate::src::nvim::terminal::{
 };
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
-    AdditionalData, Arena, Array, ArrayBuilder, BoolVarValue, Boolean, Buffer, CdScope, Channel,
+    AdditionalData, Arena, Array, ArrayBuilder, BoolVarValue, Boolean, Buffer, Channel,
     ChannelStreamType, Context, Dict, Error, Float, HlAttrs, HlMessage, Integer,
     KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts, KeyDict_empty,
     KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
@@ -116,10 +117,10 @@ use crate::src::nvim::types::{
     OptValType, RemapValues, ScopeType, ScreenGrid, SignTextAttrs, SpecialVarValue, StlClickRecord,
     String_0, StringBuilder, Tabpage, TerminalOptions, TryState, VV_LNUM, VV_RELNUM, VV_VIRTNUM,
     VarLockStatus, VarType, Window, bln_values, buf_T, bufref_T, dictitem_T, dobuf_action_values,
-    dobuf_start_values, except_T, foldinfo_T, handle_T, hlf_T, int64_t, kFalse, kNone,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kTrue, key_extra,
-    key_value_pair, linenr_T, mpack_token_type_t, msg_data, msglist_T, object,
+    dobuf_start_values, except_T, foldinfo_T, handle_T, hlf_T, int64_t, kCdScopeGlobal, kFalse,
+    kNone, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
+    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
+    kTrue, key_extra, key_value_pair, linenr_T, mpack_token_type_t, msg_data, msglist_T, object,
     object_data as C2Rust_Unnamed, pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T,
     stl_hlrec_t, tabpage_T, uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
 };
@@ -146,7 +147,6 @@ pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub const kMessageTypeNotification: MessageType = 2;
-pub const kCdScopeGlobal: CdScope = 2;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptScopeBuf: OptScope = 2;
 pub const REMAP_NONE: RemapValues = -1;
@@ -174,8 +174,6 @@ pub struct RuntimeCookie {
     pub rv: ArrayBuilder,
     pub arena: *mut Arena,
 }
-pub const DIP_ALL: C2Rust_Unnamed_41 = 1;
-pub const DIP_DIRFILE: C2Rust_Unnamed_41 = 512;
 pub const DOSO_NONE: C2Rust_Unnamed_40 = 0;
 pub const DOBUF_FIRST: dobuf_start_values = 1;
 pub const DOBUF_GOTO: dobuf_action_values = 0;

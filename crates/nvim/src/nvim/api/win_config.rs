@@ -44,6 +44,7 @@ use crate::src::nvim::types::{
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::ui_compositor::ui_comp_remove_grid;
 use crate::src::nvim::window::{
+    WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_NOENTER, WSP_TOP, WSP_VERT,
     check_split_disallowed_err, clear_float_config, goto_tabpage_win, last_status,
     lastwin_nofloating, merge_win_config, one_window, win_append, win_comp_pos, win_find_tabpage,
     win_goto, win_locked, win_remove, win_set_buf, win_setheight_win, win_setwidth_win,
@@ -93,13 +94,6 @@ pub const kFloatAnchorSouth: C2Rust_Unnamed_14 = 2;
 pub const kFloatAnchorEast: C2Rust_Unnamed_14 = 1;
 pub const kBorderTextFooter: BorderTextType = 1;
 pub const kBorderTextTitle: BorderTextType = 0;
-pub const WSP_VERT: C2Rust_Unnamed_17 = 2;
-pub const WSP_NOENTER: C2Rust_Unnamed_17 = 512;
-pub const WSP_BELOW: C2Rust_Unnamed_17 = 64;
-pub const WSP_BOT: C2Rust_Unnamed_17 = 16;
-pub const WSP_ABOVE: C2Rust_Unnamed_17 = 128;
-pub const WSP_TOP: C2Rust_Unnamed_17 = 8;
-pub const WSP_HOR: C2Rust_Unnamed_17 = 4;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_15 {

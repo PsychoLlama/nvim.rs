@@ -27,7 +27,7 @@ use crate::src::nvim::option::p_vfile;
 use crate::src::nvim::os::libc::{
     __assert_fail, gettext, snprintf, strcat, strcpy, strlen, strncmp,
 };
-use crate::src::nvim::regexp::skip_regexp_err;
+use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING, skip_regexp_err};
 use crate::src::nvim::runtime::{do_finish, estack_sfile, exestack, stacktrace_create};
 use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 use crate::src::nvim::types::{
@@ -1877,5 +1877,3 @@ pub unsafe extern "C" fn has_loop_cmd(mut p: *mut ::core::ffi::c_char) -> bool {
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const RE_STRING: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

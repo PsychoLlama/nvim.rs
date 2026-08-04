@@ -14,13 +14,14 @@
 use core::ffi::{c_char, c_int};
 
 use super::{
-    AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, E_RECURSIVE, NFA_ENGINE, NFA_TOO_EXPENSIVE, RE_AUTO,
-    REX_ALL, bt_regengine, nfa_regengine, nfa_regprog_T, regexp_engine, rex, rex_in_use,
+    AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, E_RECURSIVE, NFA_ENGINE, NFA_TOO_EXPENSIVE, REX_ALL,
+    bt_regengine, nfa_regengine, nfa_regprog_T, regexp_engine, rex, rex_in_use,
 };
 use crate::src::nvim::main::{called_emsg, curbuf, p_re, p_verbose, reg_do_extmatch};
 use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::message::{emsg, msg_puts, verbose_enter, verbose_leave};
 use crate::src::nvim::os::libc::{gettext, strncmp};
+use crate::src::nvim::regexp::RE_AUTO;
 use crate::src::nvim::types::{
     OptInt, buf_T, colnr_T, linenr_T, proftime_T, regmatch_T, regmmatch_T, regprog_T, uint8_t,
     win_T,

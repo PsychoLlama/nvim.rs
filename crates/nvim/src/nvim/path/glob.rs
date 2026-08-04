@@ -14,6 +14,7 @@ use std::ffi::CStr;
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::regexp::{RE_MAGIC, RE_NOBREAK};
 
 /// How deep a `**` may recurse. Upstream's limit, and the reason a pattern
 /// over a symlink loop terminates.

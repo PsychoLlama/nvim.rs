@@ -41,7 +41,7 @@ use crate::src::nvim::memline::ml_replace;
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{gettext, memmove, snprintf, strcat, strcpy, strlen, strncmp};
-use crate::src::nvim::search::do_search;
+use crate::src::nvim::search::{SEARCH_KEEP, do_search};
 use crate::src::nvim::types::{
     colnr_T, exarg_T, file_comparison, langp_T, linenr_T, oparg_T, pos_T, searchit_arg_T, size_t,
     slang_T, smt_T, spelltab_T, uint8_t, win_T,
@@ -83,8 +83,6 @@ pub const kOptValTypeBoolean: crate::src::nvim::types::OptValType = 0;
 pub const SHM_SEARCH: c_uint = 115;
 pub const OPT_LOCAL: c_uint = 2;
 pub const kEqualFiles: file_comparison = 1;
-pub const DIP_ALL: c_uint = 1;
-pub const SEARCH_KEEP: c_int = 1024;
 
 /// The longest word, in bytes, that any of this can handle. Every word
 /// buffer in the subsystem is this size.
@@ -174,7 +172,6 @@ pub const TAB: c_int = '\t' as c_int;
 pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;
 pub const IOSIZE: c_int = 1025;
-pub const RE_MAGIC: c_int = 1;
 
 /// The longest `SYLLABLE` item.
 pub const SY_MAXLEN: c_int = 30;

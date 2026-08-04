@@ -18,6 +18,7 @@ use crate::src::nvim::path::tail_index;
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::regexp::RE_MAGIC;
 
 /// `S_IFLNK`: the file type bits of a symbolic link.
 const S_IFLNK: u64 = 0o120000;

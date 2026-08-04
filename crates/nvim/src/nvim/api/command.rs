@@ -25,6 +25,7 @@ use crate::src::nvim::memory::{arena_alloc, arena_memdupz, xcalloc, xfree, xreal
 use crate::src::nvim::os::libc::{
     __assert_fail, memcpy, memmove, memset, snprintf, strcmp, strlen, strncmp, strtol,
 };
+use crate::src::nvim::regexp::RE_MAGIC;
 use crate::src::nvim::register::valid_yank_reg;
 use crate::src::nvim::strings::kv_do_printf;
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
@@ -43,6 +44,7 @@ use crate::src::nvim::usercmd::{
     commands_array, free_ucmd, get_user_command_name, parse_addr_type_arg, parse_compl_arg,
     uc_add_command, uc_nargs_upper_bound, uc_split_args_iter, uc_validate_name, ucmds,
 };
+use crate::src::nvim::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 unsafe extern "C" {
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
@@ -68,12 +70,6 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const WSP_ABOVE: C2Rust_Unnamed_19 = 128;
-pub const WSP_BELOW: C2Rust_Unnamed_19 = 64;
-pub const WSP_TOP: C2Rust_Unnamed_19 = 8;
-pub const WSP_BOT: C2Rust_Unnamed_19 = 16;
-pub const WSP_HOR: C2Rust_Unnamed_19 = 4;
-pub const WSP_VERT: C2Rust_Unnamed_19 = 2;
 pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_17 = 8192;
 pub const CMOD_LOCKMARKS: C2Rust_Unnamed_17 = 2048;
 pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_17 = 4096;
@@ -118,7 +114,6 @@ pub const EXPAND_FILES: C2Rust_Unnamed_16 = 2;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const WSP_ROOM: C2Rust_Unnamed_19 = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_user_command__addr: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -170,7 +165,6 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 66] = unsafe {
 };
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 unsafe extern "C" fn parse_map_cmd(
     mut arg_str: *const ::core::ffi::c_char,
     mut arena: *mut Arena,

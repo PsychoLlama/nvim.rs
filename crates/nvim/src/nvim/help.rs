@@ -27,7 +27,7 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::path::{FreeWild, add_pathsep, gen_expand_wildcards, path_full_compare};
 use crate::src::nvim::pos::MAXCOL;
-use crate::src::nvim::runtime::do_in_path;
+use crate::src::nvim::runtime::{DIP_ALL, DIP_DIR, do_in_path};
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::src::nvim::tag::{do_tag, find_tags};
 use crate::src::nvim::types::api::kErrorTypeNone;
@@ -38,7 +38,9 @@ use crate::src::nvim::types::{
     object, object_data as C2Rust_Unnamed_13, pos_T, scid_T, sctx_T, size_t, uint8_t, win_T,
     xp_prefix_T,
 };
-use crate::src::nvim::window::{win_close, win_enter, win_setheight, win_split};
+use crate::src::nvim::window::{
+    WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split,
+};
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
@@ -86,9 +88,6 @@ pub const TAG_HELP: C2Rust_Unnamed_26 = 1;
 pub const TAG_KEEP_LANG: C2Rust_Unnamed_26 = 128;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
-pub const WSP_TOP: C2Rust_Unnamed_27 = 8;
-pub const WSP_BOT: C2Rust_Unnamed_27 = 16;
-pub const WSP_HELP: C2Rust_Unnamed_27 = 32;
 pub const OPT_LOCAL: C2Rust_Unnamed_22 = 2;
 pub const kEqualFiles: file_comparison = 1;
 pub const kEqualFileNames: file_comparison = 7;
@@ -97,8 +96,6 @@ pub const kBothFilesMissing: file_comparison = 4;
 pub const kDifferentFiles: file_comparison = 2;
 pub const EW_SILENT: C2Rust_Unnamed_23 = 32;
 pub const EW_FILE: C2Rust_Unnamed_23 = 2;
-pub const DIP_DIR: C2Rust_Unnamed_24 = 2;
-pub const DIP_ALL: C2Rust_Unnamed_24 = 1;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;

@@ -79,6 +79,7 @@ use crate::src::nvim::profile::{
     profile_start, profile_sub_wait, profile_zero, script_line_end, script_line_start, time_msg,
     time_pop, time_push,
 };
+use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::{
@@ -179,15 +180,16 @@ pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const DOSO_VIMRC: C2Rust_Unnamed_21 = 1;
 pub const DOSO_NONE: C2Rust_Unnamed_21 = 0;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const DIP_DIRFILE: C2Rust_Unnamed_22 = 512;
-pub const DIP_AFTER: C2Rust_Unnamed_22 = 128;
-pub const DIP_NOAFTER: C2Rust_Unnamed_22 = 64;
-pub const DIP_NORTP: C2Rust_Unnamed_22 = 32;
-pub const DIP_OPT: C2Rust_Unnamed_22 = 16;
-pub const DIP_START: C2Rust_Unnamed_22 = 8;
-pub const DIP_ERR: C2Rust_Unnamed_22 = 4;
-pub const DIP_DIR: C2Rust_Unnamed_22 = 2;
-pub const DIP_ALL: C2Rust_Unnamed_22 = 1;
+pub const DIP_DIRFILE: ::core::ffi::c_uint = 512;
+/// `do_in_path` flags: which runtime directories to visit and what to match.
+pub const DIP_AFTER: ::core::ffi::c_uint = 128;
+pub const DIP_NOAFTER: ::core::ffi::c_uint = 64;
+pub const DIP_NORTP: ::core::ffi::c_uint = 32;
+pub const DIP_OPT: ::core::ffi::c_uint = 16;
+pub const DIP_START: ::core::ffi::c_uint = 8;
+pub const DIP_ERR: ::core::ffi::c_uint = 4;
+pub const DIP_DIR: ::core::ffi::c_uint = 2;
+pub const DIP_ALL: ::core::ffi::c_uint = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct source_cookie_T {
@@ -5080,5 +5082,3 @@ pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const READBIN: [::core::ffi::c_char; 3] =
     unsafe { ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"rb\0") };
 pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const RE_STRING: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

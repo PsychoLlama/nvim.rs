@@ -644,7 +644,6 @@ pub const NAME_MAX: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const ICONV_EINVAL: ::core::ffi::c_int = EINVAL;
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 
 /// Fill `eap` so that `'fileencoding'`, `'fileformat'` and `'binary'` are

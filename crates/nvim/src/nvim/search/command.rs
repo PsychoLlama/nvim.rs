@@ -14,27 +14,18 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::pos::MAXCOL;
+use crate::src::nvim::regexp::RE_LAST;
+use crate::src::nvim::search::{
+    SEARCH_ECHO, SEARCH_END, SEARCH_HIS, SEARCH_KEEP, SEARCH_MARK, SEARCH_MSG, SEARCH_NOOF,
+    SEARCH_OPT, SEARCH_PEEK, SEARCH_REV, SEARCH_START, SEARCH_STAT_BUF_LEN,
+    SEARCH_STAT_DEF_TIMEOUT,
+};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 // The option-flag families, retyped for this module: c2rust left them as
 // `c_uint` and `options` is a `c_int`.
-const SEARCH_REV: c_int = super::SEARCH_REV as c_int;
-const SEARCH_ECHO: c_int = super::SEARCH_ECHO as c_int;
-const SEARCH_OPT: c_int = super::SEARCH_OPT as c_int;
-const SEARCH_HIS: c_int = super::SEARCH_HIS as c_int;
-const SEARCH_END: c_int = super::SEARCH_END as c_int;
-const SEARCH_NOOF: c_int = super::SEARCH_NOOF as c_int;
-const SEARCH_START: c_int = super::SEARCH_START as c_int;
-const SEARCH_MARK: c_int = super::SEARCH_MARK as c_int;
-const SEARCH_KEEP: c_int = super::SEARCH_KEEP as c_int;
-const SEARCH_PEEK: c_int = super::SEARCH_PEEK as c_int;
-const SEARCH_MSG: c_int = super::SEARCH_MSG as c_int;
-const RE_LAST: c_int = super::RE_LAST as c_int;
-const RE_SEARCH: c_int = super::RE_SEARCH as c_int;
 const CMOD_KEEPPATTERNS: c_int = super::CMOD_KEEPPATTERNS as c_int;
-const SEARCH_STAT_BUF_LEN: usize = super::SEARCH_STAT_BUF_LEN as usize;
-const SEARCH_STAT_DEF_TIMEOUT: c_int = super::SEARCH_STAT_DEF_TIMEOUT as c_int;
 
 // ---------------------------------------------------------------------
 // `/` and `?`.
@@ -251,7 +242,7 @@ fn echo_size(plen: size_t, off_len: size_t, with_stats: bool) -> size_t {
             ((Rows.get() - msg_row.get() - 1) * Columns.get() + sc_col.get() - 1) as size_t
         }
     };
-    available.max(plen + off_len + SEARCH_STAT_BUF_LEN + 3)
+    available.max(plen + off_len + SEARCH_STAT_BUF_LEN as usize + 3)
 }
 
 /// Reverse the echoed command in place, for `'rightleft'` with `'rlc'`

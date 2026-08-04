@@ -20,9 +20,9 @@
 use core::ffi::{c_char, c_int};
 
 use super::{
-    Ctrl_V, MULTI_MULT, NSUBEXP, RA_FAIL, RA_MATCH, RA_NOMATCH, RE_NOBREAK, REGMAGIC, bt_regprog_T,
-    cstrncmp, nfa_regengine, peekchr, re_multi_type, reg_endzp, reg_endzpos, reg_startzp,
-    reg_startzpos, reg_tofree, reg_tofreelen, rex, rsm,
+    Ctrl_V, MULTI_MULT, NSUBEXP, RA_FAIL, RA_MATCH, RA_NOMATCH, REGMAGIC, bt_regprog_T, cstrncmp,
+    nfa_regengine, peekchr, re_multi_type, reg_endzp, reg_endzpos, reg_startzp, reg_startzpos,
+    reg_tofree, reg_tofreelen, rex, rsm,
 };
 use crate::semsg;
 use crate::src::nvim::charset::vim_iswordc_buf;
@@ -37,6 +37,7 @@ use crate::src::nvim::os::input::fast_breakcheck;
 use crate::src::nvim::os::libc::{gettext, strcpy, strlen};
 use crate::src::nvim::plines::{getvvcol, win_linetabsize};
 use crate::src::nvim::pos::{MAXCOL, lt};
+use crate::src::nvim::regexp::RE_NOBREAK;
 use crate::src::nvim::types::{
     buf_T, colnr_T, linenr_T, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, uint8_t,
     win_T,

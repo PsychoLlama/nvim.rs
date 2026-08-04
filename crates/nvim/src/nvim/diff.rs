@@ -75,7 +75,7 @@ use crate::src::nvim::types::{
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::undo::{u_save, u_sync};
 use crate::src::nvim::window::{
-    frames_locked, scroll_to_fraction, set_fraction, win_split, win_valid,
+    WSP_VERT, frames_locked, scroll_to_fraction, set_fraction, win_split, win_valid,
 };
 use crate::src::xdiff::xdiffi::xdl_diff;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
@@ -149,7 +149,6 @@ pub const kShellOptSilent: C2Rust_Unnamed_22 = 8;
 pub const kShellOptFilter: C2Rust_Unnamed_22 = 1;
 pub const MAX_DIFF_ANCHORS: C2Rust_Unnamed_24 = 20;
 pub const OPT_LOCAL: C2Rust_Unnamed_21 = 2;
-pub const WSP_VERT: C2Rust_Unnamed_23 = 2;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct linemap_entry_T {

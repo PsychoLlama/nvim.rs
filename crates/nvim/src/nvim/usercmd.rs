@@ -35,7 +35,9 @@ use crate::src::nvim::types::{
     kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, key_value_pair, mod_entry_T, object,
     object_data as C2Rust_Unnamed, scid_T, sctx_T, size_t, ucmd_T, uint8_t, uint32_t, win_T,
 };
-use crate::src::nvim::window::{prevwin_curwin, tabpage_index};
+use crate::src::nvim::window::{
+    WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, prevwin_curwin, tabpage_index,
+};
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;
@@ -119,12 +121,6 @@ pub struct C2Rust_Unnamed_20 {
     pub name: *mut ::core::ffi::c_char,
     pub shortname: *mut ::core::ffi::c_char,
 }
-pub const WSP_HOR: C2Rust_Unnamed_22 = 4;
-pub const WSP_VERT: C2Rust_Unnamed_22 = 2;
-pub const WSP_TOP: C2Rust_Unnamed_22 = 8;
-pub const WSP_BOT: C2Rust_Unnamed_22 = 16;
-pub const WSP_BELOW: C2Rust_Unnamed_22 = 64;
-pub const WSP_ABOVE: C2Rust_Unnamed_22 = 128;
 pub const ct_LT: C2Rust_Unnamed_21 = 8;
 pub const ct_REGISTER: C2Rust_Unnamed_21 = 7;
 pub const ct_MODS: C2Rust_Unnamed_21 = 6;
@@ -137,7 +133,6 @@ pub const ct_COUNT: C2Rust_Unnamed_21 = 2;
 pub const ct_BANG: C2Rust_Unnamed_21 = 1;
 pub const ct_ARGS: C2Rust_Unnamed_21 = 0;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const WSP_ROOM: C2Rust_Unnamed_22 = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

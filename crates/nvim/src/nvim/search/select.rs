@@ -9,13 +9,10 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::regexp::RE_SEARCH;
+use crate::src::nvim::search::{SEARCH_END, SEARCH_KEEP};
 use core::ffi::c_int;
 use core::ptr;
-
-/// Which remembered pattern `gn` uses: the one the last search used.
-const RE_SEARCH: c_int = super::RE_SEARCH as c_int;
-const SEARCH_END: c_int = super::SEARCH_END as c_int;
-const SEARCH_KEEP: c_int = super::SEARCH_KEEP as c_int;
 
 /// Where the two searches [`current_search`] runs left the match.
 struct Match {
@@ -75,7 +72,7 @@ unsafe fn search_around(
                 last_used_pattern().patlen,
                 if i != 0 { count } else { 1 },
                 SEARCH_KEEP | flags,
-                super::RE_SEARCH as c_int,
+                RE_SEARCH,
                 ptr::null_mut(),
             );
             p_ws.set(old_p_ws);

@@ -13,6 +13,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::regexp::RE_MAGIC;
 
 /// Find a synchronisation point for line `start_lnum`, setting `current_lnum`
 /// and the current state to it.

@@ -41,10 +41,9 @@ use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
 use crate::src::nvim::quickfix::{
     qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_size, qf_get_valid_size,
 };
-use crate::src::nvim::regexp::skip_regexp;
+use crate::src::nvim::regexp::{RE_SEARCH, RE_SUBST, skip_regexp};
 use crate::src::nvim::search::{
-    BACKWARD, FORWARD, RE_SEARCH, RE_SUBST, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_search,
-    searchit,
+    BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_search, searchit,
 };
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{

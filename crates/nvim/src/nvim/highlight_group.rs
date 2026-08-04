@@ -44,10 +44,6 @@ pub const EXPAND_NOTHING: c_int = 0;
 /// `OptValType`, for the one option this family sets (`'background'`).
 pub const kOptValTypeString: OptValType = 2;
 
-/// `source_runtime_vim_lua` flags: where a colour scheme may be found.
-pub const DIP_START: c_uint = 8;
-pub const DIP_OPT: c_uint = 16;
-
 /// The highest highlight id, and the longest group name.
 pub const MAX_HL_ID: c_uint = 20000;
 pub const MAX_SYN_NAME: c_int = 200;

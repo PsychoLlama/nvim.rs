@@ -50,9 +50,10 @@ use crate::src::nvim::strings::{concat_str, vim_strchr, vim_strsave_shellescape,
 use crate::src::nvim::types::{
     __off_t, BoolVarValue, CdScope, Direction, EvalFuncData, FILE, FileDescriptor, FileInfo,
     ListLenSpecials, ScopeType, SpecialVarValue, VV_VAL, VarLockStatus, VarType, blob_T, buf_T,
-    expand_T, garray_T, int32_t, int64_t, list_T, listitem_T, off_T, pos_T, ptrdiff_t, sctx_T,
-    size_t, ssize_t, tabpage_T, typval_T, typval_vval_union, uint8_t, uint64_t, uv_stat_t,
-    uv_timespec_t, varnumber_T, win_T, xp_prefix_T,
+    expand_T, garray_T, int32_t, int64_t, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage,
+    kCdScopeWindow, list_T, listitem_T, off_T, pos_T, ptrdiff_t, sctx_T, size_t, ssize_t,
+    tabpage_T, typval_T, typval_vval_union, uint8_t, uint64_t, uv_stat_t, uv_timespec_t,
+    varnumber_T, win_T, xp_prefix_T,
 };
 use crate::src::nvim::window::find_tabpage;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
@@ -77,10 +78,6 @@ pub const VAR_UNKNOWN: VarType = 0;
 pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kListLenUnknown: ListLenSpecials = -1;
 pub const kDirectionNotSet: Direction = 0;
-pub const kCdScopeGlobal: CdScope = 2;
-pub const kCdScopeTabpage: CdScope = 1;
-pub const kCdScopeWindow: CdScope = 0;
-pub const kCdScopeInvalid: CdScope = -1;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
 pub const EXPAND_FILES: C2Rust_Unnamed_14 = 2;

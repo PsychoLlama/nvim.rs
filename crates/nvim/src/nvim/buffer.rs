@@ -101,6 +101,7 @@ use crate::src::nvim::path::{FullName_save, fix_fname, path_fnamecmp, path_tail}
 use crate::src::nvim::plines::win_get_fill;
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::quickfix::qf_stack_get_bufnr;
+use crate::src::nvim::regexp::RE_MAGIC;
 use crate::src::nvim::runtime::{estack_pop, estack_push};
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::spell::parse_spelllang;
@@ -129,11 +130,11 @@ use crate::src::nvim::undo::{
 use crate::src::nvim::usercmd::uc_clear;
 use crate::src::nvim::version::min_vim_version;
 use crate::src::nvim::window::{
-    check_can_set_curbuf_forceit, check_colorcolumn, close_windows, free_wininfo, get_last_winid,
-    global_stl_height, goto_tabpage_tp, goto_tabpage_win, last_window, lastwin_nofloating,
-    one_window, swbuf_goto_win_with_buf, tabline_height, tabpage_index, win_close, win_enter,
-    win_locked, win_move_after, win_split, win_valid, win_valid_any_tab, window_layout_lock,
-    window_layout_unlock,
+    WSP_BELOW, WSP_ROOM, WSP_VERT, check_can_set_curbuf_forceit, check_colorcolumn, close_windows,
+    free_wininfo, get_last_winid, global_stl_height, goto_tabpage_tp, goto_tabpage_win,
+    last_window, lastwin_nofloating, one_window, swbuf_goto_win_with_buf, tabline_height,
+    tabpage_index, win_close, win_enter, win_locked, win_move_after, win_split, win_valid,
+    win_valid_any_tab, window_layout_lock, window_layout_unlock,
 };
 use crate::src::nvim::winfloat::win_set_minimal_style;
 unsafe extern "C" {
@@ -244,7 +245,6 @@ pub const kBffClearWinInfo: C2Rust_Unnamed_35 = 1;
 pub const BCO_ALWAYS: C2Rust_Unnamed_32 = 2;
 pub const ECMD_FORCEIT: C2Rust_Unnamed_27 = 8;
 pub const ECMD_ONE: C2Rust_Unnamed_28 = 1;
-pub const WSP_VERT: C2Rust_Unnamed_34 = 2;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct bufmatch_T {
@@ -257,8 +257,6 @@ pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_30 = -2147483648;
 pub const BUF_DIFF_FILTER: C2Rust_Unnamed_25 = 8192;
 pub const SHM_RO: C2Rust_Unnamed_24 = 114;
 pub const SHM_MOD: C2Rust_Unnamed_24 = 109;
-pub const WSP_BELOW: C2Rust_Unnamed_34 = 64;
-pub const WSP_ROOM: C2Rust_Unnamed_34 = 1;
 pub const READ_DUMMY: C2Rust_Unnamed_29 = 16;
 pub const ECMD_HIDE: C2Rust_Unnamed_27 = 1;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
@@ -273,7 +271,6 @@ pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
 pub const OPT_GLOBAL: C2Rust_Unnamed_33 = 1;
 pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
-pub const WSP_ABOVE: C2Rust_Unnamed_34 = 128;
 pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
@@ -5069,7 +5066,6 @@ pub const STL_IN_TITLE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 
 /// The buffer's running total of one kind of extmark metadata, kept at the
 /// root of its marktree. `buffer.h` had this as a `static inline`.

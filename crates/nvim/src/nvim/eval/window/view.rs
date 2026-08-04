@@ -1,4 +1,5 @@
 use super::*;
+use crate::src::nvim::window::{WSP_ABOVE, WSP_BELOW, WSP_VERT};
 
 /// "getwinpos({timeout})" function
 pub unsafe extern "C" fn f_getwinpos(

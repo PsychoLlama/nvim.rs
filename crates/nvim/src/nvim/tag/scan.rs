@@ -15,6 +15,7 @@ use crate::src::nvim::options::{
     kOptTcFlagFollowic, kOptTcFlagFollowscs, kOptTcFlagIgnore, kOptTcFlagMatch, kOptTcFlagSmart,
 };
 use crate::src::nvim::pos::MAXCOL;
+use crate::src::nvim::regexp::RE_MAGIC;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::collections::HashSet;

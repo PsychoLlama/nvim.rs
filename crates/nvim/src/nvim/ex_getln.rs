@@ -126,13 +126,14 @@ use crate::src::nvim::path::vim_ispathsep;
 use crate::src::nvim::popupmenu::{pum_check_clear, pum_undisplay};
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM, clearpos, equalpos, lt};
 use crate::src::nvim::profile::profile_setlimit;
-use crate::src::nvim::regexp::skip_regexp_ex;
+use crate::src::nvim::regexp::{RE_SEARCH, skip_regexp_ex};
 use crate::src::nvim::register::is_literal_register;
 use crate::src::nvim::register::{
     cmdline_paste_reg, get_expr_line, get_expr_register, get_spec_reg, valid_yank_reg,
 };
 use crate::src::nvim::search::{
-    BACKWARD, FORWARD, do_search, last_search_pattern, last_search_pattern_len, pat_has_uppercase,
+    BACKWARD, FORWARD, SEARCH_COL, SEARCH_KEEP, SEARCH_NOOF, SEARCH_OPT, SEARCH_PEEK, SEARCH_START,
+    do_search, last_search_pattern, last_search_pattern_len, pat_has_uppercase,
     restore_last_search_pattern, restore_search_patterns, save_last_search_pattern,
     save_search_patterns, searchit,
 };
@@ -173,8 +174,8 @@ use crate::src::nvim::viml::parser::parser::{
     parser_simple_get_line, viml_parser_destroy, viml_parser_init,
 };
 use crate::src::nvim::window::{
-    close_windows, global_stl_height, last_window, lastwin_nofloating, win_close, win_enter,
-    win_goto, win_size_restore, win_size_save, win_split, win_valid,
+    WSP_BOT, close_windows, global_stl_height, last_window, lastwin_nofloating, win_close,
+    win_enter, win_goto, win_size_restore, win_size_save, win_split, win_valid,
 };
 unsafe extern "C" {
     static pum_want: GlobalCell<C2Rust_Unnamed_51>;
@@ -379,11 +380,6 @@ pub const kExprNodeOpMissing: ExprASTNodeType = 1;
 pub const kExprNodeMissing: ExprASTNodeType = 0;
 pub const kExprFlagsDisallowEOC: ExprParserFlags = 2;
 pub const MAX_CB_ERRORS: C2Rust_Unnamed_58 = 1;
-pub const SEARCH_PEEK: C2Rust_Unnamed_54 = 2048;
-pub const SEARCH_NOOF: C2Rust_Unnamed_54 = 128;
-pub const SEARCH_OPT: C2Rust_Unnamed_54 = 16;
-pub const SEARCH_START: C2Rust_Unnamed_54 = 256;
-pub const SEARCH_KEEP: C2Rust_Unnamed_54 = 1024;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct CpInfo {
@@ -445,9 +441,6 @@ pub struct CpWinInfo {
     pub save_w_p_cul: ::core::ffi::c_int,
     pub save_w_p_cuc: ::core::ffi::c_int,
 }
-pub const WSP_BOT: C2Rust_Unnamed_56 = 16;
-pub const RE_SEARCH: C2Rust_Unnamed_55 = 0;
-pub const SEARCH_COL: C2Rust_Unnamed_54 = 4096;
 pub const GOTO_NORMAL_MODE: C2Rust_Unnamed_57 = 3;
 pub const CMDLINE_CHANGED: C2Rust_Unnamed_57 = 2;
 pub const CMDLINE_NOT_CHANGED: C2Rust_Unnamed_57 = 1;
@@ -481,10 +474,6 @@ pub type C2Rust_Unnamed_53 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_54 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_55 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_56 = ::core::ffi::c_uint;
-pub const WSP_ABOVE: C2Rust_Unnamed_56 = 128;
-pub const WSP_BELOW: C2Rust_Unnamed_56 = 64;
-pub const WSP_VERT: C2Rust_Unnamed_56 = 2;
-pub const WSP_ROOM: C2Rust_Unnamed_56 = 1;
 pub type C2Rust_Unnamed_57 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_58 = ::core::ffi::c_uint;
 static prev_prompt_id: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0);

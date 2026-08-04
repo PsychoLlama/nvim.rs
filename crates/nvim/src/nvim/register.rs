@@ -71,6 +71,7 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::plines::{getvcol, init_charsize_arg, win_charsize};
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
+use crate::src::nvim::regexp::RE_SEARCH;
 use crate::src::nvim::search::{BACKWARD, FORWARD, last_search_pat, set_last_search_pat};
 use crate::src::nvim::state::REPLACE_FLAG;
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped_ext};
@@ -165,7 +166,6 @@ pub const SIN_CHANGED: C2Rust_Unnamed_26 = 1;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub const FIND_STRING: C2Rust_Unnamed_27 = 2;
 pub const FIND_IDENT: C2Rust_Unnamed_27 = 1;
-pub const RE_SEARCH: C2Rust_Unnamed_29 = 0;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

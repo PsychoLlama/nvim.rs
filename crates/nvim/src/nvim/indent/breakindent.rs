@@ -13,6 +13,7 @@ use crate::src::nvim::r#move::{win_col_off, win_col_off2};
 use crate::src::nvim::option::{get_flp_value, get_showbreak_value};
 use crate::src::nvim::os::libc::{strcmp, strncmp};
 use crate::src::nvim::plines::win_chartabsize;
+use crate::src::nvim::regexp::{RE_AUTO, RE_MAGIC, RE_STRICT, RE_STRING};
 
 pub unsafe extern "C" fn briopt_check(
     mut briopt: *mut ::core::ffi::c_char,
