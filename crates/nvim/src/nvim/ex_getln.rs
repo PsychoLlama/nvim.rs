@@ -76,7 +76,7 @@ use crate::src::nvim::main::{
     Columns, IObuff, KeyStuffed, KeyTyped, RedrawingDisabled, Rows, State, allbuf_lock, allow_keys,
     cmd_silent, cmdline_row, cmdline_star, cmdline_was_last_drawn, cmdline_win, cmdmod, cmdmsg_rl,
     cmdpreview, cmdwin_buf, cmdwin_level, cmdwin_old_curwin, cmdwin_result, cmdwin_type,
-    cmdwin_win, curbuf, current_sctx, curtab, curwin, did_emsg, e_cannot_edit_other_buf, e_cmdwin,
+    cmdwin_win, curbuf, current_sctx, curwin, did_emsg, e_cannot_edit_other_buf, e_cmdwin,
     e_command_too_recursive, e_intern2, e_invarg, e_positive, e_textlock, emsg_off,
     emsg_on_display, emsg_silent, ex_normal_busy, exec_from_reg, exmode_active, firstwin,
     global_busy, got_int, highlight_match, lines_left, magic_overruled, mod_mask, mouse_col,
@@ -145,7 +145,7 @@ use crate::src::nvim::state::{
     may_trigger_safestate, state_enter, state_handle_k_event,
 };
 use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
+use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::ui::{kUICmdline, kUIMessages};
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Boolean, CMD_index, Callback, Callback_data as C2Rust_Unnamed_5,
@@ -728,6 +728,152 @@ pub(crate) const TRY_STATE_INIT: TryState = TryState {
 };
 
 /// An all-zero [`save_v_event_T`], the out-parameter of `get_v_event`.
+/// C's `STATIC_CSTR_AS_OPTVAL`: a string option value borrowing a literal.
+/// Nothing frees it.
+pub(crate) const fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
+    OptVal {
+        type_0: kOptValTypeString,
+        data: OptValData {
+            string: String_0 {
+                data: value.as_ptr() as *mut ::core::ffi::c_char,
+                size: value.count_bytes() as size_t,
+            },
+        },
+    }
+}
+
+/// An all-zero [`cmdmod_T`], which is what the C leaves a `cmdmod_T` local as
+/// before `parse_cmd_address` or `cmdpreview_prepare` fills it.
+pub(crate) const CMDMOD_T_INIT: cmdmod_T = cmdmod_T {
+    cmod_flags: 0,
+    cmod_split: 0,
+    cmod_tab: 0,
+    cmod_filter_pat: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    cmod_filter_regmatch: regmatch_T {
+        regprog: ::core::ptr::null_mut::<regprog_T>(),
+        startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
+        endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
+        rm_matchcol: 0,
+        rm_ic: false,
+    },
+    cmod_filter_force: false,
+    cmod_verbose: 0,
+    cmod_save_ei: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    cmod_did_sandbox: 0,
+    cmod_verbose_save: 0,
+    cmod_save_msg_silent: 0,
+    cmod_save_msg_scroll: 0,
+    cmod_did_esilent: 0,
+};
+
+/// An all-zero [`exarg_T`]; `parse_cmdline` fills it.
+pub(crate) const EXARG_T_INIT: exarg_T = exarg_T {
+    arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    args: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    arglens: ::core::ptr::null_mut::<size_t>(),
+    argc: 0,
+    nextcmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    cmdlinep: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    cmdline_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    cmdidx: CMD_append,
+    argt: 0,
+    skip: 0,
+    forceit: 0,
+    addr_count: 0,
+    line1: 0,
+    line2: 0,
+    addr_type: ADDR_LINES,
+    flags: 0,
+    do_ecmd_cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    do_ecmd_lnum: 0,
+    append: 0,
+    usefilter: 0,
+    amount: 0,
+    regname: 0,
+    force_bin: 0,
+    read_edit: 0,
+    mkdir_p: 0,
+    force_ff: 0,
+    force_enc: 0,
+    bad_char: 0,
+    useridx: 0,
+    errmsg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    ea_getline: None,
+    cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+    cstack: ::core::ptr::null_mut::<cstack_T>(),
+};
+
+/// An all-zero [`CmdParseInfo`]; `parse_cmdline` fills it.
+pub(crate) const CMD_PARSE_INFO_INIT: CmdParseInfo = CmdParseInfo {
+    cmdmod: CMDMOD_T_INIT,
+    magic: C2Rust_Unnamed_21 {
+        file: false,
+        bar: false,
+    },
+};
+
+/// An all-zero [`CpUndoInfo`], which `cmdpreview_save_undo` fills.
+pub(crate) const CP_UNDO_INFO_INIT: CpUndoInfo = CpUndoInfo {
+    save_b_u_oldhead: ::core::ptr::null_mut::<u_header_T>(),
+    save_b_u_newhead: ::core::ptr::null_mut::<u_header_T>(),
+    save_b_u_curhead: ::core::ptr::null_mut::<u_header_T>(),
+    save_b_u_numhead: 0,
+    save_b_u_synced: false,
+    save_b_u_seq_last: 0,
+    save_b_u_save_nr_last: 0,
+    save_b_u_seq_cur: 0,
+    save_b_u_time_cur: 0,
+    save_b_u_save_nr_cur: 0,
+    save_b_u_line_ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    save_b_u_line_lnum: 0,
+    save_b_u_line_colnr: 0,
+};
+
+/// An all-zero [`CpBufInfo`]; every field is assigned before it is pushed.
+pub(crate) const CP_BUF_INFO_INIT: CpBufInfo = CpBufInfo {
+    buf: ::core::ptr::null_mut::<buf_T>(),
+    save_b_p_ul: 0,
+    save_b_p_ma: 0,
+    save_b_changed: 0,
+    save_b_op_start: POS_INIT,
+    save_b_op_end: POS_INIT,
+    save_changedtick: 0,
+    undo_info: CP_UNDO_INFO_INIT,
+};
+
+/// An all-zero [`CpWinInfo`]; every field is assigned before it is pushed.
+pub(crate) const CP_WIN_INFO_INIT: CpWinInfo = CpWinInfo {
+    win: ::core::ptr::null_mut::<win_T>(),
+    save_w_cursor: POS_INIT,
+    save_viewstate: VIEWSTATE_INIT,
+    save_w_p_cul: 0,
+    save_w_p_cuc: 0,
+};
+
+/// An all-zero [`CpInfo`], C's two `kv_init`s plus an unset save area.
+pub(crate) const CP_INFO_INIT: CpInfo = CpInfo {
+    win_info: C2Rust_Unnamed_50 {
+        size: 0,
+        capacity: 0,
+        items: ::core::ptr::null_mut::<CpWinInfo>(),
+    },
+    buf_info: C2Rust_Unnamed_49 {
+        size: 0,
+        capacity: 0,
+        items: ::core::ptr::null_mut::<CpBufInfo>(),
+    },
+    save_hls: false,
+    save_cmdmod: CMDMOD_T_INIT,
+    save_view: garray_T {
+        ga_len: 0,
+        ga_maxlen: 0,
+        ga_itemsize: 0,
+        ga_growsize: 0,
+        ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+    },
+};
+
 pub(crate) const SAVE_V_EVENT_INIT: save_v_event_T = save_v_event_T {
     sve_did_save: false,
     sve_hashtab: hashtab_T {

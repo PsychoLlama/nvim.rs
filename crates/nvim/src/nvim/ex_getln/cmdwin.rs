@@ -10,22 +10,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-use ::core::ffi::CStr;
-
-/// C's `STATIC_CSTR_AS_OPTVAL`: a string option value borrowing a literal.
-/// Nothing frees it.
-const fn static_optval(value: &'static CStr) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: String_0 {
-                data: value.as_ptr() as *mut ::core::ffi::c_char,
-                size: value.count_bytes() as size_t,
-            },
-        },
-    }
-}
-
 /// True when the text must not be changed and we cannot switch to another
 /// window or buffer — editing the command line, and the like.
 pub unsafe fn text_locked() -> bool {
