@@ -218,7 +218,7 @@ pub(crate) unsafe fn set_maparg_rhs(
 ///
 /// # Safety
 /// `*to_parse` must be live and NUL-terminated.
-unsafe fn take_map_arg(to_parse: &mut *mut c_char, word: &[u8]) -> bool {
+pub(crate) unsafe fn take_map_arg(to_parse: &mut *mut c_char, word: &[u8]) -> bool {
     unsafe {
         if strncmp(*to_parse, word.as_ptr().cast(), word.len() as size_t) != 0 {
             return false;

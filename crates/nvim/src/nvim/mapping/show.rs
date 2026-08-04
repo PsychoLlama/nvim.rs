@@ -8,452 +8,361 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::key_unescape;
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn showmap(mut mp: *mut mapblock_T, mut local: bool) {
+/// What [`set_context_in_map_cmd`] worked out for the completion that
+/// follows: which modes to list, whether the command was an abbreviation
+/// one, and whether `<buffer>` was given.
+static EXPAND_MAPMODES: GlobalCell<c_int> = GlobalCell::new(0);
+static EXPAND_ISABBREV: GlobalCell<bool> = GlobalCell::new(false);
+static EXPAND_BUFFER: GlobalCell<bool> = GlobalCell::new(false);
+
+/// Print one mapping in `:map`'s four columns: modes, LHS, flags, RHS.
+///
+/// `local` marks a buffer-local mapping with `@`.
+///
+/// # Safety
+/// `mp` must be a live mapblock.
+pub(crate) unsafe fn showmap(mp: *mut mapblock_T, local: bool) {
     unsafe {
-        if message_filtered((*mp).m_keys) as ::core::ffi::c_int != 0
-            && message_filtered((*mp).m_str) as ::core::ffi::c_int != 0
-            && ((*mp).m_desc.is_null() || message_filtered((*mp).m_desc) as ::core::ffi::c_int != 0)
+        if message_filtered((*mp).m_keys)
+            && message_filtered((*mp).m_str)
+            && ((*mp).m_desc.is_null() || message_filtered((*mp).m_desc))
         {
             return;
         }
-        if msg_col.get() > 0 as ::core::ffi::c_int || msg_silent.get() != 0 as ::core::ffi::c_int {
-            msg_putchar('\n' as ::core::ffi::c_int);
+
+        if msg_col.get() > 0 || msg_silent.get() != 0 {
+            msg_putchar(c_int::from(b'\n'));
             if got_int.get() {
-                return;
+                return; // 'q' typed at the MORE prompt
             }
         }
-        let mut mapchars: [::core::ffi::c_char; 7] = map_mode_to_chars((*mp).m_mode);
-        msg_puts(&raw mut mapchars as *mut ::core::ffi::c_char);
-        let mut len: size_t = strlen(&raw mut mapchars as *mut ::core::ffi::c_char);
+
+        let mut mapchars = map_mode_to_chars((*mp).m_mode);
+        msg_puts(mapchars.as_ptr());
+        let mut len = strlen(mapchars.as_mut_ptr());
+        len += 1;
+        while len <= 3 {
+            msg_putchar(c_int::from(b' '));
+            len += 1;
+        }
+
+        // Display the LHS, and pad to at least twelve columns.
+        len = msg_outtrans_special((*mp).m_keys, true, 0) as size_t;
         loop {
-            len = len.wrapping_add(1);
-            if len > 3 as size_t {
+            msg_putchar(c_int::from(b' '));
+            len += 1;
+            if len >= 12 {
                 break;
             }
-            msg_putchar(' ' as ::core::ffi::c_int);
         }
-        len = msg_outtrans_special((*mp).m_keys, true_0 != 0, 0 as ::core::ffi::c_int) as size_t;
-        loop {
-            msg_putchar(' ' as ::core::ffi::c_int);
-            len = len.wrapping_add(1);
-            if len >= 12 as size_t {
-                break;
-            }
-        }
-        if (*mp).m_noremap == REMAP_NONE as ::core::ffi::c_int {
-            msg_puts_hl(
-                b"*\0".as_ptr() as *const ::core::ffi::c_char,
-                HLF_8,
-                false_0 != 0,
-            );
-        } else if (*mp).m_noremap == REMAP_SCRIPT as ::core::ffi::c_int {
-            msg_puts_hl(
-                b"&\0".as_ptr() as *const ::core::ffi::c_char,
-                HLF_8,
-                false_0 != 0,
-            );
+
+        if (*mp).m_noremap == REMAP_NONE {
+            msg_puts_hl(c"*".as_ptr(), HLF_8, false);
+        } else if (*mp).m_noremap == REMAP_SCRIPT {
+            msg_puts_hl(c"&".as_ptr(), HLF_8, false);
         } else {
-            msg_putchar(' ' as ::core::ffi::c_int);
+            msg_putchar(c_int::from(b' '));
         }
-        if local {
-            msg_putchar('@' as ::core::ffi::c_int);
-        } else {
-            msg_putchar(' ' as ::core::ffi::c_int);
-        }
+
+        msg_putchar(c_int::from(if local { b'@' } else { b' ' }));
+
+        // `false` below would show only things like <Up> as such on the rhs
+        // and not M-x etc; `true` gets both -- webb
         if (*mp).m_luaref != LUA_NOREF {
-            let mut str: *mut ::core::ffi::c_char =
-                nlua_funcref_str((*mp).m_luaref, ::core::ptr::null_mut::<Arena>());
-            msg_puts_hl(str, HLF_8, false_0 != 0);
-            xfree(str as *mut ::core::ffi::c_void);
-        } else if *(*mp).m_str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-        {
-            msg_puts_hl(
-                b"<Nop>\0".as_ptr() as *const ::core::ffi::c_char,
-                HLF_8,
-                false_0 != 0,
-            );
+            let str = nlua_funcref_str((*mp).m_luaref, ptr::null_mut());
+            msg_puts_hl(str, HLF_8, false);
+            xfree(str.cast());
+        } else if c_int::from(*(*mp).m_str) == NUL {
+            msg_puts_hl(c"<Nop>".as_ptr(), HLF_8, false);
         } else {
-            msg_outtrans_special((*mp).m_str, false_0 != 0, 0 as ::core::ffi::c_int);
+            msg_outtrans_special((*mp).m_str, false, 0);
         }
+
         if !(*mp).m_desc.is_null() {
-            msg_puts(b"\n                 \0".as_ptr() as *const ::core::ffi::c_char);
+            msg_puts(c"\n                 ".as_ptr()); // shift to the rhs column
             msg_puts((*mp).m_desc);
         }
-        if p_verbose.get() > 0 as OptInt {
+        if p_verbose.get() > 0 {
             last_set_msg((*mp).m_script_ctx);
         }
         msg_clr_eos();
     }
 }
 
-pub(crate) unsafe extern "C" fn translate_mapping(
-    str_in: *const ::core::ffi::c_char,
-    cpo_val: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+/// Translate a mapping's internal LHS into the external form `:map` and
+/// `:abbrev` accept, which is what command-line completion offers.
+///
+/// The answer can be wider than the original, so it is built in a growarray;
+/// the caller owns the string that comes back.
+///
+/// # Safety
+/// Both strings must be live and NUL-terminated.
+pub(crate) unsafe fn translate_mapping(
+    str_in: *const c_char,
+    cpo_val: *const c_char,
+) -> *mut c_char {
     unsafe {
-        let mut str: *const uint8_t = str_in as *const uint8_t;
-        let mut ga: garray_T = garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        };
-        ga_init(
-            &raw mut ga,
-            1 as ::core::ffi::c_int,
-            40 as ::core::ffi::c_int,
-        );
-        let cpo_bslash: bool = !vim_strchr(cpo_val, CPO_BSLASH).is_null();
+        let mut ga: garray_T = core::mem::zeroed();
+        ga_init(&raw mut ga, 1, 40);
+
+        let cpo_bslash = !vim_strchr(cpo_val, CPO_BSLASH).is_null();
+        let mut str = str_in.cast::<u8>();
         while *str != 0 {
-            let mut c: ::core::ffi::c_int = *str as ::core::ffi::c_int;
-            's_13: {
-                if c == K_SPECIAL
-                    && *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-                    && *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-                {
-                    let mut modifiers: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    if *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == KS_MODIFIER
-                    {
-                        str = str.offset(1);
-                        str = str.offset(1);
-                        modifiers = *str as ::core::ffi::c_int;
-                        str = str.offset(1);
-                        c = *str as ::core::ffi::c_int;
+            let mut c = c_int::from(*str);
+            'next: {
+                if c == K_SPECIAL && *str.add(1) != 0 && *str.add(2) != 0 {
+                    let mut modifiers = 0;
+                    if c_int::from(*str.add(1)) == KS_MODIFIER {
+                        str = str.add(2);
+                        modifiers = c_int::from(*str);
+                        str = str.add(1);
+                        c = c_int::from(*str);
                     }
-                    if c == K_SPECIAL
-                        && *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            != NUL
-                        && *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            != NUL
-                    {
-                        c = if *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            == KS_SPECIAL
-                        {
-                            K_SPECIAL
-                        } else if *str.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int
-                            == KS_ZERO
-                        {
-                            K_ZERO
-                        } else {
-                            -(*str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                                + ((*str.offset(2 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int)
-                                    << 8 as ::core::ffi::c_int))
-                        };
+
+                    if c == K_SPECIAL && *str.add(1) != 0 && *str.add(2) != 0 {
+                        c = key_unescape(*str.add(1), *str.add(2));
                         if c == K_ZERO {
-                            c = NUL;
+                            c = NUL; // display <Nul> as ^@
                         }
-                        str = str.offset(2 as ::core::ffi::c_int as isize);
+                        str = str.add(2);
                     }
-                    if c < 0 as ::core::ffi::c_int || modifiers != 0 {
+                    if c < 0 || modifiers != 0 {
+                        // A special key.
                         ga_concat(&raw mut ga, get_special_key_name(c, modifiers));
-                        break 's_13;
+                        break 'next;
                     }
                 }
-                if c == ' ' as ::core::ffi::c_int
-                    || c == '\t' as ::core::ffi::c_int
+
+                if c == c_int::from(b' ')
+                    || c == c_int::from(b'\t')
                     || c == Ctrl_J
                     || c == Ctrl_V
-                    || c == '<' as ::core::ffi::c_int
-                    || c == '\\' as ::core::ffi::c_int && !cpo_bslash
+                    || c == c_int::from(b'<')
+                    || (c == c_int::from(b'\\') && !cpo_bslash)
                 {
                     ga_append(
                         &raw mut ga,
-                        (if cpo_bslash as ::core::ffi::c_int != 0 {
-                            Ctrl_V
-                        } else {
-                            '\\' as ::core::ffi::c_int
-                        }) as uint8_t,
+                        if cpo_bslash { Ctrl_V } else { b'\\'.into() } as u8,
                     );
                 }
                 if c != 0 {
-                    ga_append(&raw mut ga, c as uint8_t);
+                    ga_append(&raw mut ga, c as u8);
                 }
             }
-            str = str.offset(1);
+            str = str.add(1);
         }
-        ga_append(&raw mut ga, NUL as uint8_t);
-        return ga.ga_data as *mut ::core::ffi::c_char;
+        ga_append(&raw mut ga, NUL as u8);
+        ga.ga_data.cast()
     }
 }
 
-pub unsafe extern "C" fn set_context_in_map_cmd(
-    mut xp: *mut expand_T,
-    mut cmd: *mut ::core::ffi::c_char,
-    mut arg: *mut ::core::ffi::c_char,
-    mut forceit: bool,
-    mut isabbrev: bool,
-    mut isunmap: bool,
-    mut cmdidx: cmdidx_T,
-) -> *mut ::core::ffi::c_char {
+/// The `:map-arguments` that may precede the `{lhs}` on a completed command
+/// line, in the order upstream tries them.
+const CONTEXT_ARGS: [&[u8]; 7] = [
+    b"<buffer>",
+    b"<unique>",
+    b"<nowait>",
+    b"<silent>",
+    b"<special>",
+    b"<script>",
+    b"<expr>",
+];
+
+/// Index of `<buffer>` in [`CONTEXT_ARGS`], the one that changes what is
+/// offered.
+const CONTEXT_ARG_BUFFER: usize = 0;
+
+/// Work out what to complete when completing a mapping or abbreviation name.
+///
+/// # Safety
+/// `xp`, `cmd` and `arg` must be live.
+#[allow(clippy::too_many_arguments)] // upstream's `set_context_in_*` shape
+pub unsafe fn set_context_in_map_cmd(
+    xp: *mut expand_T,
+    mut cmd: *mut c_char,
+    mut arg: *mut c_char,
+    forceit: bool,
+    isabbrev: bool,
+    isunmap: bool,
+    cmdidx: cmdidx_T,
+) -> *mut c_char {
     unsafe {
-        if forceit as ::core::ffi::c_int != 0
-            && cmdidx as ::core::ffi::c_int != CMD_map as ::core::ffi::c_int
-            && cmdidx as ::core::ffi::c_int != CMD_unmap as ::core::ffi::c_int
-        {
-            (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+        if forceit && cmdidx != CMD_map && cmdidx != CMD_unmap {
+            (*xp).xp_context = EXPAND_NOTHING as c_int;
+            return ptr::null_mut();
+        }
+
+        if isunmap {
+            EXPAND_MAPMODES.set(get_map_mode(&raw mut cmd, forceit || isabbrev));
         } else {
-            if isunmap {
-                expand_mapmodes.set(get_map_mode(
-                    &raw mut cmd,
-                    forceit as ::core::ffi::c_int != 0 || isabbrev as ::core::ffi::c_int != 0,
-                ));
-            } else {
-                expand_mapmodes.set(MODE_INSERT | MODE_CMDLINE);
-                if !isabbrev {
-                    (*expand_mapmodes.ptr()) |=
-                        MODE_VISUAL | MODE_SELECT | MODE_NORMAL | MODE_OP_PENDING;
-                }
+            let mut modes = MODE_INSERT | MODE_CMDLINE;
+            if !isabbrev {
+                modes |= MODE_VISUAL | MODE_SELECT | MODE_NORMAL | MODE_OP_PENDING;
             }
-            expand_isabbrev.set(isabbrev);
-            (*xp).xp_context = EXPAND_MAPPINGS as ::core::ffi::c_int;
-            expand_buffer.set(false_0 != 0);
-            loop {
-                if strncmp(
-                    arg,
-                    b"<buffer>\0".as_ptr() as *const ::core::ffi::c_char,
-                    8 as size_t,
-                ) == 0 as ::core::ffi::c_int
-                {
-                    expand_buffer.set(true_0 != 0);
-                    arg = skipwhite(arg.offset(8 as ::core::ffi::c_int as isize));
-                } else if strncmp(
-                    arg,
-                    b"<unique>\0".as_ptr() as *const ::core::ffi::c_char,
-                    8 as size_t,
-                ) == 0 as ::core::ffi::c_int
-                {
-                    arg = skipwhite(arg.offset(8 as ::core::ffi::c_int as isize));
-                } else if strncmp(
-                    arg,
-                    b"<nowait>\0".as_ptr() as *const ::core::ffi::c_char,
-                    8 as size_t,
-                ) == 0 as ::core::ffi::c_int
-                {
-                    arg = skipwhite(arg.offset(8 as ::core::ffi::c_int as isize));
-                } else if strncmp(
-                    arg,
-                    b"<silent>\0".as_ptr() as *const ::core::ffi::c_char,
-                    8 as size_t,
-                ) == 0 as ::core::ffi::c_int
-                {
-                    arg = skipwhite(arg.offset(8 as ::core::ffi::c_int as isize));
-                } else if strncmp(
-                    arg,
-                    b"<special>\0".as_ptr() as *const ::core::ffi::c_char,
-                    9 as size_t,
-                ) == 0 as ::core::ffi::c_int
-                {
-                    arg = skipwhite(arg.offset(9 as ::core::ffi::c_int as isize));
-                } else if strncmp(
-                    arg,
-                    b"<script>\0".as_ptr() as *const ::core::ffi::c_char,
-                    8 as size_t,
-                ) == 0 as ::core::ffi::c_int
-                {
-                    arg = skipwhite(arg.offset(8 as ::core::ffi::c_int as isize));
-                } else {
-                    if strncmp(
-                        arg,
-                        b"<expr>\0".as_ptr() as *const ::core::ffi::c_char,
-                        6 as size_t,
-                    ) != 0 as ::core::ffi::c_int
-                    {
-                        break;
-                    }
-                    arg = skipwhite(arg.offset(6 as ::core::ffi::c_int as isize));
-                }
-            }
-            (*xp).xp_pattern = arg;
+            EXPAND_MAPMODES.set(modes);
         }
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        EXPAND_ISABBREV.set(isabbrev);
+        (*xp).xp_context = EXPAND_MAPPINGS as c_int;
+        EXPAND_BUFFER.set(false);
+
+        // Skip the map arguments; only `<buffer>` changes what is offered.
+        'skip: loop {
+            for (i, word) in CONTEXT_ARGS.into_iter().enumerate() {
+                if take_map_arg(&mut arg, word) {
+                    if i == CONTEXT_ARG_BUFFER {
+                        EXPAND_BUFFER.set(true);
+                    }
+                    continue 'skip;
+                }
+            }
+            break;
+        }
+        (*xp).xp_pattern = arg;
+
+        ptr::null_mut()
     }
 }
 
-pub unsafe extern "C" fn ExpandMappings(
-    mut pat: *mut ::core::ffi::c_char,
-    mut regmatch: *mut regmatch_T,
-    mut numMatches: *mut ::core::ffi::c_int,
-    mut matches: *mut *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+/// The map arguments `:map <Tab>` offers, in upstream's order.  `<buffer>` is
+/// dropped once it has already been given.
+const EXPAND_ARGS: [&CStr; 7] = [
+    c"<silent>",
+    c"<unique>",
+    c"<script>",
+    c"<expr>",
+    c"<buffer>",
+    c"<nowait>",
+    c"<special>",
+];
+
+/// Index of `<buffer>` in [`EXPAND_ARGS`].
+const EXPAND_ARG_BUFFER: usize = 4;
+
+/// Find all mapping/abbreviation names matching `regmatch`, for command-line
+/// completion of `:[un]map` and `:[un]abbrev` in all modes.
+///
+/// Answers `OK` if any matched, `FAIL` otherwise.
+///
+/// # Safety
+/// Every pointer argument must be live; `matches` and `numMatches` are
+/// written unconditionally.
+pub unsafe fn ExpandMappings(
+    pat: *mut c_char,
+    regmatch: *mut regmatch_T,
+    numMatches: *mut c_int,
+    matches: *mut *mut *mut c_char,
+) -> c_int {
     unsafe {
-        let fuzzy: bool = cmdline_fuzzy_complete(pat);
-        *numMatches = 0 as ::core::ffi::c_int;
-        *matches = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-        let mut ga: garray_T = garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+        let fuzzy = cmdline_fuzzy_complete(pat);
+
+        *numMatches = 0; // return values in case of FAIL
+        *matches = ptr::null_mut();
+
+        let mut ga: garray_T = core::mem::zeroed();
+        let itemsize = if fuzzy {
+            size_of::<fuzmatch_str_T>()
+        } else {
+            size_of::<*mut c_char>()
         };
-        if !fuzzy {
-            ga_init(
-                &raw mut ga,
-                ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-                3 as ::core::ffi::c_int,
-            );
-        } else {
-            ga_init(
-                &raw mut ga,
-                ::core::mem::size_of::<fuzmatch_str_T>() as ::core::ffi::c_int,
-                3 as ::core::ffi::c_int,
-            );
-        }
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < 7 as ::core::ffi::c_int {
-            let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-            's_34: {
-                if i == 0 as ::core::ffi::c_int {
-                    p = b"<silent>\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
-                } else if i == 1 as ::core::ffi::c_int {
-                    p = b"<unique>\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
-                } else if i == 2 as ::core::ffi::c_int {
-                    p = b"<script>\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
-                } else if i == 3 as ::core::ffi::c_int {
-                    p = b"<expr>\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
-                } else if i == 4 as ::core::ffi::c_int && !expand_buffer.get() {
-                    p = b"<buffer>\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
-                } else if i == 5 as ::core::ffi::c_int {
-                    p = b"<nowait>\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
-                } else if i == 6 as ::core::ffi::c_int {
-                    p = b"<special>\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
-                } else {
-                    break 's_34;
-                }
-                let mut match_0: bool = false;
-                let mut score: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                if !fuzzy {
-                    match_0 = vim_regexec(regmatch, p, 0 as colnr_T);
-                } else {
-                    score = fuzzy_match_str(p, pat);
-                    match_0 = score != FUZZY_SCORE_NONE as ::core::ffi::c_int;
-                }
-                if match_0 {
-                    if fuzzy {
-                        ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                        *(ga.ga_data as *mut fuzmatch_str_T).offset(ga.ga_len as isize) =
-                            fuzmatch_str_T {
-                                idx: ga.ga_len,
-                                str: xstrdup(p),
-                                score: score,
-                            };
-                        ga.ga_len += 1;
-                    } else {
-                        ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                        *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) =
-                            xstrdup(p);
-                        ga.ga_len += 1;
-                    }
-                }
-            }
-            i += 1;
-        }
-        let mut hash: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while hash < 256 as ::core::ffi::c_int {
-            let mut mp: *mut mapblock_T = ::core::ptr::null_mut::<mapblock_T>();
-            if expand_isabbrev.get() {
-                if hash > 0 as ::core::ffi::c_int {
-                    break;
-                } else {
-                    mp = FIRST_ABBR.get();
-                }
-            } else if expand_buffer.get() {
-                mp = (*curbuf.get()).b_maphash[hash as usize] as *mut mapblock_T;
+        ga_init(&raw mut ga, itemsize as c_int, 3);
+
+        // Whether `p` matches, and with what fuzzy score.
+        let matched = |p: *mut c_char| -> Option<c_int> {
+            if fuzzy {
+                let score = fuzzy_match_str(p, pat);
+                (score != FUZZY_SCORE_NONE).then_some(score)
             } else {
-                mp = (*MAPHASH.ptr())[hash as usize] as *mut mapblock_T;
+                vim_regexec(regmatch, p, 0).then_some(0)
             }
-            while !mp.is_null() {
-                if !((*mp).m_simplified != 0 || (*mp).m_mode & expand_mapmodes.get() == 0) {
-                    let mut p_0: *mut ::core::ffi::c_char =
-                        translate_mapping((*mp).m_keys, p_cpo.get());
-                    if !p_0.is_null() {
-                        let mut match_1: bool = false;
-                        let mut score_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                        if !fuzzy {
-                            match_1 = vim_regexec(regmatch, p_0, 0 as colnr_T);
-                        } else {
-                            score_0 = fuzzy_match_str(p_0, pat);
-                            match_1 = score_0 != FUZZY_SCORE_NONE as ::core::ffi::c_int;
-                        }
-                        if !match_1 {
-                            xfree(p_0 as *mut ::core::ffi::c_void);
-                        } else if fuzzy {
-                            ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                            *(ga.ga_data as *mut fuzmatch_str_T).offset(ga.ga_len as isize) =
-                                fuzmatch_str_T {
-                                    idx: ga.ga_len,
-                                    str: p_0,
-                                    score: score_0,
-                                };
-                            ga.ga_len += 1;
-                        } else {
-                            ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                            *(ga.ga_data as *mut *mut ::core::ffi::c_char)
-                                .offset(ga.ga_len as isize) = p_0;
-                            ga.ga_len += 1;
-                        }
-                    }
-                }
-                mp = (*mp).m_next;
+        };
+        // C's `GA_APPEND`, in whichever of the two element shapes is in use.
+        // `ga` is a parameter rather than a capture so the loops below can
+        // still read it.
+        let push = |ga: &mut garray_T, s: *mut c_char, score: c_int| {
+            ga_grow(ga, 1);
+            if fuzzy {
+                *(ga.ga_data as *mut fuzmatch_str_T).offset(ga.ga_len as isize) = fuzmatch_str_T {
+                    idx: ga.ga_len,
+                    str: s,
+                    score,
+                };
+            } else {
+                *(ga.ga_data as *mut *mut c_char).offset(ga.ga_len as isize) = s;
             }
-            hash += 1;
+            ga.ga_len += 1;
+        };
+
+        // First search in map modifier arguments.
+        for (i, word) in EXPAND_ARGS.into_iter().enumerate() {
+            if i == EXPAND_ARG_BUFFER && EXPAND_BUFFER.get() {
+                continue;
+            }
+            let p = word.as_ptr().cast_mut();
+            if let Some(score) = matched(p) {
+                push(&mut ga, xstrdup(p), score);
+            }
         }
-        if ga.ga_len == 0 as ::core::ffi::c_int {
+
+        // Then the mapping names themselves. Note that `<buffer>` only
+        // redirects the *mapping* lookup: upstream reads the global
+        // abbreviation list either way.
+        let abbr = EXPAND_ISABBREV.get();
+        let table = if !abbr && EXPAND_BUFFER.get() {
+            MapTable::Buffer(curbuf.get())
+        } else {
+            MapTable::Global
+        };
+        map_walk::<()>(table, abbr, |mp| {
+            if (*mp).m_simplified != 0 || (*mp).m_mode & EXPAND_MAPMODES.get() == 0 {
+                return None;
+            }
+            let p = translate_mapping((*mp).m_keys, p_cpo.get());
+            if p.is_null() {
+                return None;
+            }
+            match matched(p) {
+                Some(score) => push(&mut ga, p, score),
+                None => xfree(p.cast()),
+            }
+            None
+        });
+
+        if ga.ga_len == 0 {
             return FAIL;
         }
-        if !fuzzy {
-            *matches = ga.ga_data as *mut *mut ::core::ffi::c_char;
-            *numMatches = ga.ga_len;
+
+        if fuzzy {
+            fuzzymatches_to_strmatches(ga.ga_data.cast(), matches, ga.ga_len, false);
         } else {
-            fuzzymatches_to_strmatches(
-                ga.ga_data as *mut fuzmatch_str_T,
-                matches,
-                ga.ga_len,
-                false_0 != 0,
-            );
-            *numMatches = ga.ga_len;
+            *matches = ga.ga_data.cast();
         }
-        let mut count: ::core::ffi::c_int = *numMatches;
-        if count > 1 as ::core::ffi::c_int {
+        *numMatches = ga.ga_len;
+
+        let mut count = *numMatches;
+        if count > 1 {
+            // Sort the matches; fuzzy matching already sorted them.
             if !fuzzy {
                 sort_strings(*matches, count);
             }
-            let mut ptr1: *mut *mut ::core::ffi::c_char = *matches;
-            let mut ptr2: *mut *mut ::core::ffi::c_char =
-                ptr1.offset(1 as ::core::ffi::c_int as isize);
-            let mut ptr3: *mut *mut ::core::ffi::c_char = ptr1.offset(count as isize);
-            while ptr2 < ptr3 {
-                if strcmp(*ptr1, *ptr2) != 0 as ::core::ffi::c_int {
-                    let c2rust_fresh12 = ptr2;
-                    ptr2 = ptr2.offset(1);
-                    ptr1 = ptr1.offset(1);
-                    let c2rust_lvalue_ptr = &raw mut *ptr1;
-                    *c2rust_lvalue_ptr = *c2rust_fresh12;
+            // Remove duplicate entries, keeping the first of each run.
+            let items = core::slice::from_raw_parts_mut(*matches, count as usize);
+            let mut kept = 0;
+            for read in 1..items.len() {
+                if strcmp(items[kept], items[read]) != 0 {
+                    kept += 1;
+                    items[kept] = items[read];
                 } else {
-                    let c2rust_fresh13 = ptr2;
-                    ptr2 = ptr2.offset(1);
-                    xfree(*c2rust_fresh13 as *mut ::core::ffi::c_void);
+                    xfree(items[read].cast());
                     count -= 1;
                 }
             }
         }
+
         *numMatches = count;
-        return if count == 0 as ::core::ffi::c_int {
-            FAIL
-        } else {
-            OK
-        };
+        if count == 0 { FAIL } else { OK }
     }
 }

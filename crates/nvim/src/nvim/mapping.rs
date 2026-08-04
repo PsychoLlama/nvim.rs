@@ -69,8 +69,8 @@ use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
     Arena, Array, ArrayBuilder, BoolVarValue, Buffer, CMD_index, Dict, Error, EvalFuncData, FILE,
-    Integer, KeyDict_keymap, ListLenSpecials, LuaRef, LuaRetMode, Object, OptInt, RemapValues,
-    ScopeType, SpecialVarValue, String_0, VarLockStatus, VarType, buf_T, cmdidx_T, colnr_T, dict_T,
+    Integer, KeyDict_keymap, ListLenSpecials, LuaRef, LuaRetMode, Object, RemapValues, ScopeType,
+    SpecialVarValue, String_0, VarLockStatus, VarType, buf_T, cmdidx_T, colnr_T, dict_T,
     dictitem_T, estack_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, kObjectTypeDict,
     kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, key_extra,
     key_value_pair, linenr_T, mapblock_T, object, object_data as C2Rust_Unnamed, optset_T,
