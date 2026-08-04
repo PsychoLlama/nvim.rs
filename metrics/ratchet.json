@@ -227,7 +227,7 @@
     "crates/nvim/src/nvim/ex_getln/draw.rs": {"unsafe": 14},
     "crates/nvim/src/nvim/ex_getln/enter.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/ex_getln/eval.rs": {"unsafe": 18},
-    "crates/nvim/src/nvim/ex_getln/execute.rs": {"unsafe": 8},
+    "crates/nvim/src/nvim/ex_getln/execute.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/ex_getln/handlekey.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/ex_getln/history.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/ex_getln/incsearch.rs": {"unsafe": 13},

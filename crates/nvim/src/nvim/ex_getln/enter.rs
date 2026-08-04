@@ -102,7 +102,7 @@ pub(crate) unsafe fn ui_ext_cmdline_hide(abort: bool) {
 /// Set `v:event` to a dictionary describing the command line, for the
 /// `CmdlineEnter`/`CmdlineLeave` autocommands.  Answers the dictionary,
 /// which the caller hands back to `restore_v_event`.
-unsafe fn cmdline_event_dict(
+pub(crate) unsafe fn cmdline_event_dict(
     save_v_event: *mut save_v_event_T,
     cmdtype: *const ::core::ffi::c_char,
 ) -> *mut dict_T {
