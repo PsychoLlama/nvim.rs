@@ -516,7 +516,7 @@ pub unsafe fn ex_messages(mut eap: *mut exarg_T) {
                         data: C2Rust_Unnamed_11 { array: entry },
                     };
                 }
-                if redirecting() != 0 || !ui_has(kUIMessages) {
+                if redirecting() || !ui_has(kUIMessages) {
                     (*msg_silent.ptr()) += ui_has(kUIMessages) as ::core::ffi::c_int;
                     let mut needs_clear: bool = false_0 != 0;
                     msg_multihl(

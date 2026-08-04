@@ -515,7 +515,7 @@ pub unsafe fn undo_cmdmod(cmod: *mut cmdmod_T) {
             *emsg_silent.ptr() -= cm.cmod_did_esilent;
             emsg_silent.set(emsg_silent.get().max(0));
             msg_scroll.set(cm.cmod_save_msg_scroll);
-            if redirecting() != 0 {
+            if redirecting() {
                 msg_col.set(0);
             }
             cm.cmod_save_msg_silent = 0;

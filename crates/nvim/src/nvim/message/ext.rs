@@ -9,225 +9,176 @@
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
-pub unsafe extern "C" fn msg_ext_set_kind(mut msg_kind: *const ::core::ffi::c_char) {
+/// Start a new message of kind `msg_kind`, flushing whatever preceded it.
+///
+/// # Safety
+/// `msg_kind` must be null or a C string that outlives the message -- the
+/// kind is stored by pointer, not copied.
+pub unsafe fn msg_ext_set_kind(msg_kind: *const c_char) {
     unsafe {
+        // Flush before setting the kind, so the previous message is emitted
+        // under the kind it was written with.
         msg_ext_ui_flush();
         msg_ext_kind.set(msg_kind);
-        redir_col.set(if msg_ext_append.get() as ::core::ffi::c_int != 0 {
-            redir_col.get()
-        } else {
-            0 as ::core::ffi::c_int
-        });
+        // An appended message continues the previous one's column run.
+        if !msg_ext_append.get() {
+            redir_col.set(0);
+        }
     }
 }
 
-pub unsafe extern "C" fn msg_ext_set_append(mut append: bool) {
+/// Mark the next message as continuing the last one rather than replacing it.
+///
+/// # Safety
+/// Only that the emitter statics are in a consistent state.
+pub unsafe fn msg_ext_set_append(append: bool) {
     unsafe {
         msg_ext_ui_flush();
         msg_ext_append.set(append);
     }
 }
 
-pub unsafe extern "C" fn msg_ext_set_trigger(mut trigger: *const ::core::ffi::c_char) {
+/// Record what caused the next message, for a UI that wants to group by it.
+///
+/// # Safety
+/// As [`msg_ext_set_kind`]: `trigger` is stored by pointer.
+pub unsafe fn msg_ext_set_trigger(trigger: *const c_char) {
     unsafe {
         msg_ext_ui_flush();
         msg_ext_trigger.set(trigger);
     }
 }
 
-pub(crate) unsafe extern "C" fn msg_ext_emit_chunk() {
+/// Close off the run of text accumulated under one highlight.
+///
+/// Each chunk is `[attr, text, hl_id]`, which is what the `msg_show` UI event
+/// carries.
+///
+/// # Safety
+/// Only that the emitter statics are in a consistent state.
+pub(crate) unsafe fn msg_ext_emit_chunk() {
     unsafe {
-        if (*msg_ext_chunks.ptr()).is_null() {
+        if msg_ext_chunks.get().is_null() {
             msg_ext_init_chunks();
         }
-        if msg_ext_last_attr.get() == -1 as sattr_T {
+        if msg_ext_last_attr.get() == -1 {
             return;
         }
-        let mut chunk: Array = Array {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
-        };
-        if chunk.size == chunk.capacity {
-            chunk.capacity = if chunk.capacity != 0 {
-                chunk.capacity << 1 as ::core::ffi::c_int
-            } else {
-                8 as size_t
-            };
-            chunk.items = xrealloc(
-                chunk.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<Object>().wrapping_mul(chunk.capacity),
-            ) as *mut Object;
-        } else {
-        };
-        let c2rust_fresh1 = chunk.size;
-        chunk.size = chunk.size.wrapping_add(1);
-        *chunk.items.offset(c2rust_fresh1 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed_11 {
-                integer: msg_ext_last_attr.get() as Integer,
-            },
-        };
-        msg_ext_last_attr.set(-1 as ::core::ffi::c_int as sattr_T);
-        let mut text: String_0 = ga_take_string(msg_ext_last_chunk.ptr());
-        if chunk.size == chunk.capacity {
-            chunk.capacity = if chunk.capacity != 0 {
-                chunk.capacity << 1 as ::core::ffi::c_int
-            } else {
-                8 as size_t
-            };
-            chunk.items = xrealloc(
-                chunk.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<Object>().wrapping_mul(chunk.capacity),
-            ) as *mut Object;
-        } else {
-        };
-        let c2rust_fresh2 = chunk.size;
-        chunk.size = chunk.size.wrapping_add(1);
-        *chunk.items.offset(c2rust_fresh2 as isize) = object {
-            type_0: kObjectTypeString,
-            data: C2Rust_Unnamed_11 { string: text },
-        };
-        if chunk.size == chunk.capacity {
-            chunk.capacity = if chunk.capacity != 0 {
-                chunk.capacity << 1 as ::core::ffi::c_int
-            } else {
-                8 as size_t
-            };
-            chunk.items = xrealloc(
-                chunk.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<Object>().wrapping_mul(chunk.capacity),
-            ) as *mut Object;
-        } else {
-        };
-        let c2rust_fresh3 = chunk.size;
-        chunk.size = chunk.size.wrapping_add(1);
-        *chunk.items.offset(c2rust_fresh3 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed_11 {
-                integer: msg_ext_last_hl_id.get() as Integer,
-            },
-        };
-        if (*msg_ext_chunks.get()).size == (*msg_ext_chunks.get()).capacity {
-            (*msg_ext_chunks.get()).capacity = if (*msg_ext_chunks.get()).capacity != 0 {
-                (*msg_ext_chunks.get()).capacity << 1 as ::core::ffi::c_int
-            } else {
-                8 as size_t
-            };
-            (*msg_ext_chunks.get()).items = xrealloc(
-                (*msg_ext_chunks.get()).items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<Object>().wrapping_mul((*msg_ext_chunks.get()).capacity),
-            ) as *mut Object;
-        } else {
-        };
-        let c2rust_fresh4 = (*msg_ext_chunks.get()).size;
-        (*msg_ext_chunks.get()).size = (*msg_ext_chunks.get()).size.wrapping_add(1);
-        *(*msg_ext_chunks.get()).items.offset(c2rust_fresh4 as isize) = object {
-            type_0: kObjectTypeArray,
-            data: C2Rust_Unnamed_11 { array: chunk },
-        };
+
+        let mut chunk = EMPTY_ARRAY;
+        array_push(&mut chunk, Object::integer(msg_ext_last_attr.get().into()));
+        msg_ext_last_attr.set(-1);
+        // Takes ownership of the accumulated text, leaving the garray empty.
+        let text = ga_take_string(msg_ext_last_chunk.ptr());
+        array_push(&mut chunk, Object::string(text));
+        array_push(&mut chunk, Object::integer(msg_ext_last_hl_id.get().into()));
+
+        array_push(&mut *msg_ext_chunks.get(), Object::array(chunk));
     }
 }
 
-pub(crate) unsafe extern "C" fn msg_ext_init_chunks() -> *mut Array {
+/// Start a fresh chunk array, handing the old one to the caller to dispose of.
+///
+/// # Safety
+/// Only that the emitter statics are in a consistent state.
+pub(crate) unsafe fn msg_ext_init_chunks() -> *mut Array {
     unsafe {
-        let mut tofree: *mut Array = msg_ext_chunks.get();
-        msg_ext_chunks.set(xcalloc(1 as size_t, ::core::mem::size_of::<Array>()) as *mut Array);
-        msg_col.set(0 as ::core::ffi::c_int);
-        return tofree;
+        let tofree = msg_ext_chunks.get();
+        msg_ext_chunks.set(xcalloc(1, ::core::mem::size_of::<Array>()).cast());
+        msg_col.set(0);
+        tofree
     }
 }
 
-pub unsafe extern "C" fn msg_ext_ui_flush() {
+/// Emit everything accumulated so far as one `msg_show` event.
+///
+/// Without `ext_messages` this only clears the pending kind: the text went to
+/// the grid as it was written.
+///
+/// # Safety
+/// Only that the emitter statics are in a consistent state.
+pub unsafe fn msg_ext_ui_flush() {
     unsafe {
         if !ui_has(kUIMessages) {
-            msg_ext_kind.set(::core::ptr::null::<::core::ffi::c_char>());
-            return;
-        } else if msg_ext_skip_flush.get() {
+            msg_ext_kind.set(ptr::null());
             return;
         }
+        if msg_ext_skip_flush.get() {
+            return;
+        }
+
         msg_ext_emit_chunk();
-        if (*msg_ext_chunks.get()).size > 0 as size_t {
-            let mut tofree: *mut Array = msg_ext_init_chunks();
-            ui_call_msg_show(
-                cstr_as_string(msg_ext_kind.get()),
-                *tofree,
-                msg_ext_overwrite.get() as Boolean,
-                msg_ext_history.get() as Boolean,
-                msg_ext_append.get() as Boolean,
-                msg_ext_id.get(),
-                cstr_as_string(msg_ext_trigger.get()),
-            );
-            if msg_ext_history.get() {
-                api_free_array(*tofree);
-            } else {
-                let mut msg_0: HlMessage = HlMessage {
-                    size: 0 as size_t,
-                    capacity: 0 as size_t,
-                    items: ::core::ptr::null_mut::<HlMessageChunk>(),
-                };
-                let mut i: size_t = 0 as size_t;
-                while i < (*tofree).size {
-                    let mut chunk: *mut Object =
-                        (*(*tofree).items.offset(i as isize)).data.array.items;
-                    if msg_0.size == msg_0.capacity {
-                        msg_0.capacity = if msg_0.capacity != 0 {
-                            msg_0.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            8 as size_t
-                        };
-                        msg_0.items = xrealloc(
-                            msg_0.items as *mut ::core::ffi::c_void,
-                            ::core::mem::size_of::<HlMessageChunk>().wrapping_mul(msg_0.capacity),
-                        ) as *mut HlMessageChunk;
-                    } else {
-                    };
-                    let c2rust_fresh0 = msg_0.size;
-                    msg_0.size = msg_0.size.wrapping_add(1);
-                    *msg_0.items.offset(c2rust_fresh0 as isize) = HlMessageChunk {
-                        text: (*chunk.offset(1 as ::core::ffi::c_int as isize))
-                            .data
-                            .string,
-                        hl_id: (*chunk.offset(2 as ::core::ffi::c_int as isize))
-                            .data
-                            .integer as ::core::ffi::c_int,
-                    };
-                    xfree(chunk as *mut ::core::ffi::c_void);
-                    i = i.wrapping_add(1);
-                }
-                xfree((*tofree).items as *mut ::core::ffi::c_void);
-                msg_hist_add_multihl(msg_0, true_0 != 0, ::core::ptr::null_mut::<MessageData>());
-            }
-            xfree(tofree as *mut ::core::ffi::c_void);
-            msg_ext_overwrite.set(false_0 != 0);
-            msg_ext_history.set(false_0 != 0);
-            msg_ext_append.set(false_0 != 0);
-            msg_ext_kind.set(::core::ptr::null::<::core::ffi::c_char>());
-            (*msg_id_next.ptr()) += ((*msg_ext_id.ptr()).data.integer == msg_id_next.get())
-                as ::core::ffi::c_int as int64_t;
-            msg_ext_id.set(object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_11 {
-                    integer: msg_id_next.get(),
-                },
-            });
+        if (*msg_ext_chunks.get()).size == 0 {
+            return;
         }
+
+        let tofree = msg_ext_init_chunks();
+        ui_call_msg_show(
+            cstr_as_string(msg_ext_kind.get()),
+            *tofree,
+            msg_ext_overwrite.get(),
+            msg_ext_history.get(),
+            msg_ext_append.get(),
+            msg_ext_id.get(),
+            cstr_as_string(msg_ext_trigger.get()),
+        );
+
+        if msg_ext_history.get() {
+            // The UI owns the history copy; ours is redundant.
+            api_free_array(*tofree);
+        } else {
+            // Not going to the UI's history, so keep it in ours -- as a
+            // temporary entry, which the next message displaces.  The chunk
+            // arrays are unwrapped rather than copied: the strings move.
+            let mut msg = EMPTY_HL_MESSAGE;
+            for i in 0..(*tofree).size {
+                let chunk = (*(*tofree).items.add(i)).data.array.items;
+                hl_msg_push(
+                    &mut msg,
+                    HlMessageChunk {
+                        text: (*chunk.add(1)).data.string,
+                        hl_id: (*chunk.add(2)).data.integer as c_int,
+                    },
+                );
+                xfree(chunk.cast());
+            }
+            xfree((*tofree).items.cast());
+            msg_hist_add_multihl(msg, true, ptr::null_mut());
+        }
+        xfree(tofree.cast());
+
+        msg_ext_overwrite.set(false);
+        msg_ext_history.set(false);
+        msg_ext_append.set(false);
+        msg_ext_kind.set(ptr::null());
+        // Only claim the next id if nothing else took it in the meantime.
+        if msg_ext_id.get().data.integer == msg_id_next.get() {
+            msg_id_next.set(msg_id_next.get() + 1);
+        }
+        msg_ext_id.set(Object::integer(msg_id_next.get()));
     }
 }
 
-pub unsafe extern "C" fn msg_ext_flush_showmode() {
+/// Emit the pending showmode/showcmd/ruler text as its own event.
+///
+/// # Safety
+/// Only that the emitter statics are in a consistent state.
+pub unsafe fn msg_ext_flush_showmode() {
     unsafe {
-        static clear: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-        if ui_has(kUIMessages) as ::core::ffi::c_int != 0
-            && (msg_ext_last_attr.get() != -1 as sattr_T || clear.get() as ::core::ffi::c_int != 0)
-        {
-            clear.set(msg_ext_last_attr.get() != -1 as sattr_T);
+        // One trailing empty event after the mode text goes away, so the UI
+        // knows to clear what it drew.
+        static clear: GlobalCell<bool> = GlobalCell::new(false);
+        let pending = msg_ext_last_attr.get() != -1;
+        if ui_has(kUIMessages) && (pending || clear.get()) {
+            clear.set(pending);
             msg_ext_emit_chunk();
-            let mut tofree: *mut Array = msg_ext_init_chunks();
+            let tofree = msg_ext_init_chunks();
             ui_call_msg_showmode(*tofree);
             api_free_array(*tofree);
-            xfree(tofree as *mut ::core::ffi::c_void);
+            xfree(tofree.cast());
         }
     }
 }

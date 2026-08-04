@@ -154,7 +154,7 @@ pub unsafe extern "C" fn msg_source(mut hl_id: ::core::ffi::c_int) {
                         .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
                     .es_name,
                 ));
-                if redirecting() == 0 {
+                if !redirecting() {
                     msg_putchar_hl('\n' as ::core::ffi::c_int, hl_id);
                 }
             }

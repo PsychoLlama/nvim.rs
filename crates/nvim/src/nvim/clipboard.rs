@@ -77,7 +77,7 @@ pub unsafe fn adjust_clipboard_name(
         let warn = CLIPBOARD.with_mut(|st| {
             if st.batch_change_count <= 1
                 && !quiet
-                && (!st.didwarn || (explicit_cb_reg && redirecting() == 0))
+                && (!st.didwarn || (explicit_cb_reg && !redirecting()))
             {
                 st.didwarn = true;
                 true

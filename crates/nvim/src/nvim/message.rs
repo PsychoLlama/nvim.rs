@@ -264,8 +264,6 @@ static msg_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(
 );
 static msg_wait: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static progress_msg_target: GlobalCell<::core::ffi::c_int> = GlobalCell::new(PROGRESS_TARGET_CMD);
-static verbose_fd: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
-static verbose_did_open: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static keep_msg_more: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static msg_ext_kind: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
@@ -292,6 +290,75 @@ static msg_ext_append: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static msg_grid_pos_at_flush: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 static msg_id_next: GlobalCell<int64_t> = GlobalCell::new(1 as int64_t);
+
+/// An [`Array`] owning nothing, C's `ARRAY_DICT_INIT`.
+pub(crate) const EMPTY_ARRAY: Array = Array {
+    size: 0,
+    capacity: 0,
+    items: ::core::ptr::null_mut(),
+};
+
+/// A [`HlMessage`] owning nothing.
+pub(crate) const EMPTY_HL_MESSAGE: HlMessage = HlMessage {
+    size: 0,
+    capacity: 0,
+    items: ::core::ptr::null_mut(),
+};
+
+/// Append to a heap-allocated [`Array`], growing it the way C's `kv_push`
+/// does: eight elements, then doubling.
+///
+/// [`crate::src::nvim::types::builders::ArrayBuf`] is the stack-allocated
+/// form, and is what a callee that only reads the value wants. This is for
+/// the arrays whose ownership outlives the frame that builds them -- which
+/// is every array the message code hands to the UI or to the history.
+///
+/// # Safety
+/// `array` must be [`EMPTY_ARRAY`] or the result of earlier `array_push`es,
+/// and must not be borrowed elsewhere: a growth reallocates `items`.
+unsafe fn array_push(array: &mut Array, value: Object) {
+    unsafe {
+        if array.size == array.capacity {
+            array.capacity = if array.capacity != 0 {
+                array.capacity * 2
+            } else {
+                8
+            };
+            array.items = xrealloc(
+                array.items.cast(),
+                ::core::mem::size_of::<Object>() * array.capacity,
+            )
+            .cast();
+        }
+        array.items.add(array.size).write(value);
+        array.size += 1;
+    }
+}
+
+/// [`array_push`] for a [`HlMessage`], which is the same shape over
+/// [`HlMessageChunk`].
+///
+/// # Safety
+/// As [`array_push`], with [`EMPTY_HL_MESSAGE`] as the empty value.
+unsafe fn hl_msg_push(msg: &mut HlMessage, chunk: HlMessageChunk) {
+    unsafe {
+        if msg.size == msg.capacity {
+            msg.capacity = if msg.capacity != 0 {
+                msg.capacity * 2
+            } else {
+                8
+            };
+            msg.items = xrealloc(
+                msg.items.cast(),
+                ::core::mem::size_of::<HlMessageChunk>() * msg.capacity,
+            )
+            .cast();
+        }
+        msg.items.add(msg.size).write(chunk);
+        msg.size += 1;
+    }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn msg(mut s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool {
     unsafe {
@@ -840,14 +907,9 @@ pub unsafe extern "C" fn msgmore(mut n: ::core::ffi::c_int) {
         }
     }
 }
-static redir_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static last_msgchunk: GlobalCell<*mut msgchunk_T> =
     GlobalCell::new(::core::ptr::null_mut::<msgchunk_T>());
 static do_clear_sb_text: GlobalCell<sb_clear_T> = GlobalCell::new(SB_CLEAR_NONE);
-static pre_verbose_kind: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
-static verbose_kind: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(b"verbose\0".as_ptr() as *const ::core::ffi::c_char);
 pub const HAS_HOTKEY_LEN: ::core::ffi::c_int = 30 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;

@@ -8,197 +8,265 @@
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
 
-pub unsafe extern "C" fn verb_msg(mut s: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
+/// The `msg_ext` kind a verbose message carries.
+///
+/// [`verbose_enter`] compares `msg_ext_kind` against this **by pointer** to
+/// recognise a verbose section it is already inside. The C got that identity
+/// from its compiler pooling two occurrences of the same string literal, so
+/// this is one named constant rather than two literals: the guard then holds
+/// by construction instead of by codegen.
+const VERBOSE_KIND: &CStr = c"verbose";
+
+/// The message kind in force when the current verbose section started.
+static pre_verbose_kind: GlobalCell<*const c_char> = GlobalCell::new(ptr::null());
+
+/// The `'verbosefile'` handle, opened lazily by [`verbose_open`].
+static verbose_fd: GlobalCell<*mut FILE> = GlobalCell::new(ptr::null_mut());
+
+/// Whether opening `'verbosefile'` has been attempted, so the failure is
+/// reported once rather than on every message.
+static verbose_did_open: GlobalCell<bool> = GlobalCell::new(false);
+
+/// The column [`redir_write`] has written up to, tracked separately from
+/// `msg_col` because the redirection sees no screen.
+pub(crate) static redir_col: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// Is `'verbosefile'` set to anything?
+///
+/// # Safety
+/// Only that `p_vfile` holds a valid string, which the option code
+/// guarantees.
+unsafe fn verbosefile_set() -> bool {
+    unsafe { *p_vfile.get() != 0 }
+}
+
+/// [`msg_keep`] inside a `verbose_enter`/`verbose_leave` pair.
+///
+/// # Safety
+/// `s` must be a valid C string.
+pub unsafe fn verb_msg(s: *const c_char) -> c_int {
     unsafe {
         verbose_enter();
-        let mut n: ::core::ffi::c_int =
-            msg_keep(s, 0 as ::core::ffi::c_int, false_0 != 0, false_0 != 0) as ::core::ffi::c_int;
+        let n = msg_keep(s, 0, false, false) as c_int;
         verbose_leave();
-        return n;
+        n
     }
 }
 
-pub(crate) unsafe extern "C" fn redir_write(str: *const ::core::ffi::c_char, maxlen: ptrdiff_t) {
+/// Copy a message to `:redir`'s destination and to `'verbosefile'`.
+///
+/// `maxlen` is the byte count to write, or -1 for the whole of `str`.
+///
+/// # Safety
+/// `str` must be a valid C string, readable for `maxlen` bytes when that is
+/// not negative.
+pub(crate) unsafe fn redir_write(str: *const c_char, maxlen: ptrdiff_t) {
     unsafe {
-        let mut s: *const ::core::ffi::c_char = str;
-        if maxlen == 0 as ptrdiff_t {
+        if maxlen == 0 {
             return;
         }
+        // Don't do anything for displaying prompts and the like.
         if redir_off.get() {
             return;
         }
-        if *p_vfile.get() as ::core::ffi::c_int != NUL && (*verbose_fd.ptr()).is_null() {
+        // If 'verbosefile' is set prepare for writing in that file.
+        if verbosefile_set() && verbose_fd.get().is_null() {
             verbose_open();
         }
-        if redirecting() != 0 {
-            if *s as ::core::ffi::c_int != '\n' as ::core::ffi::c_int
-                && *s as ::core::ffi::c_int != '\r' as ::core::ffi::c_int
-            {
-                while redir_col.get() < msg_col.get() {
-                    if !(*capture_ga.ptr()).is_null() {
-                        ga_concat_len(
-                            capture_ga.get(),
-                            b" \0".as_ptr() as *const ::core::ffi::c_char,
-                            1 as size_t,
-                        );
-                    }
-                    if redir_reg.get() != 0 {
-                        write_reg_contents(
-                            redir_reg.get(),
-                            b" \0".as_ptr() as *const ::core::ffi::c_char,
-                            1 as ssize_t,
-                            true_0,
-                        );
-                    } else if redir_vname.get() {
-                        var_redir_str(
-                            b" \0".as_ptr() as *const ::core::ffi::c_char,
-                            -1 as ::core::ffi::c_int,
-                        );
-                    } else if !(*redir_fd.ptr()).is_null() {
-                        fputs(
-                            b" \0".as_ptr() as *const ::core::ffi::c_char,
-                            redir_fd.get(),
-                        );
-                    }
-                    if !(*verbose_fd.ptr()).is_null() {
-                        fputs(
-                            b" \0".as_ptr() as *const ::core::ffi::c_char,
-                            verbose_fd.get(),
-                        );
-                    }
-                    (*redir_col.ptr()) += 1;
-                }
-            }
-            let mut len: size_t = if maxlen == -1 as ptrdiff_t {
-                strlen(s)
-            } else {
-                maxlen as size_t
-            };
-            if !(*capture_ga.ptr()).is_null() {
-                ga_concat_len(capture_ga.get(), str, len);
+        if !redirecting() {
+            return;
+        }
+
+        // One space to every sink this message is going to. A closure rather
+        // than a fn: it inherits the enclosing `unsafe` block, where a
+        // separate `unsafe`-declared fn would need one of its own.
+        let pad = || {
+            if !capture_ga.get().is_null() {
+                ga_concat_len(capture_ga.get(), c" ".as_ptr(), 1);
             }
             if redir_reg.get() != 0 {
-                write_reg_contents(redir_reg.get(), s, len as ssize_t, true_0);
+                write_reg_contents(redir_reg.get(), c" ".as_ptr(), 1, true_0);
+            } else if redir_vname.get() {
+                var_redir_str(c" ".as_ptr(), -1);
+            } else if !redir_fd.get().is_null() {
+                fputs(c" ".as_ptr(), redir_fd.get());
             }
-            if redir_vname.get() {
-                var_redir_str(s, maxlen as ::core::ffi::c_int);
+            if !verbose_fd.get().is_null() {
+                fputs(c" ".as_ptr(), verbose_fd.get());
             }
-            while *s as ::core::ffi::c_int != NUL
-                && (maxlen < 0 as ptrdiff_t
-                    || (s.offset_from(str) as ::core::ffi::c_int as ptrdiff_t) < maxlen)
+        };
+
+        // If the string doesn't start with CR or NL, go to msg_col.
+        if *str != b'\n' as c_char && *str != b'\r' as c_char {
+            while redir_col.get() < msg_col.get() {
+                pad();
+                redir_col.set(redir_col.get() + 1);
+            }
+        }
+
+        let len = if maxlen == -1 {
+            strlen(str)
+        } else {
+            maxlen as size_t
+        };
+        if !capture_ga.get().is_null() {
+            ga_concat_len(capture_ga.get(), str, len);
+        }
+        if redir_reg.get() != 0 {
+            write_reg_contents(redir_reg.get(), str, len as ssize_t, true_0);
+        }
+        if redir_vname.get() {
+            var_redir_str(str, maxlen as c_int);
+        }
+
+        // Write and adjust the current column. The file sinks are fed byte by
+        // byte because the column has to be tracked byte by byte anyway.
+        let mut s = str;
+        while *s != 0 && (maxlen < 0 || (s.offset_from(str) as c_int as ptrdiff_t) < maxlen) {
+            if redir_reg.get() == 0
+                && !redir_vname.get()
+                && capture_ga.get().is_null()
+                && !redir_fd.get().is_null()
             {
-                if redir_reg.get() == 0 && !redir_vname.get() && (*capture_ga.ptr()).is_null() {
-                    if !(*redir_fd.ptr()).is_null() {
-                        putc(*s as ::core::ffi::c_int, redir_fd.get());
-                    }
-                }
-                if !(*verbose_fd.ptr()).is_null() {
-                    putc(*s as ::core::ffi::c_int, verbose_fd.get());
-                }
-                if *s as ::core::ffi::c_int == '\r' as ::core::ffi::c_int
-                    || *s as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
-                {
-                    redir_col.set(0 as ::core::ffi::c_int);
-                } else if *s as ::core::ffi::c_int == '\t' as ::core::ffi::c_int {
-                    (*redir_col.ptr()) +=
-                        8 as ::core::ffi::c_int - redir_col.get() % 8 as ::core::ffi::c_int;
-                } else {
-                    (*redir_col.ptr()) += 1;
-                }
-                s = s.offset(1);
+                putc(*s as c_int, redir_fd.get());
             }
-            if msg_silent.get() != 0 as ::core::ffi::c_int {
-                msg_col.set(redir_col.get());
+            if !verbose_fd.get().is_null() {
+                putc(*s as c_int, verbose_fd.get());
             }
+            match *s as u8 {
+                b'\r' | b'\n' => redir_col.set(0),
+                b'\t' => redir_col.set(redir_col.get() + 8 - redir_col.get() % 8),
+                _ => redir_col.set(redir_col.get() + 1),
+            }
+            s = s.add(1);
+        }
+
+        if msg_silent.get() != 0 {
+            // Should update msg_col.
+            msg_col.set(redir_col.get());
         }
     }
 }
 
-pub unsafe extern "C" fn redirecting() -> ::core::ffi::c_int {
+/// Is anything teeing the message stream?
+///
+/// # Safety
+/// Only that `p_vfile` holds a valid string.
+pub unsafe fn redirecting() -> bool {
     unsafe {
-        return (!(*redir_fd.ptr()).is_null()
-            || *p_vfile.get() as ::core::ffi::c_int != NUL
+        !redir_fd.get().is_null()
+            || verbosefile_set()
             || redir_reg.get() != 0
-            || redir_vname.get() as ::core::ffi::c_int != 0
-            || !(*capture_ga.ptr()).is_null()) as ::core::ffi::c_int;
+            || redir_vname.get()
+            || !capture_ga.get().is_null()
     }
 }
 
-pub unsafe extern "C" fn verbose_enter() {
+/// Before giving a verbose message. Must always be paired with
+/// [`verbose_leave`].
+///
+/// # Safety
+/// Only that `p_vfile` holds a valid string.
+pub unsafe fn verbose_enter() {
     unsafe {
-        if *p_vfile.get() as ::core::ffi::c_int != NUL {
-            (*msg_silent.ptr()) += 1;
+        if verbosefile_set() {
+            msg_silent.set(msg_silent.get() + 1);
         }
+        // Don't set the verbose kind if message continuity is wanted, as with
+        // last_set_msg().
         if !msg_ext_skip_verbose.get() {
-            if msg_ext_kind.get() != verbose_kind.get() {
+            if msg_ext_kind.get() != VERBOSE_KIND.as_ptr() {
                 pre_verbose_kind.set(msg_ext_kind.get());
             }
-            msg_ext_set_kind(b"verbose\0".as_ptr() as *const ::core::ffi::c_char);
+            msg_ext_set_kind(VERBOSE_KIND.as_ptr());
         }
-        msg_ext_skip_verbose.set(false_0 != 0);
+        msg_ext_skip_verbose.set(false);
     }
 }
 
-pub unsafe extern "C" fn verbose_leave() {
+/// After giving a verbose message. Must always be paired with
+/// [`verbose_enter`].
+///
+/// # Safety
+/// Only that `p_vfile` holds a valid string.
+pub unsafe fn verbose_leave() {
     unsafe {
-        if *p_vfile.get() as ::core::ffi::c_int != NUL {
-            (*msg_silent.ptr()) -= 1;
-            if msg_silent.get() < 0 as ::core::ffi::c_int {
-                msg_silent.set(0 as ::core::ffi::c_int);
+        if verbosefile_set() {
+            msg_silent.set(msg_silent.get() - 1);
+            if msg_silent.get() < 0 {
+                msg_silent.set(0);
             }
         }
-        if !(*pre_verbose_kind.ptr()).is_null() {
+        if !pre_verbose_kind.get().is_null() {
             msg_ext_set_kind(pre_verbose_kind.get());
-            pre_verbose_kind.set(::core::ptr::null::<::core::ffi::c_char>());
+            pre_verbose_kind.set(ptr::null());
         }
     }
 }
 
-pub unsafe extern "C" fn verbose_enter_scroll() {
+/// [`verbose_enter`], and scroll rather than overwrite when the message is
+/// going to be displayed.
+///
+/// # Safety
+/// See [`verbose_enter`].
+pub unsafe fn verbose_enter_scroll() {
     unsafe {
         verbose_enter();
-        if *p_vfile.get() as ::core::ffi::c_int == NUL {
+        if !verbosefile_set() {
+            // Always scroll up, don't overwrite.
             msg_scroll.set(true_0);
         }
     }
 }
 
-pub unsafe extern "C" fn verbose_leave_scroll() {
+/// [`verbose_leave`], and leave the command line below a displayed message.
+///
+/// # Safety
+/// See [`verbose_leave`].
+pub unsafe fn verbose_leave_scroll() {
     unsafe {
         verbose_leave();
-        if *p_vfile.get() as ::core::ffi::c_int == NUL {
+        if !verbosefile_set() {
             cmdline_row.set(msg_row.get());
         }
     }
 }
 
-pub unsafe extern "C" fn verbose_stop() {
+/// `'verbosefile'` changed: stop writing to the old one.
+///
+/// # Safety
+/// Only that no other thread is using the handle.
+pub unsafe fn verbose_stop() {
     unsafe {
-        if !(*verbose_fd.ptr()).is_null() {
+        if !verbose_fd.get().is_null() {
             fclose(verbose_fd.get());
-            verbose_fd.set(::core::ptr::null_mut::<FILE>());
+            verbose_fd.set(ptr::null_mut());
         }
-        verbose_did_open.set(false_0 != 0);
+        verbose_did_open.set(false);
     }
 }
 
-pub unsafe extern "C" fn verbose_open() -> ::core::ffi::c_int {
+/// Open `'verbosefile'` for appending, once.
+///
+/// # Safety
+/// Only that `p_vfile` holds a valid string.
+pub unsafe fn verbose_open() -> c_int {
     unsafe {
-        if (*verbose_fd.ptr()).is_null() && !verbose_did_open.get() {
-            verbose_did_open.set(true_0 != 0);
-            verbose_fd.set(os_fopen(
-                p_vfile.get(),
-                b"a\0".as_ptr() as *const ::core::ffi::c_char,
-            ));
-            if (*verbose_fd.ptr()).is_null() {
+        if verbose_fd.get().is_null() && !verbose_did_open.get() {
+            // Only give the error message once.
+            verbose_did_open.set(true);
+            verbose_fd.set(os_fopen(p_vfile.get(), c"a".as_ptr()));
+            if verbose_fd.get().is_null() {
                 semsg(
-                    gettext(&raw const e_notopen as *const ::core::ffi::c_char),
+                    gettext(&raw const e_notopen as *const c_char),
                     p_vfile.get(),
                 );
                 return FAIL;
             }
         }
-        return OK;
+        OK
     }
 }
