@@ -132,7 +132,7 @@ pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
                 );
                 // Remember how many characters were recorded last, so that
                 // `get_recorded` can drop the keys that stopped the recording.
-                last_recorded_len.set(last_recorded_len.get() + buflen);
+                last_recorded_len.set(last_recorded_len.get().wrapping_add(buflen));
             }
 
             (*state.ptr()).buflen = 0;

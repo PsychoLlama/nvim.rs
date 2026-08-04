@@ -354,7 +354,10 @@ pub unsafe fn ungetchars(len: c_int) {
             return;
         }
         delete_buff_tail(recordbuff.ptr(), len);
-        last_recorded_len.set(last_recorded_len.get() - len as usize);
+        // Wrapping, as the C's `size_t -=` is: `delete_buff_tail` gives up
+        // when the block is shorter than `len`, and the counter then goes
+        // below zero rather than tracking what was really removed.
+        last_recorded_len.set(last_recorded_len.get().wrapping_sub(len as usize));
     }
 }
 

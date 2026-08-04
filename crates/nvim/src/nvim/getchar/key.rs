@@ -123,7 +123,18 @@ unsafe fn vgetc_from_typeahead() -> c_int {
         mod_mask.set(0);
         vgetc_mod_mask.set(0);
         vgetc_char.set(0);
-        last_recorded_len.set(last_recorded_len.get() - last_vgetc_recorded_len.get());
+        // `wrapping_sub` and not `-`: upstream's comment says
+        // `last_recorded_len` can be *larger* than what the last `vgetc`
+        // recorded, but it can also be smaller -- `ungetchars` shrinks it --
+        // and C's defined unsigned wrap is what happens then. A huge value
+        // makes `get_recorded`'s `len >= last_recorded_len` fail, so nothing
+        // is trimmed off the recording, which is the upstream behaviour.
+        // `test_registers`' Test_recording_with_select_mode reaches it.
+        last_recorded_len.set(
+            last_recorded_len
+                .get()
+                .wrapping_sub(last_vgetc_recorded_len.get()),
+        );
 
         let c = loop {
             // No mapping once a modifier has been read.

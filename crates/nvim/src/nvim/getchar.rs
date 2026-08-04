@@ -257,7 +257,16 @@ static block_redo: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static KeyNoremap: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static typebuf_init: GlobalCell<[uint8_t; 265]> = GlobalCell::new([0; 265]);
 static noremapbuf_init: GlobalCell<[uint8_t; 265]> = GlobalCell::new([0; 265]);
-static last_recorded_len: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
+/// How many bytes the last `gotchars` recorded, so that `get_recorded` can
+/// drop the keys that stopped the recording.
+///
+/// Every arithmetic on this counter is **wrapping**, as the C's `size_t` is:
+/// `vgetc` subtracts what the previous call recorded and `ungetchars`
+/// subtracts what it took back, and either can take it below zero. A huge
+/// value then makes `get_recorded`'s `len >= last_recorded_len` fail and
+/// nothing is trimmed, which is what upstream does. `test_registers`'
+/// Test_recording_with_select_mode reaches it.
+static last_recorded_len: GlobalCell<size_t> = GlobalCell::new(0);
 static e_recursive_mapping: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E223: Recursive mapping\0")
 });
