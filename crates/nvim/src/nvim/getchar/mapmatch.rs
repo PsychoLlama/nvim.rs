@@ -342,6 +342,13 @@ unsafe fn search_maphash(
                 }
 
                 if found.keylen > (*tb).tb_len {
+                    // `<nowait>` is order-dependent, and upstream is the
+                    // same: `mp_match` is only set by an *earlier* iteration
+                    // of this walk, and `map_add` pushes each new mapping to
+                    // the front of its bucket. So a `<nowait>` mapping only
+                    // cuts the wait short when it was defined *after* the
+                    // longer candidate it is ambiguous with. Measured both
+                    // ways -- see the divergence docket, O-B13-1.
                     if !*timedout && !(!mp_match.is_null() && (*mp_match).m_nowait != 0) {
                         // Stop at a partial match and wait for more input.
                         found.keylen = KEYLEN_PART_MAP;
