@@ -49,6 +49,7 @@ use crate::src::nvim::keycodes::{K_DOWN, K_KENTER, K_LEFT, K_RIGHT, K_UP};
 use crate::src::nvim::lua::executor::{
     nlua_call_user_expand_func, nlua_exec, nlua_expand_get_matches, nlua_expand_pat,
 };
+use crate::src::nvim::main::pum_want;
 use crate::src::nvim::main::{
     Columns, KeyTyped, NameBuff, RedrawingDisabled, Rows, cmd_silent, cmdline_row, cmdline_win,
     curbuf, current_sctx, curwin, default_gridview, e_invarg, e_invarg2, e_nomatch2, e_toomany,
@@ -78,8 +79,8 @@ use crate::src::nvim::os::env::{expand_env_save_opt, get_env_name, home_replace,
 use crate::src::nvim::os::fs::os_isdir;
 use crate::src::nvim::os::lang::{get_lang_arg, get_locales};
 use crate::src::nvim::os::libc::{
-    __assert_fail, gettext, memmove, memset, qsort, snprintf, strchr, strcmp, strcpy, strlen,
-    strncmp, strncpy,
+    __assert_fail, gettext, memmove, qsort, snprintf, strchr, strcmp, strcpy, strlen, strncmp,
+    strncpy,
 };
 use crate::src::nvim::os::users::{UserMatch, get_users, match_user};
 use crate::src::nvim::path::{
@@ -157,7 +158,6 @@ pub use self::eval::*;
 mod bufpat;
 pub(crate) use self::bufpat::*;
 unsafe extern "C" {
-    static pum_want: GlobalCell<C2Rust_Unnamed_22>;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
@@ -359,14 +359,6 @@ pub const EW_PATH: C2Rust_Unnamed_28 = 128;
 pub const MB_MAXBYTES: C2Rust_Unnamed_23 = 21;
 pub const WM_SCROLLED: C2Rust_Unnamed_26 = 2;
 pub const WM_SHOWN: C2Rust_Unnamed_26 = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_22 {
-    pub active: bool,
-    pub item: ::core::ffi::c_int,
-    pub insert: bool,
-    pub finish: bool,
-}
 pub const EXPAND_FILETYPECMD_INDENT: C2Rust_Unnamed_33 = 2;
 pub const EXPAND_FILETYPECMD_PLUGIN: C2Rust_Unnamed_33 = 1;
 pub const OPT_LOCAL: C2Rust_Unnamed_27 = 2;

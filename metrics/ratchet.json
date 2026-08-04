@@ -81,7 +81,7 @@
     "crates/nvim/src/nvim/cmdexpand/context.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/cmdexpand/escape.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/cmdexpand/eval.rs": {"unsafe": 3},
-    "crates/nvim/src/nvim/cmdexpand/expandone.rs": {"unsafe": 8},
+    "crates/nvim/src/nvim/cmdexpand/expandone.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/cmdexpand/fromcontext.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/cmdexpand/generate.rs": {"unsafe": 38},
     "crates/nvim/src/nvim/cmdexpand/pum.rs": {"unsafe": 11},

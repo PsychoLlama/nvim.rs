@@ -34,7 +34,6 @@
     "crates/nvim/src/nvim/cmdexpand/cmdname.rs": 7,
     "crates/nvim/src/nvim/cmdexpand/context.rs": 14,
     "crates/nvim/src/nvim/cmdexpand/eval.rs": 8,
-    "crates/nvim/src/nvim/cmdexpand/expandone.rs": 25,
     "crates/nvim/src/nvim/cmdexpand/fromcontext.rs": 13,
     "crates/nvim/src/nvim/cmdexpand/generate.rs": 23,
     "crates/nvim/src/nvim/cmdexpand/pum.rs": 4,
