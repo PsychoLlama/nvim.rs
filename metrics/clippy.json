@@ -72,7 +72,6 @@
     "crates/nvim/src/nvim/fileio.rs": 1,
     "crates/nvim/src/nvim/garray.rs": 7,
     "crates/nvim/src/nvim/getchar.rs": 2,
-    "crates/nvim/src/nvim/getchar/mapmatch.rs": 6,
     "crates/nvim/src/nvim/hashtab.rs": 2,
     "crates/nvim/src/nvim/help.rs": 49,
     "crates/nvim/src/nvim/highlight_group/table.rs": 2,

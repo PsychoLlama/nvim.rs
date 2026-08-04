@@ -66,9 +66,7 @@ use crate::src::nvim::options::kOptBoFlagError;
 use crate::src::nvim::os::env::expand_env;
 use crate::src::nvim::os::fileio::{file_close, file_open, file_open_stdin, file_read};
 use crate::src::nvim::os::input::{input_available, input_get, line_breakcheck, os_breakcheck};
-use crate::src::nvim::os::libc::{
-    __assert_fail, atoi, fprintf, gettext, memmove, putc, stderr, strcmp, strlen, strncmp,
-};
+use crate::src::nvim::os::libc::{atoi, fprintf, gettext, putc, stderr, strcmp, strlen, strncmp};
 use crate::src::nvim::plines::{init_charsize_arg, win_charsize};
 use crate::src::nvim::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_HITRETURN, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL,
@@ -78,12 +76,12 @@ use crate::src::nvim::state::{
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::{
-    Arena, Array, BoolVarValue, CharsizeArg, CharsizeKind, Error, EvalFuncData, FileDescriptor,
-    Integer, LuaRef, LuaRetMode, MotionType, MultiQueue, Object, OptInt, RemapValues, ScopeType,
-    SpecialVarValue, StrCharInfo, String_0, TriState, VV_MOUSE_COL, VV_MOUSE_LNUM, VV_MOUSE_WIN,
-    VV_MOUSE_WINID, VarLockStatus, VarType, buffblock, buffblock_T, buffheader_T, colnr_T,
-    flush_buffers_T, garray_T, kFalse, kNone, key_extra, linenr_T, mapblock_T, oparg_T, ptrdiff_t,
-    save_redo_T, size_t, tasave_T, typebuf_T, typval_T, uint8_t, uint64_t, varnumber_T,
+    Arena, Array, BoolVarValue, CharsizeArg, Error, EvalFuncData, FileDescriptor, Integer, LuaRef,
+    LuaRetMode, MotionType, MultiQueue, Object, OptInt, RemapValues, ScopeType, SpecialVarValue,
+    String_0, TriState, VV_MOUSE_COL, VV_MOUSE_LNUM, VV_MOUSE_WIN, VV_MOUSE_WINID, VarLockStatus,
+    VarType, buffblock, buffblock_T, buffheader_T, colnr_T, flush_buffers_T, garray_T, kFalse,
+    kNone, key_extra, linenr_T, mapblock_T, oparg_T, ptrdiff_t, save_redo_T, size_t, tasave_T,
+    typebuf_T, typval_T, uint8_t, uint64_t, varnumber_T,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::src::nvim::undo::u_sync;

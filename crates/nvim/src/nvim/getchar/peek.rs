@@ -2,624 +2,760 @@
 //!
 //! [`vgetorpeek`] is the loop that turns "something is in the typeahead" into
 //! "a byte to hand out": it consults the stuff buffers, runs the mapping
-//! match, and blocks in [`inchar`] when neither has anything.  [`inchar`] is
+//! match, and blocks in [`inchar`] when neither has anything. [`inchar`] is
 //! the only place that reads the script stack or the OS input buffer.
+//!
+//! Two upstream properties this file is faithful to, both reachable and both
+//! on the divergence docket (D-B13-1, D-B13-2):
+//!
+//! - Under `ex_normal_busy` the "get it from the user" arm never reaches
+//!   [`inchar`]; it answers a synthetic ESC (or CTRL-C on the command line)
+//!   so that `:normal` cannot block. `nvim_feedkeys(k, "Lx")` puts its bytes
+//!   in the *low-level* input buffer and then runs `exec_normal` with
+//!   `use_vpeekc` under exactly that flag, so `vpeekc()` answers ESC forever
+//!   and the loop spins. Upstream v0.12.4 has the identical structure
+//!   (getchar.c:2812-2841, api/vim.c:323-350, ex_docmd.c:7451-7468); the
+//!   comment on `exec_normal`'s loop shows the author expected CTRL-C here.
+//! - In `--headless -l` (which sets `silent_mode`) a blocking [`inchar`]
+//!   reaches `input_get`, which drains the event loop and then calls
+//!   `read_error_exit()` -> `getout(0)`. That is upstream's designed exit for
+//!   batch mode, not a tty-dependent accident.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::key_escape;
+use core::ffi::{c_char, c_int, c_long};
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn vgetorpeek(mut advance: bool) -> ::core::ffi::c_int {
+/// Longest partial mapping `'showcmd'` will display.
+const SHOWCMD_COLS: c_int = 10;
+
+/// Where the cursor was left after the `<Esc>`-in-Insert peek, which is where
+/// `'showcmd'` has to draw the partially matched keys.
+#[derive(Clone, Copy)]
+struct CursorAt {
+    wcol: c_int,
+    wrow: c_int,
+}
+
+/// What [`show_partial_key`] put on the screen and has to take back off.
+struct Partial {
+    /// Index into the typeahead the showcmd display started at; 0 when
+    /// nothing was pushed.
+    showcmd_idx: c_int,
+    /// Whether a character was drawn into the text or the command line.
+    showing: bool,
+}
+
+/// Peek 25ms for more input after an `<Esc>` in Insert mode and, when none
+/// comes, move the cursor as if Insert mode had been left.
+///
+/// This is what avoids the one-second pause after typing `<Esc>`: the mode
+/// message is taken down and the cursor moved left straight away, and if a
+/// key does arrive after all the display is simply redrawn. Answers the
+/// cursor position to draw `'showcmd'` at, and whether the mode message was
+/// removed.
+///
+/// # Safety
+/// Callable at any time; `typebuf` must have room for three more bytes.
+unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
     unsafe {
-        let mut c: ::core::ffi::c_int = 0;
-        let mut timedout: bool = false_0 != 0;
-        let mut mapdepth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut mode_deleted: bool = false_0 != 0;
-        if vgetc_busy.get() > 0 as ::core::ffi::c_int
-            && ex_normal_busy.get() == 0 as ::core::ffi::c_int
+        let deleted = mode_displayed.get();
+        if deleted {
+            unshowmode(true);
+        }
+        validate_cursor(curwin.get());
+        let win = curwin.get();
+        let old_wcol = (*win).w_wcol;
+        let old_wrow = (*win).w_wrow;
+
+        // Move the cursor left, if that is possible.
+        if (*win).w_cursor.col != 0 {
+            let mut col: colnr_T = 0;
+            if (*win).w_wcol > 0 {
+                if did_ai.get()
+                    && c_int::from(*skipwhite(
+                        get_cursor_line_ptr().offset((*win).w_cursor.col as isize),
+                    )) == NUL
+                {
+                    // After auto-indenting with no text following, the
+                    // trailing white space is about to be truncated, so the
+                    // cursor belongs after the last non-white character.
+                    (*win).w_wcol = 0;
+                    let ptr = get_cursor_line_ptr();
+                    let endptr = ptr.offset((*win).w_cursor.col as isize);
+
+                    let mut csarg = CharsizeArg::default();
+                    let cstype = init_charsize_arg(&mut csarg, win, (*win).w_cursor.lnum, ptr);
+                    let mut ci = utf_ptr2StrCharInfo(ptr);
+                    let mut vcol = 0;
+                    while ci.ptr < endptr {
+                        if !ascii_iswhite(ci.chr.value as c_int) {
+                            (*win).w_wcol = vcol;
+                        }
+                        vcol += win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg).width;
+                        ci = utfc_next(ci);
+                    }
+
+                    (*win).w_wrow = (*win).w_cline_row + (*win).w_wcol / (*win).w_view_width;
+                    (*win).w_wcol %= (*win).w_view_width;
+                    (*win).w_wcol += win_col_off(win);
+                    col = 0; // no correction needed
+                } else {
+                    (*win).w_wcol -= 1;
+                    col = (*win).w_cursor.col - 1;
+                }
+            } else if (*win).w_onebuf_opt.wo_wrap != 0 && (*win).w_wrow != 0 {
+                (*win).w_wrow -= 1;
+                (*win).w_wcol = (*win).w_view_width - 1;
+                col = (*win).w_cursor.col - 1;
+            }
+            if col > 0 && (*win).w_wcol > 0 {
+                // Correct for the cursor sitting on the right half of a
+                // double-width character.
+                let ptr = get_cursor_line_ptr();
+                col -= utf_head_off(ptr, ptr.offset(col as isize));
+                if utf_ptr2cells(ptr.offset(col as isize)) > 1 {
+                    (*win).w_wcol -= 1;
+                }
+            }
+        }
+        setcursor();
+        ui_flush();
+
+        at.wcol = (*win).w_wcol;
+        at.wrow = (*win).w_wrow;
+        (*win).w_wcol = old_wcol;
+        (*win).w_wrow = old_wrow;
+        deleted
+    }
+}
+
+/// Show the partially matched keys with `'showcmd'` while we wait for the
+/// rest of a mapping.
+///
+/// # Safety
+/// Callable at any time.
+unsafe fn show_partial_key(at: CursorAt) -> Partial {
+    unsafe {
+        let tb = typebuf.ptr();
+        let mut partial = Partial {
+            showcmd_idx: 0,
+            showing: false,
+        };
+
+        if (State.get() & (MODE_NORMAL | MODE_INSERT) != 0 || State.get() == MODE_LANGMAP)
+            && State.get() != MODE_HITRETURN
         {
+            let last = (*tb)
+                .tb_buf
+                .offset(((*tb).tb_off + (*tb).tb_len - 1) as isize);
+            if State.get() & MODE_INSERT != 0 && ptr2cells(last.cast()) == 1 {
+                // This looks nice when typing a dead-character mapping.
+                edit_putchar(c_int::from(*last), false);
+                setcursor(); // put the cursor back where it belongs
+                partial.showing = true;
+            }
+            // The showcmd area is drawn relative to the cursor position the
+            // <Esc> peek above left, not the one the cursor is at now.
+            let win = curwin.get();
+            let old_wcol = (*win).w_wcol;
+            let old_wrow = (*win).w_wrow;
+            (*win).w_wcol = at.wcol;
+            (*win).w_wrow = at.wrow;
+            push_showcmd();
+            if (*tb).tb_len > SHOWCMD_COLS {
+                partial.showcmd_idx = (*tb).tb_len - SHOWCMD_COLS;
+            }
+            while partial.showcmd_idx < (*tb).tb_len {
+                add_byte_to_showcmd(
+                    *(*tb)
+                        .tb_buf
+                        .offset(((*tb).tb_off + partial.showcmd_idx) as isize),
+                );
+                partial.showcmd_idx += 1;
+            }
+            (*win).w_wcol = old_wcol;
+            (*win).w_wrow = old_wrow;
+        }
+
+        // The same on the command line, where `get_number()` has none.
+        if State.get() & MODE_CMDLINE != 0
+            && !(*get_cmdline_info()).cmdbuff.is_null()
+            && cmdline_star.get() == 0
+        {
+            let p = (*tb)
+                .tb_buf
+                .offset(((*tb).tb_off + (*tb).tb_len - 1) as isize);
+            if ptr2cells(p.cast()) == 1 && c_int::from(*p) < 128 {
+                putcmdline(*p as c_char, false);
+                partial.showing = true;
+            }
+        }
+        partial
+    }
+}
+
+/// Take back what [`show_partial_key`] drew.
+///
+/// # Safety
+/// `partial` must be what the matching [`show_partial_key`] answered.
+unsafe fn unshow_partial_key(partial: &Partial) {
+    unsafe {
+        if partial.showcmd_idx != 0 {
+            pop_showcmd();
+        }
+        if partial.showing {
+            if State.get() & MODE_INSERT != 0 {
+                edit_unputchar();
+            }
+            if State.get() & MODE_CMDLINE != 0 && !(*get_cmdline_info()).cmdbuff.is_null() {
+                unputcmdline();
+            } else {
+                setcursor(); // put the cursor back where it belongs
+            }
+        }
+    }
+}
+
+/// How long to wait in [`inchar`] for the rest of a mapping or key code.
+///
+/// # Safety
+/// Callable at any time.
+unsafe fn wait_time_for(advance: bool, keylen: c_int) -> c_long {
+    unsafe {
+        if !advance {
+            return 0;
+        }
+        let tb = typebuf.ptr();
+        if (*tb).tb_len == 0
+            || !(p_timeout.get() != 0 || (p_ttimeout.get() != 0 && keylen == KEYLEN_PART_KEY))
+        {
+            -1 // blocking wait
+        } else if keylen == KEYLEN_PART_KEY && p_ttm.get() >= 0 {
+            p_ttm.get() as c_long
+        } else {
+            p_tm.get() as c_long
+        }
+    }
+}
+
+/// Everything that got read after a CTRL-C, and the key to answer with.
+///
+/// # Safety
+/// Callable at any time.
+unsafe fn interrupted(advance: bool) -> c_int {
+    unsafe {
+        let tb = typebuf.ptr();
+        // Flush all input.
+        let got = inchar((*tb).tb_buf, (*tb).tb_buflen - 1, 0);
+
+        // If `inchar` answered true (a script file was active) or we are
+        // inside a mapping, get out of Insert mode; otherwise behave as if a
+        // CTRL-C had been typed, so that typing CTRL-C in Insert mode really
+        // inserts one.
+        let c = if (got != 0 || (*tb).tb_maplen != 0)
+            && State.get() & (MODE_INSERT | MODE_CMDLINE) != 0
+        {
+            ESC
+        } else {
+            Ctrl_C
+        };
+        flush_buffers(FLUSH_INPUT); // flush all typeahead
+
+        if advance {
+            // Record this character too; it may be needed to get out of
+            // Insert mode.
+            *(*tb).tb_buf = c as u8;
+            gotchars((*tb).tb_buf, 1);
+        }
+        cmd_silent.set(false);
+        c
+    }
+}
+
+/// The loop that fills the typeahead and matches mappings against it.
+///
+/// Answers the byte to hand out, or a negative value when the input script
+/// ended and the caller should start over.
+///
+/// # Safety
+/// Callable at any time; may block waiting for input.
+unsafe fn read_from_typeahead(
+    advance: bool,
+    timedout: &mut bool,
+    mapdepth: &mut c_int,
+    mode_deleted: &mut bool,
+) -> c_int {
+    unsafe {
+        loop {
+            check_end_reg_executing(advance);
+
+            // `os_breakcheck` is slow; inside a mapping do not use it every
+            // time round, but do for every typed character.
+            if (*typebuf.ptr()).tb_maplen != 0 {
+                line_breakcheck();
+            } else {
+                // os_breakcheck() can call input_enqueue().
+                if (mapped_ctrl_c.get() | (*curbuf.get()).b_mapped_ctrl_c) & get_real_state() != 0 {
+                    ctrl_c_interrupts.set(false);
+                }
+                os_breakcheck(); // check for CTRL-C
+                ctrl_c_interrupts.set(true);
+            }
+
+            let mut keylen = 0;
+            if got_int.get() {
+                return interrupted(advance);
+            } else if (*typebuf.ptr()).tb_len > 0 {
+                // Check for a mapping in the typeahead.
+                match handle_mapping(&raw mut keylen, timedout, mapdepth) as map_result_T {
+                    map_result_retry => continue, // try mapping again
+                    map_result_fail => return -1, // failed; use the outer loop
+                    map_result_get => {
+                        // Take the character from the typeahead.
+                        let tb = typebuf.ptr();
+                        let c = c_int::from(*(*tb).tb_buf.offset((*tb).tb_off as isize));
+                        if advance {
+                            cmd_silent.set((*tb).tb_silent > 0);
+                            if (*tb).tb_maplen > 0 {
+                                KeyTyped.set(false);
+                            } else {
+                                KeyTyped.set(true);
+                                // Write the character to the script file(s).
+                                gotchars((*tb).tb_buf.offset((*tb).tb_off as isize), 1);
+                            }
+                            KeyNoremap
+                                .set(c_int::from(*(*tb).tb_noremap.offset((*tb).tb_off as isize)));
+                            del_typebuf(1, 0);
+                        }
+                        return c;
+                    }
+                    _ => {} // not enough characters; get more
+                }
+            }
+
+            // Get a character from the user, handling <Esc> in Insert mode.
+            //
+            // Special case: an <ESC> in Insert mode with nothing else
+            // immediately available means we pretend to leave Insert mode,
+            // which avoids the one-second delay after typing <ESC>. If
+            // something does arrive after all the mode may have to be
+            // redisplayed; that the cursor is in the wrong place until then
+            // does not matter.
+            let mut c = 0;
+            let win = curwin.get();
+            let mut at = CursorAt {
+                wcol: (*win).w_wcol,
+                wrow: (*win).w_wrow,
+            };
+            let tb = typebuf.ptr();
+            if advance
+                && (*tb).tb_len == 1
+                && c_int::from(*(*tb).tb_buf.offset((*tb).tb_off as isize)) == ESC
+                && no_mapping.get() == 0
+                && ex_normal_busy.get() == 0
+                && (*tb).tb_maplen == 0
+                && State.get() & MODE_INSERT != 0
+                && (p_timeout.get() != 0 || (keylen == KEYLEN_PART_KEY && p_ttimeout.get() != 0))
+                && {
+                    c = inchar(
+                        (*tb).tb_buf.offset(((*tb).tb_off + (*tb).tb_len) as isize),
+                        3,
+                        25,
+                    );
+                    c == 0
+                }
+            {
+                if esc_leaves_insert(&mut at) {
+                    *mode_deleted = true;
+                }
+            }
+            if c < 0 {
+                continue; // end of the input script reached
+            }
+
+            // Allow mapping for the characters just typed. `c` is the number
+            // of extra bytes and `tb_len` is 1.
+            for n in 1..=c {
+                *(*tb).tb_noremap.offset(((*tb).tb_off + n) as isize) = RM_YES as u8;
+            }
+            (*tb).tb_len += c;
+
+            if (*tb).tb_len >= (*tb).tb_maplen + MAXMAPLEN as c_int {
+                // The buffer is full, so don't map.
+                *timedout = true;
+                continue;
+            }
+
+            if ex_normal_busy.get() > 0 {
+                /// The key the previous forced answer used, so that the
+                /// cmdline window alternates between ESC and CTRL-C.
+                static tc: GlobalCell<c_int> = GlobalCell::new(0);
+
+                // No typeahead left and inside `:normal`: something has to be
+                // answered to avoid getting stuck. With an incomplete mapping
+                // present, behave as if it timed out.
+                if (*tb).tb_len > 0 {
+                    *timedout = true;
+                    continue;
+                }
+
+                // On the command line only CTRL-C breaks it; for the cmdline
+                // window alternate between ESC (for most situations) and
+                // CTRL-C (which closes the window).
+                let c = if State.get() & MODE_CMDLINE != 0
+                    || (cmdwin_type.get() > 0 && tc.get() == ESC)
+                {
+                    Ctrl_C
+                } else {
+                    ESC
+                };
+                tc.set(c);
+
+                // A flag saying this was not a normal character.
+                if advance {
+                    typebuf_was_empty.set(true);
+                }
+                // Answer 0 in normal_check().
+                if pending_exmode_active.get() {
+                    exmode_active.set(true);
+                }
+                // No characters to block abbreviations for.
+                (*tb).tb_no_abbr_cnt = 0;
+                return c;
+            }
+
+            // In Insert mode a screen update is skipped while characters are
+            // still available. But when those characters are part of a
+            // mapping we are about to block here, so the changed text has to
+            // be shown. Same for a redraw 'lazyredraw' postponed because
+            // there was something in the input buffer (a termresponse, say).
+            if (State.get() & MODE_INSERT != 0 || p_lz.get() != 0)
+                && State.get() & MODE_CMDLINE == 0
+                && advance
+                && must_redraw.get() != 0
+                && !need_wait_return.get()
+            {
+                update_screen();
+                setcursor(); // put the cursor back where it belongs
+            }
+
+            let partial = if (*tb).tb_len > 0 && advance && !exmode_active.get() {
+                show_partial_key(at)
+            } else {
+                Partial {
+                    showcmd_idx: 0,
+                    showing: false,
+                }
+            };
+
+            if (*tb).tb_len == 0 {
+                // `timedout` may have been set when a mapping with an empty
+                // RHS fully matched while longer mappings timed out.
+                *timedout = false;
+            }
+
+            let wait_tb_len = (*tb).tb_len;
+            c = inchar(
+                (*tb).tb_buf.offset(((*tb).tb_off + (*tb).tb_len) as isize),
+                (*tb).tb_buflen - (*tb).tb_off - (*tb).tb_len - 1,
+                wait_time_for(advance, keylen),
+            );
+
+            unshow_partial_key(&partial);
+
+            if c < 0 {
+                continue; // end of the input script reached
+            }
+            if c == NUL {
+                // No character is available.
+                if !advance {
+                    return NUL;
+                }
+                if wait_tb_len > 0 {
+                    *timedout = true; // timed out
+                    continue;
+                }
+            } else {
+                // Allow mapping for the characters just typed.
+                while c_int::from(*(*tb).tb_buf.offset(((*tb).tb_off + (*tb).tb_len) as isize))
+                    != NUL
+                {
+                    *(*tb)
+                        .tb_noremap
+                        .offset(((*tb).tb_off + (*tb).tb_len) as isize) = RM_YES as u8;
+                    (*tb).tb_len += 1;
+                }
+            }
+        }
+    }
+}
+
+/// Get a byte from the stuff buffer, the typeahead buffer, or the user.
+///
+/// With `advance` (what `vgetc` wants) the byte is really consumed, `KeyTyped`
+/// is set when the user typed it and `KeyStuffed` when it came from the stuff
+/// buffer; without it (what `vpeekc` wants) this only looks, and answers `NUL`
+/// when there is nothing.
+///
+/// Mappings are checked when the global `no_mapping` is zero. Only one byte of
+/// a multibyte character comes back, and a `K_SPECIAL` may be escaped — two
+/// more bytes have to be fetched then.
+///
+/// # Safety
+/// Callable at any time; may block waiting for input when `advance` is set.
+pub(crate) unsafe fn vgetorpeek(advance: bool) -> c_int {
+    unsafe {
+        // This function does not work well when called recursively, which can
+        // happen because `add_to_showcmd` uses `char_avail`, and because a UI
+        // callback that writes to the screen can raise a `wait_return`. Using
+        // `:normal` can do it too, but that saves the typeahead buffer, so it
+        // is allowed -- it just must not read a key from the user.
+        if vgetc_busy.get() > 0 && ex_normal_busy.get() == 0 {
             return NUL;
         }
-        (*vgetc_busy.ptr()) += 1;
+        vgetc_busy.set(vgetc_busy.get() + 1);
+
         if advance {
-            KeyStuffed.set(false_0);
-            typebuf_was_empty.set(false_0 != 0);
+            KeyStuffed.set(0);
+            typebuf_was_empty.set(false);
         }
+
+        let mut timedout = false; // waited longer than 'timeoutlen' for a
+        // mapping to complete, or 'ttimeoutlen' for a key code
+        let mut mapdepth = 0; // recursive mapping check
+        let mut mode_deleted = false; // the mode message has been taken down
+
         init_typebuf();
         start_stuff();
         check_end_reg_executing(advance);
-        loop {
-            if typeahead_char.get() != 0 as ::core::ffi::c_int {
-                c = typeahead_char.get();
+
+        let c = loop {
+            // Get a character: 1. from the stuff buffer.
+            let c = if typeahead_char.get() != 0 {
+                let c = typeahead_char.get();
                 if advance {
-                    typeahead_char.set(0 as ::core::ffi::c_int);
+                    typeahead_char.set(0);
                 }
+                c
             } else {
-                c = read_readbuffers(advance);
-            }
-            if c != NUL && !got_int.get() {
+                read_readbuffers(advance)
+            };
+
+            let c = if c != NUL && !got_int.get() {
                 if advance {
-                    KeyStuffed.set(true_0);
+                    // KeyTyped is deliberately left alone: when the command
+                    // that stuffed something was typed, behave as if the
+                    // stuffed command was typed. Needed for CTRL-W CTRL-] to
+                    // open a fold, for example.
+                    KeyStuffed.set(1);
                 }
-                if (*typebuf.ptr()).tb_no_abbr_cnt == 0 as ::core::ffi::c_int {
-                    (*typebuf.ptr()).tb_no_abbr_cnt = 1 as ::core::ffi::c_int;
+                if (*typebuf.ptr()).tb_no_abbr_cnt == 0 {
+                    (*typebuf.ptr()).tb_no_abbr_cnt = 1; // no abbreviations now
                 }
+                c
             } else {
-                loop {
-                    check_end_reg_executing(advance);
-                    if (*typebuf.ptr()).tb_maplen != 0 {
-                        line_breakcheck();
-                    } else {
-                        if (mapped_ctrl_c.get() | (*curbuf.get()).b_mapped_ctrl_c)
-                            & get_real_state()
-                            != 0
-                        {
-                            ctrl_c_interrupts.set(false_0 != 0);
-                        }
-                        os_breakcheck();
-                        ctrl_c_interrupts.set(true_0 != 0);
-                    }
-                    let mut keylen: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    if got_int.get() {
-                        c = inchar(
-                            (*typebuf.ptr()).tb_buf,
-                            (*typebuf.ptr()).tb_buflen - 1 as ::core::ffi::c_int,
-                            0 as ::core::ffi::c_long,
-                        );
-                        if (c != 0 || (*typebuf.ptr()).tb_maplen != 0)
-                            && State.get() & (MODE_INSERT | MODE_CMDLINE) != 0
-                        {
-                            c = ESC;
-                        } else {
-                            c = Ctrl_C;
-                        }
-                        flush_buffers(FLUSH_INPUT);
-                        if advance {
-                            *(*typebuf.ptr()).tb_buf = c as uint8_t;
-                            gotchars((*typebuf.ptr()).tb_buf, 1 as size_t);
-                        }
-                        cmd_silent.set(false_0 != 0);
-                        break;
-                    } else {
-                        if (*typebuf.ptr()).tb_len > 0 as ::core::ffi::c_int {
-                            let mut result: map_result_T = handle_mapping(
-                                &raw mut keylen,
-                                &raw mut timedout,
-                                &raw mut mapdepth,
-                            )
-                                as map_result_T;
-                            if result as ::core::ffi::c_uint
-                                == map_result_retry as ::core::ffi::c_int as ::core::ffi::c_uint
-                            {
-                                continue;
-                            }
-                            if result as ::core::ffi::c_uint
-                                == map_result_fail as ::core::ffi::c_int as ::core::ffi::c_uint
-                            {
-                                c = -1 as ::core::ffi::c_int;
-                                break;
-                            } else if result as ::core::ffi::c_uint
-                                == map_result_get as ::core::ffi::c_int as ::core::ffi::c_uint
-                            {
-                                c = *(*typebuf.ptr())
-                                    .tb_buf
-                                    .offset((*typebuf.ptr()).tb_off as isize)
-                                    as ::core::ffi::c_int;
-                                if advance {
-                                    cmd_silent
-                                        .set((*typebuf.ptr()).tb_silent > 0 as ::core::ffi::c_int);
-                                    if (*typebuf.ptr()).tb_maplen > 0 as ::core::ffi::c_int {
-                                        KeyTyped.set(false_0 != 0);
-                                    } else {
-                                        KeyTyped.set(true_0 != 0);
-                                        gotchars(
-                                            (*typebuf.ptr())
-                                                .tb_buf
-                                                .offset((*typebuf.ptr()).tb_off as isize),
-                                            1 as size_t,
-                                        );
-                                    }
-                                    KeyNoremap.set(
-                                        *(*typebuf.ptr())
-                                            .tb_noremap
-                                            .offset((*typebuf.ptr()).tb_off as isize)
-                                            as ::core::ffi::c_uchar
-                                            as ::core::ffi::c_int,
-                                    );
-                                    del_typebuf(1 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-                                }
-                                break;
-                            }
-                        }
-                        c = 0 as ::core::ffi::c_int;
-                        let mut new_wcol: ::core::ffi::c_int = (*curwin.get()).w_wcol;
-                        let mut new_wrow: ::core::ffi::c_int = (*curwin.get()).w_wrow;
-                        if advance as ::core::ffi::c_int != 0
-                            && (*typebuf.ptr()).tb_len == 1 as ::core::ffi::c_int
-                            && *(*typebuf.ptr())
-                                .tb_buf
-                                .offset((*typebuf.ptr()).tb_off as isize)
-                                as ::core::ffi::c_int
-                                == ESC
-                            && no_mapping.get() == 0
-                            && ex_normal_busy.get() == 0 as ::core::ffi::c_int
-                            && (*typebuf.ptr()).tb_maplen == 0 as ::core::ffi::c_int
-                            && State.get() & MODE_INSERT != 0
-                            && (p_timeout.get() != 0
-                                || keylen == KEYLEN_PART_KEY as ::core::ffi::c_int
-                                    && p_ttimeout.get() != 0)
-                            && {
-                                c = inchar(
-                                    (*typebuf.ptr())
-                                        .tb_buf
-                                        .offset((*typebuf.ptr()).tb_off as isize)
-                                        .offset((*typebuf.ptr()).tb_len as isize),
-                                    3 as ::core::ffi::c_int,
-                                    25 as ::core::ffi::c_long,
-                                );
-                                c == 0 as ::core::ffi::c_int
-                            }
-                        {
-                            if mode_displayed.get() {
-                                unshowmode(true_0 != 0);
-                                mode_deleted = true_0 != 0;
-                            }
-                            validate_cursor(curwin.get());
-                            let mut old_wcol: ::core::ffi::c_int = (*curwin.get()).w_wcol;
-                            let mut old_wrow: ::core::ffi::c_int = (*curwin.get()).w_wrow;
-                            if (*curwin.get()).w_cursor.col != 0 as ::core::ffi::c_int {
-                                let mut col: colnr_T = 0 as colnr_T;
-                                let mut ptr: *mut ::core::ffi::c_char =
-                                    ::core::ptr::null_mut::<::core::ffi::c_char>();
-                                if (*curwin.get()).w_wcol > 0 as ::core::ffi::c_int {
-                                    if did_ai.get() as ::core::ffi::c_int != 0
-                                        && *skipwhite(
-                                            get_cursor_line_ptr()
-                                                .offset((*curwin.get()).w_cursor.col as isize),
-                                        )
-                                            as ::core::ffi::c_int
-                                            == NUL
-                                    {
-                                        (*curwin.get()).w_wcol = 0 as ::core::ffi::c_int;
-                                        ptr = get_cursor_line_ptr();
-                                        let mut endptr: *mut ::core::ffi::c_char =
-                                            ptr.offset((*curwin.get()).w_cursor.col as isize);
-                                        let mut csarg: CharsizeArg = CharsizeArg::default();
-                                        let mut cstype: CharsizeKind = init_charsize_arg(
-                                            &mut csarg,
-                                            curwin.get(),
-                                            (*curwin.get()).w_cursor.lnum,
-                                            ptr,
-                                        );
-                                        let mut ci: StrCharInfo = utf_ptr2StrCharInfo(ptr);
-                                        let mut vcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                                        while ci.ptr < endptr {
-                                            if !ascii_iswhite(ci.chr.value as ::core::ffi::c_int) {
-                                                (*curwin.get()).w_wcol = vcol;
-                                            }
-                                            vcol += win_charsize(
-                                                cstype,
-                                                vcol,
-                                                ci.ptr,
-                                                ci.chr.value,
-                                                &mut csarg,
-                                            )
-                                            .width;
-                                            ci = utfc_next(ci);
-                                        }
-                                        (*curwin.get()).w_wrow = (*curwin.get()).w_cline_row
-                                            + (*curwin.get()).w_wcol / (*curwin.get()).w_view_width;
-                                        (*curwin.get()).w_wcol %= (*curwin.get()).w_view_width;
-                                        (*curwin.get()).w_wcol += win_col_off(curwin.get());
-                                        col = 0 as ::core::ffi::c_int as colnr_T;
-                                    } else {
-                                        (*curwin.get()).w_wcol -= 1;
-                                        col = ((*curwin.get()).w_cursor.col as ::core::ffi::c_int
-                                            - 1 as ::core::ffi::c_int)
-                                            as colnr_T;
-                                    }
-                                } else if (*curwin.get()).w_onebuf_opt.wo_wrap != 0
-                                    && (*curwin.get()).w_wrow != 0
-                                {
-                                    (*curwin.get()).w_wrow -= 1;
-                                    (*curwin.get()).w_wcol =
-                                        (*curwin.get()).w_view_width - 1 as ::core::ffi::c_int;
-                                    col = ((*curwin.get()).w_cursor.col as ::core::ffi::c_int
-                                        - 1 as ::core::ffi::c_int)
-                                        as colnr_T;
-                                }
-                                if col > 0 as ::core::ffi::c_int
-                                    && (*curwin.get()).w_wcol > 0 as ::core::ffi::c_int
-                                {
-                                    ptr = get_cursor_line_ptr();
-                                    col -= utf_head_off(ptr, ptr.offset(col as isize));
-                                    if utf_ptr2cells(ptr.offset(col as isize))
-                                        > 1 as ::core::ffi::c_int
-                                    {
-                                        (*curwin.get()).w_wcol -= 1;
-                                    }
-                                }
-                            }
-                            setcursor();
-                            ui_flush();
-                            new_wcol = (*curwin.get()).w_wcol;
-                            new_wrow = (*curwin.get()).w_wrow;
-                            (*curwin.get()).w_wcol = old_wcol;
-                            (*curwin.get()).w_wrow = old_wrow;
-                        }
-                        if c < 0 as ::core::ffi::c_int {
-                            continue;
-                        }
-                        let mut n: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-                        while n <= c {
-                            *(*typebuf.ptr())
-                                .tb_noremap
-                                .offset(((*typebuf.ptr()).tb_off + n) as isize) =
-                                RM_YES as ::core::ffi::c_int as uint8_t;
-                            n += 1;
-                        }
-                        (*typebuf.ptr()).tb_len += c;
-                        if (*typebuf.ptr()).tb_len
-                            >= (*typebuf.ptr()).tb_maplen + MAXMAPLEN as ::core::ffi::c_int
-                        {
-                            timedout = true_0 != 0;
-                        } else if ex_normal_busy.get() > 0 as ::core::ffi::c_int {
-                            static tc: GlobalCell<::core::ffi::c_int> =
-                                GlobalCell::new(0 as ::core::ffi::c_int);
-                            if (*typebuf.ptr()).tb_len > 0 as ::core::ffi::c_int {
-                                timedout = true_0 != 0;
-                            } else {
-                                c = if State.get() & MODE_CMDLINE != 0
-                                    || cmdwin_type.get() > 0 as ::core::ffi::c_int
-                                        && tc.get() == ESC
-                                {
-                                    Ctrl_C
-                                } else {
-                                    ESC
-                                };
-                                tc.set(c);
-                                if advance {
-                                    typebuf_was_empty.set(true_0 != 0);
-                                }
-                                if pending_exmode_active.get() {
-                                    exmode_active.set(true_0 != 0);
-                                }
-                                (*typebuf.ptr()).tb_no_abbr_cnt = 0 as ::core::ffi::c_int;
-                                break;
-                            }
-                        } else {
-                            if (State.get() & MODE_INSERT != 0 as ::core::ffi::c_int
-                                || p_lz.get() != 0)
-                                && State.get() & MODE_CMDLINE == 0 as ::core::ffi::c_int
-                                && advance as ::core::ffi::c_int != 0
-                                && must_redraw.get() != 0 as ::core::ffi::c_int
-                                && !need_wait_return.get()
-                            {
-                                update_screen();
-                                setcursor();
-                            }
-                            let mut showcmd_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            let mut showing_partial: bool = false_0 != 0;
-                            if (*typebuf.ptr()).tb_len > 0 as ::core::ffi::c_int
-                                && advance as ::core::ffi::c_int != 0
-                                && !exmode_active.get()
-                            {
-                                if (State.get() & (MODE_NORMAL | MODE_INSERT) != 0
-                                    || State.get() == MODE_LANGMAP)
-                                    && State.get() != MODE_HITRETURN
-                                {
-                                    if State.get() & MODE_INSERT != 0
-                                        && ptr2cells(
-                                            ((*typebuf.ptr()).tb_buf as *mut ::core::ffi::c_char)
-                                                .offset((*typebuf.ptr()).tb_off as isize)
-                                                .offset((*typebuf.ptr()).tb_len as isize)
-                                                .offset(-(1 as ::core::ffi::c_int as isize)),
-                                        ) == 1 as ::core::ffi::c_int
-                                    {
-                                        edit_putchar(
-                                            *(*typebuf.ptr()).tb_buf.offset(
-                                                ((*typebuf.ptr()).tb_off + (*typebuf.ptr()).tb_len
-                                                    - 1 as ::core::ffi::c_int)
-                                                    as isize,
-                                            )
-                                                as ::core::ffi::c_int,
-                                            false_0 != 0,
-                                        );
-                                        setcursor();
-                                        showing_partial = true_0 != 0;
-                                    }
-                                    let mut old_wcol_0: ::core::ffi::c_int = (*curwin.get()).w_wcol;
-                                    let mut old_wrow_0: ::core::ffi::c_int = (*curwin.get()).w_wrow;
-                                    (*curwin.get()).w_wcol = new_wcol;
-                                    (*curwin.get()).w_wrow = new_wrow;
-                                    push_showcmd();
-                                    if (*typebuf.ptr()).tb_len > SHOWCMD_COLS as ::core::ffi::c_int
-                                    {
-                                        showcmd_idx = (*typebuf.ptr()).tb_len
-                                            - SHOWCMD_COLS as ::core::ffi::c_int;
-                                    }
-                                    while showcmd_idx < (*typebuf.ptr()).tb_len {
-                                        let c2rust_fresh5 = showcmd_idx;
-                                        showcmd_idx = showcmd_idx + 1;
-                                        add_byte_to_showcmd(*(*typebuf.ptr()).tb_buf.offset(
-                                            ((*typebuf.ptr()).tb_off + c2rust_fresh5) as isize,
-                                        ));
-                                    }
-                                    (*curwin.get()).w_wcol = old_wcol_0;
-                                    (*curwin.get()).w_wrow = old_wrow_0;
-                                }
-                                if State.get() & MODE_CMDLINE != 0
-                                    && !(*get_cmdline_info()).cmdbuff.is_null()
-                                    && cmdline_star.get() == 0 as ::core::ffi::c_int
-                                {
-                                    let mut p: *mut ::core::ffi::c_char = ((*typebuf.ptr()).tb_buf
-                                        as *mut ::core::ffi::c_char)
-                                        .offset((*typebuf.ptr()).tb_off as isize)
-                                        .offset((*typebuf.ptr()).tb_len as isize)
-                                        .offset(-(1 as ::core::ffi::c_int as isize));
-                                    if ptr2cells(p) == 1 as ::core::ffi::c_int
-                                        && (*p as uint8_t as ::core::ffi::c_int)
-                                            < 128 as ::core::ffi::c_int
-                                    {
-                                        putcmdline(*p, false_0 != 0);
-                                        showing_partial = true_0 != 0;
-                                    }
-                                }
-                            }
-                            if (*typebuf.ptr()).tb_len == 0 as ::core::ffi::c_int {
-                                timedout = false_0 != 0;
-                            }
-                            let mut wait_time: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            if advance {
-                                if (*typebuf.ptr()).tb_len == 0 as ::core::ffi::c_int
-                                    || !(p_timeout.get() != 0
-                                        || p_ttimeout.get() != 0
-                                            && keylen == KEYLEN_PART_KEY as ::core::ffi::c_int)
-                                {
-                                    wait_time = -1 as ::core::ffi::c_int;
-                                } else if keylen == KEYLEN_PART_KEY as ::core::ffi::c_int
-                                    && p_ttm.get() >= 0 as OptInt
-                                {
-                                    wait_time = p_ttm.get() as ::core::ffi::c_int;
-                                } else {
-                                    wait_time = p_tm.get() as ::core::ffi::c_int;
-                                }
-                            }
-                            let mut wait_tb_len: ::core::ffi::c_int = (*typebuf.ptr()).tb_len;
-                            c = inchar(
-                                (*typebuf.ptr())
-                                    .tb_buf
-                                    .offset((*typebuf.ptr()).tb_off as isize)
-                                    .offset((*typebuf.ptr()).tb_len as isize),
-                                (*typebuf.ptr()).tb_buflen
-                                    - (*typebuf.ptr()).tb_off
-                                    - (*typebuf.ptr()).tb_len
-                                    - 1 as ::core::ffi::c_int,
-                                wait_time as ::core::ffi::c_long,
-                            );
-                            if showcmd_idx != 0 as ::core::ffi::c_int {
-                                pop_showcmd();
-                            }
-                            if showing_partial as ::core::ffi::c_int == 1 as ::core::ffi::c_int {
-                                if State.get() & MODE_INSERT != 0 {
-                                    edit_unputchar();
-                                }
-                                if State.get() & MODE_CMDLINE != 0
-                                    && !(*get_cmdline_info()).cmdbuff.is_null()
-                                {
-                                    unputcmdline();
-                                } else {
-                                    setcursor();
-                                }
-                            }
-                            if c < 0 as ::core::ffi::c_int {
-                                continue;
-                            }
-                            if c == NUL {
-                                if !advance {
-                                    break;
-                                }
-                                if wait_tb_len <= 0 as ::core::ffi::c_int {
-                                    continue;
-                                }
-                                timedout = true_0 != 0;
-                            } else {
-                                while *(*typebuf.ptr()).tb_buf.offset(
-                                    ((*typebuf.ptr()).tb_off + (*typebuf.ptr()).tb_len) as isize,
-                                ) as ::core::ffi::c_int
-                                    != NUL
-                                {
-                                    let c2rust_fresh6 = (*typebuf.ptr()).tb_len;
-                                    (*typebuf.ptr()).tb_len = (*typebuf.ptr()).tb_len + 1;
-                                    *(*typebuf.ptr()).tb_noremap.offset(
-                                        ((*typebuf.ptr()).tb_off + c2rust_fresh6) as isize,
-                                    ) = RM_YES as ::core::ffi::c_int as uint8_t;
-                                }
-                            }
-                        }
-                    }
-                }
+                read_from_typeahead(advance, &mut timedout, &mut mapdepth, &mut mode_deleted)
+            };
+
+            // With `advance` false, don't loop on NULs.
+            if !(c < 0 || (advance && c == NUL)) {
+                break c;
             }
-            if !(c < 0 as ::core::ffi::c_int || advance as ::core::ffi::c_int != 0 && c == NUL) {
-                break;
-            }
-        }
-        if advance as ::core::ffi::c_int != 0
-            && p_smd.get() != 0
-            && msg_silent.get() == 0 as ::core::ffi::c_int
-            && State.get() & MODE_INSERT != 0
-        {
-            if c == ESC
-                && !mode_deleted
-                && no_mapping.get() == 0
-                && mode_displayed.get() as ::core::ffi::c_int != 0
-            {
+        };
+
+        // The "INSERT" message is taken care of here: if an ESC is answered
+        // to leave Insert mode the message is deleted, and if we do not
+        // answer an ESC but deleted the message before, it is redisplayed.
+        if advance && p_smd.get() != 0 && msg_silent.get() == 0 && State.get() & MODE_INSERT != 0 {
+            if c == ESC && !mode_deleted && no_mapping.get() == 0 && mode_displayed.get() {
                 if (*typebuf.ptr()).tb_len != 0 && !KeyTyped.get() {
-                    redraw_cmdline.set(true_0 != 0);
+                    redraw_cmdline.set(true); // delete the mode later
                 } else {
-                    unshowmode(false_0 != 0);
+                    unshowmode(false);
                 }
-            } else if c != ESC && mode_deleted as ::core::ffi::c_int != 0 {
+            } else if c != ESC && mode_deleted {
                 if (*typebuf.ptr()).tb_len != 0 && !KeyTyped.get() {
-                    redraw_cmdline.set(true_0 != 0);
+                    redraw_cmdline.set(true); // show the mode later
                 } else {
                     showmode();
                 }
             }
         }
-        if timedout as ::core::ffi::c_int != 0 && c == ESC {
+
+        if timedout && c == ESC {
+            // When recording there is no timeout. Add an <Ignore> after the
+            // ESC so that it cannot form a key code with what follows.
             gotchars_ignore();
         }
-        (*vgetc_busy.ptr()) -= 1;
-        return c;
+
+        vgetc_busy.set(vgetc_busy.get() - 1);
+        c
     }
 }
 
-pub(crate) unsafe extern "C" fn inchar(
-    mut buf: *mut uint8_t,
-    mut maxlen: ::core::ffi::c_int,
-    mut wait_time: ::core::ffi::c_long,
-) -> ::core::ffi::c_int {
+/// Read up to `maxlen` bytes from a script file or the keyboard into `buf`.
+///
+/// `buf` must have room for `maxlen + 1` bytes and is NUL-terminated;
+/// `maxlen` must be at least 3, because `fix_input_buffer` can triple a byte.
+/// `wait_time` is in milliseconds: 0 does not wait, -1 waits forever.
+///
+/// Answers the number of bytes obtained, or -1 at the end of an input script
+/// — which is a distinct answer because closing the script frees
+/// `typebuf.tb_buf`, and `buf` may point inside it.
+///
+/// # Safety
+/// `buf` must point at `maxlen + 1` writable bytes.
+pub(crate) unsafe fn inchar(buf: *mut u8, maxlen: c_int, wait_time: c_long) -> c_int {
     unsafe {
-        let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut retesc: ::core::ffi::c_int = false_0;
-        let tb_change_cnt: ::core::ffi::c_int = (*typebuf.ptr()).tb_change_cnt;
-        if wait_time == -1 as ::core::ffi::c_long || wait_time > 100 as ::core::ffi::c_long {
-            ui_flush();
+        let mut len = 0;
+        let mut retesc = false; // answer ESC with got_int
+        let tb_change_cnt = (*typebuf.ptr()).tb_change_cnt;
+
+        if wait_time == -1 || wait_time > 100 {
+            ui_flush(); // flush output before waiting
         }
+
+        // Don't reset these at the hit-return prompt, or an endless recursion
+        // can result: write error in swapfile, hit-return, timeout on the
+        // character wait, flush swapfile, write error, ...
         if State.get() != MODE_HITRETURN {
-            did_outofmem_msg.set(false_0 != 0);
-            did_swapwrite_msg.set(false_0 != 0);
+            did_outofmem_msg.set(false); // display the out-of-memory message again
+            did_swapwrite_msg.set(false); // display the swap-write error again
         }
-        let mut read_size: ptrdiff_t = -1 as ptrdiff_t;
-        while curscript.get() >= 0 as ::core::ffi::c_int
-            && read_size <= 0 as ptrdiff_t
-            && !ignore_script.get()
-        {
-            let mut script_char: ::core::ffi::c_char = 0;
-            if got_int.get() as ::core::ffi::c_int != 0 || {
-                read_size = file_read(
-                    (scriptin.ptr() as *mut FileDescriptor).offset(curscript.get() as isize),
-                    &raw mut script_char,
-                    1 as size_t,
-                );
-                read_size != 1 as ptrdiff_t
-            } {
+
+        // Get a character from a script file if there is one. On an
+        // interrupt, stop reading script files and close them all.
+        let mut read_size: ptrdiff_t = -1;
+        while curscript.get() >= 0 && read_size <= 0 && !ignore_script.get() {
+            let mut script_char: c_char = 0;
+            // Short-circuit deliberately: once interrupted, no further read
+            // is attempted and `read_size` keeps the value it had.
+            let failed = got_int.get() || {
+                read_size = file_read(script_at(curscript.get()), &raw mut script_char, 1);
+                read_size != 1
+            };
+            if failed {
+                // EOF, or some error. Careful: closescript() frees
+                // typebuf.tb_buf and buf may point inside it, so buf must not
+                // be used after this.
                 closescript();
                 if got_int.get() {
-                    retesc = true_0;
+                    // Reading the script was interrupted: answer an ESC to
+                    // get back to Normal mode.
+                    retesc = true;
                 } else {
-                    return -1 as ::core::ffi::c_int;
+                    // Otherwise -1, because typebuf.tb_buf has changed.
+                    return -1;
                 }
             } else {
-                *buf.offset(0 as ::core::ffi::c_int as isize) = script_char as uint8_t;
-                len = 1 as ::core::ffi::c_int;
+                *buf = script_char as u8;
+                len = 1;
             }
         }
-        if read_size <= 0 as ptrdiff_t {
+
+        if read_size <= 0 {
+            // Nothing came from a script.
+            //
+            // On an interrupt, skip everything typed so far and answer
+            // whether reading a script file was quit. Don't use buf here:
+            // closescript() may have freed typebuf.tb_buf and buf may point
+            // inside it.
             if got_int.get() {
-                let mut dum: [uint8_t; 154] = [0; 154];
+                const DUM_LEN: usize = MAXMAPLEN as usize * 3 + 3;
+                let mut dum = [0u8; DUM_LEN + 1];
                 loop {
-                    len = input_get(
-                        &raw mut dum as *mut uint8_t,
-                        MAXMAPLEN as ::core::ffi::c_int * 3 as ::core::ffi::c_int
-                            + 3 as ::core::ffi::c_int,
-                        0 as ::core::ffi::c_int,
-                        0 as ::core::ffi::c_int,
-                        ::core::ptr::null_mut::<MultiQueue>(),
+                    let got = input_get(
+                        dum.as_mut_ptr(),
+                        DUM_LEN as c_int,
+                        0,
+                        0,
+                        ptr::null_mut::<MultiQueue>(),
                     );
-                    if len == 0 as ::core::ffi::c_int
-                        || len == 1 as ::core::ffi::c_int
-                            && dum[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int == Ctrl_C
-                    {
+                    if got == 0 || (got == 1 && c_int::from(dum[0]) == Ctrl_C) {
                         break;
                     }
                 }
-                return retesc;
+                return c_int::from(retesc);
             }
-            if wait_time == -1 as ::core::ffi::c_long || wait_time > 10 as ::core::ffi::c_long {
+
+            // Always flush the output when reading input from the user, as
+            // opposed to just peeking.
+            if wait_time == -1 || wait_time > 10 {
                 ui_flush();
             }
+
+            // Fill up to a third of the buffer: `fix_input_buffer` can triple
+            // each character.
             len = input_get(
                 buf,
-                maxlen / 3 as ::core::ffi::c_int,
-                wait_time as ::core::ffi::c_int,
+                maxlen / 3,
+                wait_time as c_int,
                 tb_change_cnt,
-                ::core::ptr::null_mut::<MultiQueue>(),
+                ptr::null_mut::<MultiQueue>(),
             );
         }
+
+        // If the typeahead was changed further down it is as if nothing was
+        // added by this call.
         if typebuf_changed(tb_change_cnt) {
-            return 0 as ::core::ffi::c_int;
+            return 0;
         }
-        if len > 0 as ::core::ffi::c_int && {
+
+        // Note the change in the typeahead buffer; this matters for when
+        // vgetorpeek() is called recursively, e.g. `getchar(1)` in a timer.
+        if len > 0 {
             (*typebuf.ptr()).tb_change_cnt += 1;
-            (*typebuf.ptr()).tb_change_cnt == 0 as ::core::ffi::c_int
-        } {
-            (*typebuf.ptr()).tb_change_cnt = 1 as ::core::ffi::c_int;
+            if (*typebuf.ptr()).tb_change_cnt == 0 {
+                (*typebuf.ptr()).tb_change_cnt = 1;
+            }
         }
-        return fix_input_buffer(buf, len);
+
+        fix_input_buffer(buf, len)
     }
 }
 
-pub unsafe extern "C" fn fix_input_buffer(
-    mut buf: *mut uint8_t,
-    mut len: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Escape the bytes that cannot appear literally in the typeahead, and answer
+/// the new length.
+///
+/// Only input read from a *script* needs this: keys from the user have
+/// already been through `input_enqueue`, which escapes them. `buf` must have
+/// room to triple the number of bytes.
+///
+/// # Safety
+/// `buf` must point at `len` readable and `3 * len + 1` writable bytes.
+pub unsafe fn fix_input_buffer(buf: *mut u8, mut len: c_int) -> c_int {
     unsafe {
         if using_script() == 0 {
-            *buf.offset(len as isize) = NUL as uint8_t;
+            // K_SPECIAL should not be escaped for input from the user: the
+            // key codes are processed in input.c/input_enqueue.
+            *buf.offset(len as isize) = 0;
             return len;
         }
-        let mut p: *mut uint8_t = buf;
-        let mut i: ::core::ffi::c_int = len;
-        loop {
+
+        // Two bytes are special: NUL and K_SPECIAL. Both are replaced by
+        // their three-byte escape.
+        let mut p = buf;
+        let mut i = len;
+        while i > 0 {
             i -= 1;
-            if i < 0 as ::core::ffi::c_int {
-                break;
-            }
-            if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-                || *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == K_SPECIAL
-                    && (i < 2 as ::core::ffi::c_int
-                        || *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            != KS_EXTRA)
+            if c_int::from(*p) == NUL
+                || (c_int::from(*p) == K_SPECIAL && (i < 2 || c_int::from(*p.add(1)) != KS_EXTRA))
             {
-                memmove(
-                    p.offset(3 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-                    p.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-                    i as size_t,
-                );
-                *p.offset(2 as ::core::ffi::c_int as isize) =
-                    (if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == K_SPECIAL
-                        || *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-                    {
-                        KE_FILLER as ::core::ffi::c_uint
-                    } else {
-                        -(*p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                            as ::core::ffi::c_uint
-                            >> 8 as ::core::ffi::c_int
-                            & 0xff as ::core::ffi::c_uint
-                    }) as uint8_t;
-                *p.offset(1 as ::core::ffi::c_int as isize) = (if *p
-                    .offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int
-                    == K_SPECIAL
-                {
-                    KS_SPECIAL
-                } else if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL {
-                    KS_ZERO
-                } else {
-                    -(*p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                        & 0xff as ::core::ffi::c_int
-                }) as uint8_t;
-                *p.offset(0 as ::core::ffi::c_int as isize) = K_SPECIAL as uint8_t;
-                p = p.offset(2 as ::core::ffi::c_int as isize);
-                len += 2 as ::core::ffi::c_int;
+                ptr::copy(p.add(1), p.add(3), i as usize);
+                let escape = key_escape(c_int::from(*p));
+                *p = escape[0];
+                *p.add(1) = escape[1];
+                *p.add(2) = escape[2];
+                p = p.add(2);
+                len += 2;
             }
-            p = p.offset(1);
+            p = p.add(1);
         }
-        *p = NUL as uint8_t;
-        return len;
+        *p = 0; // add the trailing NUL
+        len
     }
 }
