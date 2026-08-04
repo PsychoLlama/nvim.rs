@@ -58,8 +58,8 @@ use crate::src::nvim::message::{
     str2special_arena, str2special_save, swmsg,
 };
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, fprintf, fputc, fputs, gettext, putc, snprintf, strcasecmp, strchr,
-    strcmp, strlen, strncmp, strpbrk, strstr,
+    abort, fprintf, fputc, fputs, gettext, putc, snprintf, strcasecmp, strchr, strcmp, strlen,
+    strncmp, strpbrk, strstr,
 };
 use crate::src::nvim::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_OP_PENDING, MODE_SELECT,
@@ -70,11 +70,10 @@ use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTy
 use crate::src::nvim::types::{
     Arena, Array, ArrayBuilder, BoolVarValue, Buffer, CMD_index, Dict, Error, EvalFuncData, FILE,
     Integer, KeyDict_keymap, ListLenSpecials, LuaRef, LuaRetMode, Object, RemapValues, ScopeType,
-    SpecialVarValue, String_0, VarLockStatus, VarType, buf_T, cmdidx_T, colnr_T, dict_T,
-    dictitem_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, kObjectTypeLuaRef, kObjectTypeString,
-    key_extra, key_value_pair, linenr_T, mapblock_T, object_data as C2Rust_Unnamed, optset_T,
-    ptrdiff_t, regmatch_T, scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_T, uint64_t,
-    varnumber_T,
+    SpecialVarValue, String_0, VarLockStatus, VarType, buf_T, cmdidx_T, colnr_T, dict_T, exarg_T,
+    expand_T, fuzmatch_str_T, garray_T, kObjectTypeLuaRef, kObjectTypeString, key_extra,
+    key_value_pair, linenr_T, mapblock_T, object_data as C2Rust_Unnamed, optset_T, ptrdiff_t,
+    regmatch_T, scid_T, size_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 
 // The carve of the transpiled module; see each child's docs.

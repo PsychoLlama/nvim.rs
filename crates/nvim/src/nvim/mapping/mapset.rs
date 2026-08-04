@@ -8,100 +8,74 @@
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
+/// Size of the scratch buffer `tv_get_string_buf_chk` may answer with.
+const NUMBUFLEN: usize = 65;
+
+/// `mapset()`: replace a mapping from a `maparg()`-shaped dict.
+///
+/// Two call shapes: one dict argument carrying `"mode"` and `"abbr"` as well,
+/// or a mode string, an abbreviation flag and the dict.
+///
+/// # Safety
+/// The Vimscript call convention: `argvars` is a live argument vector.
 pub unsafe extern "C" fn f_mapset(
-    mut argvars: *mut typval_T,
-    mut _rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    _rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
         if check_secure() {
             return;
         }
-        let mut which: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut buf: [::core::ffi::c_char; 65] = [0; 65];
-        let mut is_abbr: ::core::ffi::c_int = 0;
-        let mut d: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
-        let dict_only: bool = (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
-            == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint;
-        if dict_only {
-            d = (*argvars.offset(0 as ::core::ffi::c_int as isize))
-                .vval
-                .v_dict;
-            which = tv_dict_get_string(
-                d,
-                b"mode\0".as_ptr() as *const ::core::ffi::c_char,
-                false_0 != 0,
-            );
-            is_abbr = tv_dict_get_bool(
-                d,
-                b"abbr\0".as_ptr() as *const ::core::ffi::c_char,
-                -1 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int;
-            if which.is_null() || is_abbr < 0 as ::core::ffi::c_int {
+
+        let mut buf = [0 as c_char; NUMBUFLEN];
+        let which: *const c_char;
+        let is_abbr: bool;
+        let d: *mut dict_T;
+
+        // If the first argument is a dict, then that is the only one allowed.
+        if (*argvars).v_type == VAR_DICT as _ {
+            d = (*argvars).vval.v_dict;
+            which = tv_dict_get_string(d, c"mode".as_ptr(), false);
+            let abbr = tv_dict_get_bool(d, c"abbr".as_ptr(), -1);
+            if which.is_null() || abbr < 0 {
                 emsg(gettext(E_ENTRIES_MISSING_IN_MAPSET_DICT_ARGUMENT.as_ptr()));
                 return;
             }
+            is_abbr = abbr != 0;
         } else {
-            which = tv_get_string_buf_chk(
-                argvars.offset(0 as ::core::ffi::c_int as isize),
-                &raw mut buf as *mut ::core::ffi::c_char,
-            );
+            which = tv_get_string_buf_chk(argvars, buf.as_mut_ptr());
             if which.is_null() {
                 return;
             }
-            is_abbr =
-                tv_get_bool(argvars.offset(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
-            if tv_check_for_dict_arg(argvars, 2 as ::core::ffi::c_int) == FAIL {
+            is_abbr = tv_get_bool(argvars.add(1)) != 0;
+            if tv_check_for_dict_arg(argvars, 2) == FAIL {
                 return;
             }
-            d = (*argvars.offset(2 as ::core::ffi::c_int as isize))
-                .vval
-                .v_dict;
+            d = (*argvars.add(2)).vval.v_dict;
         }
-        let mode: ::core::ffi::c_int = get_map_mode_string(which, is_abbr != 0);
-        if mode == 0 as ::core::ffi::c_int {
+
+        let mode = get_map_mode_string(which, is_abbr);
+        if mode == 0 {
             semsg(gettext(E_ILLEGAL_MAP_MODE_STRING_STR.as_ptr()), which);
             return;
         }
-        let mut lhs: *mut ::core::ffi::c_char = tv_dict_get_string(
-            d,
-            b"lhs\0".as_ptr() as *const ::core::ffi::c_char,
-            false_0 != 0,
-        );
-        let mut lhsraw: *mut ::core::ffi::c_char = tv_dict_get_string(
-            d,
-            b"lhsraw\0".as_ptr() as *const ::core::ffi::c_char,
-            false_0 != 0,
-        );
-        let mut lhsrawalt: *mut ::core::ffi::c_char = tv_dict_get_string(
-            d,
-            b"lhsrawalt\0".as_ptr() as *const ::core::ffi::c_char,
-            false_0 != 0,
-        );
-        let mut orig_rhs: *mut ::core::ffi::c_char = tv_dict_get_string(
-            d,
-            b"rhs\0".as_ptr() as *const ::core::ffi::c_char,
-            false_0 != 0,
-        );
-        let mut rhs_lua: LuaRef = LUA_NOREF;
-        let mut callback_di: *mut dictitem_T = tv_dict_find(
-            d,
-            b"callback\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        );
-        if !callback_di.is_null() {
-            if (*callback_di).di_tv.v_type as ::core::ffi::c_uint
-                == VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                let mut fp: *mut ufunc_T = find_func((*callback_di).di_tv.vval.v_string);
-                if !fp.is_null() && (*fp).uf_flags & FC_LUAREF != 0 {
-                    rhs_lua = api_new_luaref((*fp).uf_luaref);
-                    orig_rhs =
-                        b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-                }
+
+        // Get the values in the same order as get_maparg() writes them.
+        let lhs = tv_dict_get_string(d, c"lhs".as_ptr(), false);
+        let lhsraw = tv_dict_get_string(d, c"lhsraw".as_ptr(), false);
+        let lhsrawalt = tv_dict_get_string(d, c"lhsrawalt".as_ptr(), false);
+        let mut orig_rhs = tv_dict_get_string(d, c"rhs".as_ptr(), false);
+        let mut rhs_lua = LUA_NOREF;
+        let callback_di = tv_dict_find(d, c"callback".as_ptr(), c"callback".count_bytes() as _);
+        if !callback_di.is_null() && (*callback_di).di_tv.v_type == VAR_FUNC as _ {
+            let fp = find_func((*callback_di).di_tv.vval.v_string);
+            if !fp.is_null() && (*fp).uf_flags & FC_LUAREF != 0 {
+                rhs_lua = api_new_luaref((*fp).uf_luaref);
+                orig_rhs = c"".as_ptr().cast_mut();
             }
         }
         if lhs.is_null() || lhsraw.is_null() || orig_rhs.is_null() {
@@ -109,57 +83,31 @@ pub unsafe extern "C" fn f_mapset(
             api_free_luaref(rhs_lua);
             return;
         }
-        let mut noremap: ::core::ffi::c_int =
-            if tv_dict_get_number(d, b"noremap\0".as_ptr() as *const ::core::ffi::c_char)
-                != 0 as varnumber_T
-            {
-                REMAP_NONE as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            };
-        if tv_dict_get_number(d, b"script\0".as_ptr() as *const ::core::ffi::c_char)
-            != 0 as varnumber_T
-        {
-            noremap = REMAP_SCRIPT as ::core::ffi::c_int;
-        }
-        let mut args: MapArguments = map_arguments {
-            buffer: false,
-            expr: tv_dict_get_number(d, b"expr\0".as_ptr() as *const ::core::ffi::c_char)
-                != 0 as varnumber_T,
-            noremap: false,
-            nowait: tv_dict_get_number(d, b"nowait\0".as_ptr() as *const ::core::ffi::c_char)
-                != 0 as varnumber_T,
-            script: false,
-            silent: tv_dict_get_number(d, b"silent\0".as_ptr() as *const ::core::ffi::c_char)
-                != 0 as varnumber_T,
-            unique: false,
-            replace_keycodes: tv_dict_get_number(
-                d,
-                b"replace_keycodes\0".as_ptr() as *const ::core::ffi::c_char,
-            ) != 0 as varnumber_T,
-            lhs: [0; 51],
-            lhs_len: 0,
-            alt_lhs: [0; 51],
-            alt_lhs_len: 0,
-            rhs: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            rhs_len: 0,
-            rhs_lua: 0,
-            rhs_is_noop: false,
-            orig_rhs: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            orig_rhs_len: 0,
-            desc: tv_dict_get_string(
-                d,
-                b"desc\0".as_ptr() as *const ::core::ffi::c_char,
-                true_0 != 0,
-            ),
+
+        let mut noremap = if tv_dict_get_number(d, c"noremap".as_ptr()) != 0 {
+            REMAP_NONE
+        } else {
+            0
         };
-        let mut sid: scid_T =
-            tv_dict_get_number(d, b"sid\0".as_ptr() as *const ::core::ffi::c_char) as scid_T;
-        let mut lnum: linenr_T =
-            tv_dict_get_number(d, b"lnum\0".as_ptr() as *const ::core::ffi::c_char) as linenr_T;
-        let mut buffer: bool =
-            tv_dict_get_number(d, b"buffer\0".as_ptr() as *const ::core::ffi::c_char)
-                != 0 as varnumber_T;
+        if tv_dict_get_number(d, c"script".as_ptr()) != 0 {
+            noremap = REMAP_SCRIPT;
+        }
+
+        // Upstream's designated initialiser, which leaves everything it does
+        // not name zeroed -- including `rhs_lua`, which `set_maparg_rhs`
+        // overwrites below.
+        let mut args: MapArguments = core::mem::zeroed();
+        args.expr = tv_dict_get_number(d, c"expr".as_ptr()) != 0;
+        args.silent = tv_dict_get_number(d, c"silent".as_ptr()) != 0;
+        args.nowait = tv_dict_get_number(d, c"nowait".as_ptr()) != 0;
+        args.replace_keycodes = tv_dict_get_number(d, c"replace_keycodes".as_ptr()) != 0;
+        args.desc = tv_dict_get_string(d, c"desc".as_ptr(), true);
+
+        let sid = tv_dict_get_number(d, c"sid".as_ptr()) as scid_T;
+        let lnum = tv_dict_get_number(d, c"lnum".as_ptr()) as linenr_T;
+        let buffer = tv_dict_get_number(d, c"buffer".as_ptr()) != 0;
+        // The dict's "mode" is not used past get_map_mode_string.
+
         set_maparg_rhs(
             orig_rhs,
             strlen(orig_rhs),
@@ -168,41 +116,42 @@ pub unsafe extern "C" fn f_mapset(
             p_cpo.get(),
             &raw mut args,
         );
-        let mut map_table: *mut *mut mapblock_T = if buffer as ::core::ffi::c_int != 0 {
-            &raw mut (*curbuf.get()).b_maphash as *mut *mut mapblock_T
+
+        let map_table: *mut *mut mapblock_T = if buffer {
+            (&raw mut (*curbuf.get()).b_maphash).cast()
         } else {
-            MAPHASH.ptr() as *mut *mut mapblock_T
+            MAPHASH.ptr().cast()
         };
-        let mut abbr_table: *mut *mut mapblock_T = if buffer as ::core::ffi::c_int != 0 {
+        let abbr_table: *mut *mut mapblock_T = if buffer {
             &raw mut (*curbuf.get()).b_first_abbr
         } else {
             FIRST_ABBR.ptr()
         };
-        let mut unmap_args: MapArguments = MAP_ARGUMENTS_INIT;
+
+        // Delete any existing mapping for this lhs and mode.
+        let mut unmap_args = MAP_ARGUMENTS_INIT;
         set_maparg_lhs_rhs(
             lhs,
             strlen(lhs),
-            b"\0".as_ptr() as *const ::core::ffi::c_char,
-            0 as size_t,
+            c"".as_ptr(),
+            0,
             LUA_NOREF,
             p_cpo.get(),
             &raw mut unmap_args,
         );
         unmap_args.buffer = buffer;
         buf_do_map(
-            MAPTYPE_UNMAP_LHS as ::core::ffi::c_int,
+            MAPTYPE_UNMAP_LHS as c_int,
             &raw mut unmap_args,
             mode,
-            is_abbr != 0,
+            is_abbr,
             curbuf.get(),
         );
-        xfree(unmap_args.rhs as *mut ::core::ffi::c_void);
-        xfree(unmap_args.orig_rhs as *mut ::core::ffi::c_void);
-        let mut mp_result: [*mut mapblock_T; 2] = [
-            ::core::ptr::null_mut::<mapblock_T>(),
-            ::core::ptr::null_mut::<mapblock_T>(),
-        ];
-        mp_result[0 as ::core::ffi::c_int as usize] = map_add(
+        xfree(unmap_args.rhs.cast());
+        xfree(unmap_args.orig_rhs.cast());
+
+        let mut mp_result: [*mut mapblock_T; 2] = [ptr::null_mut(); 2];
+        mp_result[0] = map_add(
             curbuf.get(),
             map_table,
             abbr_table,
@@ -210,13 +159,13 @@ pub unsafe extern "C" fn f_mapset(
             &raw mut args,
             noremap,
             mode,
-            is_abbr != 0,
+            is_abbr,
             sid,
             lnum,
-            false_0 != 0,
+            false,
         );
         if !lhsrawalt.is_null() {
-            mp_result[1 as ::core::ffi::c_int as usize] = map_add(
+            mp_result[1] = map_add(
                 curbuf.get(),
                 map_table,
                 abbr_table,
@@ -224,83 +173,83 @@ pub unsafe extern "C" fn f_mapset(
                 &raw mut args,
                 noremap,
                 mode,
-                is_abbr != 0,
+                is_abbr,
                 sid,
                 lnum,
-                true_0 != 0,
+                true,
             );
         }
-        if !mp_result[0 as ::core::ffi::c_int as usize].is_null()
-            && !mp_result[1 as ::core::ffi::c_int as usize].is_null()
-        {
-            (*mp_result[0 as ::core::ffi::c_int as usize]).m_alt =
-                mp_result[1 as ::core::ffi::c_int as usize];
-            (*mp_result[1 as ::core::ffi::c_int as usize]).m_alt =
-                mp_result[0 as ::core::ffi::c_int as usize];
+
+        if !mp_result[0].is_null() && !mp_result[1].is_null() {
+            (*mp_result[0]).m_alt = mp_result[1];
+            (*mp_result[1]).m_alt = mp_result[0];
         }
     }
 }
 
-pub unsafe extern "C" fn modify_keymap(
-    mut channel_id: uint64_t,
+/// Set, tweak or remove a mapping in a mode: the implementation behind
+/// `nvim_set_keymap`, `nvim_del_keymap` and their `buf_` variants.
+///
+/// `buffer` is a buffer handle, 0 for the current buffer, or -1 for "all
+/// buffers", i.e. the global tables.  `is_unmap` removes the mapping matching
+/// `lhs` instead of adding one.
+///
+/// # Safety
+/// Every pointer argument must be live; `err` is written on failure.
+#[allow(clippy::too_many_arguments)] // the API dispatcher's own signature
+pub unsafe fn modify_keymap(
+    channel_id: uint64_t,
     mut buffer: Buffer,
-    mut is_unmap: bool,
-    mut mode: String_0,
-    mut lhs: String_0,
-    mut rhs: String_0,
-    mut opts: *mut KeyDict_keymap,
-    mut err: *mut Error,
+    is_unmap: bool,
+    mode: String_0,
+    lhs: String_0,
+    rhs: String_0,
+    opts: *mut KeyDict_keymap,
+    err: *mut Error,
 ) {
     unsafe {
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut forceit: bool = false;
-        let mut mode_val: ::core::ffi::c_int = 0;
-        let mut is_abbrev: bool = false;
-        let mut is_noremap: bool = false;
-        let mut maptype_val: ::core::ffi::c_int = 0;
-        let mut lua_funcref: LuaRef = LUA_NOREF;
-        let mut global: bool = buffer == -1 as ::core::ffi::c_int;
+        let mut lua_funcref = LUA_NOREF;
+        let global = buffer == -1;
         if global {
-            buffer = 0 as ::core::ffi::c_int as Buffer;
+            buffer = 0;
         }
-        let mut target_buf: *mut buf_T = find_buffer_by_handle(buffer, err);
+        let target_buf = find_buffer_by_handle(buffer, err);
         if target_buf.is_null() {
             return;
         }
-        let save_current_sctx: sctx_T = api_set_sctx(channel_id);
-        let mut parsed_args: MapArguments = MAP_ARGUMENTS_INIT;
+
+        let save_current_sctx = api_set_sctx(channel_id);
+
+        let mut parsed_args = MAP_ARGUMENTS_INIT;
         if !opts.is_null() {
-            parsed_args.nowait = (*opts).nowait as bool;
-            parsed_args.noremap = (*opts).noremap as bool;
-            parsed_args.silent = (*opts).silent as bool;
-            parsed_args.script = (*opts).script as bool;
-            parsed_args.expr = (*opts).expr as bool;
-            parsed_args.unique = (*opts).unique as bool;
-            parsed_args.replace_keycodes = (*opts).replace_keycodes as bool;
-            if (*opts).is_set__keymap_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_keymap__callback
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            parsed_args.nowait = (*opts).nowait;
+            parsed_args.noremap = (*opts).noremap;
+            parsed_args.silent = (*opts).silent;
+            parsed_args.script = (*opts).script;
+            parsed_args.expr = (*opts).expr;
+            parsed_args.unique = (*opts).unique;
+            parsed_args.replace_keycodes = (*opts).replace_keycodes;
+            if (*opts).is_set__keymap_ & 1 << KEYSET_OPTIDX_keymap__callback != 0 {
                 lua_funcref = (*opts).callback;
-                (*opts).callback = LUA_NOREF as LuaRef;
+                (*opts).callback = LUA_NOREF;
             }
-            if (*opts).is_set__keymap_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_keymap__desc
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            if (*opts).is_set__keymap_ & 1 << KEYSET_OPTIDX_keymap__desc != 0 {
                 parsed_args.desc = string_to_cstr((*opts).desc);
             }
         }
         parsed_args.buffer = !global;
-        '_fail_and_free: {
-            if parsed_args.replace_keycodes as ::core::ffi::c_int != 0 && !parsed_args.expr {
+
+        'fail_and_free: {
+            if parsed_args.replace_keycodes && !parsed_args.expr {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"\"replace_keycodes\" requires \"expr\"\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    c"\"replace_keycodes\" requires \"expr\"".as_ptr(),
                 );
-            } else if !set_maparg_lhs_rhs(
+                break 'fail_and_free;
+            }
+
+            if !set_maparg_lhs_rhs(
                 lhs.data,
                 lhs.size,
                 rhs.data,
@@ -308,197 +257,127 @@ pub unsafe extern "C" fn modify_keymap(
                 lua_funcref,
                 p_cpo.get(),
                 &raw mut parsed_args,
-            ) {
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    b"LHS exceeds maximum map length: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                    lhs.data,
-                );
-            } else if parsed_args.lhs_len > MAXMAPLEN as ::core::ffi::c_int as size_t
-                || parsed_args.alt_lhs_len > MAXMAPLEN as ::core::ffi::c_int as size_t
+            ) || parsed_args.lhs_len > MAXMAPLEN as size_t
+                || parsed_args.alt_lhs_len > MAXMAPLEN as size_t
             {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"LHS exceeds maximum map length: %s\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"LHS exceeds maximum map length: %s".as_ptr(),
                     lhs.data,
                 );
+                break 'fail_and_free;
+            }
+
+            let (mode_val, is_abbrev, mut p) = parse_shortname_mode(mode);
+            if is_abbrev {
+                p = p.add(1);
+            }
+            if mode.size > 0 && p.offset_from(mode.data) as size_t != mode.size {
+                api_set_error(
+                    err,
+                    kErrorTypeValidation,
+                    c"Invalid mode shortname: \"%s\"".as_ptr(),
+                    mode.data,
+                );
+                break 'fail_and_free;
+            }
+            if parsed_args.lhs_len == 0 {
+                api_set_error(err, kErrorTypeValidation, c"Invalid (empty) LHS".as_ptr());
+                break 'fail_and_free;
+            }
+
+            let is_noremap = parsed_args.noremap;
+            debug_assert!(!(is_unmap && is_noremap));
+
+            if !is_unmap
+                && lua_funcref == LUA_NOREF
+                && parsed_args.rhs_len == 0
+                && !parsed_args.rhs_is_noop
+            {
+                if rhs.size == 0 {
+                    // Assume the caller wants the RHS to be a <Nop>.
+                    parsed_args.rhs_is_noop = true;
+                } else {
+                    abort(); // should never happen
+                }
+            } else if is_unmap && (parsed_args.rhs_len != 0 || parsed_args.rhs_lua != LUA_NOREF) {
+                if parsed_args.rhs_len != 0 {
+                    api_set_error(
+                        err,
+                        kErrorTypeValidation,
+                        c"Gave nonempty RHS in unmap command: %s".as_ptr(),
+                        parsed_args.rhs,
+                    );
+                } else {
+                    api_set_error(
+                        err,
+                        kErrorTypeValidation,
+                        c"Gave nonempty RHS for unmap".as_ptr(),
+                    );
+                }
+                break 'fail_and_free;
+            }
+
+            // buf_do_map() reads noremap/unmap as its own argument.
+            let maptype_val = if is_unmap {
+                MAPTYPE_UNMAP as c_int
+            } else if is_noremap {
+                MAPTYPE_NOREMAP as c_int
             } else {
-                p = (if mode.size > 0 as size_t {
-                    mode.data as *const ::core::ffi::c_char
-                } else {
-                    b"m\0".as_ptr() as *const ::core::ffi::c_char
-                }) as *mut ::core::ffi::c_char;
-                forceit = *p as ::core::ffi::c_int == '!' as ::core::ffi::c_int;
-                mode_val = get_map_mode(&raw mut p, forceit);
-                if forceit {
-                    '_c2rust_label: {
-                        if p == mode.data {
-                        } else {
-                            __assert_fail(
-                            b"p == mode.data\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/mapping.rs\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                            2794 as ::core::ffi::c_uint,
-                            b"void modify_keymap(uint64_t, Buffer, _Bool, String, String, String, KeyDict_keymap *, Error *)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                        );
-                        }
-                    };
-                    p = p.offset(1);
-                }
-                is_abbrev = mode_val & (MODE_INSERT | MODE_CMDLINE) != 0 as ::core::ffi::c_int
-                    && *p as ::core::ffi::c_int == 'a' as ::core::ffi::c_int;
-                if is_abbrev {
-                    p = p.offset(1);
-                }
-                if mode.size > 0 as size_t && p.offset_from(mode.data) as size_t != mode.size {
-                    api_set_error(
-                        err,
-                        kErrorTypeValidation,
-                        b"Invalid mode shortname: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
-                        mode.data,
-                    );
-                } else if parsed_args.lhs_len == 0 as size_t {
-                    api_set_error(
-                        err,
-                        kErrorTypeValidation,
-                        b"Invalid (empty) LHS\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                } else {
-                    is_noremap = parsed_args.noremap;
-                    '_c2rust_label_0: {
-                        if !(is_unmap as ::core::ffi::c_int != 0
-                            && is_noremap as ::core::ffi::c_int != 0)
-                        {
-                        } else {
-                            __assert_fail(
-                            b"!(is_unmap && is_noremap)\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                            b"src/nvim/mapping.rs\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                            2812 as ::core::ffi::c_uint,
-                            b"void modify_keymap(uint64_t, Buffer, _Bool, String, String, String, KeyDict_keymap *, Error *)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                        );
-                        }
-                    };
-                    if !is_unmap
-                        && lua_funcref == LUA_NOREF
-                        && (parsed_args.rhs_len == 0 as size_t && !parsed_args.rhs_is_noop)
-                    {
-                        if rhs.size == 0 as size_t {
-                            parsed_args.rhs_is_noop = true_0 != 0;
-                        } else {
-                            abort();
-                        }
-                    } else if is_unmap as ::core::ffi::c_int != 0
-                        && (parsed_args.rhs_len != 0 || parsed_args.rhs_lua != LUA_NOREF)
-                    {
-                        if parsed_args.rhs_len != 0 {
-                            api_set_error(
-                                err,
-                                kErrorTypeValidation,
-                                b"Gave nonempty RHS in unmap command: %s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                parsed_args.rhs,
-                            );
-                        } else {
-                            api_set_error(
-                                err,
-                                kErrorTypeValidation,
-                                b"Gave nonempty RHS for unmap\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
-                        }
-                        break '_fail_and_free;
-                    }
-                    maptype_val = MAPTYPE_MAP as ::core::ffi::c_int;
-                    if is_unmap {
-                        maptype_val = MAPTYPE_UNMAP as ::core::ffi::c_int;
-                    } else if is_noremap {
-                        maptype_val = MAPTYPE_NOREMAP as ::core::ffi::c_int;
-                    }
-                    match buf_do_map(
-                        maptype_val,
-                        &raw mut parsed_args,
-                        mode_val,
-                        is_abbrev,
-                        target_buf,
-                    ) {
-                        0 => {}
-                        1 => {
-                            api_set_error(
-                                err,
-                                kErrorTypeException,
-                                &raw const e_invarg as *const ::core::ffi::c_char,
-                                0 as ::core::ffi::c_int,
-                            );
-                        }
-                        2 => {
-                            api_set_error(
-                                err,
-                                kErrorTypeException,
-                                &raw const e_nomap as *const ::core::ffi::c_char,
-                                0 as ::core::ffi::c_int,
-                            );
-                        }
-                        5 => {
-                            api_set_error(
-                                err,
-                                kErrorTypeException,
-                                if is_abbrev as ::core::ffi::c_int != 0 {
-                                    E_ABBREVIATION_ALREADY_EXISTS_FOR_STR.as_ptr()
-                                        as *const ::core::ffi::c_char
-                                } else {
-                                    E_MAPPING_ALREADY_EXISTS_FOR_STR.as_ptr()
-                                        as *const ::core::ffi::c_char
-                                },
-                                lhs.data,
-                            );
-                        }
-                        6 => {
-                            api_set_error(
-                                err,
-                                kErrorTypeException,
-                                if is_abbrev as ::core::ffi::c_int != 0 {
-                                    E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR.as_ptr()
-                                        as *const ::core::ffi::c_char
-                                } else {
-                                    E_GLOBAL_MAPPING_ALREADY_EXISTS_FOR_STR.as_ptr()
-                                        as *const ::core::ffi::c_char
-                                },
-                                lhs.data,
-                            );
-                        }
-                        _ => {
-                            '_c2rust_label_1: {
-                                if false {
-                                } else {
-                                    __assert_fail(
-                                    b"false && \"Unrecognized return code!\"\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                    b"src/nvim/mapping.rs\0"
-                                        .as_ptr() as *const ::core::ffi::c_char,
-                                    2860 as ::core::ffi::c_uint,
-                                    b"void modify_keymap(uint64_t, Buffer, _Bool, String, String, String, KeyDict_keymap *, Error *)\0"
-                                        .as_ptr() as *const ::core::ffi::c_char,
-                                );
-                                }
-                            };
-                        }
-                    }
-                }
+                MAPTYPE_MAP as c_int
+            };
+
+            match buf_do_map(
+                maptype_val,
+                &raw mut parsed_args,
+                mode_val,
+                is_abbrev,
+                target_buf,
+            ) {
+                1 => api_set_error(
+                    err,
+                    kErrorTypeException,
+                    (&raw const e_invarg).cast::<c_char>(),
+                    0,
+                ),
+                2 => api_set_error(
+                    err,
+                    kErrorTypeException,
+                    (&raw const e_nomap).cast::<c_char>(),
+                    0,
+                ),
+                5 => api_set_error(
+                    err,
+                    kErrorTypeException,
+                    if is_abbrev {
+                        E_ABBREVIATION_ALREADY_EXISTS_FOR_STR.as_ptr()
+                    } else {
+                        E_MAPPING_ALREADY_EXISTS_FOR_STR.as_ptr()
+                    },
+                    lhs.data,
+                ),
+                6 => api_set_error(
+                    err,
+                    kErrorTypeException,
+                    if is_abbrev {
+                        E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR.as_ptr()
+                    } else {
+                        E_GLOBAL_MAPPING_ALREADY_EXISTS_FOR_STR.as_ptr()
+                    },
+                    lhs.data,
+                ),
+                _ => {}
             }
         }
+
         current_sctx.set(save_current_sctx);
         if parsed_args.rhs_lua != LUA_NOREF {
             api_free_luaref(parsed_args.rhs_lua);
-            parsed_args.rhs_lua = LUA_NOREF as LuaRef;
+            parsed_args.rhs_lua = LUA_NOREF;
         }
-        xfree(parsed_args.rhs as *mut ::core::ffi::c_void);
-        xfree(parsed_args.orig_rhs as *mut ::core::ffi::c_void);
-        xfree(parsed_args.desc as *mut ::core::ffi::c_void);
+        xfree(parsed_args.rhs.cast());
+        xfree(parsed_args.orig_rhs.cast());
+        xfree(parsed_args.desc.cast());
     }
 }
