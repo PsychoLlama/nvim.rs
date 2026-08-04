@@ -27,14 +27,19 @@ const MB_MAXBYTES: usize = 21;
 /// Callable at any time.
 unsafe fn langmap_adjust(c: c_int, condition: bool) -> c_int {
     unsafe {
-        let typed = if vgetc_busy.get() != 0 {
-            typebuf_maplen() == 0
-        } else {
-            KeyTyped.get()
-        };
+        // Upstream's operand order, short-circuiting exactly as the macro
+        // does. Evaluating `typebuf_maplen()` up front would be pure, but it
+        // is a call in the innermost loop of the mapping match and this
+        // runs once per typeahead byte per candidate mapping: measured at
+        // +5.6..7.6% on `inbench`'s `mapresolve` before it was put back.
         if *p_langmap.get() != 0
             && condition
-            && (p_lrm.get() != 0 || typed)
+            && (p_lrm.get() != 0
+                || if vgetc_busy.get() != 0 {
+                    typebuf_maplen() == 0
+                } else {
+                    KeyTyped.get()
+                })
             && KeyStuffed.get() == 0
             && c >= 0
         {
