@@ -2651,6 +2651,40 @@ describe('msg_may_trunc', function()
   end)
 end)
 
+-- wait_return()'s tail treats ':', '?' and '/' specially: the key is put back
+-- in the typeahead, and because the command line it opens is about to draw
+-- over the prompt anyway, cmdline_row moves down to msg_row and skip_redraw
+-- suppresses the one redraw_later() the tail would otherwise queue.  Nothing
+-- else in the suite snapshots the screen while that command line is open, so
+-- these cases are the only cover the arm has.
+describe('wait_return', function()
+  local screen
+
+  before_each(function()
+    clear()
+    screen = Screen.new(40, 8)
+  end)
+
+  -- The prompt itself takes a line (hit_return_msg() starts a new one when
+  -- anything was output), so msg_row has moved past the cmdline_row set on the
+  -- way in.  Without the arm the command line would be drawn a line higher,
+  -- over the last line of the message.
+  for _, key in ipairs({ ':', '/', '?' }) do
+    it("opens a command line below the prompt for '" .. key .. "'", function()
+      feed(':echo "one\\ntwo"<CR>')
+      feed(key)
+      screen:expect(([[
+                                                |
+        {1:~                                       }|*3
+        {3:                                        }|
+        one                                     |
+        two                                     |
+        %s^                                       |
+      ]]):format(key))
+    end)
+  end
+end)
+
 describe('pager', function()
   local screen
 
