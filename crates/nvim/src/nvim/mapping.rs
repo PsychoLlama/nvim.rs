@@ -37,7 +37,6 @@ use crate::src::nvim::keycodes::{
     K_SPECIAL, K_ZERO, get_special_key_name, replace_termcodes, vim_strsave_escape_ks,
     vim_unescape_ks,
 };
-use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::{
     api_free_luaref, api_new_luaref, nlua_call_ref, nlua_funcref_str, nlua_set_sctx,
 };
@@ -50,8 +49,8 @@ use crate::src::nvim::mbyte::{
     mb_prevptr, mb_unescape, utf_char2bytes, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::src::nvim::memory::{
-    ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xcalloc, xfree, xmalloc, xmemcpyz,
-    xrealloc, xstrdup, xstrlcpy,
+    ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xcalloc, xfree, xmemcpyz, xstrdup,
+    xstrlcpy,
 };
 use crate::src::nvim::message::{
     emsg, iemsg, message_filtered, msg, msg_clr_eos, msg_ext_set_kind, msg_outtrans,
@@ -59,8 +58,8 @@ use crate::src::nvim::message::{
     str2special_arena, str2special_save, swmsg,
 };
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, fprintf, fputc, fputs, gettext, memcpy, putc, snprintf, strcasecmp,
-    strchr, strcmp, strlen, strncmp, strpbrk, strstr,
+    __assert_fail, abort, fprintf, fputc, fputs, gettext, putc, snprintf, strcasecmp, strchr,
+    strcmp, strlen, strncmp, strpbrk, strstr,
 };
 use crate::src::nvim::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_OP_PENDING, MODE_SELECT,
@@ -72,10 +71,10 @@ use crate::src::nvim::types::{
     Arena, Array, ArrayBuilder, BoolVarValue, Buffer, CMD_index, Dict, Error, EvalFuncData, FILE,
     Integer, KeyDict_keymap, ListLenSpecials, LuaRef, LuaRetMode, Object, RemapValues, ScopeType,
     SpecialVarValue, String_0, VarLockStatus, VarType, buf_T, cmdidx_T, colnr_T, dict_T,
-    dictitem_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, kObjectTypeDict, kObjectTypeInteger,
-    kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, key_extra, key_value_pair, linenr_T,
-    mapblock_T, object, object_data as C2Rust_Unnamed, optset_T, ptrdiff_t, regmatch_T, scid_T,
-    sctx_T, size_t, typval_T, typval_vval_union, ufunc_T, uint64_t, varnumber_T,
+    dictitem_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, kObjectTypeLuaRef, kObjectTypeString,
+    key_extra, key_value_pair, linenr_T, mapblock_T, object_data as C2Rust_Unnamed, optset_T,
+    ptrdiff_t, regmatch_T, scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_T, uint64_t,
+    varnumber_T,
 };
 
 // The carve of the transpiled module; see each child's docs.

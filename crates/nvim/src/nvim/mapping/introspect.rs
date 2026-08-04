@@ -9,747 +9,468 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::kvec::InitVec;
+use crate::src::nvim::types::builders::static_cstring;
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
 
+/// Size of the scratch buffer `tv_get_string_buf` may answer with.
+const NUMBUFLEN: usize = 65;
+
+/// `hasmapto()`: whether any mapping in the named modes has `{name}` in its
+/// RHS.
+///
+/// # Safety
+/// The Vimscript call convention: `argvars` is a live argument vector.
 pub unsafe extern "C" fn f_hasmapto(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        let mut mode: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let name: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let mut abbr: bool = false_0 != 0;
-        let mut buf: [::core::ffi::c_char; 65] = [0; 65];
-        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            mode = b"nvo\0".as_ptr() as *const ::core::ffi::c_char;
+        let name = tv_get_string(argvars);
+        let mut buf = [0 as c_char; NUMBUFLEN];
+        let mut abbr = false;
+        let mode = if (*argvars.add(1)).v_type == VAR_UNKNOWN as _ {
+            c"nvo".as_ptr()
         } else {
-            mode = tv_get_string_buf(
-                argvars.offset(1 as ::core::ffi::c_int as isize),
-                &raw mut buf as *mut ::core::ffi::c_char,
-            );
-            if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                abbr = tv_get_number(argvars.offset(2 as ::core::ffi::c_int as isize)) != 0;
+            let mode = tv_get_string_buf(argvars.add(1), buf.as_mut_ptr());
+            if (*argvars.add(2)).v_type != VAR_UNKNOWN as _ {
+                abbr = tv_get_number(argvars.add(2)) != 0;
             }
-        }
-        (*rettv).vval.v_number = map_to_exists(name, mode, abbr) as varnumber_T;
+            mode
+        };
+        (*rettv).vval.v_number = varnumber_T::from(map_to_exists(name, mode, abbr));
     }
 }
 
-pub(crate) unsafe extern "C" fn mapblock_fill_dict(
+/// C's `PUT_C`: append `key: value` to a dict whose storage `arena_dict` has
+/// already reserved.
+///
+/// # Safety
+/// `dict` must have room for one more entry.
+unsafe fn put(dict: &mut Dict, key: &'static CStr, value: Object) {
+    unsafe {
+        dict.items.add(dict.size).write(key_value_pair {
+            key: static_cstring(key),
+            value,
+        });
+        dict.size += 1;
+    }
+}
+
+/// How many entries [`mapblock_fill_dict`] can write.
+const MAPARG_DICT_KEYS: size_t = 20;
+
+/// Render `mp` as the dict `maparg()`, `maplist()` and `nvim_get_keymap` all
+/// answer with.
+///
+/// `compatible` selects the old `maparg()` shape: the RHS comes back as the
+/// text the user typed rather than as a `str2special` rendering, `<script>`
+/// is not told apart from `:noremap`, and there is no `"buf"` key.
+/// `lhsrawalt` is the other spelling of a simplified LHS, or null.
+///
+/// # Safety
+/// `mp` must be a live mapblock and `arena` a live arena.
+pub(crate) unsafe fn mapblock_fill_dict(
     mp: *const mapblock_T,
-    mut lhsrawalt: *const ::core::ffi::c_char,
-    buffer_value: ::core::ffi::c_int,
+    lhsrawalt: *const c_char,
+    buffer_value: c_int,
     abbr: bool,
     compatible: bool,
-    mut arena: *mut Arena,
+    arena: *mut Arena,
 ) -> Dict {
     unsafe {
-        let mut dict: Dict = arena_dict(arena, 20 as size_t);
-        let lhs: *mut ::core::ffi::c_char =
-            str2special_arena((*mp).m_keys, compatible, !compatible, arena);
-        let mapmode: *mut ::core::ffi::c_char =
-            arena_alloc(arena, 7 as size_t, false_0 != 0) as *mut ::core::ffi::c_char;
+        let mut dict = arena_dict(arena, MAPARG_DICT_KEYS);
+        let lhs = str2special_arena((*mp).m_keys, compatible, !compatible, arena);
+        let mapmode: *mut c_char = arena_alloc(arena, 7, false).cast();
         mapmode.copy_from_nonoverlapping(map_mode_to_chars((*mp).m_mode).as_ptr(), 7);
-        let mut noremap_value: ::core::ffi::c_int = 0;
-        if compatible {
-            noremap_value = ((*mp).m_noremap != 0) as ::core::ffi::c_int;
+
+        let noremap_value = if compatible {
+            // Keep the old compatible behaviour, which cannot tell a
+            // <script> mapping apart.
+            c_int::from((*mp).m_noremap != 0)
+        } else if (*mp).m_noremap == REMAP_SCRIPT {
+            2
         } else {
-            noremap_value = if (*mp).m_noremap == REMAP_SCRIPT as ::core::ffi::c_int {
-                2 as ::core::ffi::c_int
-            } else {
-                ((*mp).m_noremap != 0) as ::core::ffi::c_int
-            };
-        }
+            c_int::from((*mp).m_noremap != 0)
+        };
+
         if (*mp).m_luaref != LUA_NOREF {
-            let c2rust_fresh21 = dict.size;
-            dict.size = dict.size.wrapping_add(1);
-            *dict.items.offset(c2rust_fresh21 as isize) = key_value_pair {
-                key: cstr_as_string(b"callback\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
+            put(
+                &mut dict,
+                c"callback",
+                Object {
                     type_0: kObjectTypeLuaRef,
                     data: C2Rust_Unnamed {
                         luaref: api_new_luaref((*mp).m_luaref),
                     },
                 },
-            };
+            );
         } else {
-            let mut rhs: String_0 = cstr_as_string(if compatible as ::core::ffi::c_int != 0 {
+            let rhs = cstr_as_string(if compatible {
                 (*mp).m_orig_str
             } else {
-                str2special_arena((*mp).m_str, false_0 != 0, true_0 != 0, arena)
+                str2special_arena((*mp).m_str, false, true, arena)
             });
-            let c2rust_fresh22 = dict.size;
-            dict.size = dict.size.wrapping_add(1);
-            *dict.items.offset(c2rust_fresh22 as isize) = key_value_pair {
-                key: cstr_as_string(b"rhs\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed { string: rhs },
-                },
-            };
+            put(&mut dict, c"rhs", Object::string(rhs));
         }
         if !(*mp).m_desc.is_null() {
-            let c2rust_fresh23 = dict.size;
-            dict.size = dict.size.wrapping_add(1);
-            *dict.items.offset(c2rust_fresh23 as isize) = key_value_pair {
-                key: cstr_as_string(b"desc\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: cstr_as_string((*mp).m_desc),
-                    },
-                },
-            };
+            put(
+                &mut dict,
+                c"desc",
+                Object::string(cstr_as_string((*mp).m_desc)),
+            );
         }
-        let c2rust_fresh24 = dict.size;
-        dict.size = dict.size.wrapping_add(1);
-        *dict.items.offset(c2rust_fresh24 as isize) = key_value_pair {
-            key: cstr_as_string(b"lhs\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed {
-                    string: cstr_as_string(lhs),
-                },
-            },
-        };
-        let c2rust_fresh25 = dict.size;
-        dict.size = dict.size.wrapping_add(1);
-        *dict.items.offset(c2rust_fresh25 as isize) = key_value_pair {
-            key: cstr_as_string(b"lhsraw\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed {
-                    string: cstr_as_string((*mp).m_keys),
-                },
-            },
-        };
+        put(&mut dict, c"lhs", Object::string(cstr_as_string(lhs)));
+        put(
+            &mut dict,
+            c"lhsraw",
+            Object::string(cstr_as_string((*mp).m_keys)),
+        );
         if !lhsrawalt.is_null() {
-            let c2rust_fresh26 = dict.size;
-            dict.size = dict.size.wrapping_add(1);
-            *dict.items.offset(c2rust_fresh26 as isize) = key_value_pair {
-                key: cstr_as_string(b"lhsrawalt\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: cstr_as_string(lhsrawalt),
-                    },
-                },
-            };
+            // Also add the value for the simplified entry.
+            put(
+                &mut dict,
+                c"lhsrawalt",
+                Object::string(cstr_as_string(lhsrawalt)),
+            );
         }
-        let c2rust_fresh27 = dict.size;
-        dict.size = dict.size.wrapping_add(1);
-        *dict.items.offset(c2rust_fresh27 as isize) = key_value_pair {
-            key: cstr_as_string(b"noremap\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: noremap_value as Integer,
-                },
-            },
-        };
-        let c2rust_fresh28 = dict.size;
-        dict.size = dict.size.wrapping_add(1);
-        *dict.items.offset(c2rust_fresh28 as isize) = key_value_pair {
-            key: cstr_as_string(b"script\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (if (*mp).m_noremap == REMAP_SCRIPT as ::core::ffi::c_int {
-                        1 as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    }) as Integer,
-                },
-            },
-        };
-        let c2rust_fresh29 = dict.size;
-        dict.size = dict.size.wrapping_add(1);
-        *dict.items.offset(c2rust_fresh29 as isize) = key_value_pair {
-            key: cstr_as_string(b"expr\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (if (*mp).m_expr as ::core::ffi::c_int != 0 {
-                        1 as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    }) as Integer,
-                },
-            },
-        };
-        let c2rust_fresh30 = dict.size;
-        dict.size = dict.size.wrapping_add(1);
-        *dict.items.offset(c2rust_fresh30 as isize) = key_value_pair {
-            key: cstr_as_string(b"silent\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (if (*mp).m_silent as ::core::ffi::c_int != 0 {
-                        1 as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    }) as Integer,
-                },
-            },
-        };
-        let c2rust_fresh31 = dict.size;
-        dict.size = dict.size.wrapping_add(1);
-        *dict.items.offset(c2rust_fresh31 as isize) = key_value_pair {
-            key: cstr_as_string(b"sid\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (*mp).m_script_ctx.sc_sid as Integer,
-                },
-            },
-        };
-        let c2rust_fresh32 = dict.size;
-        dict.size = dict.size.wrapping_add(1);
-        *dict.items.offset(c2rust_fresh32 as isize) = key_value_pair {
-            key: cstr_as_string(b"scriptversion\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: 1 as Integer,
-                },
-            },
-        };
-        let c2rust_fresh33 = dict.size;
-        dict.size = dict.size.wrapping_add(1);
-        *dict.items.offset(c2rust_fresh33 as isize) = key_value_pair {
-            key: cstr_as_string(b"lnum\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (*mp).m_script_ctx.sc_lnum as Integer,
-                },
-            },
-        };
-        let c2rust_fresh34 = dict.size;
-        dict.size = dict.size.wrapping_add(1);
-        *dict.items.offset(c2rust_fresh34 as isize) = key_value_pair {
-            key: cstr_as_string(b"buffer\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: buffer_value as Integer,
-                },
-            },
-        };
+        put(&mut dict, c"noremap", Object::integer(noremap_value.into()));
+        put(
+            &mut dict,
+            c"script",
+            Object::integer(Integer::from((*mp).m_noremap == REMAP_SCRIPT)),
+        );
+        put(
+            &mut dict,
+            c"expr",
+            Object::integer(Integer::from((*mp).m_expr != 0)),
+        );
+        put(
+            &mut dict,
+            c"silent",
+            Object::integer(Integer::from((*mp).m_silent != 0)),
+        );
+        put(
+            &mut dict,
+            c"sid",
+            Object::integer((*mp).m_script_ctx.sc_sid.into()),
+        );
+        put(&mut dict, c"scriptversion", Object::integer(1));
+        put(
+            &mut dict,
+            c"lnum",
+            Object::integer((*mp).m_script_ctx.sc_lnum.into()),
+        );
+        put(&mut dict, c"buffer", Object::integer(buffer_value.into()));
         if !compatible {
-            let c2rust_fresh35 = dict.size;
-            dict.size = dict.size.wrapping_add(1);
-            *dict.items.offset(c2rust_fresh35 as isize) = key_value_pair {
-                key: cstr_as_string(b"buf\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed {
-                        integer: buffer_value as Integer,
-                    },
-                },
-            };
+            put(&mut dict, c"buf", Object::integer(buffer_value.into()));
         }
-        let c2rust_fresh36 = dict.size;
-        dict.size = dict.size.wrapping_add(1);
-        *dict.items.offset(c2rust_fresh36 as isize) = key_value_pair {
-            key: cstr_as_string(b"nowait\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (if (*mp).m_nowait as ::core::ffi::c_int != 0 {
-                        1 as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    }) as Integer,
-                },
-            },
-        };
-        let c2rust_fresh37 = dict.size;
-        dict.size = dict.size.wrapping_add(1);
-        *dict.items.offset(c2rust_fresh37 as isize) = key_value_pair {
-            key: cstr_as_string(b"replace_keycodes\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (if (*mp).m_replace_keycodes as ::core::ffi::c_int != 0 {
-                        1 as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    }) as Integer,
-                },
-            },
-        };
-        let c2rust_fresh38 = dict.size;
-        dict.size = dict.size.wrapping_add(1);
-        *dict.items.offset(c2rust_fresh38 as isize) = key_value_pair {
-            key: cstr_as_string(b"mode\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed {
-                    string: cstr_as_string(mapmode),
-                },
-            },
-        };
-        let c2rust_fresh39 = dict.size;
-        dict.size = dict.size.wrapping_add(1);
-        *dict.items.offset(c2rust_fresh39 as isize) = key_value_pair {
-            key: cstr_as_string(b"abbr\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (if abbr as ::core::ffi::c_int != 0 {
-                        1 as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    }) as Integer,
-                },
-            },
-        };
-        let c2rust_fresh40 = dict.size;
-        dict.size = dict.size.wrapping_add(1);
-        *dict.items.offset(c2rust_fresh40 as isize) = key_value_pair {
-            key: cstr_as_string(b"mode_bits\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (*mp).m_mode as Integer,
-                },
-            },
-        };
-        return dict;
+        put(
+            &mut dict,
+            c"nowait",
+            Object::integer(Integer::from((*mp).m_nowait != 0)),
+        );
+        put(
+            &mut dict,
+            c"replace_keycodes",
+            Object::integer(Integer::from((*mp).m_replace_keycodes)),
+        );
+        put(&mut dict, c"mode", Object::string(cstr_as_string(mapmode)));
+        put(&mut dict, c"abbr", Object::integer(Integer::from(abbr)));
+        put(
+            &mut dict,
+            c"mode_bits",
+            Object::integer((*mp).m_mode.into()),
+        );
+
+        dict
     }
 }
 
-pub(crate) unsafe extern "C" fn get_maparg(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut exact: ::core::ffi::c_int,
-) {
+/// The body of `maparg()` and `mapcheck()`: `exact` is what tells them apart.
+///
+/// # Safety
+/// The Vimscript call convention: `argvars` is a live argument vector.
+unsafe fn get_maparg(argvars: *mut typval_T, rettv: *mut typval_T, exact: bool) {
     unsafe {
+        // Return an empty string on failure.
         (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut keys: *mut ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize))
-                as *mut ::core::ffi::c_char;
-        if *keys as ::core::ffi::c_int == NUL {
+        (*rettv).vval.v_string = ptr::null_mut();
+
+        let keys = tv_get_string(argvars).cast_mut();
+        if c_int::from(*keys) == NUL {
             return;
         }
-        let mut which: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut buf: [::core::ffi::c_char; 65] = [0; 65];
-        let mut abbr: bool = false_0 != 0;
-        let mut get_dict: bool = false_0 != 0;
-        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            which = tv_get_string_buf_chk(
-                argvars.offset(1 as ::core::ffi::c_int as isize),
-                &raw mut buf as *mut ::core::ffi::c_char,
-            );
-            if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                abbr = tv_get_number(argvars.offset(2 as ::core::ffi::c_int as isize)) != 0;
-                if (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                    != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    get_dict = tv_get_number(argvars.offset(3 as ::core::ffi::c_int as isize)) != 0;
+
+        let mut buf = [0 as c_char; NUMBUFLEN];
+        let mut abbr = false;
+        let mut get_dict = false;
+        let mut which: *mut c_char = if (*argvars.add(1)).v_type != VAR_UNKNOWN as _ {
+            let which = tv_get_string_buf_chk(argvars.add(1), buf.as_mut_ptr());
+            if (*argvars.add(2)).v_type != VAR_UNKNOWN as _ {
+                abbr = tv_get_number(argvars.add(2)) != 0;
+                if (*argvars.add(3)).v_type != VAR_UNKNOWN as _ {
+                    get_dict = tv_get_number(argvars.add(3)) != 0;
                 }
             }
+            which.cast_mut()
         } else {
-            which = b"\0".as_ptr() as *const ::core::ffi::c_char;
-        }
+            c"".as_ptr().cast_mut()
+        };
         if which.is_null() {
             return;
         }
-        let mut keys_buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut alt_keys_buf: *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut did_simplify: bool = false_0 != 0;
-        let flags: ::core::ffi::c_int =
-            REPTERM_FROM_PART as ::core::ffi::c_int | REPTERM_DO_LT as ::core::ffi::c_int;
-        let mode: ::core::ffi::c_int =
-            get_map_mode(&raw mut which as *mut *mut ::core::ffi::c_char, false);
-        let mut keys_simplified: *mut ::core::ffi::c_char = replace_termcodes(
+
+        let mut keys_buf: *mut c_char = ptr::null_mut();
+        let mut alt_keys_buf: *mut c_char = ptr::null_mut();
+        let mut did_simplify = false;
+        let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
+        let mode = get_map_mode(&raw mut which, false);
+
+        let keys_simplified = replace_termcodes(
             keys,
             strlen(keys),
             &raw mut keys_buf,
-            0 as scid_T,
+            0,
             flags,
             &raw mut did_simplify,
             p_cpo.get(),
         );
-        let mut found = check_map(keys_simplified, mode, exact != 0, false, abbr);
+        let mut found = check_map(keys_simplified, mode, exact, false, abbr);
         if did_simplify {
+            // When the lhs is being simplified the not-simplified keys are
+            // preferred for printing, like in do_map(). Upstream leaves the
+            // previous `mp` in place when this second look-up fails, but it
+            // clears both `rhs` and `rhs_lua`, and every reader of `mp` is
+            // behind a test on one of those -- so dropping the whole match
+            // is the same answer.
             replace_termcodes(
                 keys,
                 strlen(keys),
                 &raw mut alt_keys_buf,
-                0 as scid_T,
-                flags | REPTERM_NO_SIMPLIFY as ::core::ffi::c_int,
-                ::core::ptr::null_mut::<bool>(),
+                0,
+                flags | REPTERM_NO_SIMPLIFY as c_int,
+                ptr::null_mut(),
                 p_cpo.get(),
             );
-            // When the lhs is being simplified the not-simplified keys are
-            // preferred, like in do_map(). Upstream leaves the previous `mp`
-            // in place when this second look-up fails, but then both `rhs`
-            // and `rhs_lua` are cleared, so every reader of `mp` is behind a
-            // test that has already failed -- dropping the whole match is the
-            // same answer.
-            found = check_map(alt_keys_buf, mode, exact != 0, false, abbr);
+            found = check_map(alt_keys_buf, mode, exact, false, abbr);
         }
-        let mp = found.as_ref().map_or(::core::ptr::null_mut(), |f| f.mp);
-        let buffer_local = ::core::ffi::c_int::from(found.as_ref().is_some_and(|f| f.local));
-        let rhs_lua = found.as_ref().map_or(LUA_NOREF, |f| f.rhs_lua);
-        let rhs = found.as_ref().map_or(::core::ptr::null_mut(), |f| f.rhs);
+
         if !get_dict {
-            if !rhs.is_null() {
-                if *rhs as ::core::ffi::c_int == NUL {
+            // Return a string.
+            if let Some(found) = &found {
+                if !found.rhs.is_null() {
+                    (*rettv).vval.v_string = if c_int::from(*found.rhs) == NUL {
+                        xstrdup(c"<Nop>".as_ptr())
+                    } else {
+                        str2special_save(found.rhs, false, false)
+                    };
+                } else if found.rhs_lua != LUA_NOREF {
                     (*rettv).vval.v_string =
-                        xstrdup(b"<Nop>\0".as_ptr() as *const ::core::ffi::c_char);
-                } else {
-                    (*rettv).vval.v_string = str2special_save(rhs, false_0 != 0, false_0 != 0);
+                        nlua_funcref_str((*found.mp).m_luaref, ptr::null_mut());
                 }
-            } else if rhs_lua != LUA_NOREF {
-                (*rettv).vval.v_string =
-                    nlua_funcref_str((*mp).m_luaref, ::core::ptr::null_mut::<Arena>());
             }
-        } else if !mp.is_null() && (!rhs.is_null() || rhs_lua != LUA_NOREF) {
-            let mut arena: Arena = ARENA_EMPTY;
-            let mut dict: Dict = mapblock_fill_dict(
-                mp,
-                if did_simplify as ::core::ffi::c_int != 0 {
+        } else if let Some(found) = found.filter(|f| !f.rhs.is_null() || f.rhs_lua != LUA_NOREF) {
+            // Return a dictionary.
+            let mut arena = ARENA_EMPTY;
+            let dict = mapblock_fill_dict(
+                found.mp,
+                if did_simplify {
                     keys_simplified
                 } else {
-                    ::core::ptr::null_mut::<::core::ffi::c_char>()
+                    ptr::null_mut()
                 },
-                buffer_local,
+                c_int::from(found.local),
                 abbr,
-                true_0 != 0,
+                true,
                 &raw mut arena,
             );
-            let mut c2rust_lvalue: Object = object {
-                type_0: kObjectTypeDict,
-                data: C2Rust_Unnamed { dict: dict },
-            };
-            object_to_vim_take_luaref(
-                &raw mut c2rust_lvalue,
-                rettv,
-                true_0 != 0,
-                ::core::ptr::null_mut::<Error>(),
-            );
+            let mut obj = Object::dict(dict);
+            object_to_vim_take_luaref(&raw mut obj, rettv, true, ptr::null_mut());
             arena_mem_free(arena_finish(&raw mut arena));
         } else {
+            // Return an empty dictionary.
             tv_dict_alloc_ret(rettv);
         }
-        xfree(keys_buf as *mut ::core::ffi::c_void);
-        xfree(alt_keys_buf as *mut ::core::ffi::c_void);
+
+        xfree(keys_buf.cast());
+        xfree(alt_keys_buf.cast());
     }
 }
 
+/// `maplist()`: every mapping, global then buffer-local, as a list of dicts.
+///
+/// # Safety
+/// The Vimscript call convention: `argvars` is a live argument vector.
 pub unsafe extern "C" fn f_maplist(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        let flags: ::core::ffi::c_int =
-            REPTERM_FROM_PART as ::core::ffi::c_int | REPTERM_DO_LT as ::core::ffi::c_int;
-        let abbr: bool = (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            && tv_get_bool(argvars.offset(0 as ::core::ffi::c_int as isize)) != 0;
-        tv_list_alloc_ret(rettv, kListLenUnknown as ::core::ffi::c_int as ptrdiff_t);
-        let mut buffer_local: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while buffer_local <= 1 as ::core::ffi::c_int {
-            let mut hash: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while hash < 256 as ::core::ffi::c_int {
-                let mut mp: *mut mapblock_T = ::core::ptr::null_mut::<mapblock_T>();
-                if abbr {
-                    if hash > 0 as ::core::ffi::c_int {
-                        break;
-                    }
-                    if buffer_local != 0 {
-                        mp = (*curbuf.get()).b_first_abbr;
+        let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
+        let abbr = (*argvars).v_type != VAR_UNKNOWN as _ && tv_get_bool(argvars) != 0;
+
+        tv_list_alloc_ret(rettv, kListLenUnknown as ptrdiff_t);
+
+        // Do it twice: once for global maps and once for local maps.
+        for (buffer_local, table) in [(0, MapTable::Global), (1, MapTable::Buffer(curbuf.get()))] {
+            map_walk::<()>(table, abbr, |mp| {
+                if (*mp).m_simplified != 0 {
+                    return None;
+                }
+                let mut keys_buf: *mut c_char = ptr::null_mut();
+                let mut did_simplify = false;
+
+                let mut arena = ARENA_EMPTY;
+                let lhs = str2special_arena((*mp).m_keys, true, false, &raw mut arena);
+                replace_termcodes(
+                    lhs,
+                    strlen(lhs),
+                    &raw mut keys_buf,
+                    0,
+                    flags,
+                    &raw mut did_simplify,
+                    p_cpo.get(),
+                );
+
+                let dict = mapblock_fill_dict(
+                    mp,
+                    if did_simplify {
+                        keys_buf
                     } else {
-                        mp = FIRST_ABBR.get();
-                    }
-                } else if buffer_local != 0 {
-                    mp = (*curbuf.get()).b_maphash[hash as usize] as *mut mapblock_T;
-                } else {
-                    mp = (*MAPHASH.ptr())[hash as usize] as *mut mapblock_T;
-                }
-                while !mp.is_null() {
-                    if (*mp).m_simplified == 0 {
-                        let mut keys_buf: *mut ::core::ffi::c_char =
-                            ::core::ptr::null_mut::<::core::ffi::c_char>();
-                        let mut did_simplify: bool = false_0 != 0;
-                        let mut arena: Arena = ARENA_EMPTY;
-                        let mut lhs: *mut ::core::ffi::c_char = str2special_arena(
-                            (*mp).m_keys,
-                            true_0 != 0,
-                            false_0 != 0,
-                            &raw mut arena,
-                        );
-                        replace_termcodes(
-                            lhs,
-                            strlen(lhs),
-                            &raw mut keys_buf,
-                            0 as scid_T,
-                            flags,
-                            &raw mut did_simplify,
-                            p_cpo.get(),
-                        );
-                        let mut dict: Dict = mapblock_fill_dict(
-                            mp,
-                            if did_simplify as ::core::ffi::c_int != 0 {
-                                keys_buf
-                            } else {
-                                ::core::ptr::null_mut::<::core::ffi::c_char>()
-                            },
-                            buffer_local,
-                            abbr,
-                            true_0 != 0,
-                            &raw mut arena,
-                        );
-                        let mut d: typval_T = typval_T {
-                            v_type: VAR_UNKNOWN,
-                            v_lock: VAR_UNLOCKED,
-                            vval: typval_vval_union { v_number: 0 },
-                        };
-                        let mut c2rust_lvalue: Object = object {
-                            type_0: kObjectTypeDict,
-                            data: C2Rust_Unnamed { dict: dict },
-                        };
-                        object_to_vim_take_luaref(
-                            &raw mut c2rust_lvalue,
-                            &raw mut d,
-                            true_0 != 0,
-                            ::core::ptr::null_mut::<Error>(),
-                        );
-                        '_c2rust_label: {
-                            if d.v_type as ::core::ffi::c_uint
-                                == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-                            {
-                            } else {
-                                __assert_fail(
-                                    b"d.v_type == VAR_DICT\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                    b"src/nvim/mapping.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                    2431 as ::core::ffi::c_uint,
-                                    b"void f_maplist(typval_T *, typval_T *, EvalFuncData)\0"
-                                        .as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                );
-                            }
-                        };
-                        tv_list_append_dict((*rettv).vval.v_list, d.vval.v_dict);
-                        arena_mem_free(arena_finish(&raw mut arena));
-                        xfree(keys_buf as *mut ::core::ffi::c_void);
-                    }
-                    mp = (*mp).m_next;
-                }
-                hash += 1;
-            }
-            buffer_local += 1;
+                        ptr::null_mut()
+                    },
+                    buffer_local,
+                    abbr,
+                    true,
+                    &raw mut arena,
+                );
+                let mut d = typval_T {
+                    v_type: VAR_UNKNOWN,
+                    v_lock: VAR_UNLOCKED,
+                    vval: typval_vval_union { v_number: 0 },
+                };
+                let mut obj = Object::dict(dict);
+                object_to_vim_take_luaref(&raw mut obj, &raw mut d, true, ptr::null_mut());
+                debug_assert_eq!(d.v_type, VAR_DICT);
+                tv_list_append_dict((*rettv).vval.v_list, d.vval.v_dict);
+                arena_mem_free(arena_finish(&raw mut arena));
+                xfree(keys_buf.cast());
+                None
+            });
         }
     }
 }
 
+/// `maparg()`.
+///
+/// # Safety
+/// The Vimscript call convention: `argvars` is a live argument vector.
 pub unsafe extern "C" fn f_maparg(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        get_maparg(argvars, rettv, true_0);
-    }
+    unsafe { get_maparg(argvars, rettv, true) }
 }
 
+/// `mapcheck()`.
+///
+/// # Safety
+/// The Vimscript call convention: `argvars` is a live argument vector.
 pub unsafe extern "C" fn f_mapcheck(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
+    unsafe { get_maparg(argvars, rettv, false) }
+}
+
+/// The mode a mode-shortname string names, and how much of it was consumed.
+///
+/// `nvim_get_keymap` and `nvim_set_keymap` take the same shortnames as
+/// `:map`'s command names, optionally with a `!` in front and an `a` after
+/// for the abbreviation form.
+///
+/// # Safety
+/// `mode` must be a live API string.
+pub(crate) unsafe fn parse_shortname_mode(mode: String_0) -> (c_int, bool, *mut c_char) {
     unsafe {
-        get_maparg(argvars, rettv, false_0);
+        let mut p = if mode.size > 0 {
+            mode.data
+        } else {
+            c"m".as_ptr().cast_mut()
+        };
+        let forceit = c_int::from(*p) == c_int::from(b'!');
+        let int_mode = get_map_mode(&raw mut p, forceit);
+        if forceit {
+            debug_assert_eq!(p, mode.data);
+            p = p.add(1);
+        }
+        let is_abbrev = int_mode & (MODE_INSERT | MODE_CMDLINE) != 0 && *p == b'a' as c_char;
+        (int_mode, is_abbrev, p)
     }
 }
 
-pub unsafe extern "C" fn keymap_array(
-    mut mode: String_0,
-    mut buf: *mut buf_T,
-    mut arena: *mut Arena,
-) -> Array {
+/// Every mapping in `mode`, as `maparg()`-like dicts: `nvim_get_keymap`.
+///
+/// `buf` is the buffer whose local mappings to report, or null for the
+/// global ones.
+///
+/// # Safety
+/// `arena` must be live and `buf` null or a live buffer.
+pub unsafe fn keymap_array(mode: String_0, buf: *mut buf_T, arena: *mut Arena) -> Array {
     unsafe {
-        let mut mappings: ArrayBuilder = ArrayBuilder {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
-            init_array: [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            }; 16],
-        };
-        mappings.capacity = ::core::mem::size_of::<[Object; 16]>()
-            .wrapping_div(::core::mem::size_of::<Object>())
-            .wrapping_div(
-                (::core::mem::size_of::<[Object; 16]>()
-                    .wrapping_rem(::core::mem::size_of::<Object>())
-                    == 0) as ::core::ffi::c_int as usize,
-            ) as size_t;
-        mappings.size = 0 as size_t;
-        mappings.items = &raw mut mappings.init_array as *mut Object;
-        let mut p: *mut ::core::ffi::c_char = (if mode.size > 0 as size_t {
-            mode.data as *const ::core::ffi::c_char
+        let (int_mode, is_abbrev, _) = parse_shortname_mode(mode);
+        let buffer_value = if buf.is_null() {
+            0
         } else {
-            b"m\0".as_ptr() as *const ::core::ffi::c_char
-        }) as *mut ::core::ffi::c_char;
-        let mut forceit: bool = *p as ::core::ffi::c_int == '!' as ::core::ffi::c_int;
-        let mut int_mode: ::core::ffi::c_int = get_map_mode(&raw mut p, forceit);
-        if forceit {
-            '_c2rust_label: {
-                if p == mode.data {
-                } else {
-                    __assert_fail(
-                        b"p == mode.data\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/mapping.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        2888 as ::core::ffi::c_uint,
-                        b"Array keymap_array(String, buf_T *, Arena *)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            p = p.offset(1);
-        }
-        let mut is_abbrev: bool = int_mode & (MODE_INSERT | MODE_CMDLINE)
-            != 0 as ::core::ffi::c_int
-            && *p as ::core::ffi::c_int == 'a' as ::core::ffi::c_int;
-        let mut buffer_value: ::core::ffi::c_int = if buf.is_null() {
-            0 as ::core::ffi::c_int
-        } else {
-            (*buf).handle as ::core::ffi::c_int
+            (*buf).handle as c_int
         };
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i
-            < (if is_abbrev as ::core::ffi::c_int != 0 {
-                1 as ::core::ffi::c_int
-            } else {
-                MAX_MAPHASH as ::core::ffi::c_int
-            })
+        let table = if buf.is_null() {
+            MapTable::Global
+        } else {
+            MapTable::Buffer(buf)
+        };
+
+        let mut mappings = ArrayBuilder {
+            size: 0,
+            capacity: 0,
+            items: ptr::null_mut(),
+            init_array: [Object::NIL; 16],
+        };
         {
-            let mut current_maphash: *const mapblock_T = if is_abbrev as ::core::ffi::c_int != 0 {
-                if !buf.is_null() {
-                    (*buf).b_first_abbr
-                } else {
-                    FIRST_ABBR.get()
+            let mut items = InitVec::new(
+                &mut mappings.size,
+                &mut mappings.capacity,
+                &mut mappings.items,
+                &mut mappings.init_array,
+            );
+            items.init();
+            map_walk::<()>(table, is_abbrev, |mp| {
+                if (*mp).m_simplified != 0 || int_mode & (*mp).m_mode == 0 {
+                    return None;
                 }
-            } else if !buf.is_null() {
-                (*buf).b_maphash[i as usize] as *mut mapblock_T
-            } else {
-                (*MAPHASH.ptr())[i as usize] as *mut mapblock_T
-            };
-            while !current_maphash.is_null() {
-                if (*current_maphash).m_simplified == 0 {
-                    if int_mode & (*current_maphash).m_mode != 0 {
-                        if mappings.size == mappings.capacity {
-                            mappings.capacity = if mappings.capacity << 1 as ::core::ffi::c_int
-                                > ::core::mem::size_of::<[Object; 16]>()
-                                    .wrapping_div(::core::mem::size_of::<Object>())
-                                    .wrapping_div(
-                                        (::core::mem::size_of::<[Object; 16]>()
-                                            .wrapping_rem(::core::mem::size_of::<Object>())
-                                            == 0)
-                                            as ::core::ffi::c_int
-                                            as usize,
-                                    ) {
-                                mappings.capacity << 1 as ::core::ffi::c_int
-                            } else {
-                                ::core::mem::size_of::<[Object; 16]>()
-                                    .wrapping_div(::core::mem::size_of::<Object>())
-                                    .wrapping_div(
-                                        (::core::mem::size_of::<[Object; 16]>()
-                                            .wrapping_rem(::core::mem::size_of::<Object>())
-                                            == 0)
-                                            as ::core::ffi::c_int
-                                            as size_t,
-                                    )
-                            };
-                            mappings.items = (if mappings.capacity
-                                == ::core::mem::size_of::<[Object; 16]>()
-                                    .wrapping_div(::core::mem::size_of::<Object>())
-                                    .wrapping_div(
-                                        (::core::mem::size_of::<[Object; 16]>()
-                                            .wrapping_rem(::core::mem::size_of::<Object>())
-                                            == 0)
-                                            as ::core::ffi::c_int
-                                            as usize,
-                                    ) {
-                                if mappings.items == &raw mut mappings.init_array as *mut Object {
-                                    mappings.items as *mut ::core::ffi::c_void
-                                } else {
-                                    _memcpy_free(
-                                        &raw mut mappings.init_array as *mut Object
-                                            as *mut ::core::ffi::c_void,
-                                        mappings.items as *mut ::core::ffi::c_void,
-                                        mappings
-                                            .size
-                                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                                    )
-                                }
-                            } else {
-                                if mappings.items == &raw mut mappings.init_array as *mut Object {
-                                    memcpy(
-                                        xmalloc(
-                                            mappings
-                                                .capacity
-                                                .wrapping_mul(::core::mem::size_of::<Object>()),
-                                        ),
-                                        mappings.items as *const ::core::ffi::c_void,
-                                        mappings
-                                            .size
-                                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                                    )
-                                } else {
-                                    xrealloc(
-                                        mappings.items as *mut ::core::ffi::c_void,
-                                        mappings
-                                            .capacity
-                                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                                    )
-                                }
-                            }) as *mut Object;
-                        } else {
-                        };
-                        let c2rust_fresh41 = mappings.size;
-                        mappings.size = mappings.size.wrapping_add(1);
-                        *mappings.items.offset(c2rust_fresh41 as isize) = object {
-                            type_0: kObjectTypeDict,
-                            data: C2Rust_Unnamed {
-                                dict: mapblock_fill_dict(
-                                    current_maphash,
-                                    if !(*current_maphash).m_alt.is_null() {
-                                        (*(*current_maphash).m_alt).m_keys
-                                    } else {
-                                        ::core::ptr::null_mut::<::core::ffi::c_char>()
-                                    },
-                                    buffer_value,
-                                    is_abbrev,
-                                    false,
-                                    arena,
-                                ),
-                            },
-                        };
-                    }
-                }
-                current_maphash = (*current_maphash).m_next;
-            }
-            i += 1;
+                let dict = mapblock_fill_dict(
+                    mp,
+                    if (*mp).m_alt.is_null() {
+                        ptr::null_mut()
+                    } else {
+                        (*(*mp).m_alt).m_keys
+                    },
+                    buffer_value,
+                    is_abbrev,
+                    false,
+                    arena,
+                );
+                items.push(Object::dict(dict));
+                None
+            });
         }
-        return arena_take_arraybuilder(arena, &raw mut mappings);
+
+        arena_take_arraybuilder(arena, &raw mut mappings)
     }
 }

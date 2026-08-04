@@ -316,7 +316,7 @@
     "crates/nvim/src/nvim/mapping/abbrev.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/mapping/args.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/mapping/domap.rs": {"unsafe": 14},
-    "crates/nvim/src/nvim/mapping/introspect.rs": {"unsafe": 7},
+    "crates/nvim/src/nvim/mapping/introspect.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/mapping/langmap.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/mapping/mapset.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/mapping/session.rs": {"unsafe": 3},
