@@ -116,9 +116,9 @@ use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, CMD_index, CmdlineInfo, CompleteListItemGetter, Direction, Error,
     EvalFuncData, LuaRetMode, Object, OptInt, ScopeType, SpecialVarValue, VarLockStatus, VarType,
     buf_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T, fuzmatch_str_T, garray_T,
-    hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, linenr_T, list_T, listitem_T, pos_T,
-    ptrdiff_t, pumitem_T, regmatch_T, regprog_T, scriptitem_T, sctx_T, searchit_arg_T, size_t,
-    ssize_t, typval_T, typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T, xp_prefix_T,
+    hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, list_T, listitem_T, pos_T, ptrdiff_t,
+    pumitem_T, regmatch_T, regprog_T, scriptitem_T, sctx_T, size_t, ssize_t, typval_T,
+    typval_vval_union, uint32_t, varnumber_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has, vim_beep};
 use crate::src::nvim::usercmd::{
