@@ -57,8 +57,8 @@ use crate::src::nvim::message::{
     str2special_arena, str2special_save, swmsg,
 };
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, fprintf, fputc, fputs, gettext, memcpy, memmove, putc, snprintf,
-    strcasecmp, strchr, strcmp, strlen, strncmp, strpbrk, strstr,
+    __assert_fail, abort, fprintf, fputc, fputs, gettext, memcpy, putc, snprintf, strcasecmp,
+    strchr, strcmp, strlen, strncmp, strpbrk, strstr,
 };
 use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::state::{
@@ -73,7 +73,7 @@ use crate::src::nvim::types::{
     ScopeType, SpecialVarValue, String_0, VarLockStatus, VarType, buf_T, cmdidx_T, colnr_T, dict_T,
     dictitem_T, estack_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, kObjectTypeDict,
     kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, key_extra,
-    key_value_pair, linenr_T, mapblock_T, object, object_data as C2Rust_Unnamed, optset_T, pos_T,
+    key_value_pair, linenr_T, mapblock_T, object, object_data as C2Rust_Unnamed, optset_T,
     ptrdiff_t, regmatch_T, scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_T, uint8_t,
     uint64_t, varnumber_T,
 };

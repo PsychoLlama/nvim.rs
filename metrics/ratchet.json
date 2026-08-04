@@ -313,7 +313,7 @@
     "crates/nvim/src/nvim/map/table.rs": {"unsafe": 18},
     "crates/nvim/src/nvim/map_glyph_cache.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/mapping.rs": {"unsafe": 7},
-    "crates/nvim/src/nvim/mapping/abbrev.rs": {"unsafe": 2},
+    "crates/nvim/src/nvim/mapping/abbrev.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/mapping/args.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/mapping/domap.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/mapping/introspect.rs": {"unsafe": 7},
