@@ -15,7 +15,7 @@ pub(crate) unsafe extern "C" fn command_line_wildchar_complete(
 ) -> ::core::ffi::c_int {
     unsafe {
         let mut res: ::core::ffi::c_int = 0;
-        let mut options: ::core::ffi::c_int = WILD_NO_BEEP as ::core::ffi::c_int;
+        let mut options: ::core::ffi::c_int = WILD_NO_BEEP;
         let mut escape: bool = (*s).firstc != '@' as ::core::ffi::c_int;
         let mut redraw_if_menu_empty: bool = (*s).c
             == -(253 as ::core::ffi::c_int
@@ -28,7 +28,7 @@ pub(crate) unsafe extern "C" fn command_line_wildchar_complete(
             & kOptWimFlagLastused as ::core::ffi::c_int
             != 0
         {
-            options |= WILD_BUFLASTUSED as ::core::ffi::c_int;
+            options |= WILD_BUFLASTUSED;
         }
         if (*s).xpc.xp_numfiles > 0 as ::core::ffi::c_int {
             if (*s).xpc.xp_numfiles > 1 as ::core::ffi::c_int
@@ -45,22 +45,12 @@ pub(crate) unsafe extern "C" fn command_line_wildchar_complete(
                 & kOptWimFlagLongest as ::core::ffi::c_int
                 != 0
             {
-                res = nextwild(
-                    &raw mut (*s).xpc,
-                    WILD_LONGEST as ::core::ffi::c_int,
-                    options,
-                    escape,
-                );
+                res = nextwild(&raw mut (*s).xpc, WILD_LONGEST, options, escape);
             } else if (*wim_flags.ptr())[(*s).wim_index as usize] as ::core::ffi::c_int
                 & kOptWimFlagFull as ::core::ffi::c_int
                 != 0
             {
-                res = nextwild(
-                    &raw mut (*s).xpc,
-                    WILD_NEXT as ::core::ffi::c_int,
-                    options,
-                    escape,
-                );
+                res = nextwild(&raw mut (*s).xpc, WILD_NEXT, options, escape);
             } else {
                 res = OK;
             }
@@ -85,33 +75,23 @@ pub(crate) unsafe extern "C" fn command_line_wildchar_complete(
                         + ((KE_WILD as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
                 || (*s).c == Ctrl_Z
             {
-                options |= WILD_MAY_EXPAND_PATTERN as ::core::ffi::c_int;
+                options |= WILD_MAY_EXPAND_PATTERN;
                 if (*s).c
                     == -(253 as ::core::ffi::c_int
                         + ((KE_WILD as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
                 {
-                    options |= WILD_FUNC_TRIGGER as ::core::ffi::c_int;
+                    options |= WILD_FUNC_TRIGGER;
                 }
                 (*s).xpc.xp_pre_incsearch_pos = (*s).is_state.search_start;
             }
             let mut cmdpos_before: ::core::ffi::c_int = (*ccline.ptr()).cmdpos;
             if wim_longest {
-                res = nextwild(
-                    &raw mut (*s).xpc,
-                    WILD_LONGEST as ::core::ffi::c_int,
-                    options,
-                    escape,
-                );
+                res = nextwild(&raw mut (*s).xpc, WILD_LONGEST, options, escape);
             } else {
                 if wim_noselect as ::core::ffi::c_int != 0 || wim_list as ::core::ffi::c_int != 0 {
-                    options |= WILD_NOSELECT as ::core::ffi::c_int;
+                    options |= WILD_NOSELECT;
                 }
-                res = nextwild(
-                    &raw mut (*s).xpc,
-                    WILD_EXPAND_KEEP as ::core::ffi::c_int,
-                    options,
-                    escape,
-                );
+                res = nextwild(&raw mut (*s).xpc, WILD_EXPAND_KEEP, options, escape);
             }
             if redraw_if_menu_empty as ::core::ffi::c_int != 0
                 && (*s).xpc.xp_numfiles <= 0 as ::core::ffi::c_int
@@ -126,10 +106,10 @@ pub(crate) unsafe extern "C" fn command_line_wildchar_complete(
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     0 as ::core::ffi::c_int,
-                    WILD_FREE as ::core::ffi::c_int,
+                    WILD_FREE,
                 );
                 (*s).xpc.xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
-                return CMDLINE_CHANGED as ::core::ffi::c_int;
+                return CMDLINE_CHANGED;
             }
             if res == OK
                 && (*s).xpc.xp_numfiles
@@ -167,12 +147,7 @@ pub(crate) unsafe extern "C" fn command_line_wildchar_complete(
                                     || wim_noselect_next as ::core::ffi::c_int != 0)
                         {
                             if wim_full_next as ::core::ffi::c_int != 0 && !wim_noselect_next {
-                                nextwild(
-                                    &raw mut (*s).xpc,
-                                    WILD_NEXT as ::core::ffi::c_int,
-                                    options,
-                                    escape,
-                                );
+                                nextwild(&raw mut (*s).xpc, WILD_NEXT, options, escape);
                             } else {
                                 showmatches(
                                     &raw mut (*s).xpc,
@@ -210,9 +185,9 @@ pub(crate) unsafe extern "C" fn command_line_wildchar_complete(
             (*s).gotesc = true_0 != 0;
         }
         return if res == OK {
-            CMDLINE_CHANGED as ::core::ffi::c_int
+            CMDLINE_CHANGED
         } else {
-            CMDLINE_NOT_CHANGED as ::core::ffi::c_int
+            CMDLINE_NOT_CHANGED
         };
     }
 }

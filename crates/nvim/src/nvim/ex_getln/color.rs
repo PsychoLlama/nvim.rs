@@ -234,7 +234,7 @@ pub(crate) unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineIn
             if (*colored_ccline).prompt_id != prev_prompt_id.get() {
                 prev_prompt_errors.set(0 as ::core::ffi::c_int);
                 prev_prompt_id.set((*colored_ccline).prompt_id);
-            } else if prev_prompt_errors.get() >= MAX_CB_ERRORS as ::core::ffi::c_int {
+            } else if prev_prompt_errors.get() >= MAX_CB_ERRORS {
                 break '_color_cmdline_end;
             }
             if (*colored_ccline).highlight_callback.type_0 as ::core::ffi::c_uint

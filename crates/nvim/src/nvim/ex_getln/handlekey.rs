@@ -78,7 +78,7 @@ pub(crate) unsafe extern "C" fn command_line_erase_chars(
             if exmode_active.get() as ::core::ffi::c_int != 0
                 || (*ccline.ptr()).cmdfirstc == '>' as ::core::ffi::c_int
             {
-                return CMDLINE_NOT_CHANGED as ::core::ffi::c_int;
+                return CMDLINE_NOT_CHANGED;
             }
             dealloc_cmdbuff();
             if !cmd_silent.get() && !ui_has(kUICmdline) {
@@ -87,9 +87,9 @@ pub(crate) unsafe extern "C" fn command_line_erase_chars(
             }
             (*s).is_state.search_start = (*s).is_state.save_cursor;
             redraw_cmdline.set(true_0 != 0);
-            return GOTO_NORMAL_MODE as ::core::ffi::c_int;
+            return GOTO_NORMAL_MODE;
         }
-        return CMDLINE_CHANGED as ::core::ffi::c_int;
+        return CMDLINE_CHANGED;
     }
 }
 
@@ -161,7 +161,7 @@ pub(crate) unsafe extern "C" fn command_line_insert_reg(
             cmdline_paste((*s).c, literally, false_0 != 0);
             if aborting() {
                 (*s).gotesc = true_0 != 0;
-                return GOTO_NORMAL_MODE as ::core::ffi::c_int;
+                return GOTO_NORMAL_MODE;
             }
             KeyTyped.set(false_0 != 0);
             if new_cmdpos.get() >= 0 as ::core::ffi::c_int {
@@ -176,9 +176,9 @@ pub(crate) unsafe extern "C" fn command_line_insert_reg(
         (*ccline.ptr()).special_char = NUL as ::core::ffi::c_char;
         redrawcmd();
         return if literally as ::core::ffi::c_int != 0 {
-            CMDLINE_CHANGED as ::core::ffi::c_int
+            CMDLINE_CHANGED
         } else {
-            CMDLINE_NOT_CHANGED as ::core::ffi::c_int
+            CMDLINE_NOT_CHANGED
         };
     }
 }
@@ -445,7 +445,7 @@ pub(crate) unsafe extern "C" fn command_line_handle_key(
                                     }
                                     if nextwild(
                                         &raw mut (*s).xpc,
-                                        WILD_ALL as ::core::ffi::c_int,
+                                        WILD_ALL,
                                         0 as ::core::ffi::c_int,
                                         (*s).firstc != '@' as ::core::ffi::c_int,
                                     ) == FAIL
@@ -468,7 +468,7 @@ pub(crate) unsafe extern "C" fn command_line_handle_key(
                                     }
                                     if nextwild(
                                         &raw mut (*s).xpc,
-                                        WILD_LONGEST as ::core::ffi::c_int,
+                                        WILD_LONGEST,
                                         0 as ::core::ffi::c_int,
                                         (*s).firstc != '@' as ::core::ffi::c_int,
                                     ) == FAIL
@@ -481,9 +481,9 @@ pub(crate) unsafe extern "C" fn command_line_handle_key(
                                 Ctrl_N | Ctrl_P => {
                                     if (*s).xpc.xp_numfiles > 0 as ::core::ffi::c_int {
                                         let wild_type: ::core::ffi::c_int = if (*s).c == Ctrl_P {
-                                            WILD_PREV as ::core::ffi::c_int
+                                            WILD_PREV
                                         } else {
-                                            WILD_NEXT as ::core::ffi::c_int
+                                            WILD_NEXT
                                         };
                                         if nextwild(
                                             &raw mut (*s).xpc,
@@ -572,9 +572,9 @@ pub(crate) unsafe extern "C" fn command_line_handle_key(
                             {
                                 let wild_type_0: ::core::ffi::c_int =
                                     if (*s).c == K_PAGEDOWN || (*s).c == K_KPAGEDOWN {
-                                        WILD_PAGEDOWN as ::core::ffi::c_int
+                                        WILD_PAGEDOWN
                                     } else {
-                                        WILD_PAGEUP as ::core::ffi::c_int
+                                        WILD_PAGEUP
                                     };
                                 if nextwild(
                                     &raw mut (*s).xpc,

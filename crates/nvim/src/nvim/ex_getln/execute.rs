@@ -27,7 +27,7 @@ pub(crate) unsafe extern "C" fn command_line_handle_ctrl_bsl(
                 || cmdline_star.get() > 0 as ::core::ffi::c_int)
         {
             vungetc((*s).c);
-            return PROCESS_NEXT_KEY as ::core::ffi::c_int;
+            return PROCESS_NEXT_KEY;
         }
         if (*s).c == 'e' as ::core::ffi::c_int {
             if (*ccline.ptr()).cmdpos == (*ccline.ptr()).cmdlen {
@@ -53,7 +53,7 @@ pub(crate) unsafe extern "C" fn command_line_handle_ctrl_bsl(
                     };
                     KeyTyped.set(false_0 != 0);
                     redrawcmd();
-                    return CMDLINE_CHANGED as ::core::ffi::c_int;
+                    return CMDLINE_CHANGED;
                 }
             }
             beep_flush();
@@ -61,10 +61,10 @@ pub(crate) unsafe extern "C" fn command_line_handle_ctrl_bsl(
             did_emsg.set(false_0);
             emsg_on_display.set(false_0 != 0);
             redrawcmd();
-            return CMDLINE_NOT_CHANGED as ::core::ffi::c_int;
+            return CMDLINE_NOT_CHANGED;
         }
         (*s).gotesc = true_0 != 0;
-        return GOTO_NORMAL_MODE as ::core::ffi::c_int;
+        return GOTO_NORMAL_MODE;
     }
 }
 
@@ -98,7 +98,7 @@ pub(crate) unsafe extern "C" fn command_line_end_wildmenu(
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 0 as ::core::ffi::c_int,
-                WILD_FREE as ::core::ffi::c_int,
+                WILD_FREE,
             );
         }
         (*s).did_wild_list = false_0 != 0;
@@ -173,7 +173,7 @@ pub(crate) unsafe extern "C" fn command_line_execute(
                                 -> *mut ::core::ffi::c_char,
                     ),
                     NULL_0,
-                    DOCMD_NOWAIT as ::core::ffi::c_int,
+                    DOCMD_NOWAIT,
                 );
             } else {
                 map_execute_lua(false_0 != 0, false_0 != 0);
@@ -193,15 +193,15 @@ pub(crate) unsafe extern "C" fn command_line_execute(
                 if cmdline_pum_active() {
                     nextwild(
                         &raw mut (*s).xpc,
-                        WILD_PUM_WANT as ::core::ffi::c_int,
+                        WILD_PUM_WANT,
                         0 as ::core::ffi::c_int,
                         (*s).firstc != '@' as ::core::ffi::c_int,
                     );
                     if (*pum_want.ptr()).finish {
                         nextwild(
                             &raw mut (*s).xpc,
-                            WILD_APPLY as ::core::ffi::c_int,
-                            WILD_NO_BEEP as ::core::ffi::c_int,
+                            WILD_APPLY,
+                            WILD_NO_BEEP,
                             (*s).firstc != '@' as ::core::ffi::c_int,
                         );
                         command_line_end_wildmenu(s, false_0 != 0, (*s).c);
@@ -296,14 +296,14 @@ pub(crate) unsafe extern "C" fn command_line_execute(
         {
             if (*s).c == Ctrl_E || (*s).c == Ctrl_Y {
                 wild_type = if (*s).c == Ctrl_E {
-                    WILD_CANCEL as ::core::ffi::c_int
+                    WILD_CANCEL
                 } else {
-                    WILD_APPLY as ::core::ffi::c_int
+                    WILD_APPLY
                 };
                 nextwild(
                     &raw mut (*s).xpc,
                     wild_type,
-                    WILD_NO_BEEP as ::core::ffi::c_int,
+                    WILD_NO_BEEP,
                     (*s).firstc != '@' as ::core::ffi::c_int,
                 );
             }
@@ -425,7 +425,7 @@ pub(crate) unsafe extern "C" fn command_line_execute(
             {
                 (*emsg_silent.ptr()) -= 1;
             }
-            if res == CMDLINE_CHANGED as ::core::ffi::c_int {
+            if res == CMDLINE_CHANGED {
                 return command_line_changed(s);
             }
             if (*s).c
@@ -439,7 +439,7 @@ pub(crate) unsafe extern "C" fn command_line_execute(
         if (*s).c == K_S_TAB && KeyTyped.get() as ::core::ffi::c_int != 0 {
             if nextwild(
                 &raw mut (*s).xpc,
-                WILD_EXPAND_KEEP as ::core::ffi::c_int,
+                WILD_EXPAND_KEEP,
                 0 as ::core::ffi::c_int,
                 (*s).firstc != '@' as ::core::ffi::c_int,
             ) == OK
@@ -464,13 +464,13 @@ pub(crate) unsafe extern "C" fn command_line_execute(
                 }
                 nextwild(
                     &raw mut (*s).xpc,
-                    WILD_PREV as ::core::ffi::c_int,
+                    WILD_PREV,
                     0 as ::core::ffi::c_int,
                     (*s).firstc != '@' as ::core::ffi::c_int,
                 );
                 nextwild(
                     &raw mut (*s).xpc,
-                    WILD_PREV as ::core::ffi::c_int,
+                    WILD_PREV,
                     0 as ::core::ffi::c_int,
                     (*s).firstc != '@' as ::core::ffi::c_int,
                 );
@@ -481,9 +481,7 @@ pub(crate) unsafe extern "C" fn command_line_execute(
             (*s).c = NL;
         }
         (*s).do_abbr = true_0 != 0;
-        if wild_type == WILD_CANCEL as ::core::ffi::c_int
-            || wild_type == WILD_APPLY as ::core::ffi::c_int
-        {
+        if wild_type == WILD_CANCEL || wild_type == WILD_APPLY {
             if (*s).is_state.winid != (*curwin.get()).handle {
                 init_incsearch_state(&raw mut (*s).is_state);
             }

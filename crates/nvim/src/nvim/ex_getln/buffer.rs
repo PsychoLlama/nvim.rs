@@ -253,15 +253,15 @@ pub unsafe extern "C" fn vim_strsave_fnameescape(
     unsafe {
         let mut p: *mut ::core::ffi::c_char = vim_strsave_escaped(
             fname,
-            if what == VSE_SHELL as ::core::ffi::c_int {
+            if what == VSE_SHELL {
                 SHELL_ESC_CHARS.as_ptr()
-            } else if what == VSE_BUFFER as ::core::ffi::c_int {
+            } else if what == VSE_BUFFER {
                 BUFFER_ESC_CHARS.as_ptr()
             } else {
                 PATH_ESC_CHARS.as_ptr()
             },
         );
-        if what == VSE_SHELL as ::core::ffi::c_int && csh_like_shell() {
+        if what == VSE_SHELL && csh_like_shell() {
             let mut s: *mut ::core::ffi::c_char =
                 vim_strsave_escaped(p, b"!\0".as_ptr() as *const ::core::ffi::c_char);
             xfree(p as *mut ::core::ffi::c_void);

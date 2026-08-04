@@ -302,7 +302,7 @@ pub(crate) unsafe extern "C" fn cmdpreview_prepare(mut cpinfo: *mut CpInfo) {
         p_hls.set(false_0);
         (*cmdmod.ptr()).cmod_split = 0 as ::core::ffi::c_int;
         (*cmdmod.ptr()).cmod_tab = 0 as ::core::ffi::c_int;
-        (*cmdmod.ptr()).cmod_flags |= CMOD_NOSWAPFILE as ::core::ffi::c_int;
+        (*cmdmod.ptr()).cmod_flags |= CMOD_NOSWAPFILE;
         u_sync(true_0 != 0);
     }
 }

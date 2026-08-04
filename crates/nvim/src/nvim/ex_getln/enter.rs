@@ -311,7 +311,7 @@ pub(crate) unsafe extern "C" fn command_line_enter(
                 (*ccline.ptr()).cmdspos = cmd_startcol();
             }
             (*s).xpc.xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
-            (*s).xpc.xp_backslash = XP_BS_NONE as ::core::ffi::c_int;
+            (*s).xpc.xp_backslash = XP_BS_NONE;
             (*s).xpc.xp_shell = false_0 != 0;
             if (*ccline.ptr()).input_fn != 0 {
                 (*s).xpc.xp_context = (*ccline.ptr()).xp_context;

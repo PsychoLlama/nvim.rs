@@ -125,7 +125,7 @@ pub(crate) unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
         win_size_save(&raw mut winsizes);
         pum_undisplay(true_0 != 0);
         (*cmdmod.ptr()).cmod_tab = 0 as ::core::ffi::c_int;
-        (*cmdmod.ptr()).cmod_flags |= CMOD_NOSWAPFILE as ::core::ffi::c_int;
+        (*cmdmod.ptr()).cmod_flags |= CMOD_NOSWAPFILE;
         if win_split(
             p_cwh.get() as ::core::ffi::c_int,
             WSP_BOT as ::core::ffi::c_int,
@@ -202,7 +202,7 @@ pub(crate) unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
                     },
                 },
             },
-            OPT_LOCAL as ::core::ffi::c_int,
+            OPT_LOCAL,
         );
         (*curbuf.get()).b_p_ma = true_0;
         (*curwin.get()).w_onebuf_opt.wo_fen = false_0;
@@ -243,7 +243,7 @@ pub(crate) unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
                         },
                     },
                 },
-                OPT_LOCAL as ::core::ffi::c_int,
+                OPT_LOCAL,
             );
         }
         (*curbuf.get()).b_ro_locked -= 1;

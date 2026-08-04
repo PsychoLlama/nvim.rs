@@ -70,7 +70,7 @@ pub(crate) unsafe extern "C" fn command_line_browse_history(
             || get_hislen() == 0 as ::core::ffi::c_int
             || (*s).firstc == NUL
         {
-            return CMDLINE_NOT_CHANGED as ::core::ffi::c_int;
+            return CMDLINE_NOT_CHANGED;
         }
         (*s).save_hiscnt = (*s).hiscnt;
         if (*s).lookfor.is_null() {
@@ -159,10 +159,10 @@ pub(crate) unsafe extern "C" fn command_line_browse_history(
                 (*ccline.ptr()).cmdpos = (*ccline.ptr()).cmdlen;
             }
             redrawcmd();
-            return CMDLINE_CHANGED as ::core::ffi::c_int;
+            return CMDLINE_CHANGED;
         }
         beep_flush();
-        return CMDLINE_NOT_CHANGED as ::core::ffi::c_int;
+        return CMDLINE_NOT_CHANGED;
     }
 }
 
