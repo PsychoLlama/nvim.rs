@@ -8,6 +8,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::CStr;
+
 use crate::src::nvim::api::private::converter::object_to_vim_take_luaref;
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_object, api_set_error, api_set_sctx, arena_dict,
@@ -60,7 +62,6 @@ use crate::src::nvim::os::libc::{
     __assert_fail, abort, fprintf, fputc, fputs, gettext, memcpy, putc, snprintf, strcasecmp,
     strchr, strcmp, strlen, strncmp, strpbrk, strstr,
 };
-use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_OP_PENDING, MODE_SELECT,
     MODE_TERMINAL, MODE_VISUAL,
@@ -71,11 +72,10 @@ use crate::src::nvim::types::{
     Arena, Array, ArrayBuilder, BoolVarValue, Buffer, CMD_index, Dict, Error, EvalFuncData, FILE,
     Integer, KeyDict_keymap, ListLenSpecials, LuaRef, LuaRetMode, Object, RemapValues, ScopeType,
     SpecialVarValue, String_0, VarLockStatus, VarType, buf_T, cmdidx_T, colnr_T, dict_T,
-    dictitem_T, estack_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, kObjectTypeDict,
-    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, key_extra,
-    key_value_pair, linenr_T, mapblock_T, object, object_data as C2Rust_Unnamed, optset_T,
-    ptrdiff_t, regmatch_T, scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_T, uint8_t,
-    uint64_t, varnumber_T,
+    dictitem_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, kObjectTypeDict, kObjectTypeInteger,
+    kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, key_extra, key_value_pair, linenr_T,
+    mapblock_T, object, object_data as C2Rust_Unnamed, optset_T, ptrdiff_t, regmatch_T, scid_T,
+    sctx_T, size_t, typval_T, typval_vval_union, ufunc_T, uint64_t, varnumber_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -203,170 +203,41 @@ pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
 pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
+/// The error texts `mapping` raises for itself; the rest come from the
+/// shared table in `main`.
+pub const E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR: &CStr =
+    c"E224: Global abbreviation already exists for %s";
+pub const E_GLOBAL_MAPPING_ALREADY_EXISTS_FOR_STR: &CStr =
+    c"E225: Global mapping already exists for %s";
+pub const E_ABBREVIATION_ALREADY_EXISTS_FOR_STR: &CStr =
+    c"E226: Abbreviation already exists for %s";
+pub const E_MAPPING_ALREADY_EXISTS_FOR_STR: &CStr = c"E227: Mapping already exists for %s";
+pub const E_ENTRIES_MISSING_IN_MAPSET_DICT_ARGUMENT: &CStr =
+    c"E460: Entries missing in mapset() dict argument";
+pub const E_ILLEGAL_MAP_MODE_STRING_STR: &CStr = c"E1276: Illegal map mode string: '%s'";
+
+/// A `MapArguments` with nothing set, which is what every parse starts from.
 pub const MAP_ARGUMENTS_INIT: MapArguments = map_arguments {
-    buffer: false_0 != 0,
-    expr: false_0 != 0,
-    noremap: false_0 != 0,
-    nowait: false_0 != 0,
-    script: false_0 != 0,
-    silent: false_0 != 0,
-    unique: false_0 != 0,
-    replace_keycodes: false_0 != 0,
-    lhs: [
-        0 as ::core::ffi::c_char,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-    ],
-    lhs_len: 0 as size_t,
-    alt_lhs: [
-        0 as ::core::ffi::c_char,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-    ],
-    alt_lhs_len: 0 as size_t,
-    rhs: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    rhs_len: 0 as size_t,
+    buffer: false,
+    expr: false,
+    noremap: false,
+    nowait: false,
+    script: false,
+    silent: false,
+    unique: false,
+    replace_keycodes: false,
+    lhs: [0; 51],
+    lhs_len: 0,
+    alt_lhs: [0; 51],
+    alt_lhs_len: 0,
+    rhs: ::core::ptr::null_mut(),
+    rhs_len: 0,
     rhs_lua: LUA_NOREF,
-    rhs_is_noop: false_0 != 0,
-    orig_rhs: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    orig_rhs_len: 0 as size_t,
-    desc: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    rhs_is_noop: false,
+    orig_rhs: ::core::ptr::null_mut(),
+    orig_rhs_len: 0,
+    desc: ::core::ptr::null_mut(),
 };
-static e_global_abbreviation_already_exists_for_str: GlobalCell<[::core::ffi::c_char; 48]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
-            *b"E224: Global abbreviation already exists for %s\0",
-        )
-    });
-static e_global_mapping_already_exists_for_str: GlobalCell<[::core::ffi::c_char; 43]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
-            *b"E225: Global mapping already exists for %s\0",
-        )
-    });
-static e_abbreviation_already_exists_for_str: GlobalCell<[::core::ffi::c_char; 41]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
-            *b"E226: Abbreviation already exists for %s\0",
-        )
-    });
-static e_mapping_already_exists_for_str: GlobalCell<[::core::ffi::c_char; 36]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
-            *b"E227: Mapping already exists for %s\0",
-        )
-    });
-static e_entries_missing_in_mapset_dict_argument: GlobalCell<[::core::ffi::c_char; 48]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
-            *b"E460: Entries missing in mapset() dict argument\0",
-        )
-    });
-static e_illegal_map_mode_string_str: GlobalCell<[::core::ffi::c_char; 37]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
-            *b"E1276: Illegal map mode string: '%s'\0",
-        )
-    });
-static expand_mapmodes: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static expand_isabbrev: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static expand_buffer: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const SCHAR_MAX: ::core::ffi::c_int = __SCHAR_MAX__;
 pub const UCHAR_MAX: ::core::ffi::c_int =
     SCHAR_MAX * 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;

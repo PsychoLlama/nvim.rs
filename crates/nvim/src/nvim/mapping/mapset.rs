@@ -40,10 +40,7 @@ pub unsafe extern "C" fn f_mapset(
                 -1 as ::core::ffi::c_int,
             ) as ::core::ffi::c_int;
             if which.is_null() || is_abbr < 0 as ::core::ffi::c_int {
-                emsg(gettext(
-                    (e_entries_missing_in_mapset_dict_argument.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ));
+                emsg(gettext(E_ENTRIES_MISSING_IN_MAPSET_DICT_ARGUMENT.as_ptr()));
                 return;
             }
         } else {
@@ -65,12 +62,7 @@ pub unsafe extern "C" fn f_mapset(
         }
         let mode: ::core::ffi::c_int = get_map_mode_string(which, is_abbr != 0);
         if mode == 0 as ::core::ffi::c_int {
-            semsg(
-                gettext(
-                    (e_illegal_map_mode_string_str.ptr() as *const _) as *const ::core::ffi::c_char,
-                ),
-                which,
-            );
+            semsg(gettext(E_ILLEGAL_MAP_MODE_STRING_STR.as_ptr()), which);
             return;
         }
         let mut lhs: *mut ::core::ffi::c_char = tv_dict_get_string(
@@ -113,10 +105,7 @@ pub unsafe extern "C" fn f_mapset(
             }
         }
         if lhs.is_null() || lhsraw.is_null() || orig_rhs.is_null() {
-            emsg(gettext(
-                (e_entries_missing_in_mapset_dict_argument.ptr() as *const _)
-                    as *const ::core::ffi::c_char,
-            ));
+            emsg(gettext(E_ENTRIES_MISSING_IN_MAPSET_DICT_ARGUMENT.as_ptr()));
             api_free_luaref(rhs_lua);
             return;
         }
@@ -460,10 +449,10 @@ pub unsafe extern "C" fn modify_keymap(
                                 err,
                                 kErrorTypeException,
                                 if is_abbrev as ::core::ffi::c_int != 0 {
-                                    (e_abbreviation_already_exists_for_str.ptr() as *const _)
+                                    E_ABBREVIATION_ALREADY_EXISTS_FOR_STR.as_ptr()
                                         as *const ::core::ffi::c_char
                                 } else {
-                                    (e_mapping_already_exists_for_str.ptr() as *const _)
+                                    E_MAPPING_ALREADY_EXISTS_FOR_STR.as_ptr()
                                         as *const ::core::ffi::c_char
                                 },
                                 lhs.data,
@@ -474,10 +463,10 @@ pub unsafe extern "C" fn modify_keymap(
                                 err,
                                 kErrorTypeException,
                                 if is_abbrev as ::core::ffi::c_int != 0 {
-                                    (e_global_abbreviation_already_exists_for_str.ptr() as *const _)
+                                    E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR.as_ptr()
                                         as *const ::core::ffi::c_char
                                 } else {
-                                    (e_global_mapping_already_exists_for_str.ptr() as *const _)
+                                    E_GLOBAL_MAPPING_ALREADY_EXISTS_FOR_STR.as_ptr()
                                         as *const ::core::ffi::c_char
                                 },
                                 lhs.data,
