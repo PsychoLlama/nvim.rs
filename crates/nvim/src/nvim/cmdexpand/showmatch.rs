@@ -10,126 +10,125 @@
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int, c_void};
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn showmatches_oneline(
-    mut xp: *mut expand_T,
-    mut matches: *mut *mut ::core::ffi::c_char,
-    mut numMatches: ::core::ffi::c_int,
-    mut lines: ::core::ffi::c_int,
-    mut linenr: ::core::ffi::c_int,
-    mut maxlen: ::core::ffi::c_int,
-    mut showtail: bool,
+/// One line of the match listing.
+///
+/// `matches[linenr]`, `matches[linenr + lines]`, … are the entries that share
+/// a line; `maxlen` is the column width and `showtail` asks for file names to
+/// be shown as their tail alone.
+pub(crate) unsafe fn showmatches_oneline(
+    xp: *mut expand_T,
+    matches: *mut *mut c_char,
+    numMatches: c_int,
+    lines: c_int,
+    linenr: c_int,
+    maxlen: c_int,
+    showtail: bool,
 ) {
     unsafe {
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut lastlen: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
-        let mut j: ::core::ffi::c_int = linenr;
+        // C's SHOW_MATCH().
+        let show_match = |i: c_int| {
+            let m = *matches.offset(i as isize);
+            if showtail {
+                showmatches_gettail(m, false)
+            } else {
+                m
+            }
+        };
+
+        let mut lastlen = 999;
+        let mut j = linenr;
         while j < numMatches {
             if (*xp).xp_context == EXPAND_TAGS_LISTFILES {
-                msg_outtrans(*matches.offset(j as isize), HLF_D, false_0 != 0);
-                p = (*matches.offset(j as isize))
-                    .offset(strlen(*matches.offset(j as isize)) as isize)
-                    .offset(1 as ::core::ffi::c_int as isize);
-                msg_advance(maxlen + 1 as ::core::ffi::c_int);
+                msg_outtrans(*matches.offset(j as isize), HLF_D, false);
+                let p = (*matches.offset(j as isize)).add(strlen(*matches.offset(j as isize)) + 1);
+                msg_advance(maxlen + 1);
                 msg_puts(p);
-                msg_advance(maxlen + 3 as ::core::ffi::c_int);
-                msg_outtrans_long(p.offset(2 as ::core::ffi::c_int as isize), HLF_D);
+                msg_advance(maxlen + 3);
+                msg_outtrans_long(p.add(2), HLF_D);
                 break;
-            } else {
-                let mut i: ::core::ffi::c_int = maxlen - lastlen;
-                loop {
-                    i -= 1;
-                    if i < 0 as ::core::ffi::c_int {
-                        break;
-                    }
-                    msg_putchar(' ' as ::core::ffi::c_int);
-                }
-                let mut isdir: bool = false;
-                if (*xp).xp_context == EXPAND_FILES
-                    || (*xp).xp_context == EXPAND_SHELLCMD
-                    || (*xp).xp_context == EXPAND_BUFFERS
-                {
-                    if (*xp).xp_numfiles != -1 as ::core::ffi::c_int {
-                        let mut exp_path: *mut ::core::ffi::c_char =
-                            expand_env_save_opt(*matches.offset(j as isize), true_0 != 0);
-                        let mut path: *mut ::core::ffi::c_char = if !exp_path.is_null() {
-                            exp_path
-                        } else {
-                            *matches.offset(j as isize)
-                        };
-                        let mut halved_slash: *mut ::core::ffi::c_char = backslash_halve_save(path);
-                        isdir = os_isdir(halved_slash);
-                        xfree(exp_path as *mut ::core::ffi::c_void);
-                        if halved_slash != path {
-                            xfree(halved_slash as *mut ::core::ffi::c_void);
-                        }
-                    } else {
-                        isdir = os_isdir(*matches.offset(j as isize));
-                    }
-                    if showtail {
-                        p = if showtail as ::core::ffi::c_int != 0 {
-                            showmatches_gettail(*matches.offset(j as isize), false_0 != 0)
-                        } else {
-                            *matches.offset(j as isize)
-                        };
-                    } else {
-                        home_replace(
-                            ::core::ptr::null::<buf_T>(),
-                            *matches.offset(j as isize),
-                            NameBuff.ptr() as *mut ::core::ffi::c_char,
-                            MAXPATHL as size_t,
-                            true_0 != 0,
-                        );
-                        p = NameBuff.ptr() as *mut ::core::ffi::c_char;
-                    }
-                } else {
-                    isdir = false_0 != 0;
-                    p = if showtail as ::core::ffi::c_int != 0 {
-                        showmatches_gettail(*matches.offset(j as isize), false_0 != 0)
+            }
+            for _ in 0..(maxlen - lastlen).max(0) {
+                msg_putchar(' ' as c_int);
+            }
+            let isdir;
+            let p;
+            if (*xp).xp_context == EXPAND_FILES
+                || (*xp).xp_context == EXPAND_SHELLCMD
+                || (*xp).xp_context == EXPAND_BUFFERS
+            {
+                // Highlight directories.
+                if (*xp).xp_numfiles != -1 {
+                    // Expansion was done before and special characters were
+                    // escaped, need to halve backslashes.  Also $HOME has been
+                    // replaced with ~/.
+                    let exp_path = expand_env_save_opt(*matches.offset(j as isize), true);
+                    let path = if !exp_path.is_null() {
+                        exp_path
                     } else {
                         *matches.offset(j as isize)
                     };
+                    let halved_slash = backslash_halve_save(path);
+                    isdir = os_isdir(halved_slash);
+                    xfree(exp_path as *mut c_void);
+                    if halved_slash != path {
+                        xfree(halved_slash as *mut c_void);
+                    }
+                } else {
+                    // Expansion was done here, file names are literal.
+                    isdir = os_isdir(*matches.offset(j as isize));
                 }
-                lastlen = msg_outtrans(
-                    p,
-                    if isdir as ::core::ffi::c_int != 0 {
-                        HLF_D
-                    } else {
-                        0 as ::core::ffi::c_int
-                    },
-                    false_0 != 0,
-                );
-                j += lines;
+                if showtail {
+                    p = show_match(j);
+                } else {
+                    home_replace(
+                        ptr::null(),
+                        *matches.offset(j as isize),
+                        NameBuff.ptr() as *mut c_char,
+                        MAXPATHL as size_t,
+                        true,
+                    );
+                    p = NameBuff.ptr() as *mut c_char;
+                }
+            } else {
+                isdir = false;
+                p = show_match(j);
             }
+            lastlen = msg_outtrans(p, if isdir { HLF_D } else { 0 }, false);
+            j += lines;
         }
-        if msg_col.get() > 0 as ::core::ffi::c_int {
+        if msg_col.get() > 0 {
+            // When not wrapped around.
             msg_clr_eos();
-            msg_putchar('\n' as ::core::ffi::c_int);
+            msg_putchar('\n' as c_int);
         }
     }
 }
 
-pub unsafe extern "C" fn showmatches(
-    mut xp: *mut expand_T,
-    mut display_wildmenu: bool,
-    mut display_list: bool,
-    mut noselect: bool,
-) -> ::core::ffi::c_int {
+/// Display completion matches.
+///
+/// Returns `EXPAND_NOTHING` when the character that triggered expansion should
+/// be inserted as a normal character.
+pub unsafe fn showmatches(
+    xp: *mut expand_T,
+    display_wildmenu: bool,
+    display_list: bool,
+    noselect: bool,
+) -> c_int {
     unsafe {
         let ccline: *mut CmdlineInfo = get_cmdline_info();
-        let mut numMatches: ::core::ffi::c_int = 0;
-        let mut matches: *mut *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-        let mut maxlen: ::core::ffi::c_int = 0;
-        let mut lines: ::core::ffi::c_int = 0;
-        let mut columns: ::core::ffi::c_int = 0;
-        let mut showtail: bool = false;
-        if (*xp).xp_numfiles == -1 as ::core::ffi::c_int {
+        let mut numMatches = 0;
+        let mut matches = ptr::null_mut();
+        let showtail;
+
+        if (*xp).xp_numfiles == -1 {
             set_expand_context(xp);
             if (*xp).xp_context == EXPAND_LUA {
                 nlua_expand_pat(xp);
             }
-            let mut retval: ::core::ffi::c_int = expand_cmdline(
+            let retval = expand_cmdline(
                 xp,
                 (*ccline).cmdbuff,
                 (*ccline).cmdpos,
@@ -145,182 +144,197 @@ pub unsafe extern "C" fn showmatches(
             matches = (*xp).xp_files;
             showtail = cmd_showtail.get();
         }
-        if cmdline_compl_use_pum(display_wildmenu as ::core::ffi::c_int != 0 && !display_list) {
+
+        if cmdline_compl_use_pum(display_wildmenu && !display_list) {
             cmdline_pum_create(ccline, xp, matches, numMatches, showtail, noselect);
-            compl_selected.set(if noselect as ::core::ffi::c_int != 0 {
-                -1 as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            });
+            compl_selected.set(if noselect { -1 } else { 0 });
             pum_clear();
-            cmdline_pum_display(true_0 != 0);
+            cmdline_pum_display(true);
             return EXPAND_OK;
         }
+
         if display_list {
-            msg_didany.set(false_0 != 0);
-            msg_start();
+            msg_didany.set(false); // lines_left will be set
+            msg_start(); // prepare for paging
             if !ui_has(kUIMessages) {
-                msg_putchar('\n' as ::core::ffi::c_int);
+                msg_putchar('\n' as c_int);
             }
             ui_flush();
             cmdline_row.set(msg_row.get());
-            msg_didany.set(false_0 != 0);
-            msg_ext_set_kind(b"wildlist\0".as_ptr() as *const ::core::ffi::c_char);
-            msg_start();
+            msg_didany.set(false); // lines_left will be set again
+            msg_ext_set_kind(c"wildlist".as_ptr());
+            msg_start(); // prepare for paging
         }
+
         if got_int.get() {
-            got_int.set(false_0 != 0);
-        } else if display_wildmenu as ::core::ffi::c_int != 0 && !display_list {
+            got_int.set(false); // only interrupt the completion, not the cmd line
+        } else if display_wildmenu && !display_list {
+            // Display statusbar menu.
             redraw_wildmenu(
                 xp,
                 numMatches,
                 matches,
-                if noselect as ::core::ffi::c_int != 0 {
-                    -1 as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                },
+                if noselect { -1 } else { 0 },
                 showtail,
             );
         } else if display_list {
-            maxlen = 0 as ::core::ffi::c_int;
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < numMatches {
-                let mut len: ::core::ffi::c_int = 0;
-                if !showtail
+            // C's SHOW_MATCH().
+            let show_match = |i: c_int| {
+                let m = *matches.offset(i as isize);
+                if showtail {
+                    showmatches_gettail(m, false)
+                } else {
+                    m
+                }
+            };
+
+            // Find the length of the longest file name.
+            let mut maxlen = 0;
+            for i in 0..numMatches {
+                let len = if !showtail
                     && ((*xp).xp_context == EXPAND_FILES
                         || (*xp).xp_context == EXPAND_SHELLCMD
                         || (*xp).xp_context == EXPAND_BUFFERS)
                 {
                     home_replace(
-                        ::core::ptr::null::<buf_T>(),
+                        ptr::null(),
                         *matches.offset(i as isize),
-                        NameBuff.ptr() as *mut ::core::ffi::c_char,
+                        NameBuff.ptr() as *mut c_char,
                         MAXPATHL as size_t,
-                        true_0 != 0,
+                        true,
                     );
-                    len = vim_strsize(NameBuff.ptr() as *mut ::core::ffi::c_char);
+                    vim_strsize(NameBuff.ptr() as *mut c_char)
                 } else {
-                    len = vim_strsize(if showtail as ::core::ffi::c_int != 0 {
-                        showmatches_gettail(*matches.offset(i as isize), false_0 != 0)
-                    } else {
-                        *matches.offset(i as isize)
-                    });
-                }
-                maxlen = if maxlen > len { maxlen } else { len };
-                i += 1;
+                    vim_strsize(show_match(i))
+                };
+                maxlen = maxlen.max(len);
             }
-            if (*xp).xp_context == EXPAND_TAGS_LISTFILES {
-                lines = numMatches;
+
+            let lines = if (*xp).xp_context == EXPAND_TAGS_LISTFILES {
+                numMatches
             } else {
-                maxlen += 2 as ::core::ffi::c_int;
-                columns = (Columns.get() + 2 as ::core::ffi::c_int) / maxlen;
-                if columns < 1 as ::core::ffi::c_int {
-                    columns = 1 as ::core::ffi::c_int;
-                }
-                lines = (numMatches + columns - 1 as ::core::ffi::c_int) / columns;
-            }
+                // Compute the number of columns and lines for the listing.
+                maxlen += 2; // two spaces between file names
+                let columns = ((Columns.get() + 2) / maxlen).max(1);
+                (numMatches + columns - 1) / columns
+            };
+
             if (*xp).xp_context == EXPAND_TAGS_LISTFILES {
-                msg_puts_hl(
-                    gettext(b"tagname\0".as_ptr() as *const ::core::ffi::c_char),
-                    HLF_T,
-                    false_0 != 0,
-                );
+                msg_puts_hl(gettext(c"tagname".as_ptr()), HLF_T, false);
                 msg_clr_eos();
-                msg_advance(maxlen - 3 as ::core::ffi::c_int);
-                msg_puts_hl(
-                    gettext(b" kind file\n\0".as_ptr() as *const ::core::ffi::c_char),
-                    HLF_T,
-                    false_0 != 0,
-                );
+                msg_advance(maxlen - 3);
+                msg_puts_hl(gettext(c" kind file\n".as_ptr()), HLF_T, false);
             }
-            let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i_0 < lines {
-                showmatches_oneline(xp, matches, numMatches, lines, i_0, maxlen, showtail);
+
+            // List the files line by line.
+            for i in 0..lines {
+                showmatches_oneline(xp, matches, numMatches, lines, i, maxlen, showtail);
                 if got_int.get() {
-                    got_int.set(false_0 != 0);
+                    got_int.set(false);
                     break;
-                } else {
-                    i_0 += 1;
                 }
             }
-            cmdline_row.set(msg_row.get());
+
+            // We redraw the command below the lines that we have just listed.
+            // This is a bit tricky, but it saves a lot of screen updating.
+            cmdline_row.set(msg_row.get()); // will put it back later
         }
-        if (*xp).xp_numfiles == -1 as ::core::ffi::c_int {
+
+        if (*xp).xp_numfiles == -1 {
             FreeWild(numMatches, matches);
         }
-        return EXPAND_OK;
+
+        EXPAND_OK
     }
 }
 
-pub(crate) unsafe extern "C" fn showmatches_gettail(
-    mut s: *mut ::core::ffi::c_char,
-    mut eager: bool,
-) -> *mut ::core::ffi::c_char {
+/// [`path_tail`] for [`showmatches`] and [`redraw_wildmenu`]: the tail of file
+/// name path `s`, ignoring a trailing `/`.
+///
+/// `eager` takes the text after the last separator even when it is empty.
+pub(crate) unsafe fn showmatches_gettail(s: *mut c_char, eager: bool) -> *mut c_char {
     unsafe {
-        let mut t: *mut ::core::ffi::c_char = s;
-        let mut had_sep: bool = false_0 != 0;
-        let mut p: *mut ::core::ffi::c_char = s;
-        while *p as ::core::ffi::c_int != NUL {
-            if vim_ispathsep(*p as ::core::ffi::c_int) {
+        let mut t = s;
+        let mut had_sep = false;
+
+        let mut p = s;
+        while *p as c_int != NUL {
+            if vim_ispathsep(*p as c_int) {
                 if eager {
-                    t = p.offset(1 as ::core::ffi::c_int as isize);
+                    t = p.add(1);
                 } else {
-                    had_sep = true_0 != 0;
+                    had_sep = true;
                 }
             } else if had_sep {
                 t = p;
-                had_sep = false_0 != 0;
+                had_sep = false;
             }
-            p = p.offset(utfc_ptr2len(p) as isize);
+            p = p.add(utfc_ptr2len(p) as usize);
         }
-        return t;
+        t
     }
 }
 
-pub(crate) unsafe extern "C" fn expand_showtail(mut xp: *mut expand_T) -> bool {
+/// True if we only need to show the tail of completion matches.
+///
+/// When not completing file names, or when there is a wildcard in the path,
+/// false is returned.
+pub(crate) unsafe fn expand_showtail(xp: *mut expand_T) -> bool {
     unsafe {
+        // When not completing file names a "/" may mean something different.
         if (*xp).xp_context != EXPAND_FILES
             && (*xp).xp_context != EXPAND_SHELLCMD
             && (*xp).xp_context != EXPAND_DIRECTORIES
         {
-            return false_0 != 0;
+            return false;
         }
-        let mut end: *mut ::core::ffi::c_char = path_tail((*xp).xp_pattern);
+
+        let end = path_tail((*xp).xp_pattern);
         if end == (*xp).xp_pattern {
-            return false_0 != 0;
+            // There is no path separator.
+            return false;
         }
-        let mut s: *mut ::core::ffi::c_char = (*xp).xp_pattern;
+
+        let mut s = (*xp).xp_pattern;
         while s < end {
+            // Skip escaped wildcards.  Only when the backslash is not a path
+            // separator, on DOS the '*' "path\*\file" must not be skipped.
             if rem_backslash(s) {
-                s = s.offset(1);
-            } else if !vim_strchr(
-                b"*?[\0".as_ptr() as *const ::core::ffi::c_char,
-                *s as uint8_t as ::core::ffi::c_int,
-            )
-            .is_null()
-            {
-                return false_0 != 0;
+                s = s.add(1);
+            } else if !vim_strchr(c"*?[".as_ptr(), *s as u8 as c_int).is_null() {
+                return false;
             }
-            s = s.offset(1);
+            s = s.add(1);
         }
-        return true_0 != 0;
+        true
     }
 }
 
-pub unsafe extern "C" fn addstar(
-    mut fname: *mut ::core::ffi::c_char,
-    mut len: size_t,
-    mut context: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+/// Prepare a string for expansion.
+///
+/// When expanding file names the string will be used with
+/// `expand_wildcards()`: `fname[len]` is copied into allocated memory and a
+/// `*` is added at the end.  When expanding other names it will be used with
+/// `vim_regcomp()`: the name is copied and `^` prepended, with the
+/// file-matching wildcards converted to regexp ones.
+///
+/// `context` is the `EXPAND_*` the pattern came from.  The answer is never
+/// NULL.
+pub unsafe fn addstar(fname: *mut c_char, mut len: size_t, context: c_int) -> *mut c_char {
     unsafe {
-        let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if context != EXPAND_FILES
             && context != EXPAND_FILES_IN_PATH
             && context != EXPAND_SHELLCMD
             && context != EXPAND_DIRECTORIES
             && context != EXPAND_DIRS_IN_CDPATH
         {
+            // Matching will be done internally (on something other than
+            // files).  So we convert the file-matching-type wildcards into our
+            // kind for use with vim_regcomp().  First work out how long it
+            // will be.
+
+            // For help tags the translation is done in find_help_tags().
+            // For a tag pattern starting with "/" no translation is needed.
             if context == EXPAND_FINDFUNC
                 || context == EXPAND_HELP
                 || context == EXPAND_COLORS
@@ -330,132 +344,114 @@ pub unsafe extern "C" fn addstar(
                 || context == EXPAND_KEYMAP
                 || context == EXPAND_PACKADD
                 || context == EXPAND_RUNTIME
-                || (context == EXPAND_TAGS_LISTFILES || context == EXPAND_TAGS)
-                    && *fname.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == '/' as ::core::ffi::c_int
+                || ((context == EXPAND_TAGS_LISTFILES || context == EXPAND_TAGS)
+                    && *fname as c_int == '/' as c_int)
                 || context == EXPAND_CHECKHEALTH
                 || context == EXPAND_LSP
                 || context == EXPAND_LUA
             {
-                retval = xstrnsave(fname, len);
-            } else {
-                let mut new_len: size_t = len.wrapping_add(2 as size_t);
-                let mut i: size_t = 0 as size_t;
-                while i < len {
-                    if *fname.offset(i as isize) as ::core::ffi::c_int == '*' as ::core::ffi::c_int
-                        || *fname.offset(i as isize) as ::core::ffi::c_int
-                            == '~' as ::core::ffi::c_int
-                    {
-                        new_len = new_len.wrapping_add(1);
-                    }
-                    if context == EXPAND_BUFFERS
-                        && *fname.offset(i as isize) as ::core::ffi::c_int
-                            == '.' as ::core::ffi::c_int
-                    {
-                        new_len = new_len.wrapping_add(1);
-                    }
-                    if (context == EXPAND_USER_DEFINED || context == EXPAND_USER_LIST)
-                        && *fname.offset(i as isize) as ::core::ffi::c_int
-                            == '\\' as ::core::ffi::c_int
-                    {
-                        new_len = new_len.wrapping_add(1);
-                    }
-                    i = i.wrapping_add(1);
+                return xstrnsave(fname, len);
+            }
+
+            // Custom expansion takes care of special things, and matches
+            // backslashes literally.
+            let custom = context == EXPAND_USER_DEFINED || context == EXPAND_USER_LIST;
+
+            let mut new_len = len + 2; // +2 for '^' at start, NUL at end
+            for i in 0..len {
+                let c = *fname.add(i) as u8;
+                // '*' needs to be replaced by ".*", '~' by "\~".
+                if c == b'*' || c == b'~' {
+                    new_len += 1;
                 }
-                retval = xmalloc(new_len) as *mut ::core::ffi::c_char;
-                *retval.offset(0 as ::core::ffi::c_int as isize) = '^' as ::core::ffi::c_char;
-                let mut j: size_t = 1 as size_t;
-                let mut i_0: size_t = 0 as size_t;
-                while i_0 < len {
-                    if context != EXPAND_USER_DEFINED
-                        && context != EXPAND_USER_LIST
-                        && *fname.offset(i_0 as isize) as ::core::ffi::c_int
-                            == '\\' as ::core::ffi::c_int
-                        && {
-                            i_0 = i_0.wrapping_add(1);
-                            i_0 == len
-                        }
-                    {
+                // Buffer names are like file names.  "." should be literal.
+                if context == EXPAND_BUFFERS && c == b'.' {
+                    new_len += 1;
+                }
+                if custom && c == b'\\' {
+                    new_len += 1;
+                }
+            }
+
+            let retval = xmalloc(new_len) as *mut c_char;
+            *retval = '^' as c_char;
+            let mut j: size_t = 1;
+            let mut i: size_t = 0;
+            while i < len {
+                // Skip backslash.  But why?  At least keep it for custom
+                // expansion.
+                if !custom && *fname.add(i) as u8 == b'\\' {
+                    i += 1;
+                    if i == len {
                         break;
                     }
-                    's_82: {
-                        match *fname.offset(i_0 as isize) as ::core::ffi::c_int {
-                            42 => {
-                                let c2rust_fresh6 = j;
-                                j = j.wrapping_add(1);
-                                *retval.offset(c2rust_fresh6 as isize) = '.' as ::core::ffi::c_char;
-                            }
-                            126 => {
-                                let c2rust_fresh7 = j;
-                                j = j.wrapping_add(1);
-                                *retval.offset(c2rust_fresh7 as isize) =
-                                    '\\' as ::core::ffi::c_char;
-                            }
-                            63 => {
-                                *retval.offset(j as isize) = '.' as ::core::ffi::c_char;
-                                break 's_82;
-                            }
-                            46 => {
-                                if context == EXPAND_BUFFERS {
-                                    let c2rust_fresh8 = j;
-                                    j = j.wrapping_add(1);
-                                    *retval.offset(c2rust_fresh8 as isize) =
-                                        '\\' as ::core::ffi::c_char;
-                                }
-                            }
-                            92 => {
-                                if context == EXPAND_USER_DEFINED || context == EXPAND_USER_LIST {
-                                    let c2rust_fresh9 = j;
-                                    j = j.wrapping_add(1);
-                                    *retval.offset(c2rust_fresh9 as isize) =
-                                        '\\' as ::core::ffi::c_char;
-                                }
-                            }
-                            _ => {}
+                }
+
+                'copy: {
+                    match *fname.add(i) as u8 {
+                        b'*' => {
+                            *retval.add(j) = '.' as c_char;
+                            j += 1;
                         }
-                        *retval.offset(j as isize) = *fname.offset(i_0 as isize);
+                        b'~' => {
+                            *retval.add(j) = '\\' as c_char;
+                            j += 1;
+                        }
+                        b'?' => {
+                            // The one case that does not copy the source byte.
+                            *retval.add(j) = '.' as c_char;
+                            break 'copy;
+                        }
+                        b'.' if context == EXPAND_BUFFERS => {
+                            *retval.add(j) = '\\' as c_char;
+                            j += 1;
+                        }
+                        b'\\' if custom => {
+                            *retval.add(j) = '\\' as c_char;
+                            j += 1;
+                        }
+                        _ => {}
                     }
-                    i_0 = i_0.wrapping_add(1);
-                    j = j.wrapping_add(1);
+                    *retval.add(j) = *fname.add(i);
                 }
-                *retval.offset(j as isize) = NUL as ::core::ffi::c_char;
+                i += 1;
+                j += 1;
             }
-        } else {
-            retval = xmalloc(len.wrapping_add(4 as size_t)) as *mut ::core::ffi::c_char;
-            xmemcpyz(
-                retval as *mut ::core::ffi::c_void,
-                fname as *const ::core::ffi::c_void,
-                len,
-            );
-            let mut tail: *mut ::core::ffi::c_char = path_tail(retval);
-            let mut ends_in_star: ::core::ffi::c_int = (len > 0 as size_t
-                && *retval.offset(len.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
-                    == '*' as ::core::ffi::c_int)
-                as ::core::ffi::c_int;
-            let mut k: ssize_t = len as ssize_t - 2 as ssize_t;
-            while k >= 0 as ssize_t {
-                if *retval.offset(k as isize) as ::core::ffi::c_int != '\\' as ::core::ffi::c_int {
-                    break;
-                }
-                ends_in_star = (ends_in_star == 0) as ::core::ffi::c_int;
-                k -= 1;
-            }
-            if (*retval as ::core::ffi::c_int != '~' as ::core::ffi::c_int || tail != retval)
-                && ends_in_star == 0
-                && vim_strchr(tail, '$' as ::core::ffi::c_int).is_null()
-                && vim_strchr(retval, '`' as ::core::ffi::c_int).is_null()
-            {
-                let c2rust_fresh10 = len;
-                len = len.wrapping_add(1);
-                *retval.offset(c2rust_fresh10 as isize) = '*' as ::core::ffi::c_char;
-            } else if len > 0 as size_t
-                && *retval.offset(len.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
-                    == '$' as ::core::ffi::c_int
-            {
-                len = len.wrapping_sub(1);
-            }
-            *retval.offset(len as isize) = NUL as ::core::ffi::c_char;
+            *retval.add(j) = NUL as c_char;
+            return retval;
         }
-        return retval;
+
+        let retval = xmalloc(len + 4) as *mut c_char;
+        xmemcpyz(retval as *mut c_void, fname as *const c_void, len);
+
+        // Don't add a star to *, ~, ~user, $var or `cmd`.
+        // * would become **, which walks the whole tree.
+        // ~ would be at the start of the file name, but not the tail.
+        // $ could be anywhere in the tail.
+        // ` could be anywhere in the file name.
+        // When the name ends in '$' don't add a star, remove the '$'.
+        let tail = path_tail(retval);
+        let mut ends_in_star = len > 0 && *retval.add(len - 1) as c_int == '*' as c_int;
+        // An odd number of backslashes before it escapes the star.
+        let mut k = len as ssize_t - 2;
+        while k >= 0 {
+            if *retval.add(k as usize) as c_int != '\\' as c_int {
+                break;
+            }
+            ends_in_star = !ends_in_star;
+            k -= 1;
+        }
+        if (*retval as c_int != '~' as c_int || tail != retval)
+            && !ends_in_star
+            && vim_strchr(tail, '$' as c_int).is_null()
+            && vim_strchr(retval, '`' as c_int).is_null()
+        {
+            *retval.add(len) = '*' as c_char;
+            len += 1;
+        } else if len > 0 && *retval.add(len - 1) as c_int == '$' as c_int {
+            len -= 1;
+        }
+        *retval.add(len) = NUL as c_char;
+        retval
     }
 }
