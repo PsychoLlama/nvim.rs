@@ -116,10 +116,9 @@ use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, CMD_index, CmdlineInfo, CompleteListItemGetter, Direction, Error,
     EvalFuncData, LuaRetMode, Object, OptInt, ScopeType, SpecialVarValue, VarLockStatus, VarType,
     buf_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T, fuzmatch_str_T, garray_T,
-    hash_T, hashitem_T, hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, linenr_T, list_T,
-    listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, regprog_T, scriptitem_T, sctx_T,
-    searchit_arg_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t, uint32_t, varnumber_T,
-    win_T, xp_prefix_T,
+    hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, linenr_T, list_T, listitem_T, pos_T,
+    ptrdiff_t, pumitem_T, regmatch_T, regprog_T, scriptitem_T, sctx_T, searchit_arg_T, size_t,
+    ssize_t, typval_T, typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has, vim_beep};
 use crate::src::nvim::usercmd::{
@@ -306,13 +305,6 @@ pub const EXP_FILETYPECMD_INDENT: C2Rust_Unnamed_21 = 2;
 pub const EXP_FILETYPECMD_PLUGIN: C2Rust_Unnamed_21 = 1;
 pub const EXP_FILETYPECMD_ALL: C2Rust_Unnamed_21 = 0;
 pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_25 = -2147483648;
-pub type user_expand_func_T = Option<
-    unsafe extern "C" fn(
-        *const ::core::ffi::c_char,
-        ::core::ffi::c_int,
-        *mut typval_T,
-    ) -> *mut ::core::ffi::c_void,
->;
 pub const TAG_MANY: C2Rust_Unnamed_32 = 300;
 pub const EW_DIR: C2Rust_Unnamed_28 = 1;
 pub const EW_ALLLINKS: C2Rust_Unnamed_28 = 4096;

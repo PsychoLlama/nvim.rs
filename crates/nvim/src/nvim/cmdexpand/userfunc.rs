@@ -9,208 +9,212 @@
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int, c_void};
+use core::mem::size_of;
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn expand_shellcmd_onedir(
-    mut pathed_pattern: *mut ::core::ffi::c_char,
-    mut pathlen: size_t,
-    mut matches: *mut *mut *mut ::core::ffi::c_char,
-    mut numMatches: *mut ::core::ffi::c_int,
-    mut flags: ::core::ffi::c_int,
-    mut ht: *mut hashtab_T,
-    mut gap: *mut garray_T,
+/// A `:command -complete=custom,…` callback: `f(arg, argc, argv)`.
+///
+/// Only [`call_user_expand_func`] takes one, and both of its callers pass a
+/// real function, so this is the bare pointer rather than upstream's nullable
+/// `user_expand_func_T`.
+type UserExpandFunc = unsafe extern "C" fn(*const c_char, c_int, *mut typval_T) -> *mut c_void;
+
+/// The length of `PATHSEPSTR`, which is what upstream's
+/// `STRLEN_LITERAL(PATHSEPSTR)` comes to on every platform this port builds
+/// for.
+const PATHSEP_LEN: size_t = 1;
+
+/// Expand shell command matches in one directory of `$PATH`.
+///
+/// `pathed_pattern` is the fully pathed pattern and `pathlen` the length of
+/// its path portion (0 if there is no path).  New names are appended to `gap`
+/// and remembered in `ht` so a later directory cannot offer them again.
+pub(crate) unsafe fn expand_shellcmd_onedir(
+    pathed_pattern: *mut c_char,
+    pathlen: size_t,
+    matches: *mut *mut *mut c_char,
+    numMatches: *mut c_int,
+    flags: c_int,
+    ht: *mut hashtab_T,
+    gap: *mut garray_T,
 ) {
     unsafe {
-        if expand_wildcards(
-            1 as ::core::ffi::c_int,
-            &raw mut pathed_pattern,
-            numMatches,
-            matches,
-            flags,
-        ) != OK
-        {
+        let mut pathed_pattern = pathed_pattern;
+        if expand_wildcards(1, &raw mut pathed_pattern, numMatches, matches, flags) != OK {
             return;
         }
+
         ga_grow(gap, *numMatches);
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < *numMatches {
-            let mut name: *mut ::core::ffi::c_char = *(*matches).offset(i as isize);
-            let mut namelen: size_t = strlen(name);
+
+        for i in 0..*numMatches {
+            let mut name = *(*matches).offset(i as isize);
+            let namelen = strlen(name);
+
             if namelen > pathlen {
-                let mut hash: hash_T = hash_hash(name.offset(pathlen as isize));
-                let mut hi: *mut hashitem_T = hash_lookup(
-                    ht,
-                    name.offset(pathlen as isize),
-                    namelen.wrapping_sub(pathlen),
-                    hash,
-                );
-                if (*hi).hi_key.is_null()
-                    || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
+                // Check if this name was already found.
+                let hash = hash_hash(name.add(pathlen));
+                let hi = hash_lookup(ht, name.add(pathlen), namelen - pathlen, hash);
+                // HASHITEM_EMPTY().
+                if (*hi).hi_key.is_null() || (*hi).hi_key == &raw const hash_removed as *mut c_char
                 {
+                    // Remove the path that was prepended (+1 for the NUL).
                     memmove(
-                        name as *mut ::core::ffi::c_void,
-                        name.offset(pathlen as isize) as *const ::core::ffi::c_void,
-                        namelen.wrapping_sub(pathlen).wrapping_add(1 as size_t),
+                        name as *mut c_void,
+                        name.add(pathlen) as *const c_void,
+                        namelen - pathlen + 1,
                     );
-                    let c2rust_fresh2 = (*gap).ga_len;
-                    (*gap).ga_len = (*gap).ga_len + 1;
-                    let c2rust_lvalue_ptr = &raw mut *((*gap).ga_data
-                        as *mut *mut ::core::ffi::c_char)
-                        .offset(c2rust_fresh2 as isize);
-                    *c2rust_lvalue_ptr = name;
+                    ((*gap).ga_data as *mut *mut c_char)
+                        .offset((*gap).ga_len as isize)
+                        .write(name);
+                    (*gap).ga_len += 1;
                     hash_add_item(ht, hi, name, hash);
-                    name = ::core::ptr::null_mut::<::core::ffi::c_char>();
+                    name = ptr::null_mut();
                 }
             }
-            xfree(name as *mut ::core::ffi::c_void);
-            i += 1;
+            xfree(name as *mut c_void);
         }
-        xfree(*matches as *mut ::core::ffi::c_void);
+        xfree(*matches as *mut c_void);
     }
 }
 
-pub(crate) unsafe extern "C" fn expand_shellcmd(
-    mut filepat: *mut ::core::ffi::c_char,
-    mut matches: *mut *mut *mut ::core::ffi::c_char,
-    mut numMatches: *mut ::core::ffi::c_int,
-    mut flagsarg: ::core::ffi::c_int,
+/// Complete a shell command.
+///
+/// `filepat` is a pattern to match with command names; `matches` and
+/// `numMatches` return the answer, with `*matches` either NULL or allocated.
+/// `flagsarg` is a combination of `EW_*` flags.
+pub(crate) unsafe fn expand_shellcmd(
+    filepat: *mut c_char,
+    matches: *mut *mut *mut c_char,
+    numMatches: *mut c_int,
+    flagsarg: c_int,
 ) {
     unsafe {
-        let mut path: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut ga: garray_T = garray_T {
+        let buf = xmalloc(MAXPATHL as size_t) as *mut c_char;
+        let mut flags = flagsarg;
+        let mut did_curdir = false;
+
+        // For ":set path=" and ":set tags=" halve backslashes for escaped
+        // space.
+        let mut patlen = strlen(filepat);
+        let pat = xmemdupz(filepat as *const c_void, patlen) as *mut c_char;
+        // Replace "\ " with " ".
+        let mut e = pat.add(patlen);
+        let mut s = pat;
+        while *s as c_int != NUL {
+            if *s as c_int == '\\' as c_int {
+                let p = s.add(1);
+                if *p as c_int == ' ' as c_int {
+                    memmove(
+                        s as *mut c_void,
+                        p as *const c_void,
+                        e.offset_from(p) as size_t + 1, // +1 for NUL
+                    );
+                    e = e.sub(1);
+                }
+            }
+            s = s.add(1);
+        }
+        patlen = e.offset_from(pat) as size_t;
+
+        flags |= EW_FILE | EW_EXEC | EW_SHELLCMD;
+
+        let mut mustfree = false; // Track memory allocation for `path`.
+        let mut path;
+        if *pat as c_int == '.' as c_int
+            && (vim_ispathsep(*pat.add(1) as c_int)
+                || (*pat.add(1) as c_int == '.' as c_int && vim_ispathsep(*pat.add(2) as c_int)))
+        {
+            path = c".".as_ptr() as *mut c_char;
+        } else {
+            // For an absolute name we don't use $PATH.
+            path = if path_is_absolute(pat) {
+                ptr::null_mut()
+            } else {
+                vim_getenv(c"PATH".as_ptr())
+            };
+            if path.is_null() {
+                path = c"".as_ptr() as *mut c_char;
+            } else {
+                mustfree = true;
+            }
+        }
+
+        // Go over all directories in $PATH.  Expand matches in that directory
+        // and collect them in `ga`.  When "." is not in $PATH also expand for
+        // the current directory, to find "subdir/cmd".
+        let mut ga = garray_T {
             ga_len: 0,
             ga_maxlen: 0,
             ga_itemsize: 0,
             ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+            ga_data: ptr::null_mut(),
         };
-        let mut buf: *mut ::core::ffi::c_char =
-            xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
-        let mut flags: ::core::ffi::c_int = flagsarg;
-        let mut did_curdir: bool = false_0 != 0;
-        let mut patlen: size_t = strlen(filepat);
-        let mut pat: *mut ::core::ffi::c_char =
-            xmemdupz(filepat as *const ::core::ffi::c_void, patlen) as *mut ::core::ffi::c_char;
-        let mut e: *mut ::core::ffi::c_char = pat.offset(patlen as isize);
-        let mut s: *mut ::core::ffi::c_char = pat;
-        while *s as ::core::ffi::c_int != NUL {
-            if *s as ::core::ffi::c_int == '\\' as ::core::ffi::c_int {
-                let mut p: *mut ::core::ffi::c_char = s.offset(1 as ::core::ffi::c_int as isize);
-                if *p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int {
-                    memmove(
-                        s as *mut ::core::ffi::c_void,
-                        p as *const ::core::ffi::c_void,
-                        (e.offset_from(p) as size_t).wrapping_add(1 as size_t),
-                    );
-                    e = e.offset(-1);
-                }
-            }
-            s = s.offset(1);
-        }
-        patlen = e.offset_from(pat) as size_t;
-        flags |= EW_FILE | EW_EXEC | EW_SHELLCMD;
-        let mut mustfree: bool = false_0 != 0;
-        if *pat.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '.' as ::core::ffi::c_int
-            && (vim_ispathsep(*pat.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                as ::core::ffi::c_int
-                != 0
-                || *pat.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '.' as ::core::ffi::c_int
-                    && vim_ispathsep(
-                        *pat.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    ) as ::core::ffi::c_int
-                        != 0)
-        {
-            path = b".\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        } else {
-            if !path_is_absolute(pat) {
-                path = vim_getenv(b"PATH\0".as_ptr() as *const ::core::ffi::c_char);
-            }
-            if path.is_null() {
-                path = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-            } else {
-                mustfree = true_0 != 0;
-            }
-        }
-        ga_init(
-            &raw mut ga,
-            ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-            10 as ::core::ffi::c_int,
-        );
-        let mut found_ht: hashtab_T = hashtab_T {
-            ht_mask: 0,
-            ht_used: 0,
-            ht_filled: 0,
-            ht_changed: 0,
-            ht_locked: 0,
-            ht_array: ::core::ptr::null_mut::<hashitem_T>(),
-            ht_smallarray: [hashitem_T {
-                hi_hash: 0,
-                hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            }; 16],
-        };
+        ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 10);
+        let mut found_ht: hashtab_T = core::mem::zeroed();
         hash_init(&raw mut found_ht);
-        let mut s_0: *mut ::core::ffi::c_char = path;
+        let mut s = path;
         loop {
-            let mut pathlen: size_t = 0;
-            let mut seplen: size_t = 0;
-            if *s_0 as ::core::ffi::c_int == NUL {
+            // Length of the path portion of buf, including trailing slash.
+            let mut pathlen;
+            let seplen;
+
+            if *s as c_int == NUL {
                 if did_curdir {
                     break;
                 }
-                did_curdir = true_0 != 0;
+
+                // Find directories in the current directory, path is empty.
+                did_curdir = true;
                 flags |= EW_DIR;
-                e = s_0;
-                pathlen = 0 as size_t;
-                seplen = 0 as size_t;
+
+                e = s;
+                pathlen = 0;
+                seplen = 0;
             } else {
-                e = vim_strchr(s_0, ENV_SEPCHAR);
+                e = vim_strchr(s, ENV_SEPCHAR);
                 if e.is_null() {
-                    e = s_0.offset(strlen(s_0) as isize);
+                    e = s.add(strlen(s));
                 }
-                pathlen = e.offset_from(s_0) as size_t;
-                if strncmp(s_0, b".\0".as_ptr() as *const ::core::ffi::c_char, pathlen)
-                    == 0 as ::core::ffi::c_int
-                {
-                    did_curdir = true_0 != 0;
+
+                pathlen = e.offset_from(s) as size_t;
+                if strncmp(s, c".".as_ptr(), pathlen) == 0 {
+                    did_curdir = true;
                     flags |= EW_DIR;
                 } else {
-                    flags &= !(EW_DIR);
+                    // Do not match directories inside a $PATH item.
+                    flags &= !EW_DIR;
                 }
-                seplen = (if after_pathsep(s_0, e) == 0 {
-                    ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1_usize)
+
+                seplen = if after_pathsep(s, e) == 0 {
+                    PATHSEP_LEN
                 } else {
-                    0_usize
-                }) as size_t;
+                    0
+                };
             }
-            if pathlen
-                .wrapping_add(seplen)
-                .wrapping_add(patlen)
-                .wrapping_add(1 as size_t)
-                <= MAXPATHL as size_t
-            {
-                if pathlen > 0 as size_t {
-                    xmemcpyz(
-                        buf as *mut ::core::ffi::c_void,
-                        s_0 as *const ::core::ffi::c_void,
-                        pathlen,
-                    );
-                    if seplen > 0 as size_t {
+
+            // Make sure that the pathed pattern (ie the path and pattern
+            // concatenated together) will fit inside the buffer.  If not skip
+            // it and move on to the next path.
+            // Upstream's `+ 1 <= MAXPATHL` — the one byte is the NUL.
+            if pathlen + seplen + patlen < MAXPATHL as size_t {
+                if pathlen > 0 {
+                    xmemcpyz(buf as *mut c_void, s as *const c_void, pathlen);
+                    if seplen > 0 {
                         xmemcpyz(
-                            buf.offset(pathlen as isize) as *mut ::core::ffi::c_void,
-                            b"/\0".as_ptr() as *const ::core::ffi::c_char
-                                as *const ::core::ffi::c_void,
-                            ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                                .wrapping_sub(1 as size_t),
+                            buf.add(pathlen) as *mut c_void,
+                            c"/".as_ptr() as *const c_void,
+                            PATHSEP_LEN,
                         );
-                        pathlen = pathlen.wrapping_add(seplen);
+                        pathlen += seplen;
                     }
                 }
                 xmemcpyz(
-                    buf.offset(pathlen as isize) as *mut ::core::ffi::c_void,
-                    pat as *const ::core::ffi::c_void,
+                    buf.add(pathlen) as *mut c_void,
+                    pat as *const c_void,
                     patlen,
                 );
+
                 expand_shellcmd_onedir(
                     buf,
                     pathlen,
@@ -221,355 +225,316 @@ pub(crate) unsafe extern "C" fn expand_shellcmd(
                     &raw mut ga,
                 );
             }
-            if *e as ::core::ffi::c_int != NUL {
-                e = e.offset(1);
+
+            if *e as c_int != NUL {
+                e = e.add(1);
             }
-            s_0 = e;
+            s = e;
         }
-        *matches = ga.ga_data as *mut *mut ::core::ffi::c_char;
+        *matches = ga.ga_data as *mut *mut c_char;
         *numMatches = ga.ga_len;
-        xfree(buf as *mut ::core::ffi::c_void);
-        xfree(pat as *mut ::core::ffi::c_void);
+
+        xfree(buf as *mut c_void);
+        xfree(pat as *mut c_void);
         if mustfree {
-            xfree(path as *mut ::core::ffi::c_void);
+            xfree(path as *mut c_void);
         }
         hash_clear(&raw mut found_ht);
     }
 }
 
-pub(crate) unsafe extern "C" fn call_user_expand_func(
-    mut user_expand_func: user_expand_func_T,
-    mut xp: *mut expand_T,
-) -> *mut ::core::ffi::c_void {
+/// Call `user_expand_func` to invoke a user defined Vim script function.
+///
+/// Returns its result — a string, a List or NULL.  The function is handed the
+/// pattern, the whole command line and the cursor column.
+pub(crate) unsafe fn call_user_expand_func(
+    user_expand_func: UserExpandFunc,
+    xp: *mut expand_T,
+) -> *mut c_void {
     unsafe {
         let ccline: *mut CmdlineInfo = get_cmdline_info();
-        let mut keep: ::core::ffi::c_char = 0 as ::core::ffi::c_char;
-        let mut args: [typval_T; 4] = [typval_T {
+        let mut keep = 0 as c_char;
+        let mut args = [typval_T {
             v_type: VAR_UNKNOWN,
             v_lock: VAR_UNLOCKED,
             vval: typval_vval_union { v_number: 0 },
         }; 4];
-        let save_current_sctx: sctx_T = current_sctx.get();
-        if (*xp).xp_arg.is_null()
-            || *(*xp).xp_arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-            || (*xp).xp_line.is_null()
-        {
-            return NULL;
+        let save_current_sctx = current_sctx.get();
+
+        if (*xp).xp_arg.is_null() || *(*xp).xp_arg as c_int == NUL || (*xp).xp_line.is_null() {
+            return ptr::null_mut();
         }
+
         if !(*ccline).cmdbuff.is_null() {
             keep = *(*ccline).cmdbuff.offset((*ccline).cmdlen as isize);
-            *(*ccline).cmdbuff.offset((*ccline).cmdlen as isize) = 0 as ::core::ffi::c_char;
+            *(*ccline).cmdbuff.offset((*ccline).cmdlen as isize) = 0;
         }
-        let mut pat: *mut ::core::ffi::c_char = xstrnsave((*xp).xp_pattern, (*xp).xp_pattern_len);
-        args[0 as ::core::ffi::c_int as usize].v_type = VAR_STRING;
-        args[1 as ::core::ffi::c_int as usize].v_type = VAR_STRING;
-        args[2 as ::core::ffi::c_int as usize].v_type = VAR_NUMBER;
-        args[3 as ::core::ffi::c_int as usize].v_type = VAR_UNKNOWN;
-        args[0 as ::core::ffi::c_int as usize].vval.v_string = pat;
-        args[1 as ::core::ffi::c_int as usize].vval.v_string = (*xp).xp_line;
-        args[2 as ::core::ffi::c_int as usize].vval.v_number = (*xp).xp_col as varnumber_T;
+
+        let pat = xstrnsave((*xp).xp_pattern, (*xp).xp_pattern_len);
+        args[0].v_type = VAR_STRING;
+        args[1].v_type = VAR_STRING;
+        args[2].v_type = VAR_NUMBER;
+        args[3].v_type = VAR_UNKNOWN;
+        args[0].vval.v_string = pat;
+        args[1].vval.v_string = (*xp).xp_line;
+        args[2].vval.v_number = (*xp).xp_col as varnumber_T;
+
         current_sctx.set((*xp).xp_script_ctx);
-        let ret: *mut ::core::ffi::c_void = user_expand_func.expect("non-null function pointer")(
-            (*xp).xp_arg,
-            3 as ::core::ffi::c_int,
-            &raw mut args as *mut typval_T,
-        );
+
+        let ret = user_expand_func((*xp).xp_arg, 3, args.as_mut_ptr());
+
         current_sctx.set(save_current_sctx);
         if !(*ccline).cmdbuff.is_null() {
             *(*ccline).cmdbuff.offset((*ccline).cmdlen as isize) = keep;
         }
-        xfree(pat as *mut ::core::ffi::c_void);
-        return ret;
+
+        xfree(pat as *mut c_void);
+        ret
     }
 }
 
-pub(crate) unsafe extern "C" fn ExpandUserDefined(
-    pat: *const ::core::ffi::c_char,
-    mut xp: *mut expand_T,
-    mut regmatch: *mut regmatch_T,
-    mut matches: *mut *mut *mut ::core::ffi::c_char,
-    mut numMatches: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Expand names with a function defined by the user
+/// (`EXPAND_USER_DEFINED` and `EXPAND_USER_LIST`).
+pub(crate) unsafe fn ExpandUserDefined(
+    pat: *const c_char,
+    xp: *mut expand_T,
+    regmatch: *mut regmatch_T,
+    matches: *mut *mut *mut c_char,
+    numMatches: *mut c_int,
+) -> c_int {
     unsafe {
-        let fuzzy: bool = cmdline_fuzzy_complete(pat);
-        *matches = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-        *numMatches = 0 as ::core::ffi::c_int;
-        let retstr: *mut ::core::ffi::c_char = call_user_expand_func(
-            Some(
-                call_func_retstr
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        ::core::ffi::c_int,
-                        *mut typval_T,
-                    ) -> *mut ::core::ffi::c_void,
-            ),
-            xp,
-        ) as *mut ::core::ffi::c_char;
+        let fuzzy = cmdline_fuzzy_complete(pat);
+        *matches = ptr::null_mut();
+        *numMatches = 0;
+
+        let retstr = call_user_expand_func(call_func_retstr, xp) as *mut c_char;
         if retstr.is_null() {
             return FAIL;
         }
-        let mut ga: garray_T = garray_T {
+
+        let mut ga = garray_T {
             ga_len: 0,
             ga_maxlen: 0,
             ga_itemsize: 0,
             ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+            ga_data: ptr::null_mut(),
         };
-        if !fuzzy {
-            ga_init(
-                &raw mut ga,
-                ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-                3 as ::core::ffi::c_int,
-            );
+        let itemsize = if fuzzy {
+            size_of::<fuzmatch_str_T>()
         } else {
-            ga_init(
-                &raw mut ga,
-                ::core::mem::size_of::<fuzmatch_str_T>() as ::core::ffi::c_int,
-                3 as ::core::ffi::c_int,
-            );
-        }
-        let mut s: *mut ::core::ffi::c_char = retstr;
-        let mut e: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        while *s as ::core::ffi::c_int != NUL {
-            e = vim_strchr(s, '\n' as ::core::ffi::c_int);
+            size_of::<*mut c_char>()
+        };
+        ga_init(&raw mut ga, itemsize as c_int, 3);
+
+        // The answer is one match per line.
+        let mut s = retstr;
+        while *s as c_int != NUL {
+            let mut e = vim_strchr(s, '\n' as c_int);
             if e.is_null() {
-                e = s.offset(strlen(s) as isize);
+                e = s.add(strlen(s));
             }
-            let keep: ::core::ffi::c_char = *e;
-            *e = NUL as ::core::ffi::c_char;
-            let mut match_0: bool = false;
-            let mut score: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            if *(*xp).xp_pattern.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                != NUL
-            {
-                if !fuzzy {
-                    match_0 = vim_regexec(regmatch, s, 0 as colnr_T);
-                } else {
-                    score = fuzzy_match_str(s, pat);
-                    match_0 = score != FUZZY_SCORE_NONE as ::core::ffi::c_int;
-                }
+            let keep = *e;
+            *e = NUL as c_char;
+
+            let mut score = 0;
+            let matched = if *(*xp).xp_pattern as c_int == NUL {
+                true // match everything
+            } else if fuzzy {
+                score = fuzzy_match_str(s, pat);
+                score != FUZZY_SCORE_NONE
             } else {
-                match_0 = true_0 != 0;
-            }
+                vim_regexec(regmatch, s, 0)
+            };
+
             *e = keep;
-            if match_0 {
-                let mut p: *mut ::core::ffi::c_char =
-                    xmemdupz(s as *const ::core::ffi::c_void, e.offset_from(s) as size_t)
-                        as *mut ::core::ffi::c_char;
-                if !fuzzy {
-                    ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                    *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) = p;
-                    ga.ga_len += 1;
-                } else {
-                    ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                    *(ga.ga_data as *mut fuzmatch_str_T).offset(ga.ga_len as isize) =
-                        fuzmatch_str_T {
+
+            if matched {
+                let p = xmemdupz(s as *const c_void, e.offset_from(s) as size_t) as *mut c_char;
+
+                ga_grow(&raw mut ga, 1);
+                if fuzzy {
+                    (ga.ga_data as *mut fuzmatch_str_T)
+                        .offset(ga.ga_len as isize)
+                        .write(fuzmatch_str_T {
                             idx: ga.ga_len,
                             str: p,
-                            score: score,
-                        };
-                    ga.ga_len += 1;
+                            score,
+                        });
+                } else {
+                    (ga.ga_data as *mut *mut c_char)
+                        .offset(ga.ga_len as isize)
+                        .write(p);
                 }
+                ga.ga_len += 1;
             }
-            if *e as ::core::ffi::c_int != NUL {
-                e = e.offset(1);
+
+            if *e as c_int != NUL {
+                e = e.add(1);
             }
             s = e;
         }
-        xfree(retstr as *mut ::core::ffi::c_void);
-        if ga.ga_len == 0 as ::core::ffi::c_int {
+        xfree(retstr as *mut c_void);
+
+        if ga.ga_len == 0 {
             return OK;
         }
-        if !fuzzy {
-            *matches = ga.ga_data as *mut *mut ::core::ffi::c_char;
-            *numMatches = ga.ga_len;
-        } else {
+
+        if fuzzy {
             fuzzymatches_to_strmatches(
                 ga.ga_data as *mut fuzmatch_str_T,
                 matches,
                 ga.ga_len,
-                false_0 != 0,
+                false,
             );
-            *numMatches = ga.ga_len;
+        } else {
+            *matches = ga.ga_data as *mut *mut c_char;
         }
-        return OK;
+        *numMatches = ga.ga_len;
+        OK
     }
 }
 
-pub(crate) unsafe extern "C" fn process_user_list(
-    mut retlist: *mut list_T,
-    mut matches: *mut *mut *mut ::core::ffi::c_char,
-    mut numMatches: *mut ::core::ffi::c_int,
+/// Copy the strings of a `customlist,` answer into a fresh match array.
+pub(crate) unsafe fn process_user_list(
+    retlist: *mut list_T,
+    matches: *mut *mut *mut c_char,
+    numMatches: *mut c_int,
 ) {
     unsafe {
-        let mut ga: garray_T = garray_T {
+        let mut ga = garray_T {
             ga_len: 0,
             ga_maxlen: 0,
             ga_itemsize: 0,
             ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+            ga_data: ptr::null_mut(),
         };
-        ga_init(
-            &raw mut ga,
-            ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-            3 as ::core::ffi::c_int,
-        );
-        let l_: *const list_T = retlist;
-        if !l_.is_null() {
-            let mut li: *const listitem_T = (*l_).lv_first;
+        ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 3);
+
+        // Loop over the items in the list.
+        if !retlist.is_null() {
+            let mut li: *const listitem_T = (*retlist).lv_first;
             while !li.is_null() {
-                if !((*li).li_tv.v_type as ::core::ffi::c_uint
-                    != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                    || (*li).li_tv.vval.v_string.is_null())
-                {
-                    let mut p: *mut ::core::ffi::c_char = xstrdup((*li).li_tv.vval.v_string);
-                    ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                    *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) = p;
+                // Skip non-string items and empty strings.
+                if (*li).li_tv.v_type == VAR_STRING && !(*li).li_tv.vval.v_string.is_null() {
+                    let p = xstrdup((*li).li_tv.vval.v_string);
+                    ga_grow(&raw mut ga, 1);
+                    (ga.ga_data as *mut *mut c_char)
+                        .offset(ga.ga_len as isize)
+                        .write(p);
                     ga.ga_len += 1;
                 }
                 li = (*li).li_next;
             }
         }
         tv_list_unref(retlist);
-        *matches = ga.ga_data as *mut *mut ::core::ffi::c_char;
+
+        *matches = ga.ga_data as *mut *mut c_char;
         *numMatches = ga.ga_len;
     }
 }
 
-pub(crate) unsafe extern "C" fn ExpandUserList(
-    mut xp: *mut expand_T,
-    mut matches: *mut *mut *mut ::core::ffi::c_char,
-    mut numMatches: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Expand names with a list returned by a function defined by the user.
+pub(crate) unsafe fn ExpandUserList(
+    xp: *mut expand_T,
+    matches: *mut *mut *mut c_char,
+    numMatches: *mut c_int,
+) -> c_int {
     unsafe {
-        *matches = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-        *numMatches = 0 as ::core::ffi::c_int;
-        let retlist: *mut list_T = call_user_expand_func(
-            Some(
-                call_func_retlist
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        ::core::ffi::c_int,
-                        *mut typval_T,
-                    ) -> *mut ::core::ffi::c_void,
-            ),
-            xp,
-        ) as *mut list_T;
+        *matches = ptr::null_mut();
+        *numMatches = 0;
+        let retlist = call_user_expand_func(call_func_retlist, xp) as *mut list_T;
         if retlist.is_null() {
             return FAIL;
         }
+
         process_user_list(retlist, matches, numMatches);
-        return OK;
+        OK
     }
 }
 
-pub(crate) unsafe extern "C" fn ExpandUserLua(
-    mut xp: *mut expand_T,
-    mut numMatches: *mut ::core::ffi::c_int,
-    mut matches: *mut *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+/// Expand names with a Lua completion function.
+pub(crate) unsafe fn ExpandUserLua(
+    xp: *mut expand_T,
+    numMatches: *mut c_int,
+    matches: *mut *mut *mut c_char,
+) -> c_int {
     unsafe {
-        let mut rettv: typval_T = typval_T {
+        let mut rettv = typval_T {
             v_type: VAR_UNKNOWN,
             v_lock: VAR_UNLOCKED,
             vval: typval_vval_union { v_number: 0 },
         };
         nlua_call_user_expand_func(xp, &raw mut rettv);
-        if rettv.v_type as ::core::ffi::c_uint
-            != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if rettv.v_type != VAR_LIST {
             tv_clear(&raw mut rettv);
             return FAIL;
         }
-        let retlist: *mut list_T = rettv.vval.v_list;
-        process_user_list(retlist, matches, numMatches);
-        return OK;
+
+        process_user_list(rettv.vval.v_list, matches, numMatches);
+        OK
     }
 }
 
-pub unsafe extern "C" fn globpath(
-    mut path: *mut ::core::ffi::c_char,
-    mut file: *mut ::core::ffi::c_char,
-    mut ga: *mut garray_T,
-    mut expand_options: ::core::ffi::c_int,
-    mut dirs: bool,
+/// Expand `file` for all comma-separated directories in `path`, adding the
+/// matches to `ga`.
+///
+/// If `dirs` is true only directory names are expanded.
+pub unsafe fn globpath(
+    path: *mut c_char,
+    file: *mut c_char,
+    ga: *mut garray_T,
+    expand_options: c_int,
+    dirs: bool,
 ) {
     unsafe {
-        let mut buf: *mut ::core::ffi::c_char =
-            xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
-        let mut xpc: expand_T = expand_T {
-            xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            xp_context: 0,
-            xp_pattern_len: 0,
-            xp_prefix: XP_PREFIX_NONE,
-            xp_arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            xp_luaref: 0,
-            xp_script_ctx: sctx_T {
-                sc_sid: 0,
-                sc_seq: 0,
-                sc_lnum: 0,
-                sc_chan: 0,
-            },
-            xp_backslash: 0,
-            xp_shell: false,
-            xp_numfiles: 0,
-            xp_col: 0,
-            xp_selected: 0,
-            xp_orig: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            xp_files: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-            xp_line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            xp_buf: [0; 256],
-            xp_search_dir: kDirectionNotSet,
-            xp_pre_incsearch_pos: pos_T {
-                lnum: 0,
-                col: 0,
-                coladd: 0,
-            },
-        };
+        let buf = xmalloc(MAXPATHL as size_t) as *mut c_char;
+
+        let mut xpc: expand_T = core::mem::zeroed();
         ExpandInit(&raw mut xpc);
-        xpc.xp_context = if dirs as ::core::ffi::c_int != 0 {
+        xpc.xp_context = if dirs {
             EXPAND_DIRECTORIES
         } else {
             EXPAND_FILES
         };
-        let mut filelen: size_t = strlen(file);
-        while *path as ::core::ffi::c_int != NUL {
-            let mut pathlen: size_t = copy_option_part(
+
+        let filelen = strlen(file);
+
+        // Loop over all entries in {path}.
+        let mut path = path;
+        while *path as c_int != NUL {
+            // Copy one item of the path to buf[] and concatenate the file
+            // name.  `pathlen` is the length of the path portion of buf,
+            // including the trailing slash.
+            let mut pathlen = copy_option_part(
                 &raw mut path,
                 buf,
                 MAXPATHL as size_t,
-                b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                c",".as_ptr() as *mut c_char,
             );
-            let mut seplen: size_t = if *buf as ::core::ffi::c_int != NUL
-                && after_pathsep(buf, buf.offset(pathlen as isize)) == 0
-            {
-                ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as size_t)
+            let seplen = if *buf as c_int != NUL && after_pathsep(buf, buf.add(pathlen)) == 0 {
+                PATHSEP_LEN
             } else {
-                0 as size_t
+                0
             };
-            if pathlen
-                .wrapping_add(seplen)
-                .wrapping_add(filelen)
-                .wrapping_add(1 as size_t)
-                <= MAXPATHL as size_t
-            {
-                if seplen > 0 as size_t {
+
+            // Upstream's `+ 1 <= MAXPATHL` — the one byte is the NUL.
+            if pathlen + seplen + filelen < MAXPATHL as size_t {
+                if seplen > 0 {
                     xmemcpyz(
-                        buf.offset(pathlen as isize) as *mut ::core::ffi::c_void,
-                        b"/\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-                        ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                            .wrapping_sub(1 as size_t),
+                        buf.add(pathlen) as *mut c_void,
+                        c"/".as_ptr() as *const c_void,
+                        PATHSEP_LEN,
                     );
-                    pathlen = pathlen.wrapping_add(seplen);
+                    pathlen += seplen;
                 }
                 xmemcpyz(
-                    buf.offset(pathlen as isize) as *mut ::core::ffi::c_void,
-                    file as *const ::core::ffi::c_void,
+                    buf.add(pathlen) as *mut c_void,
+                    file as *const c_void,
                     filelen,
                 );
-                let mut p: *mut *mut ::core::ffi::c_char =
-                    ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-                let mut num_p: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
+                let mut p: *mut *mut c_char = ptr::null_mut();
+                let mut num_p = 0;
                 ExpandFromContext(
                     &raw mut xpc,
                     buf,
@@ -577,25 +542,28 @@ pub unsafe extern "C" fn globpath(
                     &raw mut num_p,
                     WILD_SILENT | expand_options,
                 );
-                if num_p > 0 as ::core::ffi::c_int {
+                if num_p > 0 {
                     escape_matches(
                         &raw mut xpc,
                         buf,
                         core::slice::from_raw_parts_mut(p, num_p as usize),
                         WILD_SILENT | expand_options,
                     );
+
+                    // Concatenate new results to previous ones, taking over
+                    // the pointers.
                     ga_grow(ga, num_p);
-                    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    while i < num_p {
-                        *((*ga).ga_data as *mut *mut ::core::ffi::c_char)
-                            .offset((*ga).ga_len as isize) = *p.offset(i as isize);
+                    for i in 0..num_p {
+                        ((*ga).ga_data as *mut *mut c_char)
+                            .offset((*ga).ga_len as isize)
+                            .write(*p.offset(i as isize));
                         (*ga).ga_len += 1;
-                        i += 1;
                     }
-                    xfree(p as *mut ::core::ffi::c_void);
+                    xfree(p as *mut c_void);
                 }
             }
         }
-        xfree(buf as *mut ::core::ffi::c_void);
+
+        xfree(buf as *mut c_void);
     }
 }
