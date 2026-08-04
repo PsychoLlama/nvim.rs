@@ -31,7 +31,6 @@ use crate::src::nvim::keycodes::{
     K_S_HOME, K_SPECIAL, K_UP, K_VER_SCROLLBAR, K_XDOWN, K_XEND, K_XHOME, K_XLEFT, K_XRIGHT, K_XUP,
     K_ZEND, K_ZERO, K_ZHOME, special_to_buf,
 };
-use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::src::nvim::main::{
     KeyStuffed, KeyTyped, NameBuff, State, VIsual, VIsual_active, VIsual_reselect, VIsual_select,
@@ -57,7 +56,6 @@ use crate::src::nvim::mbyte::{
 use crate::src::nvim::memline::ml_sync_all;
 use crate::src::nvim::memory::{
     ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc, xmemcpyz, xmemdupz,
-    xrealloc,
 };
 use crate::src::nvim::message::{emsg, iemsg, internal_error, semsg, semsg_multiline};
 use crate::src::nvim::mouse::{is_mouse_key, mouse_comp_pos, mouse_find_win_inner};
@@ -69,7 +67,7 @@ use crate::src::nvim::os::env::expand_env;
 use crate::src::nvim::os::fileio::{file_close, file_open, file_open_stdin, file_read};
 use crate::src::nvim::os::input::{input_available, input_get, line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
-    __assert_fail, atoi, fprintf, gettext, memcpy, memmove, putc, stderr, strcmp, strlen, strncmp,
+    __assert_fail, atoi, fprintf, gettext, memmove, putc, stderr, strcmp, strlen, strncmp,
 };
 use crate::src::nvim::plines::{init_charsize_arg, win_charsize};
 use crate::src::nvim::state::{
@@ -155,14 +153,6 @@ pub struct gotchars_state_T {
     pub buflen: size_t,
     pub pending_special: ::core::ffi::c_uint,
     pub pending_mbyte: ::core::ffi::c_uint,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_31 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ::core::ffi::c_char,
-    pub init_array: [::core::ffi::c_char; 51],
 }
 pub const KEYLEN_PART_KEY: C2Rust_Unnamed_37 = -1;
 pub const SHOWCMD_COLS: C2Rust_Unnamed_33 = 10;
@@ -435,12 +425,10 @@ static readbuf2: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T {
     bh_space: 0 as size_t,
     bh_create_newblock: false_0 != 0,
 });
-static on_key_buf: GlobalCell<C2Rust_Unnamed_31> = GlobalCell::new(C2Rust_Unnamed_31 {
-    size: 0,
-    capacity: 0,
-    items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    init_array: [0; 51],
-});
+/// The bytes of the key `vgetc` is assembling, for the `vim.on_key()`
+/// callbacks. Upstream is a `kvec_withinit_t(char, MAXMAPLEN + 1)`; nothing
+/// outside this module touches it, so it is an owned `Vec` here.
+static on_key_buf: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 static on_key_ignore_len: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
 static typeahead_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static block_redo: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
@@ -497,24 +485,3 @@ pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
-unsafe extern "C" fn c2rust_run_static_initializers() {
-    unsafe {
-        on_key_buf.set(C2Rust_Unnamed_31 {
-            size: 0 as size_t,
-            capacity: ::core::mem::size_of::<[::core::ffi::c_char; 51]>()
-                .wrapping_div(::core::mem::size_of::<::core::ffi::c_char>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[::core::ffi::c_char; 51]>()
-                        .wrapping_rem(::core::mem::size_of::<::core::ffi::c_char>())
-                        == 0) as ::core::ffi::c_int as size_t,
-                ),
-            items: &raw mut (*on_key_buf.ptr()).init_array as *mut ::core::ffi::c_char,
-            init_array: [0; 51],
-        });
-    }
-}
-#[used]
-#[cfg_attr(target_os = "linux", unsafe(link_section = ".init_array"))]
-#[cfg_attr(target_os = "windows", unsafe(link_section = ".CRT$XIB"))]
-#[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__mod_init_func"))]
-static INIT_ARRAY: [unsafe extern "C" fn(); 1] = [c2rust_run_static_initializers];

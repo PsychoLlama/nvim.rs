@@ -1,6 +1,6 @@
 //! `vgetc` and the peek variants: one whole key out of the typeahead.
 //!
-//! [`vgetc`] is what the rest of the editor calls.  It asks
+//! [`vgetc`] is what the rest of the editor calls. It asks
 //! [`crate::src::nvim::getchar::vgetorpeek`] for bytes and reassembles them
 //! into a single key: a `K_SPECIAL` escape back into its key code, a modifier
 //! prefix into `mod_mask`, a UTF-8 sequence into a codepoint.
@@ -9,409 +9,353 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::{
+    K_C_END, K_C_HOME, K_COMMAND, K_IGNORE, K_LUA, K_MOUSEMOVE, key_unescape,
+};
+use core::ffi::c_int;
+use core::ptr;
 
-pub unsafe extern "C" fn merge_modifiers(
-    mut c_arg: ::core::ffi::c_int,
-    mut modifiers: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Longest UTF-8 sequence a character can occupy.
+const MB_MAXBYTES: usize = 21;
+
+/// Fold `modifiers` into `c` where a single code stands for the combination.
+///
+/// Only Ctrl has such codes: `CTRL-A` is 0x01 rather than `<C-> A`. The
+/// modifier is cleared out of `*modifiers` when it was folded in.
+///
+/// # Safety
+/// `modifiers` must point at a writable `c_int`.
+pub unsafe fn merge_modifiers(c_arg: c_int, modifiers: *mut c_int) -> c_int {
     unsafe {
-        let mut c: ::core::ffi::c_int = c_arg;
+        let mut c = c_arg;
         if *modifiers & MOD_MASK_CTRL != 0 {
-            if c >= '@' as ::core::ffi::c_int && c <= 0x7f as ::core::ffi::c_int {
-                c &= 0x1f as ::core::ffi::c_int;
+            if c >= '@' as c_int && c <= 0x7f {
+                c &= 0x1f;
                 if c == NUL {
                     c = K_ZERO;
                 }
-            } else if c == '6' as ::core::ffi::c_int {
-                c = 0x1e as ::core::ffi::c_int;
+            } else if c == '6' as c_int {
+                // CTRL-6 is equivalent to CTRL-^.
+                c = 0x1e;
             }
             if c != c_arg {
                 *modifiers &= !MOD_MASK_CTRL;
             }
         }
-        return c;
+        c
     }
 }
 
-pub unsafe extern "C" fn vgetc() -> ::core::ffi::c_int {
+/// The next input character, which may be a special key or a multibyte one.
+///
+/// Answers `NUL` when called recursively — use [`safe_vgetc`] when that is
+/// not wanted. Escaped `K_SPECIAL` bytes are translated back into their key
+/// code and the bytes of a multibyte character are collected into the whole
+/// character; the modifiers come back in the global `mod_mask`.
+///
+/// # Safety
+/// Callable at any time; may block waiting for input.
+pub unsafe fn vgetc() -> c_int {
     unsafe {
-        let mut c: ::core::ffi::c_int = 0;
-        let mut buf: [uint8_t; 22] = [0; 22];
-        if may_garbage_collect.get() as ::core::ffi::c_int != 0
-            && want_garbage_collect.get() as ::core::ffi::c_int != 0
-        {
-            garbage_collect(false_0 != 0);
+        // Garbage collection was requested by a previous `garbagecollect()`
+        // and we are back at the top level.
+        if may_garbage_collect.get() && want_garbage_collect.get() {
+            garbage_collect(false);
         }
+
+        let mut c;
         if can_get_old_char() {
+            // A character `vungetc` put back has already been processed.
             c = old_char.get();
-            old_char.set(-1 as ::core::ffi::c_int);
+            old_char.set(-1);
             mod_mask.set(old_mod_mask.get());
             mouse_grid.set(old_mouse_grid.get());
             mouse_row.set(old_mouse_row.get());
             mouse_col.set(old_mouse_col.get());
         } else {
-            static last_vgetc_recorded_len: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-            mod_mask.set(0 as ::core::ffi::c_int);
-            vgetc_mod_mask.set(0 as ::core::ffi::c_int);
-            vgetc_char.set(0 as ::core::ffi::c_int);
-            last_recorded_len
-                .set((*last_recorded_len.ptr()).wrapping_sub(last_vgetc_recorded_len.get()));
-            loop {
-                let mut did_inc: bool = false_0 != 0;
-                if mod_mask.get() != 0 {
-                    (*no_mapping.ptr()) += 1;
-                    (*allow_keys.ptr()) += 1;
-                    did_inc = true_0 != 0;
-                }
-                c = vgetorpeek(true_0 != 0);
-                if did_inc {
-                    (*no_mapping.ptr()) -= 1;
-                    (*allow_keys.ptr()) -= 1;
-                }
-                if c == K_SPECIAL {
-                    let mut save_allow_keys: ::core::ffi::c_int = allow_keys.get();
-                    (*no_mapping.ptr()) += 1;
-                    allow_keys.set(0 as ::core::ffi::c_int);
-                    let mut c2: ::core::ffi::c_int = vgetorpeek(true_0 != 0);
-                    c = vgetorpeek(true_0 != 0);
-                    (*no_mapping.ptr()) -= 1;
-                    allow_keys.set(save_allow_keys);
-                    if c2 == KS_MODIFIER {
-                        mod_mask.set(c);
-                        continue;
-                    } else {
-                        c = if c2 == KS_SPECIAL {
-                            K_SPECIAL
-                        } else if c2 == KS_ZERO {
-                            K_ZERO
-                        } else {
-                            -(c2 + (c << 8 as ::core::ffi::c_int))
-                        };
-                    }
-                }
-                let mut n: ::core::ffi::c_int = 0;
-                n = if c < 0 as ::core::ffi::c_int || c > 255 as ::core::ffi::c_int {
-                    1 as ::core::ffi::c_int
-                } else {
-                    (*utf8len_tab.ptr())[c as usize] as ::core::ffi::c_int
-                };
-                if n > 1 as ::core::ffi::c_int {
-                    (*no_mapping.ptr()) += 1;
-                    buf[0 as ::core::ffi::c_int as usize] = c as uint8_t;
-                    let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-                    while i < n {
-                        buf[i as usize] = vgetorpeek(true_0 != 0) as uint8_t;
-                        if buf[i as usize] as ::core::ffi::c_int == K_SPECIAL {
-                            vgetorpeek(true_0 != 0);
-                            vgetorpeek(true_0 != 0);
-                        }
-                        i += 1;
-                    }
-                    (*no_mapping.ptr()) -= 1;
-                    c = utf_ptr2char(&raw mut buf as *mut uint8_t as *mut ::core::ffi::c_char);
-                }
-                if no_mapping.get() == 0
-                    && KeyTyped.get() as ::core::ffi::c_int != 0
-                    && mod_mask.get() == MOD_MASK_ALT
-                    && State.get() & MODE_TERMINAL == 0
-                    && !is_mouse_key(c)
-                {
-                    mod_mask.set(0 as ::core::ffi::c_int);
-                    let mut len: ::core::ffi::c_int =
-                        ins_char_typebuf(c, 0 as ::core::ffi::c_int, false_0 != 0);
-                    ins_char_typebuf(ESC, 0 as ::core::ffi::c_int, false_0 != 0);
-                    let mut old_len: ::core::ffi::c_int = len + 3 as ::core::ffi::c_int;
-                    ungetchars(old_len);
-                    if (*on_key_buf.ptr()).size >= old_len as size_t {
-                        (*on_key_buf.ptr()).size =
-                            (*on_key_buf.ptr()).size.wrapping_sub(old_len as size_t);
-                    }
-                } else {
-                    if vgetc_char.get() == 0 as ::core::ffi::c_int {
-                        vgetc_mod_mask.set(mod_mask.get());
-                        vgetc_char.set(c);
-                    }
-                    match c {
-                        K_KPLUS => {
-                            c = '+' as ::core::ffi::c_int;
-                        }
-                        K_KMINUS => {
-                            c = '-' as ::core::ffi::c_int;
-                        }
-                        K_KDIVIDE => {
-                            c = '/' as ::core::ffi::c_int;
-                        }
-                        K_KMULTIPLY => {
-                            c = '*' as ::core::ffi::c_int;
-                        }
-                        K_KENTER => {
-                            c = CAR;
-                        }
-                        K_KPOINT => {
-                            c = '.' as ::core::ffi::c_int;
-                        }
-                        K_KCOMMA => {
-                            c = ',' as ::core::ffi::c_int;
-                        }
-                        K_KEQUAL => {
-                            c = '=' as ::core::ffi::c_int;
-                        }
-                        K_K0 => {
-                            c = '0' as ::core::ffi::c_int;
-                        }
-                        K_K1 => {
-                            c = '1' as ::core::ffi::c_int;
-                        }
-                        K_K2 => {
-                            c = '2' as ::core::ffi::c_int;
-                        }
-                        K_K3 => {
-                            c = '3' as ::core::ffi::c_int;
-                        }
-                        K_K4 => {
-                            c = '4' as ::core::ffi::c_int;
-                        }
-                        K_K5 => {
-                            c = '5' as ::core::ffi::c_int;
-                        }
-                        K_K6 => {
-                            c = '6' as ::core::ffi::c_int;
-                        }
-                        K_K7 => {
-                            c = '7' as ::core::ffi::c_int;
-                        }
-                        K_K8 => {
-                            c = '8' as ::core::ffi::c_int;
-                        }
-                        K_K9 => {
-                            c = '9' as ::core::ffi::c_int;
-                        }
-                        K_XHOME | K_ZHOME => {
-                            if mod_mask.get() == MOD_MASK_SHIFT {
-                                c = K_S_HOME;
-                                mod_mask.set(0 as ::core::ffi::c_int);
-                            } else if mod_mask.get() == MOD_MASK_CTRL {
-                                c = -(253 as ::core::ffi::c_int
-                                    + ((KE_C_HOME as ::core::ffi::c_int)
-                                        << 8 as ::core::ffi::c_int));
-                                mod_mask.set(0 as ::core::ffi::c_int);
-                            } else {
-                                c = K_HOME;
-                            }
-                        }
-                        K_XEND | K_ZEND => {
-                            if mod_mask.get() == MOD_MASK_SHIFT {
-                                c = K_S_END;
-                                mod_mask.set(0 as ::core::ffi::c_int);
-                            } else if mod_mask.get() == MOD_MASK_CTRL {
-                                c = -(253 as ::core::ffi::c_int
-                                    + ((KE_C_END as ::core::ffi::c_int)
-                                        << 8 as ::core::ffi::c_int));
-                                mod_mask.set(0 as ::core::ffi::c_int);
-                            } else {
-                                c = K_END;
-                            }
-                        }
-                        K_KUP | K_XUP => {
-                            c = K_UP;
-                        }
-                        K_KDOWN | K_XDOWN => {
-                            c = K_DOWN;
-                        }
-                        K_KLEFT | K_XLEFT => {
-                            c = K_LEFT;
-                        }
-                        K_KRIGHT | K_XRIGHT => {
-                            c = K_RIGHT;
-                        }
-                        _ => {}
-                    }
-                    break;
-                }
-            }
-            last_vgetc_recorded_len.set(last_recorded_len.get());
+            c = vgetc_from_typeahead();
         }
-        may_garbage_collect.set(false_0 != 0);
-        if (*on_key_buf.ptr()).size == (*on_key_buf.ptr()).capacity {
-            (*on_key_buf.ptr()).capacity = if (*on_key_buf.ptr()).capacity
-                << 1 as ::core::ffi::c_int
-                > ::core::mem::size_of::<[::core::ffi::c_char; 51]>()
-                    .wrapping_div(::core::mem::size_of::<::core::ffi::c_char>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[::core::ffi::c_char; 51]>()
-                            .wrapping_rem(::core::mem::size_of::<::core::ffi::c_char>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                (*on_key_buf.ptr()).capacity << 1 as ::core::ffi::c_int
-            } else {
-                ::core::mem::size_of::<[::core::ffi::c_char; 51]>()
-                    .wrapping_div(::core::mem::size_of::<::core::ffi::c_char>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[::core::ffi::c_char; 51]>()
-                            .wrapping_rem(::core::mem::size_of::<::core::ffi::c_char>())
-                            == 0) as ::core::ffi::c_int as size_t,
-                    )
-            };
-            (*on_key_buf.ptr()).items = (if (*on_key_buf.ptr()).capacity
-                == ::core::mem::size_of::<[::core::ffi::c_char; 51]>()
-                    .wrapping_div(::core::mem::size_of::<::core::ffi::c_char>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[::core::ffi::c_char; 51]>()
-                            .wrapping_rem(::core::mem::size_of::<::core::ffi::c_char>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                if (*on_key_buf.ptr()).items
-                    == &raw mut (*on_key_buf.ptr()).init_array as *mut ::core::ffi::c_char
-                {
-                    (*on_key_buf.ptr()).items as *mut ::core::ffi::c_void
-                } else {
-                    _memcpy_free(
-                        &raw mut (*on_key_buf.ptr()).init_array as *mut ::core::ffi::c_char
-                            as *mut ::core::ffi::c_void,
-                        (*on_key_buf.ptr()).items as *mut ::core::ffi::c_void,
-                        (*on_key_buf.ptr())
-                            .size
-                            .wrapping_mul(::core::mem::size_of::<::core::ffi::c_char>()),
-                    )
-                }
-            } else {
-                if (*on_key_buf.ptr()).items
-                    == &raw mut (*on_key_buf.ptr()).init_array as *mut ::core::ffi::c_char
-                {
-                    memcpy(
-                        xmalloc(
-                            (*on_key_buf.ptr())
-                                .capacity
-                                .wrapping_mul(::core::mem::size_of::<::core::ffi::c_char>()),
-                        ),
-                        (*on_key_buf.ptr()).items as *const ::core::ffi::c_void,
-                        (*on_key_buf.ptr())
-                            .size
-                            .wrapping_mul(::core::mem::size_of::<::core::ffi::c_char>()),
-                    )
-                } else {
-                    xrealloc(
-                        (*on_key_buf.ptr()).items as *mut ::core::ffi::c_void,
-                        (*on_key_buf.ptr())
-                            .capacity
-                            .wrapping_mul(::core::mem::size_of::<::core::ffi::c_char>()),
-                    )
-                }
-            }) as *mut ::core::ffi::c_char;
-        } else {
-        };
-        let c2rust_fresh10 = (*on_key_buf.ptr()).size;
-        (*on_key_buf.ptr()).size = (*on_key_buf.ptr()).size.wrapping_add(1);
-        *(*on_key_buf.ptr()).items.offset(c2rust_fresh10 as isize) = '\0' as ::core::ffi::c_char;
-        if nlua_execute_on_key(c, (*on_key_buf.ptr()).items) {
-            if c == -(253 as ::core::ffi::c_int
-                + ((KE_COMMAND as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            {
-                xfree(
-                    getcmdkeycmd(NUL, NULL_0, 0 as ::core::ffi::c_int, false_0 != 0)
-                        as *mut ::core::ffi::c_void,
-                );
-            } else if c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_LUA as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            {
-                map_execute_lua(false_0 != 0, true_0 != 0);
+
+        // The main loop sets `may_garbage_collect` so that the next `vgetc`
+        // collects; it is disabled again here so that Lists and Dicts in use
+        // internally are not freed under a caller.
+        may_garbage_collect.set(false);
+
+        // Hand the key's bytes to the Lua on_key callbacks. The buffer is
+        // reached through `ptr()` rather than `with_mut` throughout: a
+        // callback can re-enter `vgetc`, and a live borrow across the call
+        // would be exactly the overlap `GlobalCell` forbids.
+        (*on_key_buf.ptr()).push(0);
+        let discarded = nlua_execute_on_key(c, (*on_key_buf.ptr()).as_mut_ptr().cast());
+        if discarded {
+            // Keys following K_COMMAND/K_LUA/K_PASTE_START are not normally
+            // seen by vim.on_key() callbacks, so drop them with this one.
+            if c == K_COMMAND {
+                xfree(getcmdkeycmd(NUL, ptr::null_mut(), 0, false).cast());
+            } else if c == K_LUA {
+                map_execute_lua(false, true);
             } else if c == K_PASTE_START {
-                paste_repeat(0 as ::core::ffi::c_int);
+                paste_repeat(0);
             }
-            c = -(253 as ::core::ffi::c_int
-                + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+            c = K_IGNORE;
         }
-        if (*on_key_buf.ptr()).items
-            != &raw mut (*on_key_buf.ptr()).init_array as *mut ::core::ffi::c_char
-        {
-            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                &raw mut (*on_key_buf.ptr()).items as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr_);
-            *ptr_ = NULL_0;
-            let _ = *ptr_;
+        (*on_key_buf.ptr()).clear();
+
+        // The character has to be processed before anything else is safe.
+        if c != K_IGNORE {
+            state_no_longer_safe(c"key typed".as_ptr());
         }
-        (*on_key_buf.ptr()).capacity = ::core::mem::size_of::<[::core::ffi::c_char; 51]>()
-            .wrapping_div(::core::mem::size_of::<::core::ffi::c_char>())
-            .wrapping_div(
-                (::core::mem::size_of::<[::core::ffi::c_char; 51]>()
-                    .wrapping_rem(::core::mem::size_of::<::core::ffi::c_char>())
-                    == 0) as ::core::ffi::c_int as usize,
-            ) as size_t;
-        (*on_key_buf.ptr()).size = 0 as size_t;
-        (*on_key_buf.ptr()).items =
-            &raw mut (*on_key_buf.ptr()).init_array as *mut ::core::ffi::c_char;
-        if c != -(253 as ::core::ffi::c_int
-            + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        {
-            state_no_longer_safe(b"key typed\0".as_ptr() as *const ::core::ffi::c_char);
-        }
-        return c;
+
+        c
     }
 }
 
-pub unsafe extern "C" fn safe_vgetc() -> ::core::ffi::c_int {
+/// One whole key from the typeahead, the half of [`vgetc`] that reads.
+///
+/// # Safety
+/// Callable at any time; may block waiting for input.
+unsafe fn vgetc_from_typeahead() -> c_int {
     unsafe {
-        let mut c: ::core::ffi::c_int = vgetc();
-        if c == NUL {
-            c = get_keystroke(::core::ptr::null_mut::<MultiQueue>());
-        }
-        return c;
-    }
-}
+        /// How many characters the last `vgetc` recorded. Peeking can record
+        /// more, so `last_recorded_len` may have grown past it since.
+        static last_vgetc_recorded_len: GlobalCell<usize> = GlobalCell::new(0);
 
-pub unsafe extern "C" fn plain_vgetc() -> ::core::ffi::c_int {
-    unsafe {
-        let mut c: ::core::ffi::c_int = 0;
-        loop {
-            c = safe_vgetc();
-            if !(c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-                || c == K_VER_SCROLLBAR
-                || c == K_HOR_SCROLLBAR
-                || c == -(253 as ::core::ffi::c_int
-                    + ((KE_MOUSEMOVE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)))
+        mod_mask.set(0);
+        vgetc_mod_mask.set(0);
+        vgetc_char.set(0);
+        last_recorded_len.set(last_recorded_len.get() - last_vgetc_recorded_len.get());
+
+        let c = loop {
+            // No mapping once a modifier has been read.
+            let did_inc = mod_mask.get() != 0;
+            if did_inc {
+                *no_mapping.ptr() += 1;
+                *allow_keys.ptr() += 1;
+            }
+            let mut c = vgetorpeek(true);
+            if did_inc {
+                *no_mapping.ptr() -= 1;
+                *allow_keys.ptr() -= 1;
+            }
+
+            // A special key is three bytes; get the other two.
+            if c == K_SPECIAL {
+                let save_allow_keys = allow_keys.get();
+                *no_mapping.ptr() += 1;
+                allow_keys.set(0); // make sure BS is not found
+                let second = vgetorpeek(true);
+                c = vgetorpeek(true);
+                *no_mapping.ptr() -= 1;
+                allow_keys.set(save_allow_keys);
+                if second == KS_MODIFIER {
+                    mod_mask.set(c);
+                    continue;
+                }
+                c = key_unescape(second as u8, c as u8);
+            }
+
+            // A multibyte character is as many bytes as its lead byte says.
+            // This loops until every one of them has arrived.
+            let n = mb_byte2len_check(c);
+            if n > 1 {
+                *no_mapping.ptr() += 1;
+                let mut buf = [0u8; MB_MAXBYTES + 1];
+                buf[0] = c as u8;
+                for byte in &mut buf[1..n] {
+                    *byte = vgetorpeek(true) as u8;
+                    if c_int::from(*byte) == K_SPECIAL {
+                        // Must be K_SPECIAL KS_SPECIAL KE_FILLER, which
+                        // stands for a literal 0x80.
+                        vgetorpeek(true); // skip KS_SPECIAL
+                        vgetorpeek(true); // skip KE_FILLER
+                    }
+                }
+                *no_mapping.ptr() -= 1;
+                c = utf_ptr2char(buf.as_ptr().cast());
+            }
+
+            // When mappings are enabled (so not after i_CTRL-V) and the user
+            // typed an unmapped <M-x>, read it as <Esc>x instead. #8213
+            // Not in Terminal mode (#16202, #16220), and not for mouse keys:
+            // terminals encode those as CSI sequences where MOD_MASK_ALT
+            // means something even unmapped.
+            if no_mapping.get() == 0
+                && KeyTyped.get()
+                && mod_mask.get() == MOD_MASK_ALT
+                && State.get() & MODE_TERMINAL == 0
+                && !is_mouse_key(c)
             {
-                break;
+                mod_mask.set(0);
+                let len = ins_char_typebuf(c, 0, false);
+                ins_char_typebuf(ESC, 0, false);
+                // K_SPECIAL KS_MODIFIER MOD_MASK_ALT takes three more bytes.
+                let old_len = len + 3;
+                ungetchars(old_len);
+                let keys = on_key_buf.ptr();
+                if (*keys).len() >= old_len as usize {
+                    let kept = (*keys).len() - old_len as usize;
+                    (*keys).truncate(kept);
+                }
+                continue;
             }
-        }
-        return c;
+
+            if vgetc_char.get() == 0 {
+                vgetc_mod_mask.set(mod_mask.get());
+                vgetc_char.set(c);
+            }
+
+            break keypad_equivalent(c);
+        };
+
+        last_vgetc_recorded_len.set(last_recorded_len.get());
+        c
     }
 }
 
-pub unsafe extern "C" fn vpeekc() -> ::core::ffi::c_int {
+/// The ASCII or plain-key equivalent of an unmapped keypad or special
+/// function key.
+///
+/// Reads and may clear the global `mod_mask`: `<S-Home>` has its own code, so
+/// the shift is folded into the key rather than left in the mask.
+///
+/// # Safety
+/// Callable at any time.
+unsafe fn keypad_equivalent(c: c_int) -> c_int {
+    match c {
+        K_KPLUS => '+' as c_int,
+        K_KMINUS => '-' as c_int,
+        K_KDIVIDE => '/' as c_int,
+        K_KMULTIPLY => '*' as c_int,
+        K_KENTER => CAR,
+        K_KPOINT => '.' as c_int,
+        K_KCOMMA => ',' as c_int,
+        K_KEQUAL => '=' as c_int,
+        K_K0 => '0' as c_int,
+        K_K1 => '1' as c_int,
+        K_K2 => '2' as c_int,
+        K_K3 => '3' as c_int,
+        K_K4 => '4' as c_int,
+        K_K5 => '5' as c_int,
+        K_K6 => '6' as c_int,
+        K_K7 => '7' as c_int,
+        K_K8 => '8' as c_int,
+        K_K9 => '9' as c_int,
+        K_XHOME | K_ZHOME => unsafe { modified_key(K_S_HOME, K_C_HOME, K_HOME) },
+        K_XEND | K_ZEND => unsafe { modified_key(K_S_END, K_C_END, K_END) },
+        K_KUP | K_XUP => K_UP,
+        K_KDOWN | K_XDOWN => K_DOWN,
+        K_KLEFT | K_XLEFT => K_LEFT,
+        K_KRIGHT | K_XRIGHT => K_RIGHT,
+        _ => c,
+    }
+}
+
+/// Pick the shifted, control or plain code for a key that has all three, and
+/// take the modifier out of `mod_mask` when one was used.
+///
+/// # Safety
+/// Callable at any time.
+unsafe fn modified_key(shifted: c_int, control: c_int, plain: c_int) -> c_int {
+    if mod_mask.get() == MOD_MASK_SHIFT {
+        mod_mask.set(0);
+        shifted
+    } else if mod_mask.get() == MOD_MASK_CTRL {
+        mod_mask.set(0);
+        control
+    } else {
+        plain
+    }
+}
+
+/// Like [`vgetc`], but never answers `NUL` when called recursively: it falls
+/// back to reading a key straight from the user.
+///
+/// # Safety
+/// Callable at any time; may block waiting for input.
+pub unsafe fn safe_vgetc() -> c_int {
+    unsafe {
+        let c = vgetc();
+        if c == NUL {
+            get_keystroke(ptr::null_mut())
+        } else {
+            c
+        }
+    }
+}
+
+/// Like [`safe_vgetc`], but loops past `K_IGNORE` and scrollbar events.
+///
+/// # Safety
+/// Callable at any time; may block waiting for input.
+pub unsafe fn plain_vgetc() -> c_int {
+    unsafe {
+        loop {
+            let c = safe_vgetc();
+            if c != K_IGNORE && c != K_VER_SCROLLBAR && c != K_HOR_SCROLLBAR && c != K_MOUSEMOVE {
+                return c;
+            }
+        }
+    }
+}
+
+/// Whether a character is available, so that [`vgetc`] will not block.
+///
+/// Answers `NUL` when none is. When the next character is a special or
+/// multibyte one the answer is only its first byte, which is not a valid key.
+///
+/// # Safety
+/// Callable at any time.
+pub unsafe fn vpeekc() -> c_int {
     unsafe {
         if can_get_old_char() {
-            return old_char.get();
+            old_char.get()
+        } else {
+            vgetorpeek(false)
         }
-        return vgetorpeek(false_0 != 0);
     }
 }
 
-pub unsafe extern "C" fn vpeekc_any() -> ::core::ffi::c_int {
+/// Whether *any* character is available, half an escape sequence included.
+///
+/// The trick: when no typeahead is found but the typeahead buffer is not
+/// empty, what is in it must be an ESC that was taken for the start of a key
+/// code.
+///
+/// # Safety
+/// Callable at any time.
+pub unsafe fn vpeekc_any() -> c_int {
     unsafe {
-        let mut c: ::core::ffi::c_int = vpeekc();
-        if c == NUL && (*typebuf.ptr()).tb_len > 0 as ::core::ffi::c_int {
-            c = ESC;
+        let c = vpeekc();
+        if c == NUL && (*typebuf.ptr()).tb_len > 0 {
+            ESC
+        } else {
+            c
         }
-        return c;
     }
 }
 
-pub unsafe extern "C" fn char_avail() -> bool {
+/// [`vpeekc`] without letting anything be mapped.
+///
+/// # Safety
+/// Callable at any time.
+pub unsafe fn char_avail() -> bool {
     unsafe {
         if test_disable_char_avail.get() {
-            return false_0 != 0;
+            return false;
         }
-        (*no_mapping.ptr()) += 1;
-        let mut retval: ::core::ffi::c_int = vpeekc();
-        (*no_mapping.ptr()) -= 1;
-        return retval != NUL;
+        *no_mapping.ptr() += 1;
+        let c = vpeekc();
+        *no_mapping.ptr() -= 1;
+        c != NUL
     }
 }
 
-pub unsafe extern "C" fn vungetc(mut c: ::core::ffi::c_int) {
+/// Put one character back, to be answered by the next [`vgetc`]. Can only be
+/// done once.
+///
+/// A stuffed character comes back immediately; anything else waits until the
+/// stuff buffer is empty.
+pub fn vungetc(c: c_int) {
     old_char.set(c);
     old_mod_mask.set(mod_mask.get());
     old_mouse_grid.set(mouse_grid.get());
@@ -420,17 +364,23 @@ pub unsafe extern "C" fn vungetc(mut c: ::core::ffi::c_int) {
     old_KeyStuffed.set(KeyStuffed.get());
 }
 
-pub unsafe extern "C" fn check_end_reg_executing(mut advance: bool) {
+/// Clear `reg_executing` now, or arrange for it to be cleared.
+///
+/// While *peeking* the register is not finished with yet, so the flag is only
+/// noted; the next advancing read acts on it.
+///
+/// # Safety
+/// Callable at any time.
+pub unsafe fn check_end_reg_executing(advance: bool) {
     unsafe {
-        if reg_executing.get() != 0 as ::core::ffi::c_int
-            && ((*typebuf.ptr()).tb_maplen == 0 as ::core::ffi::c_int
-                || pending_end_reg_executing.get() as ::core::ffi::c_int != 0)
+        if reg_executing.get() != 0
+            && ((*typebuf.ptr()).tb_maplen == 0 || pending_end_reg_executing.get())
         {
             if advance {
-                reg_executing.set(0 as ::core::ffi::c_int);
-                pending_end_reg_executing.set(false_0 != 0);
+                reg_executing.set(0);
+                pending_end_reg_executing.set(false);
             } else {
-                pending_end_reg_executing.set(true_0 != 0);
+                pending_end_reg_executing.set(true);
             }
         }
     }

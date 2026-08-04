@@ -298,7 +298,7 @@ pub(crate) unsafe fn read_redo(init: bool, old_redo: bool) -> c_int {
 
 /// C's `MB_BYTE2LEN_CHECK`: how many bytes a UTF-8 sequence starting with `b`
 /// occupies, and 1 for anything that is not a byte at all.
-fn mb_byte2len_check(b: c_int) -> usize {
+pub(crate) fn mb_byte2len_check(b: c_int) -> usize {
     if !(0..=255).contains(&b) {
         1
     } else {
