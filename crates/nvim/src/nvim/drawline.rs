@@ -83,9 +83,9 @@ use crate::src::nvim::syntax::{
 use crate::src::nvim::terminal::terminal_get_line_attributes;
 use crate::src::nvim::types::{
     CharSize, CharsizeArg, DecorRange, DecorVirtText, GridView, HlMode, NS, RgbValue,
-    SignTextAttrs, VimVarIndex, VirtLines, VirtText, WinExtmark, buf_T, colnr_T, diffline_T,
-    foldinfo_T, hlf_T, linenr_T, pos_T, ptrdiff_t, sattr_T, schar_T, size_t, spellvars_T, ssize_t,
-    statuscol_T, uint8_t, uint32_t, uint64_t, varnumber_T, virt_line, win_T,
+    SignTextAttrs, VirtLines, VirtText, WinExtmark, buf_T, colnr_T, diffline_T, foldinfo_T, hlf_T,
+    linenr_T, pos_T, ptrdiff_t, sattr_T, schar_T, size_t, spellvars_T, ssize_t, statuscol_T,
+    uint8_t, uint32_t, uint64_t, varnumber_T, virt_line, win_T,
 };
 use crate::src::nvim::ui::ui_rgb_attached;
 
@@ -116,9 +116,6 @@ pub const MAXCOL: ::core::ffi::c_int = ::core::ffi::c_int::MAX;
 /// The scratch array is that many entries; past it a terminal cell just takes
 /// the window's own attributes.
 pub const TERM_ATTRS_MAX: ::core::ffi::c_int = 1024;
-/// `v:virtnum` -- which virtual line of a buffer line `'statuscolumn'` is being
-/// evaluated for.
-pub const VV_VIRTNUM: VimVarIndex = 103;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;

@@ -74,9 +74,9 @@ use crate::src::nvim::tag::do_tags;
 use crate::src::nvim::types::{
     BoolVarValue, CMD_index, Callback, Callback_data as C2Rust_Unnamed_20, CdCause, CdScope,
     ChannelPart, Direction, LineGetter, LuaRetMode, MarkGet, MotionType, OptValType, RemapValues,
-    TriState, VarLockStatus, VarType, VimVarIndex, cmd_addr_T, dobuf_action_values,
-    dobuf_start_values, estack_arg_T, etype_T, exarg_T, except_T, garray_T, handle_T, kNone,
-    key_extra, linenr_T, optmagic_T, uint8_t, uint16_t, uint32_t,
+    TriState, VarLockStatus, VarType, cmd_addr_T, dobuf_action_values, dobuf_start_values,
+    estack_arg_T, etype_T, exarg_T, except_T, garray_T, handle_T, kNone, key_extra, linenr_T,
+    optmagic_T, uint8_t, uint16_t, uint32_t,
 };
 use crate::src::nvim::undo::{ex_undojoin, ex_undolist};
 use crate::src::nvim::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -397,11 +397,6 @@ pub type C2Rust_Unnamed_47 = c_uint;
 pub const VIM_QUESTION: C2Rust_Unnamed_47 = 4;
 pub type C2Rust_Unnamed_48 = c_uint;
 pub const VIM_YES: C2Rust_Unnamed_48 = 2;
-pub const VV_EXITREASON: VimVarIndex = 105;
-pub const VV_ARGV: VimVarIndex = 89;
-pub const VV_PROGPATH: VimVarIndex = 60;
-pub const VV_OLDFILES: VimVarIndex = 58;
-pub const VV_HLSEARCH: VimVarIndex = 57;
 pub type C2Rust_Unnamed_49 = c_uint;
 pub const ECMD_ALTBUF: C2Rust_Unnamed_49 = 32;
 pub const ECMD_ADDBUF: C2Rust_Unnamed_49 = 16;

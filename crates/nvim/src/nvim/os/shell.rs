@@ -52,9 +52,9 @@ use crate::src::nvim::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     BoolVarValue, Event, FILE, LibuvProc, MultiQueue, OptInt, Proc, RStream, ScopeType,
-    SpecialVarValue, Stream, String_0, StringBuilder, VarLockStatus, VarType, VimVarIndex, WBuffer,
-    colnr_T, int64_t, intptr_t, linenr_T, proftime_T, size_t, stream_read_cb, uint8_t, uint64_t,
-    varnumber_T,
+    SpecialVarValue, Stream, String_0, StringBuilder, VV_SHELL_ERROR, VarLockStatus, VarType,
+    WBuffer, colnr_T, int64_t, intptr_t, linenr_T, proftime_T, size_t, stream_read_cb, uint8_t,
+    uint64_t, varnumber_T,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_flush, ui_has};
 pub const VAR_DEF_SCOPE: ScopeType = 2;
@@ -75,7 +75,6 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const VV_SHELL_ERROR: VimVarIndex = 6;
 pub type C2Rust_Unnamed_30 = ::core::ffi::c_uint;
 pub const kShellOptHideMess: C2Rust_Unnamed_30 = 64;
 pub const kShellOptWrite: C2Rust_Unnamed_30 = 32;

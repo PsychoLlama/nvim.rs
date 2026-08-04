@@ -81,10 +81,11 @@ use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, CharsizeArg, CharsizeKind, Error, EvalFuncData, FileDescriptor,
     Integer, LuaRef, LuaRetMode, MotionType, MultiQueue, Object, OptInt, RemapValues, ScopeType,
-    SpecialVarValue, StrCharInfo, String_0, TriState, VarLockStatus, VarType, VimVarIndex,
-    buffblock, buffblock_T, buffheader_T, colnr_T, dict_T, flush_buffers_T, garray_T, kFalse,
-    kNone, key_extra, linenr_T, mapblock_T, oparg_T, pos_T, ptrdiff_t, save_redo_T, size_t,
-    tasave_T, typebuf_T, typval_T, uint8_t, uint64_t, varnumber_T, win_T,
+    SpecialVarValue, StrCharInfo, String_0, TriState, VV_MOUSE_COL, VV_MOUSE_LNUM, VV_MOUSE_WIN,
+    VV_MOUSE_WINID, VarLockStatus, VarType, buffblock, buffblock_T, buffheader_T, colnr_T, dict_T,
+    flush_buffers_T, garray_T, kFalse, kNone, key_extra, linenr_T, mapblock_T, oparg_T, pos_T,
+    ptrdiff_t, save_redo_T, size_t, tasave_T, typebuf_T, typval_T, uint8_t, uint64_t, varnumber_T,
+    win_T,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::src::nvim::undo::u_sync;
@@ -108,15 +109,6 @@ pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub const MAXMAPLEN: C2Rust_Unnamed_27 = 50;
-pub const VV_MOUSE_COL: VimVarIndex = 54;
-pub const VV_MOUSE_LNUM: VimVarIndex = 53;
-pub const VV_MOUSE_WINID: VimVarIndex = 52;
-pub const VV_MOUSE_WIN: VimVarIndex = 51;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_LNUM: VimVarIndex = 9;
 pub const REMAP_SKIP: RemapValues = -3;
 pub const REMAP_SCRIPT: RemapValues = -2;
 pub const REMAP_NONE: RemapValues = -1;

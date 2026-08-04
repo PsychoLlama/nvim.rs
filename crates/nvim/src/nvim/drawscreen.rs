@@ -100,9 +100,8 @@ use crate::src::nvim::terminal::{terminal_check_size, terminal_suspended};
 use crate::src::nvim::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::src::nvim::types::{
     DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Integer, OptInt,
-    VimVarIndex, VirtText, VirtTextChunk, Window, buf_T, colnr_T, foldinfo_T, frame_T, handle_T,
-    hlf_T, int64_t, linenr_T, pos_T, regprog_T, schar_T, size_t, spellvars_T, uint16_t,
-    varnumber_T, win_T,
+    VirtText, VirtTextChunk, Window, buf_T, colnr_T, foldinfo_T, frame_T, handle_T, hlf_T, int64_t,
+    linenr_T, pos_T, regprog_T, schar_T, size_t, spellvars_T, uint16_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_call_grid_clear, ui_call_grid_resize, ui_call_msg_clear, ui_call_win_extmark, ui_flush,
@@ -150,8 +149,6 @@ pub const UPD_REDRAW_TOP: RedrawType = 30;
 pub const UPD_INVERTED_ALL: RedrawType = 25;
 pub const UPD_INVERTED: RedrawType = 20;
 pub const UPD_VALID: RedrawType = 10;
-/// `v:echospace` -- how many columns a message may use before it wraps.
-pub const VV_ECHOSPACE: VimVarIndex = 87;
 /// Columns `'showcmd'` reserves at the right of the last line.
 pub const SHOWCMD_COLS: ::core::ffi::c_int = 10;
 /// The narrowest screen the editor will lay windows out on.

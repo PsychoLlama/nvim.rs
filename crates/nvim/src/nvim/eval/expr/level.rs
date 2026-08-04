@@ -15,7 +15,6 @@ use core::ffi::{c_char, c_int, c_ushort};
 use core::ptr::{null_mut, write_bytes};
 
 use crate::src::nvim::charset::{skipdigits, skipwhite};
-use crate::src::nvim::eval::VV_LUA;
 use crate::src::nvim::eval::expr::arith::{
     eval_addblob, eval_addlist, eval_addsub_number, eval_concat_str, eval_multdiv_number,
 };
@@ -45,8 +44,8 @@ use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{__ctype_b_loc, gettext, strncmp, strstr};
 use crate::src::nvim::register::get_reg_contents;
 use crate::src::nvim::types::{
-    dictitem_T, evalarg_T, exarg_T, exprtype_T, float_T, funcexe_T, partial_T, size_t, typval_T,
-    typval_vval_union, varnumber_T,
+    VV_LUA, dictitem_T, evalarg_T, exarg_T, exprtype_T, float_T, funcexe_T, partial_T, size_t,
+    typval_T, typval_vval_union, varnumber_T,
 };
 
 /// A freshly declared typval, which is what every level starts a second

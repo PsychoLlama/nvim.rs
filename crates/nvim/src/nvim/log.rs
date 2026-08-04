@@ -16,7 +16,7 @@ use crate::src::nvim::os::stdpaths::{get_xdg_home, stdpaths_user_state_subpath};
 use crate::src::nvim::os::time::{os_localtime, tm_zeroed};
 use crate::src::nvim::path::path_tail;
 use crate::src::nvim::types::{
-    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, FILE, VimVarIndex, XDGVarType,
+    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, FILE, VV_SEND_SERVER, XDGVarType,
     int32_t, int64_t, pthread_mutex_t, size_t, tm, uv_loop_t, uv_mutex_t,
 };
 unsafe extern "C" {
@@ -28,7 +28,6 @@ pub struct uv_timeval64_t {
     pub tv_sec: int64_t,
     pub tv_usec: int32_t,
 }
-pub const VV_SEND_SERVER: VimVarIndex = 28;
 pub const kXDGStateHome: XDGVarType = 3;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;

@@ -37,8 +37,8 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::empty_string_option;
 use crate::src::nvim::optionstr::set_chars_option;
 use crate::src::nvim::types::{
-    CMD_index, CharsOption, HlAttrs, OptScope, OptValType, RgbValue, String_0, VarType,
-    VimVarIndex, int16_t, int32_t, size_t, xp_prefix_T,
+    CMD_index, CharsOption, HlAttrs, OptScope, OptValType, RgbValue, String_0, VarType, int16_t,
+    int32_t, size_t, xp_prefix_T,
 };
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -145,13 +145,6 @@ pub const SHM_LINES: c_uint = 108;
 pub const SHM_MOD: c_uint = 109;
 pub const SHM_RO: c_uint = 114;
 pub const STR2NR_ALL: c_uint = 15;
-pub const VV_OPTION_TYPE: VimVarIndex = 67;
-pub const VV_OPTION_COMMAND: VimVarIndex = 66;
-pub const VV_OPTION_OLDGLOBAL: VimVarIndex = 65;
-pub const VV_OPTION_OLDLOCAL: VimVarIndex = 64;
-pub const VV_OPTION_OLD: VimVarIndex = 63;
-pub const VV_OPTION_NEW: VimVarIndex = 62;
-pub const VV_WARNINGMSG: VimVarIndex = 4;
 pub const FUZZY_SCORE_NONE: c_int = -2147483648;
 pub const FSK_SIMPLIFY: c_uint = 8;
 pub const FSK_KEEP_X_KEY: c_uint = 2;

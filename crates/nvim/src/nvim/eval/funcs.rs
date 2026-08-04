@@ -5,9 +5,8 @@ use crate::src::nvim::memory::ARENA_EMPTY;
 use crate::src::nvim::types::{
     Array, BoolVarValue, CMD_index, Callback_data as C2Rust_Unnamed_22, ChannelPart,
     ChannelStreamType, Context, GRegFlags, ListLenSpecials, LuaRetMode, MotionType, Object,
-    ProcType, SpecialVarValue, String_0, VarLockStatus, VarType, VimVarIndex, XDGVarType,
-    cmd_addr_T, garray_T, object_data as C2Rust_Unnamed_16, size_t, uint64_t, uv__work, uv_loop_t,
-    uv_req_type,
+    ProcType, SpecialVarValue, String_0, VarLockStatus, VarType, XDGVarType, cmd_addr_T, garray_T,
+    object_data as C2Rust_Unnamed_16, size_t, uint64_t, uv__work, uv_loop_t, uv_req_type,
 };
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash
@@ -185,11 +184,6 @@ pub const kSomeMatch: SomeMatchType = 0;
 pub const VSE_NONE: C2Rust_Unnamed_57 = 0;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
-pub const VV_KEY: VimVarIndex = 36;
-pub const VV_VAL: VimVarIndex = 35;
-pub const VV_REG: VimVarIndex = 32;
-pub const VV_SEND_SERVER: VimVarIndex = 28;
-pub const VV_SHELL_ERROR: VimVarIndex = 6;
 pub const kGRegList: GRegFlags = 4;
 pub const kGRegExprSrc: GRegFlags = 2;
 pub const MENU_ALL_MODES: C2Rust_Unnamed_58 = 127;

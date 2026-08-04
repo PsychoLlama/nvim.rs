@@ -79,7 +79,7 @@ use crate::src::nvim::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::src::nvim::types::ui::kUICmdline;
 use crate::src::nvim::types::{
     BoolVarValue, CMD_index, Callback, EvalFuncDef, LuaRef, OptInt, ScopeType, SpecialVarValue,
-    String_0, VarLockStatus, VarType, VimVarIndex, blob_T, buf_T, buffblock, buffblock_T,
+    String_0, VV_TESTING, VarLockStatus, VarType, blob_T, buf_T, buffblock, buffblock_T,
     buffheader_T, colnr_T, cstack_T, dict_T, dictitem_T, estack_T, evalarg_T, exarg_T, except_T,
     exception_state_T, expand_T, funccal_entry_T, funccall_S_fc_fixvar as C2Rust_Unnamed_7,
     funccall_T, funcdict_T, funcexe_T, garray_T, hashitem_T, hashtab_T, ht_stack_T, intmax_t,
@@ -139,12 +139,6 @@ pub const CMD_arglocal: CMD_index = 14;
 pub const CMD_argglobal: CMD_index = 13;
 pub const CMD_argdo: CMD_index = 10;
 pub const CMD_args: CMD_index = 7;
-pub const VV_TESTING: VimVarIndex = 76;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_LNUM: VimVarIndex = 9;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const TFN_NO_DEREF: C2Rust_Unnamed_22 = 8;
 pub const TFN_NO_AUTOLOAD: C2Rust_Unnamed_22 = 4;

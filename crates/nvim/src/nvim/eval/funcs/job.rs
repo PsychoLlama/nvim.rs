@@ -4,8 +4,8 @@
 use super::args::frame;
 use super::{
     C2Rust_Unnamed_16, C2Rust_Unnamed_22, FAIL, GA_EMPTY_INIT_VALUE, NUL, NUMBUFLEN, VAR_BOOL,
-    VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, VV_SEND_SERVER, f_environ, false_0,
-    kChannelPartRpc, kChannelStreamProc, kProcTypePty,
+    VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, f_environ, false_0, kChannelPartRpc,
+    kChannelStreamProc, kProcTypePty,
 };
 use crate::src::nvim::api::private::helpers::{api_clear_error, cstr_as_string, dict_set_var};
 use crate::src::nvim::autocmd::{EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, apply_autocmds};
@@ -48,8 +48,8 @@ use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::src::nvim::types::{
     Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, Integer,
-    buf_T, dict_T, dictitem_T, kObjectTypeInteger, list_T, listitem_T, object, typval_T,
-    typval_vval_union, uint16_t, uint64_t, varnumber_T,
+    VV_SEND_SERVER, buf_T, dict_T, dictitem_T, kObjectTypeInteger, list_T, listitem_T, object,
+    typval_T, typval_vval_union, uint16_t, uint64_t, varnumber_T,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use core::ffi::{CStr, c_char, c_int, c_void};

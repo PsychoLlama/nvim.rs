@@ -19,7 +19,7 @@ use crate::src::nvim::main::{IObuff, curbuf, main_loop, p_awa, preserve_exit, v_
 use crate::src::nvim::memline::ml_sync_all;
 use crate::src::nvim::os::libc::snprintf;
 use crate::src::nvim::types::{
-    SignalWatcher, VimVarIndex, uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u,
+    SignalWatcher, VV_DYING, uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u,
     uv_signal_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -57,7 +57,6 @@ pub const SIGPWR: c_int = 30;
 const SIG_SETMASK: c_int = 2;
 const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
 const IOSIZE: usize = 1025;
-const VV_DYING: VimVarIndex = 29;
 
 /// The signals the editor watches, in the order upstream registered them.
 /// `WATCHERS[i]` is the watcher for `WATCHED[i]`.

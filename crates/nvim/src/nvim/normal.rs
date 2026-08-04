@@ -15,8 +15,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::mouse::{nv_mouse, nv_mousescroll};
 use crate::src::nvim::types::{
     Array, Direction, MarkGet, MarkMove, MarkMoveRes, MotionType, Object, SpellAddType, VimState,
-    VimVarIndex, cmdarg_T, getf_values, int16_t, key_extra, oparg_T, pos_T, size_t, smt_T,
-    uint16_t,
+    cmdarg_T, getf_values, int16_t, key_extra, oparg_T, pos_T, size_t, smt_T, uint16_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
@@ -76,7 +75,6 @@ pub const HIST_SEARCH: c_int = 1;
 pub const BL_FIX: c_uint = 4;
 pub const BL_SOL: c_uint = 2;
 pub const BL_WHITE: c_uint = 1;
-pub const VV_OP: VimVarIndex = 55;
 pub const ECMD_HIDE: c_uint = 1;
 pub const ECMD_LAST: c_int = -1;
 pub const DOCMD_KEEPLINE: c_uint = 32;

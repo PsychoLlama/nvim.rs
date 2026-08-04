@@ -21,8 +21,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::vars::set_vim_var_nr;
 use crate::src::nvim::eval::{
-    NL, NUL, PROF_YES, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VV_SHELL_ERROR,
-    kListLenMayKnow,
+    NL, NUL, PROF_YES, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
 };
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::main::{
@@ -40,8 +39,8 @@ use crate::src::nvim::os::shell::{
 };
 use crate::src::nvim::profile::{prof_child_enter, prof_child_exit};
 use crate::src::nvim::types::{
-    EvalFuncData, OptInt, buf_T, list_T, listitem_T, proftime_T, ptrdiff_t, size_t, typval_T,
-    varnumber_T,
+    EvalFuncData, OptInt, VV_SHELL_ERROR, buf_T, list_T, listitem_T, proftime_T, ptrdiff_t, size_t,
+    typval_T, varnumber_T,
 };
 
 /// The scratch a "not executable" complaint is rendered into. `MAXPATHL`

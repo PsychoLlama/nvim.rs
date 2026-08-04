@@ -108,11 +108,11 @@ use crate::src::nvim::textformat::auto_format;
 use crate::src::nvim::types::{
     Arena, BoolVarValue, Callback, Callback_data as C2Rust_Unnamed_5, Direction, EvalFuncData,
     ExtmarkOp, ExtmarkUndoObject, FILE, ListLenSpecials, OptInt, ScopeType, SpecialVarValue,
-    String_0, VarLockStatus, VarType, VimVarIndex, buf_T, colnr_T, dict_T, dictitem_T, expand_T,
-    extmark_undo_vec_t, garray_T, hashitem_T, hashtab_T, hlf_T, ht_stack_T, key_extra, linenr_T,
-    list_T, list_stack_T, listitem_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, regprog_T,
-    save_v_event_T, sctx_T, searchit_arg_T, size_t, typval_T, typval_vval_union, uint8_t, uint64_t,
-    varnumber_T, win_T, xp_prefix_T, yankreg_T,
+    String_0, VV_COMPLETED_ITEM, VarLockStatus, VarType, buf_T, colnr_T, dict_T, dictitem_T,
+    expand_T, extmark_undo_vec_t, garray_T, hashitem_T, hashtab_T, hlf_T, ht_stack_T, key_extra,
+    linenr_T, list_T, list_stack_T, listitem_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T,
+    regprog_T, save_v_event_T, sctx_T, searchit_arg_T, size_t, typval_T, typval_vval_union,
+    uint8_t, uint64_t, varnumber_T, win_T, xp_prefix_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_flush, vim_beep};
 use crate::src::nvim::undo::undo_allowed;
@@ -183,7 +183,6 @@ pub const SHM_COMPLETIONSCAN: C2Rust_Unnamed_20 = 67;
 pub const SHM_COMPLETIONMENU: C2Rust_Unnamed_20 = 99;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const KEY_COMPLETE: C2Rust_Unnamed_22 = 259;
-pub const VV_COMPLETED_ITEM: VimVarIndex = 61;
 pub type C2Rust_Unnamed_23 = ::core::ffi::c_int;
 pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_23 = -2147483648;
 pub const CTRL_X_CMDLINE_CTRL_X: C2Rust_Unnamed_36 = 17;

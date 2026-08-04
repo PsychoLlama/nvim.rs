@@ -145,8 +145,8 @@ use crate::src::nvim::textobject::{bck_word, fwd_word};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     AdditionalData, BoolVarValue, CharsizeArg, CharsizeKind, Direction, GraphemeState, MotionType,
-    OptInt, ScopeType, SpecialVarValue, StrCharInfo, String_0, TriState, UndoObjectType,
-    VarLockStatus, VarType, VimState, VimVarIndex, aco_save_T, buf_T, cmdarg_T, colnr_T, event_T,
+    OptInt, ScopeType, SpecialVarValue, StrCharInfo, String_0, TriState, UndoObjectType, VV_CHAR,
+    VV_INSERTMODE, VarLockStatus, VarType, VimState, aco_save_T, buf_T, cmdarg_T, colnr_T, event_T,
     fmark_T, fmarkv_T, foldinfo_T, int32_t, int64_t, kFalse, kNone, kTrue, key_extra, linenr_T,
     pos_T, ptrdiff_t, schar_T, size_t, ssize_t, state_check_callback, state_execute_callback,
     uint8_t, uint32_t, varnumber_T, win_T, yankreg_T,
@@ -245,21 +245,6 @@ pub struct C2Rust_Unnamed_26 {
     pub capacity: size_t,
     pub items: *mut ::core::ffi::c_char,
 }
-pub const VV_EXITREASON: VimVarIndex = 105;
-pub const VV_ARGV: VimVarIndex = 89;
-pub const VV_PROGPATH: VimVarIndex = 60;
-pub const VV_OLDFILES: VimVarIndex = 58;
-pub const VV_HLSEARCH: VimVarIndex = 57;
-pub const VV_OP: VimVarIndex = 55;
-pub const VV_CHAR: VimVarIndex = 50;
-pub const VV_SWAPCHOICE: VimVarIndex = 48;
-pub const VV_SWAPNAME: VimVarIndex = 47;
-pub const VV_INSERTMODE: VimVarIndex = 34;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_LNUM: VimVarIndex = 9;
 pub const KE_EVENT: key_extra = 102;
 pub const KE_NOP: key_extra = 97;
 pub const KE_S_DOWN: key_extra = 5;

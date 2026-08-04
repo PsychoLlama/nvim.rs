@@ -22,6 +22,7 @@ use crate::src::nvim::pos::lt;
 use crate::src::nvim::search::{findmatch, linewhite};
 use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::strings::vim_strchr;
+use crate::src::nvim::types::VV_LNUM;
 
 pub unsafe extern "C" fn get_expr_indent() -> ::core::ffi::c_int {
     let mut use_sandbox: bool = was_set_insecurely(

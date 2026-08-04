@@ -21,6 +21,7 @@
 use super::*;
 use crate::src::nvim::decoration::{SCL_NUM, SIGN_WIDTH};
 use crate::src::nvim::statusline::{STL_FOLDCOL, STL_SIGNCOL};
+use crate::src::nvim::types::VV_VIRTNUM;
 
 /// The widest a `'statuscolumn'` may grow the number column to.
 ///

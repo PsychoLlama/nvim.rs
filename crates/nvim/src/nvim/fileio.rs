@@ -84,10 +84,10 @@ use crate::src::nvim::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::src::nvim::strings::{sort_strings, vim_strchr};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    CheckItem, Directory, FILE, FileInfo, OptInt, OptVal, OptValData, OptValType, VimVarIndex,
-    aco_save_T, bln_values, buf_T, bufref_T, colnr_T, exarg_T, garray_T, iconv_t, int64_t,
-    linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t, time_t,
-    uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
+    CheckItem, Directory, FILE, FileInfo, OptInt, OptVal, OptValData, OptValType, aco_save_T,
+    bln_values, buf_T, bufref_T, colnr_T, exarg_T, garray_T, iconv_t, int64_t, linenr_T, off_T,
+    pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t, time_t, uint64_t, uintmax_t,
+    uv_gid_t, uv_uid_t,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has};
 use crate::src::nvim::undo::{
@@ -144,9 +144,6 @@ pub const BLN_DUMMY: bln_values = 4;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
 pub const BL_FIX: C2Rust_Unnamed_25 = 4;
 pub const BL_WHITE: C2Rust_Unnamed_25 = 1;
-pub const VV_FCS_CHOICE: VimVarIndex = 39;
-pub const VV_FCS_REASON: VimVarIndex = 38;
-pub const VV_WARNINGMSG: VimVarIndex = 4;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
 pub const ENC_LATIN1: C2Rust_Unnamed_26 = 512;
 pub const ENC_2WORD: C2Rust_Unnamed_26 = 256;

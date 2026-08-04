@@ -15,6 +15,7 @@ use core::ffi::CStr;
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::VV_ECHOSPACE;
 
 /// `VIsual_mode` for a linewise selection.
 const VISUAL_LINE: c_int = 'V' as c_int;

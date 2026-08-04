@@ -73,7 +73,7 @@ use crate::src::nvim::textformat::{comp_textwidth, has_format_option};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     AdditionalData, BoolVarValue, ExtmarkOp, GraphemeState, MarkTree, ScopeType, SpecialVarValue,
-    VarLockStatus, VarType, VimVarIndex, bcount_t, buf_T, colnr_T, fmark_T, fmarkv_T, foldinfo_T,
+    VV_WARNINGMSG, VarLockStatus, VarType, bcount_t, buf_T, colnr_T, fmark_T, fmarkv_T, foldinfo_T,
     int64_t, linenr_T, oparg_T, pos_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, win_T,
 };
 use crate::src::nvim::ui::{ui_active, ui_has};
@@ -112,7 +112,6 @@ pub const OPENLINE_MARKFIX: C2Rust_Unnamed_18 = 8;
 pub const OPENLINE_KEEPTRAIL: C2Rust_Unnamed_18 = 4;
 pub const OPENLINE_DO_COM: C2Rust_Unnamed_18 = 2;
 pub const OPENLINE_DELSPACES: C2Rust_Unnamed_18 = 1;
-pub const VV_WARNINGMSG: VimVarIndex = 4;
 pub const KEY_OPEN_BACK: C2Rust_Unnamed_21 = 258;
 pub const KEY_OPEN_FORW: C2Rust_Unnamed_21 = 257;
 pub const SIN_NOMARK: C2Rust_Unnamed_23 = 8;

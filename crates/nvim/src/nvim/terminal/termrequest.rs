@@ -26,13 +26,13 @@ use crate::src::nvim::main::main_loop;
 use crate::src::nvim::types::builders::{ArrayBuf, DictBuf};
 use crate::src::nvim::types::{
     Event, Object, String_0, Terminal, VTermStateFallbacks, VTermStringFragment, VTermTerminator,
-    VTermValue, buf_T, exarg_T, handle_T, ptrdiff_t, size_t,
+    VTermValue, VV_TERMREQUEST, buf_T, exarg_T, handle_T, ptrdiff_t, size_t,
 };
 use crate::src::nvim::vterm::pen::set_pen_attr;
 use crate::src::nvim::vterm::state::vterm_obtain_state;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
-use super::{AUGROUP_ALL, VV_TERMREQUEST, buf_for_handle, row_to_linenr, terminal_send};
+use super::{AUGROUP_ALL, buf_for_handle, row_to_linenr, terminal_send};
 use crate::src::nvim::vterm::vterm::{VTERM_ATTR_URI, VTERM_TERMINATOR_BEL, VTERM_VALUETYPE_INT};
 
 /// The sequences vterm hands over rather than acting on itself.

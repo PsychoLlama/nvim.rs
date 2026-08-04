@@ -24,8 +24,8 @@ use crate::src::nvim::ex_docmd::{
     CMD_bang, CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make, CMD_terminal,
     ECMD_LAST, ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, EX_NOSPC, EXPAND_FILES, FAIL, FIND_EVAL,
     FIND_IDENT, FIND_STRING, FNAME_HYP, FNAME_MESS, MAXPATHL, NUL, OK, VALID_HEAD, VALID_PATH,
-    VV_OLDFILES, WILD_ADD_SLASH, WILD_EXPAND_FREE, WILD_ICASE, WILD_LIST_NOTFOUND, WILD_NOERROR,
-    dollar_command, e_no_autocommand_buffer_number_to_substitute_for_abuf,
+    WILD_ADD_SLASH, WILD_EXPAND_FREE, WILD_ICASE, WILD_LIST_NOTFOUND, WILD_NOERROR, dollar_command,
+    e_no_autocommand_buffer_number_to_substitute_for_abuf,
     e_no_autocommand_file_name_to_substitute_for_afile,
     e_no_autocommand_match_name_to_substitute_for_amatch, e_no_call_stack_to_substitute_for_stack,
     e_no_line_number_to_use_for_sflnum, e_no_line_number_to_use_for_slnum,
@@ -46,7 +46,9 @@ use crate::src::nvim::path::{FullName_save, path_has_wildcard, path_tail, path_t
 use crate::src::nvim::quickfix::grep_internal;
 use crate::src::nvim::runtime::estack_sfile;
 use crate::src::nvim::strings::{strrep, vim_strchr, vim_strsave_escaped};
-use crate::src::nvim::types::{exarg_T, expand_T, linenr_T, size_t, ssize_t, uint8_t, uint32_t};
+use crate::src::nvim::types::{
+    VV_OLDFILES, exarg_T, expand_T, linenr_T, size_t, ssize_t, uint8_t, uint32_t,
+};
 
 /// `:make` and `:grep` are 'makeprg'/'grepprg' with `$*` replaced by the
 /// argument — spliced in here, before `%` and `#` are expanded, so that

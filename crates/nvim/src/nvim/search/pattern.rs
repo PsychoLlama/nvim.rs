@@ -13,6 +13,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::VV_SEARCHFORWARD;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

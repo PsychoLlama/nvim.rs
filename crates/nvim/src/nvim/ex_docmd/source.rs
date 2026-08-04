@@ -13,8 +13,8 @@ use crate::src::nvim::eval::vars::{set_vim_var_string, v_exception, v_throwpoint
 use crate::src::nvim::ex_cmds::print_line_no_prefix;
 use crate::src::nvim::ex_docmd::cmdline::{do_cmdline, sourcing_entry};
 use crate::src::nvim::ex_docmd::{
-    ETYPE_EXCEPT, FAIL, IOSIZE, ML_EMPTY, MSG_BUF_LEN, OK, VV_EXITREASON, cmdline_call_depth,
-    dbg_stuff, ex_error_buf, ex_pressedreturn, loop_cookie, wcmd_T,
+    ETYPE_EXCEPT, FAIL, IOSIZE, ML_EMPTY, MSG_BUF_LEN, OK, cmdline_call_depth, dbg_stuff,
+    ex_error_buf, ex_pressedreturn, loop_cookie, wcmd_T,
 };
 use crate::src::nvim::ex_eval::discard_current_exception;
 use crate::src::nvim::ex_getln::{getcmdline, getexline};
@@ -37,7 +37,7 @@ use crate::src::nvim::runtime::{estack_pop, estack_push};
 use crate::src::nvim::state::{MODE_NORMAL, may_trigger_modechanged};
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
-    LineGetter, OptInt, garray_T, linenr_T, msglist_T, ptrdiff_t, size_t,
+    LineGetter, OptInt, VV_EXITREASON, garray_T, linenr_T, msglist_T, ptrdiff_t, size_t,
 };
 
 /// Take the whole exception environment out of the way, and answer it.

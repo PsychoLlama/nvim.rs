@@ -63,8 +63,8 @@ use crate::src::nvim::types::{
     AlignTextPos, Arena, Array, BoolVarValue, Buffer, Dict, FloatRelative, Integer, Object,
     OptIndex, OptInt, OptValType, ScopeType, ScreenGrid, SignTextAttrs, SpecialVarValue,
     StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, StlClickRecord, StlFlag,
-    String_0, Tabpage, VarLockStatus, VarType, VimVarIndex, WinSplit, WinStyle, buf_T, colnr_T,
-    frame_T, hlf_T, int64_t, kObjectTypeArray, kObjectTypeBuffer, kObjectTypeDict,
+    String_0, Tabpage, VV_LNUM, VV_RELNUM, VV_VIRTNUM, VarLockStatus, VarType, WinSplit, WinStyle,
+    buf_T, colnr_T, frame_T, hlf_T, int64_t, kObjectTypeArray, kObjectTypeBuffer, kObjectTypeDict,
     kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, key_value_pair,
     linenr_T, object, object_data as C2Rust_Unnamed, ptrdiff_t, schar_T, size_t, ssize_t,
     statuscol_T, stl_hlrec_t, tabpage_T, typval_T, typval_vval_union, uint8_t, varnumber_T, win_T,
@@ -164,13 +164,6 @@ pub const Group: C2Rust_Unnamed_15 = 2;
 pub const Empty: C2Rust_Unnamed_15 = 1;
 pub const Normal: C2Rust_Unnamed_15 = 0;
 pub type stl_item_t = stl_item;
-pub const VV_VIRTNUM: VimVarIndex = 103;
-pub const VV_RELNUM: VimVarIndex = 102;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_LNUM: VimVarIndex = 9;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const OPT_LOCAL: C2Rust_Unnamed_17 = 2;
 pub const OPT_GLOBAL: C2Rust_Unnamed_17 = 1;

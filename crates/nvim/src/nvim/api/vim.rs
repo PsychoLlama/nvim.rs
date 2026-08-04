@@ -114,8 +114,8 @@ use crate::src::nvim::types::{
     KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, KeyValuePair, LuaRef,
     LuaRetMode, MessageData, MessageType, MotionType, NS, Object, OptScope, OptVal, OptValData,
     OptValType, RemapValues, ScopeType, ScreenGrid, SignTextAttrs, SpecialVarValue, StlClickRecord,
-    String_0, StringBuilder, Tabpage, TerminalOptions, TryState, VarLockStatus, VarType,
-    VimVarIndex, Window, bln_values, buf_T, bufref_T, dictitem_T, dobuf_action_values,
+    String_0, StringBuilder, Tabpage, TerminalOptions, TryState, VV_LNUM, VV_RELNUM, VV_VIRTNUM,
+    VarLockStatus, VarType, Window, bln_values, buf_T, bufref_T, dictitem_T, dobuf_action_values,
     dobuf_start_values, except_T, foldinfo_T, handle_T, hlf_T, int64_t, kFalse, kNone,
     kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeInteger,
     kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kTrue, key_extra,
@@ -195,13 +195,6 @@ pub const kCtxGVars: C2Rust_Unnamed_33 = 8;
 pub const kCtxBufs: C2Rust_Unnamed_33 = 4;
 pub const kCtxJumps: C2Rust_Unnamed_33 = 2;
 pub const kCtxRegs: C2Rust_Unnamed_33 = 1;
-pub const VV_VIRTNUM: VimVarIndex = 103;
-pub const VV_RELNUM: VimVarIndex = 102;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_LNUM: VimVarIndex = 9;
 pub const BLN_CURBUF: bln_values = 1;
 pub const DOBUF_WIPE: dobuf_action_values = 4;
 pub const DOBUF_DEL: dobuf_action_values = 3;

@@ -31,10 +31,11 @@ use crate::src::nvim::regexp::skip_regexp_err;
 use crate::src::nvim::runtime::{do_finish, estack_sfile, exestack, stacktrace_create};
 use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 use crate::src::nvim::types::{
-    BoolVarValue, CMD_index, OptInt, ScopeType, SpecialVarValue, VarLockStatus, VarType,
-    VimVarIndex, cleanup_T, colnr_T, cstack_T, eslist_T, estack_T, estack_arg_T, evalarg_T,
-    exarg_T, except_T, except_type_T, exception_state_T, int64_t, linenr_T, list_T, msglist_T,
-    ptrdiff_t, regmatch_T, regprog_T, size_t, typval_T, typval_vval_union,
+    BoolVarValue, CMD_index, OptInt, ScopeType, SpecialVarValue, VV_EXCEPTION, VV_STACKTRACE,
+    VV_THROWPOINT, VarLockStatus, VarType, cleanup_T, colnr_T, cstack_T, eslist_T, estack_T,
+    estack_arg_T, evalarg_T, exarg_T, except_T, except_type_T, exception_state_T, int64_t,
+    linenr_T, list_T, msglist_T, ptrdiff_t, regmatch_T, regprog_T, size_t, typval_T,
+    typval_vval_union,
 };
 unsafe extern "C" {
     fn vim_regcomp(
@@ -103,14 +104,6 @@ pub const CMD_arglocal: CMD_index = 14;
 pub const CMD_argglobal: CMD_index = 13;
 pub const CMD_argdo: CMD_index = 10;
 pub const CMD_args: CMD_index = 7;
-pub const VV_STACKTRACE: VimVarIndex = 93;
-pub const VV_THROWPOINT: VimVarIndex = 31;
-pub const VV_EXCEPTION: VimVarIndex = 30;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_LNUM: VimVarIndex = 9;
 pub const ESTACK_NONE: estack_arg_T = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;

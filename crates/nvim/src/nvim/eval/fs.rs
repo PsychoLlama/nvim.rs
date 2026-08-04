@@ -49,9 +49,9 @@ use crate::src::nvim::runtime::script_is_lua;
 use crate::src::nvim::strings::{concat_str, vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::src::nvim::types::{
     __off_t, BoolVarValue, CdScope, Direction, EvalFuncData, FILE, FileDescriptor, FileInfo,
-    ListLenSpecials, ScopeType, SpecialVarValue, VarLockStatus, VarType, VimVarIndex, blob_T,
-    buf_T, expand_T, garray_T, int32_t, int64_t, list_T, listitem_T, off_T, pos_T, ptrdiff_t,
-    sctx_T, size_t, ssize_t, tabpage_T, typval_T, typval_vval_union, uint8_t, uint64_t, uv_stat_t,
+    ListLenSpecials, ScopeType, SpecialVarValue, VV_VAL, VarLockStatus, VarType, blob_T, buf_T,
+    expand_T, garray_T, int32_t, int64_t, list_T, listitem_T, off_T, pos_T, ptrdiff_t, sctx_T,
+    size_t, ssize_t, tabpage_T, typval_T, typval_vval_union, uint8_t, uint64_t, uv_stat_t,
     uv_timespec_t, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::src::nvim::window::find_tabpage;
@@ -94,12 +94,6 @@ pub const WILD_ICASE: C2Rust_Unnamed_16 = 256;
 pub const WILD_SILENT: C2Rust_Unnamed_16 = 64;
 pub const WILD_KEEP_ALL: C2Rust_Unnamed_16 = 32;
 pub const WILD_USE_NL: C2Rust_Unnamed_16 = 4;
-pub const VV_VAL: VimVarIndex = 35;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_LNUM: VimVarIndex = 9;
 pub const VALID_PATH: C2Rust_Unnamed_17 = 1;
 pub const VALID_HEAD: C2Rust_Unnamed_17 = 2;
 pub const FINDFILE_DIR: C2Rust_Unnamed_18 = 1;

@@ -16,6 +16,7 @@ use std::ffi::CStr;
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::highlight_group::{HLF_E, HLF_W};
+use crate::src::nvim::types::{VV_FCS_CHOICE, VV_FCS_REASON, VV_WARNINGMSG};
 
 /// Has a warning already been shown this sweep? Only one is worth reading.
 static ALREADY_WARNED: GlobalCell<bool> = GlobalCell::new(false);

@@ -5,14 +5,8 @@ use crate::src::nvim::eval::vars::set_vim_var_string;
 use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::memory::strequal;
 use crate::src::nvim::types::{
-    Error, Integer, Object, String_0, VimVarIndex, kObjectTypeString, ptrdiff_t, uint64_t,
+    Error, Integer, Object, String_0, VV_TERMRESPONSE, kObjectTypeString, ptrdiff_t, uint64_t,
 };
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_TERMRESPONSE: VimVarIndex = 11;
-pub const VV_LNUM: VimVarIndex = 9;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub unsafe extern "C" fn nvim_error_event(

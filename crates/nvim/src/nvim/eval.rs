@@ -18,9 +18,8 @@ pub(crate) use crate::src::nvim::main::e_invalblob;
 use crate::src::nvim::types::{
     Array, BoolVarValue, CMD_index, ChannelStreamType, GRegFlags, ListLenSpecials, LuaRetMode,
     Map_uint64_t_ptr_t, MapHash, MarkGet, MotionType, Object, OptValType, ScopeType, Set_uint64_t,
-    VarLockStatus, VarType, VimVarIndex, blob_T, dict_T, exprtype_T, funcexe_T, key_extra,
-    linenr_T, list_T, listwatch_T, partial_T, ptr_t, size_t, typval_T, uint32_t, uint64_t,
-    var_flavour_T,
+    VarLockStatus, VarType, blob_T, dict_T, exprtype_T, funcexe_T, key_extra, linenr_T, list_T,
+    listwatch_T, partial_T, ptr_t, size_t, typval_T, uint32_t, uint64_t, var_flavour_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
 
@@ -93,10 +92,6 @@ pub const CMD_const: CMD_index = 99;
 pub const CMD_call: CMD_index = 53;
 pub const kChannelStreamProc: ChannelStreamType = 0;
 pub const STR2NR_ALL: c_uint = 15;
-pub const VV_LUA: VimVarIndex = 101;
-pub const VV_ARGV: VimVarIndex = 89;
-pub const VV_EVENT: VimVarIndex = 85;
-pub const VV_SHELL_ERROR: VimVarIndex = 6;
 pub const CONV_NONE: c_uint = 0;
 pub const VAR_FLAVOUR_SHADA: var_flavour_T = 4;
 pub const VAR_FLAVOUR_SESSION: var_flavour_T = 2;

@@ -28,10 +28,10 @@ use crate::src::nvim::os::libc::{fclose, fgetc, gettext, memmove, strcmp, strlen
 use crate::src::nvim::runtime::{estack_sfile, exestack};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::src::nvim::types::{
-    BoolVarValue, EvalFuncData, FILE, ScopeType, SpecialVarValue, VarLockStatus, VarType,
-    VimVarIndex, dict_T, dictitem_T, estack_T, estack_arg_T, float_T, garray_T, hashitem_T,
-    int64_t, linenr_T, list_T, ptrdiff_t, size_t, typval_T, typval_vval_union, uint8_t,
-    varnumber_T,
+    BoolVarValue, EvalFuncData, FILE, ScopeType, SpecialVarValue, VV_ERRMSG, VV_EXCEPTION,
+    VV_TESTING, VarLockStatus, VarType, dict_T, dictitem_T, estack_T, estack_arg_T, float_T,
+    garray_T, hashitem_T, int64_t, linenr_T, list_T, ptrdiff_t, size_t, typval_T,
+    typval_vval_union, uint8_t, varnumber_T,
 };
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
@@ -53,9 +53,6 @@ pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_1 = ::core::ffi::c_uint;
 pub const NUMBUFLEN: C2Rust_Unnamed_1 = 65;
-pub const VV_TESTING: VimVarIndex = 76;
-pub const VV_EXCEPTION: VimVarIndex = 30;
-pub const VV_ERRMSG: VimVarIndex = 3;
 pub const ESTACK_NONE: estack_arg_T = 0;
 pub type assert_type_T = ::core::ffi::c_uint;
 pub const ASSERT_OTHER: assert_type_T = 5;

@@ -68,9 +68,9 @@ use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     AdditionalData, Callback, Callback_data as C2Rust_Unnamed_5, FILE, OptInt, SpecialVarValue,
-    Timestamp, VarLockStatus, VarType, VimVarIndex, buf_T, colnr_T, dict_T, dictitem_T, exarg_T,
-    expand_T, file_comparison, fmark_T, fmarkv_T, getf_retvalues, getf_values, int64_t, linenr_T,
-    list_T, off_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, size_t, taggy_T,
+    Timestamp, VarLockStatus, VarType, buf_T, colnr_T, dict_T, dictitem_T, exarg_T, expand_T,
+    file_comparison, fmark_T, fmarkv_T, getf_retvalues, getf_values, int64_t, linenr_T, list_T,
+    off_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, size_t, taggy_T,
     typval_T, typval_vval_union, varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::ui::ui_has;
@@ -129,7 +129,6 @@ pub const WILD_EXPAND_FREE: C2Rust_Unnamed_22 = 2;
 pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
 pub const WILD_SILENT: C2Rust_Unnamed_23 = 64;
 pub const WILD_LIST_NOTFOUND: C2Rust_Unnamed_23 = 1;
-pub const VV_SWAPCOMMAND: VimVarIndex = 49;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
 pub const CONV_NONE: C2Rust_Unnamed_25 = 0;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;

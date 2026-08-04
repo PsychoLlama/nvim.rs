@@ -10,8 +10,8 @@ use crate::src::nvim::types::{
     Loop, LuaRef, LuaRetMode, MTNode, MTPos, Map_String_int, Map_int_ptr_t, Map_uint64_t_ptr_t,
     MapHash, MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object, OptInt, OptValType, Proc,
     RgbValue, ScreenGrid, Set_String, Set_int, Set_uint32_t, Set_uint64_t, StlClickDefinition,
-    String_0, TriState, VarLockStatus, VarType, VimVarIndex, WinExtmark, XDGVarType, alist_T,
-    aucmdwin_T, bln_values, buf_T, bufref_T, caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T,
+    String_0, TriState, VarLockStatus, VarType, WinExtmark, XDGVarType, alist_T, aucmdwin_T,
+    bln_values, buf_T, bufref_T, caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T,
     estack_T_es_info, etype_T, evalarg_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T,
     garray_T, handle_T, hlf_T, int16_t, int32_t, int64_t, kFalse, kNone, key_extra, linenr_T,
     lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s, optmagic_T, pos_T, proftime_T,
@@ -86,16 +86,6 @@ pub struct AucmdWinVec {
     pub items: *mut aucmdwin_T,
 }
 pub(crate) const BLN_LISTED: bln_values = 2;
-pub(crate) const VV_EXITREASON: VimVarIndex = 105;
-pub(crate) const VV_STARTTIME: VimVarIndex = 104;
-pub(crate) const VV_VIM_DID_INIT: VimVarIndex = 94;
-pub(crate) const VV_EXITING: VimVarIndex = 91;
-pub(crate) const VV_ARGF: VimVarIndex = 88;
-pub(crate) const VV_VIM_DID_ENTER: VimVarIndex = 75;
-pub(crate) const VV_PROGPATH: VimVarIndex = 60;
-pub(crate) const VV_OLDFILES: VimVarIndex = 58;
-pub(crate) const VV_SWAPCOMMAND: VimVarIndex = 49;
-pub(crate) const VV_PROGNAME: VimVarIndex = 27;
 pub(crate) const kXDGConfigDirs: XDGVarType = 5;
 pub(crate) const EVAL_EVALUATE: c_uint = 1;
 pub(crate) const ECMD_HIDE: c_uint = 1;

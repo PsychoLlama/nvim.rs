@@ -15,7 +15,7 @@ use crate::src::nvim::eval::userfunc::eval_fname_script;
 use crate::src::nvim::eval::vars::get_vim_var_partial;
 use crate::src::nvim::eval::{
     AUTOLOAD_CHAR, FNE_CHECK_START, FNE_INCL_BR, KE_SNR, KS_EXTRA, NUL, OPT_GLOBAL, OPT_LOCAL,
-    VAR_PARTIAL, VV_LUA, eval_to_string, namespace_char,
+    VAR_PARTIAL, eval_to_string, namespace_char,
 };
 use crate::src::nvim::keycodes::K_SPECIAL;
 use crate::src::nvim::main::e_invexpr2;
@@ -25,7 +25,7 @@ use crate::src::nvim::message::semsg;
 use crate::src::nvim::option::find_option_end;
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
-use crate::src::nvim::types::OptIndex;
+use crate::src::nvim::types::{OptIndex, VV_LUA};
 use crate::src::nvim::types::{partial_T, size_t, typval_T, uint8_t};
 
 /// The length of the environment-variable name at the cursor, which is

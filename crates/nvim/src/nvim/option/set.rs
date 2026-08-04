@@ -46,22 +46,22 @@ use crate::src::nvim::optionstr::check_illegal_path_names;
 use crate::src::nvim::os::libc::{gettext, snprintf, strlen};
 use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::types::{
-    OptIndex, OptVal, OptValData, String_0, estack_T, kFalse, kNone, optset_T, ptrdiff_t, scid_T,
-    sctx_T, size_t, uint32_t, vimoption_T,
+    OptIndex, OptVal, OptValData, String_0, VV_OPTION_COMMAND, VV_OPTION_NEW, VV_OPTION_OLD,
+    VV_OPTION_OLDGLOBAL, VV_OPTION_OLDLOCAL, VV_OPTION_TYPE, estack_T, kFalse, kNone, optset_T,
+    ptrdiff_t, scid_T, sctx_T, size_t, uint32_t, vimoption_T,
 };
 use crate::src::nvim::ui::ui_call_option_set;
 use crate::src::nvim::window::set_winbar;
 
 use super::{
     IOSIZE, MAXCOL, NO_LOCAL_UNDOLEVEL, NUL, NUMBUFLEN, OPT_GLOBAL, OPT_LOCAL, OPT_MODELINE,
-    SID_NONE, VV_OPTION_COMMAND, VV_OPTION_NEW, VV_OPTION_OLD, VV_OPTION_OLDGLOBAL,
-    VV_OPTION_OLDLOCAL, VV_OPTION_TYPE, check_redraw, do_spelllang_source, do_syntax_autocmd,
-    find_tty_option_end, get_varp, get_varp_scope, insecure_flag, is_option_hidden,
-    kOptFlagCurswant, kOptFlagHLOnly, kOptFlagInsecure, kOptFlagRedrAll, kOptFlagSecure,
-    kOptFlagUIOption, kOptFlagWasSet, kOptScopeBuf, kOptScopeWin, kOptValTypeBoolean,
-    kOptValTypeNil, kOptValTypeNumber, kOptValTypeString, option_has_scope, option_has_type,
-    option_is_global_local, option_is_global_only, option_scope_idx, optval_copy, optval_equal,
-    optval_free, optval_from_varp, set_option_varp, validate_option_value,
+    SID_NONE, check_redraw, do_spelllang_source, do_syntax_autocmd, find_tty_option_end, get_varp,
+    get_varp_scope, insecure_flag, is_option_hidden, kOptFlagCurswant, kOptFlagHLOnly,
+    kOptFlagInsecure, kOptFlagRedrAll, kOptFlagSecure, kOptFlagUIOption, kOptFlagWasSet,
+    kOptScopeBuf, kOptScopeWin, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber,
+    kOptValTypeString, option_has_scope, option_has_type, option_is_global_local,
+    option_is_global_only, option_scope_idx, optval_copy, optval_equal, optval_free,
+    optval_from_varp, set_option_varp, validate_option_value,
 };
 
 /// The message buffer the callbacks format into. `set_option` hands its

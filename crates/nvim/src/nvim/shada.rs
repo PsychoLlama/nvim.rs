@@ -84,10 +84,10 @@ use crate::src::nvim::types::{
     KeyDict__shada_search_pat, KeyValuePair, ListLenSpecials, MHPutStatus, Map_cstr_t_ptr_t,
     MapHash, MarkGet, MotionType, OptionalKeys, PackerBuffer, SearchOffset, SearchPattern,
     Set_cstr_t, Set_ptr_t, String_0, StringArray, SubReplacementString, Timestamp, VarLockStatus,
-    VarType, VimVarIndex, bln_values, buf_T, colnr_T, cstr_t, dictitem_T, fmark_T, fmarkv_T,
-    hashitem_T, int64_t, kObjectTypeInteger, kObjectTypeString, linenr_T, list_T, pos_T, ptr_t,
-    ptrdiff_t, size_t, ssize_t, tabpage_T, typval_T, typval_vval_union, uint8_t, uint32_t,
-    uint64_t, uintmax_t, uv_gid_t, uv_uid_t, var_flavour_T, win_T, xfmark_T, yankreg_T,
+    VarType, bln_values, buf_T, colnr_T, cstr_t, dictitem_T, fmark_T, fmarkv_T, hashitem_T,
+    int64_t, kObjectTypeInteger, kObjectTypeString, linenr_T, list_T, pos_T, ptr_t, ptrdiff_t,
+    size_t, ssize_t, tabpage_T, typval_T, typval_vval_union, uint8_t, uint32_t, uint64_t,
+    uintmax_t, uv_gid_t, uv_uid_t, var_flavour_T, win_T, xfmark_T, yankreg_T,
 };
 use crate::src::nvim::version::longVersion;
 
@@ -139,7 +139,6 @@ pub const HIST_SEARCH: C2Rust_Unnamed_17 = 1;
 pub const HIST_CMD: C2Rust_Unnamed_17 = 0;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const HIST_COUNT: C2Rust_Unnamed_18 = 5;
-pub const VV_OLDFILES: VimVarIndex = 58;
 pub const VAR_FLAVOUR_SHADA: var_flavour_T = 4;
 pub const VAR_FLAVOUR_SESSION: var_flavour_T = 2;
 pub const VAR_FLAVOUR_DEFAULT: var_flavour_T = 1;

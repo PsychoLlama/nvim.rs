@@ -19,7 +19,7 @@ use crate::src::nvim::eval::userfunc::{func_ptr_unref, func_unref, get_func_tv, 
 use crate::src::nvim::eval::vars::get_vim_var_partial;
 use crate::src::nvim::eval::{
     EVAL_EVALUATE, FAIL, FUNCEXE_INIT, NUL, OK, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VAR_UNLOCKED,
-    VV_LUA, e_cannot_use_partial_here, e_empty_function_name, e_nowhitespace, eval_func, eval7,
+    e_cannot_use_partial_here, e_empty_function_name, e_nowhitespace, eval_func, eval7,
     get_name_len, is_luafunc, skip_luafunc_name,
 };
 use crate::src::nvim::main::{
@@ -30,7 +30,7 @@ use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    dict_T, evalarg_T, funcexe_T, partial_T, size_t, typval_T, typval_vval_union,
+    VV_LUA, dict_T, evalarg_T, funcexe_T, partial_T, size_t, typval_T, typval_vval_union,
 };
 
 /// A freshly declared typval.

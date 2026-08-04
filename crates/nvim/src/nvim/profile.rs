@@ -33,7 +33,7 @@ use crate::src::nvim::os::libc::{fclose, fopen, fprintf, gettext, setvbuf, stder
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::runtime::{exestack, get_scriptname, script_items};
 use crate::src::nvim::types::{
-    VimVarIndex, estack_T, exarg_T, expand_T, funccall_T, int64_t, linenr_T, proftime_T,
+    VV_PROFILING, estack_T, exarg_T, expand_T, funccall_T, int64_t, linenr_T, proftime_T,
     scriptitem_T, ufunc_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -47,7 +47,6 @@ pub const PROF_NONE: c_int = 0;
 pub const PROF_YES: c_int = 1;
 pub const PROF_PAUSED: c_int = 2;
 
-const VV_PROFILING: VimVarIndex = 37;
 const EXPAND_NOTHING: c_int = 0;
 const EXPAND_FILES: c_int = 2;
 const EXPAND_USER_FUNC: c_int = 19;

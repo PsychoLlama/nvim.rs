@@ -76,11 +76,18 @@ use crate::src::nvim::strings::{concat_str, vim_strchr};
 use crate::src::nvim::types::{
     BoolVarValue, CMD_index, EvalFuncData, GRegFlags, ListLenSpecials, OptIndex, OptInt, OptVal,
     OptValData, OptValType, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, TriState,
-    VarLockStatus, VarType, VimVarIndex, aco_save_T, blob_T, buf_T, dict_T, dictitem_T, evalarg_T,
-    exarg_T, expand_T, garray_T, hashitem_T, hashtab_T, int64_t, kFalse, kNone, kTrue, list_T,
-    list_stack_T, listitem_T, lval_T, partial_T, ptrdiff_t, queue, scid_T, scriptitem_T,
-    scriptvar_T, sctx_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T, typval_vval_union,
-    uint8_t, uint32_t, varnumber_T, win_T,
+    VV_CC_FROM, VV_CC_TO, VV_CHAR, VV_CMDARG, VV_COMPAT, VV_COMPLETED_ITEM, VV_COUNT, VV_COUNT1,
+    VV_ECHOSPACE, VV_ERRORS, VV_EVENT, VV_EXCEPTION, VV_EXITING, VV_FALSE, VV_FNAME_DIFF,
+    VV_FNAME_IN, VV_FNAME_NEW, VV_FNAME_OUT, VV_HLSEARCH, VV_LUA, VV_MAXCOL, VV_MSGPACK_TYPES,
+    VV_NULL, VV_NUMBERMAX, VV_NUMBERMIN, VV_NUMBERSIZE, VV_OPTION_COMMAND, VV_OPTION_NEW,
+    VV_OPTION_OLD, VV_OPTION_OLDGLOBAL, VV_OPTION_OLDLOCAL, VV_OPTION_TYPE, VV_PREVCOUNT, VV_REG,
+    VV_RO, VV_RO_SBX, VV_SEARCHFORWARD, VV_STDERR, VV_THROWPOINT, VV_TRUE, VV_TYPE_BLOB,
+    VV_TYPE_BOOL, VV_TYPE_DICT, VV_TYPE_FLOAT, VV_TYPE_FUNC, VV_TYPE_LIST, VV_TYPE_NUMBER,
+    VV_TYPE_STRING, VV_VAL, VV_VERSION, VV_VERSIONLONG, VarLockStatus, VarType, VimVarIndex,
+    aco_save_T, blob_T, buf_T, dict_T, dictitem_T, evalarg_T, exarg_T, expand_T, garray_T,
+    hashitem_T, hashtab_T, int64_t, kFalse, kNone, kTrue, list_T, list_stack_T, listitem_T, lval_T,
+    partial_T, ptrdiff_t, queue, scid_T, scriptitem_T, scriptvar_T, sctx_T, size_t, ssize_t,
+    switchwin_T, tabpage_T, typval_T, typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T,
 };
 use crate::src::nvim::version::{highest_patch, min_vim_version};
 use crate::src::nvim::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
@@ -132,54 +139,6 @@ pub const kOptValTypeBoolean: OptValType = 0;
 pub const kOptValTypeNil: OptValType = -1;
 pub const CMD_lockvar: CMD_index = 256;
 pub const CMD_const: CMD_index = 99;
-pub const VV_LUA: VimVarIndex = 101;
-pub const VV_MSGPACK_TYPES: VimVarIndex = 96;
-pub const VV_STDERR: VimVarIndex = 95;
-pub const VV_MAXCOL: VimVarIndex = 92;
-pub const VV_EXITING: VimVarIndex = 91;
-pub const VV_ECHOSPACE: VimVarIndex = 87;
-pub const VV_VERSIONLONG: VimVarIndex = 86;
-pub const VV_EVENT: VimVarIndex = 85;
-pub const VV_TYPE_BLOB: VimVarIndex = 84;
-pub const VV_TYPE_BOOL: VimVarIndex = 83;
-pub const VV_TYPE_FLOAT: VimVarIndex = 82;
-pub const VV_TYPE_DICT: VimVarIndex = 81;
-pub const VV_TYPE_LIST: VimVarIndex = 80;
-pub const VV_TYPE_FUNC: VimVarIndex = 79;
-pub const VV_TYPE_STRING: VimVarIndex = 78;
-pub const VV_TYPE_NUMBER: VimVarIndex = 77;
-pub const VV_NUMBERSIZE: VimVarIndex = 74;
-pub const VV_NUMBERMIN: VimVarIndex = 73;
-pub const VV_NUMBERMAX: VimVarIndex = 72;
-pub const VV_NULL: VimVarIndex = 71;
-pub const VV_TRUE: VimVarIndex = 70;
-pub const VV_FALSE: VimVarIndex = 69;
-pub const VV_ERRORS: VimVarIndex = 68;
-pub const VV_OPTION_TYPE: VimVarIndex = 67;
-pub const VV_OPTION_COMMAND: VimVarIndex = 66;
-pub const VV_OPTION_OLDGLOBAL: VimVarIndex = 65;
-pub const VV_OPTION_OLDLOCAL: VimVarIndex = 64;
-pub const VV_OPTION_OLD: VimVarIndex = 63;
-pub const VV_OPTION_NEW: VimVarIndex = 62;
-pub const VV_COMPLETED_ITEM: VimVarIndex = 61;
-pub const VV_HLSEARCH: VimVarIndex = 57;
-pub const VV_SEARCHFORWARD: VimVarIndex = 56;
-pub const VV_CHAR: VimVarIndex = 50;
-pub const VV_VAL: VimVarIndex = 35;
-pub const VV_REG: VimVarIndex = 32;
-pub const VV_THROWPOINT: VimVarIndex = 31;
-pub const VV_EXCEPTION: VimVarIndex = 30;
-pub const VV_CMDARG: VimVarIndex = 22;
-pub const VV_FNAME_DIFF: VimVarIndex = 21;
-pub const VV_FNAME_NEW: VimVarIndex = 20;
-pub const VV_FNAME_OUT: VimVarIndex = 19;
-pub const VV_FNAME_IN: VimVarIndex = 18;
-pub const VV_CC_TO: VimVarIndex = 17;
-pub const VV_CC_FROM: VimVarIndex = 16;
-pub const VV_VERSION: VimVarIndex = 8;
-pub const VV_PREVCOUNT: VimVarIndex = 2;
-pub const VV_COUNT1: VimVarIndex = 1;
-pub const VV_COUNT: VimVarIndex = 0;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const GLV_QUIET: C2Rust_Unnamed_21 = 2;
 #[derive(Copy, Clone)]
@@ -311,9 +270,6 @@ static compat_hashtab: GlobalCell<hashtab_T> = GlobalCell::new(hashtab_T {
         hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     }; 16],
 });
-pub const VV_COMPAT: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const VV_RO: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const VV_RO_SBX: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 static vimvars: GlobalCell<[vimvar; 106]> = GlobalCell::new([
     vimvar {
         vv_name: b"count\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,

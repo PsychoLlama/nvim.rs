@@ -29,14 +29,13 @@ use crate::src::nvim::main::exit::os_exit;
 use crate::src::nvim::main::usage::{mainerr, usage, version};
 use crate::src::nvim::main::{
     EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, ETYPE_ENV, FAIL, IOSIZE, IObuff,
-    MAX_ARG_CMDS, MAXPATHL, NUL, OK, SESSION_FILE, SID_ENV, VV_PROGNAME, VV_PROGPATH,
-    VV_SWAPCOMMAND, WIN_HOR, WIN_TABS, WIN_VER, curbuf, current_sctx, embedded_mode,
-    err_arg_missing, err_extra_cmd, err_opt_garbage, err_opt_unknown, err_too_many_args,
-    exmode_active, global_alist, headless_mode, kOptArabic, kOptKeymap, kOptRightleft,
-    kOptShadafile, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, kOptVerbosefile,
-    kOptWindow, mparm_T, nlua_disable_preload, p_lpl, p_shadafile, p_uc, p_verbose, p_write,
-    readonlymode, recoverymode, silent_mode, stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty,
-    time_msg_at,
+    MAX_ARG_CMDS, MAXPATHL, NUL, OK, SESSION_FILE, SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, curbuf,
+    current_sctx, embedded_mode, err_arg_missing, err_extra_cmd, err_opt_garbage, err_opt_unknown,
+    err_too_many_args, exmode_active, global_alist, headless_mode, kOptArabic, kOptKeymap,
+    kOptRightleft, kOptShadafile, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString,
+    kOptVerbosefile, kOptWindow, mparm_T, nlua_disable_preload, p_lpl, p_shadafile, p_uc,
+    p_verbose, p_write, readonlymode, recoverymode, silent_mode, stderr_isatty, stdin_fd,
+    stdin_isatty, stdout_isatty, time_msg_at,
 };
 use crate::src::nvim::memory::{strequal, xfree, xmalloc, xstrdup};
 use crate::src::nvim::message::semsg;
@@ -53,8 +52,8 @@ use crate::src::nvim::runtime::{estack_pop, estack_push};
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::src::nvim::types::{
-    OptInt, OptVal, OptValData, aentry_T, kFalse, kTrue, linenr_T, ptrdiff_t, scid_T, sctx_T,
-    size_t,
+    OptInt, OptVal, OptValData, VV_PROGNAME, VV_PROGPATH, VV_SWAPCOMMAND, aentry_T, kFalse, kTrue,
+    linenr_T, ptrdiff_t, scid_T, sctx_T, size_t,
 };
 
 /// A bare `-V` is "a little bit verbose".

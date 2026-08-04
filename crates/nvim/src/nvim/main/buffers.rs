@@ -29,11 +29,11 @@ use crate::src::nvim::getchar::vgetc;
 use crate::src::nvim::main::exit::getout;
 use crate::src::nvim::main::{
     BLN_LISTED, ECMD_HIDE, ECMD_LASTL, EDIT_QF, IOSIZE, IObuff, NameBuff, READ_NEW, READ_STDIN,
-    SEA_DIALOG, SEA_NONE, SEA_QUIT, SID_CARG, VAR_FIXED, VV_ARGF, WIN_HOR, WIN_TABS, WIN_VER,
-    arg_had_last, autocmd_no_enter, autocmd_no_leave, curbuf, curtab, curwin, did_emsg, firstwin,
-    global_alist, got_int, kListLenMayKnow, kOptErrorfile, kOptShortmess, kOptValTypeString,
-    mparm_T, msg_didany, msg_scroll, no_wait_return, p_ef, p_efm, p_fdls, p_menc, p_shm,
-    recoverymode, swap_exists_action, swap_exists_did_quit, time_msg_at,
+    SEA_DIALOG, SEA_NONE, SEA_QUIT, SID_CARG, VAR_FIXED, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last,
+    autocmd_no_enter, autocmd_no_leave, curbuf, curtab, curwin, did_emsg, firstwin, global_alist,
+    got_int, kListLenMayKnow, kOptErrorfile, kOptShortmess, kOptValTypeString, mparm_T, msg_didany,
+    msg_scroll, no_wait_return, p_ef, p_efm, p_fdls, p_menc, p_shm, recoverymode,
+    swap_exists_action, swap_exists_did_quit, time_msg_at,
 };
 use crate::src::nvim::memline::ml_recover;
 use crate::src::nvim::memory::{xfree, xstrdup};
@@ -45,8 +45,8 @@ use crate::src::nvim::path::vim_FullName;
 use crate::src::nvim::quickfix::qf_init;
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
-    Integer, OptInt, OptVal, OptValData, aentry_T, bufref_T, exarg_T, handle_T, linenr_T, list_T,
-    ptrdiff_t, size_t, ssize_t, win_T,
+    Integer, OptInt, OptVal, OptValData, VV_ARGF, aentry_T, bufref_T, exarg_T, handle_T, linenr_T,
+    list_T, ptrdiff_t, size_t, ssize_t, win_T,
 };
 use crate::src::nvim::ui::ui_call_error_exit;
 use crate::src::nvim::window::{

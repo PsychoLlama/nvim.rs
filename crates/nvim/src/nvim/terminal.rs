@@ -69,8 +69,8 @@ use crate::src::nvim::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::src::nvim::types::{
     Arena, Buffer, Error, Event, ExtmarkOp, HlAttrs, Map_int_ptr_t, MarkAdjustMode, Object, OptVal,
     OptValData, OptValType, RgbValue, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
-    VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, VimVarIndex, aco_save_T, buf_T,
-    colnr_T, exarg_T, handle_T, int16_t, kObjectTypeNil, kObjectTypeString, linenr_T, pos_T, ptr_t,
+    VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, aco_save_T, buf_T, colnr_T,
+    exarg_T, handle_T, int16_t, kObjectTypeNil, kObjectTypeString, linenr_T, pos_T, ptr_t,
     save_v_event_T, size_t, tabpage_T, uint8_t, varnumber_T, win_T,
 };
 use crate::src::nvim::vterm::parser::vterm_input_write;
@@ -124,8 +124,6 @@ const TERM_ATTRS_MAX: c_int = 1024;
 /// `State` bit set while terminal mode is running.
 /// `redraw_later` levels.
 const AUGROUP_ALL: c_int = -3;
-/// `v:termrequest`.
-const VV_TERMREQUEST: VimVarIndex = 10;
 
 /// vterm's cursor shapes, which are DECSCUSR's rather than the editor's.
 /// Merge damage reports up to a whole scrolled region before delivering

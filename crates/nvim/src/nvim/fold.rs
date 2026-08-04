@@ -61,11 +61,6 @@ pub const VIRTTEXT_EMPTY: VirtText = VirtText {
 };
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kWinOptFoldtext: c_int = 22;
-pub const VV_LNUM: VimVarIndex = 9;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
 
 /// The deepest nesting 'foldnestmax' will accept.
 pub const MAX_LEVEL: c_int = 20;

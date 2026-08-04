@@ -84,9 +84,9 @@ use crate::src::nvim::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsav
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     Direction, EvalFuncData, FILE, MotionType, OptInt, SearchOffset, SearchPattern, TriState,
-    VarType, VimVarIndex, buf_T, cmdarg_T, colnr_T, dict_T, file_comparison, int64_t, linenr_T,
-    list_T, lpos_T, magic_T, oparg_T, pos_T, proftime_T, ptrdiff_t, regmatch_T, regmmatch_T,
-    regprog_T, searchit_arg_T, size_t, typval_T, varnumber_T, win_T,
+    VarType, buf_T, cmdarg_T, colnr_T, dict_T, file_comparison, int64_t, linenr_T, list_T, lpos_T,
+    magic_T, oparg_T, pos_T, proftime_T, ptrdiff_t, regmatch_T, regmmatch_T, regprog_T,
+    searchit_arg_T, size_t, typval_T, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep,
@@ -141,7 +141,6 @@ pub const SHM_COMPLETIONSCAN: C2Rust_Unnamed_17 = 67;
 pub const SHM_SEARCH: C2Rust_Unnamed_17 = 115;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_int;
 pub const HIST_SEARCH: C2Rust_Unnamed_18 = 1;
-pub const VV_SEARCHFORWARD: VimVarIndex = 56;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const FNAME_REL: C2Rust_Unnamed_20 = 16;
 pub const FNAME_INCL: C2Rust_Unnamed_20 = 8;

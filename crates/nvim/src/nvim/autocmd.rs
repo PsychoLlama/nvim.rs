@@ -70,13 +70,14 @@ use crate::src::nvim::types::{
     CMD_index, Callback, Callback_data as C2Rust_Unnamed_5, Dict, Error, Event, Integer,
     KeyValuePair, LuaRetMode, Map_String_int, Map_int_String, Map_int_ptr_t, MapHash, Object,
     OptInt, OptVal, OptValData, OptValType, ScopeType, Set_String, Set_int, SpecialVarValue,
-    String_0, Timestamp, TriState, VarLockStatus, VarType, VimVarIndex, aco_save_T, aucmdwin_T,
-    auto_event, buf_T, buffblock, buffblock_T, buffheader_T, bufref_T, dict_T, estack_T, etype_T,
-    event_T, exarg_T, expand_T, funccal_entry_T, handle_T, hashitem_T, hashtab_T, int64_t, kFalse,
-    kNone, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil,
-    kObjectTypeString, kTrue, key_value_pair, linenr_T, object, object_data as C2Rust_Unnamed,
-    proftime_T, ptr_t, ptrdiff_t, regprog_T, save_redo_T, save_v_event_T, sctx_T, size_t,
-    tabpage_T, typval_T, typval_vval_union, uint32_t, uint64_t, varnumber_T, win_T,
+    String_0, Timestamp, TriState, VV_CMDBANG, VV_TERMRESPONSE, VarLockStatus, VarType, aco_save_T,
+    aucmdwin_T, auto_event, buf_T, buffblock, buffblock_T, buffheader_T, bufref_T, dict_T,
+    estack_T, etype_T, event_T, exarg_T, expand_T, funccal_entry_T, handle_T, hashitem_T,
+    hashtab_T, int64_t, kFalse, kNone, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
+    kObjectTypeNil, kObjectTypeString, kTrue, key_value_pair, linenr_T, object,
+    object_data as C2Rust_Unnamed, proftime_T, ptr_t, ptrdiff_t, regprog_T, save_redo_T,
+    save_v_event_T, sctx_T, size_t, tabpage_T, typval_T, typval_vval_union, uint32_t, uint64_t,
+    varnumber_T, win_T,
 };
 use crate::src::nvim::ui::ui_call_win_hide;
 use crate::src::nvim::ui_compositor::ui_comp_remove_grid;
@@ -302,13 +303,6 @@ pub struct event_name {
     pub event: ::core::ffi::c_int,
 }
 pub const ETYPE_AUCMD: etype_T = 3;
-pub const VV_CMDBANG: VimVarIndex = 33;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_TERMRESPONSE: VimVarIndex = 11;
-pub const VV_LNUM: VimVarIndex = 9;
 pub const DOCMD_REPEAT: C2Rust_Unnamed_34 = 4;
 pub const DOCMD_VERBOSE: C2Rust_Unnamed_34 = 1;
 pub const DOCMD_NOWAIT: C2Rust_Unnamed_34 = 2;

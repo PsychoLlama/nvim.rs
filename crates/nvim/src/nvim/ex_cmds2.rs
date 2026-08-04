@@ -42,7 +42,7 @@ use crate::src::nvim::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_s
 use crate::src::nvim::runtime::source_runtime_vim_lua;
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::types::{
-    BoolVarValue, CMD_index, ScopeType, SpecialVarValue, VarLockStatus, VarType, VimVarIndex,
+    BoolVarValue, CMD_index, ScopeType, SpecialVarValue, VV_SWAPCOMMAND, VarLockStatus, VarType,
     aco_save_T, aentry_T, buf_T, bufref_T, cmd_addr_T, cstack_T, dobuf_action_values,
     dobuf_start_values, exarg, exarg_T, linenr_T, list_T, ptrdiff_t, size_t, ssize_t, tabpage_T,
     uint8_t, uint64_t, varnumber_T, win_T,
@@ -89,7 +89,6 @@ pub const DOBUF_DEL: dobuf_action_values = 3;
 pub const DOBUF_UNLOAD: dobuf_action_values = 2;
 pub const DOBUF_GOTO: dobuf_action_values = 0;
 pub const DOBUF_FIRST: dobuf_start_values = 1;
-pub const VV_SWAPCOMMAND: VimVarIndex = 49;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const VIM_QUESTION: C2Rust_Unnamed_17 = 4;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;

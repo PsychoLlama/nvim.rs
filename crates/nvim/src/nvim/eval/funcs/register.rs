@@ -4,8 +4,8 @@
 
 use super::args::{Args, frame};
 use super::{
-    Ctrl_V, FAIL, NUL, OK, VAR_DICT, VAR_LIST, VAR_STRING, VV_REG, YREG_YANK, kBoolVarFalse,
-    kBoolVarTrue, kGRegExprSrc, kGRegList, kMTBlockWise, kMTCharWise, kMTLineWise, kMTUnknown,
+    Ctrl_V, FAIL, NUL, OK, VAR_DICT, VAR_LIST, VAR_STRING, YREG_YANK, kBoolVarFalse, kBoolVarTrue,
+    kGRegExprSrc, kGRegList, kMTBlockWise, kMTCharWise, kMTLineWise, kMTUnknown,
 };
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::charset::getdigits_int;
@@ -27,7 +27,7 @@ use crate::src::nvim::register::{
 };
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
-    BoolVarValue, EvalFuncData, MotionType, colnr_T, dict_T, list_T, listitem_T, typval_T,
+    BoolVarValue, EvalFuncData, MotionType, VV_REG, colnr_T, dict_T, list_T, listitem_T, typval_T,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;

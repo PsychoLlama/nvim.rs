@@ -27,7 +27,7 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::strings::{striequal, vim_strchr, vim_strsave_escaped};
 use crate::src::nvim::types::{
-    BoolVarValue, Direction, ScopeType, SpecialVarValue, VarLockStatus, VarType, VimVarIndex,
+    BoolVarValue, Direction, ScopeType, SpecialVarValue, VV_PROGPATH, VarLockStatus, VarType,
     buf_T, evalarg_T, expand_T, int64_t, pos_T, ptrdiff_t, sctx_T, size_t, uint8_t, xp_prefix_T,
 };
 unsafe extern "C" {
@@ -79,17 +79,6 @@ pub const WILD_KEEP_ALL: C2Rust_Unnamed_16 = 32;
 pub const WILD_ADD_SLASH: C2Rust_Unnamed_16 = 16;
 pub const WILD_USE_NL: C2Rust_Unnamed_16 = 4;
 pub const WILD_LIST_NOTFOUND: C2Rust_Unnamed_16 = 1;
-pub const VV_PROGPATH: VimVarIndex = 60;
-pub const VV_KEY: VimVarIndex = 36;
-pub const VV_VAL: VimVarIndex = 35;
-pub const VV_REG: VimVarIndex = 32;
-pub const VV_SEND_SERVER: VimVarIndex = 28;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_LNUM: VimVarIndex = 9;
-pub const VV_SHELL_ERROR: VimVarIndex = 6;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct utsname {

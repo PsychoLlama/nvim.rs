@@ -11,6 +11,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::VV_FNAME;
 use core::ffi::{c_char, c_int, c_long};
 use core::ptr;
 use std::ffi::CStr;

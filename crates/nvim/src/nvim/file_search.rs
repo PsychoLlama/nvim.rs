@@ -47,8 +47,8 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, xstrnsave};
 use crate::src::nvim::types::{
-    BoolVarValue, CdCause, CdScope, FileID, VimVarIndex, cmdarg_T, event_T, linenr_T, ptrdiff_t,
-    save_v_event_T, size_t,
+    BoolVarValue, CdCause, CdScope, FileID, cmdarg_T, event_T, linenr_T, ptrdiff_t, save_v_event_T,
+    size_t,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -74,7 +74,6 @@ pub const kCdCauseAuto: CdCause = 2;
 pub const kCdCauseWindow: CdCause = 1;
 pub const kCdCauseOther: CdCause = -1;
 pub const kBufOptIncludeexpr: c_int = 46;
-pub const VV_FNAME: VimVarIndex = 12;
 
 /// What a search should accept as a match.
 pub const FINDFILE_DIR: c_int = 1;

@@ -93,12 +93,13 @@ use crate::src::nvim::types::ui::{kUIMessages, kUIMultigrid};
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Boolean, CMD_index, Dict, Error, Event, FILE, HlMessage,
     HlMessageChunk, Integer, KeyDict_echo_opts, KeyValuePair, MessageData, Object, OptInt,
-    ScopeType, ScreenGrid, SpecialVarValue, String_0, VarLockStatus, VarType, VimVarIndex, buf_T,
-    cmd_addr_T, colnr_T, cstack_T, estack_T, estack_arg_T, exarg, exarg_T, flush_buffers_T,
-    garray_T, int64_t, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, key_extra, key_value_pair, linenr_T, object,
-    object_data as C2Rust_Unnamed_11, ptrdiff_t, regmatch_T, sattr_T, schar_T, size_t, ssize_t,
-    typval_T, typval_vval_union, uint8_t, uint32_t, uint64_t,
+    ScopeType, ScreenGrid, SpecialVarValue, String_0, VV_ERRMSG, VV_SCROLLSTART, VV_STATUSMSG,
+    VV_WARNINGMSG, VarLockStatus, VarType, buf_T, cmd_addr_T, colnr_T, cstack_T, estack_T,
+    estack_arg_T, exarg, exarg_T, flush_buffers_T, garray_T, int64_t, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
+    key_extra, key_value_pair, linenr_T, object, object_data as C2Rust_Unnamed_11, ptrdiff_t,
+    regmatch_T, sattr_T, schar_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t, uint32_t,
+    uint64_t,
 };
 use crate::src::nvim::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
@@ -153,15 +154,6 @@ pub const AUGROUP_ALL: C2Rust_Unnamed_30 = -3;
 pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
 pub const SHM_TRUNCALL: C2Rust_Unnamed_34 = 84;
 pub const SHM_TRUNC: C2Rust_Unnamed_34 = 116;
-pub const VV_SCROLLSTART: VimVarIndex = 46;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_LNUM: VimVarIndex = 9;
-pub const VV_STATUSMSG: VimVarIndex = 5;
-pub const VV_WARNINGMSG: VimVarIndex = 4;
-pub const VV_ERRMSG: VimVarIndex = 3;
 pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
 pub const MB_MAXBYTES: C2Rust_Unnamed_36 = 21;
 pub type C2Rust_Unnamed_37 = ::core::ffi::c_uint;

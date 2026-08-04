@@ -25,7 +25,7 @@ use crate::src::nvim::ex_docmd::source::not_exiting;
 use crate::src::nvim::ex_docmd::{
     CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CMD_SIZE, CMD_bdelete, CMD_bwipeout, CMD_close, CMD_hide,
     CMD_only, CMD_tabclose, CMD_tabonly, CMD_wq, CMOD_CONFIRM, Ctrl_C, DOBUF_DEL, DOBUF_UNLOAD,
-    DOBUF_WIPE, EXIT_FAILURE, FAIL, KE_IGNORE, KE_XF1, KE_XF2, NUL, OK, VV_EXITREASON,
+    DOBUF_WIPE, EXIT_FAILURE, FAIL, KE_IGNORE, KE_XF1, KE_XF2, NUL, OK,
 };
 use crate::src::nvim::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
 use crate::src::nvim::getchar::beep_flush;
@@ -36,7 +36,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::message::{emsg, msg};
 use crate::src::nvim::os::libc::{gettext, snprintf};
 use crate::src::nvim::types::{
-    Integer, buf_T, bufref_T, exarg_T, linenr_T, ptrdiff_t, tabpage_T, win_T,
+    Integer, VV_EXITREASON, buf_T, bufref_T, exarg_T, linenr_T, ptrdiff_t, tabpage_T, win_T,
 };
 use crate::src::nvim::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
 use crate::src::nvim::undo::{bufIsChanged, curbufIsChanged};

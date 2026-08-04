@@ -30,8 +30,8 @@ use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{__assert_fail, memmove, strcmp, strlen, strstr};
 use crate::src::nvim::strings::reverse_text;
 use crate::src::nvim::types::{
-    BoolVarValue, EvalFuncData, ListLenSpecials, ScopeType, SpecialVarValue, VarLockStatus,
-    VarType, VimVarIndex, blob_T, dict_T, dictitem_T, garray_T, hashitem_T, hashtab_T, int64_t,
+    BoolVarValue, EvalFuncData, ListLenSpecials, ScopeType, SpecialVarValue, VV_KEY, VV_VAL,
+    VarLockStatus, VarType, blob_T, dict_T, dictitem_T, garray_T, hashitem_T, hashtab_T, int64_t,
     list_T, listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
     vimconv_T,
 };
@@ -56,14 +56,6 @@ pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kListLenUnknown: ListLenSpecials = -1;
-pub const VV_SWAPCOMMAND: VimVarIndex = 49;
-pub const VV_KEY: VimVarIndex = 36;
-pub const VV_VAL: VimVarIndex = 35;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_LNUM: VimVarIndex = 9;
 pub type filtermap_T = ::core::ffi::c_uint;
 pub const FILTERMAP_FOREACH: filtermap_T = 3;
 pub const FILTERMAP_MAPNEW: filtermap_T = 2;

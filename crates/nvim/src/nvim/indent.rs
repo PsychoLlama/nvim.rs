@@ -65,7 +65,6 @@ const SIN_CHANGED: ::core::ffi::c_uint = 1;
 const SIN_INSERT: ::core::ffi::c_uint = 2;
 const SIN_UNDO: ::core::ffi::c_uint = 4;
 const SIN_NOMARK: ::core::ffi::c_uint = 8;
-const VV_LNUM: VimVarIndex = 9;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const FO_Q_COMS: ::core::ffi::c_int = 'q' as ::core::ffi::c_int;

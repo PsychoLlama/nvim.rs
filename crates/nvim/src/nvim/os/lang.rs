@@ -16,13 +16,9 @@ use crate::src::nvim::os::shell::get_cmd_output;
 use crate::src::nvim::path::{path_tail, path_tail_with_sep};
 use crate::src::nvim::profile::time_msg;
 use crate::src::nvim::types::{
-    VimVarIndex, exarg_T, expand_T, garray_T, proftime_T, ptrdiff_t, size_t,
+    VV_COLLATE, VV_CTYPE, VV_LANG, VV_LC_TIME, VV_PROGPATH, exarg_T, expand_T, garray_T,
+    proftime_T, ptrdiff_t, size_t,
 };
-pub const VV_COLLATE: VimVarIndex = 90;
-pub const VV_PROGPATH: VimVarIndex = 60;
-pub const VV_CTYPE: VimVarIndex = 15;
-pub const VV_LC_TIME: VimVarIndex = 14;
-pub const VV_LANG: VimVarIndex = 13;
 pub const kShellOptSilent: C2Rust_Unnamed_0 = 8;
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
 pub const LC_CTYPE: ::core::ffi::c_int = __LC_CTYPE;

@@ -15,7 +15,7 @@ use crate::src::nvim::drawscreen::{
 use crate::src::nvim::eval::eval_to_string;
 use crate::src::nvim::eval::vars::{set_vim_var_nr, var_redir_start, var_redir_stop};
 use crate::src::nvim::ex_docmd::argopt::open_exfile;
-use crate::src::nvim::ex_docmd::{FAIL, NUL, OK, VV_HLSEARCH, ex_pressedreturn};
+use crate::src::nvim::ex_docmd::{FAIL, NUL, OK, ex_pressedreturn};
 use crate::src::nvim::highlight_group::{do_highlight, load_colors};
 use crate::src::nvim::main::{
     RedrawingDisabled, State, VIsual_active, cmdpreview, curwin, e_invarg2, emsg_off, msg_col,
@@ -30,7 +30,7 @@ use crate::src::nvim::os::libc::{fclose, gettext, strcasecmp};
 use crate::src::nvim::register::{valid_yank_reg, write_reg_contents};
 use crate::src::nvim::state::MODE_CMDLINE;
 use crate::src::nvim::statusline::draw_tabline;
-use crate::src::nvim::types::{FILE, exarg_T, ssize_t, uint8_t, varnumber_T};
+use crate::src::nvim::types::{FILE, VV_HLSEARCH, exarg_T, ssize_t, uint8_t, varnumber_T};
 use crate::src::nvim::ui::ui_flush;
 
 /// `:colorscheme` — with no argument, report `g:colors_name`.

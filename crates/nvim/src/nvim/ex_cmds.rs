@@ -139,11 +139,11 @@ use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     AdditionalData, BoolVarValue, CMD_index, Callback, Callback_data as C2Rust_Unnamed_5,
     ExtmarkOp, OptInt, OptVal, OptValData, OptValType, ScopeType, SpecialVarValue, String_0,
-    SubReplacementString, Timestamp, UndoObjectType, VarLockStatus, VarType, VimVarIndex, bcount_t,
-    bfa_values, bln_values, buf_T, bufref_T, colnr_T, dobuf_action_values, exarg_T, float_T,
-    fmark_T, getf_retvalues, handle_T, int32_t, int64_t, linenr_T, list_T, listitem_T, lpos_T,
-    magic_T, pos_T, proftime_T, ptrdiff_t, regmatch_T, regmmatch_T, regprog_T, size_t, tabpage_T,
-    time_t, uint8_t, uint64_t, uvarnumber_T, varnumber_T, win_T,
+    SubReplacementString, Timestamp, UndoObjectType, VV_OLDFILES, VV_SWAPCOMMAND, VarLockStatus,
+    VarType, bcount_t, bfa_values, bln_values, buf_T, bufref_T, colnr_T, dobuf_action_values,
+    exarg_T, float_T, fmark_T, getf_retvalues, handle_T, int32_t, int64_t, linenr_T, list_T,
+    listitem_T, lpos_T, magic_T, pos_T, proftime_T, ptrdiff_t, regmatch_T, regmmatch_T, regprog_T,
+    size_t, tabpage_T, time_t, uint8_t, uint64_t, uvarnumber_T, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{ui_cursor_goto, ui_cursor_shape, ui_has};
 use crate::src::nvim::undo::{
@@ -250,13 +250,6 @@ pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
 pub const VIM_QUESTION: C2Rust_Unnamed_26 = 4;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub const VIM_YES: C2Rust_Unnamed_27 = 2;
-pub const VV_OLDFILES: VimVarIndex = 58;
-pub const VV_SWAPCOMMAND: VimVarIndex = 49;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_LNUM: VimVarIndex = 9;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
 pub const ECMD_NOWINENTER: C2Rust_Unnamed_28 = 64;
 pub const ECMD_ALTBUF: C2Rust_Unnamed_28 = 32;
