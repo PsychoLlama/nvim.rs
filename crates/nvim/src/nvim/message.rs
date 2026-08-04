@@ -5,7 +5,7 @@ use crate::src::nvim::api::private::helpers::{
 };
 use crate::src::nvim::api::vim::nvim_echo;
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::src::nvim::autocmd::{EVENT_PROGRESS, apply_autocmds_group, has_event};
+use crate::src::nvim::autocmd::{AUGROUP_ALL, EVENT_PROGRESS, apply_autocmds_group, has_event};
 use crate::src::nvim::charset::{
     byte2cells, char2cells, getdigits_int, ptr2cells, skipwhite, transchar_buf, transchar_byte_buf,
     vim_isprintc, vim_strsize,
@@ -70,7 +70,7 @@ use crate::src::nvim::memory::{
     arena_alloc, strequal, strnequal, xcalloc, xfree, xmalloc, xmemdupz, xmemrchr, xrealloc,
     xstrdup, xstrlcat, xstrlcpy,
 };
-use crate::src::nvim::mouse::{jump_to_mouse, setmouse};
+use crate::src::nvim::mouse::{MOUSE_SETPOS, jump_to_mouse, setmouse};
 use crate::src::nvim::option::{p_vfile, shortmess};
 use crate::src::nvim::options::{
     kOptBoFlagMess, kOptBoFlagShell, kOptMoptFlagHistory, kOptMoptFlagHitEnter,
@@ -93,13 +93,12 @@ use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, 
 use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::ui::{kUIMessages, kUIMultigrid};
 use crate::src::nvim::types::{
-    Arena, Array, BoolVarValue, CMD_index, Dict, Error, Event, FILE, HlMessage, HlMessageChunk,
-    Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ScopeType, SpecialVarValue, String_0,
-    VV_ERRMSG, VV_SCROLLSTART, VV_STATUSMSG, VV_WARNINGMSG, VarLockStatus, VarType, cmd_addr_T,
-    colnr_T, estack_T, estack_arg_T, exarg_T, flush_buffers_T, garray_T, int64_t,
-    kObjectTypeInteger, kObjectTypeNil, key_extra, object, object_data as C2Rust_Unnamed_11,
-    ptrdiff_t, regmatch_T, sattr_T, schar_T, size_t, ssize_t, typval_T, typval_vval_union,
-    uint64_t,
+    Arena, Array, BoolVarValue, Dict, Error, Event, FILE, HlMessage, HlMessageChunk, Integer,
+    KeyDict_echo_opts, MessageData, Object, OptInt, ScopeType, SpecialVarValue, String_0,
+    VV_ERRMSG, VV_SCROLLSTART, VV_STATUSMSG, VV_WARNINGMSG, VarLockStatus, VarType, colnr_T,
+    estack_T, estack_arg_T, exarg_T, flush_buffers_T, garray_T, int64_t, kObjectTypeInteger,
+    kObjectTypeNil, object, object_data as C2Rust_Unnamed_11, ptrdiff_t, regmatch_T, sattr_T,
+    schar_T, size_t, ssize_t, typval_T, typval_vval_union, uint64_t,
 };
 use crate::src::nvim::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
@@ -138,6 +137,9 @@ pub use self::errors::*;
 unsafe extern "C" {
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
+/// Vimscript value tags and lock states. Kept as a family because ffigen
+/// exports them to the unit specs' flat cdef namespace, where the LuaJIT
+/// side names them; nothing in this module reads most of them.
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;
@@ -156,8 +158,9 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub const kZIndexMessages: C2Rust_Unnamed_27 = 200;
+/// The compositor layer messages float on.
+pub const kZIndexMessages: c_uint = 200;
+/// One entry of the message history. See [`self::history`].
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct msg_hist {
@@ -169,45 +172,20 @@ pub struct msg_hist {
     pub append: bool,
 }
 pub type MessageHistoryEntry = msg_hist;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
-pub const CMD_append: CMD_index = 0;
-pub const ADDR_LINES: cmd_addr_T = 0;
-pub type C2Rust_Unnamed_30 = ::core::ffi::c_int;
-pub const AUGROUP_ALL: C2Rust_Unnamed_30 = -3;
-pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
-pub const SHM_TRUNCALL: C2Rust_Unnamed_34 = 84;
-pub const SHM_TRUNC: C2Rust_Unnamed_34 = 116;
-pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
-pub const MB_MAXBYTES: C2Rust_Unnamed_36 = 21;
-pub type C2Rust_Unnamed_37 = ::core::ffi::c_uint;
-pub const VIM_DISCARDALL: C2Rust_Unnamed_37 = 6;
-pub const VIM_ALL: C2Rust_Unnamed_37 = 5;
-pub const VIM_CANCEL: C2Rust_Unnamed_37 = 4;
-pub const VIM_NO: C2Rust_Unnamed_37 = 3;
-pub const VIM_YES: C2Rust_Unnamed_37 = 2;
-pub const MOUSE_SETPOS: C2Rust_Unnamed_40 = 8;
-pub const KE_X2MOUSE: key_extra = 92;
-pub const KE_X1MOUSE: key_extra = 89;
-pub const KE_RIGHTMOUSE: key_extra = 50;
-pub const KE_MIDDLEMOUSE: key_extra = 47;
-pub const KE_LEFTMOUSE: key_extra = 44;
-pub const KE_MOUSEMOVE: key_extra = 100;
-pub const KE_MOUSEUP: key_extra = 76;
-pub const KE_MOUSEDOWN: key_extra = 75;
-pub const KE_MOUSERIGHT: key_extra = 78;
-pub const KE_MOUSELEFT: key_extra = 77;
-pub const KE_RIGHTRELEASE: key_extra = 52;
-pub const KE_RIGHTDRAG: key_extra = 51;
-pub const KE_MIDDLERELEASE: key_extra = 49;
-pub const KE_MIDDLEDRAG: key_extra = 48;
-pub const KE_LEFTRELEASE: key_extra = 46;
-pub const KE_LEFTDRAG: key_extra = 45;
-pub const KE_IGNORE: key_extra = 53;
+/// `'shortmess'` flags: `T` truncates a long message in the middle, `t`
+/// truncates a file message at the head.
+pub const SHM_TRUNCALL: c_uint = 84;
+pub const SHM_TRUNC: c_uint = 116;
+/// The longest UTF-8 sequence, including composing characters.
+pub const MB_MAXBYTES: c_uint = 21;
+/// [`do_dialog`] answers, as `confirm()` reports them.
+pub const VIM_DISCARDALL: c_uint = 6;
+pub const VIM_ALL: c_uint = 5;
+pub const VIM_CANCEL: c_uint = 4;
+pub const VIM_NO: c_uint = 3;
+pub const VIM_YES: c_uint = 2;
+/// One run of displayed message text, for scrolling back over. See
+/// [`self::scrollback`].
 pub type msgchunk_T = msgchunk_S;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -219,6 +197,7 @@ pub struct msgchunk_S {
     pub sb_hl_id: ::core::ffi::c_int,
     pub sb_text: [::core::ffi::c_char; 0],
 }
+/// How much of the scrollback the next message should drop.
 pub type sb_clear_T = ::core::ffi::c_uint;
 pub const SB_CLEAR_CMDLINE_DONE: sb_clear_T = 3;
 pub const SB_CLEAR_CMDLINE_BUSY: sb_clear_T = 2;
@@ -226,11 +205,10 @@ pub const SB_CLEAR_ALL: sb_clear_T = 1;
 pub const SB_CLEAR_NONE: sb_clear_T = 0;
 pub const ESTACK_NONE: estack_arg_T = 0;
 pub const FLUSH_MINIMAL: flush_buffers_T = 0;
-pub const DLG_HOTKEY_CHAR: C2Rust_Unnamed_41 = 38;
-pub const DLG_BUTTON_SEP: C2Rust_Unnamed_41 = 10;
-pub type C2Rust_Unnamed_40 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_41 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+/// A dialog's button list: `&` marks the next character as its hotkey, and
+/// a newline separates buttons.
+pub const DLG_HOTKEY_CHAR: c_uint = 38;
+pub const DLG_BUTTON_SEP: c_uint = 10;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
@@ -261,7 +239,7 @@ static msg_ext_last_chunk: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_maxlen: 0 as ::core::ffi::c_int,
     ga_itemsize: ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int,
     ga_growsize: 40 as ::core::ffi::c_int,
-    ga_data: NULL,
+    ga_data: ::core::ptr::null_mut(),
 });
 static msg_ext_last_attr: GlobalCell<sattr_T> = GlobalCell::new(-1 as sattr_T);
 static msg_ext_last_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -276,7 +254,6 @@ pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
 pub const KS_ZERO: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
-pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
