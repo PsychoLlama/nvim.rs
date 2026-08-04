@@ -319,7 +319,7 @@
     "crates/nvim/src/nvim/mapping/introspect.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/mapping/langmap.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/mapping/mapset.rs": {"unsafe": 2},
-    "crates/nvim/src/nvim/mapping/session.rs": {"unsafe": 2},
+    "crates/nvim/src/nvim/mapping/session.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/mapping/show.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/mapping/table.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/mark.rs": {"unsafe": 19},

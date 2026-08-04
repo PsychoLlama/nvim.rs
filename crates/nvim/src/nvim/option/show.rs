@@ -22,7 +22,7 @@ use crate::src::nvim::main::{
     Columns, NameBuff, curbuf, curwin, got_int, info_message, p_mouse, p_pp, p_rtp, p_wc, p_wcm,
     silent_mode,
 };
-use crate::src::nvim::mapping::put_escstr;
+use crate::src::nvim::mapping::{EscTarget, put_escstr};
 use crate::src::nvim::memory::{xfree, xmalloc, xstrlcpy};
 use crate::src::nvim::message::{
     message_filtered, msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts,
@@ -481,7 +481,7 @@ unsafe fn put_string_value(
     // SAFETY: the caller's file and strings.
     unsafe {
         if flags & kOptFlagExpand as uint32_t == 0 {
-            return if put_escstr(fd, value_str, 2) == FAIL {
+            return if put_escstr(fd, value_str, EscTarget::SetValue) == FAIL {
                 Written::Failed
             } else {
                 Written::Value
@@ -493,7 +493,7 @@ unsafe fn put_string_value(
         home_replace(ptr::null::<buf_T>(), value_str, buf, size, false);
 
         if !needs_splitting(value_str, flags) {
-            let failed = put_escstr(fd, buf, 2) == FAIL;
+            let failed = put_escstr(fd, buf, EscTarget::SetValue) == FAIL;
             xfree(buf.cast::<c_void>());
             return if failed {
                 Written::Failed
@@ -515,7 +515,7 @@ unsafe fn put_string_value(
                     break;
                 }
                 copy_option_part(&raw mut p, part, size, c",".as_ptr() as *mut c_char);
-                if put_escstr(fd, part, 2) == FAIL || put_eol(fd) == FAIL {
+                if put_escstr(fd, part, EscTarget::SetValue) == FAIL || put_eol(fd) == FAIL {
                     result = Written::Failed;
                     break;
                 }

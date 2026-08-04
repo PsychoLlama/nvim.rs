@@ -91,7 +91,6 @@
     "crates/nvim/src/nvim/mapping/domap.rs": 10,
     "crates/nvim/src/nvim/mapping/introspect.rs": 51,
     "crates/nvim/src/nvim/mapping/mapset.rs": 44,
-    "crates/nvim/src/nvim/mapping/session.rs": 16,
     "crates/nvim/src/nvim/mbyte.rs": 188,
     "crates/nvim/src/nvim/memfile.rs": 1,
     "crates/nvim/src/nvim/memline.rs": 2,
