@@ -57,7 +57,7 @@ use crate::src::nvim::message::{
     str2special_arena, str2special_save, swmsg,
 };
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, fprintf, fputc, fputs, gettext, memcpy, memmove, memset, putc, snprintf,
+    __assert_fail, abort, fprintf, fputc, fputs, gettext, memcpy, memmove, putc, snprintf,
     strcasecmp, strchr, strcmp, strlen, strncmp, strpbrk, strstr,
 };
 use crate::src::nvim::runtime::exestack;
@@ -82,7 +82,7 @@ use crate::src::nvim::types::{
 mod table;
 pub use self::table::*;
 mod args;
-pub use self::args::*;
+pub(crate) use self::args::*;
 mod domap;
 pub use self::domap::*;
 mod show;

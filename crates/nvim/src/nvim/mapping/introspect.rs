@@ -52,9 +52,9 @@ pub(crate) unsafe extern "C" fn mapblock_fill_dict(
         let mut dict: Dict = arena_dict(arena, 20 as size_t);
         let lhs: *mut ::core::ffi::c_char =
             str2special_arena((*mp).m_keys, compatible, !compatible, arena);
-        let mut mapmode: *mut ::core::ffi::c_char =
+        let mapmode: *mut ::core::ffi::c_char =
             arena_alloc(arena, 7 as size_t, false_0 != 0) as *mut ::core::ffi::c_char;
-        map_mode_to_chars((*mp).m_mode, mapmode);
+        mapmode.copy_from_nonoverlapping(map_mode_to_chars((*mp).m_mode).as_ptr(), 7);
         let mut noremap_value: ::core::ffi::c_int = 0;
         if compatible {
             noremap_value = ((*mp).m_noremap != 0) as ::core::ffi::c_int;

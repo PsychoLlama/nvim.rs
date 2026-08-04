@@ -23,8 +23,7 @@ pub(crate) unsafe extern "C" fn showmap(mut mp: *mut mapblock_T, mut local: bool
                 return;
             }
         }
-        let mut mapchars: [::core::ffi::c_char; 7] = [0; 7];
-        map_mode_to_chars((*mp).m_mode, &raw mut mapchars as *mut ::core::ffi::c_char);
+        let mut mapchars: [::core::ffi::c_char; 7] = map_mode_to_chars((*mp).m_mode);
         msg_puts(&raw mut mapchars as *mut ::core::ffi::c_char);
         let mut len: size_t = strlen(&raw mut mapchars as *mut ::core::ffi::c_char);
         loop {
