@@ -235,7 +235,7 @@
     "crates/nvim/src/nvim/fold/text.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/fuzzy.rs": {"unsafe": 18},
     "crates/nvim/src/nvim/garray.rs": {"no_mangle": 2, "unsafe": 11},
-    "crates/nvim/src/nvim/getchar.rs": {"unsafe": 5},
+    "crates/nvim/src/nvim/getchar.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/getchar/buffers.rs": {"unsafe": 26},
     "crates/nvim/src/nvim/getchar/cmdkey.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/getchar/funcs.rs": {"unsafe": 7},

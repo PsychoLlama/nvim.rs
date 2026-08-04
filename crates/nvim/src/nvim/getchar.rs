@@ -165,11 +165,6 @@ pub const kMTCharWise: MotionType = 0;
 pub const kFileReadOnly: C2Rust_Unnamed_34 = 1;
 pub const kFileNonBlocking: C2Rust_Unnamed_34 = 128;
 pub const kRetNilBool: LuaRetMode = 1;
-pub const KE_LUA: key_extra = 103;
-pub const KE_COMMAND: key_extra = 104;
-pub const KE_C_END: key_extra = 88;
-pub const KE_C_HOME: key_extra = 87;
-pub const KE_MOUSEMOVE: key_extra = 100;
 pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
 pub const kFileTruncate: C2Rust_Unnamed_34 = 32;
@@ -180,7 +175,6 @@ pub const kFileCreate: C2Rust_Unnamed_34 = 2;
 pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_37 = ::core::ffi::c_int;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const KV_INITIAL_VALUE: Array = Array {
@@ -204,8 +198,6 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const NL_STR: [::core::ffi::c_char; 2] =
-    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"\n\0") };
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 pub const DEL: ::core::ffi::c_int = 0x7f as ::core::ffi::c_int;
@@ -215,213 +207,46 @@ pub const Ctrl_O: ::core::ffi::c_int = 15 as ::core::ffi::c_int;
 pub const Ctrl_P: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 static curscript: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
-static scriptin: GlobalCell<[FileDescriptor; 15]> = GlobalCell::new([
-    FileDescriptor {
-        fd: 0 as ::core::ffi::c_int,
-        buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        wr: false,
-        eof: false,
-        non_blocking: false,
-        bytes_read: 0,
-    },
-    FileDescriptor {
-        fd: 0,
-        buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        wr: false,
-        eof: false,
-        non_blocking: false,
-        bytes_read: 0,
-    },
-    FileDescriptor {
-        fd: 0,
-        buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        wr: false,
-        eof: false,
-        non_blocking: false,
-        bytes_read: 0,
-    },
-    FileDescriptor {
-        fd: 0,
-        buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        wr: false,
-        eof: false,
-        non_blocking: false,
-        bytes_read: 0,
-    },
-    FileDescriptor {
-        fd: 0,
-        buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        wr: false,
-        eof: false,
-        non_blocking: false,
-        bytes_read: 0,
-    },
-    FileDescriptor {
-        fd: 0,
-        buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        wr: false,
-        eof: false,
-        non_blocking: false,
-        bytes_read: 0,
-    },
-    FileDescriptor {
-        fd: 0,
-        buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        wr: false,
-        eof: false,
-        non_blocking: false,
-        bytes_read: 0,
-    },
-    FileDescriptor {
-        fd: 0,
-        buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        wr: false,
-        eof: false,
-        non_blocking: false,
-        bytes_read: 0,
-    },
-    FileDescriptor {
-        fd: 0,
-        buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        wr: false,
-        eof: false,
-        non_blocking: false,
-        bytes_read: 0,
-    },
-    FileDescriptor {
-        fd: 0,
-        buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        wr: false,
-        eof: false,
-        non_blocking: false,
-        bytes_read: 0,
-    },
-    FileDescriptor {
-        fd: 0,
-        buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        wr: false,
-        eof: false,
-        non_blocking: false,
-        bytes_read: 0,
-    },
-    FileDescriptor {
-        fd: 0,
-        buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        wr: false,
-        eof: false,
-        non_blocking: false,
-        bytes_read: 0,
-    },
-    FileDescriptor {
-        fd: 0,
-        buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        wr: false,
-        eof: false,
-        non_blocking: false,
-        bytes_read: 0,
-    },
-    FileDescriptor {
-        fd: 0,
-        buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        wr: false,
-        eof: false,
-        non_blocking: false,
-        bytes_read: 0,
-    },
-    FileDescriptor {
-        fd: 0,
-        buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        wr: false,
-        eof: false,
-        non_blocking: false,
-        bytes_read: 0,
-    },
-]);
-static redobuff: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T {
+/// Streams to read script (`-s` / `:source!`) input from, innermost last.
+static scriptin: GlobalCell<[FileDescriptor; NSCRIPT as usize]> =
+    GlobalCell::new([EMPTY_FILE; NSCRIPT as usize]);
+
+/// A `FileDescriptor` that has never been opened. Upstream's array is a
+/// zero-initialised C static; this spells the same bytes once instead of
+/// fifteen times.
+const EMPTY_FILE: FileDescriptor = FileDescriptor {
+    fd: 0,
+    buffer: ::core::ptr::null_mut(),
+    read_pos: ::core::ptr::null_mut(),
+    write_pos: ::core::ptr::null_mut(),
+    wr: false,
+    eof: false,
+    non_blocking: false,
+    bytes_read: 0,
+};
+/// An empty `buffheader_T`, the state all five of them start in.
+const EMPTY_BUFF: buffheader_T = buffheader_T {
     bh_first: buffblock {
-        b_next: ::core::ptr::null_mut::<buffblock>(),
-        b_strlen: 0 as size_t,
-        b_str: [NUL as ::core::ffi::c_char],
+        b_next: ::core::ptr::null_mut(),
+        b_strlen: 0,
+        b_str: [0],
     },
-    bh_curr: ::core::ptr::null_mut::<buffblock_T>(),
-    bh_index: 0 as size_t,
-    bh_space: 0 as size_t,
-    bh_create_newblock: false_0 != 0,
-});
-static old_redobuff: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T {
-    bh_first: buffblock {
-        b_next: ::core::ptr::null_mut::<buffblock>(),
-        b_strlen: 0 as size_t,
-        b_str: [NUL as ::core::ffi::c_char],
-    },
-    bh_curr: ::core::ptr::null_mut::<buffblock_T>(),
-    bh_index: 0 as size_t,
-    bh_space: 0 as size_t,
-    bh_create_newblock: false_0 != 0,
-});
-static recordbuff: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T {
-    bh_first: buffblock {
-        b_next: ::core::ptr::null_mut::<buffblock>(),
-        b_strlen: 0 as size_t,
-        b_str: [NUL as ::core::ffi::c_char],
-    },
-    bh_curr: ::core::ptr::null_mut::<buffblock_T>(),
-    bh_index: 0 as size_t,
-    bh_space: 0 as size_t,
-    bh_create_newblock: false_0 != 0,
-});
-static readbuf1: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T {
-    bh_first: buffblock {
-        b_next: ::core::ptr::null_mut::<buffblock>(),
-        b_strlen: 0 as size_t,
-        b_str: [NUL as ::core::ffi::c_char],
-    },
-    bh_curr: ::core::ptr::null_mut::<buffblock_T>(),
-    bh_index: 0 as size_t,
-    bh_space: 0 as size_t,
-    bh_create_newblock: false_0 != 0,
-});
-static readbuf2: GlobalCell<buffheader_T> = GlobalCell::new(buffheader_T {
-    bh_first: buffblock {
-        b_next: ::core::ptr::null_mut::<buffblock>(),
-        b_strlen: 0 as size_t,
-        b_str: [NUL as ::core::ffi::c_char],
-    },
-    bh_curr: ::core::ptr::null_mut::<buffblock_T>(),
-    bh_index: 0 as size_t,
-    bh_space: 0 as size_t,
-    bh_create_newblock: false_0 != 0,
-});
+    bh_curr: ::core::ptr::null_mut(),
+    bh_index: 0,
+    bh_space: 0,
+    bh_create_newblock: false,
+};
+
+/// The redo buffer: the keys `.` replays.
+static redobuff: GlobalCell<buffheader_T> = GlobalCell::new(EMPTY_BUFF);
+/// The redo buffer before this command, which `CTRL-O .` replays.
+static old_redobuff: GlobalCell<buffheader_T> = GlobalCell::new(EMPTY_BUFF);
+/// The register being recorded into by `q`.
+static recordbuff: GlobalCell<buffheader_T> = GlobalCell::new(EMPTY_BUFF);
+/// First read-ahead buffer, for translated commands.
+static readbuf1: GlobalCell<buffheader_T> = GlobalCell::new(EMPTY_BUFF);
+/// Second read-ahead buffer, for redo.
+static readbuf2: GlobalCell<buffheader_T> = GlobalCell::new(EMPTY_BUFF);
 /// The bytes of the key `vgetc` is assembling, for the `vim.on_key()`
 /// callbacks. Upstream is a `kvec_withinit_t(char, MAXMAPLEN + 1)`; nothing
 /// outside this module touches it, so it is an owned `Vec` here.
@@ -448,7 +273,8 @@ static e_cmd_mapping_must_end_with_cr_before_second_cmd: GlobalCell<[::core::ffi
             *b"E1136: <Cmd> mapping must end with <CR> before second <Cmd>\0",
         )
     });
-static saved_typebuf: GlobalCell<[typebuf_T; 15]> = GlobalCell::new(
+/// The typeahead each `:source!` displaced, put back by `closescript`.
+static saved_typebuf: GlobalCell<[typebuf_T; NSCRIPT as usize]> = GlobalCell::new(
     [typebuf_T {
         tb_buf: ::core::ptr::null_mut::<uint8_t>(),
         tb_noremap: ::core::ptr::null_mut::<uint8_t>(),
@@ -459,7 +285,7 @@ static saved_typebuf: GlobalCell<[typebuf_T; 15]> = GlobalCell::new(
         tb_silent: 0,
         tb_no_abbr_cnt: 0,
         tb_change_cnt: 0,
-    }; 15],
+    }; NSCRIPT as usize],
 );
 static old_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 static old_mod_mask: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -468,7 +294,6 @@ static old_mouse_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static old_mouse_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static old_KeyStuffed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static no_reduce_keys: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-pub const KS_ZERO: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
@@ -480,5 +305,3 @@ pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const MOD_MASK_ALT: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
