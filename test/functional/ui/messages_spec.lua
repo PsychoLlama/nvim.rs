@@ -2557,6 +2557,100 @@ describe('ui/msg_puts_printf', function()
   end)
 end)
 
+-- msg_may_trunc() drops the *head* of a message that does not fit the message
+-- area, replacing the last dropped character with '<'.  Nothing reaches it but
+-- msg_trunc() (":file" and friends) and one fileio.c site, and it does nothing
+-- below `room` = (Rows - cmdline_row - 1) * Columns + sc_col - 1 -- 39 cells on
+-- the 40x8 screen below.  No differential sweep can drive it, so these cases
+-- are the only cover its four decisions have.
+describe('msg_may_trunc', function()
+  local screen
+
+  before_each(function()
+    clear()
+    screen = Screen.new(40, 8)
+    -- 'T' would let msg_strtrunc() truncate the middle first and hide which of
+    -- the two truncations ran.
+    command('set shortmess+=t shortmess-=T')
+  end)
+
+  local function file_msg(name)
+    command('edit! ' .. name)
+    command('file')
+  end
+
+  it('truncates only once the message outgrows the message area', function()
+    -- 39 bytes: exactly `room`, kept whole.
+    file_msg(('b'):rep(8))
+    screen:expect([[
+      ^                                        |
+      {1:~                                       }|*6
+      "bbbbbbbb" [New] --No lines in buffer-- |
+    ]])
+    -- 40 bytes: one over, so the head goes and '<' takes its place.
+    file_msg(('b'):rep(9))
+    screen:expect([[
+      ^                                        |
+      {1:~                                       }|*6
+      <bbbbbbbb" [New] --No lines in buffer-- |
+    ]])
+  end)
+
+  it("does not truncate the head without 'shortmess' t", function()
+    -- 'T' back on, because a message this long has to be truncated somehow to
+    -- stay off the hit-enter prompt -- `room` is one short of a screen line.
+    -- msg_strtrunc() takes it out of the middle, which is exactly the answer
+    -- that says msg_may_trunc() did nothing.
+    command('set shortmess-=t shortmess+=T')
+    file_msg(('b'):rep(9))
+    screen:expect([[
+      ^                                        |
+      {1:~                                       }|*6
+      "bbbbbbbbb" [New] ... lines in buffer-- |
+    ]])
+  end)
+
+  it('measures cells, not bytes', function()
+    -- 43 bytes but 39 cells: over `room` by strlen() and inside it by width,
+    -- which is the early return the byte test alone would miss.
+    file_msg(('\228\184\128'):rep(4))
+    screen:expect([[
+      ^                                        |
+      {1:~                                       }|*6
+      "一一一一" [New] --No lines in buffer-- |
+    ]])
+    -- 41 cells: genuinely too wide, and the head goes a whole character at a
+    -- time.
+    file_msg(('\228\184\128'):rep(5))
+    screen:expect([[
+      ^                                        |
+      {1:~                                       }|*6
+      <一一一一" [New] --No lines in buffer-- |
+    ]])
+  end)
+
+  it('keeps the whole message under ext_messages', function()
+    clear()
+    screen = Screen.new(40, 8, { ext_messages = true })
+    command('set shortmess+=t')
+    command('edit! ' .. ('b'):rep(9))
+    command('file')
+    screen:expect({
+      grid = [[
+        ^                                        |
+        {1:~                                       }|*7
+      ]],
+      messages = {
+        {
+          content = { { '"bbbbbbbbb" [New] --No lines in buffer--' } },
+          history = true,
+          kind = '',
+        },
+      },
+    })
+  end)
+end)
+
 describe('pager', function()
   local screen
 
