@@ -620,8 +620,7 @@ pub(crate) unsafe extern "C" fn command_line_handle_key(
                     (*s).c + ABBR_OFF
                 } else {
                     (*s).c
-                }) != 0
-                    || (*s).c == Ctrl_RSB)
+                }) || (*s).c == Ctrl_RSB)
             {
                 return command_line_changed(s);
             }

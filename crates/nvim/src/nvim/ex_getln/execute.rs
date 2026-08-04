@@ -391,7 +391,7 @@ pub(crate) unsafe extern "C" fn command_line_execute(
                 }
             } else {
                 (*s).gotesc = false_0 != 0;
-                if ccheck_abbr((*s).c + ABBR_OFF) != 0 {
+                if ccheck_abbr((*s).c + ABBR_OFF) {
                     return command_line_changed(s);
                 }
                 if !cmd_silent.get() {

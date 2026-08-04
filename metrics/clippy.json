@@ -65,7 +65,6 @@
     "crates/nvim/src/nvim/ex_docmd/path.rs": 3,
     "crates/nvim/src/nvim/ex_docmd/scan.rs": 1,
     "crates/nvim/src/nvim/ex_eval.rs": 66,
-    "crates/nvim/src/nvim/ex_getln/buffer.rs": 1,
     "crates/nvim/src/nvim/ex_getln/cmdpreview.rs": 7,
     "crates/nvim/src/nvim/ex_getln/cmdwin.rs": 10,
     "crates/nvim/src/nvim/ex_getln/color.rs": 34,
