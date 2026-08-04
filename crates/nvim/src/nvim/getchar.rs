@@ -183,15 +183,15 @@ pub const KV_INITIAL_VALUE: Array = Array {
     items: ::core::ptr::null_mut::<Object>(),
 };
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
-    << ::core::mem::size_of::<uint64_t>()
-        .wrapping_mul(8 as usize)
-        .wrapping_sub(1 as usize);
+/// The top bit of a channel id, which no real channel has: a call that
+/// carries it came from inside nvim rather than over a channel.
+pub const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
-pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL.wrapping_add(1 as uint64_t);
-#[inline(always)]
-unsafe extern "C" fn is_internal_call(channel_id: uint64_t) -> bool {
-    return channel_id & INTERNAL_CALL_MASK != 0;
+pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
+
+/// Whether `channel_id` names an internal caller rather than a channel.
+fn is_internal_call(channel_id: uint64_t) -> bool {
+    channel_id & INTERNAL_CALL_MASK != 0
 }
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
