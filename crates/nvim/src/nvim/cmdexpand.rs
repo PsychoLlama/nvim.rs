@@ -115,13 +115,12 @@ use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::ui::{kUICmdline, kUIMessages, kUIPopupmenu, kUIWildmenu};
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, CMD_index, CmdlineInfo, CompleteListItemGetter, Direction, Error,
-    EvalFuncData, LuaRetMode, Object, OptInt, ScopeType, SpecialVarValue, String_0, VarLockStatus,
-    VarType, buf_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T, dict_T, exarg_T, expand_T,
-    fuzmatch_str_T, garray_T, hash_T, hashitem_T, hashtab_T, hlf_T, kObjectTypeArray,
-    kObjectTypeNil, kObjectTypeString, linenr_T, list_T, listitem_T, object,
-    object_data as C2Rust_Unnamed, pos_T, ptrdiff_t, pumitem_T, regmatch_T, regprog_T, schar_T,
-    scriptitem_T, sctx_T, searchit_arg_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t,
-    uint32_t, varnumber_T, win_T, xp_prefix_T,
+    EvalFuncData, LuaRetMode, Object, OptInt, ScopeType, SpecialVarValue, VarLockStatus, VarType,
+    buf_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T, dict_T, exarg_T, expand_T, fuzmatch_str_T,
+    garray_T, hash_T, hashitem_T, hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, linenr_T,
+    list_T, listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, regprog_T, schar_T, scriptitem_T,
+    sctx_T, searchit_arg_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t, uint32_t,
+    varnumber_T, win_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has, vim_beep};
 use crate::src::nvim::usercmd::{
@@ -315,15 +314,6 @@ pub const WILD_LIST_NOTFOUND: C2Rust_Unnamed_19 = 1;
 pub const VSE_NONE: C2Rust_Unnamed_24 = 0;
 pub const VSE_BUFFER: C2Rust_Unnamed_24 = 2;
 pub const VSE_SHELL: C2Rust_Unnamed_24 = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct expgen {
-    pub context: ::core::ffi::c_int,
-    pub func: ExpandFunc,
-    pub ic: ::core::ffi::c_int,
-    pub escaped: ::core::ffi::c_int,
-}
-pub type ExpandFunc = CompleteListItemGetter;
 pub const kRetObject: LuaRetMode = 0;
 pub const EXP_BREAKPT_DEL: C2Rust_Unnamed_20 = 1;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
