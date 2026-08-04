@@ -32,7 +32,6 @@
     "crates/nvim/src/nvim/clipboard.rs": 7,
     "crates/nvim/src/nvim/cmdexpand/bufpat.rs": 4,
     "crates/nvim/src/nvim/cmdexpand/eval.rs": 8,
-    "crates/nvim/src/nvim/cmdexpand/pum.rs": 4,
     "crates/nvim/src/nvim/cmdexpand/userfunc.rs": 18,
     "crates/nvim/src/nvim/cmdhist.rs": 5,
     "crates/nvim/src/nvim/context.rs": 38,

@@ -79,8 +79,7 @@ use crate::src::nvim::os::env::{expand_env_save_opt, get_env_name, home_replace,
 use crate::src::nvim::os::fs::os_isdir;
 use crate::src::nvim::os::lang::{get_lang_arg, get_locales};
 use crate::src::nvim::os::libc::{
-    __assert_fail, gettext, memmove, qsort, snprintf, strchr, strcmp, strcpy, strlen, strncmp,
-    strncpy,
+    gettext, memmove, qsort, snprintf, strchr, strcmp, strcpy, strlen, strncmp, strncpy,
 };
 use crate::src::nvim::os::users::{UserMatch, get_users, match_user};
 use crate::src::nvim::path::{
@@ -118,7 +117,7 @@ use crate::src::nvim::types::{
     EvalFuncData, LuaRetMode, Object, OptInt, ScopeType, SpecialVarValue, VarLockStatus, VarType,
     buf_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T, fuzmatch_str_T, garray_T,
     hash_T, hashitem_T, hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, linenr_T, list_T,
-    listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, regprog_T, schar_T, scriptitem_T, sctx_T,
+    listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, regprog_T, scriptitem_T, sctx_T,
     searchit_arg_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t, uint32_t, varnumber_T,
     win_T, xp_prefix_T,
 };
