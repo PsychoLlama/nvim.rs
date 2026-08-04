@@ -7,6 +7,12 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Dropped the dead half of every transpiled module preamble: the `types`
+  re-export blobs and the per-module copies of the constants, `#define`s and
+  type aliases each C translation unit could see.
+
 ## [2026.08.02-af6bcec290]
 
 Ongoing migration of the transpiled code toward safe, idiomatic Rust.
