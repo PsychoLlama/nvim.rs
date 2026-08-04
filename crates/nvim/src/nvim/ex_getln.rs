@@ -63,12 +63,14 @@ use crate::src::nvim::getchar::{
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::{HLF_E, syn_id2attr, syn_name2id};
 use crate::src::nvim::keycodes::{
-    K_BS, K_C_END, K_C_HOME, K_DEL, K_DOWN, K_END, K_HOME, K_INS, K_KEND, K_KENTER, K_KHOME,
-    K_KINS, K_KPAGEDOWN, K_KPAGEUP, K_LEFT, K_LEFTDRAG, K_LEFTMOUSE, K_MIDDLEDRAG, K_MIDDLEMOUSE,
-    K_MIDDLERELEASE, K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP, K_PAGEDOWN,
-    K_PAGEUP, K_RIGHT, K_RIGHTDRAG, K_RIGHTMOUSE, K_S_END, K_S_HOME, K_S_LEFT, K_S_RIGHT, K_S_TAB,
-    K_SELECT, K_SPECIAL, K_UP, K_X1DRAG, K_X1MOUSE, K_X1RELEASE, K_X2DRAG, K_X2MOUSE, K_X2RELEASE,
-    K_ZERO, get_special_key_name,
+    K_BS, K_C_END, K_C_HOME, K_C_LEFT, K_C_RIGHT, K_CMDWIN, K_COMMAND, K_DEL, K_DOWN, K_END,
+    K_EVENT, K_HOME, K_IGNORE, K_INS, K_KDEL, K_KEND, K_KENTER, K_KHOME, K_KINS, K_KPAGEDOWN,
+    K_KPAGEUP, K_LEFT, K_LEFTDRAG, K_LEFTMOUSE, K_LEFTRELEASE, K_LUA, K_MIDDLEDRAG, K_MIDDLEMOUSE,
+    K_MIDDLERELEASE, K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP, K_NOP,
+    K_PAGEDOWN, K_PAGEUP, K_RIGHT, K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_S_DOWN, K_S_END,
+    K_S_HOME, K_S_LEFT, K_S_RIGHT, K_S_TAB, K_S_UP, K_SELECT, K_SPECIAL, K_UP, K_WILD, K_X1DRAG,
+    K_X1MOUSE, K_X1RELEASE, K_X2DRAG, K_X2MOUSE, K_X2RELEASE, K_XF1, K_XF2, K_ZERO,
+    get_special_key_name,
 };
 use crate::src::nvim::main::{
     Columns, IObuff, KeyStuffed, KeyTyped, RedrawingDisabled, Rows, State, allbuf_lock, allow_keys,
@@ -160,9 +162,9 @@ use crate::src::nvim::types::{
     hashitem_T, hashtab_T, int64_t, kObjectTypeArray, kObjectTypeInteger, kObjectTypeString,
     key_extra, linenr_T, list_T, listitem_T, magic_T, msglist_T, object,
     object_data as C2Rust_Unnamed, oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t,
-    ptrdiff_t, regmatch_T, regprog_T, save_v_event_T, sctx_T, searchit_arg_T, size_t,
-    state_check_callback, state_execute_callback, tabpage_T, time_t, typval_T, typval_vval_union,
-    u_header_T, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
+    ptrdiff_t, regmatch_T, regprog_T, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T,
+    time_t, typval_T, typval_vval_union, u_header_T, uint8_t, uint32_t, uvarnumber_T, varnumber_T,
+    win_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -592,7 +594,14 @@ pub const B_IMODE_USE_INSERT: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 static last_prompt_id: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0 as ::core::ffi::c_uint);
-static ccline: GlobalCell<CmdlineInfo> = GlobalCell::new(CmdlineInfo {
+
+/// An all-zero [`CmdlineInfo`].
+///
+/// This is C's `CLEAR_FIELD(ccline)` and the initial value of every
+/// `save_ccline` local, which the C leaves to `save_cmdline()` to fill.
+/// `kCallbackNone` and a null `funcref` are both zero, so this really is the
+/// zero value and the C's `CLEAR_FIELD` and this constant agree bit for bit.
+pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
     cmdbuff: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     cmdbufflen: 0,
     cmdlen: 0,
@@ -631,7 +640,115 @@ static ccline: GlobalCell<CmdlineInfo> = GlobalCell::new(CmdlineInfo {
     redraw_state: kCmdRedrawNone,
     one_key: false,
     mouse_used: ::core::ptr::null_mut::<bool>(),
-});
+};
+
+/// An all-zero [`ColoredCmdline`], C's `(ColoredCmdline){ .cmdbuff = NULL,
+/// .colors = KV_INITIAL_VALUE }`.
+pub(crate) const COLORED_CMDLINE_INIT: ColoredCmdline = ColoredCmdline {
+    prompt_id: 0,
+    cmdbuff: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    colors: CmdlineColors {
+        size: 0,
+        capacity: 0,
+        items: ::core::ptr::null_mut::<CmdlineColorChunk>(),
+    },
+};
+
+/// An all-zero [`Error`], C's `ERROR_INIT`.
+pub(crate) const ERROR_INIT: Error = Error {
+    type_0: kErrorTypeNone,
+    msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+};
+
+/// An all-zero [`pos_T`].
+pub(crate) const POS_INIT: pos_T = pos_T {
+    lnum: 0,
+    col: 0,
+    coladd: 0,
+};
+
+/// An all-zero [`viewstate_T`], which `save_viewstate` fills.
+pub(crate) const VIEWSTATE_INIT: viewstate_T = viewstate_T {
+    vs_curswant: 0,
+    vs_leftcol: 0,
+    vs_skipcol: 0,
+    vs_topline: 0,
+    vs_topfill: 0,
+    vs_botline: 0,
+    vs_empty_rows: 0,
+};
+
+/// An all-zero [`incsearch_state_T`]; `init_incsearch_state` fills it.
+pub(crate) const INCSEARCH_STATE_INIT: incsearch_state_T = incsearch_state_T {
+    search_start: POS_INIT,
+    save_cursor: POS_INIT,
+    winid: 0,
+    init_viewstate: VIEWSTATE_INIT,
+    old_viewstate: VIEWSTATE_INIT,
+    match_start: POS_INIT,
+    match_end: POS_INIT,
+    did_incsearch: false,
+    incsearch_postponed: false,
+    magic_overruled_save: OPTION_MAGIC_NOT_SET,
+};
+
+/// An all-zero [`expand_T`]; `ExpandInit` fills the fields that matter.
+pub(crate) const EXPAND_T_INIT: expand_T = expand_T {
+    xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    xp_context: 0,
+    xp_pattern_len: 0,
+    xp_prefix: XP_PREFIX_NONE,
+    xp_arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    xp_luaref: 0,
+    xp_script_ctx: sctx_T {
+        sc_sid: 0,
+        sc_seq: 0,
+        sc_lnum: 0,
+        sc_chan: 0,
+    },
+    xp_backslash: 0,
+    xp_shell: false,
+    xp_numfiles: 0,
+    xp_col: 0,
+    xp_selected: 0,
+    xp_orig: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    xp_files: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    xp_line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    xp_buf: [0; 256],
+    xp_search_dir: kDirectionNotSet,
+    xp_pre_incsearch_pos: POS_INIT,
+};
+
+/// An all-zero [`TryState`], which is what the `TRY_WRAP` macro declares
+/// (uninitialised in the C; `try_enter` fills every field).
+pub(crate) const TRY_STATE_INIT: TryState = TryState {
+    current_exception: ::core::ptr::null_mut::<except_T>(),
+    private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
+    msg_list: ::core::ptr::null::<*const msglist_T>(),
+    got_int: 0,
+    did_throw: false,
+    need_rethrow: 0,
+    did_emsg: 0,
+};
+
+/// An all-zero [`save_v_event_T`], the out-parameter of `get_v_event`.
+pub(crate) const SAVE_V_EVENT_INIT: save_v_event_T = save_v_event_T {
+    sve_did_save: false,
+    sve_hashtab: hashtab_T {
+        ht_mask: 0,
+        ht_used: 0,
+        ht_filled: 0,
+        ht_changed: 0,
+        ht_locked: 0,
+        ht_array: ::core::ptr::null_mut::<hashitem_T>(),
+        ht_smallarray: [hashitem_T {
+            hi_hash: 0,
+            hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        }; 16],
+    },
+};
+
+static ccline: GlobalCell<CmdlineInfo> = GlobalCell::new(CMDLINE_INFO_INIT);
 static new_cmdpos: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static cmdline_block: GlobalCell<Array> = GlobalCell::new(ARRAY_DICT_INIT);
 static getln_interrupted_highlight: GlobalCell<bool> = GlobalCell::new(false_0 != 0);

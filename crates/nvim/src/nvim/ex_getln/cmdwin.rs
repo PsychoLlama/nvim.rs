@@ -118,8 +118,7 @@ pub(crate) unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
             || cmdline_star.get() > 0 as ::core::ffi::c_int
         {
             beep_flush();
-            return -(253 as ::core::ffi::c_int
-                + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+            return K_IGNORE;
         }
         set_bufref(&raw mut old_curbuf, curbuf.get());
         win_size_save(&raw mut winsizes);
@@ -133,8 +132,7 @@ pub(crate) unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
         {
             beep_flush();
             ga_clear(&raw mut winsizes);
-            return -(253 as ::core::ffi::c_int
-                + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+            return K_IGNORE;
         }
         if !win_valid(old_curwin)
             || curwin.get() == old_curwin
@@ -293,10 +291,7 @@ pub(crate) unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
         cmdwin_result.set(0 as ::core::ffi::c_int);
         trigger_cmd_autocmd(cmdwin_type.get(), EVENT_CMDWINENTER);
         if restart_edit.get() != 0 as ::core::ffi::c_int {
-            stuffcharReadbuff(
-                -(253 as ::core::ffi::c_int
-                    + ((KE_NOP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
-            );
+            stuffcharReadbuff(K_NOP);
         }
         i = RedrawingDisabled.get();
         RedrawingDisabled.set(0 as ::core::ffi::c_int);
@@ -324,33 +319,17 @@ pub(crate) unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
             ));
         } else {
             let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
-            if aborting() as ::core::ffi::c_int != 0
-                && cmdwin_result.get()
-                    != -(253 as ::core::ffi::c_int
-                        + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            {
+            if aborting() as ::core::ffi::c_int != 0 && cmdwin_result.get() != K_IGNORE {
                 cmdwin_result.set(Ctrl_C);
             }
             dealloc_cmdbuff();
-            if cmdwin_result.get()
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_XF1 as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-                || cmdwin_result.get()
-                    == -(253 as ::core::ffi::c_int
-                        + ((KE_XF2 as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            {
-                let mut p: *const ::core::ffi::c_char = if cmdwin_result.get()
-                    == -(253 as ::core::ffi::c_int
-                        + ((KE_XF2 as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-                {
+            if cmdwin_result.get() == K_XF1 || cmdwin_result.get() == K_XF2 {
+                let mut p: *const ::core::ffi::c_char = if cmdwin_result.get() == K_XF2 {
                     b"qa\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
                     b"qa!\0".as_ptr() as *const ::core::ffi::c_char
                 };
-                let mut plen: size_t = (if cmdwin_result.get()
-                    == -(253 as ::core::ffi::c_int
-                        + ((KE_XF2 as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-                {
+                let mut plen: size_t = (if cmdwin_result.get() == K_XF2 {
                     2 as ::core::ffi::c_int
                 } else {
                     3 as ::core::ffi::c_int
@@ -391,10 +370,7 @@ pub(crate) unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
                 {
                     (*ccline.ptr()).cmdpos = (*ccline.ptr()).cmdlen;
                 }
-                if cmdwin_result.get()
-                    == -(253 as ::core::ffi::c_int
-                        + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-                {
+                if cmdwin_result.get() == K_IGNORE {
                     (*ccline.ptr()).cmdspos = cmd_screencol((*ccline.ptr()).cmdpos);
                     redrawcmd();
                 }

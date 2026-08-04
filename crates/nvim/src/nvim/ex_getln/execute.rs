@@ -83,8 +83,7 @@ pub(crate) unsafe extern "C" fn command_line_end_wildmenu(
                         || c == K_BS
                         || c == Ctrl_H
                         || c == K_DEL
-                        || c == -(253 as ::core::ffi::c_int
-                            + ((KE_KDEL as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+                        || c == K_KDEL
                         || c == Ctrl_W
                         || c == Ctrl_U);
             }
@@ -115,13 +114,7 @@ pub(crate) unsafe extern "C" fn command_line_execute(
     mut key: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if key
-            == -(253 as ::core::ffi::c_int
-                + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            || key
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_NOP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        {
+        if key == K_IGNORE || key == K_NOP {
             return -1 as ::core::ffi::c_int;
         }
         let mut display_tick_saved: disptick_T = (*curwin.get()).w_display_tick;
@@ -133,33 +126,14 @@ pub(crate) unsafe extern "C" fn command_line_execute(
             command_line_end_wildmenu(s, false_0 != 0, -1 as ::core::ffi::c_int);
         }
         (*ccline.ptr()).cmdbuff_replaced = false_0 != 0;
-        if (*s).c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_WILD as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            && (*s).did_hist_navigate as ::core::ffi::c_int != 0
-        {
+        if (*s).c == K_WILD && (*s).did_hist_navigate as ::core::ffi::c_int != 0 {
             (*s).did_hist_navigate = false_0 != 0;
             return 1 as ::core::ffi::c_int;
         }
-        if (*s).c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_EVENT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            || (*s).c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_COMMAND as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            || (*s).c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_LUA as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        {
-            if (*s).c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_EVENT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            {
+        if (*s).c == K_EVENT || (*s).c == K_COMMAND || (*s).c == K_LUA {
+            if (*s).c == K_EVENT {
                 state_handle_k_event();
-            } else if (*s).c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_COMMAND as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            {
+            } else if (*s).c == K_COMMAND {
                 do_cmdline(
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     Some(
@@ -225,8 +199,7 @@ pub(crate) unsafe extern "C" fn command_line_execute(
                         (*s).c = K_S_LEFT;
                     }
                     -22269 => {
-                        (*s).c = -(253 as ::core::ffi::c_int
-                            + ((KE_C_LEFT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+                        (*s).c = K_C_LEFT;
                     }
                     K_LEFT => {
                         (*s).c = K_RIGHT;
@@ -235,8 +208,7 @@ pub(crate) unsafe extern "C" fn command_line_execute(
                         (*s).c = K_S_RIGHT;
                     }
                     -22013 => {
-                        (*s).c = -(253 as ::core::ffi::c_int
-                            + ((KE_C_RIGHT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+                        (*s).c = K_C_RIGHT;
                     }
                     _ => {}
                 }
@@ -250,12 +222,8 @@ pub(crate) unsafe extern "C" fn command_line_execute(
             got_int.set(false_0 != 0);
         }
         if !(*s).lookfor.is_null()
-            && (*s).c
-                != -(253 as ::core::ffi::c_int
-                    + ((KE_S_DOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            && (*s).c
-                != -(253 as ::core::ffi::c_int
-                    + ((KE_S_UP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+            && (*s).c != K_S_DOWN
+            && (*s).c != K_S_UP
             && (*s).c != K_DOWN
             && (*s).c != K_UP
             && (*s).c != K_PAGEDOWN
@@ -354,15 +322,8 @@ pub(crate) unsafe extern "C" fn command_line_execute(
                 }
             }
         }
-        if (*s).c == cedit_key.get()
-            || (*s).c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_CMDWIN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        {
-            if ((*s).c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_CMDWIN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-                || ex_normal_busy.get() == 0 as ::core::ffi::c_int)
+        if (*s).c == cedit_key.get() || (*s).c == K_CMDWIN {
+            if ((*s).c == K_CMDWIN || ex_normal_busy.get() == 0 as ::core::ffi::c_int)
                 && got_int.get() as ::core::ffi::c_int == false_0
             {
                 (*s).c = open_cmdwin();
@@ -407,31 +368,20 @@ pub(crate) unsafe extern "C" fn command_line_execute(
             && !(*s).gotesc
             && KeyTyped.get() as ::core::ffi::c_int != 0
             || (*s).c as OptInt == p_wcm.get()
-            || (*s).c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_WILD as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+            || (*s).c == K_WILD
             || (*s).c == Ctrl_Z
         {
-            if (*s).c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_WILD as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            {
+            if (*s).c == K_WILD {
                 (*emsg_silent.ptr()) += 1;
             }
             let mut res: ::core::ffi::c_int = command_line_wildchar_complete(s);
-            if (*s).c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_WILD as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            {
+            if (*s).c == K_WILD {
                 (*emsg_silent.ptr()) -= 1;
             }
             if res == CMDLINE_CHANGED {
                 return command_line_changed(s);
             }
-            if (*s).c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_WILD as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            {
+            if (*s).c == K_WILD {
                 return command_line_not_changed(s);
             }
         }

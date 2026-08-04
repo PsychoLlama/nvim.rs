@@ -167,15 +167,18 @@ pub const KE_X2MOUSE: key_extra = 92;
 pub const KE_X2DRAG: key_extra = 93;
 pub const KE_X2RELEASE: key_extra = 94;
 pub const KE_DROP: key_extra = 95;
+pub const KE_CMDWIN: key_extra = 84;
 pub const KE_NOP: key_extra = 97;
 pub const KE_MOUSEMOVE: key_extra = 100;
 pub const KE_EVENT: key_extra = 102;
 pub const KE_LUA: key_extra = 103;
 pub const KE_COMMAND: key_extra = 104;
+pub const KE_WILD: key_extra = 108;
 
 /// Key codes for the "extra" keys: everything with no termcap name of its
 /// own, which is most of what a modern terminal sends.
 pub const K_COMMAND: c_int = extra(KE_COMMAND);
+pub const K_CMDWIN: c_int = extra(KE_CMDWIN);
 pub const K_C_END: c_int = extra(KE_C_END);
 pub const K_C_HOME: c_int = extra(KE_C_HOME);
 pub const K_C_LEFT: c_int = extra(KE_C_LEFT);
@@ -238,6 +241,7 @@ pub const K_XHOME: c_int = extra(KE_XHOME);
 pub const K_XLEFT: c_int = extra(KE_XLEFT);
 pub const K_XRIGHT: c_int = extra(KE_XRIGHT);
 pub const K_XUP: c_int = extra(KE_XUP);
+pub const K_WILD: c_int = extra(KE_WILD);
 pub const K_ZEND: c_int = extra(KE_ZEND);
 pub const K_ZHOME: c_int = extra(KE_ZHOME);
 

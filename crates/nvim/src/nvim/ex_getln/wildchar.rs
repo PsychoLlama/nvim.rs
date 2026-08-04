@@ -17,9 +17,7 @@ pub(crate) unsafe extern "C" fn command_line_wildchar_complete(
         let mut res: ::core::ffi::c_int = 0;
         let mut options: ::core::ffi::c_int = WILD_NO_BEEP;
         let mut escape: bool = (*s).firstc != '@' as ::core::ffi::c_int;
-        let mut redraw_if_menu_empty: bool = (*s).c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_WILD as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+        let mut redraw_if_menu_empty: bool = (*s).c == K_WILD;
         let mut wim_noselect: bool = p_wmnu.get() != 0
             && (*wim_flags.ptr())[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
                 & kOptWimFlagNoselect as ::core::ffi::c_int
@@ -70,16 +68,11 @@ pub(crate) unsafe extern "C" fn command_line_wildchar_complete(
             (*s).wim_index = 0 as ::core::ffi::c_int;
             if (*s).c as OptInt == p_wc.get()
                 || (*s).c as OptInt == p_wcm.get()
-                || (*s).c
-                    == -(253 as ::core::ffi::c_int
-                        + ((KE_WILD as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+                || (*s).c == K_WILD
                 || (*s).c == Ctrl_Z
             {
                 options |= WILD_MAY_EXPAND_PATTERN;
-                if (*s).c
-                    == -(253 as ::core::ffi::c_int
-                        + ((KE_WILD as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-                {
+                if (*s).c == K_WILD {
                     options |= WILD_FUNC_TRIGGER;
                 }
                 (*s).xpc.xp_pre_incsearch_pos = (*s).is_state.search_start;

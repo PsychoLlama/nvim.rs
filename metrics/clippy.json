@@ -69,7 +69,6 @@
     "crates/nvim/src/nvim/ex_getln/cmdwin.rs": 10,
     "crates/nvim/src/nvim/ex_getln/color.rs": 34,
     "crates/nvim/src/nvim/ex_getln/draw.rs": 1,
-    "crates/nvim/src/nvim/ex_getln/enter.rs": 16,
     "crates/nvim/src/nvim/ex_getln/execute.rs": 2,
     "crates/nvim/src/nvim/ex_getln/handlekey.rs": 2,
     "crates/nvim/src/nvim/ex_getln/incsearch.rs": 34,

@@ -14,10 +14,7 @@ pub(crate) unsafe extern "C" fn command_line_erase_chars(
     mut s: *mut CommandLineState,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*s).c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_KDEL as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        {
+        if (*s).c == K_KDEL {
             (*s).c = K_DEL;
         }
         if (*s).c == K_DEL && (*ccline.ptr()).cmdpos != (*ccline.ptr()).cmdlen {
@@ -185,13 +182,7 @@ pub(crate) unsafe extern "C" fn command_line_insert_reg(
 
 pub(crate) unsafe extern "C" fn command_line_left_right_mouse(mut s: *mut CommandLineState) {
     unsafe {
-        if (*s).c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_LEFTRELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            || (*s).c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_RIGHTRELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        {
+        if (*s).c == K_LEFTRELEASE || (*s).c == K_RIGHTRELEASE {
             (*s).ignore_drag_release = true_0 != 0;
         } else {
             (*s).ignore_drag_release = false_0 != 0;
@@ -330,10 +321,7 @@ pub(crate) unsafe extern "C" fn command_line_handle_key(
                                                 .offset((*ccline.ptr()).cmdpos as isize),
                                         );
                                         if !(((*s).c == K_S_RIGHT
-                                            || (*s).c
-                                                == -(253 as ::core::ffi::c_int
-                                                    + ((KE_C_RIGHT as ::core::ffi::c_int)
-                                                        << 8 as ::core::ffi::c_int))
+                                            || (*s).c == K_C_RIGHT
                                             || mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL)
                                                 != 0)
                                             && *(*ccline.ptr())
@@ -364,10 +352,7 @@ pub(crate) unsafe extern "C" fn command_line_handle_key(
                                             cmdline_charsize((*ccline.ptr()).cmdpos);
                                         if !((*ccline.ptr()).cmdpos > 0 as ::core::ffi::c_int
                                             && ((*s).c == K_S_LEFT
-                                                || (*s).c
-                                                    == -(253 as ::core::ffi::c_int
-                                                        + ((KE_C_LEFT as ::core::ffi::c_int)
-                                                            << 8 as ::core::ffi::c_int))
+                                                || (*s).c == K_C_LEFT
                                                 || mod_mask.get()
                                                     & (MOD_MASK_SHIFT | MOD_MASK_CTRL)
                                                     != 0)

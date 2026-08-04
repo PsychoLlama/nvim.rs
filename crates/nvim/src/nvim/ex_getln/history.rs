@@ -79,9 +79,7 @@ pub(crate) unsafe extern "C" fn command_line_browse_history(
             (*s).lookforlen = (*ccline.ptr()).cmdpos;
         }
         let mut next_match: bool = (*s).c == K_DOWN
-            || (*s).c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_S_DOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+            || (*s).c == K_S_DOWN
             || (*s).c == Ctrl_N
             || (*s).c == K_PAGEDOWN
             || (*s).c == K_KPAGEDOWN;
