@@ -80,8 +80,8 @@ use crate::src::nvim::os::env::home_replace_save;
 use crate::src::nvim::os::fs::os_fopen;
 use crate::src::nvim::os::input::{input_available, os_breakcheck};
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, abs, fclose, fprintf, fputs, gettext, memchr, memmove, ngettext, printf,
-    putc, snprintf, stderr, strcmp, strlen, strnlen,
+    abort, abs, fclose, fprintf, fputs, gettext, memchr, ngettext, printf, putc, snprintf, stderr,
+    strcmp, strlen, strnlen,
 };
 use crate::src::nvim::os::time::os_delay;
 use crate::src::nvim::register::write_reg_contents;
@@ -98,8 +98,8 @@ use crate::src::nvim::types::{
     VV_ERRMSG, VV_SCROLLSTART, VV_STATUSMSG, VV_WARNINGMSG, VarLockStatus, VarType, cmd_addr_T,
     colnr_T, estack_T, estack_arg_T, exarg_T, flush_buffers_T, garray_T, int64_t,
     kObjectTypeInteger, kObjectTypeNil, key_extra, object, object_data as C2Rust_Unnamed_11,
-    ptrdiff_t, regmatch_T, sattr_T, schar_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t,
-    uint32_t, uint64_t,
+    ptrdiff_t, regmatch_T, sattr_T, schar_T, size_t, ssize_t, typval_T, typval_vval_union,
+    uint64_t,
 };
 use crate::src::nvim::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
@@ -107,6 +107,8 @@ use crate::src::nvim::ui::{
     ui_cursor_goto, ui_flush, ui_grid_cursor_goto, ui_has, ui_line, ui_refresh, vim_beep,
 };
 use crate::src::nvim::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
+use core::ffi::{c_char, c_int, c_uint};
+use core::ptr;
 
 // The carve of the transpiled module; see each child's docs.
 mod grid;
@@ -269,6 +271,17 @@ static msg_grid_pos_at_flush: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 static msg_id_next: GlobalCell<int64_t> = GlobalCell::new(1 as int64_t);
 
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
+pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
+pub const KS_ZERO: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
+pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
+pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
+pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
+pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
+pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
+
 /// The active attribute for highlight group `hlf`, i.e. C's `HL_ATTR`.
 ///
 /// # Safety
@@ -359,300 +372,325 @@ unsafe fn hl_msg_push(msg: &mut HlMessage, chunk: HlMessageChunk) {
     }
 }
 
+/// Show a message. Exported for the unit specs.
+///
+/// Answers false when the message needed a hit-enter prompt that has not been
+/// answered yet.
+///
+/// # Safety
+/// `s` must be a valid C string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn msg(mut s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool {
-    unsafe {
-        return msg_keep(s, hl_id, false_0 != 0, false_0 != 0);
-    }
+pub unsafe extern "C" fn msg(s: *const c_char, hl_id: c_int) -> bool {
+    unsafe { msg_keep(s, hl_id, false, false) }
 }
-pub unsafe extern "C" fn msg_multiline(
-    mut str: String_0,
-    mut hl_id: ::core::ffi::c_int,
-    mut check_int: bool,
-    mut hist: bool,
-    mut need_clear: *mut bool,
+
+/// Show `str`, splitting it at the control characters that need handling of
+/// their own: a newline, tab or carriage return is emitted as itself, and a
+/// bell rings instead of being drawn.
+///
+/// `need_clear` is cleared once the rest of the line has been cleared.
+///
+/// # Safety
+/// `str` must describe a readable range, and `need_clear` a writable `bool`.
+pub unsafe fn msg_multiline(
+    str: String_0,
+    hl_id: c_int,
+    check_int: bool,
+    hist: bool,
+    need_clear: *mut bool,
 ) {
     unsafe {
-        let mut s: *const ::core::ffi::c_char = str.data;
-        let mut chunk: *const ::core::ffi::c_char = s;
+        let mut s = str.data.cast_const();
+        let mut chunk = s;
         while (s.offset_from(str.data) as size_t) < str.size {
-            if check_int as ::core::ffi::c_int != 0 && got_int.get() as ::core::ffi::c_int != 0 {
+            if check_int && got_int.get() {
                 return;
             }
-            if *s as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
-                || *s as ::core::ffi::c_int == TAB
-                || *s as ::core::ffi::c_int == '\r' as ::core::ffi::c_int
-                || *s as ::core::ffi::c_int == BELL
-            {
-                msg_outtrans_len(
-                    chunk,
-                    s.offset_from(chunk) as ::core::ffi::c_int,
-                    hl_id,
-                    hist,
-                );
-                if *s as ::core::ffi::c_int != TAB && *need_clear as ::core::ffi::c_int != 0 {
+            if matches!(*s as u8, b'\n' | b'\t' | b'\r' | 0x07) {
+                msg_outtrans_len(chunk, s.offset_from(chunk) as c_int, hl_id, hist);
+                if *s as c_int != TAB && *need_clear {
                     msg_clr_eos();
-                    *need_clear = false_0 != 0;
+                    *need_clear = false;
                 }
-                if *s as ::core::ffi::c_int == BELL {
-                    vim_beep(kOptBoFlagShell as ::core::ffi::c_int as ::core::ffi::c_uint);
+                if *s as c_int == BELL {
+                    vim_beep(kOptBoFlagShell as c_uint);
                 } else {
-                    msg_putchar_hl(*s as uint8_t as ::core::ffi::c_int, hl_id);
+                    msg_putchar_hl(*s as u8 as c_int, hl_id);
                 }
-                chunk = s.offset(1 as ::core::ffi::c_int as isize);
+                chunk = s.add(1);
             }
-            s = s.offset(1);
+            s = s.add(1);
         }
-        if *chunk as ::core::ffi::c_int != NUL || chunk == str.data as *const ::core::ffi::c_char {
+        // The tail, and the whole of an empty message: an empty `str` still
+        // has to reach `msg_outtrans_len`, which is what clears the line.
+        if *chunk != 0 || chunk == str.data.cast_const() {
             msg_outtrans_len(
                 chunk,
-                str.size.wrapping_sub(chunk.offset_from(str.data) as size_t) as ::core::ffi::c_int,
+                (str.size - chunk.offset_from(str.data) as size_t) as c_int,
                 hl_id,
                 hist,
             );
         }
     }
 }
-static is_multihl: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-pub unsafe extern "C" fn msg_multihl(
-    mut id: Object,
-    mut hl_msg: HlMessage,
-    mut kind: *const ::core::ffi::c_char,
-    mut history: bool,
-    mut err: bool,
-    mut msg_data: *mut MessageData,
-    mut needs_msg_clear: *mut bool,
+
+/// Nonzero while [`msg_multihl`] is emitting a chunk, so [`msg_keep`] knows
+/// not to start or end a message of its own.
+pub(crate) static is_multihl: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// Show a message made of chunks, each with its own highlight id.
+///
+/// Answers the message's id: `id` itself when it names one, and a freshly
+/// allocated one when it is nil.
+///
+/// # Safety
+/// `hl_msg` must be a valid message, `kind` null or a valid C string, and
+/// `needs_msg_clear` a writable `bool`.
+pub unsafe fn msg_multihl(
+    id: Object,
+    hl_msg: HlMessage,
+    kind: *const c_char,
+    history: bool,
+    err: bool,
+    msg_data: *mut MessageData,
+    needs_msg_clear: *mut bool,
 ) -> Object {
     unsafe {
-        if id.type_0 as ::core::ffi::c_uint
-            == kObjectTypeNil as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let c2rust_fresh8 = msg_id_next.get();
-            msg_id_next.set(msg_id_next.get() + 1);
-            id = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_11 {
-                    integer: c2rust_fresh8,
-                },
-            };
-        } else if id.type_0 as ::core::ffi::c_uint
-            == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-            && !msg_id_exists(id.data.integer as int64_t)
-        {
-            abort();
-        }
-        if strequal(kind, b"progress\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int
-            != 0
-            && progress_msg_target.get() & PROGRESS_TARGET_CMD == 0 as ::core::ffi::c_int
-        {
-            *needs_msg_clear = true_0 != 0;
+        let mut hl_msg = hl_msg;
+        // Message `id`:
+        // - Nil: generate a new Integer id.
+        // - Integer: an existing id.
+        // - String: a user-defined id, new or existing.
+        let id = if id.type_0 == kObjectTypeNil {
+            let next = msg_id_next.get();
+            msg_id_next.set(next + 1);
+            Object::integer(next)
+        } else {
+            if id.type_0 == kObjectTypeInteger && !msg_id_exists(id.data.integer) {
+                abort();
+            }
+            id
+        };
+
+        let is_progress = strequal(kind, c"progress".as_ptr());
+        // Don't display a progress message on the command line when the
+        // target does not include it.
+        if is_progress && progress_msg_target.get() & PROGRESS_TARGET_CMD == 0 {
+            *needs_msg_clear = true;
             return id;
         }
-        (*no_wait_return.ptr()) += 1;
+
+        no_wait_return.set(no_wait_return.get() + 1);
         msg_start();
         msg_clr_eos();
-        let mut need_clear: bool = false_0 != 0;
-        let mut hl_msg_updated: bool = false_0 != 0;
+        let mut need_clear = false;
+        let mut hl_msg_updated = false;
         if !kind.is_null() {
             msg_ext_set_kind(kind);
         }
-        msg_ext_skip_flush.set(true_0 != 0);
+        msg_ext_skip_flush.set(true);
         msg_ext_id.set(id);
-        if strequal(kind, b"progress\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int
-            != 0
-            && !msg_data.is_null()
-        {
-            let mut formated_message: HlMessage = format_progress_message(hl_msg, msg_data);
-            if formated_message.items != hl_msg.items {
-                *needs_msg_clear = true_0 != 0;
-                hl_msg_updated = true_0 != 0;
-                hl_msg = formated_message;
+
+        // A progress message displays as "title: percent% msg".
+        if is_progress && !msg_data.is_null() {
+            let formatted = format_progress_message(hl_msg, msg_data);
+            if formatted.items != hl_msg.items {
+                *needs_msg_clear = true;
+                hl_msg_updated = true;
+                hl_msg = formatted;
             }
         }
-        let mut i: uint32_t = 0 as uint32_t;
-        while (i as size_t) < hl_msg.size {
-            let mut chunk: HlMessageChunk = *hl_msg.items.offset(i as isize);
-            (*is_multihl.ptr()) += 1;
+
+        for i in 0..hl_msg.size {
+            let chunk = *hl_msg.items.add(i);
+            is_multihl.set(is_multihl.get() + 1);
             if err {
-                emsg_multiline(chunk.text.data, kind, chunk.hl_id, true_0 != 0);
+                emsg_multiline(chunk.text.data, kind, chunk.hl_id, true);
             } else {
-                msg_multiline(
-                    chunk.text,
-                    chunk.hl_id,
-                    true_0 != 0,
-                    false_0 != 0,
-                    &raw mut need_clear,
-                );
+                msg_multiline(chunk.text, chunk.hl_id, true, false, &raw mut need_clear);
             }
-            '_c2rust_label: {
-                if !ui_has(kUIMessages) || kind.is_null() || msg_ext_kind.get() == kind {
-                } else {
-                    __assert_fail(
-                    b"!ui_has(kUIMessages) || kind == NULL || msg_ext_kind == kind\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/message.rs\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    416 as ::core::ffi::c_uint,
-                    b"Object msg_multihl(Object, HlMessage, const char *, _Bool, _Bool, MessageData *, _Bool *)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-                }
-            };
-            i = i.wrapping_add(1);
+            debug_assert!(!ui_has(kUIMessages) || kind.is_null() || msg_ext_kind.get() == kind);
         }
-        if history as ::core::ffi::c_int != 0 && hl_msg.size != 0 {
-            msg_hist_add_multihl(hl_msg, false_0 != 0, msg_data);
+
+        let kept = history && hl_msg.size != 0;
+        if kept {
+            msg_hist_add_multihl(hl_msg, false, msg_data);
         }
-        msg_ext_skip_flush.set(false_0 != 0);
-        is_multihl.set(0 as ::core::ffi::c_int);
-        (*no_wait_return.ptr()) -= 1;
+
+        msg_ext_skip_flush.set(false);
+        is_multihl.set(0);
+        no_wait_return.set(no_wait_return.get() - 1);
         msg_end();
-        if hl_msg_updated as ::core::ffi::c_int != 0
-            && !(history as ::core::ffi::c_int != 0 && hl_msg.size != 0)
-        {
+
+        // The reformatted message is ours to free unless the history took it.
+        if hl_msg_updated && !kept {
             hl_msg_free(hl_msg);
         }
-        return id;
+        id
     }
 }
-pub unsafe extern "C" fn msg_keep(
-    mut s: *const ::core::ffi::c_char,
-    mut hl_id: ::core::ffi::c_int,
-    mut keep: bool,
-    mut multiline: bool,
-) -> bool {
+
+/// Show a message, optionally keeping it displayed after a redraw.
+///
+/// `keep` sets `keep_msg` when the message fits without scrolling;
+/// `multiline` sends it through [`msg_multiline`] rather than
+/// [`msg_outtrans`].
+///
+/// # Safety
+/// `s` must be a valid C string.
+pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bool) -> bool {
     unsafe {
-        static entered: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-        if keep as ::core::ffi::c_int != 0 && multiline as ::core::ffi::c_int != 0 {
+        static entered: GlobalCell<c_int> = GlobalCell::new(0);
+
+        if keep && multiline {
+            // Not implemented. 'multiline' is only used by nvim-added
+            // messages, which should avoid 'keep' behaviour -- they should
+            // just show the message at the right time already.
             abort();
         }
-        if !emsg_on_display.get() && message_filtered(s) as ::core::ffi::c_int != 0 {
-            return true_0 != 0;
+
+        // Skip messages that do not match ":filter pattern", but never filter
+        // when there is an error.
+        if !emsg_on_display.get() && message_filtered(s) {
+            return true;
         }
-        if hl_id == 0 as ::core::ffi::c_int {
-            set_vim_var_string(VV_STATUSMSG, s, -1 as ptrdiff_t);
+
+        if hl_id == 0 {
+            set_vim_var_string(VV_STATUSMSG, s, -1);
         }
-        if entered.get() >= 3 as ::core::ffi::c_int {
-            return true_0 != 0;
+
+        // Displaying a message can cause a problem (e.g. when redrawing the
+        // window), which causes another message, and so on. Break the loop by
+        // limiting the recursion to three levels.
+        if entered.get() >= 3 {
+            return true;
         }
-        (*entered.ptr()) += 1;
+        entered.set(entered.get() + 1);
+
+        // Add the message to the history unless it is a multihl, or a repeat
+        // of the kept message, or a truncated one.
         if is_multihl.get() == 0
-            && (s != keep_msg.get() as *const ::core::ffi::c_char
-                || *s as ::core::ffi::c_int != '<' as ::core::ffi::c_int
-                    && !(*msg_hist_last.ptr()).is_null()
-                    && strcmp(
-                        s,
-                        (*(*msg_hist_last.get())
-                            .msg
-                            .items
-                            .offset(0 as ::core::ffi::c_int as isize))
-                        .text
-                        .data,
-                    ) != 0 as ::core::ffi::c_int)
+            && (s != keep_msg.get().cast_const()
+                || (*s as u8 != b'<'
+                    && !msg_hist_last.get().is_null()
+                    && strcmp(s, (*(*msg_hist_last.get()).msg.items).text.data) != 0))
         {
-            msg_hist_add(s, -1 as ::core::ffi::c_int, hl_id);
+            msg_hist_add(s, -1, hl_id);
         }
+
         if is_multihl.get() == 0 {
             msg_start();
         }
-        let mut buf: *mut ::core::ffi::c_char = msg_strtrunc(s, false_0);
-        if !buf.is_null() {
-            s = buf;
-        }
-        let mut need_clear: bool = true_0 != 0;
+
+        // Truncate the message if needed.
+        let buf = msg_strtrunc(s, false_0);
+        let s = if buf.is_null() { s } else { buf.cast_const() };
+
+        let mut need_clear = true;
         if multiline {
-            msg_multiline(
-                cstr_as_string(s),
-                hl_id,
-                false_0 != 0,
-                false_0 != 0,
-                &raw mut need_clear,
-            );
+            msg_multiline(cstr_as_string(s), hl_id, false, false, &raw mut need_clear);
         } else {
-            msg_outtrans(s, hl_id, false_0 != 0);
+            msg_outtrans(s, hl_id, false);
         }
         if need_clear {
             msg_clr_eos();
         }
-        let mut retval: bool = true_0 != 0;
+
+        let mut retval = true;
         if is_multihl.get() == 0 {
             retval = msg_end();
         }
-        if keep as ::core::ffi::c_int != 0
-            && retval as ::core::ffi::c_int != 0
-            && vim_strsize(s)
-                < (Rows.get() - cmdline_row.get() - 1 as ::core::ffi::c_int) * Columns.get()
-                    + sc_col.get()
+
+        if keep
+            && retval
+            && vim_strsize(s) < (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get()
         {
-            set_keep_msg(s, 0 as ::core::ffi::c_int);
+            set_keep_msg(s, 0);
         }
-        need_fileinfo.set(false_0 != 0);
-        xfree(buf as *mut ::core::ffi::c_void);
-        (*entered.ptr()) -= 1;
-        return retval;
+
+        need_fileinfo.set(false);
+
+        xfree(buf.cast());
+        entered.set(entered.get() - 1);
+        retval
     }
 }
-pub unsafe extern "C" fn msg_strtrunc(
-    mut s: *const ::core::ffi::c_char,
-    mut force: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+
+/// Truncate `s` so it prints without causing a scroll.
+///
+/// Answers an allocated string, or null when no truncation was needed.
+/// `force` truncates regardless of `'shortmess'`.
+///
+/// # Safety
+/// `s` must be a valid C string.
+pub unsafe fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char {
     unsafe {
-        let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if msg_scroll.get() == 0
+        let mut buf: *mut c_char = ptr::null_mut();
+        // May truncate the message to avoid a hit-return prompt.
+        if (msg_scroll.get() == 0
             && !need_wait_return.get()
-            && shortmess(SHM_TRUNCALL as ::core::ffi::c_int) as ::core::ffi::c_int != 0
+            && shortmess(SHM_TRUNCALL as c_int)
             && !exmode_active.get()
-            && msg_silent.get() == 0 as ::core::ffi::c_int
-            && !ui_has(kUIMessages)
+            && msg_silent.get() == 0
+            && !ui_has(kUIMessages))
             || force != 0
         {
-            let mut room: ::core::ffi::c_int = 0;
-            let mut len: ::core::ffi::c_int = vim_strsize(s);
-            if msg_scrolled.get() != 0 as ::core::ffi::c_int {
-                room = (Rows.get() - msg_row.get()) * Columns.get() - 1 as ::core::ffi::c_int;
+            let mut len = vim_strsize(s);
+            let room = if msg_scrolled.get() != 0 {
+                // Use all the columns.
+                (Rows.get() - msg_row.get()) * Columns.get() - 1
             } else {
-                room = (Rows.get() - msg_row.get() - 1 as ::core::ffi::c_int) * Columns.get()
-                    + sc_col.get()
-                    - 1 as ::core::ffi::c_int;
-            }
-            if len > room && room > 0 as ::core::ffi::c_int {
-                len = (room + 2 as ::core::ffi::c_int) * 18 as ::core::ffi::c_int;
-                buf = xmalloc(len as size_t) as *mut ::core::ffi::c_char;
+                // Use up to the 'showcmd' column.
+                (Rows.get() - msg_row.get() - 1) * Columns.get() + sc_col.get() - 1
+            };
+            if len > room && room > 0 {
+                // Up to 18 bytes per cell: six per character, and up to two
+                // composing characters.
+                len = (room + 2) * 18;
+                buf = xmalloc(len as size_t).cast();
                 trunc_string(s, buf, room, len);
             }
         }
-        return buf;
+        buf
     }
 }
+
+/// Truncate `s` into `buf` at cell width `room`, replacing the middle with
+/// "...". `s` and `buf` may be the same pointer.
+///
+/// Exported for the unit specs.
+///
+/// # Safety
+/// `s` must be a valid C string and `buf` must have room for `buflen` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn trunc_string(
-    mut s: *const ::core::ffi::c_char,
-    mut buf: *mut ::core::ffi::c_char,
-    mut room_in: ::core::ffi::c_int,
-    mut buflen: ::core::ffi::c_int,
+    s: *const c_char,
+    buf: *mut c_char,
+    room_in: c_int,
+    buflen: c_int,
 ) {
     unsafe {
-        let mut room: ::core::ffi::c_int = room_in - 3 as ::core::ffi::c_int;
-        let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut e: ::core::ffi::c_int = 0;
-        let mut i: ::core::ffi::c_int = 0;
-        let mut n: ::core::ffi::c_int = 0;
-        if *s as ::core::ffi::c_int == NUL {
-            if buflen > 0 as ::core::ffi::c_int {
-                *buf = NUL as ::core::ffi::c_char;
+        let mut room = room_in - 3; // "..." takes 3 chars
+        let mut len = 0;
+        let mut n;
+
+        if *s == 0 {
+            if buflen > 0 {
+                *buf = 0;
             }
             return;
         }
-        if room_in < 3 as ::core::ffi::c_int {
-            room = 0 as ::core::ffi::c_int;
+        if room_in < 3 {
+            room = 0;
         }
-        let mut half: ::core::ffi::c_int = room / 2 as ::core::ffi::c_int;
-        e = 0 as ::core::ffi::c_int;
+        let mut half = room / 2;
+
+        // First part: the start of the string.
+        let mut e = 0;
         while len < half && e < buflen {
-            if *s.offset(e as isize) as ::core::ffi::c_int == NUL {
-                *buf.offset(e as isize) = NUL as ::core::ffi::c_char;
+            if *s.offset(e as isize) == 0 {
+                // Text fits without truncating.
+                *buf.offset(e as isize) = 0;
                 return;
             }
             n = ptr2cells(s.offset(e as isize));
@@ -661,10 +699,12 @@ pub unsafe extern "C" fn trunc_string(
             }
             len += n;
             *buf.offset(e as isize) = *s.offset(e as isize);
+            // Copy the rest of a multibyte character one byte at a time; the
+            // inner break leaves the outer step to run, as upstream's does.
             n = utfc_ptr2len(s.offset(e as isize));
             loop {
                 n -= 1;
-                if n <= 0 as ::core::ffi::c_int {
+                if n <= 0 {
                     break;
                 }
                 e += 1;
@@ -675,243 +715,223 @@ pub unsafe extern "C" fn trunc_string(
             }
             e += 1;
         }
-        i = strlen(s) as ::core::ffi::c_int;
+
+        // Last part: the end of the string.
+        let mut i = strlen(s) as c_int;
         half = i;
         loop {
-            half =
-                half - utf_head_off(
-                    s,
-                    s.offset(half as isize)
-                        .offset(-(1 as ::core::ffi::c_int as isize)),
-                ) - 1 as ::core::ffi::c_int;
+            half = half - utf_head_off(s, s.offset(half as isize).offset(-1)) - 1;
             n = ptr2cells(s.offset(half as isize));
-            if len + n > room || half == 0 as ::core::ffi::c_int {
+            if len + n > room || half == 0 {
                 break;
             }
             len += n;
             i = half;
         }
-        if i <= e + 3 as ::core::ffi::c_int {
-            if s != buf as *const ::core::ffi::c_char {
-                len = strlen(s) as ::core::ffi::c_int;
+
+        if i <= e + 3 {
+            // Text fits without truncating.
+            if s != buf.cast_const() {
+                len = strlen(s) as c_int;
                 if len >= buflen {
-                    len = buflen - 1 as ::core::ffi::c_int;
+                    len = buflen - 1;
                 }
-                len = len - e + 1 as ::core::ffi::c_int;
-                if len < 1 as ::core::ffi::c_int {
-                    *buf.offset((e - 1 as ::core::ffi::c_int) as isize) =
-                        NUL as ::core::ffi::c_char;
+                len = len - e + 1;
+                if len < 1 {
+                    *buf.offset((e - 1) as isize) = 0;
                 } else {
-                    memmove(
-                        buf.offset(e as isize) as *mut ::core::ffi::c_void,
-                        s.offset(e as isize) as *const ::core::ffi::c_void,
-                        len as size_t,
-                    );
+                    ptr::copy(s.offset(e as isize), buf.offset(e as isize), len as usize);
                 }
             }
-        } else if (e + 3 as ::core::ffi::c_int) < buflen {
-            memmove(
-                buf.offset(e as isize) as *mut ::core::ffi::c_void,
-                b"...\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-                3 as size_t,
-            );
-            len = strlen(s.offset(i as isize)) as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-            if len >= buflen - e - 3 as ::core::ffi::c_int {
-                len = buflen - e - 3 as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
+        } else if e + 3 < buflen {
+            // Set the middle and copy the last part.
+            ptr::copy_nonoverlapping(c"...".as_ptr(), buf.offset(e as isize), 3);
+            len = strlen(s.offset(i as isize)) as c_int + 1;
+            if len >= buflen - e - 3 {
+                len = buflen - e - 3 - 1;
             }
-            memmove(
-                buf.offset(e as isize)
-                    .offset(3 as ::core::ffi::c_int as isize)
-                    as *mut ::core::ffi::c_void,
-                s.offset(i as isize) as *const ::core::ffi::c_void,
-                len as size_t,
+            ptr::copy(
+                s.offset(i as isize),
+                buf.offset(e as isize).offset(3),
+                len as usize,
             );
-            *buf.offset((e + 3 as ::core::ffi::c_int + len - 1 as ::core::ffi::c_int) as isize) =
-                NUL as ::core::ffi::c_char;
+            *buf.offset((e + 3 + len - 1) as isize) = 0;
         } else {
-            *buf.offset((buflen - 1 as ::core::ffi::c_int) as isize) = NUL as ::core::ffi::c_char;
-        };
-    }
-}
-pub unsafe extern "C" fn smsg(
-    mut hl_id: ::core::ffi::c_int,
-    mut s: *const ::core::ffi::c_char,
-    mut c2rust_args: ...
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut arglist: ::core::ffi::VaList;
-        arglist = c2rust_args.clone();
-        vim_vsnprintf(
-            IObuff.ptr() as *mut ::core::ffi::c_char,
-            IOSIZE as size_t,
-            s,
-            arglist,
-        );
-        return msg(IObuff.ptr() as *mut ::core::ffi::c_char, hl_id) as ::core::ffi::c_int;
-    }
-}
-pub unsafe extern "C" fn smsg_keep(
-    mut hl_id: ::core::ffi::c_int,
-    mut s: *const ::core::ffi::c_char,
-    mut c2rust_args: ...
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut arglist: ::core::ffi::VaList;
-        arglist = c2rust_args.clone();
-        vim_vsnprintf(
-            IObuff.ptr() as *mut ::core::ffi::c_char,
-            IOSIZE as size_t,
-            s,
-            arglist,
-        );
-        return msg_keep(
-            IObuff.ptr() as *mut ::core::ffi::c_char,
-            hl_id,
-            true_0 != 0,
-            false_0 != 0,
-        ) as ::core::ffi::c_int;
-    }
-}
-pub unsafe extern "C" fn msg_trunc(
-    mut s: *mut ::core::ffi::c_char,
-    mut force: bool,
-    mut hl_id: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        msg_hist_add(s, -1 as ::core::ffi::c_int, hl_id);
-        let mut ts: *mut ::core::ffi::c_char = msg_may_trunc(force, s);
-        msg_hist_off.set(true_0 != 0);
-        let mut n: bool = msg(ts, hl_id);
-        msg_hist_off.set(false_0 != 0);
-        if n {
-            return ts;
+            // Can't fit the "...", so just truncate.
+            *buf.offset((buflen - 1) as isize) = 0;
         }
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
 }
-pub unsafe extern "C" fn msg_may_trunc(
-    mut force: bool,
-    mut s: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+
+/// [`msg`] with `printf` formatting. See the note on the variadics in
+/// [`crate::src::nvim::message::errors`].
+///
+/// The caller must check the result is shorter than `IOSIZE`.
+///
+/// # Safety
+/// `s` and the arguments must agree, as for `printf`.
+pub unsafe extern "C" fn smsg(hl_id: c_int, s: *const c_char, mut c2rust_args: ...) -> c_int {
     unsafe {
+        vim_vsnprintf(
+            IObuff.ptr().cast(),
+            IOSIZE as size_t,
+            s,
+            c2rust_args.clone(),
+        );
+        msg(IObuff.ptr().cast(), hl_id) as c_int
+    }
+}
+
+/// [`msg_keep`] with `printf` formatting, keeping the message displayed.
+///
+/// # Safety
+/// As [`smsg`].
+pub unsafe extern "C" fn smsg_keep(hl_id: c_int, s: *const c_char, mut c2rust_args: ...) -> c_int {
+    unsafe {
+        vim_vsnprintf(
+            IObuff.ptr().cast(),
+            IOSIZE as size_t,
+            s,
+            c2rust_args.clone(),
+        );
+        msg_keep(IObuff.ptr().cast(), hl_id, true, false) as c_int
+    }
+}
+
+/// Show `s`, truncated at the head if it does not fit the message area.
+///
+/// Answers the string that was shown, or null if it was not.
+///
+/// # Safety
+/// `s` must be a valid, writable C string -- the truncation writes into it.
+pub unsafe fn msg_trunc(s: *mut c_char, force: bool, hl_id: c_int) -> *mut c_char {
+    unsafe {
+        // The history gets the whole message; only the display is truncated.
+        msg_hist_add(s, -1, hl_id);
+        let ts = msg_may_trunc(force, s);
+        msg_hist_off.set(true);
+        let n = msg(ts, hl_id);
+        msg_hist_off.set(false);
+        if n { ts } else { ptr::null_mut() }
+    }
+}
+
+/// Drop the *head* of `s` if it does not fit the message area, marking the
+/// cut with a `<`.
+///
+/// Answers a pointer into `s`, which the marker is written through.
+///
+/// # Safety
+/// `s` must be a valid, writable C string.
+pub unsafe fn msg_may_trunc(force: bool, s: *mut c_char) -> *mut c_char {
+    unsafe {
+        // Under ext_messages the UI decides what fits. This guard changes no
+        // answer -- nothing shrinks `cmdline_row` off `Rows` there, so `room`
+        // is already negative -- but it says what the intent is; see docket
+        // O-B13-6.
         if ui_has(kUIMessages) {
             return s;
         }
-        let mut room: ::core::ffi::c_int =
-            (Rows.get() - cmdline_row.get() - 1 as ::core::ffi::c_int) * Columns.get()
-                + sc_col.get()
-                - 1 as ::core::ffi::c_int;
-        if room > 0 as ::core::ffi::c_int
-            && (force as ::core::ffi::c_int != 0
-                || shortmess(SHM_TRUNC as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-                    && !exmode_active.get())
-            && strlen(s) as ::core::ffi::c_int - room > 0 as ::core::ffi::c_int
+        let mut s = s;
+        let room = (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get() - 1;
+        if room > 0
+            && (force || (shortmess(SHM_TRUNC as c_int) && !exmode_active.get()))
+            && strlen(s) as c_int - room > 0
         {
-            let mut size: ::core::ffi::c_int = vim_strsize(s);
+            // May have up to 18 bytes per cell (6 per char, up to two
+            // composing chars).
+            let mut size = vim_strsize(s);
             if size <= room {
                 return s;
             }
-            let mut n: ::core::ffi::c_int = 0;
-            n = 0 as ::core::ffi::c_int;
+            // Find the last character that fits.
+            let mut n = 0;
             while size >= room {
                 size -= utf_ptr2cells(s.offset(n as isize));
                 n += utfc_ptr2len(s.offset(n as isize));
             }
             n -= 1;
             s = s.offset(n as isize);
-            *s = '<' as ::core::ffi::c_char;
+            *s = b'<' as c_char;
         }
-        return s;
+        s
     }
 }
-pub unsafe extern "C" fn set_keep_msg(
-    mut s: *const ::core::ffi::c_char,
-    mut hl_id: ::core::ffi::c_int,
-) {
+
+/// Set `keep_msg` to `s`, freeing the old value.
+///
+/// # Safety
+/// `s` must be null or a valid C string.
+pub unsafe fn set_keep_msg(s: *const c_char, hl_id: c_int) {
     unsafe {
+        // The kept message is not cleared and re-emitted with ext_messages:
+        // neovim/neovim#20416.
         if ui_has(kUIMessages) {
             return;
         }
-        xfree(keep_msg.get() as *mut ::core::ffi::c_void);
-        if !s.is_null() && msg_silent.get() == 0 as ::core::ffi::c_int {
-            keep_msg.set(xstrdup(s));
+        xfree(keep_msg.get().cast());
+        keep_msg.set(if !s.is_null() && msg_silent.get() == 0 {
+            xstrdup(s)
         } else {
-            keep_msg.set(::core::ptr::null_mut::<::core::ffi::c_char>());
-        }
-        keep_msg_more.set(false_0 != 0);
+            ptr::null_mut()
+        });
+        keep_msg_more.set(false);
         keep_msg_hl_id.set(hl_id);
     }
 }
-pub unsafe extern "C" fn messaging() -> bool {
+
+/// Would a message be seen if it were shown now?
+///
+/// # Safety
+/// Only that the typeahead is in a consistent state.
+pub unsafe fn messaging() -> bool {
     unsafe {
-        return !(p_lz.get() != 0 && char_avail() as ::core::ffi::c_int != 0 && !KeyTyped.get())
-            && (p_ch.get() > 0 as OptInt || ui_has(kUIMessages) as ::core::ffi::c_int != 0);
+        !(p_lz.get() != 0 && char_avail() && !KeyTyped.get())
+            && (p_ch.get() > 0 || ui_has(kUIMessages))
     }
 }
-pub unsafe extern "C" fn msgmore(mut n: ::core::ffi::c_int) {
+
+/// Report "N more lines" / "N fewer lines" after an edit, if `'report'`
+/// allows it.
+///
+/// # Safety
+/// Only that the message statics are consistent.
+pub unsafe fn msgmore(n: c_int) {
     unsafe {
-        let mut pn: ::core::ffi::c_int = 0;
         if global_busy.get() != 0 || !messaging() {
+            // Don't report when :global is executing.
             return;
         }
-        if !(*keep_msg.ptr()).is_null() && !keep_msg_more.get() {
+        // Keep the message from a previous msgmore(), but not another one.
+        if !keep_msg.get().is_null() && !keep_msg_more.get() {
             return;
         }
-        pn = abs(n);
-        if pn as OptInt > p_report.get() {
-            if n > 0 as ::core::ffi::c_int {
-                vim_snprintf(
-                    msg_buf.ptr() as *mut ::core::ffi::c_char,
-                    MSG_BUF_LEN as size_t,
-                    ngettext(
-                        b"%d more line\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"%d more lines\0".as_ptr() as *const ::core::ffi::c_char,
-                        pn as ::core::ffi::c_ulong,
-                    ),
-                    pn,
-                );
-            } else {
-                vim_snprintf(
-                    msg_buf.ptr() as *mut ::core::ffi::c_char,
-                    MSG_BUF_LEN as size_t,
-                    ngettext(
-                        b"%d line less\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"%d fewer lines\0".as_ptr() as *const ::core::ffi::c_char,
-                        pn as ::core::ffi::c_ulong,
-                    ),
-                    pn,
-                );
-            }
-            if got_int.get() {
-                xstrlcat(
-                    msg_buf.ptr() as *mut ::core::ffi::c_char,
-                    gettext(b" (Interrupted)\0".as_ptr() as *const ::core::ffi::c_char),
-                    MSG_BUF_LEN as size_t,
-                );
-            }
-            if msg(
-                msg_buf.ptr() as *mut ::core::ffi::c_char,
-                0 as ::core::ffi::c_int,
-            ) {
-                set_keep_msg(
-                    msg_buf.ptr() as *mut ::core::ffi::c_char,
-                    0 as ::core::ffi::c_int,
-                );
-                keep_msg_more.set(true_0 != 0);
-            }
+
+        let pn = abs(n);
+        if pn as OptInt <= p_report.get() {
+            return;
+        }
+        let (one, many) = if n > 0 {
+            (c"%d more line", c"%d more lines")
+        } else {
+            (c"%d line less", c"%d fewer lines")
+        };
+        vim_snprintf(
+            msg_buf.ptr().cast(),
+            MSG_BUF_LEN as size_t,
+            ngettext(one.as_ptr(), many.as_ptr(), pn as ::core::ffi::c_ulong),
+            pn,
+        );
+        if got_int.get() {
+            xstrlcat(
+                msg_buf.ptr().cast(),
+                gettext(c" (Interrupted)".as_ptr()),
+                MSG_BUF_LEN as size_t,
+            );
+        }
+        if msg(msg_buf.ptr().cast(), 0) {
+            set_keep_msg(msg_buf.ptr().cast(), 0);
+            keep_msg_more.set(true);
         }
     }
 }
-static last_msgchunk: GlobalCell<*mut msgchunk_T> =
-    GlobalCell::new(::core::ptr::null_mut::<msgchunk_T>());
-static do_clear_sb_text: GlobalCell<sb_clear_T> = GlobalCell::new(SB_CLEAR_NONE);
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
-pub const KS_ZERO: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
-pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
-pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
-pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
