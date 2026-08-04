@@ -10,379 +10,342 @@
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int, c_void};
+use core::mem::size_of;
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn map_wildopts_to_ewflags(
-    mut options: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut flags: ::core::ffi::c_int = EW_DIR;
-    if options & WILD_LIST_NOTFOUND != 0 {
-        flags |= EW_NOTFOUND;
-    }
-    if options & WILD_ADD_SLASH != 0 {
-        flags |= EW_ADDSLASH;
-    }
-    if options & WILD_KEEP_ALL != 0 {
-        flags |= EW_KEEPALL;
-    }
-    if options & WILD_SILENT != 0 {
-        flags |= EW_SILENT;
-    }
-    if options & WILD_NOERROR != 0 {
-        flags |= EW_NOERROR;
-    }
-    if options & WILD_ALLLINKS != 0 {
-        flags |= EW_ALLLINKS;
-    }
-    return flags;
+/// The bare function type behind [`CompleteListItemGetter`], for the one
+/// place that compares a generator against a particular function.
+type ItemGetter = unsafe extern "C" fn(*mut expand_T, c_int) -> *mut c_char;
+
+/// The `WILD_*` options that name an `EW_*` flag one-for-one.
+const WILDOPT_TO_EW: [(c_int, c_int); 6] = [
+    (WILD_LIST_NOTFOUND, EW_NOTFOUND),
+    (WILD_ADD_SLASH, EW_ADDSLASH),
+    (WILD_KEEP_ALL, EW_KEEPALL),
+    (WILD_SILENT, EW_SILENT),
+    (WILD_NOERROR, EW_NOERROR),
+    (WILD_ALLLINKS, EW_ALLLINKS),
+];
+
+/// Translate the `WILD_*` options into the `EW_*` flags `expand_wildcards`
+/// takes.  `EW_DIR` — include directories — is always on.
+pub(crate) fn map_wildopts_to_ewflags(options: c_int) -> c_int {
+    WILDOPT_TO_EW.iter().fold(EW_DIR, |flags, &(wild, ew)| {
+        if options & wild != 0 {
+            flags | ew
+        } else {
+            flags
+        }
+    })
 }
 
-pub(crate) unsafe extern "C" fn ExpandFromContext(
-    mut xp: *mut expand_T,
-    mut pat: *mut ::core::ffi::c_char,
-    mut matches: *mut *mut *mut ::core::ffi::c_char,
-    mut numMatches: *mut ::core::ffi::c_int,
-    mut options: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Do the expansion based on `xp->xp_context` and `pat`.
+///
+/// `options` is a set of `WILD_*` flags.  Most contexts have a generator of
+/// their own; the ones that do not fall through to [`ExpandOther`]'s table,
+/// and all of those run against a compiled regexp (or, under
+/// `'wildoptions'`=fuzzy, against `fuzzy_match_str`).
+pub(crate) unsafe fn ExpandFromContext(
+    xp: *mut expand_T,
+    pat: *mut c_char,
+    matches: *mut *mut *mut c_char,
+    numMatches: *mut c_int,
+    options: c_int,
+) -> c_int {
     unsafe {
-        let mut regmatch: regmatch_T = regmatch_T {
-            regprog: ::core::ptr::null_mut::<regprog_T>(),
-            startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-            endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-            rm_matchcol: 0,
-            rm_ic: false_0 != 0,
-        };
-        let mut ret: ::core::ffi::c_int = 0;
-        let mut flags: ::core::ffi::c_int = map_wildopts_to_ewflags(options);
-        let fuzzy: bool = cmdline_fuzzy_complete(pat) as ::core::ffi::c_int != 0
-            && cmdline_fuzzy_completion_supported(xp) as ::core::ffi::c_int != 0;
-        if (*xp).xp_context == EXPAND_FILES
-            || (*xp).xp_context == EXPAND_DIRECTORIES
-            || (*xp).xp_context == EXPAND_FILES_IN_PATH
-            || (*xp).xp_context == EXPAND_FINDFUNC
-            || (*xp).xp_context == EXPAND_DIRS_IN_CDPATH
-        {
+        let mut pat = pat;
+        let flags = map_wildopts_to_ewflags(options);
+        let fuzzy = cmdline_fuzzy_complete(pat) && cmdline_fuzzy_completion_supported(xp);
+        let context = (*xp).xp_context;
+
+        if matches!(
+            context,
+            EXPAND_FILES
+                | EXPAND_DIRECTORIES
+                | EXPAND_FILES_IN_PATH
+                | EXPAND_FINDFUNC
+                | EXPAND_DIRS_IN_CDPATH
+        ) {
             return expand_files_and_dirs(xp, pat, matches, numMatches, flags, options);
         }
-        *matches = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-        *numMatches = 0 as ::core::ffi::c_int;
-        if (*xp).xp_context == EXPAND_HELP {
-            if find_help_tags(
-                if *pat as ::core::ffi::c_int == NUL {
-                    b"help\0".as_ptr() as *const ::core::ffi::c_char
+
+        *matches = ptr::null_mut();
+        *numMatches = 0;
+
+        // The contexts with a generator of their own.  Each `ExpandRTDir`
+        // arm builds the NULL-terminated `char *[]` it wants in this frame.
+        match context {
+            EXPAND_HELP => {
+                // With an empty argument we would get all the help tags,
+                // which is very slow.  Get matches for "help" instead.
+                let arg = if *pat == 0 {
+                    c"help".as_ptr()
                 } else {
-                    pat as *const ::core::ffi::c_char
-                },
-                numMatches,
-                matches,
-                false_0 != 0,
-            ) == OK
-            {
+                    pat as *const c_char
+                };
+                if find_help_tags(arg, numMatches, matches, false) != OK {
+                    return FAIL;
+                }
                 cleanup_help_tags(*numMatches, *matches);
                 return OK;
             }
-            return FAIL;
+            EXPAND_SHELLCMD => {
+                expand_shellcmd(pat, matches, numMatches, flags);
+                return OK;
+            }
+            EXPAND_OLD_SETTING => return ExpandOldSetting(numMatches, matches),
+            EXPAND_BUFFERS => return ExpandBufnames(pat, numMatches, matches, options),
+            EXPAND_DIFF_BUFFERS => {
+                return ExpandBufnames(pat, numMatches, matches, options | BUF_DIFF_FILTER);
+            }
+            EXPAND_TAGS | EXPAND_TAGS_LISTFILES => {
+                return expand_tags(context == EXPAND_TAGS, pat, numMatches, matches);
+            }
+            EXPAND_COLORS => {
+                let mut dirs = [c"colors".as_ptr() as *mut c_char, ptr::null_mut()];
+                return ExpandRTDir(
+                    pat,
+                    (DIP_START + DIP_OPT) as c_int,
+                    numMatches,
+                    matches,
+                    dirs.as_mut_ptr(),
+                );
+            }
+            EXPAND_COMPILER => {
+                let mut dirs = [c"compiler".as_ptr() as *mut c_char, ptr::null_mut()];
+                return ExpandRTDir(pat, 0, numMatches, matches, dirs.as_mut_ptr());
+            }
+            EXPAND_OWNSYNTAX => {
+                let mut dirs = [c"syntax".as_ptr() as *mut c_char, ptr::null_mut()];
+                return ExpandRTDir(pat, 0, numMatches, matches, dirs.as_mut_ptr());
+            }
+            EXPAND_FILETYPE => {
+                let mut dirs = [
+                    c"syntax".as_ptr() as *mut c_char,
+                    c"indent".as_ptr() as *mut c_char,
+                    c"ftplugin".as_ptr() as *mut c_char,
+                    ptr::null_mut(),
+                ];
+                return ExpandRTDir(pat, 0, numMatches, matches, dirs.as_mut_ptr());
+            }
+            EXPAND_KEYMAP => {
+                let mut dirs = [c"keymap".as_ptr() as *mut c_char, ptr::null_mut()];
+                return ExpandRTDir(pat, 0, numMatches, matches, dirs.as_mut_ptr());
+            }
+            EXPAND_USER_LIST => return ExpandUserList(xp, matches, numMatches),
+            EXPAND_USER_LUA => return ExpandUserLua(xp, numMatches, matches),
+            EXPAND_PACKADD => return ExpandPackAddDir(pat, numMatches, matches),
+            EXPAND_RUNTIME => return expand_runtime_cmd(pat, numMatches, matches),
+            EXPAND_PATTERN_IN_BUF => {
+                return expand_pattern_in_buf(pat, (*xp).xp_search_dir, matches, numMatches);
+            }
+            _ => {}
         }
-        if (*xp).xp_context == EXPAND_SHELLCMD {
-            expand_shellcmd(pat, matches, numMatches, flags);
-            return OK;
-        }
-        if (*xp).xp_context == EXPAND_OLD_SETTING {
-            return ExpandOldSetting(numMatches, matches);
-        }
-        if (*xp).xp_context == EXPAND_BUFFERS {
-            return ExpandBufnames(pat, numMatches, matches, options);
-        }
-        if (*xp).xp_context == EXPAND_DIFF_BUFFERS {
-            return ExpandBufnames(pat, numMatches, matches, options | BUF_DIFF_FILTER);
-        }
-        if (*xp).xp_context == EXPAND_TAGS || (*xp).xp_context == EXPAND_TAGS_LISTFILES {
-            return expand_tags((*xp).xp_context == EXPAND_TAGS, pat, numMatches, matches);
-        }
-        if (*xp).xp_context == EXPAND_COLORS {
-            let mut directories: [*mut ::core::ffi::c_char; 2] = [
-                b"colors\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ];
-            return ExpandRTDir(
-                pat,
-                DIP_START as ::core::ffi::c_int + DIP_OPT as ::core::ffi::c_int,
-                numMatches,
-                matches,
-                &raw mut directories as *mut *mut ::core::ffi::c_char,
-            );
-        }
-        if (*xp).xp_context == EXPAND_COMPILER {
-            let mut directories_0: [*mut ::core::ffi::c_char; 2] = [
-                b"compiler\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ];
-            return ExpandRTDir(
-                pat,
-                0 as ::core::ffi::c_int,
-                numMatches,
-                matches,
-                &raw mut directories_0 as *mut *mut ::core::ffi::c_char,
-            );
-        }
-        if (*xp).xp_context == EXPAND_OWNSYNTAX {
-            let mut directories_1: [*mut ::core::ffi::c_char; 2] = [
-                b"syntax\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ];
-            return ExpandRTDir(
-                pat,
-                0 as ::core::ffi::c_int,
-                numMatches,
-                matches,
-                &raw mut directories_1 as *mut *mut ::core::ffi::c_char,
-            );
-        }
-        if (*xp).xp_context == EXPAND_FILETYPE {
-            let mut directories_2: [*mut ::core::ffi::c_char; 4] = [
-                b"syntax\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                b"indent\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                b"ftplugin\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ];
-            return ExpandRTDir(
-                pat,
-                0 as ::core::ffi::c_int,
-                numMatches,
-                matches,
-                &raw mut directories_2 as *mut *mut ::core::ffi::c_char,
-            );
-        }
-        if (*xp).xp_context == EXPAND_KEYMAP {
-            let mut directories_3: [*mut ::core::ffi::c_char; 2] = [
-                b"keymap\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ];
-            return ExpandRTDir(
-                pat,
-                0 as ::core::ffi::c_int,
-                numMatches,
-                matches,
-                &raw mut directories_3 as *mut *mut ::core::ffi::c_char,
-            );
-        }
-        if (*xp).xp_context == EXPAND_USER_LIST {
-            return ExpandUserList(xp, matches, numMatches);
-        }
-        if (*xp).xp_context == EXPAND_USER_LUA {
-            return ExpandUserLua(xp, numMatches, matches);
-        }
-        if (*xp).xp_context == EXPAND_PACKADD {
-            return ExpandPackAddDir(pat, numMatches, matches);
-        }
-        if (*xp).xp_context == EXPAND_RUNTIME {
-            return expand_runtime_cmd(pat, numMatches, matches);
-        }
-        if (*xp).xp_context == EXPAND_PATTERN_IN_BUF {
-            return expand_pattern_in_buf(pat, (*xp).xp_search_dir, matches, numMatches);
-        }
-        let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if (*xp).xp_context == EXPAND_USER_FUNC
-            && strncmp(
-                pat,
-                b"^s:\0".as_ptr() as *const ::core::ffi::c_char,
-                3 as size_t,
-            ) == 0 as ::core::ffi::c_int
-        {
-            let len: size_t = strlen(pat).wrapping_add(20 as size_t);
-            tofree = xmalloc(len) as *mut ::core::ffi::c_char;
-            snprintf(
-                tofree,
-                len,
-                b"^<SNR>\\d\\+_%s\0".as_ptr() as *const ::core::ffi::c_char,
-                pat.offset(3 as ::core::ffi::c_int as isize),
-            );
+
+        // When expanding a function name starting with s:, match the <SNR>nr_
+        // prefix.
+        let mut tofree = ptr::null_mut::<c_char>();
+        if context == EXPAND_USER_FUNC && strncmp(pat, c"^s:".as_ptr(), 3) == 0 {
+            let len = strlen(pat) + 20;
+            tofree = xmalloc(len) as *mut c_char;
+            snprintf(tofree, len, c"^<SNR>\\d\\+_%s".as_ptr(), pat.add(3));
             pat = tofree;
         }
-        if (*xp).xp_context == EXPAND_LUA {
+
+        if context == EXPAND_LUA {
+            // `tofree` is still NULL here: only EXPAND_USER_FUNC sets it.
             return nlua_expand_get_matches(numMatches, matches);
         }
+
+        let mut regmatch = regmatch_T {
+            regprog: ptr::null_mut(),
+            startp: [ptr::null_mut(); 10],
+            endp: [ptr::null_mut(); 10],
+            rm_matchcol: 0,
+            rm_ic: false,
+        };
         if !fuzzy {
-            regmatch.regprog = vim_regcomp(
-                pat,
-                if magic_isset() as ::core::ffi::c_int != 0 {
-                    RE_MAGIC
-                } else {
-                    0 as ::core::ffi::c_int
-                },
-            );
+            regmatch.regprog = vim_regcomp(pat, if magic_isset() { RE_MAGIC } else { 0 });
             if regmatch.regprog.is_null() {
-                xfree(tofree as *mut ::core::ffi::c_void);
+                xfree(tofree as *mut c_void);
                 return FAIL;
             }
+            // Set ignore-case according to 'ignorecase', 'smartcase' and pat.
             regmatch.rm_ic = ignorecase(pat) != 0;
         }
-        if (*xp).xp_context == EXPAND_SETTINGS || (*xp).xp_context == EXPAND_BOOL_SETTINGS {
-            ret = ExpandSettings(xp, &raw mut regmatch, pat, numMatches, matches, fuzzy);
-        } else if (*xp).xp_context == EXPAND_STRING_SETTING {
-            ret = ExpandStringSetting(xp, &raw mut regmatch, numMatches, matches);
-        } else if (*xp).xp_context == EXPAND_SETTING_SUBTRACT {
-            ret = ExpandSettingSubtract(xp, &raw mut regmatch, numMatches, matches);
-        } else if (*xp).xp_context == EXPAND_MAPPINGS {
-            ret = ExpandMappings(pat, &raw mut regmatch, numMatches, matches);
-        } else if (*xp).xp_context == EXPAND_ARGOPT {
-            ret = expand_argopt(pat, xp, &raw mut regmatch, matches, numMatches);
-        } else if (*xp).xp_context == EXPAND_USER_DEFINED {
-            ret = ExpandUserDefined(pat, xp, &raw mut regmatch, matches, numMatches);
-        } else {
-            ret = ExpandOther(pat, xp, &raw mut regmatch, matches, numMatches);
-        }
+
+        let ret = match context {
+            EXPAND_SETTINGS | EXPAND_BOOL_SETTINGS => {
+                ExpandSettings(xp, &raw mut regmatch, pat, numMatches, matches, fuzzy)
+            }
+            EXPAND_STRING_SETTING => {
+                ExpandStringSetting(xp, &raw mut regmatch, numMatches, matches)
+            }
+            EXPAND_SETTING_SUBTRACT => {
+                ExpandSettingSubtract(xp, &raw mut regmatch, numMatches, matches)
+            }
+            EXPAND_MAPPINGS => ExpandMappings(pat, &raw mut regmatch, numMatches, matches),
+            EXPAND_ARGOPT => expand_argopt(pat, xp, &raw mut regmatch, matches, numMatches),
+            EXPAND_USER_DEFINED => {
+                ExpandUserDefined(pat, xp, &raw mut regmatch, matches, numMatches)
+            }
+            _ => ExpandOther(pat, xp, &raw mut regmatch, matches, numMatches),
+        };
+
         if !fuzzy {
             vim_regfree(regmatch.regprog);
         }
-        xfree(tofree as *mut ::core::ffi::c_void);
-        return ret;
+        xfree(tofree as *mut c_void);
+        ret
     }
 }
 
-pub unsafe extern "C" fn ExpandGeneric(
-    pat: *const ::core::ffi::c_char,
-    mut xp: *mut expand_T,
-    mut regmatch: *mut regmatch_T,
-    mut matches: *mut *mut *mut ::core::ffi::c_char,
-    mut numMatches: *mut ::core::ffi::c_int,
-    mut func: CompleteListItemGetter,
-    mut escaped: bool,
+/// Expand a list of names.
+///
+/// The generic command-line completion loop: `func` is called with rising
+/// indices until it answers NULL, each string is matched against `regmatch`
+/// (or scored by `fuzzy_match_str`), and the survivors are copied into a new
+/// array.
+///
+/// `escaped` asks for spaces, tabs, backslashes and dots to be escaped in
+/// each match.
+pub unsafe fn ExpandGeneric(
+    pat: *const c_char,
+    xp: *mut expand_T,
+    regmatch: *mut regmatch_T,
+    matches: *mut *mut *mut c_char,
+    numMatches: *mut c_int,
+    func: CompleteListItemGetter,
+    escaped: bool,
 ) {
     unsafe {
-        let fuzzy: bool = cmdline_fuzzy_complete(pat);
-        *matches = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-        *numMatches = 0 as ::core::ffi::c_int;
-        let mut ga: garray_T = garray_T {
+        let get_item = func.expect("ExpandGeneric needs a generator");
+        let fuzzy = cmdline_fuzzy_complete(pat);
+        *matches = ptr::null_mut();
+        *numMatches = 0;
+
+        let mut ga = garray_T {
             ga_len: 0,
             ga_maxlen: 0,
             ga_itemsize: 0,
             ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+            ga_data: ptr::null_mut(),
         };
-        if !fuzzy {
-            ga_init(
-                &raw mut ga,
-                ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-                30 as ::core::ffi::c_int,
-            );
+        let itemsize = if fuzzy {
+            size_of::<fuzmatch_str_T>()
         } else {
-            ga_init(
-                &raw mut ga,
-                ::core::mem::size_of::<fuzmatch_str_T>() as ::core::ffi::c_int,
-                30 as ::core::ffi::c_int,
-            );
-        }
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        loop {
-            let mut str: *mut ::core::ffi::c_char = Some(func.expect("non-null function pointer"))
-                .expect("non-null function pointer")(
-                xp, i
-            );
+            size_of::<*mut c_char>()
+        };
+        ga_init(&raw mut ga, itemsize as c_int, 30);
+
+        for i in 0.. {
+            let mut str = get_item(xp, i);
             if str.is_null() {
-                break;
+                break; // end of list
             }
-            if *str as ::core::ffi::c_int != NUL {
-                let mut match_0: bool = false;
-                let mut score: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                if *(*xp).xp_pattern.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != NUL
-                {
-                    if !fuzzy {
-                        match_0 = vim_regexec(regmatch, str, 0 as colnr_T);
-                    } else {
-                        score = fuzzy_match_str(str, pat);
-                        match_0 = score != FUZZY_SCORE_NONE as ::core::ffi::c_int;
-                    }
-                } else {
-                    match_0 = true_0 != 0;
-                }
-                if match_0 {
-                    if escaped {
-                        str = vim_strsave_escaped(
-                            str,
-                            b" \t\\.\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
-                    } else {
-                        str = xstrdup(str);
-                    }
-                    if fuzzy {
-                        ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                        *(ga.ga_data as *mut fuzmatch_str_T).offset(ga.ga_len as isize) =
-                            fuzmatch_str_T {
-                                idx: ga.ga_len,
-                                str: str,
-                                score: score,
-                            };
-                        ga.ga_len += 1;
-                    } else {
-                        ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                        *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) =
-                            str;
-                        ga.ga_len += 1;
-                    }
-                    if func.is_some_and(|f| {
-                        ::core::ptr::fn_addr_eq(
-                            f,
-                            get_menu_names
-                                as unsafe extern "C" fn(
-                                    *mut expand_T,
-                                    ::core::ffi::c_int,
-                                )
-                                    -> *mut ::core::ffi::c_char,
-                        )
-                    }) {
-                        str = str.offset(strlen(str).wrapping_sub(1 as size_t) as isize);
-                        if *str as ::core::ffi::c_int == '\u{1}' as ::core::ffi::c_int {
-                            *str = '.' as ::core::ffi::c_char;
-                        }
-                    }
+            if *str == 0 {
+                continue; // skip empty strings
+            }
+
+            // An empty pattern matches everything; otherwise every
+            // candidate is tested, and under 'wildoptions'=fuzzy also scored.
+            // `xp_pattern` is re-read each pass, as upstream does: the
+            // generator is handed `xp` and a user-defined one can move it.
+            let mut score = 0;
+            let matched = if *(*xp).xp_pattern == 0 {
+                true
+            } else if fuzzy {
+                score = fuzzy_match_str(str, pat);
+                score != FUZZY_SCORE_NONE
+            } else {
+                vim_regexec(regmatch, str, 0)
+            };
+            if !matched {
+                continue;
+            }
+
+            str = if escaped {
+                vim_strsave_escaped(str, c" \t\\.".as_ptr())
+            } else {
+                xstrdup(str)
+            };
+
+            ga_grow(&raw mut ga, 1);
+            if fuzzy {
+                (ga.ga_data as *mut fuzmatch_str_T)
+                    .offset(ga.ga_len as isize)
+                    .write(fuzmatch_str_T {
+                        idx: ga.ga_len,
+                        str,
+                        score,
+                    });
+            } else {
+                (ga.ga_data as *mut *mut c_char)
+                    .offset(ga.ga_len as isize)
+                    .write(str);
+            }
+            ga.ga_len += 1;
+
+            if ptr::fn_addr_eq(get_item, get_menu_names as ItemGetter) {
+                // Undo the separator get_menu_names() added, in the copy that
+                // is now in the array.
+                let last = str.add(strlen(str) - 1);
+                if *last == 1 {
+                    *last = b'.' as c_char;
                 }
             }
-            i += 1;
         }
-        if ga.ga_len == 0 as ::core::ffi::c_int {
+
+        if ga.ga_len == 0 {
             return;
         }
-        let sort_matches: bool = !fuzzy
-            && (*xp).xp_context != EXPAND_MENUNAMES
-            && (*xp).xp_context != EXPAND_STRING_SETTING
-            && (*xp).xp_context != EXPAND_MENUS
-            && (*xp).xp_context != EXPAND_SCRIPTNAMES
-            && (*xp).xp_context != EXPAND_ARGOPT;
-        let funcsort: bool = (*xp).xp_context == EXPAND_EXPRESSION
-            || (*xp).xp_context == EXPAND_FUNCTIONS
-            || (*xp).xp_context == EXPAND_USER_FUNC;
+
+        // Sort the matches when using regular expression matching and sorting
+        // applies to the completion context.  Menus and scriptnames should be
+        // kept in the order they were given in.
+        let sort_matches = !fuzzy
+            && !matches!(
+                (*xp).xp_context,
+                EXPAND_MENUNAMES
+                    | EXPAND_STRING_SETTING
+                    | EXPAND_MENUS
+                    | EXPAND_SCRIPTNAMES
+                    | EXPAND_ARGOPT
+            );
+        // <SNR> functions should be sorted to the end.
+        let funcsort = matches!(
+            (*xp).xp_context,
+            EXPAND_EXPRESSION | EXPAND_FUNCTIONS | EXPAND_USER_FUNC
+        );
+
         if sort_matches {
             if funcsort {
                 qsort(
                     ga.ga_data,
                     ga.ga_len as size_t,
-                    ::core::mem::size_of::<*mut ::core::ffi::c_char>(),
-                    Some(
-                        sort_func_compare
-                            as unsafe extern "C" fn(
-                                *const ::core::ffi::c_void,
-                                *const ::core::ffi::c_void,
-                            )
-                                -> ::core::ffi::c_int,
-                    ),
+                    size_of::<*mut c_char>(),
+                    Some(sort_func_compare),
                 );
             } else {
-                sort_strings(ga.ga_data as *mut *mut ::core::ffi::c_char, ga.ga_len);
+                sort_strings(ga.ga_data as *mut *mut c_char, ga.ga_len);
             }
         }
-        if !fuzzy {
-            *matches = ga.ga_data as *mut *mut ::core::ffi::c_char;
-            *numMatches = ga.ga_len;
-        } else {
+
+        if fuzzy {
             fuzzymatches_to_strmatches(
                 ga.ga_data as *mut fuzmatch_str_T,
                 matches,
                 ga.ga_len,
                 funcsort,
             );
-            *numMatches = ga.ga_len;
+        } else {
+            *matches = ga.ga_data as *mut *mut c_char;
         }
+        *numMatches = ga.ga_len;
+
+        // Reset the variables used for special highlight names expansion, so
+        // that they don't show up when getting normal highlight names by ID.
         reset_expand_highlight();
     }
 }
