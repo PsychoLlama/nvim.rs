@@ -17,7 +17,7 @@ use core::ptr;
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::charset::{transchar, vim_strsize};
 use crate::src::nvim::ex_session::{put_eol, put_line};
-use crate::src::nvim::keycodes::{find_special_key_in_table, get_special_key_name};
+use crate::src::nvim::keycodes::{get_special_key_name, has_key_name};
 use crate::src::nvim::main::{
     Columns, NameBuff, curbuf, curwin, got_int, info_message, p_mouse, p_pp, p_rtp, p_wc, p_wcm,
     silent_mode,
@@ -580,6 +580,5 @@ pub(crate) unsafe fn wc_use_keyname(varp: *const c_void, wcp: &mut OptInt) -> bo
     }
     // A negative value is a special key code; a positive one may still be a
     // named key such as <Tab>.
-    // SAFETY: the lookup only reads the key-name table.
-    *wcp < 0 || unsafe { find_special_key_in_table(*wcp as c_int) } >= 0
+    *wcp < 0 || has_key_name(*wcp as c_int)
 }

@@ -29,11 +29,21 @@ use crate::support::{cstr, take_bytes};
 /// `replace_termcodes` does *not* treat a backslash as CTRL-V.
 const CPO: &CStr = c"aABceFs_";
 
-/// `(name, termcodes, no_special, no_lt, no_from_part)`: the four encodings of
-/// `<name>` that `nvim_replace_termcodes` can produce, as
-/// `(from_part, do_lt, special)` = `(T,T,T)`, `(T,T,F)`, `(T,F,T)`, `(F,T,T)`.
+/// One row of [`TERMCODES`]: `(name, termcodes, no_special, no_lt,
+/// no_from_part)`.
+type Encodings = (
+    &'static str,
+    &'static [u8],
+    &'static [u8],
+    &'static [u8],
+    &'static [u8],
+);
+
+/// The four encodings of `<name>` that `nvim_replace_termcodes` can produce,
+/// as `(from_part, do_lt, special)` = `(T,T,T)`, `(T,T,F)`, `(T,F,T)`,
+/// `(F,T,T)`.
 #[rustfmt::skip]
-const TERMCODES: &[(&str, &[u8], &[u8], &[u8], &[u8])] = &[
+const TERMCODES: &[Encodings] = &[
     ("Esc", b"\x1b", b"<Esc>", b"\x1b", b"\x1b"),
     ("CR", b"\x0d", b"<CR>", b"\x0d", b"\x0d"),
     ("Return", b"\x0d", b"<Return>", b"\x0d", b"\x0d"),
