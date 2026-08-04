@@ -33,7 +33,6 @@
     "crates/nvim/src/nvim/cmdexpand/bufpat.rs": 4,
     "crates/nvim/src/nvim/cmdexpand/cmdname.rs": 7,
     "crates/nvim/src/nvim/cmdexpand/context.rs": 14,
-    "crates/nvim/src/nvim/cmdexpand/escape.rs": 4,
     "crates/nvim/src/nvim/cmdexpand/eval.rs": 8,
     "crates/nvim/src/nvim/cmdexpand/expandone.rs": 25,
     "crates/nvim/src/nvim/cmdexpand/fromcontext.rs": 13,

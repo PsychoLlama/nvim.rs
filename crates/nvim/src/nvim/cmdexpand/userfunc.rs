@@ -578,7 +578,12 @@ pub unsafe extern "C" fn globpath(
                     WILD_SILENT | expand_options,
                 );
                 if num_p > 0 as ::core::ffi::c_int {
-                    ExpandEscape(&raw mut xpc, buf, num_p, p, WILD_SILENT | expand_options);
+                    escape_matches(
+                        &raw mut xpc,
+                        buf,
+                        core::slice::from_raw_parts_mut(p, num_p as usize),
+                        WILD_SILENT | expand_options,
+                    );
                     ga_grow(ga, num_p);
                     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                     while i < num_p {

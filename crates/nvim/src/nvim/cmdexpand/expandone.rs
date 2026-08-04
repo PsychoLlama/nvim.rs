@@ -340,7 +340,12 @@ pub(crate) unsafe extern "C" fn ExpandOne_start(
                     );
                 }
             } else {
-                ExpandEscape(xp, str, (*xp).xp_numfiles, (*xp).xp_files, options);
+                escape_matches(
+                    xp,
+                    str,
+                    core::slice::from_raw_parts_mut((*xp).xp_files, (*xp).xp_numfiles as usize),
+                    options,
+                );
                 if mode != WILD_ALL && mode != WILD_ALL_KEEP && mode != WILD_LONGEST {
                     if (*xp).xp_numfiles != 0 {
                         non_suf_match = (*xp).xp_numfiles;

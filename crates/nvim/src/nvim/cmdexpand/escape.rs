@@ -1,7 +1,7 @@
 //! Escaping a match, and whether fuzzy matching applies.
 //!
 //! [`wildescape`] puts back whatever the shell, the command line or a `:set`
-//! value would otherwise eat, once per match, and [`ExpandEscape`] runs it
+//! value would otherwise eat, once per match, and [`escape_matches`] runs it
 //! over a whole match array.  [`cmdline_fuzzy_complete`] answers whether
 //! `'wildoptions'` asked for fuzzy matching *and* the context supports it —
 //! the contexts that expand paths or option values never do.
@@ -10,146 +10,168 @@
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int, c_void};
 
-pub(crate) unsafe extern "C" fn cmdline_fuzzy_completion_supported(xp: *const expand_T) -> bool {
-    unsafe {
-        match (*xp).xp_context {
-            5 | 28 | 29 | 3 | 56 | 2 | 37 | 36 | 59 | 58 | 8 | 55 | 63 | 7 | 52 | 53 | 38 | 44
-            | 51 | 33 | 57 | 6 | 17 | 31 | 32 => return false_0 != 0,
-            _ => {}
-        }
-        return wop_flags.get() & kOptWopFlagFuzzy as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0;
+/// Is fuzzy completion supported in this cmdline completion context?
+///
+/// The listed contexts answer no whatever `'wildoptions'` says: each of them
+/// expands a path, an option value or a tag, where a fuzzy match would offer
+/// something the command being completed cannot use.
+pub(crate) unsafe fn cmdline_fuzzy_completion_supported(xp: *const expand_T) -> bool {
+    let context = unsafe { (*xp).xp_context };
+    match context {
+        EXPAND_BOOL_SETTINGS
+        | EXPAND_COLORS
+        | EXPAND_COMPILER
+        | EXPAND_DIRECTORIES
+        | EXPAND_DIRS_IN_CDPATH
+        | EXPAND_FILES
+        | EXPAND_FILES_IN_PATH
+        | EXPAND_FILETYPE
+        | EXPAND_FILETYPECMD
+        | EXPAND_FINDFUNC
+        | EXPAND_HELP
+        | EXPAND_KEYMAP
+        | EXPAND_LUA
+        | EXPAND_OLD_SETTING
+        | EXPAND_STRING_SETTING
+        | EXPAND_SETTING_SUBTRACT
+        | EXPAND_OWNSYNTAX
+        | EXPAND_PACKADD
+        | EXPAND_RUNTIME
+        | EXPAND_SHELLCMD
+        | EXPAND_SHELLCMDLINE
+        | EXPAND_TAGS
+        | EXPAND_TAGS_LISTFILES
+        | EXPAND_USER_LIST
+        | EXPAND_USER_LUA => false,
+        _ => wop_flags.get() & kOptWopFlagFuzzy != 0,
     }
 }
 
-pub unsafe extern "C" fn cmdline_fuzzy_complete(fuzzystr: *const ::core::ffi::c_char) -> bool {
+/// Is fuzzy cmdline completion enabled, with a non-empty pattern to match?
+///
+/// An empty search pattern never fuzzy-matches: it would score every candidate
+/// alike and throw away the sort order the caller wants.
+pub unsafe fn cmdline_fuzzy_complete(fuzzystr: *const c_char) -> bool {
+    wop_flags.get() & kOptWopFlagFuzzy != 0 && unsafe { *fuzzystr } != 0
+}
+
+/// `qsort` comparator for the completion matches: plain `strcmp`, except that
+/// `<SNR>` functions sort to the end.
+///
+/// Stays `extern "C"`: it is handed to `qsort`.
+pub(crate) unsafe extern "C" fn sort_func_compare(s1: *const c_void, s2: *const c_void) -> c_int {
     unsafe {
-        return wop_flags.get() & kOptWopFlagFuzzy as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0
-            && *fuzzystr as ::core::ffi::c_int != NUL;
+        let p1 = *s1.cast::<*mut c_char>();
+        let p2 = *s2.cast::<*mut c_char>();
+        match (*p1 == b'<' as c_char, *p2 == b'<' as c_char) {
+            (false, true) => -1,
+            (true, false) => 1,
+            _ => strcmp(p1, p2),
+        }
     }
 }
 
-pub(crate) unsafe extern "C" fn sort_func_compare(
-    mut s1: *const ::core::ffi::c_void,
-    mut s2: *const ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut p1: *mut ::core::ffi::c_char = *(s1 as *mut *mut ::core::ffi::c_char);
-        let mut p2: *mut ::core::ffi::c_char = *(s2 as *mut *mut ::core::ffi::c_char);
-        if *p1 as ::core::ffi::c_int != '<' as ::core::ffi::c_int
-            && *p2 as ::core::ffi::c_int == '<' as ::core::ffi::c_int
-        {
-            return -1 as ::core::ffi::c_int;
-        }
-        if *p1 as ::core::ffi::c_int == '<' as ::core::ffi::c_int
-            && *p2 as ::core::ffi::c_int != '<' as ::core::ffi::c_int
-        {
-            return 1 as ::core::ffi::c_int;
-        }
-        return strcmp(p1, p2);
-    }
-}
-
-pub(crate) unsafe extern "C" fn wildescape(
-    mut xp: *mut expand_T,
-    mut str: *const ::core::ffi::c_char,
-    mut numfiles: ::core::ffi::c_int,
-    mut files: *mut *mut ::core::ffi::c_char,
+/// Escape special characters in the cmdline completion matches.
+///
+/// `str` is the pattern that produced them, needed only for its leading
+/// `"\~"`.  Both callers expand only when there is at least one match, which
+/// is what makes the unconditional `matches[0]` at the end in bounds.
+pub(crate) unsafe fn wildescape(
+    xp: *mut expand_T,
+    str: *const c_char,
+    matches: &mut [*mut c_char],
 ) {
     unsafe {
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let vse_what: ::core::ffi::c_int = if (*xp).xp_context == EXPAND_BUFFERS {
-            VSE_BUFFER
-        } else {
-            VSE_NONE
+        // Free the string in `slot` and put `escaped` in its place.  Every
+        // escaping step builds the new string out of the old one, so the
+        // replacement is always computed before the call.  A closure rather
+        // than a free function: it inherits this block, where a free
+        // function would have to state one of its own.
+        let put = |slot: &mut *mut c_char, escaped: *mut c_char| {
+            xfree(core::mem::replace(slot, escaped) as *mut c_void)
         };
-        if (*xp).xp_context == EXPAND_FILES
-            || (*xp).xp_context == EXPAND_FILES_IN_PATH
-            || (*xp).xp_context == EXPAND_SHELLCMD
-            || (*xp).xp_context == EXPAND_BUFFERS
-            || (*xp).xp_context == EXPAND_DIRECTORIES
-            || (*xp).xp_context == EXPAND_DIRS_IN_CDPATH
-        {
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < numfiles {
+        let context = (*xp).xp_context;
+        if matches!(
+            context,
+            EXPAND_FILES
+                | EXPAND_FILES_IN_PATH
+                | EXPAND_SHELLCMD
+                | EXPAND_BUFFERS
+                | EXPAND_DIRECTORIES
+                | EXPAND_DIRS_IN_CDPATH
+        ) {
+            let vse_what = if context == EXPAND_BUFFERS {
+                VSE_BUFFER
+            } else {
+                VSE_NONE
+            };
+            // Insert a backslash into a file name before a space, \, %, #
+            // and wildmatch characters, except '~'.
+            for slot in matches.iter_mut() {
+                // For ":set path=" we need to escape spaces twice.
                 if (*xp).xp_backslash & XP_BS_THREE != 0 {
-                    let mut pat: *mut ::core::ffi::c_char =
-                        (if (*xp).xp_backslash & XP_BS_COMMA != 0 {
-                            b" ,\0".as_ptr() as *const ::core::ffi::c_char
-                        } else {
-                            b" \0".as_ptr() as *const ::core::ffi::c_char
-                        }) as *mut ::core::ffi::c_char;
-                    p = vim_strsave_escaped(*files.offset(i as isize), pat);
-                    xfree(*files.offset(i as isize) as *mut ::core::ffi::c_void);
-                    *files.offset(i as isize) = p;
-                } else if (*xp).xp_backslash & XP_BS_COMMA != 0 {
-                    if !vim_strchr(*files.offset(i as isize), ',' as ::core::ffi::c_int).is_null() {
-                        p = vim_strsave_escaped(
-                            *files.offset(i as isize),
-                            b",\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
-                        xfree(*files.offset(i as isize) as *mut ::core::ffi::c_void);
-                        *files.offset(i as isize) = p;
-                    }
-                }
-                p = vim_strsave_fnameescape(
-                    *files.offset(i as isize),
-                    if (*xp).xp_shell as ::core::ffi::c_int != 0 {
-                        VSE_SHELL
+                    let pat = if (*xp).xp_backslash & XP_BS_COMMA != 0 {
+                        c" ,"
                     } else {
-                        vse_what
-                    },
-                );
-                xfree(*files.offset(i as isize) as *mut ::core::ffi::c_void);
-                *files.offset(i as isize) = p;
-                if *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '\\' as ::core::ffi::c_int
-                    && *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == '~' as ::core::ffi::c_int
-                    && *(*files.offset(i as isize)).offset(0 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int
-                        == '~' as ::core::ffi::c_int
+                        c" "
+                    };
+                    let escaped = vim_strsave_escaped(*slot, pat.as_ptr());
+                    put(slot, escaped);
+                } else if (*xp).xp_backslash & XP_BS_COMMA != 0
+                    && !vim_strchr(*slot, ',' as c_int).is_null()
                 {
-                    escape_fname(files.offset(i as isize));
+                    let escaped = vim_strsave_escaped(*slot, c",".as_ptr());
+                    put(slot, escaped);
                 }
-                i += 1;
+                let escaped = vim_strsave_fnameescape(
+                    *slot,
+                    if (*xp).xp_shell { VSE_SHELL } else { vse_what },
+                );
+                put(slot, escaped);
+
+                // If "str" starts with "\~", replace a leading "~" of the
+                // match with "\~" as well.
+                if *str == b'\\' as c_char
+                    && *str.add(1) == b'~' as c_char
+                    && **slot == b'~' as c_char
+                {
+                    escape_fname(slot);
+                }
             }
             (*xp).xp_backslash = XP_BS_NONE;
-            if **files.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '+' as ::core::ffi::c_int
-            {
-                escape_fname(files.offset(0 as ::core::ffi::c_int as isize));
+
+            // If the first match starts with a '+' escape it.  Otherwise it
+            // could be read as "+cmd".
+            if *matches[0] == b'+' as c_char {
+                escape_fname(&mut matches[0]);
             }
-        } else if (*xp).xp_context == EXPAND_TAGS {
-            let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i_0 < numfiles {
-                p = vim_strsave_escaped(
-                    *files.offset(i_0 as isize),
-                    b"\\|\"\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-                xfree(*files.offset(i_0 as isize) as *mut ::core::ffi::c_void);
-                *files.offset(i_0 as isize) = p;
-                i_0 += 1;
+        } else if context == EXPAND_TAGS {
+            // Insert a backslash before characters in a tag name that would
+            // terminate the ":tag" command.
+            for slot in matches.iter_mut() {
+                let escaped = vim_strsave_escaped(*slot, c"\\|\"".as_ptr());
+                put(slot, escaped);
             }
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn ExpandEscape(
-    mut xp: *mut expand_T,
-    mut str: *mut ::core::ffi::c_char,
-    mut numfiles: ::core::ffi::c_int,
-    mut files: *mut *mut ::core::ffi::c_char,
-    mut options: ::core::ffi::c_int,
+/// Prepare a freshly expanded match array for use on the command line.
+pub(crate) unsafe fn escape_matches(
+    xp: *mut expand_T,
+    str: *mut c_char,
+    matches: &mut [*mut c_char],
+    options: c_int,
 ) {
     unsafe {
+        // May change home directory back to "~".
         if options & WILD_HOME_REPLACE != 0 {
-            tilde_replace(str, numfiles, files);
+            tilde_replace(str, matches.len() as c_int, matches.as_mut_ptr());
         }
         if options & WILD_ESCAPE != 0 {
-            wildescape(xp, str, numfiles, files);
+            wildescape(xp, str, matches);
         }
     }
 }
