@@ -10,7 +10,7 @@ use crate::src::nvim::tui::termkey::format::{self, KeyBody};
 use crate::src::nvim::tui::termkey::keynames;
 use crate::src::nvim::tui::termkey::report;
 use crate::src::nvim::tui::termkey::utf8::{self, Decoded, UNICODE_INVALID};
-pub use crate::src::nvim::types::{
+use crate::src::nvim::types::{
     TermKey, TermKey_Terminfo_Getstr_Hook, TermKeyCsi, TermKeyEvent, TermKeyFormat, TermKeyKey,
     TermKeyKey_code, TermKeyMouseEvent, TermKeyResult, TermKeySym, TermKeyType, TerminfoEntry,
     size_t,

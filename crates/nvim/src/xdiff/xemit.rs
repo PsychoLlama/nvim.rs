@@ -14,11 +14,7 @@
 //! General Public License for more details.
 
 use crate::src::nvim::os::libc::strlen;
-pub use crate::src::nvim::types::{
-    chanode_t, chastore_t, find_func_t, mmbuffer_t, s_chanode, s_chastore, s_mmbuffer, s_xdchange,
-    s_xdemitcb, s_xdemitconf, s_xdfenv, s_xdfile, s_xrecord, size_t, xdchange_t, xdemitcb_t,
-    xdemitconf_t, xdfenv_t, xdfile_t, xdl_emit_hunk_consume_func_t, xrecord_t,
-};
+use crate::src::nvim::types::{xdchange_t, xdemitcb_t, xdemitconf_t, xdfenv_t, xdfile_t};
 use crate::src::xdiff::xutils::{xdl_emit_diffrec, xdl_emit_hunk_hdr};
 #[derive(Copy, Clone)]
 #[repr(C)]

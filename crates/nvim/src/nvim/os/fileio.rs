@@ -22,7 +22,7 @@ use crate::src::nvim::memory::{alloc_block, free_block};
 use crate::src::nvim::os::fs::{
     os_close, os_file_mkdir, os_fsync, os_open, os_open_stdin_fd, os_read, os_readv, os_write,
 };
-pub use crate::src::nvim::types::{FileDescriptor, iovec, ptrdiff_t, size_t};
+use crate::src::nvim::types::{FileDescriptor, iovec, ptrdiff_t, size_t};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 use core::slice;

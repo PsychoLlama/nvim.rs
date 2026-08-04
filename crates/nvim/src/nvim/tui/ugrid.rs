@@ -7,7 +7,7 @@
 
 #![forbid(unsafe_code)]
 
-pub use crate::src::nvim::types::{UCell, UGrid, UGridCells, sattr_T, schar_T};
+use crate::src::nvim::types::{UCell, UGrid, UGridCells, sattr_T, schar_T};
 use core::ffi::c_int;
 
 /// A cleared cell: an ASCII space carrying `attr`.

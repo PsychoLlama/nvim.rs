@@ -18,9 +18,8 @@ use crate::src::nvim::os::libc::{
     __assert_fail, abort, floor, free, malloc, memcmp, memcpy, memset, qsort, realloc, strncasecmp,
     strncmp, strtoll,
 };
-pub use crate::src::nvim::types::{
-    __compar_fn_t, LuaRef, lua_CFunction, lua_Integer, lua_Number, lua_State, luaL_Reg, ptrdiff_t,
-    size_t, strbuf_t, uintptr_t,
+use crate::src::nvim::types::{
+    lua_Integer, lua_Number, lua_State, luaL_Reg, size_t, strbuf_t, uintptr_t,
 };
 #[derive(Copy, Clone)]
 #[repr(C)]

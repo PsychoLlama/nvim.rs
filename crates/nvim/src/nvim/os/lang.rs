@@ -15,12 +15,9 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::shell::get_cmd_output;
 use crate::src::nvim::path::{path_tail, path_tail_with_sep};
 use crate::src::nvim::profile::time_msg;
-pub use crate::src::nvim::types::{
-    __off_t, __off64_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, CMD_index,
-    Direction, FILE, LineGetter, LuaRef, VimVarIndex, cmd_addr_T, cmdidx_T, colnr_T, cstack_T,
-    cstack_T_cs_pend as C2Rust_Unnamed, eslist_T, eslist_elem, exarg, exarg_T, expand_T, garray_T,
-    int32_t, linenr_T, pos_T, proftime_T, ptrdiff_t, scid_T, sctx_T, size_t, uint32_t, uint64_t,
-    xp_prefix_T,
+use crate::src::nvim::types::{
+    CMD_index, Direction, VimVarIndex, cmd_addr_T, exarg_T, expand_T, garray_T, proftime_T,
+    ptrdiff_t, size_t, xp_prefix_T,
 };
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;

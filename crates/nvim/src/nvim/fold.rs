@@ -22,7 +22,7 @@ use crate::src::nvim::main::{State, curwin, disable_fold_update, got_int, need_d
 use crate::src::nvim::memory::xfree;
 use crate::src::nvim::os::libc::memmove;
 use crate::src::nvim::plines::plines_win_nofold;
-pub use crate::src::nvim::types::*;
+use crate::src::nvim::types::*;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 

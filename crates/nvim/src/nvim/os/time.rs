@@ -17,7 +17,7 @@ use crate::src::nvim::memory::{xstrlcat, xstrlcpy};
 use crate::src::nvim::os::env::os_getenv_noalloc;
 use crate::src::nvim::os::input::os_input_ready;
 use crate::src::nvim::os::libc::{gettext, localtime_r, strftime, strncmp, strptime, time, tzset};
-pub use crate::src::nvim::types::{Timestamp, UV_CLOCK_REALTIME, time_t, tm, uv_timespec64_t};
+use crate::src::nvim::types::{Timestamp, UV_CLOCK_REALTIME, time_t, tm, uv_timespec64_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

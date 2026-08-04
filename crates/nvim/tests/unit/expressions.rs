@@ -15,13 +15,13 @@ use std::ptr;
 use c2rust_neovim::src::nvim::memory::xfree;
 use c2rust_neovim::src::nvim::types::{
     ExprAST, ExprASTNode, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition,
+    ParserState,
 };
 use c2rust_neovim::src::nvim::viml::parser::expressions::{
     east_node_type_tab, viml_pexpr_free_ast, viml_pexpr_parse,
 };
 use c2rust_neovim::src::nvim::viml::parser::parser::{
-    PARSER_STATE_INIT, ParserState, highlight_vec, parser_simple_get_line, viml_parser_destroy,
-    viml_parser_init,
+    PARSER_STATE_INIT, highlight_vec, parser_simple_get_line, viml_parser_destroy, viml_parser_init,
 };
 
 const EMPTY_LINE: ParserLine = ParserLine {

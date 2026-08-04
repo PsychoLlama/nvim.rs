@@ -15,9 +15,9 @@ use crate::src::nvim::event::libuv::{
     uv_pipe_init, uv_pipe_open, uv_run, uv_stream_get_write_queue_size, uv_stream_set_blocking,
 };
 use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
-pub use crate::src::nvim::types::{
-    Loop, MultiQueue, Stream, uv_file, uv_handle_t, uv_handle_type, uv_loop_t, uv_pipe_t,
-    uv_run_mode, uv_stream_t,
+use crate::src::nvim::types::{
+    Loop, Stream, uv_file, uv_handle_t, uv_handle_type, uv_loop_t, uv_pipe_t, uv_run_mode,
+    uv_stream_t,
 };
 use core::ffi::{c_int, c_void};
 use core::ptr;

@@ -15,9 +15,8 @@
 
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
 use crate::src::nvim::os::libc::memset;
-pub use crate::src::nvim::types::{
-    chanode_t, chastore_t, mmfile_t, s_chanode, s_chastore, s_mmfile, s_xdfenv, s_xdfile,
-    s_xpparam, s_xrecord, size_t, xdfenv_t, xdfile_t, xpparam_t, xrecord_t,
+use crate::src::nvim::types::{
+    chanode_t, chastore_t, mmfile_t, s_xrecord, size_t, xdfenv_t, xdfile_t, xpparam_t, xrecord_t,
 };
 use crate::src::xdiff::xutils::{
     xdl_bogosqrt, xdl_cha_alloc, xdl_cha_free, xdl_cha_init, xdl_guess_lines, xdl_hash_record,

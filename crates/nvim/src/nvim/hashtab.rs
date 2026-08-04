@@ -15,7 +15,7 @@ use crate::src::nvim::memory::{xcalloc, xfree};
 use crate::src::nvim::message::siemsg;
 use crate::src::nvim::os::libc::gettext;
 
-pub use crate::src::nvim::types::{hash_T, hashitem_T, hashtab_T};
+use crate::src::nvim::types::{hash_T, hashitem_T, hashtab_T};
 
 /// The array a table starts with, inline in the struct. Growing past it moves
 /// to the heap; shrinking back to this size moves back in.

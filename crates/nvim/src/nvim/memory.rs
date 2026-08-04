@@ -14,7 +14,7 @@
 //! allocation may end there.
 
 use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
-pub use crate::src::nvim::types::{Arena, ArenaMem, consumed_blk};
+use crate::src::nvim::types::{Arena, ArenaMem, consumed_blk};
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 use core::ptr;
 use core::slice;

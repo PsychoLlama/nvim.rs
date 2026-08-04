@@ -29,16 +29,11 @@ use crate::src::nvim::memory::xmemdupz;
 use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{__assert_fail, memmove, strcmp, strlen, strstr};
 use crate::src::nvim::strings::reverse_text;
-pub use crate::src::nvim::types::{
-    ApiDispatchWrapper, Arena, Array, BoolVarValue, Boolean, Dict, Error, ErrorType, EvalFuncData,
-    Float, Integer, KeyValuePair, ListLenSpecials, LuaRef, MsgpackRpcRequestHandler, Object,
-    ObjectType, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, String_0, VarLockStatus,
-    VarType, VimVarIndex, blob_T, blobvar_S, dict_T, dictitem_T, dictvar_S, float_T, funccall_S,
-    funccall_S_fc_fixvar as C2Rust_Unnamed_0, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
-    iconv_t, int32_t, int64_t, key_value_pair, linenr_T, list_T, listitem_S, listitem_T, listvar_S,
-    listwatch_S, listwatch_T, object, object_data as C2Rust_Unnamed, partial_S, partial_T,
-    proftime_T, ptrdiff_t, queue, scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_S,
-    ufunc_T, uint8_t, uint64_t, varnumber_T, vimconv_T,
+use crate::src::nvim::types::{
+    BoolVarValue, EvalFuncData, ListLenSpecials, ScopeType, SpecialVarValue, VarLockStatus,
+    VarType, VimVarIndex, blob_T, dict_T, dictitem_T, garray_T, hashitem_T, hashtab_T, int64_t,
+    list_T, listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
+    vimconv_T,
 };
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;

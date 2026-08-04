@@ -19,7 +19,7 @@ use crate::src::nvim::os::env::{os_env_exists, os_get_pid, os_getenv, os_unseten
 use crate::src::nvim::os::libc::snprintf;
 use crate::src::nvim::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::src::nvim::path::fix_fname;
-pub use crate::src::nvim::types::{SocketWatcher, TriState, size_t, uint32_t};
+use crate::src::nvim::types::{SocketWatcher, TriState, size_t, uint32_t};
 
 use crate::src::nvim::event::socket::address::SOCKET_ADDR_LEN;
 

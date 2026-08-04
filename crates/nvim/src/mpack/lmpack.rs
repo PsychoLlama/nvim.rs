@@ -20,14 +20,12 @@ use crate::src::nvim::lua::ffi::{
     luaL_newmetatable, luaL_prepbuffer, luaL_pushresult, luaL_ref, luaL_register, luaL_unref,
 };
 use crate::src::nvim::os::libc::{__assert_fail, free, malloc, memcpy, snprintf};
-pub use crate::src::nvim::types::{
-    lua_CFunction, lua_Integer, lua_Number, lua_State, luaL_Buffer, luaL_Reg, mpack_data_t,
-    mpack_node_s, mpack_node_t, mpack_one_parser_t, mpack_parser_t, mpack_rpc_header_s,
-    mpack_rpc_header_t, mpack_rpc_message_s, mpack_rpc_message_t, mpack_rpc_one_session_t,
-    mpack_rpc_session_t, mpack_rpc_slot_s, mpack_sintmax_t, mpack_tokbuf_s, mpack_tokbuf_t,
-    mpack_token_s, mpack_token_s_data as C2Rust_Unnamed, mpack_token_t, mpack_token_type_t,
-    mpack_uint32_t, mpack_uintmax_t, mpack_value_s, mpack_value_t, mpack_walk_cb, ptrdiff_t,
-    size_t,
+use crate::src::nvim::types::{
+    lua_Integer, lua_Number, lua_State, luaL_Buffer, luaL_Reg, mpack_data_t, mpack_node_t,
+    mpack_one_parser_t, mpack_parser_t, mpack_rpc_message_t, mpack_rpc_one_session_t,
+    mpack_rpc_session_t, mpack_rpc_slot_s, mpack_sintmax_t, mpack_tokbuf_t,
+    mpack_token_s_data as C2Rust_Unnamed, mpack_token_t, mpack_token_type_t, mpack_uint32_t,
+    mpack_value_t, size_t,
 };
 #[derive(Copy, Clone)]
 #[repr(C)]

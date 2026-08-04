@@ -18,9 +18,9 @@ use crate::src::nvim::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::src::nvim::main::{IObuff, curbuf, main_loop, p_awa, preserve_exit, v_dying};
 use crate::src::nvim::memline::ml_sync_all;
 use crate::src::nvim::os::libc::snprintf;
-pub use crate::src::nvim::types::{
-    SignalWatcher, VimVarIndex, auto_event, uv__queue, uv_handle_type, uv_signal_s_tree_entry,
-    uv_signal_s_u, uv_signal_t,
+use crate::src::nvim::types::{
+    SignalWatcher, VimVarIndex, uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u,
+    uv_signal_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;

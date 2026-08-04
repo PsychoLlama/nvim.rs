@@ -18,9 +18,9 @@ use crate::src::nvim::tui::termkey::termkey::{
     TERMKEY_TYPE_POSITION, TERMKEY_TYPE_UNICODE, TERMKEY_TYPE_UNKNOWN_CSI, emit_codepoint,
     peekkey_mouse,
 };
-pub use crate::src::nvim::types::{
+use crate::src::nvim::types::{
     TermKey, TermKeyCsi, TermKeyCsiParam, TermKeyKey, TermKeyKey_code, TermKeyMouseEvent,
-    TermKeyResult, keyinfo, size_t,
+    TermKeyResult, size_t,
 };
 use core::ffi::{c_char, c_int, c_uint, c_void};
 

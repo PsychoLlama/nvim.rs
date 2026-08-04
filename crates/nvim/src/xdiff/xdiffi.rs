@@ -15,12 +15,9 @@
 
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::os::libc::{__ctype_b_loc, exit, fprintf, stderr};
-pub use crate::src::nvim::types::{
-    __off_t, __off64_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, FILE,
-    chanode_t, chastore_t, find_func_t, mmbuffer_t, mmfile_t, s_chanode, s_chastore, s_mmbuffer,
-    s_mmfile, s_xdchange, s_xdemitcb, s_xdemitconf, s_xdfenv, s_xdfile, s_xpparam, s_xrecord,
-    size_t, xdchange_t, xdemitcb_t, xdemitconf_t, xdfenv_t, xdfile_t, xdl_emit_hunk_consume_func_t,
-    xpparam_t, xrecord_t,
+use crate::src::nvim::types::{
+    chanode_t, chastore_t, mmfile_t, s_xdchange, size_t, xdchange_t, xdemitcb_t, xdemitconf_t,
+    xdfenv_t, xdfile_t, xpparam_t, xrecord_t,
 };
 use crate::src::xdiff::xemit::{xdl_emit_diff, xdl_get_hunk};
 use crate::src::xdiff::xhistogram::xdl_do_histogram_diff;

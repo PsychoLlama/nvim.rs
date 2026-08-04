@@ -16,7 +16,7 @@ use crate::src::nvim::main::{curwin, e_no_spell};
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::spell::{parse_spelllang, spell_check};
-pub use crate::src::nvim::types::{hlf_T, lua_Integer, lua_State, luaL_Reg, size_t};
+use crate::src::nvim::types::{hlf_T, lua_Integer, lua_State, luaL_Reg, size_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

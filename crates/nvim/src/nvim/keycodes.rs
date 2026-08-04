@@ -12,9 +12,9 @@ use crate::src::nvim::os::libc::{
     __assert_fail, gettext, snprintf, strcpy, strlen, strncasecmp, strncmp,
 };
 use crate::src::nvim::strings::{vim_strchr, vim_strnicmp_asc};
-pub use crate::src::nvim::types::{
-    String_0, int32_t, int64_t, key_extra, linenr_T, scid_T, sctx_T, size_t, ssize_t, uint8_t,
-    uint16_t, uint64_t, uintmax_t, uvarnumber_T, varnumber_T,
+use crate::src::nvim::types::{
+    String_0, key_extra, scid_T, size_t, ssize_t, uint8_t, uint16_t, uintmax_t, uvarnumber_T,
+    varnumber_T,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const STR2NR_QUOTE: C2Rust_Unnamed = 16;

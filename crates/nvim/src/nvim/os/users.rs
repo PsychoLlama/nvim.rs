@@ -16,7 +16,7 @@ use crate::src::nvim::garray::{ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::memory::{xstrdup, xstrlcpy};
 use crate::src::nvim::os::env::os_getenv_noalloc;
-pub use crate::src::nvim::types::{expand_T, garray_T, size_t, uv_uid_t};
+use crate::src::nvim::types::{expand_T, garray_T, size_t, uv_uid_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;

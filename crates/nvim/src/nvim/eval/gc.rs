@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::global_cell::GlobalCell;
-pub use crate::src::nvim::types::{dict_T, list_T};
+use crate::src::nvim::types::{dict_T, list_T};
 
 /// Most recently allocated dict.
 pub static gc_first_dict: GlobalCell<*mut dict_T> =

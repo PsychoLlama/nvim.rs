@@ -12,17 +12,10 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::cb_flags;
 use crate::src::nvim::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus};
 use crate::src::nvim::register::{
-    AdditionalData, PLUS_REGISTER, STAR_REGISTER, String_0, kMTBlockWise, kMTCharWise, kMTLineWise,
-    kMTUnknown, yankreg_T,
+    PLUS_REGISTER, STAR_REGISTER, kMTBlockWise, kMTCharWise, kMTLineWise, kMTUnknown,
 };
-pub use crate::src::nvim::types::{
-    BoolVarValue, LuaRef, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, Timestamp,
-    VarLockStatus, VarType, blob_T, blobvar_S, dict_T, dictvar_S, float_T, funccall_S,
-    funccall_S_fc_fixvar as C2Rust_Unnamed, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
-    int32_t, int64_t, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S,
-    listwatch_T, partial_S, partial_T, proftime_T, ptrdiff_t, queue, scid_T, sctx_T, size_t,
-    ssize_t, typval_T, typval_vval_union, ufunc_S, ufunc_T, uint8_t, uint32_t, uint64_t,
-    varnumber_T,
+use crate::src::nvim::types::{
+    AdditionalData, String_0, VarType, ptrdiff_t, size_t, ssize_t, yankreg_T,
 };
 
 use crate::src::nvim::api::private::helpers::cstr_to_string;

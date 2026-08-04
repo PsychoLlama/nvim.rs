@@ -34,7 +34,7 @@ use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::path::{path_fnamecmp, path_shorten_fname, vim_ispathsep_nocolon};
 use crate::src::nvim::plines::linetabsize_eol;
 use crate::src::nvim::tag::tagstack_clear_entry;
-pub use crate::src::nvim::types::*;
+use crate::src::nvim::types::*;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 

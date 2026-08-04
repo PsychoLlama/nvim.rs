@@ -21,9 +21,7 @@
 //! retire once the loop and channel code above them is rewritten.
 
 use crate::src::nvim::types::multiqueue_list::{Item, ItemList};
-pub use crate::src::nvim::types::{
-    Event, MultiQueue, PutCallback, argv_callback, multiqueue, size_t,
-};
+use crate::src::nvim::types::{Event, MultiQueue, PutCallback, multiqueue, size_t};
 use core::ffi::c_void;
 use core::ptr;
 

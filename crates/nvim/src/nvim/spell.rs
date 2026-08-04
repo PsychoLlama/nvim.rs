@@ -42,9 +42,9 @@ use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{gettext, memmove, snprintf, strcat, strcpy, strlen, strncmp};
 use crate::src::nvim::search::do_search;
-pub use crate::src::nvim::types::{
-    colnr_T, exarg_T, file_comparison, hlf_T, langp_T, linenr_T, oparg_T, pos_T, regmatch_T,
-    regprog_T, searchit_arg_T, size_t, slang_T, smt_T, spelltab_T, uint8_t, win_T,
+use crate::src::nvim::types::{
+    colnr_T, exarg_T, file_comparison, langp_T, linenr_T, oparg_T, pos_T, searchit_arg_T, size_t,
+    slang_T, smt_T, spelltab_T, uint8_t, win_T,
 };
 use crate::src::nvim::undo::u_save_cursor;
 

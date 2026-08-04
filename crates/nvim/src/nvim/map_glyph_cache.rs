@@ -2,9 +2,7 @@ use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::map::{MapKey, mh_realloc};
 use crate::src::nvim::memory::xrealloc;
 use crate::src::nvim::os::libc::{abort, memcpy, strlen};
-pub use crate::src::nvim::types::{
-    MHPutStatus, MapHash, Set_glyph, String_0, size_t, uint8_t, uint32_t,
-};
+use crate::src::nvim::types::{MHPutStatus, MapHash, Set_glyph, String_0, size_t, uint32_t};
 pub const kMHNewKeyRealloc: MHPutStatus = 2;
 pub const kMHNewKeyDidFit: MHPutStatus = 1;
 pub const kMHExisting: MHPutStatus = 0;

@@ -15,7 +15,7 @@ use crate::src::nvim::tui::termkey::termkey::{
     TERMKEY_TYPE_KEYSYM,
 };
 use crate::src::nvim::tui::termkey::trie::{KeyTrie, Lookup};
-pub use crate::src::nvim::types::{
+use crate::src::nvim::types::{
     TermKey, TermKeyKey, TermKeyResult, TermKeySym, TermKeyType, TerminfoEntry, keyinfo, size_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};

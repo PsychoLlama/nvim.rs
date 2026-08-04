@@ -7,10 +7,10 @@ use std::ffi::{CStr, CString, c_void};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use c2rust_neovim::src::nvim::event::multiqueue::{
-    Event, MultiQueue, multiqueue_empty, multiqueue_free, multiqueue_get, multiqueue_new,
-    multiqueue_new_child, multiqueue_process_events, multiqueue_purge_events, multiqueue_put_event,
-    multiqueue_size,
+    multiqueue_empty, multiqueue_free, multiqueue_get, multiqueue_new, multiqueue_new_child,
+    multiqueue_process_events, multiqueue_purge_events, multiqueue_put_event, multiqueue_size,
 };
+use c2rust_neovim::src::nvim::types::{Event, MultiQueue};
 
 /// An event carrying `label` and no handler, so `get` hands the label back.
 fn labelled(label: &CStr) -> Event {

@@ -8,11 +8,12 @@
 use std::ffi::{CStr, c_char, c_void};
 
 use c2rust_neovim::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
-use c2rust_neovim::src::nvim::msgpack_rpc::unpacker::{Arena, Error, Object, unpack};
+use c2rust_neovim::src::nvim::msgpack_rpc::unpacker::unpack;
 use c2rust_neovim::src::nvim::types::api::kErrorTypeNone;
 use c2rust_neovim::src::nvim::types::{
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
+    Arena, Error, Object, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
+    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
+    kObjectTypeWindow,
 };
 
 /// What one decode produced: the object plus whatever error was reported.

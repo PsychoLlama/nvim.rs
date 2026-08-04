@@ -11,10 +11,10 @@ use crate::src::nvim::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_SHOWMATCH, MODE_TERMINAL, REPLACE_FLAG, VREPLACE_FLAG,
 };
 use crate::src::nvim::strings::vim_strchr;
-pub use crate::src::nvim::types::{
-    Arena, Array, Boolean, CursorShape, Dict, Float, Integer, KeyValuePair, LuaRef, Object,
-    ObjectType, String_0, cursorentry_T, int64_t, kObjectTypeDict, kObjectTypeInteger,
-    kObjectTypeString, key_value_pair, object, object_data as C2Rust_Unnamed, size_t, uint8_t,
+use crate::src::nvim::types::{
+    Arena, Array, CursorShape, Dict, Integer, String_0, cursorentry_T, kObjectTypeDict,
+    kObjectTypeInteger, kObjectTypeString, key_value_pair, object, object_data as C2Rust_Unnamed,
+    size_t, uint8_t,
 };
 use crate::src::nvim::ui::ui_mode_info_set;
 /// Where a mode's cursor shape sits in `shape_table`.

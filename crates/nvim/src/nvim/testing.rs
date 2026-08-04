@@ -27,19 +27,11 @@ use crate::src::nvim::os::fs::os_fopen;
 use crate::src::nvim::os::libc::{fclose, fgetc, gettext, memmove, strcmp, strlen, strstr};
 use crate::src::nvim::runtime::{estack_sfile, exestack};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen};
-pub use crate::src::nvim::types::{
-    __off_t, __off64_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
-    ApiDispatchWrapper, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean,
-    Dict, Error, ErrorType, EvalFuncData, FILE, Float, Integer, KeyValuePair, LuaRef,
-    MsgpackRpcRequestHandler, Object, ObjectType, QUEUE, ScopeDictDictItem, ScopeType,
-    SpecialVarValue, String_0, VarLockStatus, VarType, VimVarIndex, auto_event, blob_T, blobvar_S,
-    dict_T, dictitem_T, dictvar_S, estack_T, estack_T_es_info as C2Rust_Unnamed_2, estack_arg_T,
-    etype_T, event_T, except_T, except_type_T, float_T, funccall_S,
-    funccall_S_fc_fixvar as C2Rust_Unnamed_0, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
-    int32_t, int64_t, key_value_pair, linenr_T, list_T, listitem_S, listitem_T, listvar_S,
-    listwatch_S, listwatch_T, msglist, msglist_T, object, object_data as C2Rust_Unnamed, partial_S,
-    partial_T, proftime_T, ptrdiff_t, queue, regprog, regprog_T, scid_T, sctx_T, size_t, typval_T,
-    typval_vval_union, ufunc_S, ufunc_T, uint8_t, uint64_t, varnumber_T, vim_exception,
+use crate::src::nvim::types::{
+    BoolVarValue, EvalFuncData, FILE, ScopeType, SpecialVarValue, VarLockStatus, VarType,
+    VimVarIndex, auto_event, dict_T, dictitem_T, estack_T, estack_arg_T, etype_T, except_type_T,
+    float_T, garray_T, hashitem_T, int64_t, linenr_T, list_T, ptrdiff_t, size_t, typval_T,
+    typval_vval_union, uint8_t, varnumber_T,
 };
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;

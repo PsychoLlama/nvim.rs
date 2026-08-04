@@ -30,20 +30,12 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::regexp::skip_regexp_err;
 use crate::src::nvim::runtime::{do_finish, estack_sfile, exestack, stacktrace_create};
 use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
-pub use crate::src::nvim::types::{
-    Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean, CMD_index, Dict, Float,
-    Integer, KeyValuePair, LineGetter, LuaRef, Object, ObjectType, OptInt, QUEUE,
-    ScopeDictDictItem, ScopeType, SpecialVarValue, String_0, VarLockStatus, VarType, VimVarIndex,
-    auto_event, blob_T, blobvar_S, cleanup_T, cleanup_stuff, cmd_addr_T, cmdidx_T, colnr_T,
-    cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_2, dict_T, dictvar_S, eslist_T, eslist_elem,
-    estack_T, estack_T_es_info as C2Rust_Unnamed_6, estack_arg_T, etype_T, evalarg_T, event_T,
-    exarg, exarg_T, except_T, except_type_T, exception_state_S, exception_state_T, float_T,
-    funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_0, funccall_T, garray_T, hash_T, hashitem_T,
-    hashtab_T, int32_t, int64_t, key_value_pair, linenr_T, list_T, listitem_S, listitem_T,
-    listvar_S, listwatch_S, listwatch_T, msglist, msglist_T, object, object_data as C2Rust_Unnamed,
-    partial_S, partial_T, proftime_T, ptrdiff_t, queue, regmatch_T, regprog, regprog_T, scid_T,
-    sctx_T, size_t, typval_T, typval_vval_union, ufunc_S, ufunc_T, uint8_t, uint32_t, uint64_t,
-    varnumber_T, vim_exception,
+use crate::src::nvim::types::{
+    BoolVarValue, CMD_index, OptInt, ScopeType, SpecialVarValue, VarLockStatus, VarType,
+    VimVarIndex, auto_event, cleanup_T, cmd_addr_T, colnr_T, cstack_T, eslist_T, estack_T,
+    estack_arg_T, etype_T, evalarg_T, exarg_T, except_T, except_type_T, exception_state_T, int64_t,
+    linenr_T, list_T, msglist_T, ptrdiff_t, regmatch_T, regprog_T, size_t, typval_T,
+    typval_vval_union,
 };
 unsafe extern "C" {
     fn vim_regcomp(

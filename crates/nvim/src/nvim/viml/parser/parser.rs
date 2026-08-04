@@ -19,7 +19,7 @@ use core::ptr;
 use crate::src::nvim::kvec::InitVec;
 use crate::src::nvim::mbyte::string_convert;
 use crate::src::nvim::memory::xfree;
-pub use crate::src::nvim::types::{
+use crate::src::nvim::types::{
     ParserHighlight, ParserHighlightChunk, ParserInputReader, ParserInputReader_lines, ParserLine,
     ParserLineGetter, ParserPosition, ParserState, ParserState_stack, ParserStateItem,
     ParserStateItem_data, ParserStateItem_data_expr, ParserStateItem_data_expr_type_0,

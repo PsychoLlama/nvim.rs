@@ -12,7 +12,7 @@ use crate::src::nvim::lua::ffi::{
     lua_createtable, lua_gettop, lua_pushlstring, lua_tolstring, lua_type, luaL_argerror,
     luaL_error, luaL_register,
 };
-pub use crate::src::nvim::types::{lua_State, luaL_Reg, size_t};
+use crate::src::nvim::types::{lua_State, luaL_Reg, size_t};
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
 

@@ -12,7 +12,7 @@
 
 use crate::src::nvim::event::libuv::{uv_fs_req_cleanup, uv_fs_write, uv_write};
 use crate::src::nvim::event::stream::{stream_close_handle, stream_init};
-pub use crate::src::nvim::types::{
+use crate::src::nvim::types::{
     Loop, Stream, WBuffer, size_t, stream_write_cb, uv_buf_t, uv_fs_t, uv_write_t,
     wbuffer_data_finalizer,
 };

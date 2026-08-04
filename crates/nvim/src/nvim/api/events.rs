@@ -4,10 +4,8 @@ use crate::src::nvim::autocmd::do_termresponse_autocmd;
 use crate::src::nvim::eval::vars::set_vim_var_string;
 use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::memory::strequal;
-pub use crate::src::nvim::types::{
-    Array, Boolean, Dict, Error, ErrorType, Float, Integer, KeyValuePair, LuaRef, Object,
-    ObjectType, String_0, VimVarIndex, int64_t, kObjectTypeString, key_value_pair, object,
-    object_data as C2Rust_Unnamed, ptrdiff_t, size_t, uint64_t,
+use crate::src::nvim::types::{
+    Error, Integer, Object, String_0, VimVarIndex, kObjectTypeString, ptrdiff_t, uint64_t,
 };
 pub const VV_EXITREASON: VimVarIndex = 105;
 pub const VV_STARTTIME: VimVarIndex = 104;

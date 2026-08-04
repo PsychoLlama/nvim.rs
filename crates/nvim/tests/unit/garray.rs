@@ -6,9 +6,10 @@ use std::ptr;
 
 use c2rust_neovim::src::nvim::garray::{
     ga_append, ga_clear, ga_clear_strings, ga_concat, ga_concat_strings, ga_grow, ga_init,
-    ga_remove_duplicate_strings, garray_T,
+    ga_remove_duplicate_strings,
 };
 use c2rust_neovim::src::nvim::memory::xstrdup;
+use c2rust_neovim::src::nvim::types::garray_T;
 
 use crate::support::{cstr, internalize};
 

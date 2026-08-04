@@ -36,24 +36,12 @@ use crate::src::nvim::keycodes::trans_special;
 use crate::src::nvim::mbyte::{mb_copy_char, utf_char2bytes, utf_char2len, utfc_ptr2len_len};
 use crate::src::nvim::memory::{xfree, xmalloc, xmallocz};
 use crate::src::nvim::os::libc::{abort, gettext, memchr, memcmp, memcpy, strchr};
-pub use crate::src::nvim::types::{
+use crate::src::nvim::types::{
     ExprAST, ExprASTError, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, ExprVarScope,
-    ParserHighlight, ParserHighlightChunk, ParserInputReader,
-    ParserInputReader_lines as C2Rust_Unnamed_5, ParserLine, ParserLineGetter, ParserPosition,
-    ParserState, ParserState_stack as C2Rust_Unnamed_6, ParserStateItem,
-    ParserStateItem_data as C2Rust_Unnamed_1, ParserStateItem_data_expr as C2Rust_Unnamed_2,
-    ParserStateItem_data_expr_type_0 as C2Rust_Unnamed_3,
-    ParserStateItem_type_0 as C2Rust_Unnamed_4, expr_ast_node,
-    expr_ast_node_data as C2Rust_Unnamed_21, expr_ast_node_data_ass as C2Rust_Unnamed_22,
-    expr_ast_node_data_cmp as C2Rust_Unnamed_28, expr_ast_node_data_env as C2Rust_Unnamed_23,
-    expr_ast_node_data_fig as C2Rust_Unnamed_31,
-    expr_ast_node_data_fig_type_guesses as C2Rust_Unnamed_32,
-    expr_ast_node_data_flt as C2Rust_Unnamed_26, expr_ast_node_data_num as C2Rust_Unnamed_27,
-    expr_ast_node_data_opt as C2Rust_Unnamed_24, expr_ast_node_data_reg as C2Rust_Unnamed_33,
-    expr_ast_node_data_str as C2Rust_Unnamed_25, expr_ast_node_data_ter as C2Rust_Unnamed_29,
-    expr_ast_node_data_var as C2Rust_Unnamed_30, float_T, iconv_t, int64_t, size_t, uint8_t,
-    uint64_t, uvarnumber_T, varnumber_T, vimconv_T,
+    ParserLine, ParserPosition, ParserState, ParserStateItem_data_expr_type_0 as C2Rust_Unnamed_3,
+    ParserStateItem_type_0 as C2Rust_Unnamed_4, float_T, size_t, uint8_t, uvarnumber_T,
+    varnumber_T,
 };
 use crate::src::nvim::viml::parser::parser::{
     highlight_vec, viml_parser_advance, viml_parser_get_remaining_line, viml_parser_highlight,

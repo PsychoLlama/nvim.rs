@@ -2,12 +2,11 @@
 
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::memory::ARENA_EMPTY;
-pub use crate::src::nvim::types::{
-    Array, BoolVarValue, CMD_index, Callback_data as C2Rust_Unnamed_22, CallbackType, ChannelPart,
-    ChannelStdinMode, ChannelStreamType, Context, Direction, ErrorType, GRegFlags, ListLenSpecials,
-    LuaRetMode, MotionType, Object, ObjectType, ProcType, SpecialVarValue, String_0, TriState,
-    UIExtension, VarLockStatus, VarType, VimVarIndex, XDGVarType, auto_event, cmd_addr_T, garray_T,
-    hlf_T, object_data as C2Rust_Unnamed_16, size_t, smt_T, uint64_t, uv__work, uv_loop_t,
+use crate::src::nvim::types::{
+    Array, BoolVarValue, CMD_index, Callback_data as C2Rust_Unnamed_22, ChannelPart,
+    ChannelStreamType, Context, GRegFlags, ListLenSpecials, LuaRetMode, MotionType, Object,
+    ProcType, SpecialVarValue, String_0, TriState, VarLockStatus, VarType, VimVarIndex, XDGVarType,
+    cmd_addr_T, garray_T, object_data as C2Rust_Unnamed_16, size_t, uint64_t, uv__work, uv_loop_t,
     uv_req_type,
 };
 

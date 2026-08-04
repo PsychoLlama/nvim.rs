@@ -2,9 +2,7 @@ use crate::src::nvim::global_cell::SharedCell;
 use crate::src::nvim::os::libc::{
     __assert_fail, abort, fprintf, free, malloc, memcpy, snprintf, stderr, strchr, strtod,
 };
-pub use crate::src::nvim::types::{
-    __off_t, __off64_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, FILE, size_t,
-};
+use crate::src::nvim::types::size_t;
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 36] = unsafe {
     ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
         *b"void set_number_format(char *, int)\0",

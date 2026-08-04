@@ -71,7 +71,7 @@ use crate::src::nvim::os::libc::{strcmp, strlen};
 use crate::src::nvim::path::path_with_url;
 use crate::src::nvim::sign::{buf_has_signs, get_buffer_signs};
 use crate::src::nvim::strings::{concat_str, xstrnsave};
-pub use crate::src::nvim::types::*;
+use crate::src::nvim::types::*;
 pub const NUL: c_int = '\0' as c_int;
 pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;

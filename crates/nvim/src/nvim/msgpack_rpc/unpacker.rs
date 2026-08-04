@@ -27,14 +27,13 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::os::libc::abort;
 use crate::src::nvim::strings::arena_printf;
-pub use crate::src::nvim::types::{
-    AdditionalData, AdditionalDataBuilder, Arena, Array, Boolean, Dict, Error, ErrorType,
-    FieldHashfn, GridLineEvent, Integer, KeySetLink, KeyValuePair, MessageType,
-    MsgpackRpcRequestHandler, Object, ObjectType, OptKeySet, String_0, StringArray,
-    UIClientHandler, Unpacker, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer,
+use crate::src::nvim::types::{
+    AdditionalData, AdditionalDataBuilder, Arena, Array, Boolean, Dict, Error, FieldHashfn,
+    GridLineEvent, Integer, KeySetLink, KeyValuePair, MessageType, Object, ObjectType, OptKeySet,
+    String_0, StringArray, Unpacker, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer,
     kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
-    kObjectTypeTabpage, mpack_node_t, mpack_parser_t, mpack_tokbuf_t, mpack_token_t,
-    mpack_uint32_t, object, object_data, schar_T, size_t, ssize_t, uint32_t,
+    kObjectTypeTabpage, mpack_node_t, mpack_parser_t, mpack_token_t, mpack_uint32_t, object_data,
+    schar_T, size_t, ssize_t, uint32_t,
 };
 use crate::src::nvim::ui_client::{
     handle_ui_client_redraw, ui_client_event_grid_line, ui_client_get_redraw_handler,

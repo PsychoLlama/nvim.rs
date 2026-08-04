@@ -13,7 +13,7 @@ use crate::src::nvim::lua::ffi::{
     lua_settop, lua_toboolean, lua_tolstring,
 };
 use crate::src::nvim::os::libc::gettext;
-pub use crate::src::nvim::types::{exarg_T, lua_State};
+use crate::src::nvim::types::exarg_T;
 use core::ffi::{CStr, c_char};
 use core::{ptr, slice};
 

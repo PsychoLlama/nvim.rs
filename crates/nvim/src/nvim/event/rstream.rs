@@ -23,7 +23,7 @@ use crate::src::nvim::event::stream::{stream_close_handle, stream_init, stream_m
 use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
 use crate::src::nvim::memory::{alloc_block, free_block};
 use crate::src::nvim::os::libc::memmove;
-pub use crate::src::nvim::types::{
+use crate::src::nvim::types::{
     Event, Loop, RStream, Stream, size_t, ssize_t, stream_read_cb, uv_buf_t, uv_fs_t, uv_handle_t,
     uv_handle_type, uv_idle_t, uv_stream_t,
 };

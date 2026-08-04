@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::global_cell::GlobalCell;
-pub use crate::src::nvim::types::{VTermEncoding, VTermEncodingType, size_t, uint32_t};
+use crate::src::nvim::types::{VTermEncoding, VTermEncodingType, size_t, uint32_t};
 use core::ffi::{c_char, c_int, c_void};
 use core::slice;
 

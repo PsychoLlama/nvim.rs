@@ -14,7 +14,7 @@ use crate::src::nvim::main::{IObuff, NameBuff};
 use crate::src::nvim::memory::{xfree, xmemcpyz, xmemdupz, xstrdup};
 use crate::src::nvim::os::env::{expand_env_save, os_env_exists, os_getenv, os_getenv_noalloc};
 use crate::src::nvim::path::{concat_fnames_realloc, path_fnamecmp, path_is_absolute};
-pub use crate::src::nvim::types::{XDGVarType, size_t};
+use crate::src::nvim::types::{XDGVarType, size_t};
 use core::ffi::{CStr, c_char};
 use core::ptr;
 use std::ffi::CString;

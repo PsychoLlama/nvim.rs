@@ -1,9 +1,8 @@
 use crate::src::mpack::mpack_core::{mpack_read, mpack_tokbuf_init, mpack_write};
 use crate::src::nvim::os::libc::{__assert_fail, memcpy, memset};
-pub use crate::src::nvim::types::{
-    mpack_data_t, mpack_node_s, mpack_node_t, mpack_one_parser_t, mpack_parser_t, mpack_sintmax_t,
-    mpack_tokbuf_s, mpack_tokbuf_t, mpack_token_s, mpack_token_s_data as C2Rust_Unnamed_0,
-    mpack_token_t, mpack_token_type_t, mpack_uint32_t, mpack_uintmax_t, mpack_value_s,
+use crate::src::nvim::types::{
+    mpack_node_t, mpack_one_parser_t, mpack_parser_t, mpack_tokbuf_t,
+    mpack_token_s_data as C2Rust_Unnamed_0, mpack_token_t, mpack_token_type_t, mpack_uint32_t,
     mpack_value_t, mpack_walk_cb, size_t,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;

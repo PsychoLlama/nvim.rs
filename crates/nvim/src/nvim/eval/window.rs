@@ -60,7 +60,7 @@ use crate::src::nvim::normal::end_visual_mode;
 use crate::src::nvim::os::fs::{os_chdir, os_dirname};
 use crate::src::nvim::os::libc::{memset, strcmp, strtol};
 use crate::src::nvim::strings::vim_snprintf_safelen;
-pub use crate::src::nvim::types::*;
+use crate::src::nvim::types::*;
 use core::ffi::CStr;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem;

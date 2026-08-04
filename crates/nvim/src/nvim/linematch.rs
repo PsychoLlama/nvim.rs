@@ -22,7 +22,7 @@
 
 #![forbid(unsafe_code)]
 
-pub use crate::src::nvim::types::linenr_T;
+use crate::src::nvim::types::linenr_T;
 use core::ffi::c_int;
 
 /// Buffers a diff block can span (`DB_COUNT`).
