@@ -222,7 +222,7 @@
     "crates/nvim/src/nvim/ex_getln.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/ex_getln/buffer.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/ex_getln/cmdpreview.rs": {"unsafe": 8},
-    "crates/nvim/src/nvim/ex_getln/cmdwin.rs": {"unsafe": 9},
+    "crates/nvim/src/nvim/ex_getln/cmdwin.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/ex_getln/color.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/ex_getln/draw.rs": {"unsafe": 14},
     "crates/nvim/src/nvim/ex_getln/enter.rs": {"unsafe": 8},
