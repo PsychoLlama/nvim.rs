@@ -65,7 +65,6 @@
     "crates/nvim/src/nvim/ex_docmd/path.rs": 3,
     "crates/nvim/src/nvim/ex_docmd/scan.rs": 1,
     "crates/nvim/src/nvim/ex_eval.rs": 66,
-    "crates/nvim/src/nvim/ex_getln/incsearch.rs": 34,
     "crates/nvim/src/nvim/ex_session.rs": 97,
     "crates/nvim/src/nvim/extmark.rs": 21,
     "crates/nvim/src/nvim/fileio.rs": 1,
