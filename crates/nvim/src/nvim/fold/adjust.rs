@@ -12,6 +12,7 @@ use super::open_close::*;
 use super::*;
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::state::MODE_INSERT;
+use crate::src::nvim::types::kNone;
 
 ///
 /// If "updown" is false: Move to the start or end of the fold.

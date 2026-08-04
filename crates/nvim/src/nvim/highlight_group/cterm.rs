@@ -10,9 +10,7 @@
 use core::ffi::{CStr, c_int};
 
 use crate::src::nvim::main::t_colors;
-use crate::src::nvim::types::TriState;
-
-use super::{kFalse, kNone, kTrue};
+use crate::src::nvim::types::{TriState, kFalse, kNone, kTrue};
 
 /// The names `ctermfg=`/`ctermbg=` accept, in the order the number tables
 /// below are indexed. `NONE` is last and maps to -1 in every table.

@@ -16,6 +16,7 @@ use core::ptr;
 use super::*;
 use super::{adjust::*, marker::*};
 use crate::src::nvim::pos::MAXLNUM;
+use crate::src::nvim::types::kNone;
 
 // The fold-level strategy is dispatched by comparing function addresses, as
 // the C code did; the helper spells the address comparison out so the intent

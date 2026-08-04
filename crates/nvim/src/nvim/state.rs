@@ -22,14 +22,11 @@ use crate::src::nvim::os::input::{input_available, input_get, os_breakcheck};
 use crate::src::nvim::os::libc::{strcmp, strcpy};
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
-    BoolVarValue, Direction, Event, ProcType, ScopeType, SpecialVarValue, TriState, VarLockStatus,
-    VarType, VimState, dict_T, hashitem_T, hashtab_T, key_extra, save_v_event_T, size_t, uint8_t,
+    BoolVarValue, Direction, Event, ProcType, ScopeType, SpecialVarValue, VarLockStatus, VarType,
+    VimState, dict_T, hashitem_T, hashtab_T, kNone, key_extra, save_v_event_T, size_t, uint8_t,
     win_T,
 };
 use crate::src::nvim::ui::ui_flush;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

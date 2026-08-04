@@ -80,15 +80,14 @@ use crate::src::nvim::types::{
     BoolVarValue, Callback, Callback_data as C2Rust_Unnamed_5, CharsizeArg, CharsizeKind,
     ExtmarkOp, MotionType, OptInt, ScopeType, SpecialVarValue, StrCharInfo, TriState,
     VarLockStatus, VarType, bcount_t, block_def, buf_T, cmdarg_T, colnr_T, dict_T, ht_stack_T,
-    int32_t, int64_t, key_extra, linenr_T, list_stack_T, oparg_T, optset_T, pos_T, size_t, ssize_t,
-    typval_T, typval_vval_union, uint8_t, uvarnumber_T, varnumber_T, yankreg_T,
+    int32_t, int64_t, kNone, key_extra, linenr_T, list_stack_T, oparg_T, optset_T, pos_T, size_t,
+    ssize_t, typval_T, typval_vval_union, uint8_t, uvarnumber_T, varnumber_T, yankreg_T,
 };
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::undo::{u_clearline, u_save, u_save_cursor};
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalpha: C2Rust_Unnamed = 1024;
 pub const _ISupper: C2Rust_Unnamed = 256;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

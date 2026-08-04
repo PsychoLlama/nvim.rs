@@ -114,22 +114,19 @@ use crate::src::nvim::types::{
     KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, KeyValuePair, LuaRef,
     LuaRetMode, MessageData, MessageType, MotionType, NS, Object, OptScope, OptVal, OptValData,
     OptValType, RemapValues, ScopeType, ScreenGrid, SignTextAttrs, SpecialVarValue, StlClickRecord,
-    String_0, StringBuilder, Tabpage, TerminalOptions, TriState, TryState, VarLockStatus, VarType,
+    String_0, StringBuilder, Tabpage, TerminalOptions, TryState, VarLockStatus, VarType,
     VimVarIndex, Window, bln_values, buf_T, bufref_T, dictitem_T, dobuf_action_values,
-    dobuf_start_values, except_T, foldinfo_T, handle_T, hlf_T, int64_t, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil,
-    kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, key_extra, key_value_pair, linenr_T,
-    mpack_token_type_t, msg_data, msglist_T, object, object_data as C2Rust_Unnamed, pos_T,
-    ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T, stl_hlrec_t, tabpage_T, uint8_t,
-    uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
+    dobuf_start_values, except_T, foldinfo_T, handle_T, hlf_T, int64_t, kFalse, kNone,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeInteger,
+    kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kTrue, key_extra,
+    key_value_pair, linenr_T, mpack_token_type_t, msg_data, msglist_T, object,
+    object_data as C2Rust_Unnamed, pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T,
+    stl_hlrec_t, tabpage_T, uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::src::nvim::window::{
     global_stl_height, goto_tabpage_tp, goto_tabpage_win, win_find_tabpage,
 };
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

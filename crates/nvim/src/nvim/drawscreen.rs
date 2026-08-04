@@ -100,8 +100,8 @@ use crate::src::nvim::terminal::{terminal_check_size, terminal_suspended};
 use crate::src::nvim::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::src::nvim::types::{
     DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Integer, OptInt,
-    TriState, VimVarIndex, VirtText, VirtTextChunk, Window, buf_T, colnr_T, foldinfo_T, frame_T,
-    handle_T, hlf_T, int64_t, linenr_T, pos_T, regprog_T, schar_T, size_t, spellvars_T, uint16_t,
+    VimVarIndex, VirtText, VirtTextChunk, Window, buf_T, colnr_T, foldinfo_T, frame_T, handle_T,
+    hlf_T, int64_t, linenr_T, pos_T, regprog_T, schar_T, size_t, spellvars_T, uint16_t,
     varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{
@@ -132,7 +132,6 @@ unsafe extern "C" {
     fn re_multiline(prog: *const regprog_T) -> ::core::ffi::c_int;
     fn vim_regfree(prog: *mut regprog_T);
 }
-pub const kFalse: TriState = 0;
 /// A column past any real one -- "to the end of the line".
 ///
 /// Still declared per module tree-wide (40 copies); `pos.rs` is the home it

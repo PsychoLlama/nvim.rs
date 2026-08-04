@@ -60,19 +60,16 @@ use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTy
 use crate::src::nvim::types::{
     Arena, Array, ArrayBuilder, BoolVarValue, Buffer, CMD_index, Dict, Error, EvalFuncData, FILE,
     Integer, KeyDict_keymap, ListLenSpecials, LuaRef, LuaRetMode, Object, OptInt, RemapValues,
-    ScopeType, SpecialVarValue, String_0, TriState, VarLockStatus, VarType, buf_T, cmdidx_T,
-    colnr_T, dict_T, dictitem_T, estack_T, exarg_T, expand_T, fuzmatch_str_T, garray_T,
-    kObjectTypeDict, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
-    key_extra, key_value_pair, linenr_T, mapblock_T, object, object_data as C2Rust_Unnamed,
-    optset_T, pos_T, ptrdiff_t, regmatch_T, scid_T, sctx_T, size_t, typval_T, typval_vval_union,
-    ufunc_T, uint8_t, uint64_t, varnumber_T,
+    ScopeType, SpecialVarValue, String_0, VarLockStatus, VarType, buf_T, cmdidx_T, colnr_T, dict_T,
+    dictitem_T, estack_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, kObjectTypeDict,
+    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, key_extra,
+    key_value_pair, linenr_T, mapblock_T, object, object_data as C2Rust_Unnamed, optset_T, pos_T,
+    ptrdiff_t, regmatch_T, scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_T, uint8_t,
+    uint64_t, varnumber_T,
 };
 unsafe extern "C" {
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

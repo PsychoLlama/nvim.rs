@@ -14,6 +14,7 @@ use core::ptr;
 use super::marker::*;
 use super::*;
 use crate::src::nvim::pos::MAXLNUM;
+use crate::src::nvim::types::{kNone, kTrue};
 
 /// Close fold for current window at position "pos".
 /// Repeat "count" times.

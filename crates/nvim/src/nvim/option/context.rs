@@ -17,12 +17,13 @@ use crate::src::nvim::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::src::nvim::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::src::nvim::main::{curbuf, curwin};
 use crate::src::nvim::types::{
-    Error, OptIndex, OptScope, OptVal, OptValData, aco_save_T, buf_T, scid_T, switchwin_T, win_T,
+    Error, OptIndex, OptScope, OptVal, OptValData, aco_save_T, buf_T, kFalse, scid_T, switchwin_T,
+    win_T,
 };
 use crate::src::nvim::window::win_find_tabpage;
 
 use super::{
-    FAIL, get_option_value, kFalse, kOptScopeBuf, kOptScopeWin, kOptValTypeNil, set_option_direct,
+    FAIL, get_option_value, kOptScopeBuf, kOptScopeWin, kOptValTypeNil, set_option_direct,
     set_option_value_handle_tty,
 };
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};

@@ -23,6 +23,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::{kFalse, kTrue};
 
 impl Cells {
     /// Put the next character in [`Cells::cell_char`].

@@ -69,8 +69,8 @@ use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::src::nvim::types::{
     AlignTextPos, Array, BoolVarValue, Buffer, Error, Float, FloatRelative, Integer, Object,
-    OptInt, OptVal, OptValData, OptValType, String_0, TriState, VirtText, VirtTextChunk, WinConfig,
-    WinSplit, WinStyle, Window, dict_T, exarg_T, float_T, handle_T, hlf_T, kObjectTypeArray,
+    OptInt, OptVal, OptValData, OptValType, String_0, VirtText, VirtTextChunk, WinConfig, WinSplit,
+    WinStyle, Window, dict_T, exarg_T, float_T, handle_T, hlf_T, kObjectTypeArray,
     kObjectTypeBoolean, kObjectTypeString, linenr_T, lpos_T, object_data as C2Rust_Unnamed_12,
     pumitem_T, sattr_T, schar_T, size_t, tabpage_T, uint32_t, varnumber_T, vimmenu_T, win_T,
 };
@@ -97,8 +97,6 @@ pub use self::preview::*;
 mod menu;
 pub use self::menu::*;
 
-pub const kFalse: TriState = 0;
-pub const kTrue: TriState = 1;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kAlignLeft: AlignTextPos = 0;

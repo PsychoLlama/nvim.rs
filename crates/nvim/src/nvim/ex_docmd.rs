@@ -75,8 +75,8 @@ use crate::src::nvim::types::{
     BoolVarValue, CMD_index, Callback, Callback_data as C2Rust_Unnamed_20, CdCause, CdScope,
     ChannelPart, Direction, LineGetter, LuaRetMode, MarkGet, MotionType, OptValType, RemapValues,
     TriState, VarLockStatus, VarType, VimVarIndex, cmd_addr_T, dobuf_action_values,
-    dobuf_start_values, estack_arg_T, etype_T, exarg_T, except_T, garray_T, handle_T, key_extra,
-    linenr_T, optmagic_T, uint8_t, uint16_t, uint32_t,
+    dobuf_start_values, estack_arg_T, etype_T, exarg_T, except_T, garray_T, handle_T, kNone,
+    key_extra, linenr_T, optmagic_T, uint8_t, uint16_t, uint32_t,
 };
 use crate::src::nvim::undo::{ex_undojoin, ex_undolist};
 use crate::src::nvim::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -126,9 +126,6 @@ pub use self::filetype::*;
 use crate::src::nvim::eval::typval::kCallbackNone;
 mod childproc;
 pub(crate) use self::childproc::*;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;

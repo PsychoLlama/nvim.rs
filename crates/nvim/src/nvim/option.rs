@@ -37,7 +37,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::empty_string_option;
 use crate::src::nvim::optionstr::set_chars_option;
 use crate::src::nvim::types::{
-    CMD_index, CharsOption, HlAttrs, OptScope, OptValType, RgbValue, String_0, TriState, VarType,
+    CMD_index, CharsOption, HlAttrs, OptScope, OptValType, RgbValue, String_0, VarType,
     VimVarIndex, int16_t, int32_t, size_t, xp_prefix_T,
 };
 use core::ffi::{c_char, c_int, c_uint};
@@ -75,9 +75,6 @@ pub use self::show::*;
 pub(crate) use self::stropt::*;
 pub(crate) use self::validate::*;
 pub use self::value::*;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_STRING: VarType = 2;
 pub const MAXCOL: c_uint = 2147483647;
 pub const NUMBUFLEN: c_uint = 65;

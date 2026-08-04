@@ -45,6 +45,7 @@ pub use text::get_foldtext;
 
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::state::MODE_INSERT;
+use crate::src::nvim::types::{kFalse, kNone, kTrue};
 use level::foldUpdateIEMS;
 use open_close::check_closed;
 
@@ -58,9 +59,6 @@ pub const VIRTTEXT_EMPTY: VirtText = VirtText {
     capacity: 0,
     items: ptr::null_mut(),
 };
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kWinOptFoldtext: c_int = 22;
 pub const VV_LNUM: VimVarIndex = 9;

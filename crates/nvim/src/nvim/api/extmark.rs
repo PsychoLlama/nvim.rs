@@ -49,15 +49,12 @@ use crate::src::nvim::types::{
     KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_ns_opts, KeyDict_set_decoration_provider,
     KeyDict_set_extmark, KeySetLink, LuaRef, MHPutStatus, MTKey, MTPair, Map_String_int,
     Map_uint32_t_uint32_t, MapHash, MarkTree, NS, Object, OptionalKeys, ScopeType, Set_ptr_t,
-    Set_uint32_t, SpecialVarValue, String_0, TriState, UndoObjectType, VarLockStatus, VarType,
-    VirtLines, VirtText, VirtTextChunk, Window, buf_T, colnr_T, handle_T, int32_t, int64_t,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
-    key_value_pair, linenr_T, object, object_data as C2Rust_Unnamed, ptr_t, schar_T, size_t,
-    tabpage_T, uint8_t, uint16_t, uint32_t, virt_line, win_T,
+    Set_uint32_t, SpecialVarValue, String_0, UndoObjectType, VarLockStatus, VarType, VirtLines,
+    VirtText, VirtTextChunk, Window, buf_T, colnr_T, handle_T, int32_t, int64_t, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, key_value_pair,
+    linenr_T, object, object_data as C2Rust_Unnamed, ptr_t, schar_T, size_t, tabpage_T, uint8_t,
+    uint16_t, uint32_t, virt_line, win_T,
 };
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

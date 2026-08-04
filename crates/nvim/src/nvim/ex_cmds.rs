@@ -139,11 +139,11 @@ use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     AdditionalData, BoolVarValue, CMD_index, Callback, Callback_data as C2Rust_Unnamed_5,
     ExtmarkOp, OptInt, OptVal, OptValData, OptValType, ScopeType, SpecialVarValue, String_0,
-    SubReplacementString, Timestamp, TriState, UndoObjectType, VarLockStatus, VarType, VimVarIndex,
-    bcount_t, bfa_values, bln_values, buf_T, bufref_T, colnr_T, dobuf_action_values, exarg_T,
-    float_T, fmark_T, getf_retvalues, handle_T, int32_t, int64_t, linenr_T, list_T, listitem_T,
-    lpos_T, magic_T, pos_T, proftime_T, ptrdiff_t, regmatch_T, regmmatch_T, regprog_T, size_t,
-    tabpage_T, time_t, uint8_t, uint64_t, uvarnumber_T, varnumber_T, win_T,
+    SubReplacementString, Timestamp, UndoObjectType, VarLockStatus, VarType, VimVarIndex, bcount_t,
+    bfa_values, bln_values, buf_T, bufref_T, colnr_T, dobuf_action_values, exarg_T, float_T,
+    fmark_T, getf_retvalues, handle_T, int32_t, int64_t, linenr_T, list_T, listitem_T, lpos_T,
+    magic_T, pos_T, proftime_T, ptrdiff_t, regmatch_T, regmmatch_T, regprog_T, size_t, tabpage_T,
+    time_t, uint8_t, uint64_t, uvarnumber_T, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{ui_cursor_goto, ui_cursor_shape, ui_has};
 use crate::src::nvim::undo::{
@@ -165,9 +165,6 @@ unsafe extern "C" {
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalpha: C2Rust_Unnamed = 1024;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

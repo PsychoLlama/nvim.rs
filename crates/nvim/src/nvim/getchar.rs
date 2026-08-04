@@ -82,15 +82,12 @@ use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, CharsizeArg, CharsizeKind, Error, EvalFuncData, FileDescriptor,
     Integer, LuaRef, LuaRetMode, MotionType, MultiQueue, Object, OptInt, RemapValues, ScopeType,
     SpecialVarValue, StrCharInfo, String_0, TriState, VarLockStatus, VarType, VimVarIndex,
-    buffblock, buffblock_T, buffheader_T, colnr_T, dict_T, flush_buffers_T, garray_T, key_extra,
-    linenr_T, mapblock_T, oparg_T, pos_T, ptrdiff_t, save_redo_T, size_t, tasave_T, typebuf_T,
-    typval_T, uint8_t, uint64_t, varnumber_T, win_T,
+    buffblock, buffblock_T, buffheader_T, colnr_T, dict_T, flush_buffers_T, garray_T, kFalse,
+    kNone, key_extra, linenr_T, mapblock_T, oparg_T, pos_T, ptrdiff_t, save_redo_T, size_t,
+    tasave_T, typebuf_T, typval_T, uint8_t, uint64_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::src::nvim::undo::u_sync;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

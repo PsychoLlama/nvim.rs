@@ -147,9 +147,9 @@ use crate::src::nvim::types::{
     AdditionalData, BoolVarValue, CharsizeArg, CharsizeKind, Direction, GraphemeState, MotionType,
     OptInt, ScopeType, SpecialVarValue, StrCharInfo, String_0, TriState, UndoObjectType,
     VarLockStatus, VarType, VimState, VimVarIndex, aco_save_T, buf_T, cmdarg_T, colnr_T, event_T,
-    fmark_T, fmarkv_T, foldinfo_T, int32_t, int64_t, key_extra, linenr_T, pos_T, ptrdiff_t,
-    schar_T, size_t, ssize_t, state_check_callback, state_execute_callback, uint8_t, uint32_t,
-    varnumber_T, win_T, yankreg_T,
+    fmark_T, fmarkv_T, foldinfo_T, int32_t, int64_t, kFalse, kNone, kTrue, key_extra, linenr_T,
+    pos_T, ptrdiff_t, schar_T, size_t, ssize_t, state_check_callback, state_execute_callback,
+    uint8_t, uint32_t, varnumber_T, win_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::src::nvim::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -161,9 +161,6 @@ pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
 pub const _ISlower: C2Rust_Unnamed = 512;
 pub const _ISupper: C2Rust_Unnamed = 256;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

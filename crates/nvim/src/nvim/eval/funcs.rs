@@ -5,7 +5,7 @@ use crate::src::nvim::memory::ARENA_EMPTY;
 use crate::src::nvim::types::{
     Array, BoolVarValue, CMD_index, Callback_data as C2Rust_Unnamed_22, ChannelPart,
     ChannelStreamType, Context, GRegFlags, ListLenSpecials, LuaRetMode, MotionType, Object,
-    ProcType, SpecialVarValue, String_0, TriState, VarLockStatus, VarType, VimVarIndex, XDGVarType,
+    ProcType, SpecialVarValue, String_0, VarLockStatus, VarType, VimVarIndex, XDGVarType,
     cmd_addr_T, garray_T, object_data as C2Rust_Unnamed_16, size_t, uint64_t, uv__work, uv_loop_t,
     uv_req_type,
 };
@@ -102,9 +102,6 @@ pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const MPACK_ERROR: C2Rust_Unnamed_13 = 2;
 pub const MPACK_EOF: C2Rust_Unnamed_13 = 1;
 pub const MPACK_OK: C2Rust_Unnamed_13 = 0;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;

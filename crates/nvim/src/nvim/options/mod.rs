@@ -86,12 +86,12 @@ use crate::src::nvim::option::{
     did_set_smoothscroll, did_set_spell, did_set_swapfile, did_set_textwidth, did_set_title_icon,
     did_set_titlelen, did_set_undofile, did_set_undolevels, did_set_updatecount, did_set_wildchar,
     did_set_winblend, did_set_window, did_set_winheight, did_set_winwidth, did_set_wrap,
-    did_set_xhistory, kFalse, kOptFlagColon, kOptFlagComma, kOptFlagCurswant, kOptFlagExpand,
+    did_set_xhistory, kOptFlagColon, kOptFlagComma, kOptFlagCurswant, kOptFlagExpand,
     kOptFlagFlagList, kOptFlagFunc, kOptFlagHLOnly, kOptFlagMLE, kOptFlagNDname, kOptFlagNFname,
     kOptFlagNoDefExp, kOptFlagNoDefault, kOptFlagNoDup, kOptFlagNoGlob, kOptFlagNoMkrc,
     kOptFlagOneComma, kOptFlagPriMkrc, kOptFlagRedrAll, kOptFlagRedrBuf, kOptFlagRedrStat,
     kOptFlagRedrTabl, kOptFlagRedrWin, kOptFlagSecure, kOptFlagUIOption, kOptScopeBuf,
-    kOptScopeGlobal, kOptScopeWin, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, kTrue,
+    kOptScopeGlobal, kOptScopeWin, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString,
     p_vfile,
 };
 use crate::src::nvim::optionstr::{
@@ -121,6 +121,7 @@ use crate::src::nvim::optionstr::{
 use crate::src::nvim::quickfix::did_set_quickfixtextfunc;
 use crate::src::nvim::runtime::did_set_runtimepackpath;
 use crate::src::nvim::tag::did_set_tagfunc;
+use crate::src::nvim::types::types::{kFalse, kTrue};
 use crate::src::nvim::types::{
     OptIndex, OptInt, OptScopeFlags, OptVal, OptValData, String_0, sctx_T, ssize_t, vimoption_T,
 };

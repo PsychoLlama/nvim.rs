@@ -63,8 +63,8 @@ use crate::src::nvim::types::{
     AlignTextPos, Arena, Array, BoolVarValue, Buffer, Dict, FloatRelative, Integer, Object,
     OptIndex, OptInt, OptValType, ScopeType, ScreenGrid, SignTextAttrs, SpecialVarValue,
     StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, StlClickRecord, StlFlag,
-    String_0, Tabpage, TriState, VarLockStatus, VarType, VimVarIndex, WinSplit, WinStyle, buf_T,
-    colnr_T, frame_T, hlf_T, int64_t, kObjectTypeArray, kObjectTypeBuffer, kObjectTypeDict,
+    String_0, Tabpage, VarLockStatus, VarType, VimVarIndex, WinSplit, WinStyle, buf_T, colnr_T,
+    frame_T, hlf_T, int64_t, kObjectTypeArray, kObjectTypeBuffer, kObjectTypeDict,
     kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, key_value_pair,
     linenr_T, object, object_data as C2Rust_Unnamed, ptrdiff_t, schar_T, size_t, ssize_t,
     statuscol_T, stl_hlrec_t, tabpage_T, typval_T, typval_vval_union, uint8_t, varnumber_T, win_T,
@@ -72,9 +72,6 @@ use crate::src::nvim::types::{
 use crate::src::nvim::ui::{ui_call_msg_ruler, ui_call_tabline_update, ui_has};
 use crate::src::nvim::undo::bufIsChanged;
 use crate::src::nvim::window::{global_stl_height, lastwin_nofloating, tabline_height};
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

@@ -26,7 +26,7 @@ use crate::src::nvim::ex_docmd::{
     CMD_yank, CPO_EXECBUF, Ctrl_C, Ctrl_O, DOCMD_NOWAIT, DOCMD_VERBOSE, EXFLAG_LIST, EXFLAG_NR,
     FAIL, KE_FILLER, KS_SPECIAL, ML_EMPTY, NUL, OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK,
     OPTION_MAGIC_OFF, OPTION_MAGIC_ON, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, REMAP_NONE,
-    REMAP_YES, kFalse, kMTLineWise, kNone,
+    REMAP_YES, kMTLineWise,
 };
 use crate::src::nvim::ex_getln::getexline;
 use crate::src::nvim::fold::{foldCreate, foldManualAllowed, hasFolding, opFoldRange};
@@ -66,8 +66,8 @@ use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    colnr_T, exarg_T, handle_T, int64_t, linenr_T, oparg_T, optmagic_T, pos_T, save_state_T,
-    size_t, ssize_t, uint8_t,
+    colnr_T, exarg_T, handle_T, int64_t, kFalse, kNone, linenr_T, oparg_T, optmagic_T, pos_T,
+    save_state_T, size_t, ssize_t, uint8_t,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::src::nvim::undo::u_clearline;

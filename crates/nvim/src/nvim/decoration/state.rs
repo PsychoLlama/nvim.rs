@@ -50,15 +50,10 @@ use crate::src::nvim::memory::xfree;
 use crate::src::nvim::types::{
     DecorInline, DecorPriority, DecorPriorityInternal, DecorRange, DecorRange_data,
     DecorRange_data_ui, DecorRangeSlot, DecorSignHighlight, DecorState, DecorVirtText, MTPair,
-    MTPos, MarkTree, MarkTreeIter, TriState, VirtTextPos, buf_T, uint32_t, win_T,
+    MTPos, MarkTree, MarkTreeIter, VirtTextPos, buf_T, kFalse, kNone, kTrue, uint32_t, win_T,
 };
 use ::core::ffi::c_int;
 use ::core::{mem, ptr};
-
-/// `TriState`, the spelling state a cell inherits from its decorations.
-const kTrue: TriState = 1;
-const kFalse: TriState = 0;
-const kNone: TriState = -1;
 
 const MAXCOL: c_int = c_int::MAX;
 

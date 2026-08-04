@@ -17,6 +17,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::decoration::kMTMetaSignText;
+use crate::src::nvim::types::kFalse;
 
 /// Which corner of a window a separator connector is being drawn in.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

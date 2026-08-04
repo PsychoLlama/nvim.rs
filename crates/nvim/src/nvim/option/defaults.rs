@@ -52,19 +52,19 @@ use crate::src::nvim::runtime::runtimepath_default;
 use crate::src::nvim::spell::init_spell_chartab;
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
-    OptIndex, OptInt, OptVal, OptValData, String_0, garray_T, size_t, tabpage_T, uint32_t,
-    vimoption_T,
+    OptIndex, OptInt, OptVal, OptValData, String_0, garray_T, kFalse, kTrue, size_t, tabpage_T,
+    uint32_t, vimoption_T,
 };
 use crate::src::nvim::window::{last_status, win_comp_scroll};
 
 use super::{
     NO_LOCAL_UNDOLEVEL, NUL, OPT_GLOBAL, OPT_LOCAL, PATHSEPSTR, PROJECT_NAME, ROOT_UID, SID_NONE,
     check_options, check_win_options, default_fileformat, didset_options, didset_options2,
-    get_option_unset_value, insecure_flag, kFalse, kOptFlagComma, kOptFlagGettext,
-    kOptFlagInsecure, kOptFlagNoDefExp, kOptFlagNoDefault, kOptFlagWasSet, kOptValTypeBoolean,
-    kOptValTypeNumber, kOptValTypeString, kTrue, option_expand, option_has_type,
-    option_is_global_local, option_was_set, optval_copy, optval_free, set_fileformat,
-    set_option_direct, set_option_value_give_err, set_option_varp,
+    get_option_unset_value, insecure_flag, kOptFlagComma, kOptFlagGettext, kOptFlagInsecure,
+    kOptFlagNoDefExp, kOptFlagNoDefault, kOptFlagWasSet, kOptValTypeBoolean, kOptValTypeNumber,
+    kOptValTypeString, option_expand, option_has_type, option_is_global_local, option_was_set,
+    optval_copy, optval_free, set_fileformat, set_option_direct, set_option_value_give_err,
+    set_option_varp,
 };
 
 /// Every option, in table order.

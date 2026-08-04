@@ -79,8 +79,6 @@ pub use slang::{
 };
 pub use soundfold::{eval_soundfold, spell_soundfold};
 
-pub const kTrue: crate::src::nvim::types::TriState = 1;
-pub const kFalse: crate::src::nvim::types::TriState = 0;
 pub const MAXCOL: c_uint = 2147483647;
 
 pub const kOptValTypeBoolean: crate::src::nvim::types::OptValType = 0;

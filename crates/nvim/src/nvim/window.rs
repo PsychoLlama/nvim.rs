@@ -120,7 +120,7 @@ use crate::src::nvim::types::{
     AlignTextPos, BoolVarValue, Boolean, CMD_index, CdCause, CdScope, Direction, Error, Float,
     FloatAnchor, FloatRelative, GridView, Integer, Map_int_ptr_t, MapHash, MotionType, OptInt,
     OptVal, OptValData, OptValType, ScopeType, ScreenGrid, Set_uint32_t, SpecialVarValue,
-    StlClickDefinition, String_0, Terminal, TriState, TryState, VarLockStatus, VarType, VirtText,
+    StlClickDefinition, String_0, Terminal, TryState, VarLockStatus, VarType, VirtText,
     VirtTextChunk, WinConfig, WinInfo, WinSplit, WinStyle, Window, aucmdwin_T, bln_values, buf_T,
     bufref_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, dobuf_action_values, dobuf_start_values,
     exarg_T, except_T, frame_T, garray_T, getf_values, handle_T, hashitem_T, hashtab_T, int64_t,
@@ -142,9 +142,6 @@ use crate::src::nvim::winfloat::{
     win_float_find_altwin, win_float_update_statusline, win_new_float, win_reconfig_floats,
 };
 unsafe extern "C" {}
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

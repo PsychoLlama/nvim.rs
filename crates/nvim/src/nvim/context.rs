@@ -21,13 +21,10 @@ use crate::src::nvim::shada::{
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Context, Dict, Error, KeyDict_exec_opts, KeyValuePair, Object,
-    OptVal, OptValData, OptValType, ScopeType, SpecialVarValue, String_0, TriState, VarLockStatus,
-    VarType, hashitem_T, hashtab_T, kObjectTypeArray, kObjectTypeString, key_value_pair, object,
+    OptVal, OptValData, OptValType, ScopeType, SpecialVarValue, String_0, VarLockStatus, VarType,
+    hashitem_T, hashtab_T, kObjectTypeArray, kObjectTypeString, key_value_pair, object,
     object_data as C2Rust_Unnamed_0, size_t, typval_T, typval_vval_union, uint8_t, uint64_t,
 };
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

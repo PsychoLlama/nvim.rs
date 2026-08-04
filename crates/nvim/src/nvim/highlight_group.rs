@@ -13,7 +13,7 @@ use crate::src::nvim::main::{
     clear_cmdline, highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, msg_grid,
     need_highlight_changed,
 };
-use crate::src::nvim::types::{Integer, OptValType, TriState, size_t};
+use crate::src::nvim::types::{Integer, OptValType, size_t};
 use crate::src::nvim::ui::ui_call_hl_group_set;
 mod hlf;
 
@@ -36,11 +36,6 @@ mod command;
 pub use self::command::*;
 mod apply;
 pub use self::apply::*;
-
-/// `TriState`: an answer that can also be "leave it alone".
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 
 /// `xp_context` values: what `:highlight`'s completion is expanding.
 pub const EXPAND_HIGHLIGHT: c_int = 13;

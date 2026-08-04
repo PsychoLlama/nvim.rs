@@ -31,15 +31,10 @@ use crate::src::nvim::sign::buf_has_signs;
 use crate::src::nvim::statusline::SIGN_SHOW_MAX;
 use crate::src::nvim::types::{
     DecorInline, DecorSignHighlight, MTPair, MTPos, MarkTree, MarkTreeIter, MetaFilter, SignItem,
-    SignTextAttrs, TriState, buf_T, linenr_T, tabpage_T, uint32_t, win_T,
+    SignTextAttrs, TriState, buf_T, kFalse, kNone, kTrue, linenr_T, tabpage_T, uint32_t, win_T,
 };
 use ::core::ffi::c_int;
 use ::core::{mem, ptr};
-
-/// `kTrue`/`kFalse`/`kNone`, the argument [`buf_signcols_count_range`] takes.
-const kTrue: TriState = 1;
-const kFalse: TriState = 0;
-const kNone: TriState = -1;
 
 /// Marktree filters: which meta counts a walk is allowed to descend into.
 /// The index is a `MetaIndex`; `kMTMetaSignText` is 3 and `kMTMetaSignHL` 2.

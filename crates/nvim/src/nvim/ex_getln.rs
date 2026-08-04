@@ -151,11 +151,11 @@ use crate::src::nvim::types::{
     ExprParserFlags, HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt,
     OptVal, OptValData, OptValType, ParserHighlight, ParserHighlightChunk, ParserLine,
     ParserPosition, ParserState, RemapValues, ScopeType, Set_ptr_t, SpecialVarValue, String_0,
-    TriState, TryState, UndoObjectType, VarLockStatus, VarType, VimState, aco_save_T, buf_T,
-    bufref_T, cmd_addr_T, cmdmod_T, colnr_T, cstack_T, dict_T, dictitem_T, disptick_T,
-    dobuf_action_values, dobuf_start_values, event_T, exarg, exarg_T, except_T, expand_T, garray_T,
-    handle_T, hashitem_T, hashtab_T, int64_t, kObjectTypeArray, kObjectTypeInteger,
-    kObjectTypeString, key_extra, linenr_T, list_T, listitem_T, magic_T, msglist_T, object,
+    TryState, UndoObjectType, VarLockStatus, VarType, VimState, aco_save_T, buf_T, bufref_T,
+    cmd_addr_T, cmdmod_T, colnr_T, cstack_T, dict_T, dictitem_T, disptick_T, dobuf_action_values,
+    dobuf_start_values, event_T, exarg, exarg_T, except_T, expand_T, garray_T, handle_T,
+    hashitem_T, hashtab_T, int64_t, kObjectTypeArray, kObjectTypeInteger, kObjectTypeString,
+    key_extra, linenr_T, list_T, listitem_T, magic_T, msglist_T, object,
     object_data as C2Rust_Unnamed, oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t,
     ptrdiff_t, regmatch_T, regprog_T, save_v_event_T, sctx_T, searchit_arg_T, size_t,
     state_check_callback, state_execute_callback, tabpage_T, time_t, typval_T, typval_vval_union,
@@ -179,9 +179,6 @@ use crate::src::nvim::window::{
 unsafe extern "C" {
     static pum_want: GlobalCell<C2Rust_Unnamed_51>;
 }
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

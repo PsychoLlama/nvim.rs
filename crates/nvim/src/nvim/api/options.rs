@@ -21,15 +21,11 @@ use crate::src::nvim::os::libc::{__assert_fail, strcmp};
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
     Arena, BoolVarValue, Dict, Error, KeyDict_option, KeyValuePair, Object, OptIndex, OptScope,
-    OptVal, OptValData, OptValType, ScopeType, SpecialVarValue, String_0, TriState, TryState,
-    VarLockStatus, VarType, aco_save_T, bln_values, buf_T, bufref_T, except_T, int64_t,
-    kObjectTypeNil, linenr_T, msglist_T, object, object_data as C2Rust_Unnamed, sctx_T, size_t,
-    uint64_t, win_T,
+    OptVal, OptValData, OptValType, ScopeType, SpecialVarValue, String_0, TryState, VarLockStatus,
+    VarType, aco_save_T, bln_values, buf_T, bufref_T, except_T, int64_t, kObjectTypeNil, linenr_T,
+    msglist_T, object, object_data as C2Rust_Unnamed, sctx_T, size_t, uint64_t, win_T,
 };
 use crate::src::nvim::window::close_windows;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

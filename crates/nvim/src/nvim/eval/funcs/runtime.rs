@@ -5,8 +5,7 @@
 use super::args::frame;
 use super::wrappers::non_zero_arg;
 use super::{
-    MENU_ALL_MODES, NUL, VAR_STRING, VV_SHELL_ERROR, kFalse, kListLenMayKnow, kNone, kRetNilBool,
-    kTrue, true_0,
+    MENU_ALL_MODES, NUL, VAR_STRING, VV_SHELL_ERROR, kListLenMayKnow, kRetNilBool, true_0,
 };
 use crate::src::nvim::api::private::converter::object_to_vim;
 use crate::src::nvim::api::private::helpers::api_metadata;
@@ -42,8 +41,8 @@ use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::syntax::syntax_present;
 use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::{
-    Arena, Array, Error, EvalFuncData, Object, String_0, TriState, colnr_T, garray_T,
-    kObjectTypeBoolean, tabpage_T, typval_T, uint8_t, varnumber_T, win_T,
+    Arena, Array, Error, EvalFuncData, Object, String_0, TriState, colnr_T, garray_T, kFalse,
+    kNone, kObjectTypeBoolean, kTrue, tabpage_T, typval_T, uint8_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::ui_gui_attached;
 use crate::src::nvim::version::{has_nvim_version, has_vim_patch};

@@ -38,13 +38,12 @@ use crate::src::nvim::types::{
     DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict,
     Error, Integer, KeyDict_empty, KeyDict_exec_opts, KeyValuePair, LuaRetMode,
     MsgpackRpcRequestHandler, Object, OptIndex, OptScope, OptVal, OptValData, OptValType,
-    ScopeType, SpecialVarValue, String_0, StringBuilder, Tabpage, TriState, VarLockStatus, VarType,
-    VirtText, VirtTextChunk, Window, buf_T, colnr_T, int64_t, kObjectTypeArray, kObjectTypeDict,
+    ScopeType, SpecialVarValue, String_0, StringBuilder, Tabpage, VarLockStatus, VarType, VirtText,
+    VirtTextChunk, Window, buf_T, colnr_T, int64_t, kFalse, kObjectTypeArray, kObjectTypeDict,
     kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, lua_State, object,
     object_data as C2Rust_Unnamed, schar_T, sctx_T, size_t, tabpage_T, uint8_t, uint16_t, uint32_t,
     uint64_t, win_T,
 };
-pub const kFalse: TriState = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

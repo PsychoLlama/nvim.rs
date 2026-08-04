@@ -12,6 +12,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::{kFalse, kNone, kTrue};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

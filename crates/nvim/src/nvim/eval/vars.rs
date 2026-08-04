@@ -77,18 +77,15 @@ use crate::src::nvim::types::{
     BoolVarValue, CMD_index, EvalFuncData, GRegFlags, ListLenSpecials, OptIndex, OptInt, OptVal,
     OptValData, OptValType, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, TriState,
     VarLockStatus, VarType, VimVarIndex, aco_save_T, blob_T, buf_T, dict_T, dictitem_T, evalarg_T,
-    exarg_T, expand_T, garray_T, hashitem_T, hashtab_T, int64_t, list_T, list_stack_T, listitem_T,
-    lval_T, partial_T, ptrdiff_t, queue, scid_T, scriptitem_T, scriptvar_T, sctx_T, size_t,
-    ssize_t, switchwin_T, tabpage_T, typval_T, typval_vval_union, uint8_t, uint32_t, varnumber_T,
-    win_T,
+    exarg_T, expand_T, garray_T, hashitem_T, hashtab_T, int64_t, kFalse, kNone, kTrue, list_T,
+    list_stack_T, listitem_T, lval_T, partial_T, ptrdiff_t, queue, scid_T, scriptitem_T,
+    scriptvar_T, sctx_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T, typval_vval_union,
+    uint8_t, uint32_t, varnumber_T, win_T,
 };
 use crate::src::nvim::version::{highest_patch, min_vim_version};
 use crate::src::nvim::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISlower: C2Rust_Unnamed = 512;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;

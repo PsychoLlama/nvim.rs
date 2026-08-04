@@ -56,8 +56,8 @@ use crate::src::nvim::spell::parse_spelllang;
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::terminal::on_scrollback_option_changed;
 use crate::src::nvim::types::{
-    OptIndex, OptInt, OptVal, OptValData, String_0, TriState, buf_T, colnr_T, event_T, linenr_T,
-    optset_T, ptrdiff_t, size_t, tabpage_T, uint8_t, win_T,
+    OptIndex, OptInt, OptVal, OptValData, String_0, TriState, buf_T, colnr_T, event_T, kFalse,
+    linenr_T, optset_T, ptrdiff_t, size_t, tabpage_T, uint8_t, win_T,
 };
 use crate::src::nvim::undo::{bufIsChanged, u_compute_hash, u_read_undo, u_sync};
 use crate::src::nvim::window::{
@@ -68,9 +68,9 @@ use crate::src::nvim::winfloat::win_float_update_statusline;
 
 use super::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, BF_SYN_SET, Ctrl_C, DIP_ALL, NO_SCREEN, NUL, OPT_GLOBAL,
-    OPT_LOCAL, STATUS_HEIGHT, VV_WARNINGMSG, check_blending, did_set_title, kFalse,
-    kOptValTypeNumber, kOptValTypeString, option_was_set, redraw_titles, set_option_value,
-    set_option_varp, set_options_bin,
+    OPT_LOCAL, STATUS_HEIGHT, VV_WARNINGMSG, check_blending, did_set_title, kOptValTypeNumber,
+    kOptValTypeString, option_was_set, redraw_titles, set_option_value, set_option_varp,
+    set_options_bin,
 };
 use crate::src::nvim::highlight_group::HLF_W;
 use crate::src::nvim::keycodes::K_KENTER;

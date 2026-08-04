@@ -27,7 +27,7 @@ use crate::src::nvim::options::kOptBackground;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::types::ui::kUILinegrid;
-use crate::src::nvim::types::{OptVal, OptValData, estack_T};
+use crate::src::nvim::types::{OptVal, OptValData, estack_T, kFalse, kTrue};
 use crate::src::nvim::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};
 
 use super::{
@@ -35,8 +35,8 @@ use super::{
     e_group_has_settings_highlight_link_ignored, e_highlight_group_name_not_found_str,
     e_missing_argument_str, e_missing_equal_sign_str_2, e_unexpected_equal_sign_str, group,
     highlight_attr_set_all, highlight_clear, highlight_list_one, highlight_num_groups,
-    hl_has_settings, init_highlight, kColorIdxNone, kFalse, kOptValTypeString, kTrue, lookup_color,
-    name_to_color, restore_cterm_colors, set_hl_attr, syn_check_group, syn_name2id_len, with_group,
+    hl_has_settings, init_highlight, kColorIdxNone, kOptValTypeString, lookup_color, name_to_color,
+    restore_cterm_colors, set_hl_attr, syn_check_group, syn_name2id_len, with_group,
 };
 use crate::src::nvim::highlight_group::highlight_changed;
 

@@ -55,13 +55,13 @@ use crate::src::nvim::spell::compile_cap_prog;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::tag::set_buflocal_tfu_callback;
 use crate::src::nvim::types::{
-    OptInt, OptVal, OptValData, buf_T, colnr_T, int16_t, win_T, winopt_T,
+    OptInt, OptVal, OptValData, buf_T, colnr_T, int16_t, kFalse, win_T, winopt_T,
 };
 use crate::src::nvim::window::{check_colorcolumn, set_winbar_win};
 
 use super::{
     BCO_ALWAYS, BCO_ENTER, BCO_NOHELP, CMOD_NOSWAPFILE, KEYMAP_INIT, NO_LOCAL_UNDOLEVEL, NUL,
-    change_option_default, check_blending, fill_culopt_flags, kFalse, kFillchars, kListchars,
+    change_option_default, check_blending, fill_culopt_flags, kFillchars, kListchars,
     kOptValTypeBoolean, parse_winhl_opt, set_chars_option,
 };
 

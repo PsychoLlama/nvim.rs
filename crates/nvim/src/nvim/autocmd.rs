@@ -72,11 +72,11 @@ use crate::src::nvim::types::{
     OptInt, OptVal, OptValData, OptValType, ScopeType, Set_String, Set_int, SpecialVarValue,
     String_0, Timestamp, TriState, VarLockStatus, VarType, VimVarIndex, aco_save_T, aucmdwin_T,
     auto_event, buf_T, buffblock, buffblock_T, buffheader_T, bufref_T, dict_T, estack_T, etype_T,
-    event_T, exarg_T, expand_T, funccal_entry_T, handle_T, hashitem_T, hashtab_T, int64_t,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
-    key_value_pair, linenr_T, object, object_data as C2Rust_Unnamed, proftime_T, ptr_t, ptrdiff_t,
-    regprog_T, save_redo_T, save_v_event_T, sctx_T, size_t, tabpage_T, typval_T, typval_vval_union,
-    uint32_t, uint64_t, varnumber_T, win_T,
+    event_T, exarg_T, expand_T, funccal_entry_T, handle_T, hashitem_T, hashtab_T, int64_t, kFalse,
+    kNone, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil,
+    kObjectTypeString, kTrue, key_value_pair, linenr_T, object, object_data as C2Rust_Unnamed,
+    proftime_T, ptr_t, ptrdiff_t, regprog_T, save_redo_T, save_v_event_T, sctx_T, size_t,
+    tabpage_T, typval_T, typval_vval_union, uint32_t, uint64_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::ui_call_win_hide;
 use crate::src::nvim::ui_compositor::ui_comp_remove_grid;
@@ -94,9 +94,6 @@ unsafe extern "C" {
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
 }
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

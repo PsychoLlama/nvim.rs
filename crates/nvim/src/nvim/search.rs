@@ -122,9 +122,6 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_LIST: VarType = 4;
 pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;

@@ -125,11 +125,11 @@ use crate::src::nvim::types::builders::static_cstring;
 use crate::src::nvim::types::{
     CMD_index, Callback, Callback_data, DirStack, Direction, EvalFuncData, ExtmarkOp, FILE,
     FileInfo, ListLenSpecials, OptInt, OptVal, OptValData, OptValType, QFLT_INTERNAL,
-    QFLT_LOCATION, QFLT_QUICKFIX, TriState, VarLockStatus, VarType, aco_save_T, bln_values, buf_T,
-    bufref_T, cleanup_T, cmdidx_T, colnr_T, dict_T, dictitem_T, dobuf_action_values, exarg_T,
-    getf_values, handle_T, linenr_T, list_T, listitem_T, optset_T, pos_T, ptrdiff_t, qf_info_T,
-    qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T, regprog_T, scid_T, size_t, time_t,
-    typval_T, typval_vval_union, varnumber_T, vimconv_T, win_T,
+    QFLT_LOCATION, QFLT_QUICKFIX, VarLockStatus, VarType, aco_save_T, bln_values, buf_T, bufref_T,
+    cleanup_T, cmdidx_T, colnr_T, dict_T, dictitem_T, dobuf_action_values, exarg_T, getf_values,
+    handle_T, linenr_T, list_T, listitem_T, optset_T, pos_T, ptrdiff_t, qf_info_T, qf_list_T,
+    qfline_T, qfltype_T, regmatch_T, regmmatch_T, regprog_T, scid_T, size_t, time_t, typval_T,
+    typval_vval_union, varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::u_clearallandblockfree;
@@ -181,7 +181,6 @@ mod setprops;
 pub use self::setprops::*;
 mod eval;
 pub use self::eval::*;
-pub const kFalse: TriState = 0;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const VAR_FLOAT: VarType = 6;

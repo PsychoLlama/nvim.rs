@@ -49,11 +49,12 @@ use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::syntax::{syn_get_id, syntax_present};
 use crate::src::nvim::types::{
-    DecorState, TriState, colnr_T, hlf_T, linenr_T, pos_T, size_t, smt_T, uint8_t, win_T,
+    DecorState, TriState, colnr_T, hlf_T, kFalse, kTrue, linenr_T, pos_T, size_t, smt_T, uint8_t,
+    win_T,
 };
 
 use super::check::{check_need_cap, no_spell_checking, spell_check};
-use super::{MAXCOL, MAXWLEN, NUL, SHM_SEARCH, SMT_BAD, SMT_RARE, kFalse, kTrue};
+use super::{MAXCOL, MAXWLEN, NUL, SHM_SEARCH, SMT_BAD, SMT_RARE};
 use crate::src::nvim::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPR};
 use crate::src::nvim::spell::SMT_ALL;
 

@@ -48,6 +48,10 @@ pub type NS = handle_T;
 pub type OptInt = int64_t;
 pub type Terminal = terminal;
 pub type TriState = ::core::ffi::c_int;
+/// `TriState`'s three values: an unset option or field is `kNone`, not false.
+pub const kFalse: TriState = 0;
+pub const kTrue: TriState = 1;
+pub const kNone: TriState = -1;
 pub type buf_T = file_buffer;
 pub type float_T = ::core::ffi::c_double;
 pub type handle_T = ::core::ffi::c_int;

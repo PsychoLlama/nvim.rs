@@ -87,12 +87,12 @@ use crate::src::nvim::types::{
     MHPutStatus, Map_String_int, MapHash, Object, OptInt, OptVal, OptValData, OptValType,
     ScopeType, Set_String, SpecialVarValue, String_0, TriState, VarLockStatus, VarType, XDGVarType,
     buf_T, cmd_addr_T, colnr_T, dict_T, dictitem_T, estack_T, estack_arg_T, etype_T, exarg_T,
-    expand_T, funccal_entry_T, garray_T, handle_T, hashitem_T, hashtab_T, int64_t,
+    expand_T, funccal_entry_T, garray_T, handle_T, hashitem_T, hashtab_T, int64_t, kFalse, kNone,
     kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
-    key_value_pair, linenr_T, list_T, object, object_data as C2Rust_Unnamed, optset_T, proftime_T,
-    pthread_mutex_t, ptrdiff_t, regmatch_T, regprog_T, scid_T, scriptitem_T, sctx_T, size_t,
-    ssize_t, typval_T, typval_vval_union, ufunc_T, uint8_t, uint32_t, uv_mutex_t, varnumber_T,
-    vimconv_T, win_T,
+    kTrue, key_value_pair, linenr_T, list_T, object, object_data as C2Rust_Unnamed, optset_T,
+    proftime_T, pthread_mutex_t, ptrdiff_t, regmatch_T, regprog_T, scid_T, scriptitem_T, sctx_T,
+    size_t, ssize_t, typval_T, typval_vval_union, ufunc_T, uint8_t, uint32_t, uv_mutex_t,
+    varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::usercmd::add_win_cmd_modifiers;
 unsafe extern "C" {
@@ -103,9 +103,6 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

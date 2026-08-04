@@ -114,13 +114,13 @@ use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, CdCause,
     ChangedtickDictItem, ExtmarkOp, FileID, FloatRelative, Map_int_ptr_t, MarkAdjustMode, MarkTree,
     MetaIndex, OptInt, OptVal, OptValData, OptValType, ScopeType, SpecialVarValue, StlClickRecord,
-    String_0, StringBuilder, Timestamp, TriState, UndoObjectType, VarLockStatus, VarType, WinInfo,
-    WinSplit, WinStyle, aco_save_T, bfa_values, bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T,
-    colnr_T, cstack_T, dictitem_T, dobuf_action_values, dobuf_start_values, etype_T, exarg_T,
-    except_T, fmark_T, fmarkv_T, fuzmatch_str_T, garray_T, getf_values, handle_T, hashitem_T,
-    int16_t, int64_t, intmax_t, linenr_T, memfile_T, pos_T, ptr_t, ptrdiff_t, regmatch_T,
-    regprog_T, schar_T, scid_T, sctx_T, size_t, statuscol_T, stl_hlrec_t, tabpage_T, time_t,
-    typval_T, typval_vval_union, uint8_t, uint32_t, uint64_t, varnumber_T, win_T,
+    String_0, StringBuilder, Timestamp, UndoObjectType, VarLockStatus, VarType, WinInfo, WinSplit,
+    WinStyle, aco_save_T, bfa_values, bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T, colnr_T,
+    cstack_T, dictitem_T, dobuf_action_values, dobuf_start_values, etype_T, exarg_T, except_T,
+    fmark_T, fmarkv_T, fuzmatch_str_T, garray_T, getf_values, handle_T, hashitem_T, int16_t,
+    int64_t, intmax_t, kFalse, linenr_T, memfile_T, pos_T, ptr_t, ptrdiff_t, regmatch_T, regprog_T,
+    schar_T, scid_T, sctx_T, size_t, statuscol_T, stl_hlrec_t, tabpage_T, time_t, typval_T,
+    typval_vval_union, uint8_t, uint32_t, uint64_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::src::nvim::undo::{
@@ -146,9 +146,6 @@ unsafe extern "C" {
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISdigit: C2Rust_Unnamed = 2048;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

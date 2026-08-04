@@ -43,13 +43,10 @@ use crate::src::nvim::types::{
     AlignTextPos, BoolVarValue, CMD_index, EvalFuncData, FloatRelative, ListLenSpecials,
     RemapValues, ScopeType, SpecialVarValue, String_0, TriState, VarLockStatus, VarType, WinSplit,
     WinStyle, buffblock, buffblock_T, buffheader_T, colnr_T, dict_T, exarg_T, expand_T, garray_T,
-    linenr_T, list_T, pos_T, ptrdiff_t, save_state_T, scid_T, size_t, ssize_t, tasave_T, typebuf_T,
-    typval_T, uint8_t, varnumber_T, vimmenu_T,
+    kFalse, kNone, kTrue, linenr_T, list_T, pos_T, ptrdiff_t, save_state_T, scid_T, size_t,
+    ssize_t, tasave_T, typebuf_T, typval_T, uint8_t, varnumber_T, vimmenu_T,
 };
 use crate::src::nvim::ui::ui_call_update_menu;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;

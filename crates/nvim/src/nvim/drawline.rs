@@ -83,9 +83,9 @@ use crate::src::nvim::syntax::{
 use crate::src::nvim::terminal::terminal_get_line_attributes;
 use crate::src::nvim::types::{
     CharSize, CharsizeArg, DecorRange, DecorVirtText, GridView, HlMode, NS, RgbValue,
-    SignTextAttrs, TriState, VimVarIndex, VirtLines, VirtText, WinExtmark, buf_T, colnr_T,
-    diffline_T, foldinfo_T, hlf_T, linenr_T, pos_T, ptrdiff_t, sattr_T, schar_T, size_t,
-    spellvars_T, ssize_t, statuscol_T, uint8_t, uint32_t, uint64_t, varnumber_T, virt_line, win_T,
+    SignTextAttrs, VimVarIndex, VirtLines, VirtText, WinExtmark, buf_T, colnr_T, diffline_T,
+    foldinfo_T, hlf_T, linenr_T, pos_T, ptrdiff_t, sattr_T, schar_T, size_t, spellvars_T, ssize_t,
+    statuscol_T, uint8_t, uint32_t, uint64_t, varnumber_T, virt_line, win_T,
 };
 use crate::src::nvim::ui::ui_rgb_attached;
 
@@ -109,8 +109,6 @@ mod special;
 /// Still declared per module tree-wide (40 copies); `pos.rs` is the home it
 /// wants, and that is the standing tree-wide constant job.
 pub const MAXCOL: ::core::ffi::c_int = ::core::ffi::c_int::MAX;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
 /// A `DecorRange` that draws virtual text of its own.
 /// A `DecorRange` that draws nothing and reports its position to the UI.
 /// Columns of a `:terminal` line whose attributes `win_line` will look up.
