@@ -1,458 +1,529 @@
 //! The stuff/read/record buffers: [`buffheader_T`] and its chain.
 //!
-//! A `buffheader_T` is a linked list of [`buffblock`]s holding a byte string
+//! A `buffheader_T` is a linked list of [`buffblock_T`]s holding a byte string
 //! that is appended to at the tail ([`add_buff`]) and consumed from the head
 //! ([`read_readbuf`]).  Five of them exist — the two read buffers behind
 //! `stuffReadbuff`, the record buffer behind `q`, and the redo pair — and
 //! every one of them is filled by the functions here.
+//!
+//! `buffblock_T::b_str` is a flexible array member: the type declares one
+//! byte, the allocation holds as many as the block was sized for. Every read
+//! of it goes through [`block_str`], which forms the pointer from the field's
+//! address so that it inherits the whole allocation's provenance — taking a
+//! slice of the declared `[c_char; 1]` would cover one byte.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::key_escape;
+use core::ffi::{c_char, c_int, c_uint};
+use core::mem::offset_of;
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn free_buff(mut buf: *mut buffheader_T) {
-    unsafe {
-        let mut np: *mut buffblock_T = ::core::ptr::null_mut::<buffblock_T>();
-        let mut p: *mut buffblock_T = (*buf).bh_first.b_next as *mut buffblock_T;
-        while !p.is_null() {
-            np = (*p).b_next as *mut buffblock_T;
-            xfree(p as *mut ::core::ffi::c_void);
-            p = np;
+/// Smallest block `add_buff` will allocate; upstream's `MINIMAL_SIZE`.
+const MINIMAL_SIZE: usize = 20;
+
+/// Longest UTF-8 sequence `utf_char2bytes` can write, plus its NUL.
+const MB_MAXBYTES: usize = 21;
+
+/// The bytes of one block, as a pointer over the whole allocation.
+///
+/// # Safety
+/// `block` must point at a live block allocated by [`add_buff`].
+pub(crate) unsafe fn block_str(block: *mut buffblock_T) -> *mut c_char {
+    unsafe { (&raw mut (*block).b_str).cast::<c_char>() }
+}
+
+/// Walk the blocks of `buf`, head first.
+///
+/// Each block's successor is read *before* the block is handed out, so a
+/// caller may free what it is given — which is what [`free_buff`] does.
+///
+/// # Safety
+/// `buf` must point at a live buffer whose chain nothing else is mutating.
+unsafe fn blocks(buf: *const buffheader_T) -> impl Iterator<Item = *mut buffblock_T> {
+    let mut next = unsafe { (*buf).bh_first.b_next };
+    core::iter::from_fn(move || {
+        let block = next;
+        if block.is_null() {
+            return None;
         }
-        (*buf).bh_first.b_next = ::core::ptr::null_mut::<buffblock>();
-        (*buf).bh_curr = ::core::ptr::null_mut::<buffblock_T>();
+        next = unsafe { (*block).b_next };
+        Some(block)
+    })
+}
+
+/// Free and clear a buffer.
+///
+/// # Safety
+/// `buf` must point at a live buffer.
+pub(crate) unsafe fn free_buff(buf: *mut buffheader_T) {
+    unsafe {
+        for block in blocks(buf) {
+            xfree(block.cast());
+        }
+        (*buf).bh_first.b_next = ptr::null_mut();
+        (*buf).bh_curr = ptr::null_mut();
     }
 }
 
-pub(crate) unsafe extern "C" fn get_buffcont(
-    mut buffer: *mut buffheader_T,
-    mut dozero: ::core::ffi::c_int,
-    mut len: *mut size_t,
-) -> *mut ::core::ffi::c_char {
+/// The contents of a buffer as one `xmalloc`ed NUL-terminated string, with
+/// its length. `K_SPECIAL` in the answer is escaped.
+///
+/// Answers a null pointer when the buffer is empty and `dozero` is false.
+///
+/// # Safety
+/// `buf` must point at a live buffer.
+pub(crate) unsafe fn buff_contents(buf: *mut buffheader_T, dozero: bool) -> (*mut c_char, usize) {
     unsafe {
-        let mut count: size_t = 0 as size_t;
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut i: size_t = 0 as size_t;
-        let mut bp: *const buffblock_T = (*buffer).bh_first.b_next;
-        while !bp.is_null() {
-            count = count.wrapping_add((*bp).b_strlen);
-            bp = (*bp).b_next;
+        let mut count = 0;
+        for block in blocks(buf) {
+            count += (*block).b_strlen;
         }
-        if count > 0 as size_t || dozero != 0 {
-            p = xmalloc(count.wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
-            let mut p2: *mut ::core::ffi::c_char = p;
-            let mut bp_0: *const buffblock_T = (*buffer).bh_first.b_next;
-            while !bp_0.is_null() {
-                let mut str: *const ::core::ffi::c_char =
-                    &raw const (*bp_0).b_str as *const ::core::ffi::c_char;
-                while *str != 0 {
-                    let c2rust_fresh0 = str;
-                    str = str.offset(1);
-                    let c2rust_fresh1 = p2;
-                    p2 = p2.offset(1);
-                    *c2rust_fresh1 = *c2rust_fresh0;
-                }
-                bp_0 = (*bp_0).b_next;
+        if count == 0 && !dozero {
+            return (ptr::null_mut(), 0);
+        }
+
+        let out = xmalloc(count + 1).cast::<c_char>();
+        let mut at = 0;
+        for block in blocks(buf) {
+            // Copy up to the block's own terminator rather than up to
+            // `b_strlen`: `delete_buff_tail` shortens a block by moving the
+            // NUL, and upstream reads the NUL here too.
+            let str = block_str(block);
+            let mut i = 0;
+            while *str.add(i) != 0 {
+                *out.add(at) = *str.add(i);
+                at += 1;
+                i += 1;
             }
-            *p2 = NUL as ::core::ffi::c_char;
-            i = p2.offset_from(p) as size_t;
         }
-        if !len.is_null() {
-            *len = i;
-        }
-        return p;
+        *out.add(at) = 0;
+        (out, at)
     }
 }
 
-pub unsafe extern "C" fn get_recorded() -> *mut ::core::ffi::c_char {
+/// The contents of the record buffer as one string, clearing the buffer.
+///
+/// `K_SPECIAL` in the answer is escaped. The caller owns the string.
+///
+/// # Safety
+/// Callable at any time; the answer must be freed with `xfree`.
+pub unsafe fn get_recorded() -> *mut c_char {
     unsafe {
-        let mut len: size_t = 0;
-        let mut p: *mut ::core::ffi::c_char = get_buffcont(recordbuff.ptr(), true_0, &raw mut len);
-        if p.is_null() {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        let (recorded, mut len) = buff_contents(recordbuff.ptr(), true);
+        if recorded.is_null() {
+            return ptr::null_mut();
         }
         free_buff(recordbuff.ptr());
+
+        // Drop the characters added last, which must be the (possibly mapped)
+        // keys that stopped the recording.
         if len >= last_recorded_len.get() {
-            len = len.wrapping_sub(last_recorded_len.get());
-            *p.offset(len as isize) = NUL as ::core::ffi::c_char;
+            len -= last_recorded_len.get();
+            *recorded.add(len) = 0;
         }
-        if len > 0 as size_t
-            && restart_edit.get() != 0 as ::core::ffi::c_int
-            && *p.offset(len.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int == Ctrl_O
-        {
-            *p.offset(len.wrapping_sub(1 as size_t) as isize) = NUL as ::core::ffi::c_char;
+        // Stopping a recording from Insert mode with CTRL-O q also leaves the
+        // CTRL-O behind.
+        if len > 0 && restart_edit.get() != 0 && c_int::from(*recorded.add(len - 1)) == Ctrl_O {
+            *recorded.add(len - 1) = 0;
         }
-        return p;
+        recorded
     }
 }
 
-pub unsafe extern "C" fn get_inserted() -> String_0 {
-    unsafe {
-        let mut len: size_t = 0 as size_t;
-        let mut str: *mut ::core::ffi::c_char = get_buffcont(redobuff.ptr(), false_0, &raw mut len);
-        return String_0 {
-            data: str,
-            size: len,
-        };
-    }
+/// The contents of the redo buffer as one string, with `K_SPECIAL` escaped.
+///
+/// # Safety
+/// Callable at any time; the answer owns its bytes.
+pub unsafe fn get_inserted() -> String_0 {
+    let (data, size) = unsafe { buff_contents(redobuff.ptr(), false) };
+    String_0 { data, size }
 }
 
-pub(crate) unsafe extern "C" fn add_buff(
-    buf: *mut buffheader_T,
-    s: *const ::core::ffi::c_char,
-    mut slen: ptrdiff_t,
-) {
+/// Append `s` to `buf` after its current block.
+///
+/// `K_SPECIAL` must have been escaped already. `slen` is the length, or -1 for
+/// a NUL-terminated string.
+///
+/// # Safety
+/// `buf` must point at a live buffer and `s` at `slen` readable bytes.
+pub(crate) unsafe fn add_buff(buf: *mut buffheader_T, s: *const c_char, slen: ptrdiff_t) {
     unsafe {
-        if slen < 0 as ptrdiff_t {
-            slen = strlen(s) as ptrdiff_t;
+        let slen = if slen < 0 { strlen(s) } else { slen as usize };
+        if slen == 0 {
+            return; // don't add empty strings
         }
-        if slen == 0 as ptrdiff_t {
-            return;
-        }
+
         if (*buf).bh_first.b_next.is_null() {
+            // First add to the list.
             (*buf).bh_curr = &raw mut (*buf).bh_first;
-            (*buf).bh_create_newblock = true_0 != 0;
+            (*buf).bh_create_newblock = true;
         } else if (*buf).bh_curr.is_null() {
-            iemsg(gettext(
-                b"E222: Add to read buffer\0".as_ptr() as *const ::core::ffi::c_char
-            ));
+            iemsg(gettext(c"E222: Add to read buffer".as_ptr()));
             return;
-        } else if (*buf).bh_index != 0 as size_t {
-            memmove(
-                &raw mut (*(*buf).bh_first.b_next).b_str as *mut ::core::ffi::c_char
-                    as *mut ::core::ffi::c_void,
-                (&raw mut (*(*buf).bh_first.b_next).b_str as *mut ::core::ffi::c_char)
-                    .offset((*buf).bh_index as isize) as *const ::core::ffi::c_void,
-                (*(*buf).bh_first.b_next)
-                    .b_strlen
-                    .wrapping_sub((*buf).bh_index)
-                    .wrapping_add(1 as size_t),
-            );
-            (*(*buf).bh_first.b_next).b_strlen = (*(*buf).bh_first.b_next)
-                .b_strlen
-                .wrapping_sub((*buf).bh_index);
-            (*buf).bh_space = (*buf).bh_space.wrapping_add((*buf).bh_index);
+        } else if (*buf).bh_index != 0 {
+            // Reclaim what has already been read out of the head block.
+            let head = (*buf).bh_first.b_next;
+            let str = block_str(head);
+            let kept = (*head).b_strlen - (*buf).bh_index;
+            ptr::copy(str.add((*buf).bh_index), str, kept + 1);
+            (*head).b_strlen = kept;
+            (*buf).bh_space += (*buf).bh_index;
         }
-        (*buf).bh_index = 0 as size_t;
-        if !(*buf).bh_create_newblock && (*buf).bh_space >= slen as size_t {
-            xmemcpyz(
-                (&raw mut (*(*buf).bh_curr).b_str as *mut ::core::ffi::c_char)
-                    .offset((*(*buf).bh_curr).b_strlen as isize)
-                    as *mut ::core::ffi::c_void,
-                s as *const ::core::ffi::c_void,
-                slen as size_t,
-            );
-            (*(*buf).bh_curr).b_strlen = (*(*buf).bh_curr).b_strlen.wrapping_add(slen as size_t);
-            (*buf).bh_space = (*buf).bh_space.wrapping_sub(slen as size_t);
+        (*buf).bh_index = 0;
+
+        if !(*buf).bh_create_newblock && (*buf).bh_space >= slen {
+            let curr = (*buf).bh_curr;
+            xmemcpyz(block_str(curr).add((*curr).b_strlen).cast(), s.cast(), slen);
+            (*curr).b_strlen += slen;
+            (*buf).bh_space -= slen;
         } else {
-            let mut len: size_t = if 20 as size_t > slen as size_t {
-                20 as size_t
-            } else {
-                slen as size_t
-            };
-            let mut p: *mut buffblock_T =
-                xmalloc((16 as size_t).wrapping_add(len).wrapping_add(1 as size_t))
-                    as *mut buffblock_T;
-            xmemcpyz(
-                &raw mut (*p).b_str as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
-                s as *const ::core::ffi::c_void,
-                slen as size_t,
-            );
-            (*p).b_strlen = slen as size_t;
-            (*buf).bh_space = len.wrapping_sub(slen as size_t);
-            (*buf).bh_create_newblock = false_0 != 0;
-            (*p).b_next = (*(*buf).bh_curr).b_next;
-            (*(*buf).bh_curr).b_next = p as *mut buffblock;
-            (*buf).bh_curr = p;
-        };
+            let len = MINIMAL_SIZE.max(slen);
+            let block = xmalloc(offset_of!(buffblock_T, b_str) + len + 1).cast::<buffblock_T>();
+            xmemcpyz(block_str(block).cast(), s.cast(), slen);
+            (*block).b_strlen = slen;
+            (*buf).bh_space = len - slen;
+            (*buf).bh_create_newblock = false;
+
+            (*block).b_next = (*(*buf).bh_curr).b_next;
+            (*(*buf).bh_curr).b_next = block;
+            (*buf).bh_curr = block;
+        }
     }
 }
 
-pub(crate) unsafe extern "C" fn delete_buff_tail(
-    mut buf: *mut buffheader_T,
-    mut slen: ::core::ffi::c_int,
-) {
+/// Delete `slen` bytes from the end of `buf`. Only works when they were just
+/// added.
+///
+/// # Safety
+/// `buf` must point at a live buffer.
+pub(crate) unsafe fn delete_buff_tail(buf: *mut buffheader_T, slen: c_int) {
     unsafe {
-        if (*buf).bh_curr.is_null() {
-            return;
+        let curr = (*buf).bh_curr;
+        if curr.is_null() || (*curr).b_strlen < slen as usize {
+            return; // nothing to delete
         }
-        if (*(*buf).bh_curr).b_strlen < slen as size_t {
-            return;
-        }
-        *(&raw mut (*(*buf).bh_curr).b_str as *mut ::core::ffi::c_char)
-            .offset((*(*buf).bh_curr).b_strlen.wrapping_sub(slen as size_t) as isize) =
-            NUL as ::core::ffi::c_char;
-        (*(*buf).bh_curr).b_strlen = (*(*buf).bh_curr).b_strlen.wrapping_sub(slen as size_t);
-        (*buf).bh_space = (*buf).bh_space.wrapping_add(slen as size_t);
+        (*curr).b_strlen -= slen as usize;
+        *block_str(curr).add((*curr).b_strlen) = 0;
+        (*buf).bh_space += slen as usize;
     }
 }
 
-pub(crate) unsafe extern "C" fn add_num_buff(
-    mut buf: *mut buffheader_T,
-    mut n: ::core::ffi::c_int,
-) {
-    unsafe {
-        let mut number: [::core::ffi::c_char; 32] = [0; 32];
-        let mut numberlen: ::core::ffi::c_int = snprintf(
-            &raw mut number as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 32]>(),
-            b"%d\0".as_ptr() as *const ::core::ffi::c_char,
-            n,
-        );
-        add_buff(
-            buf,
-            &raw mut number as *mut ::core::ffi::c_char,
-            numberlen as ptrdiff_t,
-        );
-    }
+/// Append the decimal spelling of `n` to `buf`.
+///
+/// # Safety
+/// `buf` must point at a live buffer.
+pub(crate) unsafe fn add_num_buff(buf: *mut buffheader_T, n: c_int) {
+    let mut number = [0u8; 32];
+    let len = write_int(&mut number, n);
+    unsafe { add_buff(buf, number.as_ptr().cast(), len as ptrdiff_t) };
 }
 
-pub(crate) unsafe extern "C" fn add_byte_buff(
-    mut buf: *mut buffheader_T,
-    mut c: ::core::ffi::c_int,
-) {
-    unsafe {
-        let mut temp: [::core::ffi::c_char; 4] = [0; 4];
-        let mut templen: ptrdiff_t = 0;
-        if c < 0 as ::core::ffi::c_int || c == K_SPECIAL || c == NUL {
-            temp[0 as ::core::ffi::c_int as usize] = K_SPECIAL as ::core::ffi::c_char;
-            temp[1 as ::core::ffi::c_int as usize] = (if c == K_SPECIAL {
-                KS_SPECIAL
-            } else if c == NUL {
-                KS_ZERO
-            } else {
-                -c & 0xff as ::core::ffi::c_int
-            }) as ::core::ffi::c_char;
-            temp[2 as ::core::ffi::c_int as usize] = (if c == K_SPECIAL || c == NUL {
-                KE_FILLER as ::core::ffi::c_uint
-            } else {
-                -c as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint
-            }) as ::core::ffi::c_char;
-            temp[3 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-            templen = 3 as ptrdiff_t;
-        } else {
-            temp[0 as ::core::ffi::c_int as usize] = c as ::core::ffi::c_char;
-            temp[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-            templen = 1 as ptrdiff_t;
+/// Write `n` into `out` as decimal digits and answer how many there are.
+///
+/// `out` is upstream's 32-byte scratch array, which no `c_int` can overrun.
+fn write_int(out: &mut [u8; 32], n: c_int) -> usize {
+    let negative = n < 0;
+    // Build the digits backwards, on the magnitude as a u32 so that
+    // `c_int::MIN` is representable.
+    let mut magnitude = n.unsigned_abs();
+    let mut at = out.len();
+    loop {
+        at -= 1;
+        out[at] = b'0' + (magnitude % 10) as u8;
+        magnitude /= 10;
+        if magnitude == 0 {
+            break;
         }
-        add_buff(buf, &raw mut temp as *mut ::core::ffi::c_char, templen);
     }
+    if negative {
+        at -= 1;
+        out[at] = b'-';
+    }
+    let len = out.len() - at;
+    out.copy_within(at.., 0);
+    len
 }
 
-pub(crate) unsafe extern "C" fn add_char_buff(
-    mut buf: *mut buffheader_T,
-    mut c: ::core::ffi::c_int,
-) {
+/// Append byte or special key `c` to `buf`, escaping special keys, NUL and
+/// `K_SPECIAL`.
+///
+/// # Safety
+/// `buf` must point at a live buffer.
+pub(crate) unsafe fn add_byte_buff(buf: *mut buffheader_T, c: c_int) {
+    let mut temp = [0u8; 4];
+    let templen = if c < 0 || c == K_SPECIAL || c == NUL {
+        temp[..3].copy_from_slice(&key_escape(c));
+        3
+    } else {
+        temp[0] = c as u8;
+        1
+    };
+    unsafe { add_buff(buf, temp.as_ptr().cast(), templen) };
+}
+
+/// Append character `c` to `buf`, escaping special keys, NUL, `K_SPECIAL` and
+/// splitting a codepoint into its UTF-8 bytes.
+///
+/// # Safety
+/// `buf` must point at a live buffer.
+pub(crate) unsafe fn add_char_buff(buf: *mut buffheader_T, c: c_int) {
     unsafe {
-        let mut bytes: [uint8_t; 22] = [0; 22];
-        let mut len: ::core::ffi::c_int = 0;
-        if c < 0 as ::core::ffi::c_int {
-            len = 1 as ::core::ffi::c_int;
-        } else {
-            len = utf_char2bytes(
-                c,
-                &raw mut bytes as *mut uint8_t as *mut ::core::ffi::c_char,
-            );
-        }
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < len {
-            if !(c < 0 as ::core::ffi::c_int) {
-                c = bytes[i as usize] as ::core::ffi::c_int;
-            }
+        if c < 0 {
+            // A special key is one unit; it has no UTF-8 spelling.
             add_byte_buff(buf, c);
-            i += 1;
+            return;
+        }
+        let mut bytes = [0u8; MB_MAXBYTES + 1];
+        let len = utf_char2bytes(c, bytes.as_mut_ptr().cast()) as usize;
+        for &byte in &bytes[..len] {
+            add_byte_buff(buf, c_int::from(byte));
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn read_readbuffers(mut advance: bool) -> ::core::ffi::c_int {
+/// One byte from the read buffers, `readbuf1` first. No translation is done,
+/// so `K_SPECIAL` is still escaped.
+///
+/// # Safety
+/// Callable at any time.
+pub(crate) unsafe fn read_readbuffers(advance: bool) -> c_int {
     unsafe {
-        let mut c: ::core::ffi::c_int = read_readbuf(readbuf1.ptr(), advance);
+        let c = read_readbuf(readbuf1.ptr(), advance);
         if c == NUL {
-            c = read_readbuf(readbuf2.ptr(), advance);
+            read_readbuf(readbuf2.ptr(), advance)
+        } else {
+            c
         }
-        return c;
     }
 }
 
-pub(crate) unsafe extern "C" fn read_readbuf(
-    mut buf: *mut buffheader_T,
-    mut advance: bool,
-) -> ::core::ffi::c_int {
+/// One byte from `buf`, advancing past it when `advance` is set.
+///
+/// # Safety
+/// `buf` must point at a live buffer.
+pub(crate) unsafe fn read_readbuf(buf: *mut buffheader_T, advance: bool) -> c_int {
     unsafe {
-        if (*buf).bh_first.b_next.is_null() {
-            return NUL;
+        let curr = (*buf).bh_first.b_next;
+        if curr.is_null() {
+            return NUL; // buffer is empty
         }
-        let curr: *mut buffblock_T = (*buf).bh_first.b_next as *mut buffblock_T;
-        let mut c: uint8_t = *(&raw mut (*curr).b_str as *mut ::core::ffi::c_char)
-            .offset((*buf).bh_index as isize) as uint8_t;
+
+        let str = block_str(curr);
+        let c = *str.add((*buf).bh_index) as u8;
         if advance {
-            (*buf).bh_index = (*buf).bh_index.wrapping_add(1);
-            if *(&raw mut (*curr).b_str as *mut ::core::ffi::c_char)
-                .offset((*buf).bh_index as isize) as ::core::ffi::c_int
-                == NUL
-            {
+            (*buf).bh_index += 1;
+            if c_int::from(*str.add((*buf).bh_index)) == NUL {
                 (*buf).bh_first.b_next = (*curr).b_next;
-                xfree(curr as *mut ::core::ffi::c_void);
-                (*buf).bh_index = 0 as size_t;
+                xfree(curr.cast());
+                (*buf).bh_index = 0;
             }
         }
-        return c as ::core::ffi::c_int;
+        c_int::from(c)
     }
 }
 
-pub(crate) unsafe extern "C" fn start_stuff() {
+/// Prepare the read buffers for reading, if they hold anything.
+///
+/// # Safety
+/// Callable at any time.
+pub(crate) unsafe fn start_stuff() {
     unsafe {
-        if !(*readbuf1.ptr()).bh_first.b_next.is_null() {
-            (*readbuf1.ptr()).bh_curr = &raw mut (*readbuf1.ptr()).bh_first;
-            (*readbuf1.ptr()).bh_create_newblock = true_0 != 0;
+        for buf in [readbuf1.ptr(), readbuf2.ptr()] {
+            if !(*buf).bh_first.b_next.is_null() {
+                (*buf).bh_curr = &raw mut (*buf).bh_first;
+                // Force a new block to be created; see `add_buff`.
+                (*buf).bh_create_newblock = true;
+            }
         }
-        if !(*readbuf2.ptr()).bh_first.b_next.is_null() {
-            (*readbuf2.ptr()).bh_curr = &raw mut (*readbuf2.ptr()).bh_first;
-            (*readbuf2.ptr()).bh_create_newblock = true_0 != 0;
-        }
     }
 }
 
-pub unsafe extern "C" fn stuff_empty() -> bool {
+/// Whether the stuff buffer is empty.
+///
+/// # Safety
+/// Callable at any time.
+pub unsafe fn stuff_empty() -> bool {
     unsafe {
-        return (*readbuf1.ptr()).bh_first.b_next.is_null()
-            && (*readbuf2.ptr()).bh_first.b_next.is_null();
+        (*readbuf1.ptr()).bh_first.b_next.is_null() && (*readbuf2.ptr()).bh_first.b_next.is_null()
     }
 }
 
-pub unsafe extern "C" fn readbuf1_empty() -> bool {
-    unsafe {
-        return (*readbuf1.ptr()).bh_first.b_next.is_null();
-    }
+/// Whether `readbuf1` is empty. There may still be redo characters in
+/// `readbuf2`.
+///
+/// # Safety
+/// Callable at any time.
+pub unsafe fn readbuf1_empty() -> bool {
+    unsafe { (*readbuf1.ptr()).bh_first.b_next.is_null() }
 }
 
-pub unsafe extern "C" fn typeahead_noflush(mut c: ::core::ffi::c_int) {
+/// Set a typeahead character that `flush_buffers` will not throw away.
+pub fn typeahead_noflush(c: c_int) {
     typeahead_char.set(c);
 }
 
-pub unsafe extern "C" fn flush_buffers(mut flush_typeahead: flush_buffers_T) {
+/// Throw away the stuff buffer and the mapped characters in the typeahead
+/// buffer, as an error does.
+///
+/// `FLUSH_INPUT` additionally drains everything the OS has for us, which is
+/// what a CTRL-C wants: an escape sequence arrives one byte at a time and
+/// leaving half of it behind would make the rest read as literal keys.
+///
+/// # Safety
+/// Callable at any time; may block briefly reading input.
+pub unsafe fn flush_buffers(flush_typeahead: flush_buffers_T) {
     unsafe {
         init_typebuf();
+
         start_stuff();
-        while read_readbuffers(true_0 != 0) != NUL {}
-        if flush_typeahead as ::core::ffi::c_uint
-            == FLUSH_MINIMAL as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            if (*typebuf.ptr()).tb_off + (*typebuf.ptr()).tb_maplen >= (*typebuf.ptr()).tb_buflen {
-                (*typebuf.ptr()).tb_off = MAXMAPLEN as ::core::ffi::c_int;
-                (*typebuf.ptr()).tb_len = 0 as ::core::ffi::c_int;
+        while read_readbuffers(true) != NUL {}
+
+        let tb = typebuf.ptr();
+        if flush_typeahead == FLUSH_MINIMAL {
+            // Remove the mapped characters at the start only, and only when
+            // that leaves enough room in typebuf.
+            if (*tb).tb_off + (*tb).tb_maplen >= (*tb).tb_buflen {
+                (*tb).tb_off = MAXMAPLEN as c_int;
+                (*tb).tb_len = 0;
             } else {
-                (*typebuf.ptr()).tb_off += (*typebuf.ptr()).tb_maplen;
-                (*typebuf.ptr()).tb_len -= (*typebuf.ptr()).tb_maplen;
+                (*tb).tb_off += (*tb).tb_maplen;
+                (*tb).tb_len -= (*tb).tb_maplen;
             }
-            if (*typebuf.ptr()).tb_len == 0 as ::core::ffi::c_int {
-                typebuf_was_filled.set(false_0 != 0);
+            if (*tb).tb_len == 0 {
+                typebuf_was_filled.set(false);
             }
         } else {
-            if flush_typeahead as ::core::ffi::c_uint
-                == FLUSH_INPUT as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                while inchar(
-                    (*typebuf.ptr()).tb_buf,
-                    (*typebuf.ptr()).tb_buflen - 1 as ::core::ffi::c_int,
-                    10 as ::core::ffi::c_long,
-                ) != 0 as ::core::ffi::c_int
-                {}
+            if flush_typeahead == FLUSH_INPUT {
+                while inchar((*tb).tb_buf, (*tb).tb_buflen - 1, 10) != 0 {}
             }
-            (*typebuf.ptr()).tb_off = MAXMAPLEN as ::core::ffi::c_int;
-            (*typebuf.ptr()).tb_len = 0 as ::core::ffi::c_int;
-            typebuf_was_filled.set(false_0 != 0);
+            (*tb).tb_off = MAXMAPLEN as c_int;
+            (*tb).tb_len = 0;
+            // Text received from a client or from feedkeys() is gone with it.
+            typebuf_was_filled.set(false);
         }
-        (*typebuf.ptr()).tb_maplen = 0 as ::core::ffi::c_int;
-        (*typebuf.ptr()).tb_silent = 0 as ::core::ffi::c_int;
-        cmd_silent.set(false_0 != 0);
-        (*typebuf.ptr()).tb_no_abbr_cnt = 0 as ::core::ffi::c_int;
-        (*typebuf.ptr()).tb_change_cnt += 1;
-        if (*typebuf.ptr()).tb_change_cnt == 0 as ::core::ffi::c_int {
-            (*typebuf.ptr()).tb_change_cnt = 1 as ::core::ffi::c_int;
+        (*tb).tb_maplen = 0;
+        (*tb).tb_silent = 0;
+        cmd_silent.set(false);
+        (*tb).tb_no_abbr_cnt = 0;
+        (*tb).tb_change_cnt += 1;
+        if (*tb).tb_change_cnt == 0 {
+            (*tb).tb_change_cnt = 1;
         }
     }
 }
 
-pub unsafe extern "C" fn beep_flush() {
+/// Flush the map and typeahead buffers and beep about an error.
+///
+/// # Safety
+/// Callable at any time.
+pub unsafe fn beep_flush() {
     unsafe {
-        if emsg_silent.get() == 0 as ::core::ffi::c_int {
+        if emsg_silent.get() == 0 {
             flush_buffers(FLUSH_MINIMAL);
-            vim_beep(kOptBoFlagError as ::core::ffi::c_int as ::core::ffi::c_uint);
+            vim_beep(kOptBoFlagError as c_uint);
         }
     }
 }
 
-pub unsafe extern "C" fn stuffReadbuff(mut s: *const ::core::ffi::c_char) {
-    unsafe {
-        add_buff(readbuf1.ptr(), s, -1 as ptrdiff_t);
-    }
+/// Stuff a NUL-terminated string into `readbuf1`, to be read back as keys.
+///
+/// # Safety
+/// `s` must point at a NUL-terminated string.
+pub unsafe fn stuffReadbuff(s: *const c_char) {
+    unsafe { add_buff(readbuf1.ptr(), s, -1) };
 }
 
-pub unsafe extern "C" fn stuffRedoReadbuff(mut s: *const ::core::ffi::c_char) {
-    unsafe {
-        add_buff(readbuf2.ptr(), s, -1 as ptrdiff_t);
-    }
+/// Stuff a NUL-terminated string into the redo read buffer.
+///
+/// # Safety
+/// `s` must point at a NUL-terminated string.
+pub unsafe fn stuffRedoReadbuff(s: *const c_char) {
+    unsafe { add_buff(readbuf2.ptr(), s, -1) };
 }
 
-pub unsafe extern "C" fn stuffReadbuffLen(mut s: *const ::core::ffi::c_char, mut len: ptrdiff_t) {
-    unsafe {
-        add_buff(readbuf1.ptr(), s, len);
-    }
+/// Stuff `len` bytes into `readbuf1`.
+///
+/// # Safety
+/// `s` must point at `len` readable bytes.
+pub unsafe fn stuffReadbuffLen(s: *const c_char, len: ptrdiff_t) {
+    unsafe { add_buff(readbuf1.ptr(), s, len) };
 }
 
-pub unsafe extern "C" fn stuffReadbuffSpec(mut s: *const ::core::ffi::c_char) {
+/// Stuff a string into `readbuf1`, replacing the characters that would end a
+/// command line — CR, NL and ESC — with a space.
+///
+/// Used for `:normal` and for the `@` register: an embedded CR would
+/// terminate whatever is reading the stuffed text.
+///
+/// # Safety
+/// `s` must point at a NUL-terminated string.
+pub unsafe fn stuffReadbuffSpec(mut s: *const c_char) {
     unsafe {
-        while *s as ::core::ffi::c_int != NUL {
-            if *s as uint8_t as ::core::ffi::c_int == K_SPECIAL
-                && *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-                && *s.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
+        while c_int::from(*s) != NUL {
+            if c_int::from(*s as u8) == K_SPECIAL
+                && c_int::from(*s.add(1)) != NUL
+                && c_int::from(*s.add(2)) != NUL
             {
-                stuffReadbuffLen(s, 3 as ptrdiff_t);
-                s = s.offset(3 as ::core::ffi::c_int as isize);
+                // Copy an escaped key code through untouched.
+                stuffReadbuffLen(s, 3);
+                s = s.add(3);
             } else {
-                let mut c: ::core::ffi::c_int = mb_cptr2char_adv(&raw mut s);
-                if c == CAR || c == NL || c == ESC {
-                    c = ' ' as ::core::ffi::c_int;
-                }
-                stuffcharReadbuff(c);
+                let c = mb_cptr2char_adv(&raw mut s);
+                stuffcharReadbuff(if c == CAR || c == NL || c == ESC {
+                    ' ' as c_int
+                } else {
+                    c
+                });
             }
         }
     }
 }
 
-pub unsafe extern "C" fn stuffcharReadbuff(mut c: ::core::ffi::c_int) {
-    unsafe {
-        add_char_buff(readbuf1.ptr(), c);
-    }
+/// Stuff one character into `readbuf1`.
+///
+/// # Safety
+/// Callable at any time.
+pub unsafe fn stuffcharReadbuff(c: c_int) {
+    unsafe { add_char_buff(readbuf1.ptr(), c) };
 }
 
-pub unsafe extern "C" fn stuffnumReadbuff(mut n: ::core::ffi::c_int) {
-    unsafe {
-        add_num_buff(readbuf1.ptr(), n);
-    }
+/// Stuff the decimal spelling of `n` into `readbuf1`.
+///
+/// # Safety
+/// Callable at any time.
+pub unsafe fn stuffnumReadbuff(n: c_int) {
+    unsafe { add_num_buff(readbuf1.ptr(), n) };
 }
 
-pub unsafe extern "C" fn stuffescaped(mut arg: *const ::core::ffi::c_char, mut literally: bool) {
+/// Stuff `arg` into `readbuf1`, one printable run at a time.
+///
+/// With `literally` set, a control character is preceded by CTRL-V so that
+/// whatever reads the keys inserts it rather than acting on it; `K_SPECIAL`
+/// is then left alone as well, because the text really contains that byte.
+///
+/// # Safety
+/// `arg` must point at a NUL-terminated string.
+pub unsafe fn stuffescaped(mut arg: *const c_char, literally: bool) {
     unsafe {
-        while *arg as ::core::ffi::c_int != NUL {
-            let start: *const ::core::ffi::c_char = arg;
-            while *arg as ::core::ffi::c_int >= ' ' as ::core::ffi::c_int
-                && (*arg as ::core::ffi::c_int) < DEL
-                || *arg as uint8_t as ::core::ffi::c_int == K_SPECIAL && !literally
+        while c_int::from(*arg) != NUL {
+            // Stuff a run of ordinary characters in one go.
+            let start = arg;
+            while (c_int::from(*arg) >= ' ' as c_int && c_int::from(*arg) < DEL)
+                || (c_int::from(*arg as u8) == K_SPECIAL && !literally)
             {
-                arg = arg.offset(1);
+                arg = arg.add(1);
             }
             if arg > start {
                 stuffReadbuffLen(start, arg.offset_from(start));
             }
-            if *arg as ::core::ffi::c_int != NUL {
-                let c: ::core::ffi::c_int = mb_cptr2char_adv(&raw mut arg);
-                if literally as ::core::ffi::c_int != 0
-                    && (c < ' ' as ::core::ffi::c_int && c != TAB || c == DEL)
-                {
+
+            // Then the character that stopped it, one at a time.
+            if c_int::from(*arg) != NUL {
+                let c = mb_cptr2char_adv(&raw mut arg);
+                if literally && ((c < ' ' as c_int && c != TAB) || c == DEL) {
                     stuffcharReadbuff(Ctrl_V);
                 }
                 stuffcharReadbuff(c);

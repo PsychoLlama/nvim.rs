@@ -69,8 +69,7 @@ use crate::src::nvim::os::env::expand_env;
 use crate::src::nvim::os::fileio::{file_close, file_open, file_open_stdin, file_read};
 use crate::src::nvim::os::input::{input_available, input_get, line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
-    __assert_fail, atoi, fprintf, gettext, memcpy, memmove, putc, snprintf, stderr, strcmp, strlen,
-    strncmp,
+    __assert_fail, atoi, fprintf, gettext, memcpy, memmove, putc, stderr, strcmp, strlen, strncmp,
 };
 use crate::src::nvim::plines::{init_charsize_arg, win_charsize};
 use crate::src::nvim::state::{

@@ -46,6 +46,39 @@ const KS_VER_SCROLLBAR: u8 = 249;
 const KS_HOR_SCROLLBAR: u8 = 248;
 const KS_SELECT: u8 = 245;
 
+/// The three bytes a key code, a NUL or a literal `K_SPECIAL` is stored as in
+/// a byte stream: upstream's `K_SPECIAL`, `K_SECOND(c)`, `K_THIRD(c)`.
+///
+/// Only these three need escaping; every other byte stands for itself. A NUL
+/// cannot be stored literally because the streams are NUL-terminated, and a
+/// literal 0x80 cannot because it is the escape byte.
+pub fn key_escape(c: c_int) -> [u8; 3] {
+    let (second, third) = if c == K_SPECIAL {
+        (KS_SPECIAL as u8, KE_FILLER as u8)
+    } else if c == 0 {
+        (KS_ZERO, KE_FILLER as u8)
+    } else {
+        let name = super::tables::termcap_name(c);
+        (name[0], name[1])
+    };
+    [K_SPECIAL as u8, second, third]
+}
+
+/// The key an escape's two trailing bytes stand for: upstream's `TO_SPECIAL`.
+///
+/// The inverse of [`key_escape`], except that a NUL comes back as the key
+/// code `K_ZERO` rather than as 0 — the streams cannot carry a bare NUL, so
+/// callers that want the byte back test for `K_ZERO` themselves.
+pub fn key_unescape(second: u8, third: u8) -> c_int {
+    if c_int::from(second) == KS_SPECIAL {
+        K_SPECIAL
+    } else if second == KS_ZERO {
+        K_ZERO
+    } else {
+        super::tables::termcap_key([second, third])
+    }
+}
+
 /// The second byte of a `KS_EXTRA` key. Upstream's `enum key_extra`.
 pub const KE_S_UP: key_extra = 4;
 pub const KE_S_DOWN: key_extra = 5;
