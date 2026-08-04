@@ -25,12 +25,12 @@ pub unsafe extern "C" fn makemap(mut fd: *mut FILE, mut buf: *mut buf_T) -> ::co
                     if !buf.is_null() {
                         mp = (*buf).b_first_abbr;
                     } else {
-                        mp = first_abbr.get();
+                        mp = FIRST_ABBR.get();
                     }
                 } else if !buf.is_null() {
                     mp = (*buf).b_maphash[hash as usize] as *mut mapblock_T;
                 } else {
-                    mp = (*maphash.ptr())[hash as usize] as *mut mapblock_T;
+                    mp = (*MAPHASH.ptr())[hash as usize] as *mut mapblock_T;
                 }
                 while !mp.is_null() {
                     if (*mp).m_noremap != REMAP_SCRIPT as ::core::ffi::c_int {

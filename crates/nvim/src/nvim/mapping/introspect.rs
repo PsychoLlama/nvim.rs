@@ -383,19 +383,7 @@ pub(crate) unsafe extern "C" fn get_maparg(
             &raw mut did_simplify,
             p_cpo.get(),
         );
-        let mut mp: *mut mapblock_T = ::core::ptr::null_mut::<mapblock_T>();
-        let mut buffer_local: ::core::ffi::c_int = 0;
-        let mut rhs_lua: LuaRef = 0;
-        let mut rhs: *mut ::core::ffi::c_char = check_map(
-            keys_simplified,
-            mode,
-            exact,
-            false_0,
-            abbr as ::core::ffi::c_int,
-            &raw mut mp,
-            &raw mut buffer_local,
-            &raw mut rhs_lua,
-        );
+        let mut found = check_map(keys_simplified, mode, exact != 0, false, abbr);
         if did_simplify {
             replace_termcodes(
                 keys,
@@ -406,17 +394,18 @@ pub(crate) unsafe extern "C" fn get_maparg(
                 ::core::ptr::null_mut::<bool>(),
                 p_cpo.get(),
             );
-            rhs = check_map(
-                alt_keys_buf,
-                mode,
-                exact,
-                false_0,
-                abbr as ::core::ffi::c_int,
-                &raw mut mp,
-                &raw mut buffer_local,
-                &raw mut rhs_lua,
-            );
+            // When the lhs is being simplified the not-simplified keys are
+            // preferred, like in do_map(). Upstream leaves the previous `mp`
+            // in place when this second look-up fails, but then both `rhs`
+            // and `rhs_lua` are cleared, so every reader of `mp` is behind a
+            // test that has already failed -- dropping the whole match is the
+            // same answer.
+            found = check_map(alt_keys_buf, mode, exact != 0, false, abbr);
         }
+        let mp = found.as_ref().map_or(::core::ptr::null_mut(), |f| f.mp);
+        let buffer_local = ::core::ffi::c_int::from(found.as_ref().is_some_and(|f| f.local));
+        let rhs_lua = found.as_ref().map_or(LUA_NOREF, |f| f.rhs_lua);
+        let rhs = found.as_ref().map_or(::core::ptr::null_mut(), |f| f.rhs);
         if !get_dict {
             if !rhs.is_null() {
                 if *rhs as ::core::ffi::c_int == NUL {
@@ -487,12 +476,12 @@ pub unsafe extern "C" fn f_maplist(
                     if buffer_local != 0 {
                         mp = (*curbuf.get()).b_first_abbr;
                     } else {
-                        mp = first_abbr.get();
+                        mp = FIRST_ABBR.get();
                     }
                 } else if buffer_local != 0 {
                     mp = (*curbuf.get()).b_maphash[hash as usize] as *mut mapblock_T;
                 } else {
-                    mp = (*maphash.ptr())[hash as usize] as *mut mapblock_T;
+                    mp = (*MAPHASH.ptr())[hash as usize] as *mut mapblock_T;
                 }
                 while !mp.is_null() {
                     if (*mp).m_simplified == 0 {
@@ -650,19 +639,19 @@ pub unsafe extern "C" fn keymap_array(
             < (if is_abbrev as ::core::ffi::c_int != 0 {
                 1 as ::core::ffi::c_int
             } else {
-                MAX_MAPHASH
+                MAX_MAPHASH as ::core::ffi::c_int
             })
         {
             let mut current_maphash: *const mapblock_T = if is_abbrev as ::core::ffi::c_int != 0 {
                 if !buf.is_null() {
                     (*buf).b_first_abbr
                 } else {
-                    first_abbr.get()
+                    FIRST_ABBR.get()
                 }
             } else if !buf.is_null() {
                 (*buf).b_maphash[i as usize] as *mut mapblock_T
             } else {
-                (*maphash.ptr())[i as usize] as *mut mapblock_T
+                (*MAPHASH.ptr())[i as usize] as *mut mapblock_T
             };
             while !current_maphash.is_null() {
                 if (*current_maphash).m_simplified == 0 {

@@ -182,12 +182,12 @@ pub unsafe extern "C" fn f_mapset(
         let mut map_table: *mut *mut mapblock_T = if buffer as ::core::ffi::c_int != 0 {
             &raw mut (*curbuf.get()).b_maphash as *mut *mut mapblock_T
         } else {
-            maphash.ptr() as *mut *mut mapblock_T
+            MAPHASH.ptr() as *mut *mut mapblock_T
         };
         let mut abbr_table: *mut *mut mapblock_T = if buffer as ::core::ffi::c_int != 0 {
             &raw mut (*curbuf.get()).b_first_abbr
         } else {
-            first_abbr.ptr()
+            FIRST_ABBR.ptr()
         };
         let mut unmap_args: MapArguments = MAP_ARGUMENTS_INIT;
         set_maparg_lhs_rhs(

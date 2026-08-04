@@ -368,12 +368,12 @@ pub unsafe extern "C" fn ExpandMappings(
                 if hash > 0 as ::core::ffi::c_int {
                     break;
                 } else {
-                    mp = first_abbr.get();
+                    mp = FIRST_ABBR.get();
                 }
             } else if expand_buffer.get() {
                 mp = (*curbuf.get()).b_maphash[hash as usize] as *mut mapblock_T;
             } else {
-                mp = (*maphash.ptr())[hash as usize] as *mut mapblock_T;
+                mp = (*MAPHASH.ptr())[hash as usize] as *mut mapblock_T;
             }
             while !mp.is_null() {
                 if !((*mp).m_simplified != 0 || (*mp).m_mode & expand_mapmodes.get() == 0) {

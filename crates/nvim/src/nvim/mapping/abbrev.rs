@@ -61,7 +61,7 @@ pub unsafe extern "C" fn check_abbr(
             ptr = ptr.offset(scol as isize);
             let mut len: ::core::ffi::c_int = col - scol;
             let mut mp: *mut mapblock_T = (*curbuf.get()).b_first_abbr;
-            let mut mp2: *mut mapblock_T = first_abbr.get();
+            let mut mp2: *mut mapblock_T = FIRST_ABBR.get();
             if mp.is_null() {
                 mp = mp2;
                 mp2 = ::core::ptr::null_mut::<mapblock_T>();

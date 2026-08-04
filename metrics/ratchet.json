@@ -321,7 +321,7 @@
     "crates/nvim/src/nvim/mapping/mapset.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/mapping/session.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/mapping/show.rs": {"unsafe": 4},
-    "crates/nvim/src/nvim/mapping/table.rs": {"unsafe": 8},
+    "crates/nvim/src/nvim/mapping/table.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/mark.rs": {"unsafe": 19},
     "crates/nvim/src/nvim/mark/adjust.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/mark/builtins.rs": {"unsafe": 3},

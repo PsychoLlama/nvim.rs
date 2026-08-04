@@ -24,12 +24,12 @@ pub(crate) unsafe extern "C" fn buf_do_map(
         let mut map_table: *mut *mut mapblock_T = if (*args).buffer as ::core::ffi::c_int != 0 {
             &raw mut (*buf).b_maphash as *mut *mut mapblock_T
         } else {
-            maphash.ptr() as *mut *mut mapblock_T
+            MAPHASH.ptr() as *mut *mut mapblock_T
         };
         let mut abbr_table: *mut *mut mapblock_T = if (*args).buffer as ::core::ffi::c_int != 0 {
             &raw mut (*buf).b_first_abbr
         } else {
-            first_abbr.ptr()
+            FIRST_ABBR.ptr()
         };
         let mut mp_result: [*mut mapblock_T; 2] = [
             ::core::ptr::null_mut::<mapblock_T>(),
@@ -156,9 +156,9 @@ pub(crate) unsafe extern "C" fn buf_do_map(
                                     if hash != 0 as ::core::ffi::c_int {
                                         break 's_299;
                                     }
-                                    mp = first_abbr.get();
+                                    mp = FIRST_ABBR.get();
                                 } else {
-                                    mp = (*maphash.ptr())[hash as usize] as *mut mapblock_T;
+                                    mp = (*MAPHASH.ptr())[hash as usize] as *mut mapblock_T;
                                 }
                                 while !mp.is_null() && !got_int.get() {
                                     if (*mp).m_mode & mode != 0 as ::core::ffi::c_int
@@ -270,7 +270,7 @@ pub(crate) unsafe extern "C" fn buf_do_map(
                                                 showmap(
                                                     mp_1,
                                                     map_table
-                                                        != maphash.ptr() as *mut *mut mapblock_T,
+                                                        != MAPHASH.ptr() as *mut *mut mapblock_T,
                                                 );
                                                 did_it = true_0 != 0;
                                             }
@@ -318,7 +318,7 @@ pub(crate) unsafe extern "C" fn buf_do_map(
                                                         showmap(
                                                             mp_1,
                                                             map_table
-                                                                != maphash.ptr()
+                                                                != MAPHASH.ptr()
                                                                     as *mut *mut mapblock_T,
                                                         );
                                                         did_it = true_0 != 0;
