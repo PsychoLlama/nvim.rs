@@ -76,7 +76,6 @@
     "crates/nvim/src/nvim/indent_c.rs": 73,
     "crates/nvim/src/nvim/input.rs": 3,
     "crates/nvim/src/nvim/insexpand/callbacks.rs": 11,
-    "crates/nvim/src/nvim/insexpand/insert.rs": 6,
     "crates/nvim/src/nvim/insexpand/keys.rs": 3,
     "crates/nvim/src/nvim/insexpand/session.rs": 17,
     "crates/nvim/src/nvim/insexpand/sources.rs": 17,

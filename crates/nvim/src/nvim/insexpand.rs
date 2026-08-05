@@ -475,8 +475,6 @@ static compl_shown_match: GlobalCell<*mut compl_T> =
     GlobalCell::new(::core::ptr::null_mut::<compl_T>());
 static compl_old_match: GlobalCell<*mut compl_T> =
     GlobalCell::new(::core::ptr::null_mut::<compl_T>());
-static compl_best_matches: GlobalCell<*mut *mut compl_T> =
-    GlobalCell::new(::core::ptr::null_mut::<*mut compl_T>());
 static compl_num_bests: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static compl_enter_selects: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static compl_leader: GlobalCell<String_0> = GlobalCell::new(STRING_INIT);

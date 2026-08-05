@@ -11,238 +11,223 @@
 #[allow(unused_imports)]
 use super::*;
 
-pub(crate) unsafe extern "C" fn ins_compl_insert_bytes(
-    mut p: *mut ::core::ffi::c_char,
-    mut len: ::core::ffi::c_int,
-) {
+/// Insert `len` bytes of `p` at the cursor, `-1` meaning up to its NUL.
+pub(crate) unsafe fn ins_compl_insert_bytes(p: *mut c_char, mut len: c_int) {
     unsafe {
-        if len == -1 as ::core::ffi::c_int {
-            len = strlen(p) as ::core::ffi::c_int;
+        if len == -1 {
+            len = strlen(p) as c_int;
         }
-        '_c2rust_label: {
-            if len >= 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1089 as ::core::ffi::c_uint,
-                    b"void ins_compl_insert_bytes(char *, int)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(len >= 0);
         ins_bytes_len(p, len as size_t);
         compl_ins_end_col.set((*curwin.get()).w_cursor.col);
     }
 }
 
-pub(crate) unsafe extern "C" fn ins_compl_longest_insert(mut prefix: *mut ::core::ffi::c_char) {
+/// Insert `prefix` as the completion, and redraw.
+pub(crate) unsafe fn ins_compl_longest_insert(prefix: *mut c_char) {
     unsafe {
-        ins_compl_delete(false_0 != 0);
-        ins_compl_insert_bytes(
-            prefix.offset(get_compl_len() as isize),
-            -1 as ::core::ffi::c_int,
-        );
-        ins_redraw(false_0 != 0);
+        ins_compl_delete(false);
+        ins_compl_insert_bytes(prefix.offset(get_compl_len() as isize), -1);
+        ins_redraw(false);
     }
 }
 
-pub(crate) unsafe extern "C" fn fuzzy_longest_match() {
+/// Insert the longest common prefix of the best fuzzy matches as `'longest'`.
+pub(crate) unsafe fn fuzzy_longest_match() {
     unsafe {
-        if compl_num_bests.get() == 0 as ::core::ffi::c_int {
+        let num_bests = compl_num_bests.get();
+        if num_bests == 0 {
             return;
         }
-        let mut nn_compl: *mut compl_T = (*(*compl_first_match.get()).cp_next).cp_next;
-        let mut more_candidates: bool = !nn_compl.is_null() && nn_compl != compl_first_match.get();
-        let mut compl: *mut compl_T = if ctrl_x_mode_whole_line() as ::core::ffi::c_int != 0 {
-            compl_first_match.get()
+
+        let first = compl_first_match.get();
+        let nn_compl = (*(*first).cp_next).cp_next;
+        let more_candidates = !nn_compl.is_null() && nn_compl != first;
+
+        let mut compl = if ctrl_x_mode_whole_line() {
+            first
         } else {
-            (*compl_first_match.get()).cp_next
+            (*first).cp_next
         };
-        if compl_num_bests.get() == 1 as ::core::ffi::c_int {
+        if num_bests == 1 {
+            // No more candidates: insert the match string itself.
             if !more_candidates {
                 ins_compl_longest_insert((*compl).cp_str.data);
-                compl_num_bests.set(0 as ::core::ffi::c_int);
             }
-            compl_num_bests.set(0 as ::core::ffi::c_int);
+            compl_num_bests.set(0);
             return;
         }
-        if compl_num_bests.get() as size_t
-            > (SIZE_MAX as usize).wrapping_div(::core::mem::size_of::<*mut compl_T>())
-        {
-            return;
-        }
-        compl_best_matches.set(xmalloc(
-            (compl_num_bests.get() as size_t).wrapping_mul(::core::mem::size_of::<*mut compl_T>()),
-        ) as *mut *mut compl_T);
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while !compl.is_null() && i < compl_num_bests.get() {
-            *(*compl_best_matches.ptr()).offset(i as isize) = compl;
+
+        // Upstream keeps these in an `xmalloc`ed array in a static that no
+        // other function reads; the walk fills it from a list made cyclic by
+        // `ins_compl_make_cyclic`, so `compl` is never null and every slot is
+        // written. Collecting instead means the shorter-than-expected list
+        // upstream would read uninitialised simply yields fewer candidates.
+        let mut best: Vec<*mut compl_T> = Vec::with_capacity(num_bests as usize);
+        while !compl.is_null() && best.len() < num_bests as usize {
+            best.push(compl);
             compl = (*compl).cp_next;
-            i += 1;
         }
-        let mut prefix: *mut ::core::ffi::c_char = (**(*compl_best_matches.ptr())
-            .offset(0 as ::core::ffi::c_int as isize))
-        .cp_str
-        .data;
-        let mut prefix_len: ::core::ffi::c_int = (**(*compl_best_matches.ptr())
-            .offset(0 as ::core::ffi::c_int as isize))
-        .cp_str
-        .size as ::core::ffi::c_int;
-        let mut i_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-        while i_0 < compl_num_bests.get() {
-            let mut match_str: *mut ::core::ffi::c_char = (**(*compl_best_matches.ptr())
-                .offset(i_0 as isize))
-            .cp_str
-            .data;
-            let mut prefix_ptr: *mut ::core::ffi::c_char = prefix;
-            let mut match_ptr: *mut ::core::ffi::c_char = match_str;
-            let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while j < prefix_len
-                && *match_ptr as ::core::ffi::c_int != NUL
-                && *prefix_ptr as ::core::ffi::c_int != NUL
-            {
-                if strncmp(prefix_ptr, match_ptr, utfc_ptr2len(prefix_ptr) as size_t)
-                    != 0 as ::core::ffi::c_int
-                {
+
+        let mut prefix = (*best[0]).cp_str.data;
+        let mut prefix_len = (*best[0]).cp_str.size as c_int;
+        for &m in &best[1..] {
+            let mut prefix_ptr = prefix;
+            let mut match_ptr = (*m).cp_str.data;
+            let mut j: c_int = 0;
+            while j < prefix_len && *match_ptr as c_int != NUL && *prefix_ptr as c_int != NUL {
+                if strncmp(prefix_ptr, match_ptr, utfc_ptr2len(prefix_ptr) as size_t) != 0 {
                     break;
                 }
                 prefix_ptr = prefix_ptr.offset(utfc_ptr2len(prefix_ptr) as isize);
                 match_ptr = match_ptr.offset(utfc_ptr2len(match_ptr) as isize);
                 j += 1;
             }
-            if j > 0 as ::core::ffi::c_int {
+            if j > 0 {
                 prefix_len = j;
             }
-            i_0 += 1;
         }
-        let mut leader: *mut ::core::ffi::c_char = ins_compl_leader();
-        let mut leader_len: size_t = ins_compl_leader_len();
-        if !(leader_len > 0 as size_t
-            && strncmp(prefix, leader, leader_len) != 0 as ::core::ffi::c_int)
-        {
-            prefix = xmemdupz(prefix as *const ::core::ffi::c_void, prefix_len as size_t)
-                as *mut ::core::ffi::c_char;
+
+        // Skip non-consecutive prefixes.
+        let leader_len = ins_compl_leader_len();
+        if leader_len == 0 || strncmp(prefix, ins_compl_leader(), leader_len) == 0 {
+            prefix = xmemdupz(prefix.cast(), prefix_len as size_t).cast::<c_char>();
             ins_compl_longest_insert(prefix);
-            xfree(prefix as *mut ::core::ffi::c_void);
+            xfree(prefix.cast::<c_void>());
         }
-        xfree(compl_best_matches.get() as *mut ::core::ffi::c_void);
-        compl_best_matches.set(::core::ptr::null_mut::<*mut compl_T>());
-        compl_num_bests.set(0 as ::core::ffi::c_int);
+        compl_num_bests.set(0);
     }
 }
 
-pub(crate) unsafe extern "C" fn ins_compl_update_shown_match() {
+/// Move `compl_shown_match` onto the match actually shown: `compl_leader` may
+/// have hidden the one it points at.
+pub(crate) unsafe fn ins_compl_update_shown_match() {
     unsafe {
-        get_leader_for_startcol(::core::ptr::null_mut::<compl_T>(), true_0 != 0);
-        let mut leader: *mut String_0 =
-            get_leader_for_startcol(compl_shown_match.get(), true_0 != 0);
-        while !ins_compl_equal(compl_shown_match.get(), (*leader).data, (*leader).size)
-            && !(*compl_shown_match.get()).cp_next.is_null()
-            && !is_first_match((*compl_shown_match.get()).cp_next)
-        {
+        get_leader_for_startcol(ptr::null_mut(), true); // Clear the cache
+        let mut leader = get_leader_for_startcol(compl_shown_match.get(), true);
+
+        // True while the leader hides the shown match and `step` can move on.
+        let hidden = |leader: *mut String_0, step: *mut compl_T| {
+            !ins_compl_equal(compl_shown_match.get(), (*leader).data, (*leader).size)
+                && !step.is_null()
+                && !is_first_match(step)
+        };
+
+        while hidden(leader, (*compl_shown_match.get()).cp_next) {
             compl_shown_match.set((*compl_shown_match.get()).cp_next);
-            leader = get_leader_for_startcol(compl_shown_match.get(), true_0 != 0);
+            leader = get_leader_for_startcol(compl_shown_match.get(), true);
         }
-        if compl_shows_dir_backward() as ::core::ffi::c_int != 0
+
+        // If we didn't find it searching forward, and compl_shows_dir is
+        // backward, find the last match.
+        if compl_shows_dir_backward()
             && !ins_compl_equal(compl_shown_match.get(), (*leader).data, (*leader).size)
             && ((*compl_shown_match.get()).cp_next.is_null()
-                || is_first_match((*compl_shown_match.get()).cp_next) as ::core::ffi::c_int != 0)
+                || is_first_match((*compl_shown_match.get()).cp_next))
         {
-            while !ins_compl_equal(compl_shown_match.get(), (*leader).data, (*leader).size)
-                && !(*compl_shown_match.get()).cp_prev.is_null()
-                && !is_first_match((*compl_shown_match.get()).cp_prev)
-            {
+            while hidden(leader, (*compl_shown_match.get()).cp_prev) {
                 compl_shown_match.set((*compl_shown_match.get()).cp_prev);
-                leader = get_leader_for_startcol(compl_shown_match.get(), true_0 != 0);
+                leader = get_leader_for_startcol(compl_shown_match.get(), true);
             }
         }
     }
 }
 
-pub unsafe extern "C" fn ins_compl_delete(mut new_leader: bool) {
+/// Delete the old text being completed.
+pub unsafe fn ins_compl_delete(new_leader: bool) {
     unsafe {
-        let mut orig_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+        // Avoid deleting text that will be reinserted when changing leader.
+        // This allows marks present on the original text to shrink/grow
+        // appropriately.
+        let mut orig_col = 0;
         if new_leader {
-            let mut orig: *mut ::core::ffi::c_char = (*compl_orig_text.ptr()).data;
-            let mut leader: *mut ::core::ffi::c_char = ins_compl_leader();
-            while *orig as ::core::ffi::c_int != NUL && utf_ptr2char(orig) == utf_ptr2char(leader) {
+            let mut orig = (*compl_orig_text.ptr()).data;
+            let mut leader = ins_compl_leader();
+            while *orig as c_int != NUL && utf_ptr2char(orig) == utf_ptr2char(leader) {
                 leader = leader.offset(utf_ptr2len(leader) as isize);
                 orig = orig.offset(utf_ptr2len(orig) as isize);
             }
-            orig_col = orig.offset_from((*compl_orig_text.ptr()).data) as ::core::ffi::c_int;
+            orig_col = orig.offset_from((*compl_orig_text.ptr()).data) as c_int;
         }
-        let mut col: ::core::ffi::c_int = compl_col.get() as ::core::ffi::c_int
-            + (if compl_status_adding() as ::core::ffi::c_int != 0 {
+
+        // In insert mode: delete the typed part.
+        // In replace mode: put the old characters back, if any.
+        let mut col = compl_col.get()
+            + if compl_status_adding() {
                 compl_length.get()
             } else {
                 orig_col
-            });
+            };
         if ins_compl_preinsert_effect() {
-            col += ins_compl_leader_len() as ::core::ffi::c_int;
+            col += ins_compl_leader_len() as c_int;
             (*curwin.get()).w_cursor.col = compl_ins_end_col.get();
         }
-        let mut remaining: String_0 = String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: 0 as size_t,
-        };
+
+        // What follows the cursor on the last line, which the line deletion
+        // below would take with it; re-inserted at the end.
+        let mut remaining = STRING_INIT;
         if (*curwin.get()).w_cursor.lnum > compl_lnum.get() {
             if (*curwin.get()).w_cursor.col < get_cursor_line_len() {
                 remaining = cbuf_to_string(get_cursor_pos_ptr(), get_cursor_pos_len() as size_t);
             }
             while (*curwin.get()).w_cursor.lnum > compl_lnum.get() {
                 if ml_delete((*curwin.get()).w_cursor.lnum) == FAIL {
-                    if !remaining.data.is_null() {
-                        xfree(remaining.data as *mut ::core::ffi::c_void);
-                    }
+                    xfree(remaining.data.cast::<c_void>());
                     return;
                 }
-                deleted_lines_mark((*curwin.get()).w_cursor.lnum, 1 as ::core::ffi::c_int);
+                deleted_lines_mark((*curwin.get()).w_cursor.lnum, 1);
                 (*curwin.get()).w_cursor.lnum -= 1;
             }
+            // Move cursor to end of line.
             (*curwin.get()).w_cursor.col = get_cursor_line_len();
         }
+
         if (*curwin.get()).w_cursor.col > col {
             if stop_arrow() == FAIL {
-                if !remaining.data.is_null() {
-                    xfree(remaining.data as *mut ::core::ffi::c_void);
-                }
+                xfree(remaining.data.cast::<c_void>());
                 return;
             }
             backspace_until_column(col);
             compl_ins_end_col.set((*curwin.get()).w_cursor.col);
         }
+
         if !remaining.data.is_null() {
-            orig_col = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
+            orig_col = (*curwin.get()).w_cursor.col;
             ins_str(remaining.data, remaining.size);
-            (*curwin.get()).w_cursor.col = orig_col as colnr_T;
-            xfree(remaining.data as *mut ::core::ffi::c_void);
+            (*curwin.get()).w_cursor.col = orig_col;
+            xfree(remaining.data.cast::<c_void>());
         }
+
+        // TODO(vim): is this sufficient for redrawing?  Redrawing everything
+        // causes flicker, thus we can't do that.
         changed_cline_bef_curs(curwin.get());
+        // Clear v:completed_item.
         set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED));
     }
 }
 
-pub(crate) unsafe extern "C" fn ins_compl_expand_multiple(mut str: *mut ::core::ffi::c_char) {
+/// Insert a completion string that contains newlines, line by line.
+pub(crate) unsafe fn ins_compl_expand_multiple(str: *mut c_char) {
     unsafe {
-        let mut start: *mut ::core::ffi::c_char = str;
-        let mut curr: *mut ::core::ffi::c_char = str;
-        let mut base_indent: ::core::ffi::c_int = get_indent();
-        while *curr as ::core::ffi::c_int != NUL {
-            if *curr as ::core::ffi::c_int == '\n' as ::core::ffi::c_int {
+        let mut start = str;
+        let mut curr = str;
+        let base_indent = get_indent();
+        while *curr as c_int != NUL {
+            if *curr as c_int == '\n' as c_int {
                 if curr > start {
                     ins_char_bytes(start, curr.offset_from(start) as size_t);
                 }
                 open_line(
-                    FORWARD as ::core::ffi::c_int,
+                    FORWARD,
                     OPENLINE_KEEPTRAIL | OPENLINE_FORCE_INDENT,
                     base_indent,
-                    ::core::ptr::null_mut::<bool>(),
+                    ptr::null_mut(),
                 );
-                start = curr.offset(1 as ::core::ffi::c_int as isize);
+                start = curr.offset(1);
             }
             curr = curr.offset(1);
         }
+        // Handle remaining text after the last newline (if any).
         if curr > start {
             ins_char_bytes(start, curr.offset_from(start) as size_t);
         }
@@ -250,267 +235,284 @@ pub(crate) unsafe extern "C" fn ins_compl_expand_multiple(mut str: *mut ::core::
     }
 }
 
-pub unsafe extern "C" fn ins_compl_insert(mut move_cursor: bool, mut insert_prefix: bool) {
+/// Insert the new text being completed.
+///
+/// `move_cursor` is for `'completeopt'` `preinsert`: when true the cursor
+/// moves back from the inserted text to `compl_leader`. With `insert_prefix`
+/// the longest common prefix goes in instead of the shown match.
+pub unsafe fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
     unsafe {
-        let mut compl_len: ::core::ffi::c_int = get_compl_len();
-        let mut preinsert: bool = ins_compl_has_preinsert();
-        let mut cp_str: *mut ::core::ffi::c_char = (*compl_shown_match.get()).cp_str.data;
-        let mut cp_str_len: size_t = (*compl_shown_match.get()).cp_str.size;
-        let mut leader_len: size_t = ins_compl_leader_len();
-        let mut has_multiple: *mut ::core::ffi::c_char = strchr(cp_str, '\n' as ::core::ffi::c_int);
+        let shown = compl_shown_match.get();
+        let compl_len = get_compl_len();
+        let preinsert = ins_compl_has_preinsert();
+        let mut cp_str = (*shown).cp_str.data;
+        let mut cp_str_len = (*shown).cp_str.size;
+        let leader_len = ins_compl_leader_len();
+        let has_multiple = !strchr(cp_str, '\n' as c_int).is_null();
+
         if insert_prefix {
-            cp_str = find_common_prefix(&raw mut cp_str_len, false_0 != 0);
+            cp_str = find_common_prefix(&raw mut cp_str_len, false);
             if cp_str.is_null() {
-                cp_str = find_common_prefix(&raw mut cp_str_len, true_0 != 0);
+                cp_str = find_common_prefix(&raw mut cp_str_len, true);
                 if cp_str.is_null() {
-                    cp_str = (*compl_shown_match.get()).cp_str.data;
-                    cp_str_len = (*compl_shown_match.get()).cp_str.size;
+                    cp_str = (*shown).cp_str.data;
+                    cp_str_len = (*shown).cp_str.size;
                 }
             }
         } else if !(*cpt_sources_array.ptr()).is_null() {
-            let mut cpt_idx: ::core::ffi::c_int = (*compl_shown_match.get()).cp_cpt_source_idx;
-            if cpt_idx >= 0 as ::core::ffi::c_int && compl_col.get() >= 0 as ::core::ffi::c_int {
-                let mut startcol: ::core::ffi::c_int =
-                    (*(*cpt_sources_array.ptr()).offset(cpt_idx as isize)).cs_startcol;
-                if startcol >= 0 as ::core::ffi::c_int && startcol < compl_col.get() {
-                    let mut skip: ::core::ffi::c_int = compl_col.get() - startcol;
+            // Since completion sources may provide matches with varying start
+            // positions, insert only the portion of the match that corresponds
+            // to the intended replacement range.
+            let cpt_idx = (*shown).cp_cpt_source_idx;
+            if cpt_idx >= 0 && compl_col.get() >= 0 {
+                let startcol = (*(*cpt_sources_array.ptr()).offset(cpt_idx as isize)).cs_startcol;
+                if startcol >= 0 && startcol < compl_col.get() {
+                    let skip = compl_col.get() - startcol;
                     if skip as size_t <= cp_str_len {
-                        cp_str_len = cp_str_len.wrapping_sub(skip as size_t);
+                        cp_str_len -= skip as size_t;
                         cp_str = cp_str.offset(skip as isize);
                     }
                 }
             }
         }
-        if compl_len < cp_str_len as ::core::ffi::c_int {
-            if !has_multiple.is_null() {
+
+        // Make sure we don't go over the end of the string, this can happen
+        // with illegal bytes.
+        if compl_len < cp_str_len as c_int {
+            if has_multiple {
                 ins_compl_expand_multiple(cp_str.offset(compl_len as isize));
             } else {
                 ins_compl_insert_bytes(
                     cp_str.offset(compl_len as isize),
-                    if insert_prefix as ::core::ffi::c_int != 0 {
-                        cp_str_len as ::core::ffi::c_int - compl_len
+                    if insert_prefix {
+                        cp_str_len as c_int - compl_len
                     } else {
-                        -1 as ::core::ffi::c_int
+                        -1
                     },
                 );
-                if (preinsert as ::core::ffi::c_int != 0
-                    || insert_prefix as ::core::ffi::c_int != 0)
-                    && move_cursor as ::core::ffi::c_int != 0
-                {
+                if (preinsert || insert_prefix) && move_cursor {
+                    // `wrapping_sub` as the transpile has it: nothing here
+                    // proves the match is longer than the leader (a fuzzy
+                    // match need not start with it), and upstream's `size_t`
+                    // underflow narrows to a negative `colnr_T`, i.e. the
+                    // cursor moves the other way.
                     (*curwin.get()).w_cursor.col -= cp_str_len.wrapping_sub(leader_len) as colnr_T;
                 }
             }
         }
-        compl_used_match.set(
-            !(match_at_original_text(compl_shown_match.get()) as ::core::ffi::c_int != 0
-                || preinsert as ::core::ffi::c_int != 0 && !insert_prefix),
-        );
-        let mut dict: *mut dict_T = ins_compl_dict_alloc(compl_shown_match.get());
-        set_vim_var_dict(VV_COMPLETED_ITEM, dict);
-        compl_hi_on_autocompl_longest.set(
-            insert_prefix as ::core::ffi::c_int != 0 && move_cursor as ::core::ffi::c_int != 0,
-        );
+        compl_used_match.set(!(match_at_original_text(shown) || (preinsert && !insert_prefix)));
+
+        set_vim_var_dict(VV_COMPLETED_ITEM, ins_compl_dict_alloc(shown));
+        compl_hi_on_autocompl_longest.set(insert_prefix && move_cursor);
     }
 }
 
-pub(crate) unsafe extern "C" fn find_next_completion_match(
-    mut allow_get_expansion: bool,
-    mut todo: ::core::ffi::c_int,
-    mut advance: bool,
-    mut num_matches: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Step `compl_shown_match` on `todo` matches in the current direction,
+/// answering the number of matches found in `num_matches`.
+///
+/// With `allow_get_expansion` [`ins_compl_get_exp`] may be called for more
+/// completions; without it, running out in the given direction does nothing.
+/// `advance` moves to the first match rather than showing the original text.
+///
+/// Answers `OK`, or `-1` when the number of matches is still unknown.
+pub(crate) unsafe fn find_next_completion_match(
+    allow_get_expansion: bool,
+    mut todo: c_int,
+    advance: bool,
+    num_matches: *mut c_int,
+) -> c_int {
     unsafe {
-        let mut found_end: bool = false_0 != 0;
-        let mut found_compl: *mut compl_T = ::core::ptr::null_mut::<compl_T>();
-        let mut cur_cot_flags: ::core::ffi::c_uint = get_cot_flags();
-        let mut compl_no_select: bool = cur_cot_flags
-            & kOptCotFlagNoselect as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0 as ::core::ffi::c_uint
-            || compl_autocomplete.get() as ::core::ffi::c_int != 0 && !ins_compl_has_preinsert();
+        let mut found_end = false;
+        let mut found_compl: *mut compl_T = ptr::null_mut();
+        let compl_no_select = get_cot_flags() & kOptCotFlagNoselect as c_uint != 0
+            || compl_autocomplete.get() && !ins_compl_has_preinsert();
+
         loop {
             todo -= 1;
-            if todo < 0 as ::core::ffi::c_int {
+            if todo < 0 {
                 break;
             }
-            if compl_shows_dir_forward() as ::core::ffi::c_int != 0
-                && !(*compl_shown_match.get()).cp_next.is_null()
-            {
-                if !(*compl_match_array.ptr()).is_null() {
-                    compl_shown_match.set(find_next_match_in_menu());
+            let shown = compl_shown_match.get();
+            if compl_shows_dir_forward() && !(*shown).cp_next.is_null() {
+                compl_shown_match.set(if !(*compl_match_array.ptr()).is_null() {
+                    find_next_match_in_menu()
                 } else {
-                    compl_shown_match.set((*compl_shown_match.get()).cp_next);
-                }
-                found_end = !(*compl_first_match.ptr()).is_null()
-                    && (is_first_match((*compl_shown_match.get()).cp_next) as ::core::ffi::c_int
-                        != 0
-                        || is_first_match(compl_shown_match.get()) as ::core::ffi::c_int != 0);
-            } else if compl_shows_dir_backward() as ::core::ffi::c_int != 0
-                && !(*compl_shown_match.get()).cp_prev.is_null()
-            {
-                found_end = is_first_match(compl_shown_match.get());
-                if !(*compl_match_array.ptr()).is_null() {
-                    compl_shown_match.set(find_next_match_in_menu());
+                    (*shown).cp_next
+                });
+                found_end = !compl_first_match.get().is_null()
+                    && (is_first_match((*compl_shown_match.get()).cp_next)
+                        || is_first_match(compl_shown_match.get()));
+            } else if compl_shows_dir_backward() && !(*shown).cp_prev.is_null() {
+                found_end = is_first_match(shown);
+                compl_shown_match.set(if !(*compl_match_array.ptr()).is_null() {
+                    find_next_match_in_menu()
                 } else {
-                    compl_shown_match.set((*compl_shown_match.get()).cp_prev);
-                }
-                found_end = found_end as ::core::ffi::c_int
-                    | is_first_match(compl_shown_match.get()) as ::core::ffi::c_int
-                    != 0;
+                    (*shown).cp_prev
+                });
+                found_end |= is_first_match(compl_shown_match.get());
             } else {
                 if !allow_get_expansion {
                     if advance {
                         if compl_shows_dir_backward() {
-                            (*compl_pending.ptr()) -= todo + 1 as ::core::ffi::c_int;
+                            (*compl_pending.ptr()) -= todo + 1;
                         } else {
-                            (*compl_pending.ptr()) += todo + 1 as ::core::ffi::c_int;
+                            (*compl_pending.ptr()) += todo + 1;
                         }
                     }
-                    return -1 as ::core::ffi::c_int;
+                    return -1;
                 }
-                if !compl_no_select && advance as ::core::ffi::c_int != 0 {
+
+                if !compl_no_select && advance {
                     if compl_shows_dir_backward() {
                         (*compl_pending.ptr()) -= 1;
                     } else {
                         (*compl_pending.ptr()) += 1;
                     }
                 }
+
+                // Find matches.
                 *num_matches = ins_compl_get_exp(compl_startpos.ptr());
-                while compl_pending.get() != 0 as ::core::ffi::c_int
-                    && compl_direction.get() as ::core::ffi::c_int
-                        == compl_shows_dir.get() as ::core::ffi::c_int
-                    && advance as ::core::ffi::c_int != 0
+
+                // Handle any pending completions.
+                while compl_pending.get() != 0
+                    && compl_direction.get() == compl_shows_dir.get()
+                    && advance
                 {
-                    if compl_pending.get() > 0 as ::core::ffi::c_int
-                        && !(*compl_shown_match.get()).cp_next.is_null()
-                    {
-                        compl_shown_match.set((*compl_shown_match.get()).cp_next);
+                    let shown = compl_shown_match.get();
+                    if compl_pending.get() > 0 && !(*shown).cp_next.is_null() {
+                        compl_shown_match.set((*shown).cp_next);
                         (*compl_pending.ptr()) -= 1;
-                    } else {
-                        if !(compl_pending.get() < 0 as ::core::ffi::c_int
-                            && !(*compl_shown_match.get()).cp_prev.is_null())
-                        {
-                            break;
-                        }
-                        compl_shown_match.set((*compl_shown_match.get()).cp_prev);
+                    } else if compl_pending.get() < 0 && !(*shown).cp_prev.is_null() {
+                        compl_shown_match.set((*shown).cp_prev);
                         (*compl_pending.ptr()) += 1;
+                    } else {
+                        break;
                     }
                 }
-                found_end = false_0 != 0;
+                found_end = false;
             }
-            let mut leader: *mut String_0 =
-                get_leader_for_startcol(compl_shown_match.get(), false_0 != 0);
-            if !match_at_original_text(compl_shown_match.get())
+
+            let shown = compl_shown_match.get();
+            let leader = get_leader_for_startcol(shown, false);
+            if !match_at_original_text(shown)
                 && !(*leader).data.is_null()
-                && !ins_compl_equal(compl_shown_match.get(), (*leader).data, (*leader).size)
-                && !(cot_fuzzy() as ::core::ffi::c_int != 0
-                    && (*compl_shown_match.get()).cp_score != FUZZY_SCORE_NONE)
+                && !ins_compl_equal(shown, (*leader).data, (*leader).size)
+                && !(cot_fuzzy() && (*shown).cp_score != FUZZY_SCORE_NONE)
             {
                 todo += 1;
             } else {
-                found_compl = compl_shown_match.get();
+                // Remember a matching item.
+                found_compl = shown;
             }
-            if !found_end {
-                continue;
-            }
-            if !found_compl.is_null() {
-                compl_shown_match.set(found_compl);
-                break;
-            } else {
-                todo = 1 as ::core::ffi::c_int;
+
+            // Stop at the end of the list when we found a usable match.
+            if found_end {
+                if !found_compl.is_null() {
+                    compl_shown_match.set(found_compl);
+                    break;
+                }
+                todo = 1; // use first usable match after wrapping around
             }
         }
-        return OK;
+        OK
     }
 }
 
-pub(crate) unsafe extern "C" fn ins_compl_next(
-    mut allow_get_expansion: bool,
-    mut count: ::core::ffi::c_int,
-    mut insert_match: bool,
-) -> ::core::ffi::c_int {
+/// Fill in the next completion in the current direction; answers the total
+/// number of matches, or `-1` if still unknown.
+///
+/// `compl_curr_match` belongs to [`ins_compl_get_exp`] while it runs, so this
+/// works through `compl_shown_match`. It recurses at most once: first with
+/// `allow_get_expansion` true, which calls [`ins_compl_get_exp`], which calls
+/// back in with it false.
+///
+/// `count` is at least 1; `insert_match` inserts the newly selected match.
+pub(crate) unsafe fn ins_compl_next(
+    allow_get_expansion: bool,
+    count: c_int,
+    insert_match: bool,
+) -> c_int {
     unsafe {
-        let mut num_matches: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-        let mut todo: ::core::ffi::c_int = count;
-        let started: bool = compl_started.get();
-        let orig_curbuf: *mut buf_T = curbuf.get();
-        let mut cur_cot_flags: ::core::ffi::c_uint = get_cot_flags();
-        let mut compl_no_insert: bool = cur_cot_flags
-            & kOptCotFlagNoinsert as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0 as ::core::ffi::c_uint
-            || compl_autocomplete.get() as ::core::ffi::c_int != 0 && !ins_compl_has_preinsert();
-        let mut compl_preinsert: bool = ins_compl_has_preinsert();
-        let mut has_autocomplete_delay: bool =
-            compl_autocomplete.get() as ::core::ffi::c_int != 0 && p_acl.get() > 0 as OptInt;
-        if (*compl_shown_match.ptr()).is_null() {
-            return -1 as ::core::ffi::c_int;
+        let mut num_matches = -1;
+        let started = compl_started.get();
+        let orig_curbuf = curbuf.get();
+        let cur_cot_flags = get_cot_flags();
+        let compl_no_insert = cur_cot_flags & kOptCotFlagNoinsert as c_uint != 0
+            || compl_autocomplete.get() && !ins_compl_has_preinsert();
+        let compl_preinsert = ins_compl_has_preinsert();
+        let has_autocomplete_delay = compl_autocomplete.get() && p_acl.get() > 0;
+
+        // When a user completion function answers -1 for findstart, which is
+        // the next time round with 'always', compl_shown_match becomes NULL.
+        if compl_shown_match.get().is_null() {
+            return -1;
         }
+
         if !(*compl_leader.ptr()).data.is_null()
             && !match_at_original_text(compl_shown_match.get())
             && !cot_fuzzy()
         {
             ins_compl_update_shown_match();
         }
-        if allow_get_expansion as ::core::ffi::c_int != 0
-            && insert_match as ::core::ffi::c_int != 0
-            && (!compl_get_longest.get() || compl_used_match.get() as ::core::ffi::c_int != 0)
+
+        if allow_get_expansion
+            && insert_match
+            && (!compl_get_longest.get() || compl_used_match.get())
         {
-            ins_compl_delete(false_0 != 0);
+            // Delete old text to be replaced.
+            ins_compl_delete(false);
         }
-        let mut advance: bool =
-            count != 1 as ::core::ffi::c_int || !allow_get_expansion || !compl_get_longest.get();
+
+        // When finding the longest common text we stick at the original text,
+        // don't let CTRL-N or CTRL-P move to the first match.
+        let mut advance = count != 1 || !allow_get_expansion || !compl_get_longest.get();
+
+        // When restarting the search don't insert the first match either.
         if compl_restarting.get() {
-            advance = false_0 != 0;
-            compl_restarting.set(false_0 != 0);
+            advance = false;
+            compl_restarting.set(false);
         }
-        if find_next_completion_match(allow_get_expansion, todo, advance, &raw mut num_matches)
-            == -1 as ::core::ffi::c_int
+
+        // Repeat this for when <PageUp> or <PageDown> is typed.  But don't
+        // wrap around.
+        if find_next_completion_match(allow_get_expansion, count, advance, &raw mut num_matches)
+            == -1
         {
-            return -1 as ::core::ffi::c_int;
+            return -1;
         }
+
         if curbuf.get() != orig_curbuf {
-            return -1 as ::core::ffi::c_int;
+            // In case some completion function switched buffer, don't insert
+            // the completion elsewhere.
+            return -1;
         }
-        if !started && ins_compl_preinsert_longest() as ::core::ffi::c_int != 0 {
-            ins_compl_insert(true_0 != 0, true_0 != 0);
+
+        // Insert the text of the new completion, or the compl_leader.
+        if !started && ins_compl_preinsert_longest() {
+            ins_compl_insert(true, true);
             if has_autocomplete_delay {
-                update_screen();
+                update_screen(); // Show the inserted text right away
             }
-        } else if compl_no_insert as ::core::ffi::c_int != 0 && !started && !compl_preinsert {
+        } else if compl_no_insert && !started && !compl_preinsert {
             ins_compl_insert_bytes(
                 (*compl_orig_text.ptr())
                     .data
                     .offset(get_compl_len() as isize),
-                -1 as ::core::ffi::c_int,
+                -1,
             );
-            compl_used_match.set(false_0 != 0);
+            compl_used_match.set(false);
             restore_orig_extmarks();
         } else if insert_match {
-            if !compl_get_longest.get() || compl_used_match.get() as ::core::ffi::c_int != 0 {
-                let mut preinsert_longest: bool = ins_compl_preinsert_longest()
-                    as ::core::ffi::c_int
-                    != 0
-                    && match_at_original_text(compl_shown_match.get()) as ::core::ffi::c_int != 0;
-                ins_compl_insert(
-                    compl_preinsert as ::core::ffi::c_int != 0
-                        || preinsert_longest as ::core::ffi::c_int != 0,
-                    preinsert_longest,
-                );
+            if !compl_get_longest.get() || compl_used_match.get() {
+                // None selected.
+                let preinsert_longest = ins_compl_preinsert_longest()
+                    && match_at_original_text(compl_shown_match.get());
+                ins_compl_insert(compl_preinsert || preinsert_longest, preinsert_longest);
             } else {
-                '_c2rust_label: {
-                    if !(*compl_leader.ptr()).data.is_null() {
-                    } else {
-                        __assert_fail(
-                            b"compl_leader.data != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                            5406 as ::core::ffi::c_uint,
-                            b"int ins_compl_next(_Bool, int, _Bool)\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        );
-                    }
-                };
+                debug_assert!(!(*compl_leader.ptr()).data.is_null());
                 ins_compl_insert_bytes(
                     (*compl_leader.ptr()).data.offset(get_compl_len() as isize),
-                    -1 as ::core::ffi::c_int,
+                    -1,
                 );
             }
             if strequal(
@@ -520,26 +522,34 @@ pub(crate) unsafe extern "C" fn ins_compl_next(
                 restore_orig_extmarks();
             }
         } else {
-            compl_used_match.set(false_0 != 0);
+            compl_used_match.set(false);
         }
+
         if !allow_get_expansion {
-            update_screen();
+            // Redraw to show the user what was inserted.
+            update_screen(); // TODO(bfredl): no!
             if !has_autocomplete_delay {
+                // Display the updated popup menu.
                 ins_compl_show_pum();
             }
-            ins_compl_delete(false_0 != 0);
+            // Delete old text to be replaced, since we're still searching and
+            // don't want to match ourselves!
+            ins_compl_delete(false);
         }
-        if compl_no_insert as ::core::ffi::c_int != 0
-            && !started
-            && !match_at_original_text(compl_shown_match.get())
-        {
-            compl_enter_selects.set(true_0 != 0);
+
+        // Enter will select a match when the match wasn't inserted and the
+        // popup menu is visible.
+        if compl_no_insert && !started && !match_at_original_text(compl_shown_match.get()) {
+            compl_enter_selects.set(true);
         } else {
             compl_enter_selects.set(!insert_match && !(*compl_match_array.ptr()).is_null());
         }
+
+        // Show the file name for the match (if any).
         if !(*compl_shown_match.get()).cp_fname.is_null() {
             ins_compl_show_filename();
         }
-        return num_matches;
+
+        num_matches
     }
 }
