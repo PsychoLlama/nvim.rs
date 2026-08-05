@@ -181,10 +181,10 @@ pub unsafe extern "C" fn ins_compl_add_infercase(
             );
         }
         if cont_s_ipos {
-            flags |= CP_CONT_S_IPOS as ::core::ffi::c_int;
+            flags |= CP_CONT_S_IPOS;
         }
         if icase {
-            flags |= CP_ICASE as ::core::ffi::c_int;
+            flags |= CP_ICASE;
         }
         let mut res: ::core::ffi::c_int = ins_compl_add(
             str,
@@ -271,13 +271,13 @@ pub(crate) unsafe extern "C" fn get_next_bufname_token() {
                         ::core::ptr::null_mut::<typval_T>(),
                         kDirectionNotSet,
                         if p_ic.get() != 0 {
-                            CP_ICASE as ::core::ffi::c_int
+                            CP_ICASE
                         } else {
                             0 as ::core::ffi::c_int
                         },
                         false_0 != 0,
                         ::core::ptr::null::<::core::ffi::c_int>(),
-                        FUZZY_SCORE_NONE as ::core::ffi::c_int,
+                        FUZZY_SCORE_NONE,
                     );
                 }
             }
@@ -348,7 +348,7 @@ pub(crate) unsafe extern "C" fn find_common_prefix(
                 && !(*leader).data.is_null()
                 && ignorecase((*leader).data) == 0
             {
-                (*compl).cp_flags &= !(CP_ICASE as ::core::ffi::c_int);
+                (*compl).cp_flags &= !(CP_ICASE);
             }
             if !match_at_original_text(compl)
                 && ((*leader).data.is_null()

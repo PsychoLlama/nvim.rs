@@ -40,7 +40,7 @@ pub(crate) unsafe extern "C" fn ins_compl_dictionaries(
             }
         }
         let mut buf: *mut ::core::ffi::c_char =
-            xmalloc(LSIZE as ::core::ffi::c_int as size_t) as *mut ::core::ffi::c_char;
+            xmalloc(LSIZE as size_t) as *mut ::core::ffi::c_char;
         regmatch.regprog = ::core::ptr::null_mut::<regprog_T>();
         let mut save_p_scs: ::core::ffi::c_int = p_scs.get();
         if (*curbuf.get()).b_p_inf != 0 {
@@ -83,7 +83,7 @@ pub(crate) unsafe extern "C" fn ins_compl_dictionaries(
                     copy_option_part(
                         &raw mut dict,
                         buf,
-                        LSIZE as ::core::ffi::c_int as size_t,
+                        LSIZE as size_t,
                         b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                     );
                     if !thesaurus
@@ -97,7 +97,7 @@ pub(crate) unsafe extern "C" fn ins_compl_dictionaries(
                             &raw mut buf,
                             &raw mut count,
                             &raw mut files,
-                            EW_FILE as ::core::ffi::c_int | EW_SILENT as ::core::ffi::c_int,
+                            EW_FILE | EW_SILENT,
                         ) != OK
                     {
                         count = 0 as ::core::ffi::c_int;
@@ -178,7 +178,7 @@ pub(crate) unsafe extern "C" fn thesaurus_add_words_in_line(
                 fname,
                 dir as Direction,
                 false_0 != 0,
-                FUZZY_SCORE_NONE as ::core::ffi::c_int,
+                FUZZY_SCORE_NONE,
             );
             if status == FAIL {
                 break;
@@ -215,10 +215,7 @@ pub(crate) unsafe extern "C" fn ins_compl_files(
                 *files.offset(i as isize),
                 b"r\0".as_ptr() as *const ::core::ffi::c_char,
             );
-            if flags != DICT_EXACT
-                && !shortmess(SHM_COMPLETIONSCAN as ::core::ffi::c_int)
-                && !compl_autocomplete.get()
-            {
+            if flags != DICT_EXACT && !shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete.get() {
                 vim_snprintf(
                     IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
@@ -236,10 +233,7 @@ pub(crate) unsafe extern "C" fn ins_compl_files(
                 );
             }
             if !fp.is_null() {
-                while !got_int.get()
-                    && !ins_compl_interrupted()
-                    && !vim_fgets(buf, LSIZE as ::core::ffi::c_int, fp)
-                {
+                while !got_int.get() && !ins_compl_interrupted() && !vim_fgets(buf, LSIZE, fp) {
                     let mut ptr: *mut ::core::ffi::c_char = buf;
                     if cot_fuzzy() as ::core::ffi::c_int != 0
                         && leader_len > 0 as ::core::ffi::c_int
@@ -301,7 +295,7 @@ pub(crate) unsafe extern "C" fn ins_compl_files(
                                 *files.offset(i as isize),
                                 *dir,
                                 false_0 != 0,
-                                FUZZY_SCORE_NONE as ::core::ffi::c_int,
+                                FUZZY_SCORE_NONE,
                             );
                             if thesaurus {
                                 ptr = buf;
@@ -512,7 +506,7 @@ pub(crate) unsafe extern "C" fn get_next_default_completion(
             && cot_fuzzy() as ::core::ffi::c_int != 0
             && compl_length.get() > 0 as ::core::ffi::c_int;
         let mut leader: *mut ::core::ffi::c_char = ins_compl_leader();
-        let mut score: ::core::ffi::c_int = FUZZY_SCORE_NONE as ::core::ffi::c_int;
+        let mut score: ::core::ffi::c_int = FUZZY_SCORE_NONE;
         let in_curbuf: bool = (*st).ins_buf == curbuf.get();
         let save_p_scs: ::core::ffi::c_int = p_scs.get();
         '_c2rust_label: {
@@ -676,7 +670,7 @@ pub(crate) unsafe extern "C" fn get_register_completion() {
         let mut dir: Direction = compl_direction.get();
         let mut adding_mode: bool = compl_status_adding();
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < NUM_REGISTERS as ::core::ffi::c_int {
+        while i < NUM_REGISTERS {
             let mut regname: ::core::ffi::c_int = get_register_name(i);
             if !(!valid_yank_reg(regname, false_0 != 0) || regname == '_' as ::core::ffi::c_int) {
                 let mut reg: *mut yankreg_T = copy_register(regname);
@@ -717,7 +711,7 @@ pub(crate) unsafe extern "C" fn get_register_completion() {
                                             ::core::ptr::null_mut::<::core::ffi::c_char>(),
                                             dir,
                                             false_0 != 0,
-                                            FUZZY_SCORE_NONE as ::core::ffi::c_int,
+                                            FUZZY_SCORE_NONE,
                                         ) == OK
                                         {
                                             dir = FORWARD;
@@ -768,7 +762,7 @@ pub(crate) unsafe extern "C" fn get_register_completion() {
                                             ::core::ptr::null_mut::<::core::ffi::c_char>(),
                                             dir,
                                             false_0 != 0,
-                                            FUZZY_SCORE_NONE as ::core::ffi::c_int,
+                                            FUZZY_SCORE_NONE,
                                         ) == OK
                                         {
                                             dir = FORWARD;

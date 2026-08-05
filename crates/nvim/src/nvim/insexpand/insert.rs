@@ -235,8 +235,7 @@ pub(crate) unsafe extern "C" fn ins_compl_expand_multiple(mut str: *mut ::core::
                 }
                 open_line(
                     FORWARD as ::core::ffi::c_int,
-                    OPENLINE_KEEPTRAIL as ::core::ffi::c_int
-                        | OPENLINE_FORCE_INDENT as ::core::ffi::c_int,
+                    OPENLINE_KEEPTRAIL | OPENLINE_FORCE_INDENT,
                     base_indent,
                     ::core::ptr::null_mut::<bool>(),
                 );
@@ -404,8 +403,7 @@ pub(crate) unsafe extern "C" fn find_next_completion_match(
                 && !(*leader).data.is_null()
                 && !ins_compl_equal(compl_shown_match.get(), (*leader).data, (*leader).size)
                 && !(cot_fuzzy() as ::core::ffi::c_int != 0
-                    && (*compl_shown_match.get()).cp_score
-                        != FUZZY_SCORE_NONE as ::core::ffi::c_int)
+                    && (*compl_shown_match.get()).cp_score != FUZZY_SCORE_NONE)
             {
                 todo += 1;
             } else {

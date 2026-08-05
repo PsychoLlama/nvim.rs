@@ -17,7 +17,7 @@ pub(crate) unsafe extern "C" fn free_cptext(cptext: *const *mut ::core::ffi::c_c
     unsafe {
         if !cptext.is_null() {
             let mut i: size_t = 0 as size_t;
-            while i < CPT_COUNT as ::core::ffi::c_int as size_t {
+            while i < CPT_COUNT as size_t {
                 xfree(*cptext.offset(i as isize) as *mut ::core::ffi::c_void);
                 i = i.wrapping_add(1);
             }
@@ -48,7 +48,7 @@ pub(crate) unsafe extern "C" fn ins_compl_add(
             }) as Direction;
         let mut flags: ::core::ffi::c_int = flags_arg;
         let mut inserted: bool = false_0 != 0;
-        if flags & CP_FAST as ::core::ffi::c_int != 0 {
+        if flags & CP_FAST != 0 {
             fast_breakcheck();
         } else {
             os_breakcheck();
@@ -91,7 +91,7 @@ pub(crate) unsafe extern "C" fn ins_compl_add(
         }
         ins_compl_del_pum();
         match_0 = xcalloc(1 as size_t, ::core::mem::size_of::<compl_T>()) as *mut compl_T;
-        (*match_0).cp_number = if flags & CP_ORIGINAL_TEXT as ::core::ffi::c_int != 0 {
+        (*match_0).cp_number = if flags & CP_ORIGINAL_TEXT != 0 {
             0 as ::core::ffi::c_int
         } else {
             -1 as ::core::ffi::c_int
@@ -105,7 +105,7 @@ pub(crate) unsafe extern "C" fn ins_compl_add(
             (*match_0).cp_fname = (*compl_curr_match.get()).cp_fname;
         } else if !fname.is_null() {
             (*match_0).cp_fname = xstrdup(fname);
-            flags |= CP_FREE_FNAME as ::core::ffi::c_int;
+            flags |= CP_FREE_FNAME;
         } else {
             (*match_0).cp_fname = ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
@@ -124,7 +124,7 @@ pub(crate) unsafe extern "C" fn ins_compl_add(
         (*match_0).cp_cpt_source_idx = cpt_sources_index.get();
         if !cptext.is_null() {
             let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < CPT_COUNT as ::core::ffi::c_int {
+            while i < CPT_COUNT {
                 if !(*cptext.offset(i as isize)).is_null() {
                     if **cptext.offset(i as isize) as ::core::ffi::c_int != NUL {
                         (*match_0).cp_text[i as usize] =
@@ -147,7 +147,7 @@ pub(crate) unsafe extern "C" fn ins_compl_add(
             (*match_0).cp_prev = ::core::ptr::null_mut::<compl_T>();
             (*match_0).cp_next = (*match_0).cp_prev;
         } else if cot_fuzzy() as ::core::ffi::c_int != 0
-            && score != FUZZY_SCORE_NONE as ::core::ffi::c_int
+            && score != FUZZY_SCORE_NONE
             && compl_get_longest.get() as ::core::ffi::c_int != 0
         {
             let mut current: *mut compl_T = (*compl_first_match.get()).cp_next;
@@ -191,7 +191,7 @@ pub(crate) unsafe extern "C" fn ins_compl_add(
         }
         compl_curr_match.set(match_0);
         if compl_get_longest.get() as ::core::ffi::c_int != 0
-            && flags & CP_ORIGINAL_TEXT as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+            && flags & CP_ORIGINAL_TEXT == 0 as ::core::ffi::c_int
             && !cot_fuzzy()
             && !ins_compl_preinsert_longest()
             && !ctrl_x_mode_thesaurus()
@@ -208,10 +208,10 @@ pub(crate) unsafe extern "C" fn ins_compl_equal(
     mut len: size_t,
 ) -> bool {
     unsafe {
-        if (*match_0).cp_flags & CP_EQUAL as ::core::ffi::c_int != 0 {
+        if (*match_0).cp_flags & CP_EQUAL != 0 {
             return true_0 != 0;
         }
-        if (*match_0).cp_flags & CP_ICASE as ::core::ffi::c_int != 0 {
+        if (*match_0).cp_flags & CP_ICASE != 0 {
             return strncasecmp((*match_0).cp_str.data, str, len) == 0 as ::core::ffi::c_int;
         }
         return strncmp((*match_0).cp_str.data, str, len) == 0 as ::core::ffi::c_int;
@@ -238,7 +238,7 @@ pub(crate) unsafe extern "C" fn ins_compl_longest_match(mut match_0: *mut compl_
         while *p as ::core::ffi::c_int != NUL {
             let mut c1: ::core::ffi::c_int = utf_ptr2char(p);
             let mut c2: ::core::ffi::c_int = utf_ptr2char(s);
-            if if (*match_0).cp_flags & CP_ICASE as ::core::ffi::c_int != 0 {
+            if if (*match_0).cp_flags & CP_ICASE != 0 {
                 (mb_tolower(c1) != mb_tolower(c2)) as ::core::ffi::c_int
             } else {
                 (c1 != c2) as ::core::ffi::c_int
@@ -280,15 +280,15 @@ pub(crate) unsafe extern "C" fn ins_compl_add_matches(
                 false_0 != 0,
                 ::core::ptr::null_mut::<typval_T>(),
                 dir,
-                CP_FAST as ::core::ffi::c_int
+                CP_FAST
                     | (if icase != 0 {
-                        CP_ICASE as ::core::ffi::c_int
+                        CP_ICASE
                     } else {
                         0 as ::core::ffi::c_int
                     }),
                 false_0 != 0,
                 ::core::ptr::null::<::core::ffi::c_int>(),
-                FUZZY_SCORE_NONE as ::core::ffi::c_int,
+                FUZZY_SCORE_NONE,
             );
             if add_r == OK {
                 dir = FORWARD;
@@ -374,9 +374,7 @@ pub(crate) unsafe extern "C" fn cp_compare_nearest(
     unsafe {
         let mut score_a: ::core::ffi::c_int = (*(a as *mut compl_T)).cp_score;
         let mut score_b: ::core::ffi::c_int = (*(b as *mut compl_T)).cp_score;
-        if score_a == FUZZY_SCORE_NONE as ::core::ffi::c_int
-            || score_b == FUZZY_SCORE_NONE as ::core::ffi::c_int
-        {
+        if score_a == FUZZY_SCORE_NONE || score_b == FUZZY_SCORE_NONE {
             return 0 as ::core::ffi::c_int;
         }
         return if score_a > score_b {
@@ -519,7 +517,7 @@ pub(crate) unsafe extern "C" fn ins_compl_item_free(mut match_0: *mut compl_T) {
         *ptr_ = NULL;
         let _ = *ptr_;
         (*match_0).cp_str.size = 0 as size_t;
-        if (*match_0).cp_flags & CP_FREE_FNAME as ::core::ffi::c_int != 0 {
+        if (*match_0).cp_flags & CP_FREE_FNAME != 0 {
             xfree((*match_0).cp_fname as *mut ::core::ffi::c_void);
         }
         free_cptext(&raw mut (*match_0).cp_text as *mut *mut ::core::ffi::c_char);

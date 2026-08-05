@@ -224,7 +224,7 @@ pub(crate) unsafe extern "C" fn get_filename_compl_info(
         compl_pattern.set(cstr_as_string(addstar(
             line.offset(compl_col.get() as isize),
             compl_length.get() as size_t,
-            EXPAND_FILES as ::core::ffi::c_int,
+            EXPAND_FILES,
         )));
         return OK;
     }
@@ -243,11 +243,11 @@ pub(crate) unsafe extern "C" fn get_cmdline_compl_info(
             curs_col as ::core::ffi::c_int,
             false,
         );
-        if (*compl_xp.ptr()).xp_context == EXPAND_LUA as ::core::ffi::c_int {
+        if (*compl_xp.ptr()).xp_context == EXPAND_LUA {
             nlua_expand_pat(compl_xp.ptr());
         }
-        if (*compl_xp.ptr()).xp_context == EXPAND_UNSUCCESSFUL as ::core::ffi::c_int
-            || (*compl_xp.ptr()).xp_context == EXPAND_NOTHING as ::core::ffi::c_int
+        if (*compl_xp.ptr()).xp_context == EXPAND_UNSUCCESSFUL
+            || (*compl_xp.ptr()).xp_context == EXPAND_NOTHING
         {
             compl_col.set(curs_col);
         } else {
@@ -361,9 +361,9 @@ pub(crate) unsafe extern "C" fn get_userdefined_compl_info(
             if is_cpt_function {
                 return FAIL;
             }
-            ctrl_x_mode.set(CTRL_X_NORMAL as ::core::ffi::c_int);
+            ctrl_x_mode.set(CTRL_X_NORMAL);
             edit_submode.set(::core::ptr::null_mut::<::core::ffi::c_char>());
-            if !shortmess(SHM_COMPLETIONMENU as ::core::ffi::c_int) {
+            if !shortmess(SHM_COMPLETIONMENU) {
                 msg_clr_cmdline();
             }
             return FAIL;
@@ -437,7 +437,7 @@ pub(crate) unsafe extern "C" fn compl_get_info(
             return get_wholeline_compl_info(line, curs_col);
         } else if ctrl_x_mode_files() {
             return get_filename_compl_info(line, startcol, curs_col);
-        } else if ctrl_x_mode.get() == CTRL_X_CMDLINE as ::core::ffi::c_int {
+        } else if ctrl_x_mode.get() == CTRL_X_CMDLINE {
             return get_cmdline_compl_info(line, curs_col);
         } else if ctrl_x_mode_function() as ::core::ffi::c_int != 0
             || ctrl_x_mode_omni() as ::core::ffi::c_int != 0
@@ -558,7 +558,7 @@ pub(crate) unsafe extern "C" fn ins_compl_start() -> ::core::ffi::c_int {
             line = ml_get((*curwin.get()).w_cursor.lnum);
         }
         if compl_status_adding() {
-            if !shortmess(SHM_COMPLETIONMENU as ::core::ffi::c_int) {
+            if !shortmess(SHM_COMPLETIONMENU) {
                 edit_submode_pre.set(gettext(b" Adding\0".as_ptr() as *const ::core::ffi::c_char));
             }
             if ctrl_x_mode_line_or_eval() {
@@ -577,11 +577,9 @@ pub(crate) unsafe extern "C" fn ins_compl_start() -> ::core::ffi::c_int {
             edit_submode_pre.set(::core::ptr::null_mut::<::core::ffi::c_char>());
             (*compl_startpos.ptr()).col = compl_col.get();
         }
-        if !shortmess(SHM_COMPLETIONMENU as ::core::ffi::c_int) && !compl_autocomplete.get() {
+        if !shortmess(SHM_COMPLETIONMENU) && !compl_autocomplete.get() {
             if compl_cont_status.get() & CONT_LOCAL != 0 {
-                edit_submode.set(gettext(
-                    (*ctrl_x_msgs.ptr())[CTRL_X_LOCAL_MSG as ::core::ffi::c_int as usize],
-                ));
+                edit_submode.set(gettext((*ctrl_x_msgs.ptr())[CTRL_X_LOCAL_MSG as usize]));
             } else {
                 edit_submode.set(gettext(
                     (*ctrl_x_msgs.ptr())
@@ -605,9 +603,9 @@ pub(crate) unsafe extern "C" fn ins_compl_start() -> ::core::ffi::c_int {
             compl_length.get() as size_t,
         ));
         save_orig_extmarks();
-        let mut flags: ::core::ffi::c_int = CP_ORIGINAL_TEXT as ::core::ffi::c_int;
+        let mut flags: ::core::ffi::c_int = CP_ORIGINAL_TEXT;
         if p_ic.get() != 0 {
-            flags |= CP_ICASE as ::core::ffi::c_int;
+            flags |= CP_ICASE;
         }
         if ins_compl_add(
             (*compl_orig_text.ptr()).data,
@@ -620,7 +618,7 @@ pub(crate) unsafe extern "C" fn ins_compl_start() -> ::core::ffi::c_int {
             flags,
             false_0 != 0,
             ::core::ptr::null::<::core::ffi::c_int>(),
-            FUZZY_SCORE_NONE as ::core::ffi::c_int,
+            FUZZY_SCORE_NONE,
         ) != OK
         {
             let mut ptr__0: *mut *mut ::core::ffi::c_void =
@@ -642,7 +640,7 @@ pub(crate) unsafe extern "C" fn ins_compl_start() -> ::core::ffi::c_int {
             did_ai.set(save_did_ai);
             return FAIL;
         }
-        if !shortmess(SHM_COMPLETIONMENU as ::core::ffi::c_int) && !compl_autocomplete.get() {
+        if !shortmess(SHM_COMPLETIONMENU) && !compl_autocomplete.get() {
             edit_submode_extra.set(gettext(
                 b"-- Searching...\0".as_ptr() as *const ::core::ffi::c_char
             ));
@@ -716,12 +714,12 @@ pub unsafe extern "C" fn ins_complete(
                 (*compl_cont_status.ptr()) &= !CONT_N_ADDS;
             }
         }
-        if (*compl_curr_match.get()).cp_flags & CP_CONT_S_IPOS as ::core::ffi::c_int != 0 {
+        if (*compl_curr_match.get()).cp_flags & CP_CONT_S_IPOS != 0 {
             (*compl_cont_status.ptr()) |= CONT_S_IPOS;
         } else {
             (*compl_cont_status.ptr()) &= !CONT_S_IPOS;
         }
-        if !shortmess(SHM_COMPLETIONMENU as ::core::ffi::c_int) && !compl_autocomplete.get() {
+        if !shortmess(SHM_COMPLETIONMENU) && !compl_autocomplete.get() {
             ins_compl_show_statusmsg();
         }
         if compl_autocomplete.get() as ::core::ffi::c_int != 0

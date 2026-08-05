@@ -271,7 +271,7 @@ pub(crate) unsafe extern "C" fn ins_compl_stop(
         }
         let mut want_cindent: bool =
             get_can_cindent() as ::core::ffi::c_int != 0 && cindent_on() as ::core::ffi::c_int != 0;
-        if compl_cont_mode.get() == CTRL_X_WHOLE_LINE as ::core::ffi::c_int {
+        if compl_cont_mode.get() == CTRL_X_WHOLE_LINE {
             if want_cindent {
                 do_c_expr_indent();
                 want_cindent = false_0 != 0;
@@ -340,10 +340,10 @@ pub(crate) unsafe extern "C" fn ins_compl_stop(
         ins_compl_free();
         compl_started.set(false_0 != 0);
         compl_matches.set(0 as ::core::ffi::c_int);
-        if !shortmess(SHM_COMPLETIONMENU as ::core::ffi::c_int) {
+        if !shortmess(SHM_COMPLETIONMENU) {
             msg_clr_cmdline();
         }
-        ctrl_x_mode.set(CTRL_X_NORMAL as ::core::ffi::c_int);
+        ctrl_x_mode.set(CTRL_X_NORMAL);
         compl_enter_selects.set(false_0 != 0);
         if !(*edit_submode.ptr()).is_null() {
             edit_submode.set(::core::ptr::null_mut::<::core::ffi::c_char>());
@@ -358,7 +358,7 @@ pub(crate) unsafe extern "C" fn ins_compl_stop(
         }
         if want_cindent as ::core::ffi::c_int != 0
             && in_cinkeys(
-                KEY_COMPLETE as ::core::ffi::c_int,
+                KEY_COMPLETE,
                 ' ' as ::core::ffi::c_int,
                 inindent(0 as ::core::ffi::c_int),
             ) as ::core::ffi::c_int
@@ -405,21 +405,21 @@ pub unsafe extern "C" fn ins_compl_prep(mut c: ::core::ffi::c_int) -> bool {
         {
             return retval;
         }
-        if ctrl_x_mode.get() == CTRL_X_CMDLINE_CTRL_X as ::core::ffi::c_int && c != Ctrl_X {
+        if ctrl_x_mode.get() == CTRL_X_CMDLINE_CTRL_X && c != Ctrl_X {
             if c == Ctrl_V
                 || c == Ctrl_Q
                 || c == Ctrl_Z
                 || ins_compl_pum_key(c) as ::core::ffi::c_int != 0
                 || !vim_is_ctrl_x_key(c)
             {
-                ctrl_x_mode.set(CTRL_X_CMDLINE as ::core::ffi::c_int);
+                ctrl_x_mode.set(CTRL_X_CMDLINE);
                 if c == Ctrl_Z {
                     retval = true_0 != 0;
                 }
             } else {
-                ctrl_x_mode.set(CTRL_X_CMDLINE as ::core::ffi::c_int);
+                ctrl_x_mode.set(CTRL_X_CMDLINE);
                 ins_compl_prep(' ' as ::core::ffi::c_int);
-                ctrl_x_mode.set(CTRL_X_NOT_DEFINED_YET as ::core::ffi::c_int);
+                ctrl_x_mode.set(CTRL_X_NOT_DEFINED_YET);
             }
         }
         if ctrl_x_mode_not_defined_yet() as ::core::ffi::c_int != 0
@@ -436,28 +436,26 @@ pub unsafe extern "C" fn ins_compl_prep(mut c: ::core::ffi::c_int) -> bool {
         } else if ctrl_x_mode_not_default() {
             if !vim_is_ctrl_x_key(c) {
                 ctrl_x_mode.set(if ctrl_x_mode_scroll() as ::core::ffi::c_int != 0 {
-                    CTRL_X_NORMAL as ::core::ffi::c_int
+                    CTRL_X_NORMAL
                 } else {
-                    CTRL_X_FINISHED as ::core::ffi::c_int
+                    CTRL_X_FINISHED
                 });
                 edit_submode.set(::core::ptr::null_mut::<::core::ffi::c_char>());
             }
             redraw_mode.set(true_0 != 0);
         }
-        if compl_started.get() as ::core::ffi::c_int != 0
-            || ctrl_x_mode.get() == CTRL_X_FINISHED as ::core::ffi::c_int
-        {
+        if compl_started.get() as ::core::ffi::c_int != 0 || ctrl_x_mode.get() == CTRL_X_FINISHED {
             redraw_mode.set(true_0 != 0);
             if ctrl_x_mode_normal() as ::core::ffi::c_int != 0
                 && c != Ctrl_N
                 && c != Ctrl_P
                 && c != Ctrl_R
                 && !ins_compl_pum_key(c)
-                || ctrl_x_mode.get() == CTRL_X_FINISHED as ::core::ffi::c_int
+                || ctrl_x_mode.get() == CTRL_X_FINISHED
             {
                 retval = ins_compl_stop(c, prev_mode, retval);
             }
-        } else if ctrl_x_mode.get() == CTRL_X_LOCAL_MSG as ::core::ffi::c_int {
+        } else if ctrl_x_mode.get() == CTRL_X_LOCAL_MSG {
             do_autocmd_completedone(
                 c,
                 ctrl_x_mode.get(),

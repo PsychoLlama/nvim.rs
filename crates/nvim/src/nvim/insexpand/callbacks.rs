@@ -26,7 +26,7 @@ pub(crate) unsafe extern "C" fn get_cpt_sources_count() -> ::core::ffi::c_int {
                 copy_option_part(
                     &raw mut p,
                     &raw mut dummy as *mut ::core::ffi::c_char,
-                    LSIZE as ::core::ffi::c_int as size_t,
+                    LSIZE as size_t,
                     b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
                 count += 1;
@@ -56,12 +56,12 @@ pub unsafe extern "C" fn did_set_completefunc(
     unsafe {
         let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
         let mut retval: ::core::ffi::c_int = 0;
-        if (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
+        if (*args).os_flags & OPT_LOCAL != 0 {
             retval =
                 option_set_callback_func((*args).os_newval.string.data, &raw mut (*buf).b_cfu_cb);
         } else {
             retval = option_set_callback_func((*args).os_newval.string.data, cfu_cb.ptr());
-            if retval == OK && (*args).os_flags & OPT_GLOBAL as ::core::ffi::c_int == 0 {
+            if retval == OK && (*args).os_flags & OPT_GLOBAL == 0 {
                 set_buflocal_cfu_callback(buf);
             }
         }
@@ -83,12 +83,12 @@ pub unsafe extern "C" fn did_set_omnifunc(mut args: *mut optset_T) -> *const ::c
     unsafe {
         let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
         let mut retval: ::core::ffi::c_int = 0;
-        if (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
+        if (*args).os_flags & OPT_LOCAL != 0 {
             retval =
                 option_set_callback_func((*args).os_newval.string.data, &raw mut (*buf).b_ofu_cb);
         } else {
             retval = option_set_callback_func((*args).os_newval.string.data, ofu_cb.ptr());
-            if retval == OK && (*args).os_flags & OPT_GLOBAL as ::core::ffi::c_int == 0 {
+            if retval == OK && (*args).os_flags & OPT_GLOBAL == 0 {
                 set_buflocal_ofu_callback(buf);
             }
         }
@@ -167,8 +167,7 @@ pub unsafe extern "C" fn set_buflocal_cpt_callbacks(mut buf: *mut buf_T) {
 
 pub unsafe extern "C" fn set_cpt_callbacks(mut args: *mut optset_T) -> ::core::ffi::c_int {
     unsafe {
-        let mut local: bool =
-            (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0 as ::core::ffi::c_int;
+        let mut local: bool = (*args).os_flags & OPT_LOCAL != 0 as ::core::ffi::c_int;
         if (*curbuf.ptr()).is_null() {
             return FAIL;
         }
@@ -197,7 +196,7 @@ pub unsafe extern "C" fn set_cpt_callbacks(mut args: *mut optset_T) -> ::core::f
                 let mut slen: size_t = copy_option_part(
                     &raw mut p,
                     &raw mut buf as *mut ::core::ffi::c_char,
-                    LSIZE as ::core::ffi::c_int as size_t,
+                    LSIZE as size_t,
                     b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
                 if slen > 0 as size_t
@@ -242,11 +241,11 @@ pub unsafe extern "C" fn did_set_thesaurusfunc(
     unsafe {
         let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
         let mut retval: ::core::ffi::c_int = 0;
-        if (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
+        if (*args).os_flags & OPT_LOCAL != 0 {
             retval = option_set_callback_func((*buf).b_p_tsrfu, &raw mut (*buf).b_tsrfu_cb);
         } else {
             retval = option_set_callback_func(p_tsrfu.get(), tsrfu_cb.ptr());
-            if (*args).os_flags & OPT_GLOBAL as ::core::ffi::c_int == 0 {
+            if (*args).os_flags & OPT_GLOBAL == 0 {
                 callback_free(&raw mut (*buf).b_tsrfu_cb);
             }
         }
@@ -341,10 +340,10 @@ pub(crate) unsafe extern "C" fn get_insert_callback(
     mut type_0: ::core::ffi::c_int,
 ) -> *mut Callback {
     unsafe {
-        if type_0 == CTRL_X_FUNCTION as ::core::ffi::c_int {
+        if type_0 == CTRL_X_FUNCTION {
             return &raw mut (*curbuf.get()).b_cfu_cb;
         }
-        if type_0 == CTRL_X_OMNI as ::core::ffi::c_int {
+        if type_0 == CTRL_X_OMNI {
             return &raw mut (*curbuf.get()).b_ofu_cb;
         }
         return if *(*curbuf.get()).b_p_tsrfu as ::core::ffi::c_int != NUL {
@@ -589,12 +588,12 @@ pub(crate) unsafe extern "C" fn setup_cpt_sources() {
                 memset(
                     &raw mut buf as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
                     0 as ::core::ffi::c_int,
-                    LSIZE as ::core::ffi::c_int as size_t,
+                    LSIZE as size_t,
                 );
                 let mut slen: size_t = copy_option_part(
                     &raw mut p,
                     &raw mut buf as *mut ::core::ffi::c_char,
-                    LSIZE as ::core::ffi::c_int as size_t,
+                    LSIZE as size_t,
                     b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
                 if slen > 0 as size_t {

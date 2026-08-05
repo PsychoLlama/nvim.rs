@@ -18,14 +18,14 @@ pub unsafe extern "C" fn ins_ctrl_x() {
             } else {
                 compl_cont_status.set(0 as ::core::ffi::c_int);
             }
-            ctrl_x_mode.set(CTRL_X_NOT_DEFINED_YET as ::core::ffi::c_int);
+            ctrl_x_mode.set(CTRL_X_NOT_DEFINED_YET);
             edit_submode.set(gettext(
                 (*ctrl_x_msgs.ptr())[(ctrl_x_mode.get() & !(0x100 as ::core::ffi::c_int)) as usize],
             ));
             edit_submode_pre.set(::core::ptr::null_mut::<::core::ffi::c_char>());
             redraw_mode.set(true_0 != 0);
         } else {
-            ctrl_x_mode.set(CTRL_X_CMDLINE_CTRL_X as ::core::ffi::c_int);
+            ctrl_x_mode.set(CTRL_X_CMDLINE_CTRL_X);
         }
         may_trigger_modechanged();
     }
@@ -36,77 +36,75 @@ pub unsafe extern "C" fn ctrl_x_mode_none() -> bool {
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_normal() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_NORMAL as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_NORMAL;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_scroll() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_SCROLL as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_SCROLL;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_whole_line() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_WHOLE_LINE as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_WHOLE_LINE;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_files() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_FILES as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_FILES;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_tags() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_TAGS as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_TAGS;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_path_patterns() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_PATH_PATTERNS as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_PATH_PATTERNS;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_path_defines() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_PATH_DEFINES as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_PATH_DEFINES;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_dictionary() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_DICTIONARY as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_DICTIONARY;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_thesaurus() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_THESAURUS as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_THESAURUS;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_cmdline() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_CMDLINE as ::core::ffi::c_int
-        || ctrl_x_mode.get() == CTRL_X_CMDLINE_CTRL_X as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_CMDLINE || ctrl_x_mode.get() == CTRL_X_CMDLINE_CTRL_X;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_function() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_FUNCTION as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_FUNCTION;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_omni() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_OMNI as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_OMNI;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_spell() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_SPELL as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_SPELL;
 }
 
 pub(crate) unsafe extern "C" fn ctrl_x_mode_eval() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_EVAL as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_EVAL;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_line_or_eval() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_WHOLE_LINE as ::core::ffi::c_int
-        || ctrl_x_mode.get() == CTRL_X_EVAL as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_WHOLE_LINE || ctrl_x_mode.get() == CTRL_X_EVAL;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_register() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_REGISTER as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_REGISTER;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_not_default() -> bool {
-    return ctrl_x_mode.get() != CTRL_X_NORMAL as ::core::ffi::c_int;
+    return ctrl_x_mode.get() != CTRL_X_NORMAL;
 }
 
 pub unsafe extern "C" fn ctrl_x_mode_not_defined_yet() -> bool {
-    return ctrl_x_mode.get() == CTRL_X_NOT_DEFINED_YET as ::core::ffi::c_int;
+    return ctrl_x_mode.get() == CTRL_X_NOT_DEFINED_YET;
 }
 
 pub unsafe extern "C" fn compl_status_adding() -> bool {
@@ -150,7 +148,7 @@ pub unsafe extern "C" fn check_compl_option(mut dict_opt: bool) -> bool {
                 && *p_tsrfu.get() as ::core::ffi::c_int == NUL) as ::core::ffi::c_int
         } != 0
         {
-            ctrl_x_mode.set(CTRL_X_NORMAL as ::core::ffi::c_int);
+            ctrl_x_mode.set(CTRL_X_NORMAL);
             edit_submode.set(::core::ptr::null_mut::<::core::ffi::c_char>());
             emsg(if dict_opt as ::core::ffi::c_int != 0 {
                 gettext(b"'dictionary' option is empty\0".as_ptr() as *const ::core::ffi::c_char)
@@ -170,7 +168,7 @@ pub unsafe extern "C" fn check_compl_option(mut dict_opt: bool) -> bool {
 
 pub unsafe extern "C" fn vim_is_ctrl_x_key(mut c: ::core::ffi::c_int) -> bool {
     unsafe {
-        if c == Ctrl_R && ctrl_x_mode.get() != CTRL_X_REGISTER as ::core::ffi::c_int {
+        if c == Ctrl_R && ctrl_x_mode.get() != CTRL_X_REGISTER {
             return true_0 != 0;
         }
         if ins_compl_pum_key(c) {
@@ -226,7 +224,7 @@ pub unsafe extern "C" fn vim_is_ctrl_x_key(mut c: ::core::ffi::c_int) -> bool {
 
 pub(crate) unsafe extern "C" fn match_at_original_text(match_0: *const compl_T) -> bool {
     unsafe {
-        return (*match_0).cp_flags & CP_ORIGINAL_TEXT as ::core::ffi::c_int != 0;
+        return (*match_0).cp_flags & CP_ORIGINAL_TEXT != 0;
     }
 }
 
@@ -473,7 +471,7 @@ pub(crate) unsafe extern "C" fn set_ctrl_x_mode(c: ::core::ffi::c_int) -> bool {
         's_241: {
             match c {
                 Ctrl_E | Ctrl_Y => {
-                    ctrl_x_mode.set(CTRL_X_SCROLL as ::core::ffi::c_int);
+                    ctrl_x_mode.set(CTRL_X_SCROLL);
                     if State.get() & REPLACE_FLAG == 0 {
                         edit_submode
                             .set(gettext(b" (insert) Scroll (^E/^Y)\0".as_ptr()
@@ -488,62 +486,62 @@ pub(crate) unsafe extern "C" fn set_ctrl_x_mode(c: ::core::ffi::c_int) -> bool {
                     break 's_241;
                 }
                 Ctrl_L => {
-                    ctrl_x_mode.set(CTRL_X_WHOLE_LINE as ::core::ffi::c_int);
+                    ctrl_x_mode.set(CTRL_X_WHOLE_LINE);
                     break 's_241;
                 }
                 Ctrl_F => {
-                    ctrl_x_mode.set(CTRL_X_FILES as ::core::ffi::c_int);
+                    ctrl_x_mode.set(CTRL_X_FILES);
                     break 's_241;
                 }
                 Ctrl_K => {
-                    ctrl_x_mode.set(CTRL_X_DICTIONARY as ::core::ffi::c_int);
+                    ctrl_x_mode.set(CTRL_X_DICTIONARY);
                     break 's_241;
                 }
                 Ctrl_R => {
                     if vpeekc() == '=' as ::core::ffi::c_int {
                         break 's_241;
                     } else {
-                        ctrl_x_mode.set(CTRL_X_REGISTER as ::core::ffi::c_int);
+                        ctrl_x_mode.set(CTRL_X_REGISTER);
                         break 's_241;
                     }
                 }
                 Ctrl_T => {
-                    ctrl_x_mode.set(CTRL_X_THESAURUS as ::core::ffi::c_int);
+                    ctrl_x_mode.set(CTRL_X_THESAURUS);
                     break 's_241;
                 }
                 Ctrl_U => {
-                    ctrl_x_mode.set(CTRL_X_FUNCTION as ::core::ffi::c_int);
+                    ctrl_x_mode.set(CTRL_X_FUNCTION);
                     break 's_241;
                 }
                 Ctrl_O => {
-                    ctrl_x_mode.set(CTRL_X_OMNI as ::core::ffi::c_int);
+                    ctrl_x_mode.set(CTRL_X_OMNI);
                     break 's_241;
                 }
                 115 | Ctrl_S => {
-                    ctrl_x_mode.set(CTRL_X_SPELL as ::core::ffi::c_int);
+                    ctrl_x_mode.set(CTRL_X_SPELL);
                     (*emsg_off.ptr()) += 1;
                     spell_back_to_badword();
                     (*emsg_off.ptr()) -= 1;
                     break 's_241;
                 }
                 Ctrl_RSB => {
-                    ctrl_x_mode.set(CTRL_X_TAGS as ::core::ffi::c_int);
+                    ctrl_x_mode.set(CTRL_X_TAGS);
                     break 's_241;
                 }
                 Ctrl_I | K_S_TAB => {
-                    ctrl_x_mode.set(CTRL_X_PATH_PATTERNS as ::core::ffi::c_int);
+                    ctrl_x_mode.set(CTRL_X_PATH_PATTERNS);
                     break 's_241;
                 }
                 Ctrl_D => {
-                    ctrl_x_mode.set(CTRL_X_PATH_DEFINES as ::core::ffi::c_int);
+                    ctrl_x_mode.set(CTRL_X_PATH_DEFINES);
                     break 's_241;
                 }
                 Ctrl_V | Ctrl_Q => {
-                    ctrl_x_mode.set(CTRL_X_CMDLINE as ::core::ffi::c_int);
+                    ctrl_x_mode.set(CTRL_X_CMDLINE);
                     break 's_241;
                 }
                 Ctrl_Z => {
-                    ctrl_x_mode.set(CTRL_X_NORMAL as ::core::ffi::c_int);
+                    ctrl_x_mode.set(CTRL_X_NORMAL);
                     edit_submode.set(::core::ptr::null_mut::<::core::ffi::c_char>());
                     redraw_mode.set(true_0 != 0);
                     retval = true_0 != 0;
@@ -562,10 +560,10 @@ pub(crate) unsafe extern "C" fn set_ctrl_x_mode(c: ::core::ffi::c_int) -> bool {
                 if compl_cont_mode.get() != 0 as ::core::ffi::c_int {
                     compl_cont_status.set(0 as ::core::ffi::c_int);
                 } else {
-                    compl_cont_mode.set(CTRL_X_NOT_DEFINED_YET as ::core::ffi::c_int);
+                    compl_cont_mode.set(CTRL_X_NOT_DEFINED_YET);
                 }
             }
-            ctrl_x_mode.set(CTRL_X_NORMAL as ::core::ffi::c_int);
+            ctrl_x_mode.set(CTRL_X_NORMAL);
             edit_submode.set(::core::ptr::null_mut::<::core::ffi::c_char>());
             redraw_mode.set(true_0 != 0);
         }

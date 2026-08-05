@@ -89,29 +89,25 @@ pub(crate) unsafe extern "C" fn ins_compl_dict_alloc(mut match_0: *mut compl_T) 
             dict,
             b"abbr\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-            (*match_0).cp_text[CPT_ABBR as ::core::ffi::c_int as usize]
-                as *const ::core::ffi::c_char,
+            (*match_0).cp_text[CPT_ABBR as usize] as *const ::core::ffi::c_char,
         );
         tv_dict_add_str(
             dict,
             b"menu\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-            (*match_0).cp_text[CPT_MENU as ::core::ffi::c_int as usize]
-                as *const ::core::ffi::c_char,
+            (*match_0).cp_text[CPT_MENU as usize] as *const ::core::ffi::c_char,
         );
         tv_dict_add_str(
             dict,
             b"kind\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-            (*match_0).cp_text[CPT_KIND as ::core::ffi::c_int as usize]
-                as *const ::core::ffi::c_char,
+            (*match_0).cp_text[CPT_KIND as usize] as *const ::core::ffi::c_char,
         );
         tv_dict_add_str(
             dict,
             b"info\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-            (*match_0).cp_text[CPT_INFO as ::core::ffi::c_int as usize]
-                as *const ::core::ffi::c_char,
+            (*match_0).cp_text[CPT_INFO as usize] as *const ::core::ffi::c_char,
         );
         if (*match_0).cp_user_data.v_type as ::core::ffi::c_uint
             == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -144,7 +140,7 @@ pub(crate) unsafe extern "C" fn ins_compl_add_tv(
         let mut dup: bool = false_0 != 0;
         let mut empty: bool = false_0 != 0;
         let mut flags: ::core::ffi::c_int = if fast as ::core::ffi::c_int != 0 {
-            CP_FAST as ::core::ffi::c_int
+            CP_FAST
         } else {
             0 as ::core::ffi::c_int
         };
@@ -171,30 +167,26 @@ pub(crate) unsafe extern "C" fn ins_compl_add_tv(
                 b"word\0".as_ptr() as *const ::core::ffi::c_char,
                 false_0 != 0,
             );
-            cptext[CPT_ABBR as ::core::ffi::c_int as usize] = tv_dict_get_string(
+            cptext[CPT_ABBR as usize] = tv_dict_get_string(
                 (*tv).vval.v_dict,
                 b"abbr\0".as_ptr() as *const ::core::ffi::c_char,
                 true_0 != 0,
-            )
-                as *mut ::core::ffi::c_char;
-            cptext[CPT_MENU as ::core::ffi::c_int as usize] = tv_dict_get_string(
+            ) as *mut ::core::ffi::c_char;
+            cptext[CPT_MENU as usize] = tv_dict_get_string(
                 (*tv).vval.v_dict,
                 b"menu\0".as_ptr() as *const ::core::ffi::c_char,
                 true_0 != 0,
-            )
-                as *mut ::core::ffi::c_char;
-            cptext[CPT_KIND as ::core::ffi::c_int as usize] = tv_dict_get_string(
+            ) as *mut ::core::ffi::c_char;
+            cptext[CPT_KIND as usize] = tv_dict_get_string(
                 (*tv).vval.v_dict,
                 b"kind\0".as_ptr() as *const ::core::ffi::c_char,
                 true_0 != 0,
-            )
-                as *mut ::core::ffi::c_char;
-            cptext[CPT_INFO as ::core::ffi::c_int as usize] = tv_dict_get_string(
+            ) as *mut ::core::ffi::c_char;
+            cptext[CPT_INFO as usize] = tv_dict_get_string(
                 (*tv).vval.v_dict,
                 b"info\0".as_ptr() as *const ::core::ffi::c_char,
                 true_0 != 0,
-            )
-                as *mut ::core::ffi::c_char;
+            ) as *mut ::core::ffi::c_char;
             user_abbr_hlname = tv_dict_get_string(
                 (*tv).vval.v_dict,
                 b"abbr_hlgroup\0".as_ptr() as *const ::core::ffi::c_char,
@@ -217,7 +209,7 @@ pub(crate) unsafe extern "C" fn ins_compl_add_tv(
                 b"icase\0".as_ptr() as *const ::core::ffi::c_char,
             ) != 0
             {
-                flags |= CP_ICASE as ::core::ffi::c_int;
+                flags |= CP_ICASE;
             }
             dup = tv_dict_get_number(
                 (*tv).vval.v_dict,
@@ -238,7 +230,7 @@ pub(crate) unsafe extern "C" fn ins_compl_add_tv(
                     b"equal\0".as_ptr() as *const ::core::ffi::c_char,
                 ) != 0
             {
-                flags |= CP_EQUAL as ::core::ffi::c_int;
+                flags |= CP_EQUAL;
             }
         } else {
             word = tv_get_string_chk(tv);
@@ -264,7 +256,7 @@ pub(crate) unsafe extern "C" fn ins_compl_add_tv(
             flags,
             dup,
             &raw mut user_hl as *mut ::core::ffi::c_int,
-            FUZZY_SCORE_NONE as ::core::ffi::c_int,
+            FUZZY_SCORE_NONE,
         );
         if status != OK {
             tv_clear(&raw mut user_data);
@@ -358,7 +350,7 @@ pub(crate) unsafe extern "C" fn restore_orig_extmarks() {
 
 pub(crate) unsafe extern "C" fn set_completion(mut startcol: colnr_T, mut list: *mut list_T) {
     unsafe {
-        let mut flags: ::core::ffi::c_int = CP_ORIGINAL_TEXT as ::core::ffi::c_int;
+        let mut flags: ::core::ffi::c_int = CP_ORIGINAL_TEXT;
         let mut cur_cot_flags: ::core::ffi::c_uint = get_cot_flags();
         let mut compl_longest: bool = cur_cot_flags
             & kOptCotFlagLongest as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -388,7 +380,7 @@ pub(crate) unsafe extern "C" fn set_completion(mut startcol: colnr_T, mut list: 
         ));
         save_orig_extmarks();
         if p_ic.get() != 0 {
-            flags |= CP_ICASE as ::core::ffi::c_int;
+            flags |= CP_ICASE;
         }
         if ins_compl_add(
             (*compl_orig_text.ptr()).data,
@@ -398,15 +390,15 @@ pub(crate) unsafe extern "C" fn set_completion(mut startcol: colnr_T, mut list: 
             false_0 != 0,
             ::core::ptr::null_mut::<typval_T>(),
             kDirectionNotSet,
-            flags | CP_FAST as ::core::ffi::c_int,
+            flags | CP_FAST,
             false_0 != 0,
             ::core::ptr::null::<::core::ffi::c_int>(),
-            FUZZY_SCORE_NONE as ::core::ffi::c_int,
+            FUZZY_SCORE_NONE,
         ) != OK
         {
             return;
         }
-        ctrl_x_mode.set(CTRL_X_EVAL as ::core::ffi::c_int);
+        ctrl_x_mode.set(CTRL_X_EVAL);
         ins_compl_add_list(list);
         compl_matches.set(ins_compl_make_cyclic());
         compl_started.set(true_0 != 0);
@@ -516,29 +508,25 @@ pub(crate) unsafe extern "C" fn fill_complete_info_dict(
             di,
             b"abbr\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-            (*match_0).cp_text[CPT_ABBR as ::core::ffi::c_int as usize]
-                as *const ::core::ffi::c_char,
+            (*match_0).cp_text[CPT_ABBR as usize] as *const ::core::ffi::c_char,
         );
         tv_dict_add_str(
             di,
             b"menu\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-            (*match_0).cp_text[CPT_MENU as ::core::ffi::c_int as usize]
-                as *const ::core::ffi::c_char,
+            (*match_0).cp_text[CPT_MENU as usize] as *const ::core::ffi::c_char,
         );
         tv_dict_add_str(
             di,
             b"kind\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-            (*match_0).cp_text[CPT_KIND as ::core::ffi::c_int as usize]
-                as *const ::core::ffi::c_char,
+            (*match_0).cp_text[CPT_KIND as usize] as *const ::core::ffi::c_char,
         );
         tv_dict_add_str(
             di,
             b"info\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-            (*match_0).cp_text[CPT_INFO as ::core::ffi::c_int as usize]
-                as *const ::core::ffi::c_char,
+            (*match_0).cp_text[CPT_INFO as usize] as *const ::core::ffi::c_char,
         );
         if add_match {
             tv_dict_add_bool(

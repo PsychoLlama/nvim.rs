@@ -12,7 +12,7 @@ use super::*;
 
 pub(crate) unsafe extern "C" fn thesaurus_func_complete(mut type_0: ::core::ffi::c_int) -> bool {
     unsafe {
-        return type_0 == CTRL_X_THESAURUS as ::core::ffi::c_int
+        return type_0 == CTRL_X_THESAURUS
             && (*(*curbuf.get()).b_p_tsrfu as ::core::ffi::c_int != NUL
                 || *p_tsrfu.get() as ::core::ffi::c_int != NUL);
     }
@@ -42,7 +42,7 @@ pub(crate) unsafe extern "C" fn process_next_cpt_value(
 ) -> ::core::ffi::c_int {
     unsafe {
         let mut compl_type: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-        let mut status: ::core::ffi::c_int = INS_COMPL_CPT_OK as ::core::ffi::c_int;
+        let mut status: ::core::ffi::c_int = INS_COMPL_CPT_OK;
         let mut skip_source: bool = compl_autocomplete.get() as ::core::ffi::c_int != 0
             && compl_from_nonkeyword.get() as ::core::ffi::c_int != 0;
         (*st).found_all = false_0 != 0;
@@ -94,16 +94,15 @@ pub(crate) unsafe extern "C" fn process_next_cpt_value(
                 } else {
                     (*st).found_all = true_0 != 0;
                     if (*(*st).ins_buf).b_fname.is_null() {
-                        status = INS_COMPL_CPT_CONT as ::core::ffi::c_int;
+                        status = INS_COMPL_CPT_CONT;
                         break '_done;
                     } else {
-                        compl_type = CTRL_X_DICTIONARY as ::core::ffi::c_int;
+                        compl_type = CTRL_X_DICTIONARY;
                         (*st).dict = (*(*st).ins_buf).b_fname;
                         (*st).dict_f = DICT_EXACT;
                     }
                 }
-                if !shortmess(SHM_COMPLETIONSCAN as ::core::ffi::c_int) && !compl_autocomplete.get()
-                {
+                if !shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete.get() {
                     vim_snprintf(
                         IObuff.ptr() as *mut ::core::ffi::c_char,
                         IOSIZE as size_t,
@@ -128,13 +127,13 @@ pub(crate) unsafe extern "C" fn process_next_cpt_value(
                     );
                 }
             } else if *(*st).e_cpt as ::core::ffi::c_int == NUL {
-                status = INS_COMPL_CPT_END as ::core::ffi::c_int;
+                status = INS_COMPL_CPT_END;
             } else {
                 if !ctrl_x_mode_line_or_eval() {
                     if *(*st).e_cpt as ::core::ffi::c_int == 'F' as ::core::ffi::c_int
                         || *(*st).e_cpt as ::core::ffi::c_int == 'o' as ::core::ffi::c_int
                     {
-                        compl_type = CTRL_X_FUNCTION as ::core::ffi::c_int;
+                        compl_type = CTRL_X_FUNCTION;
                         (*st).func_cb =
                             get_callback_if_cpt_func((*st).e_cpt, cpt_sources_index.get());
                         if (*st).func_cb.is_null() {
@@ -145,9 +144,9 @@ pub(crate) unsafe extern "C" fn process_next_cpt_value(
                             || *(*st).e_cpt as ::core::ffi::c_int == 's' as ::core::ffi::c_int
                         {
                             if *(*st).e_cpt as ::core::ffi::c_int == 'k' as ::core::ffi::c_int {
-                                compl_type = CTRL_X_DICTIONARY as ::core::ffi::c_int;
+                                compl_type = CTRL_X_DICTIONARY;
                             } else {
-                                compl_type = CTRL_X_THESAURUS as ::core::ffi::c_int;
+                                compl_type = CTRL_X_THESAURUS;
                             }
                             (*st).e_cpt = (*st).e_cpt.offset(1);
                             if *(*st).e_cpt as ::core::ffi::c_int != ',' as ::core::ffi::c_int
@@ -157,18 +156,16 @@ pub(crate) unsafe extern "C" fn process_next_cpt_value(
                                 (*st).dict_f = DICT_FIRST;
                             }
                         } else if *(*st).e_cpt as ::core::ffi::c_int == 'i' as ::core::ffi::c_int {
-                            compl_type = CTRL_X_PATH_PATTERNS as ::core::ffi::c_int;
+                            compl_type = CTRL_X_PATH_PATTERNS;
                         } else if *(*st).e_cpt as ::core::ffi::c_int == 'd' as ::core::ffi::c_int {
-                            compl_type = CTRL_X_PATH_DEFINES as ::core::ffi::c_int;
+                            compl_type = CTRL_X_PATH_DEFINES;
                         } else if *(*st).e_cpt as ::core::ffi::c_int == 'f' as ::core::ffi::c_int {
-                            compl_type = CTRL_X_BUFNAMES as ::core::ffi::c_int;
+                            compl_type = CTRL_X_BUFNAMES;
                         } else if *(*st).e_cpt as ::core::ffi::c_int == ']' as ::core::ffi::c_int
                             || *(*st).e_cpt as ::core::ffi::c_int == 't' as ::core::ffi::c_int
                         {
-                            compl_type = CTRL_X_TAGS as ::core::ffi::c_int;
-                            if !shortmess(SHM_COMPLETIONSCAN as ::core::ffi::c_int)
-                                && !compl_autocomplete.get()
-                            {
+                            compl_type = CTRL_X_TAGS;
+                            if !shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete.get() {
                                 vim_snprintf(
                                     IObuff.ptr() as *mut ::core::ffi::c_char,
                                     IOSIZE as size_t,
@@ -200,7 +197,7 @@ pub(crate) unsafe extern "C" fn process_next_cpt_value(
                 *advance_cpt_idx = may_advance_cpt_index((*st).e_cpt);
                 (*st).found_all = true_0 != 0;
                 if compl_type == -1 as ::core::ffi::c_int {
-                    status = INS_COMPL_CPT_CONT as ::core::ffi::c_int;
+                    status = INS_COMPL_CPT_CONT;
                 }
             }
         }
@@ -219,15 +216,13 @@ pub(crate) unsafe extern "C" fn get_next_include_file_completion(
             (*compl_pattern.ptr()).size,
             false_0 != 0,
             false_0 != 0,
-            if compl_type == CTRL_X_PATH_DEFINES as ::core::ffi::c_int
-                && compl_cont_status.get() & CONT_SOL == 0
-            {
-                FIND_DEFINE as ::core::ffi::c_int
+            if compl_type == CTRL_X_PATH_DEFINES && compl_cont_status.get() & CONT_SOL == 0 {
+                FIND_DEFINE
             } else {
-                FIND_ANY as ::core::ffi::c_int
+                FIND_ANY
             },
             1 as ::core::ffi::c_int,
-            ACTION_EXPAND as ::core::ffi::c_int,
+            ACTION_EXPAND,
             1 as linenr_T,
             MAXLNUM as ::core::ffi::c_int as linenr_T,
             false_0 != 0,
@@ -252,7 +247,7 @@ pub(crate) unsafe extern "C" fn get_next_dict_tsr_completion(
             ins_compl_dictionaries(
                 if !dict.is_null() {
                     dict
-                } else if compl_type == CTRL_X_THESAURUS as ::core::ffi::c_int {
+                } else if compl_type == CTRL_X_THESAURUS {
                     if *(*curbuf.get()).b_p_tsr as ::core::ffi::c_int == NUL {
                         p_tsr.get()
                     } else {
@@ -269,7 +264,7 @@ pub(crate) unsafe extern "C" fn get_next_dict_tsr_completion(
                 } else {
                     0 as ::core::ffi::c_int
                 },
-                compl_type == CTRL_X_THESAURUS as ::core::ffi::c_int,
+                compl_type == CTRL_X_THESAURUS,
             );
         };
     }
@@ -287,16 +282,16 @@ pub(crate) unsafe extern "C" fn get_next_tag_completion() {
             (*compl_pattern.ptr()).data,
             &raw mut num_matches,
             &raw mut matches,
-            TAG_REGEXP as ::core::ffi::c_int
-                | TAG_NAMES as ::core::ffi::c_int
-                | TAG_NOIC as ::core::ffi::c_int
-                | TAG_INS_COMP as ::core::ffi::c_int
+            TAG_REGEXP
+                | TAG_NAMES
+                | TAG_NOIC
+                | TAG_INS_COMP
                 | (if ctrl_x_mode_not_default() as ::core::ffi::c_int != 0 {
-                    TAG_VERBOSE as ::core::ffi::c_int
+                    TAG_VERBOSE
                 } else {
                     0 as ::core::ffi::c_int
                 }),
-            TAG_MANY as ::core::ffi::c_int,
+            TAG_MANY,
             (*curbuf.get()).b_ffname,
         ) == OK
             && num_matches > 0 as ::core::ffi::c_int
@@ -370,10 +365,7 @@ pub(crate) unsafe extern "C" fn get_next_filename_completion() {
             &raw mut (*compl_pattern.ptr()).data,
             &raw mut num_matches,
             &raw mut matches,
-            EW_FILE as ::core::ffi::c_int
-                | EW_DIR as ::core::ffi::c_int
-                | EW_ADDSLASH as ::core::ffi::c_int
-                | EW_SILENT as ::core::ffi::c_int,
+            EW_FILE | EW_DIR | EW_ADDSLASH | EW_SILENT,
         ) != OK
         {
             return;
@@ -399,7 +391,7 @@ pub(crate) unsafe extern "C" fn get_next_filename_completion() {
             while i < num_matches {
                 let mut ptr: *mut ::core::ffi::c_char = *matches.offset(i as isize);
                 let mut score: ::core::ffi::c_int = fuzzy_match_str(ptr, leader);
-                if score != FUZZY_SCORE_NONE as ::core::ffi::c_int {
+                if score != FUZZY_SCORE_NONE {
                     ga_grow(&raw mut fuzzy_indices, 1 as ::core::ffi::c_int);
                     *(fuzzy_indices.ga_data as *mut ::core::ffi::c_int)
                         .offset(fuzzy_indices.ga_len as isize) = i;
@@ -438,9 +430,9 @@ pub(crate) unsafe extern "C" fn get_next_filename_completion() {
                         false_0 != 0,
                         ::core::ptr::null_mut::<typval_T>(),
                         dir,
-                        CP_FAST as ::core::ffi::c_int
+                        CP_FAST
                             | (if p_fic.get() != 0 || p_wic.get() != 0 {
-                                CP_ICASE as ::core::ffi::c_int
+                                CP_ICASE
                             } else {
                                 0 as ::core::ffi::c_int
                             }),
@@ -494,7 +486,7 @@ pub(crate) unsafe extern "C" fn get_next_cmdline_completion() {
             (*compl_pattern.ptr()).size as ::core::ffi::c_int,
             &raw mut num_matches,
             &raw mut matches,
-        ) == EXPAND_OK as ::core::ffi::c_int
+        ) == EXPAND_OK
         {
             ins_compl_add_matches(num_matches, matches, false_0);
         }
@@ -724,10 +716,10 @@ pub(crate) unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core
                     cot_fuzzy(),
                     &raw mut may_advance_cpt_idx,
                 );
-                if status == INS_COMPL_CPT_END as ::core::ffi::c_int {
+                if status == INS_COMPL_CPT_END {
                     break;
                 }
-                if status == INS_COMPL_CPT_CONT as ::core::ffi::c_int {
+                if status == INS_COMPL_CPT_CONT {
                     if !may_advance_cpt_idx {
                         continue;
                     }
@@ -740,7 +732,7 @@ pub(crate) unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core
             }
             let mut compl_timeout_save: uint64_t = 0 as uint64_t;
             if normal_mode_strict as ::core::ffi::c_int != 0
-                && type_0 == CTRL_X_FUNCTION as ::core::ffi::c_int
+                && type_0 == CTRL_X_FUNCTION
                 && (compl_autocomplete.get() as ::core::ffi::c_int != 0
                     || p_cto.get() > 0 as OptInt)
             {
@@ -782,8 +774,7 @@ pub(crate) unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core
                 compl_started.set(!compl_time_slice_expired.get());
             } else {
                 if buf_valid((*st.ptr()).ins_buf) as ::core::ffi::c_int != 0
-                    && (type_0 == 0 as ::core::ffi::c_int
-                        || type_0 == CTRL_X_PATH_PATTERNS as ::core::ffi::c_int)
+                    && (type_0 == 0 as ::core::ffi::c_int || type_0 == CTRL_X_PATH_PATTERNS)
                 {
                     '_c2rust_label_1: {
                         if !(*st.ptr()).ins_buf.is_null() {
@@ -802,7 +793,7 @@ pub(crate) unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core
                 compl_started.set(false_0 != 0);
             }
             if normal_mode_strict as ::core::ffi::c_int != 0
-                && type_0 == CTRL_X_FUNCTION as ::core::ffi::c_int
+                && type_0 == CTRL_X_FUNCTION
                 && (compl_autocomplete.get() as ::core::ffi::c_int != 0
                     || p_cto.get() > 0 as OptInt)
             {

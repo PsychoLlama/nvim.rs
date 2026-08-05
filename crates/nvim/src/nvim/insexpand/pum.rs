@@ -287,14 +287,14 @@ pub(crate) unsafe extern "C" fn ins_compl_build_pum() -> ::core::ffi::c_int {
                 && ignorecase((*leader).data) == 0
                 && !cot_fuzzy()
             {
-                (*comp).cp_flags &= !(CP_ICASE as ::core::ffi::c_int);
+                (*comp).cp_flags &= !(CP_ICASE);
             }
             if !match_at_original_text(comp)
                 && ((*leader).data.is_null()
                     || ins_compl_equal(comp, (*leader).data, (*leader).size) as ::core::ffi::c_int
                         != 0
                     || cot_fuzzy() as ::core::ffi::c_int != 0
-                        && (*comp).cp_score != FUZZY_SCORE_NONE as ::core::ffi::c_int)
+                        && (*comp).cp_score != FUZZY_SCORE_NONE)
             {
                 let mut match_limit_exceeded: bool = false_0 != 0;
                 let mut cur_source: ::core::ffi::c_int = (*comp).cp_cpt_source_idx;
@@ -386,18 +386,15 @@ pub(crate) unsafe extern "C" fn ins_compl_build_pum() -> ::core::ffi::c_int {
         comp = match_head;
         while !comp.is_null() {
             (*(*compl_match_array.ptr()).offset(i as isize)).pum_text =
-                if !(*comp).cp_text[CPT_ABBR as ::core::ffi::c_int as usize].is_null() {
-                    (*comp).cp_text[CPT_ABBR as ::core::ffi::c_int as usize]
-                        as *mut ::core::ffi::c_char
+                if !(*comp).cp_text[CPT_ABBR as usize].is_null() {
+                    (*comp).cp_text[CPT_ABBR as usize] as *mut ::core::ffi::c_char
                 } else {
                     (*comp).cp_str.data
                 };
-            (*(*compl_match_array.ptr()).offset(i as isize)).pum_kind = (*comp).cp_text
-                [CPT_KIND as ::core::ffi::c_int as usize]
-                as *mut ::core::ffi::c_char;
-            (*(*compl_match_array.ptr()).offset(i as isize)).pum_info = (*comp).cp_text
-                [CPT_INFO as ::core::ffi::c_int as usize]
-                as *mut ::core::ffi::c_char;
+            (*(*compl_match_array.ptr()).offset(i as isize)).pum_kind =
+                (*comp).cp_text[CPT_KIND as usize] as *mut ::core::ffi::c_char;
+            (*(*compl_match_array.ptr()).offset(i as isize)).pum_info =
+                (*comp).cp_text[CPT_INFO as usize] as *mut ::core::ffi::c_char;
             (*(*compl_match_array.ptr()).offset(i as isize)).pum_cpt_source_idx =
                 (*comp).cp_cpt_source_idx;
             (*(*compl_match_array.ptr()).offset(i as isize)).pum_user_abbr_hlattr =
@@ -408,10 +405,8 @@ pub(crate) unsafe extern "C" fn ins_compl_build_pum() -> ::core::ffi::c_int {
             i = i + 1;
             let c2rust_lvalue_ptr =
                 &raw mut (*(*compl_match_array.ptr()).offset(c2rust_fresh2 as isize)).pum_extra;
-            *c2rust_lvalue_ptr = if !(*comp).cp_text[CPT_MENU as ::core::ffi::c_int as usize]
-                .is_null()
-            {
-                (*comp).cp_text[CPT_MENU as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char
+            *c2rust_lvalue_ptr = if !(*comp).cp_text[CPT_MENU as usize].is_null() {
+                (*comp).cp_text[CPT_MENU as usize] as *mut ::core::ffi::c_char
             } else {
                 (*comp).cp_fname
             };
@@ -443,8 +438,7 @@ pub unsafe extern "C" fn ins_compl_show_pum() {
                 if (*(*compl_match_array.ptr()).offset(i as isize)).pum_text
                     == (*compl_shown_match.get()).cp_str.data
                     || (*(*compl_match_array.ptr()).offset(i as isize)).pum_text
-                        == (*compl_shown_match.get()).cp_text
-                            [CPT_ABBR as ::core::ffi::c_int as usize]
+                        == (*compl_shown_match.get()).cp_text[CPT_ABBR as usize]
                 {
                     cur = i;
                     break;
@@ -641,7 +635,7 @@ pub(crate) unsafe extern "C" fn ins_compl_show_statusmsg() {
             }
         }
         redraw_mode.set(true_0 != 0);
-        if !shortmess(SHM_COMPLETIONMENU as ::core::ffi::c_int) {
+        if !shortmess(SHM_COMPLETIONMENU) {
             if !(*edit_submode_extra.ptr()).is_null() {
                 if p_smd.get() == 0 {
                     msg_hist_off.set(true_0 != 0);
