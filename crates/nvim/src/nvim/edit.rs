@@ -144,11 +144,12 @@ use crate::src::nvim::textformat::{
 use crate::src::nvim::textobject::{bck_word, fwd_word};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    AdditionalData, CharsizeArg, CharsizeKind, Direction, GraphemeState, MotionType, OptInt,
-    StrCharInfo, String_0, TriState, UndoObjectType, VV_CHAR, VV_INSERTMODE, VimState, aco_save_T,
-    buf_T, cmdarg_T, colnr_T, event_T, fmark_T, fmarkv_T, foldinfo_T, int32_t, int64_t, kFalse,
-    kNone, kTrue, key_extra, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t,
-    state_check_callback, state_execute_callback, uint8_t, uint32_t, varnumber_T, win_T, yankreg_T,
+    AdditionalData, CMOD_KEEPJUMPS, CharsizeArg, CharsizeKind, Direction, GraphemeState,
+    MotionType, OptInt, StrCharInfo, String_0, TriState, UndoObjectType, VV_CHAR, VV_INSERTMODE,
+    VimState, aco_save_T, buf_T, cmdarg_T, colnr_T, event_T, fmark_T, fmarkv_T, foldinfo_T,
+    int32_t, int64_t, kFalse, kNone, kTrue, key_extra, linenr_T, pos_T, ptrdiff_t, schar_T, size_t,
+    ssize_t, state_check_callback, state_execute_callback, uint8_t, uint32_t, varnumber_T, win_T,
+    yankreg_T,
 };
 use crate::src::nvim::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::src::nvim::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -165,20 +166,6 @@ pub const kExtmarkSplice: UndoObjectType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const kDirectionNotSet: Direction = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_17 = 8192;
-pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_17 = 4096;
-pub const CMOD_LOCKMARKS: C2Rust_Unnamed_17 = 2048;
-pub const CMOD_KEEPJUMPS: C2Rust_Unnamed_17 = 1024;
-pub const CMOD_KEEPMARKS: C2Rust_Unnamed_17 = 512;
-pub const CMOD_KEEPALT: C2Rust_Unnamed_17 = 256;
-pub const CMOD_CONFIRM: C2Rust_Unnamed_17 = 128;
-pub const CMOD_BROWSE: C2Rust_Unnamed_17 = 64;
-pub const CMOD_HIDE: C2Rust_Unnamed_17 = 32;
-pub const CMOD_NOAUTOCMD: C2Rust_Unnamed_17 = 16;
-pub const CMOD_UNSILENT: C2Rust_Unnamed_17 = 8;
-pub const CMOD_ERRSILENT: C2Rust_Unnamed_17 = 4;
-pub const CMOD_SILENT: C2Rust_Unnamed_17 = 2;
-pub const CMOD_SANDBOX: C2Rust_Unnamed_17 = 1;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const OPENLINE_DO_COM: C2Rust_Unnamed_18 = 2;
 pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;

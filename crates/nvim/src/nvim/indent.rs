@@ -49,7 +49,6 @@ pub use expr::{
 const BL_WHITE: ::core::ffi::c_int = 1;
 const BL_SOL: ::core::ffi::c_int = 2;
 const BL_FIX: ::core::ffi::c_int = 4;
-const CMOD_LOCKMARKS: ::core::ffi::c_uint = 2048;
 const INDENT_SET: ::core::ffi::c_uint = 1;
 const INDENT_DEC: ::core::ffi::c_uint = 3;
 const kBufOptIndentexpr: ::core::ffi::c_uint = 47;

@@ -16,6 +16,7 @@ use core::ptr;
 use super::show::*;
 use super::*;
 use crate::src::nvim::highlight_group::HLF_D;
+use crate::src::nvim::types::CMOD_KEEPJUMPS;
 
 /// Set the previous context mark to the current position and add it to the
 /// jump list.
@@ -23,7 +24,7 @@ pub unsafe extern "C" fn setpcmark() {
     let mut fm: *mut xfmark_T = ptr::null_mut();
     if global_busy.get() != 0
         || listcmd_busy.get()
-        || (*cmdmod.ptr()).cmod_flags & CMOD_KEEPJUMPS != 0
+        || (*cmdmod.ptr()).cmod_flags & CMOD_KEEPJUMPS as c_int != 0
     {
         return;
     }

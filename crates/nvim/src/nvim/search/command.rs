@@ -20,12 +20,9 @@ use crate::src::nvim::search::{
     SEARCH_OPT, SEARCH_PEEK, SEARCH_REV, SEARCH_START, SEARCH_STAT_BUF_LEN,
     SEARCH_STAT_DEF_TIMEOUT,
 };
+use crate::src::nvim::types::CMOD_KEEPPATTERNS;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
-
-// The option-flag families, retyped for this module: c2rust left them as
-// `c_uint` and `options` is a `c_int`.
-const CMOD_KEEPPATTERNS: c_int = super::CMOD_KEEPPATTERNS as c_int;
 
 // ---------------------------------------------------------------------
 // `/` and `?`.
@@ -727,7 +724,9 @@ pub unsafe extern "C" fn do_search(
         if !found {
             retval = 0;
         }
-        if options & SEARCH_KEEP != 0 || (*cmdmod.ptr()).cmod_flags & CMOD_KEEPPATTERNS != 0 {
+        if options & SEARCH_KEEP != 0
+            || (*cmdmod.ptr()).cmod_flags & CMOD_KEEPPATTERNS as c_int != 0
+        {
             set_search_offset(old_off);
         }
         retval

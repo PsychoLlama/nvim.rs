@@ -30,6 +30,7 @@ use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::search::findmatch;
 use crate::src::nvim::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG};
 use crate::src::nvim::strings::xstrnsave;
+use crate::src::nvim::types::CMOD_LOCKMARKS;
 use crate::src::nvim::undo::{u_clearline, u_save, u_savecommon};
 
 pub unsafe extern "C" fn inindent(mut extra: ::core::ffi::c_int) -> bool {

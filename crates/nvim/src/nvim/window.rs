@@ -116,18 +116,18 @@ use crate::src::nvim::tag::tagstack_clear_entry;
 use crate::src::nvim::terminal::terminal_check_size;
 use crate::src::nvim::types::ui::{kUIMessages, kUIMultigrid, kUITabline};
 use crate::src::nvim::types::{
-    AlignTextPos, Boolean, CMD_index, CdCause, CdScope, Direction, Error, Float, FloatAnchor,
-    GridView, Integer, Map_int_ptr_t, MapHash, MotionType, OptInt, OptVal, OptValData, OptValType,
-    ScreenGrid, Set_uint32_t, StlClickDefinition, String_0, Terminal, TryState, VAR_NUMBER,
-    VAR_SCOPE, VAR_UNLOCKED, VirtText, VirtTextChunk, WinConfig, WinInfo, WinSplit, WinStyle,
-    Window, aucmdwin_T, bln_values, buf_T, bufref_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T,
-    dobuf_action_values, dobuf_start_values, exarg_T, except_T, frame_T, garray_T, getf_values,
-    handle_T, hashitem_T, hashtab_T, int64_t, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow,
-    kErrorTypeException, kErrorTypeNone, kFloatAnchorEast, kFloatAnchorSouth, kFloatRelativeEditor,
-    kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow, linenr_T, list_T,
-    lpos_T, msglist_T, oparg_T, optset_T, pos_T, ptr_t, ptrdiff_t, qf_info_T, save_v_event_T,
-    scid_T, size_t, switchwin_T, tabpage_T, taggy_T, typval_T, typval_vval_union, uint32_t,
-    varnumber_T, win_T,
+    AlignTextPos, Boolean, CMD_index, CMOD_CONFIRM, CdCause, CdScope, Direction, Error, Float,
+    FloatAnchor, GridView, Integer, Map_int_ptr_t, MapHash, MotionType, OptInt, OptVal, OptValData,
+    OptValType, ScreenGrid, Set_uint32_t, StlClickDefinition, String_0, Terminal, TryState,
+    VAR_NUMBER, VAR_SCOPE, VAR_UNLOCKED, VirtText, VirtTextChunk, WinConfig, WinInfo, WinSplit,
+    WinStyle, Window, aucmdwin_T, bln_values, buf_T, bufref_T, cmd_addr_T, cmdidx_T, colnr_T,
+    dict_T, dobuf_action_values, dobuf_start_values, exarg_T, except_T, frame_T, garray_T,
+    getf_values, handle_T, hashitem_T, hashtab_T, int64_t, kCdScopeGlobal, kCdScopeTabpage,
+    kCdScopeWindow, kErrorTypeException, kErrorTypeNone, kFloatAnchorEast, kFloatAnchorSouth,
+    kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
+    linenr_T, list_T, lpos_T, msglist_T, oparg_T, optset_T, pos_T, ptr_t, ptrdiff_t, qf_info_T,
+    save_v_event_T, scid_T, size_t, switchwin_T, tabpage_T, taggy_T, typval_T, typval_vval_union,
+    uint32_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_call_grid_destroy, ui_call_win_close, ui_call_win_external_pos, ui_call_win_float_pos,
@@ -394,20 +394,6 @@ pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
 pub const ADDR_WINDOWS: cmd_addr_T = 1;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_19 = 8192;
-pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_19 = 4096;
-pub const CMOD_LOCKMARKS: C2Rust_Unnamed_19 = 2048;
-pub const CMOD_KEEPJUMPS: C2Rust_Unnamed_19 = 1024;
-pub const CMOD_KEEPMARKS: C2Rust_Unnamed_19 = 512;
-pub const CMOD_KEEPALT: C2Rust_Unnamed_19 = 256;
-pub const CMOD_CONFIRM: C2Rust_Unnamed_19 = 128;
-pub const CMOD_BROWSE: C2Rust_Unnamed_19 = 64;
-pub const CMOD_HIDE: C2Rust_Unnamed_19 = 32;
-pub const CMOD_NOAUTOCMD: C2Rust_Unnamed_19 = 16;
-pub const CMOD_UNSILENT: C2Rust_Unnamed_19 = 8;
-pub const CMOD_ERRSILENT: C2Rust_Unnamed_19 = 4;
-pub const CMOD_SILENT: C2Rust_Unnamed_19 = 2;
-pub const CMOD_SANDBOX: C2Rust_Unnamed_19 = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_20 {

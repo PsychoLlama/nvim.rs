@@ -72,9 +72,9 @@ use crate::src::nvim::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::src::nvim::textformat::{comp_textwidth, has_format_option};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    AdditionalData, ExtmarkOp, GraphemeState, MarkTree, VV_WARNINGMSG, bcount_t, buf_T, colnr_T,
-    fmark_T, fmarkv_T, foldinfo_T, int64_t, linenr_T, oparg_T, pos_T, ptrdiff_t, size_t, ssize_t,
-    tabpage_T, uint64_t, win_T,
+    AdditionalData, CMOD_KEEPJUMPS, CMOD_LOCKMARKS, ExtmarkOp, GraphemeState, MarkTree,
+    VV_WARNINGMSG, bcount_t, buf_T, colnr_T, fmark_T, fmarkv_T, foldinfo_T, int64_t, linenr_T,
+    oparg_T, pos_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, win_T,
 };
 use crate::src::nvim::ui::{ui_active, ui_has};
 use crate::src::nvim::undo::{curbufIsChanged, u_clearline, u_save_cursor, u_savedel};
@@ -82,9 +82,6 @@ pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_17 = 4096;
-pub const CMOD_LOCKMARKS: C2Rust_Unnamed_17 = 2048;
-pub const CMOD_KEEPJUMPS: C2Rust_Unnamed_17 = 1024;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const OPENLINE_FORCE_INDENT: C2Rust_Unnamed_18 = 64;
 pub const OPENLINE_FORMAT: C2Rust_Unnamed_18 = 32;

@@ -31,8 +31,8 @@ use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::strings::xstrnsave;
 use crate::src::nvim::types::{
-    AdditionalData, EvalFuncData, HistoryType, OptInt, Timestamp, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, exarg_T, expand_T, regmatch_T, size_t, typval_T, varnumber_T,
+    AdditionalData, CMOD_KEEPPATTERNS, EvalFuncData, HistoryType, OptInt, Timestamp, VAR_NUMBER,
+    VAR_STRING, VAR_UNKNOWN, exarg_T, expand_T, regmatch_T, size_t, typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -48,8 +48,6 @@ pub const HIST_COUNT: usize = 5;
 
 const OK: c_int = 1;
 const FAIL: c_int = 0;
-/// `cmdmod_T.cmod_flags` bit for `:keeppatterns`.
-const CMOD_KEEPPATTERNS: c_int = 4096;
 const IOSIZE: c_int = 1024 + 1;
 
 /// Names accepted by `:history` and `histget()` etc., indexed by history
@@ -541,7 +539,7 @@ pub fn add_to_history(histype: c_int, new_entry: &[u8], in_map: bool, sep: u8) {
         return;
     }
     assert!(histype != HIST_DEFAULT);
-    if cmdmod.with(|m| m.cmod_flags as c_int & CMOD_KEEPPATTERNS != 0) && histype == HIST_SEARCH {
+    if cmdmod.with(|m| m.cmod_flags & CMOD_KEEPPATTERNS as c_int != 0) && histype == HIST_SEARCH {
         return;
     }
     let now = os_time();

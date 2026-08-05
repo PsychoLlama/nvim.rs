@@ -71,16 +71,19 @@ use crate::src::nvim::runtime::{
 use crate::src::nvim::strings::{arena_printf, vim_snprintf};
 use crate::src::nvim::types::ui::{kUICmdline, kUILinegrid};
 use crate::src::nvim::types::{
-    Arena, ArenaMem, Array, CMD_index, Error, EvalFuncDef, Event, FileDescriptor, HlMessage,
-    HlMessageChunk, LuaRef, LuaRetMode, MessageData, MultiQueue, Object, OptInt, String_0,
-    StringBuilder, TimeWatcher, TryState, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VAR_UNLOCKED, buf_T, colnr_T, consumed_blk, dict_T, exarg_T, except_T, expand_T,
-    funcexe_T, garray_T, handle_T, int64_t, intptr_t, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeLuaRef, kObjectTypeNil,
-    kObjectTypeString, linenr_T, lua_CFunction, lua_Integer, lua_Number, lua_State, mod_entry_T,
-    msglist_T, nlua_ref_state_t, object, object_data as C2Rust_Unnamed_11, partial_T, proftime_T,
-    ptrdiff_t, scid_T, scriptitem_T, sctx_T, size_t, typval_T, typval_vval_union, ucmd_T, uint8_t,
-    uint32_t, uint64_t, varnumber_T,
+    Arena, ArenaMem, Array, CMD_index, CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE,
+    CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS,
+    CMOD_NOAUTOCMD, CMOD_NOSWAPFILE, CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, Error, EvalFuncDef,
+    Event, FileDescriptor, HlMessage, HlMessageChunk, LuaRef, LuaRetMode, MessageData, MultiQueue,
+    Object, OptInt, String_0, StringBuilder, TimeWatcher, TryState, VAR_DICT, VAR_FIXED, VAR_LIST,
+    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, buf_T, colnr_T, consumed_blk, dict_T,
+    exarg_T, except_T, expand_T, funcexe_T, garray_T, handle_T, int64_t, intptr_t,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, linenr_T,
+    lua_CFunction, lua_Integer, lua_Number, lua_State, mod_entry_T, msglist_T, nlua_ref_state_t,
+    object, object_data as C2Rust_Unnamed_11, partial_T, proftime_T, ptrdiff_t, scid_T,
+    scriptitem_T, sctx_T, size_t, typval_T, typval_vval_union, ucmd_T, uint8_t, uint32_t, uint64_t,
+    varnumber_T,
 };
 use crate::src::nvim::ui::{ui_add_cb, ui_flush, ui_has, ui_remove_cb};
 use crate::src::nvim::undo::u_save;
@@ -149,20 +152,6 @@ pub const CMD_argglobal: CMD_index = 13;
 pub const CMD_argdo: CMD_index = 10;
 pub const CMD_args: CMD_index = 7;
 pub type C2Rust_Unnamed_30 = ::core::ffi::c_uint;
-pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_30 = 8192;
-pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_30 = 4096;
-pub const CMOD_LOCKMARKS: C2Rust_Unnamed_30 = 2048;
-pub const CMOD_KEEPJUMPS: C2Rust_Unnamed_30 = 1024;
-pub const CMOD_KEEPMARKS: C2Rust_Unnamed_30 = 512;
-pub const CMOD_KEEPALT: C2Rust_Unnamed_30 = 256;
-pub const CMOD_CONFIRM: C2Rust_Unnamed_30 = 128;
-pub const CMOD_BROWSE: C2Rust_Unnamed_30 = 64;
-pub const CMOD_HIDE: C2Rust_Unnamed_30 = 32;
-pub const CMOD_NOAUTOCMD: C2Rust_Unnamed_30 = 16;
-pub const CMOD_UNSILENT: C2Rust_Unnamed_30 = 8;
-pub const CMOD_ERRSILENT: C2Rust_Unnamed_30 = 4;
-pub const CMOD_SILENT: C2Rust_Unnamed_30 = 2;
-pub const CMOD_SANDBOX: C2Rust_Unnamed_30 = 1;
 pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
 pub const FCERR_OTHER: C2Rust_Unnamed_31 = 6;
 pub const FCERR_NONE: C2Rust_Unnamed_31 = 5;

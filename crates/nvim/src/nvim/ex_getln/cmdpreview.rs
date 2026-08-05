@@ -9,7 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::types::kErrorTypeNone;
+use crate::src::nvim::types::{CMOD_NOSWAPFILE, kErrorTypeNone};
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
 pub fn cmdpreview_get_bufnr() -> handle_T {
@@ -268,7 +268,7 @@ pub(crate) unsafe fn cmdpreview_prepare(cpinfo: *mut CpInfo) {
         // Disable the :leftabove/:botright, :tab and swap-file modifiers.
         (*cmdmod.ptr()).cmod_split = 0;
         (*cmdmod.ptr()).cmod_tab = 0;
-        (*cmdmod.ptr()).cmod_flags |= CMOD_NOSWAPFILE;
+        (*cmdmod.ptr()).cmod_flags |= CMOD_NOSWAPFILE as ::core::ffi::c_int;
 
         u_sync(true);
     }

@@ -20,8 +20,8 @@ use crate::src::nvim::ex_docmd::source::ex_errmsg;
 use crate::src::nvim::ex_docmd::tags::ex_findpat;
 use crate::src::nvim::ex_docmd::{
     CMD_new, CMD_sfind, CMD_split, CMD_tabNext, CMD_tabedit, CMD_tabfind, CMD_tabfirst,
-    CMD_tablast, CMD_tabnew, CMD_tabprevious, CMD_tabrewind, CMD_vnew, CMD_vsplit, CMOD_KEEPALT,
-    Ctrl_G, FAIL, FNAME_MESS, IOSIZE, NUL,
+    CMD_tablast, CMD_tabnew, CMD_tabprevious, CMD_tabrewind, CMD_vnew, CMD_vsplit, Ctrl_G, FAIL,
+    FNAME_MESS, IOSIZE, NUL,
 };
 use crate::src::nvim::file_search::{find_file_in_path, vim_findfile_cleanup};
 use crate::src::nvim::highlight_group::HLF_T;
@@ -42,7 +42,7 @@ use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::{atol, gettext, strlen};
 use crate::src::nvim::popupmenu::pum_make_popup;
 use crate::src::nvim::strings::vim_snprintf;
-use crate::src::nvim::types::{exarg_T, intmax_t, size_t, tabpage_T, uint8_t, win_T};
+use crate::src::nvim::types::{CMOD_KEEPALT, exarg_T, intmax_t, size_t, tabpage_T, uint8_t, win_T};
 use crate::src::nvim::undo::bufIsChanged;
 use crate::src::nvim::window::{
     WSP_VERT, do_window, goto_tabpage, tabpage_move, valid_tabpage, win_enter, win_new_tabpage,

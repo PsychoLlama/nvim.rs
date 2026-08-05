@@ -134,7 +134,6 @@ pub const FORWARD: Direction = 1;
 pub const MAGIC_ALL: magic_T = 4;
 pub const MAGIC_ON: magic_T = 3;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_14 = 4096;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const SHM_SEARCHCOUNT: C2Rust_Unnamed_17 = 83;
 pub const SHM_COMPLETIONSCAN: C2Rust_Unnamed_17 = 67;

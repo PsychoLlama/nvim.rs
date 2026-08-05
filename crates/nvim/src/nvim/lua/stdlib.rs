@@ -38,7 +38,9 @@ use crate::src::nvim::memory::{strequal, xfree};
 use crate::src::nvim::os::libc::{__assert_fail, memchr, memset, strcasecmp};
 use crate::src::nvim::runtime::script_autoload;
 use crate::src::nvim::types::{
-    Buffer, Error, Map_int_ptr_t, String_0, Tabpage, TryState, VAR_UNKNOWN, VAR_UNLOCKED, Window,
+    Buffer, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS,
+    CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT,
+    Error, Map_int_ptr_t, String_0, Tabpage, TryState, VAR_UNKNOWN, VAR_UNLOCKED, Window,
     aco_save_T, buf_T, cmdmod_T, colnr_T, dict_T, dictitem_T, except_T, handle_T, intptr_t,
     kErrorTypeNone, linenr_T, lua_Integer, lua_Number, lua_State, luaL_Reg, msglist_T, pos_T,
     ptr_t, ptrdiff_t, regmatch_T, regprog_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T,
@@ -54,17 +56,6 @@ unsafe extern "C" {
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
-pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_12 = 4096;
-pub const CMOD_LOCKMARKS: C2Rust_Unnamed_12 = 2048;
-pub const CMOD_KEEPJUMPS: C2Rust_Unnamed_12 = 1024;
-pub const CMOD_KEEPMARKS: C2Rust_Unnamed_12 = 512;
-pub const CMOD_KEEPALT: C2Rust_Unnamed_12 = 256;
-pub const CMOD_HIDE: C2Rust_Unnamed_12 = 32;
-pub const CMOD_NOAUTOCMD: C2Rust_Unnamed_12 = 16;
-pub const CMOD_UNSILENT: C2Rust_Unnamed_12 = 8;
-pub const CMOD_ERRSILENT: C2Rust_Unnamed_12 = 4;
-pub const CMOD_SILENT: C2Rust_Unnamed_12 = 2;
-pub const CMOD_SANDBOX: C2Rust_Unnamed_12 = 1;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const CONV_NONE: C2Rust_Unnamed_13 = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

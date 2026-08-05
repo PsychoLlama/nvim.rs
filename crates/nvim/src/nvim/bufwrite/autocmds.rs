@@ -14,7 +14,7 @@
 
 use core::ffi::{c_char, c_int};
 
-use crate::src::nvim::types::event_T;
+use crate::src::nvim::types::{CMOD_LOCKMARKS, event_T};
 
 #[allow(unused_imports)]
 use super::*;

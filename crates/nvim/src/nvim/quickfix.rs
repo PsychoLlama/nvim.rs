@@ -243,7 +243,6 @@ pub const CMD_caddbuffer: CMD_index = 49;
 pub const CMD_cabove: CMD_index = 48;
 pub const CMD_cNfile: CMD_index = 45;
 pub const CMD_cNext: CMD_index = 44;
-pub const CMOD_HIDE: c_uint = 32;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeBoolean: OptValType = 0;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;

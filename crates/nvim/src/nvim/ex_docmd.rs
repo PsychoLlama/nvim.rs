@@ -343,20 +343,6 @@ pub struct CommandDefinition {
     pub cmd_addr_type: cmd_addr_T,
 }
 pub type C2Rust_Unnamed_38 = c_uint;
-pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_38 = 8192;
-pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_38 = 4096;
-pub const CMOD_LOCKMARKS: C2Rust_Unnamed_38 = 2048;
-pub const CMOD_KEEPJUMPS: C2Rust_Unnamed_38 = 1024;
-pub const CMOD_KEEPMARKS: C2Rust_Unnamed_38 = 512;
-pub const CMOD_KEEPALT: C2Rust_Unnamed_38 = 256;
-pub const CMOD_CONFIRM: C2Rust_Unnamed_38 = 128;
-pub const CMOD_BROWSE: C2Rust_Unnamed_38 = 64;
-pub const CMOD_HIDE: C2Rust_Unnamed_38 = 32;
-pub const CMOD_NOAUTOCMD: C2Rust_Unnamed_38 = 16;
-pub const CMOD_UNSILENT: C2Rust_Unnamed_38 = 8;
-pub const CMOD_ERRSILENT: C2Rust_Unnamed_38 = 4;
-pub const CMOD_SILENT: C2Rust_Unnamed_38 = 2;
-pub const CMOD_SANDBOX: C2Rust_Unnamed_38 = 1;
 pub const DOBUF_WIPE: dobuf_action_values = 4;
 pub const DOBUF_DEL: dobuf_action_values = 3;
 pub const DOBUF_UNLOAD: dobuf_action_values = 2;

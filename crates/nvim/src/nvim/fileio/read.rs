@@ -16,6 +16,7 @@ use core::ffi::{c_char, c_int};
 use super::*;
 use crate::src::nvim::memfile::MfDirty;
 use crate::src::nvim::pos::MAXCOL;
+use crate::src::nvim::types::CMOD_LOCKMARKS;
 /// What the read is being asked to do, decoded from `readfile`'s `flags`.
 #[derive(Clone, Copy)]
 pub(crate) struct How {

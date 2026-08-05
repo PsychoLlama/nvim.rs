@@ -16,7 +16,7 @@ use core::ffi::{c_char, c_int, c_uint};
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::types::{VV_SWAPCHOICE, VV_SWAPNAME};
+use crate::src::nvim::types::{CMOD_NOSWAPFILE, VV_SWAPCHOICE, VV_SWAPNAME};
 
 /// Rename the swap file after the buffer's file name changed.
 ///

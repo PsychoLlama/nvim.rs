@@ -137,7 +137,6 @@ pub const OP_ADDING: set_op_T = 1;
 pub const OP_NONE: set_op_T = 0;
 pub const CMD_setlocal: CMD_index = 402;
 pub const CMD_setglobal: CMD_index = 401;
-pub const CMOD_NOSWAPFILE: c_uint = 8192;
 pub const SHM_WRI: c_uint = 119;
 pub const SHM_LINES: c_uint = 108;
 pub const SHM_MOD: c_uint = 109;

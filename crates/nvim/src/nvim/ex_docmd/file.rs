@@ -21,10 +21,10 @@ use crate::src::nvim::ex_docmd::source::ex_errmsg;
 use crate::src::nvim::ex_docmd::{
     ACTION_SHOW, ACTION_SHOW_ALL, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, CHECK_PATH,
     CMD_badd, CMD_balt, CMD_edit, CMD_enew, CMD_new, CMD_rshada, CMD_rviminfo, CMD_split,
-    CMD_sview, CMD_tabedit, CMD_tabnew, CMD_view, CMD_visual, CMD_vnew, CMD_vsplit, CMOD_KEEPALT,
-    CPO_ALTREAD, DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, ECMD_ADDBUF, ECMD_ALTBUF,
-    ECMD_FORCEIT, ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, FAIL, FNAME_MESS, ML_EMPTY, NUL, OK,
-    ex_pressedreturn, kDirectionNotSet,
+    CMD_sview, CMD_tabedit, CMD_tabnew, CMD_view, CMD_visual, CMD_vnew, CMD_vsplit, CPO_ALTREAD,
+    DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, ECMD_ADDBUF, ECMD_ALTBUF, ECMD_FORCEIT,
+    ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, FAIL, FNAME_MESS, ML_EMPTY, NUL, OK, ex_pressedreturn,
+    kDirectionNotSet,
 };
 use crate::src::nvim::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::src::nvim::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
@@ -50,7 +50,7 @@ use crate::src::nvim::search::{BACKWARD, FORWARD, find_pattern_in_path};
 use crate::src::nvim::shada::{shada_read_everything, shada_write_file};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::ui::kUICmdline;
-use crate::src::nvim::types::{cleanup_T, exarg_T, linenr_T, size_t, uint8_t, win_T};
+use crate::src::nvim::types::{CMOD_KEEPALT, cleanup_T, exarg_T, linenr_T, size_t, uint8_t, win_T};
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::undo::{
     curbufIsChanged, u_compute_hash, u_read_undo, u_save, u_savedel, u_write_undo,

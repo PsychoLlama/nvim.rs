@@ -42,9 +42,9 @@ use crate::src::nvim::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_s
 use crate::src::nvim::runtime::{DIP_ALL, source_runtime_vim_lua};
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::types::{
-    CMD_index, VV_SWAPCOMMAND, aco_save_T, aentry_T, buf_T, bufref_T, cmd_addr_T, cstack_T,
-    dobuf_action_values, dobuf_start_values, exarg, exarg_T, linenr_T, list_T, ptrdiff_t, size_t,
-    ssize_t, tabpage_T, uint8_t, uint64_t, varnumber_T, win_T,
+    CMD_index, CMOD_CONFIRM, VV_SWAPCOMMAND, aco_save_T, aentry_T, buf_T, bufref_T, cmd_addr_T,
+    cstack_T, dobuf_action_values, dobuf_start_values, exarg, exarg_T, linenr_T, list_T, ptrdiff_t,
+    size_t, ssize_t, tabpage_T, uint8_t, uint64_t, varnumber_T, win_T,
 };
 use crate::src::nvim::undo::bufIsChanged;
 use crate::src::nvim::window::{
@@ -63,8 +63,6 @@ pub const CMD_argdo: CMD_index = 10;
 pub const CMD_append: CMD_index = 0;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_15 = 4096;
-pub const CMOD_CONFIRM: C2Rust_Unnamed_15 = 128;
 pub const DOBUF_WIPE: dobuf_action_values = 4;
 pub const DOBUF_DEL: dobuf_action_values = 3;
 pub const DOBUF_UNLOAD: dobuf_action_values = 2;

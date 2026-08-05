@@ -15,7 +15,7 @@
 use super::*;
 use crate::src::nvim::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::src::nvim::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
-use crate::src::nvim::types::VV_SEARCHFORWARD;
+use crate::src::nvim::types::{CMOD_KEEPPATTERNS, VV_SEARCHFORWARD};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

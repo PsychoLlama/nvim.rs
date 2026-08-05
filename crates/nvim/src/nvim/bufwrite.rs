@@ -54,8 +54,8 @@ use crate::src::nvim::path::{after_pathsep, path_fnamecmp, path_tail};
 use crate::src::nvim::sha256::Sha256;
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_add, vim_strchr};
 use crate::src::nvim::types::{
-    FileInfo, aco_save_T, buf_T, bufref_T, exarg_T, iconv_t, int64_t, linenr_T, off_T, pos_T,
-    size_t, uint64_t, uv_gid_t, uv_uid_t, vim_acl_T,
+    CMOD_LOCKMARKS, FileInfo, aco_save_T, buf_T, bufref_T, exarg_T, iconv_t, int64_t, linenr_T,
+    off_T, pos_T, size_t, uint64_t, uv_gid_t, uv_uid_t, vim_acl_T,
 };
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::{curbufIsChanged, u_unchanged, u_update_save_nr, u_write_undo};
@@ -72,7 +72,6 @@ pub(crate) use self::lines::*;
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const UV_ENOTSUP: C2Rust_Unnamed = -95;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const CMOD_LOCKMARKS: C2Rust_Unnamed_15 = 2048;
 /// A write error, held until the cleanup path can report it.
 ///
 /// `buf_write` has a single exit that emits the message, because the file

@@ -31,10 +31,10 @@ use crate::src::nvim::runtime::{DIP_ALL, DIP_DIR, do_in_path};
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::src::nvim::tag::{do_tag, find_tags};
 use crate::src::nvim::types::{
-    Arena, Array, Direction, Error, FILE, LuaRetMode, Object, OptInt, OptVal, OptValData,
-    OptValType, String_0, buf_T, exarg_T, expand_T, file_comparison, garray_T, kErrorTypeNone,
-    kObjectTypeNil, kObjectTypeString, linenr_T, object, object_data as C2Rust_Unnamed_13, pos_T,
-    scid_T, sctx_T, size_t, uint8_t, win_T, xp_prefix_T,
+    Arena, Array, CMOD_KEEPALT, Direction, Error, FILE, LuaRetMode, Object, OptInt, OptVal,
+    OptValData, OptValType, String_0, buf_T, exarg_T, expand_T, file_comparison, garray_T,
+    kErrorTypeNone, kObjectTypeNil, kObjectTypeString, linenr_T, object,
+    object_data as C2Rust_Unnamed_13, pos_T, scid_T, sctx_T, size_t, uint8_t, win_T, xp_prefix_T,
 };
 use crate::src::nvim::window::{
     WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split,
@@ -46,8 +46,6 @@ pub type C2Rust_Unnamed_15 = ::core::ffi::c_int;
 pub const EXPAND_DIRECTORIES: C2Rust_Unnamed_15 = 3;
 pub const kOptValTypeString: OptValType = 2;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_17 = 4096;
-pub const CMOD_KEEPALT: C2Rust_Unnamed_17 = 256;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const WILD_EXPAND_FREE: C2Rust_Unnamed_18 = 2;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;

@@ -11,6 +11,7 @@ use core::ffi::{c_int, c_uint};
 use core::ptr;
 
 use super::*;
+use crate::src::nvim::types::CMOD_LOCKMARKS;
 
 /// `mark.c`'s `ONE_ADJUST` family: the line-number rewrite every mark store
 /// gets when lines are inserted, deleted or moved. Marks in `line1..=line2`
@@ -377,7 +378,9 @@ pub unsafe extern "C" fn mark_col_adjust(
         col_amount,
         spaces_removed,
     };
-    if col_amount == 0 && lnum_amount == 0 || (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS != 0 {
+    if col_amount == 0 && lnum_amount == 0
+        || (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int != 0
+    {
         return;
     }
     let mut i: c_int = 0;

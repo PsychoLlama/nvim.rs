@@ -141,12 +141,13 @@ use crate::src::nvim::strings::{
 use crate::src::nvim::terminal::{terminal_check_size, terminal_running};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    AdditionalData, CMD_index, Callback, Callback_data as C2Rust_Unnamed_5, ExtmarkOp, OptInt,
-    OptVal, OptValData, OptValType, String_0, SubReplacementString, Timestamp, UndoObjectType,
-    VV_OLDFILES, VV_SWAPCOMMAND, bcount_t, bfa_values, bln_values, buf_T, bufref_T, colnr_T,
-    dobuf_action_values, exarg_T, float_T, fmark_T, getf_retvalues, handle_T, int32_t, int64_t,
-    linenr_T, list_T, listitem_T, lpos_T, magic_T, pos_T, proftime_T, ptrdiff_t, regmatch_T,
-    regmmatch_T, regprog_T, size_t, tabpage_T, time_t, uint8_t, uint64_t, uvarnumber_T,
+    AdditionalData, CMD_index, CMOD_BROWSE, CMOD_CONFIRM, CMOD_KEEPALT, CMOD_KEEPMARKS,
+    CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, Callback, Callback_data as C2Rust_Unnamed_5, ExtmarkOp,
+    OptInt, OptVal, OptValData, OptValType, String_0, SubReplacementString, Timestamp,
+    UndoObjectType, VV_OLDFILES, VV_SWAPCOMMAND, bcount_t, bfa_values, bln_values, buf_T, bufref_T,
+    colnr_T, dobuf_action_values, exarg_T, float_T, fmark_T, getf_retvalues, handle_T, int32_t,
+    int64_t, linenr_T, list_T, listitem_T, lpos_T, magic_T, pos_T, proftime_T, ptrdiff_t,
+    regmatch_T, regmmatch_T, regprog_T, size_t, tabpage_T, time_t, uint8_t, uint64_t, uvarnumber_T,
     varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{ui_cursor_goto, ui_cursor_shape, ui_has};
@@ -199,13 +200,6 @@ pub const CMD_argdo: CMD_index = 10;
 pub const CMD_args: CMD_index = 7;
 pub const CMD_append: CMD_index = 0;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_20 = 4096;
-pub const CMOD_LOCKMARKS: C2Rust_Unnamed_20 = 2048;
-pub const CMOD_KEEPJUMPS: C2Rust_Unnamed_20 = 1024;
-pub const CMOD_KEEPMARKS: C2Rust_Unnamed_20 = 512;
-pub const CMOD_KEEPALT: C2Rust_Unnamed_20 = 256;
-pub const CMOD_CONFIRM: C2Rust_Unnamed_20 = 128;
-pub const CMOD_BROWSE: C2Rust_Unnamed_20 = 64;
 pub const GETFILE_OPEN_OTHER: getf_retvalues = -1;
 pub const GETFILE_SAME_FILE: getf_retvalues = 0;
 pub const GETFILE_NOT_WRITTEN: getf_retvalues = 2;

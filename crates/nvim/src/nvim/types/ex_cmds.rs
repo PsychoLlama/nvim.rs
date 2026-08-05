@@ -32,9 +32,29 @@ pub struct SubReplacementString {
     pub additional_data: *mut AdditionalData,
 }
 pub type cmd_addr_T = ::core::ffi::c_uint;
+/// The `:silent`, `:noautocmd`, `:keepmarks` … command modifiers, as the
+/// bits `cmdmod_T::cmod_flags` carries.  The field is a `c_int` and every
+/// transpiled test site casts, so these stay `c_uint` until the modules
+/// reading them are rewritten and the casts go with them.
+pub type CmdModFlags = ::core::ffi::c_uint;
+pub const CMOD_SANDBOX: CmdModFlags = 1;
+pub const CMOD_SILENT: CmdModFlags = 2;
+pub const CMOD_ERRSILENT: CmdModFlags = 4;
+pub const CMOD_UNSILENT: CmdModFlags = 8;
+pub const CMOD_NOAUTOCMD: CmdModFlags = 16;
+pub const CMOD_HIDE: CmdModFlags = 32;
+pub const CMOD_BROWSE: CmdModFlags = 64;
+pub const CMOD_CONFIRM: CmdModFlags = 128;
+pub const CMOD_KEEPALT: CmdModFlags = 256;
+pub const CMOD_KEEPMARKS: CmdModFlags = 512;
+pub const CMOD_KEEPJUMPS: CmdModFlags = 1024;
+pub const CMOD_LOCKMARKS: CmdModFlags = 2048;
+pub const CMOD_KEEPPATTERNS: CmdModFlags = 4096;
+pub const CMOD_NOSWAPFILE: CmdModFlags = 8192;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct cmdmod_T {
+    /// A set of [`CmdModFlags`] bits.
     pub cmod_flags: ::core::ffi::c_int,
     pub cmod_split: ::core::ffi::c_int,
     pub cmod_tab: ::core::ffi::c_int,

@@ -29,15 +29,18 @@ use crate::src::nvim::regexp::RE_MAGIC;
 use crate::src::nvim::register::valid_yank_reg;
 use crate::src::nvim::strings::kv_do_printf;
 use crate::src::nvim::types::{
-    Arena, Array, Buffer, CMD_index, CmdParseInfo, CmdParseInfo_magic as C2Rust_Unnamed_13, Dict,
-    Direction, Error, Integer, KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods,
-    KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty, KeyDict_get_commands,
-    KeyDict_user_command, KeySetLink, KeyValuePair, LuaRef, Object, OptionalKeys, String_0,
-    StringBuilder, TryState, buf_T, cmd_addr_T, cmdmod_T, cstack_T, exarg_T, except_T, expand_T,
-    garray_T, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil,
-    kObjectTypeString, key_value_pair, linenr_T, msglist_T, object, object_data as C2Rust_Unnamed,
-    regmatch_T, regprog_T, sctx_T, size_t, ucmd_T, uint8_t, uint32_t, uint64_t,
+    Arena, Array, Buffer, CMD_index, CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE,
+    CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS,
+    CMOD_NOAUTOCMD, CMOD_NOSWAPFILE, CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, CmdParseInfo,
+    CmdParseInfo_magic as C2Rust_Unnamed_13, Dict, Direction, Error, Integer, KeyDict_cmd,
+    KeyDict_cmd_magic, KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty,
+    KeyDict_get_commands, KeyDict_user_command, KeySetLink, KeyValuePair, LuaRef, Object,
+    OptionalKeys, String_0, StringBuilder, TryState, buf_T, cmd_addr_T, cmdmod_T, cstack_T,
+    exarg_T, except_T, expand_T, garray_T, int64_t, kErrorTypeException, kErrorTypeNone,
+    kErrorTypeValidation, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
+    kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, key_value_pair, linenr_T, msglist_T,
+    object, object_data as C2Rust_Unnamed, regmatch_T, regprog_T, sctx_T, size_t, ucmd_T, uint8_t,
+    uint32_t, uint64_t,
 };
 use crate::src::nvim::usercmd::{
     commands_array, free_ucmd, get_user_command_name, parse_addr_type_arg, parse_compl_arg,
@@ -50,20 +53,6 @@ unsafe extern "C" {
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
 }
-pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_17 = 8192;
-pub const CMOD_LOCKMARKS: C2Rust_Unnamed_17 = 2048;
-pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_17 = 4096;
-pub const CMOD_KEEPMARKS: C2Rust_Unnamed_17 = 512;
-pub const CMOD_KEEPJUMPS: C2Rust_Unnamed_17 = 1024;
-pub const CMOD_KEEPALT: C2Rust_Unnamed_17 = 256;
-pub const CMOD_HIDE: C2Rust_Unnamed_17 = 32;
-pub const CMOD_CONFIRM: C2Rust_Unnamed_17 = 128;
-pub const CMOD_BROWSE: C2Rust_Unnamed_17 = 64;
-pub const CMOD_NOAUTOCMD: C2Rust_Unnamed_17 = 16;
-pub const CMOD_SANDBOX: C2Rust_Unnamed_17 = 1;
-pub const CMOD_UNSILENT: C2Rust_Unnamed_17 = 8;
-pub const CMOD_ERRSILENT: C2Rust_Unnamed_17 = 4;
-pub const CMOD_SILENT: C2Rust_Unnamed_17 = 2;
 pub const ADDR_NONE: cmd_addr_T = 11;
 pub const ADDR_OTHER: cmd_addr_T = 10;
 pub const ADDR_LINES: cmd_addr_T = 0;

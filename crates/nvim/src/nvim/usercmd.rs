@@ -29,11 +29,13 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::strings::{arena_printf, vim_strchr, xstrnsave};
 use crate::src::nvim::types::{
-    Arena, CMD_index, Dict, Integer, LuaRef, Object, OptInt, String_0, buf_T, cmd_addr_T, cmdmod_T,
-    estack_T, exarg_T, expand_T, garray_T, int64_t, kObjectTypeBoolean, kObjectTypeDict,
-    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, key_value_pair,
-    mod_entry_T, object, object_data as C2Rust_Unnamed, scid_T, sctx_T, size_t, ucmd_T, uint8_t,
-    uint32_t, win_T,
+    Arena, CMD_index, CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT,
+    CMOD_KEEPJUMPS, CMOD_KEEPMARKS, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD,
+    CMOD_NOSWAPFILE, CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, Dict, Integer, LuaRef, Object,
+    OptInt, String_0, buf_T, cmd_addr_T, cmdmod_T, estack_T, exarg_T, expand_T, garray_T, int64_t,
+    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil,
+    kObjectTypeString, key_value_pair, mod_entry_T, object, object_data as C2Rust_Unnamed, scid_T,
+    sctx_T, size_t, ucmd_T, uint8_t, uint32_t, win_T,
 };
 use crate::src::nvim::window::{
     WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, prevwin_curwin, tabpage_index,
@@ -76,20 +78,6 @@ pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
 pub const ADDR_WINDOWS: cmd_addr_T = 1;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_16 = 8192;
-pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_16 = 4096;
-pub const CMOD_LOCKMARKS: C2Rust_Unnamed_16 = 2048;
-pub const CMOD_KEEPJUMPS: C2Rust_Unnamed_16 = 1024;
-pub const CMOD_KEEPMARKS: C2Rust_Unnamed_16 = 512;
-pub const CMOD_KEEPALT: C2Rust_Unnamed_16 = 256;
-pub const CMOD_CONFIRM: C2Rust_Unnamed_16 = 128;
-pub const CMOD_BROWSE: C2Rust_Unnamed_16 = 64;
-pub const CMOD_HIDE: C2Rust_Unnamed_16 = 32;
-pub const CMOD_NOAUTOCMD: C2Rust_Unnamed_16 = 16;
-pub const CMOD_UNSILENT: C2Rust_Unnamed_16 = 8;
-pub const CMOD_ERRSILENT: C2Rust_Unnamed_16 = 4;
-pub const CMOD_SILENT: C2Rust_Unnamed_16 = 2;
-pub const CMOD_SANDBOX: C2Rust_Unnamed_16 = 1;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const DOCMD_KEYTYPED: C2Rust_Unnamed_17 = 8;
 pub const DOCMD_NOWAIT: C2Rust_Unnamed_17 = 2;
