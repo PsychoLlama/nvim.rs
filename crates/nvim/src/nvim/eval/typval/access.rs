@@ -157,6 +157,86 @@ pub unsafe fn tv_dict_is_watched(d: *const dict_T) -> bool {
     }
 }
 
+/// The key of `di`, which upstream reads as the plain `di->di_key`.
+///
+/// `di_key` is a flexible array member: `tv_dict_item_alloc_len` over-allocates
+/// the `dictitem_T` so the NUL-terminated key sits in the tail.  The field
+/// itself covers zero bytes, so the pointer has to be formed with `&raw`, not
+/// by autoreffing the array.
+#[inline(always)]
+pub(crate) unsafe fn tv_dict_item_key(di: *const dictitem_T) -> *mut ::core::ffi::c_char {
+    unsafe {
+        (&raw const (*di).di_key)
+            .cast::<::core::ffi::c_char>()
+            .cast_mut()
+    }
+}
+
+/// The `dictitem_T` a hashtab item's key points into: upstream's
+/// `TV_DICT_HI2DI`.
+///
+/// A dictionary's hashtab does not store a pointer to its item; `hi_key` points
+/// *at* the item's own `di_key`, so the item is that many bytes back.
+#[inline(always)]
+pub(crate) unsafe fn tv_dict_hi2di(hi: *const hashitem_T) -> *mut dictitem_T {
+    unsafe {
+        (*hi)
+            .hi_key
+            .sub(::core::mem::offset_of!(dictitem_T, di_key))
+            .cast::<dictitem_T>()
+    }
+}
+
+/// A walk over the occupied slots of a dictionary's hashtab.
+///
+/// See [`tv_dict_iter`].
+pub(crate) struct DictIter {
+    hi: *mut hashitem_T,
+    todo: size_t,
+}
+
+impl Iterator for DictIter {
+    type Item = *mut hashitem_T;
+
+    #[inline]
+    fn next(&mut self) -> Option<*mut hashitem_T> {
+        unsafe {
+            while self.todo != 0 {
+                let hi = self.hi;
+                self.hi = self.hi.add(1);
+                if (*hi).is_kept() {
+                    self.todo -= 1;
+                    return Some(hi);
+                }
+            }
+            None
+        }
+    }
+}
+
+/// Walk the occupied slots of `d`'s hashtab: upstream's `TV_DICT_ITER`, which
+/// is `HASHTAB_ITER` plus a `TV_DICT_HI2DI`.
+///
+/// The item is yielded as the `hashitem_T`, not the `dictitem_T`, because the
+/// bodies that remove entries need it for `hash_remove`; [`tv_dict_hi2di`] is
+/// the other half.
+///
+/// The live-item count is snapshotted before the first step, exactly as the
+/// macro does.  That is what lets a body remove entries as it goes — but only
+/// with the hashtab locked, since an unlocked `hash_remove` may rehash and
+/// invalidate `ht_array` underneath the walk.
+///
+/// The borrow is momentary — it reads the two hashtab header fields and is
+/// gone before the first step, so a body may write through the caller's raw
+/// pointer as upstream's does.  That is also what makes this one safe.
+#[inline]
+pub(crate) fn tv_dict_iter(d: &dict_T) -> DictIter {
+    DictIter {
+        hi: d.dv_hashtab.ht_array,
+        todo: d.dv_hashtab.ht_used,
+    }
+}
+
 /// Store `b` in `tv` as the return value, taking a reference to it.
 #[inline(always)]
 pub unsafe fn tv_blob_set_ret(tv: *mut typval_T, b: *mut blob_T) {

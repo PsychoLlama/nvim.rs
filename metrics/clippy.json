@@ -55,7 +55,6 @@
     "crates/nvim/src/nvim/eval/typval.rs": 13,
     "crates/nvim/src/nvim/eval/typval/blob.rs": 1,
     "crates/nvim/src/nvim/eval/typval/check.rs": 8,
-    "crates/nvim/src/nvim/eval/typval/dict.rs": 11,
     "crates/nvim/src/nvim/eval/typval/dictget.rs": 9,
     "crates/nvim/src/nvim/eval/typval/get.rs": 14,
     "crates/nvim/src/nvim/eval/typval/listops.rs": 6,

@@ -264,6 +264,14 @@ static e_non_null_dict_required_for_argument_nr: GlobalCell<[::core::ffi::c_char
             *b"E1297: Non-NULL Dictionary required for argument %d\0",
         )
     });
+/// `TV_INITIAL_VALUE`: an unlocked `VAR_UNKNOWN` object, which is what a
+/// `typval_T` is initialised to and what one is left as after being moved out
+/// of.  c2rust writes the designated initialiser out at every use site.
+pub const TV_INITIAL_VALUE: typval_T = typval_T {
+    v_type: VAR_UNKNOWN,
+    v_lock: VAR_UNLOCKED,
+    vval: typval_vval_union { v_number: 0 },
+};
 pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub static tv_empty_string: GlobalCell<*const ::core::ffi::c_char> =
