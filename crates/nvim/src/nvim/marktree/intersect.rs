@@ -245,7 +245,7 @@ impl IdSet {
             break;
         }
         if strict {
-            assert!(seen, "seen");
+            debug_assert!(seen, "seen");
         }
         if seen {
             items.copy_within(at + 1.., at);
@@ -340,7 +340,7 @@ pub fn intersect_mov(x: &IdSet, y: &IdSet, w: &IdSet, d: &IdSet) {
                 wi += 1;
                 xi += 1;
             } else {
-                assert!(wn < wi, "wn < wi");
+                debug_assert!(wn < wi, "wn < wi");
                 w.as_mut_slice()[wn] = id;
                 wn += 1;
                 xi += 1;

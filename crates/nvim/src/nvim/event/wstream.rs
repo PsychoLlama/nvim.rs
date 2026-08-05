@@ -55,8 +55,8 @@ pub unsafe fn wstream_set_write_cb(stream: *mut Stream, cb: stream_write_cb, dat
 /// reference. Returns 0 when the write was queued — or, for a regular file,
 /// completed — and a libuv error code otherwise.
 pub unsafe fn wstream_write(stream: *mut Stream, buffer: *mut WBuffer) -> c_int {
-    assert!((*stream).maxmem != 0, "wstream_init was not called");
-    assert!(!(*stream).closed);
+    debug_assert!((*stream).maxmem != 0, "wstream_init was not called");
+    debug_assert!(!(*stream).closed);
 
     let uvbuf = uv_buf_t {
         base: (*buffer).data,
@@ -93,7 +93,7 @@ pub unsafe fn wstream_write(stream: *mut Stream, buffer: *mut WBuffer) -> c_int 
     };
 
     wstream_release_wbuffer(buffer);
-    assert!(err != 0);
+    debug_assert!(err != 0);
     err
 }
 

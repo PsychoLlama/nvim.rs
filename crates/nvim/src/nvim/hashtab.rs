@@ -156,7 +156,7 @@ fn resize_decision(
     let mut newsize = HT_INIT_SIZE;
     while newsize < minsize {
         newsize <<= 1;
-        assert!(newsize != 0, "hash table size overflow");
+        debug_assert!(newsize != 0, "hash table size overflow");
     }
 
     let newarray_is_small = newsize == HT_INIT_SIZE;

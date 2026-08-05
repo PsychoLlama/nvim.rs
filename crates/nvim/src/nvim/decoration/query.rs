@@ -234,7 +234,7 @@ pub unsafe fn decor_virt_lines(
         ) {
             return 0;
         }
-        assert!(start_row >= 0);
+        debug_assert!(start_row >= 0);
 
         let mut virt_lines = 0;
         loop {

@@ -275,11 +275,12 @@ pub fn decor_put_vt(vt: DecorVirtText, next: *mut DecorVirtText) -> *mut DecorVi
 /// The stored form of an inline highlight — the same thing with the fields a
 /// full item has and it does not.
 ///
-/// # Panics
-/// A sign is never inline, so an inline item claiming to be one is a bug.
+/// A sign is never inline, so an inline item claiming to be one is a bug —
+/// asserted in a debug build only, as upstream's `assert()` is
+/// (`v0.12.4:src/nvim/decoration.c:166`).
 /// TODO(bfredl): eventually simple signs will be inlinable as well.
 pub fn decor_sh_from_inline(item: DecorHighlightInline) -> DecorSignHighlight {
-    assert!(item.flags & kSHIsSign == 0);
+    debug_assert!(item.flags & kSHIsSign == 0);
     DecorSignHighlight {
         flags: item.flags,
         priority: item.priority,
@@ -390,9 +391,10 @@ unsafe fn decor_free_inner(mut vt: *mut DecorVirtText, first_idx: uint32_t) {
 /// # Safety
 /// Must not be called while a decoration provider is running.
 pub unsafe fn decor_check_to_be_deleted() {
-    // SAFETY: the assert is the precondition, and the lists are this file's.
+    // SAFETY: the caller's precondition — restated as a debug assertion, as
+    // upstream's `assert()` is — and the lists are this file's.
     unsafe {
-        assert!(!(*decor_state.ptr()).running_decor_provider);
+        debug_assert!(!(*decor_state.ptr()).running_decor_provider);
         decor_free_inner(TO_FREE_VIRT.get(), TO_FREE_SH.get());
         TO_FREE_VIRT.set(ptr::null_mut());
         TO_FREE_SH.set(DECOR_ID_INVALID);

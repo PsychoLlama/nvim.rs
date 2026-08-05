@@ -306,13 +306,13 @@ impl Tensor<'_> {
 /// shows.
 pub fn linematch_nbuffers(diff_blk: &[&[u8]], diff_len: &[c_int], iwhite: bool) -> Vec<c_int> {
     let ndiffs = diff_len.len();
-    assert!(ndiffs <= LN_MAX_BUFS);
+    debug_assert!(ndiffs <= LN_MAX_BUFS);
     assert_eq!(diff_blk.len(), ndiffs);
 
     let mut memsize = 1usize;
     let mut max_decisions = 0usize;
     for &len in diff_len {
-        assert!(len >= 0);
+        debug_assert!(len >= 0);
         memsize *= len as usize + 1;
         max_decisions += len as usize;
     }

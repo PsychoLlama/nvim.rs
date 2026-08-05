@@ -547,7 +547,7 @@ pub unsafe extern "C" fn read_string(fd: *mut FILE, cnt: size_t) -> *mut c_char 
 /// @return  false in case of an error.
 pub unsafe extern "C" fn put_bytes(fd: *mut FILE, number: uintmax_t, len: size_t) -> bool {
     unsafe {
-        assert!(len > 0);
+        debug_assert!(len > 0);
         for i in (0..len).rev() {
             if putc((number >> (i * 8)) as c_int, fd) == EOF {
                 return false;

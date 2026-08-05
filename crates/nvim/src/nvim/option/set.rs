@@ -72,7 +72,7 @@ static ERRBUF: GlobalCell<[c_char; IOSIZE as usize]> = GlobalCell::new([0; IOSIZ
 
 /// The script context recorded for the global value of an option.
 pub fn get_option_sctx(opt_idx: OptIndex) -> *mut sctx_T {
-    assert!(opt_idx != kOptInvalid);
+    debug_assert!(opt_idx != kOptInvalid);
     // SAFETY: the option table is a plain array; nothing holds a borrow.
     unsafe { &raw mut (*options.ptr())[opt_idx as usize].script_ctx }
 }
@@ -344,7 +344,7 @@ pub fn get_option_value(opt_idx: OptIndex, opt_flags: c_int) -> OptVal {
 
 /// The option table's row for an option.
 pub fn get_option(opt_idx: OptIndex) -> *mut vimoption_T {
-    assert!(opt_idx != kOptInvalid);
+    debug_assert!(opt_idx != kOptInvalid);
     // SAFETY: the option table is a plain array; nothing holds a borrow.
     unsafe { &raw mut (*options.ptr())[opt_idx as usize] }
 }
@@ -356,7 +356,7 @@ pub fn get_option(opt_idx: OptIndex) -> *mut vimoption_T {
 /// global-local options actually use — a new global-local option has to
 /// choose one of them, which is what the final arm asserts.
 pub(crate) fn get_option_unset_value(opt_idx: OptIndex) -> OptVal {
-    assert!(opt_idx != kOptInvalid);
+    debug_assert!(opt_idx != kOptInvalid);
 
     if !option_is_global_local(opt_idx) {
         // SAFETY: `get_varp_scope` wants a row of the option table.
@@ -611,7 +611,7 @@ pub(crate) unsafe fn set_option(
     errbuf: *mut c_char,
     errbuflen: size_t,
 ) -> *const c_char {
-    assert!(opt_idx != kOptInvalid);
+    debug_assert!(opt_idx != kOptInvalid);
 
     if !direct {
         // SAFETY: the caller's `errbuf` is writable for `errbuflen` bytes.
@@ -750,7 +750,7 @@ pub fn set_option_direct(opt_idx: OptIndex, value: OptVal, opt_flags: c_int, set
 ///
 /// Returns an untranslated error message, or null.
 pub fn set_option_value(opt_idx: OptIndex, value: OptVal, opt_flags: c_int) -> *const c_char {
-    assert!(opt_idx != kOptInvalid);
+    debug_assert!(opt_idx != kOptInvalid);
 
     // SAFETY: the option table is a plain array, and `ERRBUF` is `IOSIZE`
     // writable bytes.
@@ -774,7 +774,7 @@ pub fn set_option_value(opt_idx: OptIndex, value: OptVal, opt_flags: c_int) -> *
 /// Drop a global-local option's local value, so it reads through to the
 /// global one again.
 pub(crate) fn unset_option_local_value(opt_idx: OptIndex) -> *const c_char {
-    assert!(option_is_global_local(opt_idx));
+    debug_assert!(option_is_global_local(opt_idx));
     set_option_value(opt_idx, get_option_unset_value(opt_idx), OPT_LOCAL)
 }
 

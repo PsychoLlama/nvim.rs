@@ -151,7 +151,7 @@ pub unsafe extern "C" fn file_open_fd(
     (*ret_fp).wr = has(flags, WRITING);
     (*ret_fp).non_blocking = has(flags, kFileNonBlocking);
     // Non-blocking writes are not supported.
-    assert!(!(*ret_fp).wr || !(*ret_fp).non_blocking);
+    debug_assert!(!(*ret_fp).wr || !(*ret_fp).non_blocking);
     (*ret_fp).fd = fd;
     (*ret_fp).eof = false;
     (*ret_fp).buffer = alloc_block() as *mut c_char;
@@ -269,7 +269,7 @@ pub unsafe extern "C" fn file_read(
     ret_buf: *mut c_char,
     size: size_t,
 ) -> ptrdiff_t {
-    assert!(!(*fp).wr);
+    debug_assert!(!(*fp).wr);
     let out: &mut [u8] = if size == 0 {
         &mut []
     } else {
@@ -363,7 +363,7 @@ pub unsafe extern "C" fn file_write(
     buf: *const c_char,
     size: size_t,
 ) -> ptrdiff_t {
-    assert!((*fp).wr);
+    debug_assert!((*fp).wr);
     // The `<` (rather than `<=`) is upstream's: a write that exactly fills
     // the block flushes instead of filling it.
     if size >= free_space(&*fp) {
@@ -392,7 +392,7 @@ pub unsafe extern "C" fn file_write(
 /// reading into the block and throwing the result away.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn file_skip(fp: *mut FileDescriptor, size: size_t) -> ptrdiff_t {
-    assert!(!(*fp).wr);
+    debug_assert!(!(*fp).wr);
     let from_buffer = buffered_len(&*fp).min(size);
     let mut skip_remaining = size - from_buffer;
     if skip_remaining == 0 {

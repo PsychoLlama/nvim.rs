@@ -221,7 +221,7 @@ pub(crate) unsafe fn ml_flush_line(buf: *mut buf_T, noalloc: bool) {
         } else if (*buf).b_ml.ml_flags & ML_ALLOCATED != 0 {
             // The caller must set ML_LINE_DIRTY along with noalloc, which
             // the branch above handles.
-            assert!(!noalloc);
+            debug_assert!(!noalloc);
             xfree((*buf).b_ml.ml_line_ptr.cast());
         }
 
@@ -318,7 +318,7 @@ pub(crate) unsafe fn ml_new_data(
     negative: bool,
     page_count: int64_t,
 ) -> *mut bhdr_T {
-    assert!(page_count >= 0);
+    debug_assert!(page_count >= 0);
     unsafe {
         let hp = mf_new(mfp, negative, page_count as c_uint);
         let dp = (*hp).bh_data as *mut DataBlock;

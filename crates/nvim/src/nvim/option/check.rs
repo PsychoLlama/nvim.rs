@@ -201,7 +201,7 @@ pub fn check_options() {
 ///
 /// `wp` must be live for the options that keep their flag in a window.
 pub unsafe fn was_set_insecurely(wp: *mut win_T, opt_idx: OptIndex, opt_flags: c_int) -> bool {
-    assert!(opt_idx != kOptInvalid);
+    debug_assert!(opt_idx != kOptInvalid);
     // SAFETY: the caller's window is live; the result points at a flag word.
     unsafe { *insecure_flag(wp, opt_idx, opt_flags) & kOptFlagInsecure != 0 }
 }

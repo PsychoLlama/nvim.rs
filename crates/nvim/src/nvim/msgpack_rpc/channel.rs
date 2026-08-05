@@ -652,7 +652,7 @@ unsafe fn dispatch_incoming(channel: *mut Channel, p: *mut Unpacker) -> bool {
 /// Decides where a request runs: here, on the channel's queue, or on the queue
 /// that is drained just before the editor blocks for input.
 unsafe fn handle_request(channel: *mut Channel, p: *mut Unpacker, args: Array) {
-    assert!((*p).type_0 == kMessageTypeRequest || (*p).type_0 == kMessageTypeNotification);
+    debug_assert!((*p).type_0 == kMessageTypeRequest || (*p).type_0 == kMessageTypeNotification);
 
     // The decoder could not resolve a handler, so `unpack_error` says why.
     if (*p).handler.fn_0.is_none() {

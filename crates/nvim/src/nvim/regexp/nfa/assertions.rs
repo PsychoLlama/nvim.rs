@@ -63,7 +63,7 @@ pub(crate) fn at_line(state: *mut nfa_state_T) -> bool {
 pub(crate) fn at_col(state: *mut nfa_state_T) -> bool {
     // SAFETY: as `at_line`.
     unsafe {
-        assert!((*state).val >= 0, "column assertion out of range");
+        debug_assert!((*state).val >= 0, "column assertion out of range");
         assert!(
             (*rex.ptr()).input >= (*rex.ptr()).line,
             "input before the line"

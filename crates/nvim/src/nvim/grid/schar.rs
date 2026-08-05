@@ -69,10 +69,11 @@ pub unsafe extern "C" fn schar_from_str(str: *const c_char) -> schar_T {
 /// # Safety
 /// `buf` need not be NUL-terminated, but may not contain embedded NULs, and
 /// `len` must be below [`MAX_SCHAR_SIZE`] -- below, not at, because the cache
-/// needs room for a terminator.
+/// needs room for a terminator. That bound is checked in a debug build only,
+/// as upstream's `assert()` is (`v0.12.4:src/nvim/grid.c:85`).
 pub unsafe fn schar_from_buf(buf: *const c_char, len: size_t) -> schar_T {
     unsafe {
-        assert!(len < MAX_SCHAR_SIZE as size_t, "len < MAX_SCHAR_SIZE");
+        debug_assert!(len < MAX_SCHAR_SIZE as size_t, "len < MAX_SCHAR_SIZE");
         if len <= 4 {
             let mut sc: schar_T = 0;
             memcpy((&raw mut sc).cast::<c_void>(), buf.cast::<c_void>(), len);
@@ -85,7 +86,7 @@ pub unsafe fn schar_from_buf(buf: *const c_char, len: size_t) -> schar_T {
         };
         let mut status: MHPutStatus = kMHExisting;
         let idx = mh_put_glyph(GLYPH_CACHE.ptr(), str, &raw mut status);
-        assert!(idx < 0xffffff, "idx < 0xFFFFFF");
+        debug_assert!(idx < 0xffffff, "idx < 0xFFFFFF");
         0xff_u32.wrapping_add(idx << 8)
     }
 }

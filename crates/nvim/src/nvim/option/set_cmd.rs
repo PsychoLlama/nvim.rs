@@ -459,7 +459,7 @@ unsafe fn do_one_set_option(
             }
             return;
         }
-        assert!(option_end >= arg);
+        debug_assert!(option_end >= arg);
 
         // What ends the name decides whether a trailing character is an
         // error; `:set ai  ?` is allowed, `:set ai?x` is not.

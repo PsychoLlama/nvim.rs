@@ -1437,7 +1437,7 @@ pub unsafe extern "C" fn utf_char2cells(mut c: ::core::ffi::c_int) -> ::core::ff
         return 1 as ::core::ffi::c_int;
     }
     if !vim_isprintc(c) {
-        assert!(c <= 0xffff as ::core::ffi::c_int, "c <= 0xFFFF");
+        debug_assert!(c <= 0xffff as ::core::ffi::c_int, "c <= 0xFFFF");
         return if c > 0xff as ::core::ffi::c_int {
             6 as ::core::ffi::c_int
         } else {

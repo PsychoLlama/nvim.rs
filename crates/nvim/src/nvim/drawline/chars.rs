@@ -156,7 +156,7 @@ impl Cells {
                 // `extra_attr` applies at this position; `extra_attr_next`
                 // after it.
                 wlv.reset_extra_attr = true;
-                assert!(self.extra_attr_next >= 0);
+                debug_assert!(self.extra_attr_next >= 0);
             }
         }
     }

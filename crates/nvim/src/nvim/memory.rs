@@ -200,7 +200,7 @@ pub unsafe extern "C" fn xmemscan(addr: *const c_void, c: c_char, size: usize) -
 }
 
 pub unsafe extern "C" fn strchrsub(str: *mut c_char, c: c_char, x: c_char) {
-    assert!(c != 0, "c != NUL");
+    debug_assert!(c != 0, "c != NUL");
     let len = CStr::from_ptr(str).to_bytes().len();
     replace_bytes(
         slice::from_raw_parts_mut(str as *mut u8, len),
@@ -275,7 +275,7 @@ fn lcat_copy(dlen: usize, slen: usize, dsize: usize) -> (usize, Option<usize>) {
 /// BSD `strlcat`. The unit suite calls this with `src` pointing into `dst`,
 /// so the copy stays a raw memmove.
 pub unsafe extern "C" fn xstrlcat(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize {
-    assert!(dsize > 0, "dsize > 0");
+    debug_assert!(dsize > 0, "dsize > 0");
     let dlen = CStr::from_ptr(dst).to_bytes().len();
     assert!(dlen < dsize, "dlen < dsize");
     let slen = CStr::from_ptr(src).to_bytes().len();

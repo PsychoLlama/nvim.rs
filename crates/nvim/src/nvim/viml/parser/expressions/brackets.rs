@@ -127,7 +127,7 @@ pub(super) unsafe fn colon(p: &mut ExprParser) -> Flow {
             } else if node_type == kExprNodeSubscript {
                 is_subscript = true;
                 // can_be_ternary = false;
-                assert!(!is_ternary, "!is_ternary");
+                debug_assert!(!is_ternary, "!is_ternary");
                 break;
             } else if node_type == kExprNodeColon {
                 break 'scan false;
@@ -209,7 +209,7 @@ pub(super) unsafe fn bracket(p: &mut ExprParser) -> Flow {
     p.add_op_node(node);
     p.hl_token(hl!(p, SubscriptBracket));
     if pt_is_assignment(p.cur_pt) {
-        assert!(p.want_node == kENodeValue, "want_node == kENodeValue");
+        debug_assert!(p.want_node == kENodeValue, "want_node == kENodeValue");
         // Subtract 1 for the NULL at the top.
         p.asgn_level = p.ast_stack.len().wrapping_sub(1);
         p.pt_stack.push(kEPTExpr);

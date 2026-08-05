@@ -588,7 +588,7 @@ pub unsafe extern "C" fn marktree_itr_step_overlap(
         return true;
     }
     (*itr).i = (*itr).s[(*itr).lvl as usize].i;
-    assert!((*itr).i >= 0 as ::core::ffi::c_int, "itr->i >= 0");
+    debug_assert!((*itr).i >= 0 as ::core::ffi::c_int, "itr->i >= 0");
     if (*itr).i as int32_t >= (*(*itr).x).n {
         marktree_itr_next(b, itr);
     }
@@ -651,5 +651,5 @@ pub unsafe extern "C" fn marktree_itr_fix_pos(mut b: *mut MarkTree, mut itr: *mu
         x = (*inner(x)).i_ptr[i as usize];
         lvl += 1;
     }
-    assert!(x == (*itr).x, "x == itr->x");
+    debug_assert!(x == (*itr).x, "x == itr->x");
 }

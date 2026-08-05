@@ -538,7 +538,7 @@ pub fn add_to_history(histype: c_int, new_entry: &[u8], in_map: bool, sep: u8) {
     if get_hislen() == 0 || histype == HIST_INVALID {
         return;
     }
-    assert!(histype != HIST_DEFAULT);
+    debug_assert!(histype != HIST_DEFAULT);
     if cmdmod.with(|m| m.cmod_flags & CMOD_KEEPPATTERNS as c_int != 0) && histype == HIST_SEARCH {
         return;
     }

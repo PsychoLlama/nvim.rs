@@ -154,7 +154,7 @@ impl KeyModes {
 /// undone when it switches back, and each stack always has a base entry.
 fn key_encoding_flags(state: &VTermState) -> VTermKeyEncodingFlags {
     let stack = &state.key_encoding_stacks[state.mode.alt_screen() as usize];
-    assert!(stack.size > 0, "key-encoding stack lost its base entry");
+    debug_assert!(stack.size > 0, "key-encoding stack lost its base entry");
     stack.items[usize::from(stack.size) - 1]
 }
 

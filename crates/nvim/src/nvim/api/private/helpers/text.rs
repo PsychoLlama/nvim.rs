@@ -170,7 +170,7 @@ pub(crate) unsafe fn normalize_index(
 ) -> int64_t {
     // SAFETY: `buf` is a loaded buffer and `oob` the caller's flag.
     unsafe {
-        assert!((*buf).b_ml.ml_line_count > 0);
+        debug_assert!((*buf).b_ml.ml_line_count > 0);
         let max_index = ((*buf).b_ml.ml_line_count + end_exclusive as linenr_T - 1) as int64_t;
         let mut index = if index < 0 {
             max_index + index + 1

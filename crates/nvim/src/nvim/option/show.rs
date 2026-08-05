@@ -392,7 +392,7 @@ pub(crate) unsafe fn put_set(
 
         match value.type_0 {
             kOptValTypeBoolean => {
-                assert!(value.data.boolean != kNone);
+                debug_assert!(value.data.boolean != kNone);
                 let prefix = if value.data.boolean == kTrue {
                     c"".as_ptr()
                 } else {

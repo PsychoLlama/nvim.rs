@@ -56,7 +56,7 @@ pub unsafe fn channel_create_event(chan: *mut Channel, ext_source: *const c_char
         &raw mut tv,
         ptr::null_mut(),
     );
-    assert!(tv.v_type == VAR_DICT);
+    debug_assert!(tv.v_type == VAR_DICT);
     let str = encode_tv2json(&raw mut tv, ptr::null_mut());
     logmsg(
         LOGLVL_INF,
@@ -113,7 +113,7 @@ unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
         &raw mut retval,
         ptr::null_mut(),
     );
-    assert!(retval.v_type == VAR_DICT);
+    debug_assert!(retval.v_type == VAR_DICT);
     tv_dict_add_dict(dict, c"info".as_ptr(), 4, retval.vval.v_dict);
     tv_dict_set_keys_readonly(dict);
     apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), true, curbuf.get());

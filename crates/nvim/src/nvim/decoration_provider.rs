@@ -164,7 +164,7 @@ unsafe fn decor_provider_invoke(
         if err.type_0 == kErrorTypeNone {
             with_provider(idx, |p| p.error_count = 0);
             if let Some(res) = res {
-                assert!(ret.type_0 == kObjectTypeArray);
+                debug_assert!(ret.type_0 == kObjectTypeArray);
                 *res = ret.data.array;
                 return true;
             }
@@ -546,10 +546,17 @@ pub unsafe fn decor_provider_invalidate_hl() {
 /// that can register a provider — that is, by any Lua call. Callers that keep
 /// it across one must use [`with_decor_provider`] instead.
 ///
+/// Namespace 0 is the global one and has no provider, so a caller asking for
+/// a non-positive id is a bug — but only a `debug_assert!`, because upstream
+/// spells it `assert(ns_id > 0)` (`v0.12.4:src/nvim/decoration_provider.c:305`)
+/// and that vanishes under `NDEBUG`. A release upstream nvim reached through
+/// `nvim_set_hl(-2, …)` appends a provider with a negative id and carries on;
+/// aborting instead would be a divergence, not a fix.
+///
 /// # Safety
 /// The answer must not outlive the next registration.
 pub unsafe fn get_decor_provider(ns_id: NS, force: bool) -> *mut DecorProvider {
-    assert!(ns_id > 0);
+    debug_assert!(ns_id > 0);
     match provider_index(ns_id, force) {
         Some(idx) => PROVIDERS.with(|providers| providers.as_ptr().cast_mut().wrapping_add(idx)),
         None => ptr::null_mut(),
@@ -563,12 +570,15 @@ pub unsafe fn get_decor_provider(ns_id: NS, force: bool) -> *mut DecorProvider {
 /// This is the form to use around anything that can run Lua: it resolves the
 /// provider afresh, so a callback that registered another provider in between
 /// cannot leave a stale pointer behind.
+///
+/// Carries [`get_decor_provider`]'s `ns_id > 0` assertion, and for the same
+/// reason it is a `debug_assert!` there.
 pub fn with_decor_provider<R>(
     ns_id: NS,
     force: bool,
     f: impl FnOnce(&mut DecorProvider) -> R,
 ) -> Option<R> {
-    assert!(ns_id > 0);
+    debug_assert!(ns_id > 0);
     let idx = provider_index(ns_id, force)?;
     Some(with_provider(idx, f))
 }

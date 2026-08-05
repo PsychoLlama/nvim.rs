@@ -191,7 +191,7 @@ pub(super) unsafe fn arrow(p: &mut ExprParser) -> Flow {
         p.select_figure_brace_type(lambda_node, kExprNodeLambda, hl!(p, Lambda));
         let node = p.new_node(kExprNodeArrow);
         if (*lambda_node).children.is_null() {
-            assert!(p.want_node == kENodeValue, "want_node == kENodeValue");
+            debug_assert!(p.want_node == kENodeValue, "want_node == kENodeValue");
             (*lambda_node).children = node;
             p.ast_stack.push(&raw mut (*lambda_node).children);
         } else {

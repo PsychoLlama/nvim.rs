@@ -184,7 +184,7 @@ fn flag_stack(state: &mut VTermState) -> &mut VTermKeyEncodingStack {
 /// `CSI ? u`: report the flags on top of the stack.
 pub(super) fn request_key_encoding_flags(state: &mut VTermState) {
     let stack = flag_stack(state);
-    assert!(stack.size > 0);
+    debug_assert!(stack.size > 0);
     let flags = stack.items[usize::from(stack.size - 1)];
     let mut reply = 0;
     for (bit, set) in [
@@ -221,7 +221,7 @@ pub(super) fn set_key_encoding_flags(state: &mut VTermState, arg: c_int, mode: c
     flags.set_report_associated(named(KEY_ENCODING_REPORT_ASSOCIATED));
 
     let stack = flag_stack(state);
-    assert!(stack.size > 0);
+    debug_assert!(stack.size > 0);
     let top = usize::from(stack.size - 1);
     stack.items[top] = flags;
 }

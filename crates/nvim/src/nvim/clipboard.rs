@@ -357,7 +357,7 @@ pub fn save_batch_count() -> ::core::ffi::c_int {
 /// Resume batching at the depth returned by [`save_batch_count`].
 pub fn restore_batch_count(save_count: ::core::ffi::c_int) {
     CLIPBOARD.with_mut(|st| {
-        assert!(st.batch_change_count == 0);
+        debug_assert!(st.batch_change_count == 0);
         st.batch_change_count = save_count;
         if st.batch_change_count > 0 {
             st.delay_update = true;

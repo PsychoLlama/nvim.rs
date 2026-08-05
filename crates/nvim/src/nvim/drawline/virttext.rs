@@ -45,7 +45,7 @@ pub(crate) unsafe fn line_putchar(
         // The caller handles overwriting the right half of a double-width
         // character; a zero here means it did not.
         assert!(*dest != 0);
-        assert!(maxcells > 0);
+        debug_assert!(maxcells > 0);
 
         let p = *pp;
         let mut cells = utf_ptr2cells(p);
@@ -290,7 +290,7 @@ pub(crate) unsafe fn draw_virt_text_item(
             if *draw_str as ::core::ffi::c_int == NUL {
                 continue;
             }
-            assert!(skip_cells <= 0);
+            debug_assert!(skip_cells <= 0);
 
             let mut through = false;
             let attr = match hl_mode {

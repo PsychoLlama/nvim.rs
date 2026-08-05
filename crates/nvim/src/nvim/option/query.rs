@@ -106,14 +106,14 @@ pub unsafe fn vimrc_found(fname: *mut c_char, envname: *mut c_char) {
 
 /// Whether anything has ever set the option.
 pub fn option_was_set(opt_idx: OptIndex) -> bool {
-    assert!(opt_idx != kOptInvalid);
+    debug_assert!(opt_idx != kOptInvalid);
     // SAFETY: the option table is a plain array; nothing holds a borrow.
     unsafe { (*options.ptr())[opt_idx as usize].flags & kOptFlagWasSet != 0 }
 }
 
 /// Forget that anything set the option — what `:set all&` does.
 pub fn reset_option_was_set(opt_idx: OptIndex) {
-    assert!(opt_idx != kOptInvalid);
+    debug_assert!(opt_idx != kOptInvalid);
     // SAFETY: the option table is a plain array; nothing holds a borrow.
     unsafe { (*options.ptr())[opt_idx as usize].flags &= !kOptFlagWasSet }
 }

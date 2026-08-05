@@ -165,7 +165,7 @@ pub unsafe fn tabstop_fromto(
     } else {
         ts_arg
     };
-    assert!(ts != 0);
+    debug_assert!(ts != 0);
     let (tabs, spaces) = match tabstops(vts) {
         Some(stops) => stops.from_to(start_col, end_col),
         None => tabstop::uniform_from_to(start_col, end_col, ts),
@@ -288,7 +288,7 @@ pub unsafe extern "C" fn indent_size_ts(
     mut ts: OptInt,
     mut vts: *mut colnr_T,
 ) -> ::core::ffi::c_int {
-    assert!(char2cells(' ' as ::core::ffi::c_int) == 1 as ::core::ffi::c_int);
+    debug_assert!(char2cells(' ' as ::core::ffi::c_int) == 1 as ::core::ffi::c_int);
     let mut vcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut tabstop_width: ::core::ffi::c_int = 0;
     let mut next_tab_vcol: ::core::ffi::c_int = 0;
@@ -304,7 +304,7 @@ pub unsafe extern "C" fn indent_size_ts(
             let c2rust_fresh1 = cur_tabstop;
             cur_tabstop = cur_tabstop.offset(1);
             vcol += *c2rust_fresh1 as ::core::ffi::c_int;
-            assert!(cur_vcol < vcol);
+            debug_assert!(cur_vcol < vcol);
             loop {
                 let c2rust_fresh2 = ptr;
                 ptr = ptr.offset(1);
@@ -325,7 +325,7 @@ pub unsafe extern "C" fn indent_size_ts(
         tabstop_width = *last_tabstop as ::core::ffi::c_int;
         next_tab_vcol = vcol + tabstop_width;
     }
-    assert!(tabstop_width != 0 as ::core::ffi::c_int);
+    debug_assert!(tabstop_width != 0 as ::core::ffi::c_int);
     loop {
         let c2rust_fresh3 = ptr;
         ptr = ptr.offset(1);
@@ -486,7 +486,7 @@ pub unsafe extern "C" fn set_indent(
             );
             abort();
         }
-        assert!(newline_size >= 0 as ::core::ffi::c_int);
+        debug_assert!(newline_size >= 0 as ::core::ffi::c_int);
         newline = xmalloc(newline_size as size_t) as *mut ::core::ffi::c_char;
         todo = size - ind_done;
         ind_len = orig_char_len + todo;
@@ -506,7 +506,7 @@ pub unsafe extern "C" fn set_indent(
         }
     } else {
         todo = size;
-        assert!(ind_len + line_len >= 0 as ::core::ffi::c_int);
+        debug_assert!(ind_len + line_len >= 0 as ::core::ffi::c_int);
         let mut newline_size_0: size_t = 0;
         let (c2rust_result_2, c2rust_overflowed_2) =
             (ind_len as i128).overflowing_add(line_len as i128);

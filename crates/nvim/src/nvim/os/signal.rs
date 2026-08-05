@@ -236,7 +236,7 @@ unsafe extern "C" fn on_signal(_watcher: *mut SignalWatcher, signum: c_int, _dat
 
 /// What each watched signal means to the editor.
 fn handle_signal(signum: c_int) {
-    assert!(signum >= 0);
+    debug_assert!(signum >= 0);
     // SAFETY: every call below is an ordinary main-thread editor call; this
     // runs from the event loop rather than from a signal handler. `curbuf` is
     // non-null for as long as the editor is running.

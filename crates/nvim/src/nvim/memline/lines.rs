@@ -72,7 +72,7 @@ pub unsafe fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T {
         if *ml_get_buf(buf, lnum) == NUL as ::core::ffi::c_char {
             return 0;
         }
-        assert!((*buf).b_ml.ml_line_textlen > 0);
+        debug_assert!((*buf).b_ml.ml_line_textlen > 0);
         (*buf).b_ml.ml_line_textlen - 1
     }
 }
@@ -313,7 +313,7 @@ pub unsafe fn ml_replace_buf_len(
         }
 
         let line = if copy {
-            assert!(!noalloc);
+            debug_assert!(!noalloc);
             xmemdupz(line_arg.cast(), len_arg).cast::<::core::ffi::c_char>()
         } else {
             line_arg

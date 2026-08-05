@@ -155,7 +155,7 @@ pub(super) unsafe fn plain_identifier(p: &mut ExprParser) -> Flow {
         (*node).data.var.ident_len = p.cur_token.len.wrapping_sub(scope_shift);
         *p.top_node_p = node;
         if scope_shift != 0 {
-            assert!(!p.node_is_key, "!node_is_key");
+            debug_assert!(!p.node_is_key, "!node_is_key");
             p.hl_at(p.cur_token.start, 1, hl!(p, IdentifierScope));
             p.hl_at(
                 shifted_pos(p.cur_token.start, 1),

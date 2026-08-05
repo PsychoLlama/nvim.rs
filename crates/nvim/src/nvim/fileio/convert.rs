@@ -536,7 +536,7 @@ impl Conv {
                         }
                     }
                 }
-                assert!(u8c <= INT_MAX as c_uint);
+                debug_assert!(u8c <= INT_MAX as c_uint);
                 dest = dest.offset(-(utf_char2len(u8c as c_int) as isize));
                 utf_char2bytes(u8c as c_int, dest);
             }

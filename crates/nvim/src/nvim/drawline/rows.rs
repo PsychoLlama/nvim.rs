@@ -35,7 +35,7 @@ impl Cells {
                 wlv.line_attr = self.line_attr_save;
                 wlv.line_attr_lowprio = self.line_attr_lowprio_save;
             }
-            assert!(wlv.off == 0);
+            debug_assert!(wlv.off == 0);
 
             if wp == cmdwin_win.get() {
                 wlv.draw_col_fill(

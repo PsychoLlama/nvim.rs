@@ -68,7 +68,7 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
             &raw mut capcol,
             false,
         );
-        assert!(len <= c_int::MAX as size_t);
+        debug_assert!(len <= c_int::MAX as size_t);
         if attr != HLF_COUNT {
             let kind: &CStr = match attr {
                 HLF_SPB => c"bad",

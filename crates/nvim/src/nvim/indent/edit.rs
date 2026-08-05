@@ -532,7 +532,7 @@ pub unsafe extern "C" fn copy_indent(
             line_len = get_cursor_line_len() + 1 as ::core::ffi::c_int;
             // Both operands are non-negative `int`s, so the only way the
             // narrowing to `size_t` the C guarded could fail is a negative sum.
-            assert!(ind_len + line_len >= 0, "STRICT_ADD overflow");
+            debug_assert!(ind_len + line_len >= 0, "STRICT_ADD overflow");
             line = xmalloc((ind_len + line_len) as size_t) as *mut ::core::ffi::c_char;
             p = line;
         }

@@ -75,7 +75,7 @@ impl UGrid {
     /// Rows scrolled out of the region keep their old contents; the caller
     /// repaints them.
     pub fn scroll(&mut self, top: c_int, bot: c_int, left: c_int, right: c_int, count: c_int) {
-        assert!(right >= left && left >= 0);
+        debug_assert!(right >= left && left >= 0);
         // Walk in the direction that copies a row only after its old contents
         // are no longer needed.
         let (start, stop, step) = if count > 0 {

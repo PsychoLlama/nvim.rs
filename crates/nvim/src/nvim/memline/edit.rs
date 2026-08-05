@@ -688,7 +688,7 @@ pub(crate) unsafe fn ml_delete_int(buf: *mut buf_T, lnum: linenr_T, flags: c_int
 
         // A line always holds its terminating NL internally, as a NUL, even
         // with 'noeol'.
-        assert!(line_size >= 1);
+        debug_assert!(line_size >= 1);
         ml_add_deleted_len_buf(
             buf,
             (dp as *mut c_char).offset(line_start as isize),

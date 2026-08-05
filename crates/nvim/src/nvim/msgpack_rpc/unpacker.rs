@@ -157,7 +157,7 @@ unsafe extern "C-unwind" fn api_parse_enter(parser: *mut mpack_parser_t, node: *
                 result = &raw mut (*kv).value;
             }
             TOKEN_STR | TOKEN_BIN | TOKEN_EXT => {
-                assert!((*node).tok.type_0 == TOKEN_CHUNK);
+                debug_assert!((*node).tok.type_0 == TOKEN_CHUNK);
             }
             _ => abort(),
         }
@@ -393,7 +393,7 @@ unsafe fn unpacker_parse_header(p: *mut Unpacker) -> bool {
                 if result != 0 {
                     break 'error result;
                 }
-                assert!(tok.type_0 == TOKEN_CHUNK);
+                debug_assert!(tok.type_0 == TOKEN_CHUNK);
             }
             if (tok.length as size_t) < (*p).method_name_len {
                 break 'error MPACK_EOF as c_int;
@@ -436,7 +436,7 @@ unsafe fn unpacker_parse_header(p: *mut Unpacker) -> bool {
 /// is now available in the unpacker.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn unpacker_advance(p: *mut Unpacker) -> bool {
-    assert!((*p).state >= 0);
+    debug_assert!((*p).state >= 0);
     (*p).has_grid_line_event = false;
 
     if (*p).state == protocol::HEADER {
@@ -895,7 +895,7 @@ pub unsafe fn unpack_keydict(
             continue;
         }
 
-        assert!((*field).opt_index >= 0);
+        debug_assert!((*field).opt_index >= 0);
         let flag = 1u64 << (*field).opt_index;
         if (*ks).is_set_ & flag != 0 {
             *error = xstrdup(c"duplicate key".as_ptr());

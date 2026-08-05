@@ -62,7 +62,7 @@ pub(super) unsafe fn figure_brace(p: &mut ExprParser) -> Flow {
     }
     if pt_is_assignment(p.cur_pt) && !pt_is_assignment(p.pt_top()) {
         // Subtract 1 for the NULL at the top.
-        assert!(p.want_node == kENodeValue, "want_node == kENodeValue");
+        debug_assert!(p.want_node == kENodeValue, "want_node == kENodeValue");
         p.asgn_level = p.ast_stack.len().wrapping_sub(1);
     }
     Flow::NextToken
@@ -118,7 +118,7 @@ unsafe fn closing_figure_brace(p: &mut ExprParser) -> Flow {
                 if (*new_top_node).children.is_null() {
                     // No children of a curly braces node indicates an empty
                     // dictionary.
-                    assert!(p.want_node == kENodeValue, "want_node == kENodeValue");
+                    debug_assert!(p.want_node == kENodeValue, "want_node == kENodeValue");
                     assert!(
                         (*new_top_node).data.fig.type_guesses.allow_dict,
                         "new_top_node->data.fig.type_guesses.allow_dict"

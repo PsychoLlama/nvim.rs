@@ -122,7 +122,7 @@ pub unsafe fn proc_get_exepath(proc: *mut Proc) -> *const c_char {
 /// been closed and freed and its status set to -1.
 pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: bool) -> c_int {
     // Forwarding stderr contradicts processing it internally.
-    assert!(!(has_err && (*proc).fwd_err));
+    debug_assert!(!(has_err && (*proc).fwd_err));
 
     let streams = [
         (has_in, &raw mut (*proc).in_0),
@@ -444,7 +444,7 @@ unsafe fn proc_close(proc: *mut Proc) {
         // twice: once from the teardown, once from its own exit callback.
         return;
     }
-    assert!(!(*proc).closed);
+    debug_assert!(!(*proc).closed);
     (*proc).closed = true;
 
     if (*proc).detach && (*proc).type_0 == kProcTypeUv {
@@ -556,7 +556,7 @@ unsafe extern "C" fn exit_event(argv: *mut *mut c_void) {
             os_exit(status);
         } else {
             // The only other caller is `rpc_close`, which passes 0.
-            assert!(status == 0);
+            debug_assert!(status == 0);
             preserve_exit(ptr::null());
         }
     }

@@ -495,7 +495,7 @@ pub(crate) fn set_options_default(opt_flags: c_int) {
 /// `val` must be NUL-terminated, and an allocation the option module may
 /// free when `allocated`.
 unsafe fn set_string_default(opt_idx: OptIndex, val: *mut c_char, allocated: bool) {
-    assert!(opt_idx != kOptInvalid);
+    debug_assert!(opt_idx != kOptInvalid);
     // SAFETY: the caller's `val` is NUL-terminated.
     let value = unsafe { owned(if allocated { val } else { xstrdup(val) }) };
     change_option_default(opt_idx, value);

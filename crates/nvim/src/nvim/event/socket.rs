@@ -231,7 +231,7 @@ pub unsafe fn socket_watcher_start(
         }
     }
 
-    assert!(result <= 0, "libuv returns a negative error code or zero");
+    debug_assert!(result <= 0, "libuv returns a negative error code or zero");
     if result == UV_EACCES {
         // libuv reports a missing parent directory as EACCES, for Windows
         // compatibility. ENOENT is the more useful answer.

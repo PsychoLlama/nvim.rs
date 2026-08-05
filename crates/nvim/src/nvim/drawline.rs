@@ -154,7 +154,7 @@ pub unsafe extern "C" fn win_line(
 ) -> ::core::ffi::c_int {
     // SAFETY: the caller's window, line and spell state.
     unsafe {
-        assert!(startrow < endrow);
+        debug_assert!(startrow < endrow);
 
         let mut wlv = WinLineVars {
             lnum,

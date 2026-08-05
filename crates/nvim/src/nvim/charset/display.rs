@@ -161,7 +161,7 @@ pub unsafe fn transstr_buf(
         }
     }
     *buf_p = NUL as c_char;
-    assert!(buf_p <= buf_e, "buf_p <= buf_e");
+    debug_assert!(buf_p <= buf_e, "buf_p <= buf_e");
     buf_p.addr() - buf.addr()
 }
 
@@ -368,7 +368,7 @@ pub unsafe fn transchar_nonprint(buf: *const buf_T, charbuf: *mut c_char, c: c_i
     } else if !buf.is_null() && c == CAR && get_fileformat(buf) == EOL_MAC {
         c = NL;
     }
-    assert!(c <= 0xff, "c <= 0xff");
+    debug_assert!(c <= 0xff, "c <= 0xff");
     let rendered = if dy_flags.get() & kOptDyFlagUhex != 0 || c > 0x7f {
         render::hex_form(c)
     } else {

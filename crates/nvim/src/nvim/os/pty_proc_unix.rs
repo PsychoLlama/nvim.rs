@@ -117,7 +117,7 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
 
     let proc = ptyproc as *mut Proc;
     // stderr is folded into the pty; there is one stream in each direction.
-    assert!((*proc).err.s.closed);
+    debug_assert!((*proc).err.s.closed);
 
     uv_signal_start(
         &raw mut (*(*proc).loop_0).children_watcher,

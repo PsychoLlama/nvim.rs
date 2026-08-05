@@ -291,7 +291,7 @@ pub(crate) unsafe extern "C" fn api_set_error(
         let measure: VaList = args.clone();
         let write: VaList = args.clone();
         let len = vsnprintf(ptr::null_mut(), 0, format, measure);
-        assert!(len >= 0);
+        debug_assert!(len >= 0);
         let bufsize = (len as size_t + 1).min(1024 * 1024);
         (*err).msg = xmalloc(bufsize).cast();
         vsnprintf((*err).msg, bufsize, format, write);

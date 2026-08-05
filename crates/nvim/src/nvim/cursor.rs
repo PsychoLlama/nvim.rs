@@ -390,7 +390,7 @@ pub unsafe fn check_cursor_col(win: *mut win_T) {
             (*win).w_cursor.coladd = oldcoladd - (*win).w_cursor.col;
             // Don't let the cursor point past the character it is inside.
             if (*win).w_cursor.col + 1 < len {
-                assert!((*win).w_cursor.coladd > 0, "win->w_cursor.coladd > 0");
+                debug_assert!((*win).w_cursor.coladd > 0, "win->w_cursor.coladd > 0");
                 let mut cs: colnr_T = 0;
                 let mut ce: colnr_T = 0;
                 getvcol(

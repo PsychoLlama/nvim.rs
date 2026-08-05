@@ -94,7 +94,7 @@ pub(crate) unsafe fn syn_stack_alloc() {
             while (*block).b_sst_len - (*block).b_sst_freecount + 2 > len && syn_stack_cleanup() {}
             len = len.max((*block).b_sst_len - (*block).b_sst_freecount + 2);
         }
-        assert!(len >= 0);
+        debug_assert!(len >= 0);
 
         let sstp = xcalloc(len as size_t, ::core::mem::size_of::<synstate_T>()) as *mut synstate_T;
 

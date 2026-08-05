@@ -19,8 +19,8 @@ use super::*;
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn marktree_check(mut b: *mut MarkTree) {
     if (*b).root.is_null() {
-        assert!((*b).n_keys == 0 as size_t, "b->n_keys == 0");
-        assert!((*b).n_nodes == 0 as size_t, "b->n_nodes == 0");
+        debug_assert!((*b).n_keys == 0 as size_t, "b->n_keys == 0");
+        debug_assert!((*b).n_nodes == 0 as size_t, "b->n_nodes == 0");
         assert!(
             (&raw mut (*b).id2node as *mut Map_uint64_t_ptr_t).is_null()
                 || (*(&raw mut (*b).id2node as *mut Map_uint64_t_ptr_t))
@@ -41,7 +41,7 @@ pub unsafe extern "C" fn marktree_check(mut b: *mut MarkTree) {
         &raw mut last_right,
         &(*b).meta_root,
     );
-    assert!((*b).n_keys == nkeys, "b->n_keys == nkeys");
+    debug_assert!((*b).n_keys == nkeys, "b->n_keys == nkeys");
     assert!(
         (*b).n_keys
             == (*(&raw mut (*b).id2node as *mut Map_uint64_t_ptr_t))

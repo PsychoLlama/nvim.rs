@@ -106,13 +106,13 @@ unsafe fn ix(x: *mut MTNode) -> IdSet {
 
 /// Record that the range `id` covers the whole of `x`.
 fn intersect_node(x: *mut MTNode, id: uint64_t) {
-    assert!(id & MARKTREE_END_FLAG == 0, "!(id & MARKTREE_END_FLAG)");
+    debug_assert!(id & MARKTREE_END_FLAG == 0, "!(id & MARKTREE_END_FLAG)");
     unsafe { ix(x) }.insert_sorted(id);
 }
 
 /// Drop that record. `strict` asserts the id was there to drop.
 fn unintersect_node(x: *mut MTNode, id: uint64_t, strict: bool) {
-    assert!(id & MARKTREE_END_FLAG == 0, "!(id & MARKTREE_END_FLAG)");
+    debug_assert!(id & MARKTREE_END_FLAG == 0, "!(id & MARKTREE_END_FLAG)");
     unsafe { ix(x) }.remove(id, strict);
 }
 
@@ -524,7 +524,7 @@ pub unsafe extern "C" fn marktree_del_itr(
     let mut lasti: *mut ::core::ffi::c_int = &raw mut (*itr).i;
     let mut ppos: MTPos = (*itr).pos;
     while x != (*b).root {
-        assert!(rlvl >= 0 as ::core::ffi::c_int, "rlvl >= 0");
+        debug_assert!(rlvl >= 0 as ::core::ffi::c_int, "rlvl >= 0");
         let mut p_0: *mut MTNode = (*x).parent;
         if (*x).n >= MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t - 1 as int32_t {
             break;
@@ -736,7 +736,7 @@ pub unsafe extern "C" fn marktree_clear(mut b: *mut MarkTree) {
     let _ = *ptr_;
     (*b).n_keys = 0 as size_t;
     (*b).meta_root = [0; META_COUNT];
-    assert!((*b).n_nodes == 0 as size_t, "b->n_nodes == 0");
+    debug_assert!((*b).n_nodes == 0 as size_t, "b->n_nodes == 0");
 }
 pub unsafe extern "C" fn marktree_free_subtree(mut b: *mut MarkTree, mut x: *mut MTNode) {
     if (*x).level != 0 {
@@ -906,7 +906,7 @@ unsafe extern "C" fn pseudo_index_for_id(
             }
             i += 1;
         }
-        assert!((i as int32_t) < (*n).n, "i < n->n");
+        debug_assert!((i as int32_t) < (*n).n, "i < n->n");
         if (*n).level != 0 {
             i += 1 as ::core::ffi::c_int;
         }
