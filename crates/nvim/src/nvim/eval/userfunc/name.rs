@@ -569,7 +569,16 @@ pub unsafe extern "C" fn trans_function_name(
                             lv.ll_name_len,
                         )
                             as *mut ::core::ffi::c_char;
-                        if !cp.is_null() && cp < end as *mut ::core::ffi::c_char {
+                        // Upstream also asks `cp < end`.  `cp` points into
+                        // `lv.ll_name`, which for a curly-brace name is a
+                        // fresh allocation while `end` points into the
+                        // command line: that compares two unrelated objects
+                        // and answers whatever the allocator happened to do.
+                        // `xmemrchr` is already bounded by `ll_name_len`, so
+                        // every colon it finds is inside the name and the
+                        // extra test adds nothing but the coin flip
+                        // (O-B14-12).
+                        if !cp.is_null() {
                             semsg(
                                 gettext(
                                     b"E884: Function name cannot contain a colon: %s\0".as_ptr()
