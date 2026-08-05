@@ -460,7 +460,7 @@
     "crates/nvim/src/nvim/os/fs.rs": {"lines": 2726, "no_mangle": 34, "unsafe": 60},
     "crates/nvim/src/nvim/os/input.rs": {"unsafe": 29},
     "crates/nvim/src/nvim/os/lang.rs": {"lines": 4421, "static_mut": 1, "unsafe": 14},
-    "crates/nvim/src/nvim/os/libc.rs": {"static_mut": 3, "unsafe": 19, "variadic": 1},
+    "crates/nvim/src/nvim/os/libc.rs": {"static_mut": 3, "unsafe": 21, "variadic": 1},
     "crates/nvim/src/nvim/os/proc.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/os/pty_proc_unix.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/os/shell.rs": {"lines": 1652, "no_mangle": 3, "unsafe": 30},

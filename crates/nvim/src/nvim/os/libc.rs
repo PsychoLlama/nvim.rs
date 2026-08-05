@@ -329,6 +329,7 @@ unsafe extern "C" {
         __s2: *const ::core::ffi::c_char,
         __n: size_t,
     ) -> ::core::ffi::c_int;
+    #[cfg(not(miri))]
     pub fn strncmp(
         __s1: *const ::core::ffi::c_char,
         __s2: *const ::core::ffi::c_char,
@@ -524,8 +525,12 @@ pub unsafe extern "C" fn snprintf(
 
 /// Untranslated, which is what libc's `gettext` answers for a message with
 /// no catalogue entry — and the test lane runs with no catalogue.
+///
+/// `unsafe` to match the `#[cfg(not(miri))]` declaration above: every caller
+/// hands it a raw pointer inside its own `unsafe` block, and a *safe* shim
+/// makes each of those an `unused_unsafe` error under `-D warnings`.
 #[cfg(miri)]
-pub extern "C" fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     __msgid as *mut ::core::ffi::c_char
 }
 
@@ -572,6 +577,24 @@ pub unsafe extern "C" fn strstr(
         Some(i) => unsafe { __haystack.add(i) as *mut ::core::ffi::c_char },
         None => ::core::ptr::null_mut(),
     }
+}
+
+/// Byte-for-byte, stopping at the first NUL — C's `strncmp`, which compares
+/// as `unsigned char` however `c_char` is signed on the target.
+#[cfg(miri)]
+pub unsafe extern "C" fn strncmp(
+    __s1: *const ::core::ffi::c_char,
+    __s2: *const ::core::ffi::c_char,
+    __n: size_t,
+) -> ::core::ffi::c_int {
+    for i in 0..__n {
+        let a = unsafe { *__s1.add(i) } as u8;
+        let b = unsafe { *__s2.add(i) } as u8;
+        if a != b || a == 0 {
+            return a as ::core::ffi::c_int - b as ::core::ffi::c_int;
+        }
+    }
+    0
 }
 
 #[cfg(miri)]
