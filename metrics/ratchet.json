@@ -1,6 +1,6 @@
 {
   "internal_exports": 45,
-  "files_without_forbid_unsafe": 713,
+  "files_without_forbid_unsafe": 712,
   "files_without_deny_unsafe_op": 193,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -187,8 +187,7 @@
     "crates/nvim/src/nvim/eval/typval/list.rs": {"no_mangle": 11, "unsafe": 16},
     "crates/nvim/src/nvim/eval/typval/listops.rs": {"no_mangle": 18, "unsafe": 21},
     "crates/nvim/src/nvim/eval/typval/listrange.rs": {"no_mangle": 1, "unsafe": 10},
-    "crates/nvim/src/nvim/eval/typval/nothing.rs": {"unsafe": 9},
-    "crates/nvim/src/nvim/eval/typval/nothing_convert.rs": {"lines": 1153, "unsafe": 1},
+    "crates/nvim/src/nvim/eval/typval/nothing.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/eval/typval/sort.rs": {"unsafe": 14},
     "crates/nvim/src/nvim/eval/typval/value.rs": {"no_mangle": 7, "unsafe": 8},
     "crates/nvim/src/nvim/eval/typval/watcher.rs": {"no_mangle": 3, "unsafe": 10},

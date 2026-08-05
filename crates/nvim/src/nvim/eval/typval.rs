@@ -3,28 +3,24 @@
 use crate::src::nvim::charset::vim_str2nr;
 use crate::src::nvim::eval::encode::{
     encode_bool_var_names, encode_special_var_names, encode_tv2echo, encode_tv2string,
-    encode_vim_list_to_buf,
 };
 use crate::src::nvim::eval::executor::eexe_mod_op;
 use crate::src::nvim::eval::gc::{gc_first_dict, gc_first_list};
 use crate::src::nvim::eval::userfunc::{call_func, func_ref, func_unref, get_funccal_local_ht};
 use crate::src::nvim::eval::vars::{
-    eval_msgpack_type_lists, get_globvar_dict, valid_varname, var_check_fixed, var_check_ro,
-    var_wrong_func_name,
+    get_globvar_dict, valid_varname, var_check_fixed, var_check_ro, var_wrong_func_name,
 };
 use crate::src::nvim::eval::{
-    callback_call, callback_from_typval, func_equal, get_copyID, partial_name, partial_unref,
-    set_selfdict, var_item_copy, var2fpos,
+    callback_call, callback_from_typval, func_equal, partial_name, partial_unref, set_selfdict,
+    var_item_copy, var2fpos,
 };
 use crate::src::nvim::garray::{
     ga_append, ga_append_via_ptr, ga_clear, ga_concat_len, ga_grow, ga_init,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::hashtab::{
     hash_add, hash_clear, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_unlock,
 };
-use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::{api_free_luaref, api_new_luaref, nlua_funcref_str};
 use crate::src::nvim::main::{
     curwin, did_emsg, e_blobidx, e_cannot_change_value, e_cannot_change_value_of_str, e_dictkey,
@@ -33,27 +29,23 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::mbyte::{mb_strcmp_ic, string_convert, utf_char2bytes, utfc_ptr2len};
 use crate::src::nvim::memory::{
-    xcalloc, xfree, xmalloc, xmallocz, xmemdup, xmemdupz, xrealloc, xstrdup, xstrndup,
+    xcalloc, xfree, xmalloc, xmallocz, xmemdup, xmemdupz, xstrdup, xstrndup,
 };
-use crate::src::nvim::message::{emsg, internal_error, semsg};
+use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::input::{fast_breakcheck, line_breakcheck};
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, gettext, memcmp, memcpy, memmove, qsort, snprintf, strcasecmp, strcmp,
-    strcoll, strcpy, strlen, strncmp, strtod,
+    abort, gettext, memcmp, memcpy, memmove, qsort, snprintf, strcasecmp, strcmp, strcoll, strcpy,
+    strlen, strncmp, strtod,
 };
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
     __compar_fn_t, Arena, BoolVarValue, Callback, CallbackType, DictWatcher, EvalFuncData, LuaRef,
-    MPConvPartialStage, MPConvStack, MPConvStackVal, MPConvStackVal_data as C2Rust_Unnamed_18,
-    MPConvStackVal_data_a as C2Rust_Unnamed_19, MPConvStackVal_data_d as C2Rust_Unnamed_22,
-    MPConvStackVal_data_l as C2Rust_Unnamed_21, MPConvStackVal_data_p as C2Rust_Unnamed_20,
-    MPConvStackValType, MessagePackType, QUEUE, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FIXED,
-    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_LOCKED, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
-    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VarLockStatus, blob_T, buf_T, dict_T, dictitem_T,
-    float_T, funcexe_T, garray_T, hashitem_T, int64_t, kBoolVarFalse, kBoolVarTrue,
-    kListLenMayKnow, kSpecialVarNull, linenr_T, list_T, listitem_T, listwatch_T, partial_T,
-    ptrdiff_t, size_t, ssize_t, staticList10_T, typval_T, typval_vval_union, ufunc_T, uint8_t,
-    uint64_t, varnumber_T, vimconv_T,
+    MPConvPartialStage, MPConvStackValType, QUEUE, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT,
+    VAR_FIXED, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_LOCKED, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VarLockStatus, blob_T, buf_T, dict_T,
+    dictitem_T, float_T, funcexe_T, garray_T, hashitem_T, int64_t, kBoolVarTrue, kListLenMayKnow,
+    kSpecialVarNull, linenr_T, list_T, listitem_T, listwatch_T, partial_T, ptrdiff_t, size_t,
+    ssize_t, staticList10_T, typval_T, typval_vval_union, ufunc_T, uint8_t, varnumber_T, vimconv_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -83,8 +75,6 @@ mod get;
 pub use self::get::*;
 mod nothing;
 pub(crate) use self::nothing::*;
-mod nothing_convert;
-pub(crate) use self::nothing_convert::*;
 pub const kCallbackLua: CallbackType = 3;
 pub const kCallbackPartial: CallbackType = 2;
 pub const kCallbackFuncref: CallbackType = 1;
@@ -339,7 +329,5 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_basetv: ::core::ptr::null_mut::<typval_T>(),
     fe_found_var: false_0 != 0,
 };
-pub static _typval_encode_nothing_nodict_var: GlobalCell<*const dict_T> =
-    GlobalCell::new(::core::ptr::null::<dict_T>());
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

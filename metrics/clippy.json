@@ -52,8 +52,6 @@
     "crates/nvim/src/nvim/eval/list.rs": 33,
     "crates/nvim/src/nvim/eval/lval.rs": 1,
     "crates/nvim/src/nvim/eval/system.rs": 1,
-    "crates/nvim/src/nvim/eval/typval/nothing.rs": 28,
-    "crates/nvim/src/nvim/eval/typval/nothing_convert.rs": 32,
     "crates/nvim/src/nvim/eval/userfunc.rs": 158,
     "crates/nvim/src/nvim/eval/vars.rs": 219,
     "crates/nvim/src/nvim/event/rstream.rs": 1,

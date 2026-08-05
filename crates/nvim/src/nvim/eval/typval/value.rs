@@ -31,9 +31,8 @@ pub unsafe extern "C" fn tv_clear(tv: *mut typval_T) {
         //
         // If that changes and the argument starts being used, translate it
         // where it is used.
-        let evn_ret =
-            encode_vim_to_nothing(::core::ptr::null(), tv, c"tv_clear() argument".as_ptr());
-        debug_assert!(evn_ret == OK);
+        let evn_ret = encode_vim_to_nothing(tv, c"tv_clear() argument".as_ptr());
+        debug_assert!(evn_ret);
     }
 }
 
