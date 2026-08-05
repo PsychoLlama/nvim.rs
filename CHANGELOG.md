@@ -36,6 +36,17 @@ and this project adheres to [CalVer](https://calver.org/).
   Lua values, API objects, and the deep free every discarded value goes
   through. It is now one walk those seven hang off, and it no longer keeps a
   pointer into its own stack across a reallocation of it.
+- Rewrote the value decoders, the other direction: `json_decode()` and
+  `msgpackparse()` — JSON's scanner, its `\u` and surrogate-pair escapes, the
+  special dictionaries a map or an oversized integer needs, and the msgpack
+  parser callbacks.
+
+### Fixed
+
+- A dictionary key decoded from msgpack was randomly read-only, and randomly
+  leaked. The key's item was allocated without initialising its flags, so
+  whether it refused assignment and whether it was ever freed depended on
+  what the heap block last held.
 
 ## [2026.08.02-af6bcec290]
 
