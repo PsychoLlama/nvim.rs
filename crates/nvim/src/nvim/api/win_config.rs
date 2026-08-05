@@ -32,7 +32,7 @@ use crate::src::nvim::os::libc::{__assert_fail, memcpy, memset, strchr};
 use crate::src::nvim::strings::striequal;
 use crate::src::nvim::types::ui::kUIMultigrid;
 use crate::src::nvim::types::{
-    AlignTextPos, Arena, Array, Boolean, BorderTextType, Buffer, CMD_index, Error, Float,
+    AlignTextPos, Arena, Array, Boolean, BorderTextType, Buffer, CMD_SIZE, Error, Float,
     FloatAnchor, FloatRelative, Integer, KeyDict_win_config, Object, OptionalKeys, String_0,
     TryState, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, buf_T, bufref_T,
     colnr_T, except_T, frame_T, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
@@ -75,7 +75,6 @@ pub struct C2Rust_Unnamed_15 {
     pub chars: [[::core::ffi::c_char; 32]; 8],
     pub shadow_color: bool,
 }
-pub const CMD_SIZE: CMD_index = 557;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {

@@ -29,9 +29,10 @@ use crate::src::nvim::regexp::RE_MAGIC;
 use crate::src::nvim::register::valid_yank_reg;
 use crate::src::nvim::strings::kv_do_printf;
 use crate::src::nvim::types::{
-    Arena, Array, Buffer, CMD_index, CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE,
-    CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS,
-    CMOD_NOAUTOCMD, CMOD_NOSWAPFILE, CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, CmdParseInfo,
+    Arena, Array, Buffer, CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_append, CMD_iput, CMD_put,
+    CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS,
+    CMOD_KEEPMARKS, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_NOSWAPFILE,
+    CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, CmdParseInfo,
     CmdParseInfo_magic as C2Rust_Unnamed_13, Dict, Direction, Error, Integer, KeyDict_cmd,
     KeyDict_cmd_magic, KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty,
     KeyDict_get_commands, KeyDict_user_command, KeySetLink, KeyValuePair, LuaRef, Object,
@@ -56,18 +57,6 @@ unsafe extern "C" {
 pub const ADDR_NONE: cmd_addr_T = 11;
 pub const ADDR_OTHER: cmd_addr_T = 10;
 pub const ADDR_LINES: cmd_addr_T = 0;
-pub const CMD_USER_BUF: CMD_index = -2;
-pub const CMD_USER: CMD_index = -1;
-pub const CMD_SIZE: CMD_index = 557;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_put: CMD_index = 344;
-pub const CMD_iput: CMD_index = 197;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
-pub const CMD_append: CMD_index = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const NUMBUFLEN: C2Rust_Unnamed_15 = 65;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_16 = 0;

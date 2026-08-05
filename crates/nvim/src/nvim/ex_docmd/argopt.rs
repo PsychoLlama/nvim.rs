@@ -14,8 +14,8 @@ use crate::src::nvim::ex_docmd::scan::skip_cmd_arg;
 use crate::src::nvim::ex_docmd::source::ex_errmsg;
 use crate::src::nvim::ex_docmd::window::current_tab_nr;
 use crate::src::nvim::ex_docmd::{
-    BAD_DROP, BAD_KEEP, CMD_tabmove, CMD_tabnext, DIALOG_MSG_SIZE, FAIL, FORCE_BIN, FORCE_NOBIN,
-    NUL, OK, VIM_QUESTION, VIM_YES, dollar_command, quitmore,
+    BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, FAIL, FORCE_BIN, FORCE_NOBIN, NUL, OK, VIM_QUESTION,
+    VIM_YES, dollar_command, quitmore,
 };
 use crate::src::nvim::main::{
     arg_had_last, cmdmod, curbuf, curtab, curwin, e_invarg2, e_invargval, e_invrange, e_isadir2,
@@ -30,8 +30,8 @@ use crate::src::nvim::os::libc::{gettext, ngettext, strcasecmp, strcmp, strncmp}
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::regexp::regmatch_T;
 use crate::src::nvim::types::{
-    CMOD_CONFIRM, CompleteListItemGetter, FILE, exarg_T, expand_T, int32_t, intmax_t, size_t,
-    uint8_t,
+    CMD_tabmove, CMD_tabnext, CMOD_CONFIRM, CompleteListItemGetter, FILE, exarg_T, expand_T,
+    int32_t, intmax_t, size_t, uint8_t,
 };
 use crate::src::nvim::window::{only_one_window, tabpage_index, valid_tabpage};
 

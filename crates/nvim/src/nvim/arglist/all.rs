@@ -1,6 +1,7 @@
 //! `:all` and `:sall`: lay the argument list out over windows.
 
 use super::*;
+use crate::src::nvim::types::CMD_drop;
 use crate::src::nvim::window::{WSP_BELOW, WSP_ROOM};
 
 #[derive(Copy, Clone)]

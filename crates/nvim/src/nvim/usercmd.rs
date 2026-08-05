@@ -29,13 +29,13 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::strings::{arena_printf, vim_strchr, xstrnsave};
 use crate::src::nvim::types::{
-    Arena, CMD_index, CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT,
-    CMOD_KEEPJUMPS, CMOD_KEEPMARKS, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD,
-    CMOD_NOSWAPFILE, CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, Dict, Integer, LuaRef, Object,
-    OptInt, String_0, buf_T, cmd_addr_T, cmdmod_T, estack_T, exarg_T, expand_T, garray_T, int64_t,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil,
-    kObjectTypeString, key_value_pair, mod_entry_T, object, object_data as C2Rust_Unnamed, scid_T,
-    sctx_T, size_t, ucmd_T, uint8_t, uint32_t, win_T,
+    Arena, CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_map, CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT,
+    CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS,
+    CMOD_NOAUTOCMD, CMOD_NOSWAPFILE, CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, Dict, Integer,
+    LuaRef, Object, OptInt, String_0, buf_T, cmd_addr_T, cmdmod_T, estack_T, exarg_T, expand_T,
+    garray_T, int64_t, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeLuaRef,
+    kObjectTypeNil, kObjectTypeString, key_value_pair, mod_entry_T, object,
+    object_data as C2Rust_Unnamed, scid_T, sctx_T, size_t, ucmd_T, uint8_t, uint32_t, win_T,
 };
 use crate::src::nvim::window::{
     WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, prevwin_curwin, tabpage_index,
@@ -58,16 +58,6 @@ pub const EXPAND_FILES: C2Rust_Unnamed_14 = 2;
 pub const EXPAND_COMMANDS: C2Rust_Unnamed_14 = 1;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_14 = 0;
 pub const EXPAND_UNSUCCESSFUL: C2Rust_Unnamed_14 = -2;
-pub const CMD_USER_BUF: CMD_index = -2;
-pub const CMD_USER: CMD_index = -1;
-pub const CMD_SIZE: CMD_index = 557;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_map: CMD_index = 275;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
 pub const ADDR_NONE: cmd_addr_T = 11;
 pub const ADDR_OTHER: cmd_addr_T = 10;
 pub const ADDR_QUICKFIX: cmd_addr_T = 8;

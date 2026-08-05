@@ -147,7 +147,7 @@ use crate::src::nvim::state::{
 use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::src::nvim::types::ui::{kUICmdline, kUIMessages};
 use crate::src::nvim::types::{
-    Arena, Array, Boolean, CMD_index, Callback, Callback_data as C2Rust_Unnamed_5, CmdParseInfo,
+    Arena, Array, Boolean, CMD_append, Callback, Callback_data as C2Rust_Unnamed_5, CmdParseInfo,
     CmdParseInfo_magic as C2Rust_Unnamed_21, CmdRedraw, CmdlineColorChunk, CmdlineColors,
     CmdlineInfo, ColoredCmdline, Direction, Error, EvalFuncData, ExprAST, ExprASTNodeType,
     ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
@@ -225,13 +225,6 @@ pub const OPTION_MAGIC_NOT_SET: optmagic_T = 0;
 pub const MAGIC_ALL: magic_T = 4;
 pub const MAGIC_ON: magic_T = 3;
 pub const kOptValTypeString: OptValType = 2;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
-pub const CMD_append: CMD_index = 0;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_int;
 pub const DOBUF_WIPE: dobuf_action_values = 4;

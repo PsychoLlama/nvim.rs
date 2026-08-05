@@ -23,8 +23,8 @@ use crate::src::nvim::ex_docmd::scan::ends_excmd;
 use crate::src::nvim::ex_docmd::source::getline_equal;
 use crate::src::nvim::ex_docmd::window::current_tab_nr;
 use crate::src::nvim::ex_docmd::{
-    ADDR_TABS, BF_DUMMY, CMD_SIZE, CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute,
-    FAIL, NUL, OK, SID_NONE, cmdnames, e_invrange, ex_pressedreturn, exmode_plus, getexline,
+    ADDR_TABS, BF_DUMMY, FAIL, NUL, OK, SID_NONE, cmdnames, e_invrange, ex_pressedreturn,
+    exmode_plus, getexline,
 };
 use crate::src::nvim::main::{
     curbuf, curtab, curwin, did_emsg, emsg_silent, exmode_active, expr_map_lock, msg_silent, p_ei,
@@ -43,9 +43,10 @@ use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS,
-    CMOD_KEEPMARKS, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_NOSWAPFILE,
-    CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, String_0,
+    CMD_SIZE, CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, CMOD_BROWSE,
+    CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS,
+    CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_NOSWAPFILE, CMOD_SANDBOX, CMOD_SILENT,
+    CMOD_UNSILENT, String_0,
 };
 use crate::src::nvim::types::{OptInt, size_t};
 use crate::src::nvim::types::{OptVal, OptValData};

@@ -9,6 +9,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::keycodes::key_unescape;
+use crate::src::nvim::types::{CMD_map, CMD_unmap};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

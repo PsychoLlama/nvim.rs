@@ -66,17 +66,17 @@ use crate::src::nvim::search::{restore_search_patterns, save_search_patterns};
 use crate::src::nvim::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::src::nvim::strings::{vim_strchr, vim_strnicmp_asc, xstrnsave};
 use crate::src::nvim::types::{
-    Arena, Array, AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, Buffer, CMD_index,
-    Callback, Callback_data as C2Rust_Unnamed_5, Dict, Error, Event, Integer, KeyValuePair,
-    LuaRetMode, Map_String_int, Map_int_String, Map_int_ptr_t, MapHash, Object, OptInt, OptVal,
-    OptValData, OptValType, Set_String, Set_int, String_0, Timestamp, TriState, VAR_UNKNOWN,
-    VAR_UNLOCKED, VV_CMDBANG, VV_TERMRESPONSE, aco_save_T, aucmdwin_T, auto_event, buf_T,
-    buffblock, buffblock_T, buffheader_T, bufref_T, dict_T, estack_T, etype_T, event_T, exarg_T,
-    expand_T, funccal_entry_T, handle_T, hashitem_T, hashtab_T, int64_t, kErrorTypeNone, kFalse,
-    kNone, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil,
-    kObjectTypeString, kTrue, key_value_pair, linenr_T, object, object_data as C2Rust_Unnamed,
-    proftime_T, ptr_t, ptrdiff_t, regprog_T, save_redo_T, save_v_event_T, sctx_T, size_t,
-    tabpage_T, typval_T, typval_vval_union, uint32_t, uint64_t, varnumber_T, win_T,
+    Arena, Array, AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, Buffer, Callback,
+    Callback_data as C2Rust_Unnamed_5, Dict, Error, Event, Integer, KeyValuePair, LuaRetMode,
+    Map_String_int, Map_int_String, Map_int_ptr_t, MapHash, Object, OptInt, OptVal, OptValData,
+    OptValType, Set_String, Set_int, String_0, Timestamp, TriState, VAR_UNKNOWN, VAR_UNLOCKED,
+    VV_CMDBANG, VV_TERMRESPONSE, aco_save_T, aucmdwin_T, auto_event, buf_T, buffblock, buffblock_T,
+    buffheader_T, bufref_T, dict_T, estack_T, etype_T, event_T, exarg_T, expand_T, funccal_entry_T,
+    handle_T, hashitem_T, hashtab_T, int64_t, kErrorTypeNone, kFalse, kNone, kObjectTypeBoolean,
+    kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kTrue, key_value_pair,
+    linenr_T, object, object_data as C2Rust_Unnamed, proftime_T, ptr_t, ptrdiff_t, regprog_T,
+    save_redo_T, save_v_event_T, sctx_T, size_t, tabpage_T, typval_T, typval_vval_union, uint32_t,
+    uint64_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::ui_call_win_hide;
 use crate::src::nvim::ui_compositor::ui_comp_remove_grid;
@@ -99,12 +99,6 @@ pub const EXPAND_EVENTS: C2Rust_Unnamed_28 = 10;
 pub const EXPAND_FILES: C2Rust_Unnamed_28 = 2;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_28 = 0;
 pub const kOptValTypeString: OptValType = 2;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
 pub const NUM_EVENTS: auto_event = 145;
 pub const EVENT_WINSCROLLED: auto_event = 144;
 pub const EVENT_WINRESIZED: auto_event = 143;

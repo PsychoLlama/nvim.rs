@@ -9,6 +9,9 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::{
+    CMD_SIZE, CMD_bang, CMD_breakadd, CMD_breakdel, CMD_k, CMD_substitute, CMD_terminal,
+};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

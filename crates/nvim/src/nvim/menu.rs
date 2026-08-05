@@ -41,11 +41,11 @@ use crate::src::nvim::state::{
 };
 use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 use crate::src::nvim::types::{
-    AlignTextPos, BoolVarValue, CMD_index, EvalFuncData, RemapValues, String_0, TriState,
-    VAR_UNKNOWN, WinSplit, WinStyle, buffblock, buffblock_T, buffheader_T, colnr_T, dict_T,
-    exarg_T, expand_T, garray_T, kFalse, kListLenMayKnow, kNone, kTrue, linenr_T, list_T, pos_T,
-    ptrdiff_t, save_state_T, scid_T, size_t, ssize_t, tasave_T, typebuf_T, typval_T, uint8_t,
-    varnumber_T, vimmenu_T,
+    AlignTextPos, BoolVarValue, EvalFuncData, RemapValues, String_0, TriState, VAR_UNKNOWN,
+    WinSplit, WinStyle, buffblock, buffblock_T, buffheader_T, colnr_T, dict_T, exarg_T, expand_T,
+    garray_T, kFalse, kListLenMayKnow, kNone, kTrue, linenr_T, list_T, pos_T, ptrdiff_t,
+    save_state_T, scid_T, size_t, ssize_t, tasave_T, typebuf_T, typval_T, uint8_t, varnumber_T,
+    vimmenu_T,
 };
 use crate::src::nvim::ui::ui_call_update_menu;
 pub const kAlignLeft: AlignTextPos = 0;
@@ -57,12 +57,6 @@ pub const EXPAND_MENUNAMES: C2Rust_Unnamed_14 = 21;
 pub const EXPAND_MENUS: C2Rust_Unnamed_14 = 11;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_14 = 0;
 pub const EXPAND_UNSUCCESSFUL: C2Rust_Unnamed_14 = -2;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
 pub const REMAP_SCRIPT: RemapValues = -2;
 pub const REMAP_NONE: RemapValues = -1;
 pub const REMAP_YES: RemapValues = 0;

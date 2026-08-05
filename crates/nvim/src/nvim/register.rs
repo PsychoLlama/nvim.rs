@@ -78,11 +78,11 @@ use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped_ex
 use crate::src::nvim::terminal::terminal_paste;
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    AdditionalData, Arena, BoolVarValue, CMD_index, CMOD_LOCKMARKS, CharsizeArg, CharsizeKind,
-    Direction, ExtmarkOp, GRegFlags, MotionType, OptInt, RemapValues, StrCharInfo, String_0,
-    Timestamp, UndoObjectType, VAR_FIXED, bcount_t, block_def, buf_T, cmd_addr_T, colnr_T, dict_T,
-    exarg_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, linenr_T,
-    list_T, oparg_T, pos_T, ptrdiff_t, save_v_event_T, size_t, ssize_t, uint8_t, yankreg_T,
+    AdditionalData, Arena, BoolVarValue, CMOD_LOCKMARKS, CharsizeArg, CharsizeKind, Direction,
+    ExtmarkOp, GRegFlags, MotionType, OptInt, RemapValues, StrCharInfo, String_0, Timestamp,
+    UndoObjectType, VAR_FIXED, bcount_t, block_def, buf_T, cmd_addr_T, colnr_T, dict_T, exarg_T,
+    garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, linenr_T, list_T,
+    oparg_T, pos_T, ptrdiff_t, save_v_event_T, size_t, ssize_t, uint8_t, yankreg_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::undo::{u_save, u_save_cursor};
@@ -92,13 +92,6 @@ pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
-pub const CMD_USER: CMD_index = -1;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const kMTUnknown: MotionType = -1;

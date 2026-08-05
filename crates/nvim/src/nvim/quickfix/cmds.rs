@@ -16,7 +16,11 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::types::{VAR_LIST, VAR_STRING};
+use crate::src::nvim::types::{
+    CMD_caddbuffer, CMD_caddexpr, CMD_caddfile, CMD_cbuffer, CMD_cexpr, CMD_cfile, CMD_cgetbuffer,
+    CMD_cgetexpr, CMD_cgetfile, CMD_laddbuffer, CMD_laddexpr, CMD_laddfile, CMD_lbuffer, CMD_lexpr,
+    CMD_lfile, CMD_lgetbuffer, CMD_lgetexpr, CMD_lgetfile, VAR_LIST, VAR_STRING,
+};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 

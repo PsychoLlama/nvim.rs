@@ -26,10 +26,10 @@ use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING};
 use crate::src::nvim::runtime::{estack_sfile, exestack};
 use crate::src::nvim::state::MODE_NORMAL;
 use crate::src::nvim::types::{
-    CMD_index, Callback, Callback_data as C2Rust_Unnamed_5, String_0, buf_T, buffblock,
-    buffblock_T, buffheader_T, colnr_T, estack_T, estack_arg_T, exarg_T, exprtype_T, garray_T,
-    int32_t, int64_t, key_extra, linenr_T, regprog_T, size_t, tasave_T, typebuf_T, typval_T,
-    uint8_t, varnumber_T,
+    CMD_breakdel, CMD_profdel, CMD_profile, Callback, Callback_data as C2Rust_Unnamed_5, String_0,
+    buf_T, buffblock, buffblock_T, buffheader_T, colnr_T, estack_T, estack_arg_T, exarg_T,
+    exprtype_T, garray_T, int32_t, int64_t, key_extra, linenr_T, regprog_T, size_t, tasave_T,
+    typebuf_T, typval_T, uint8_t, varnumber_T,
 };
 unsafe extern "C" {
     fn vim_regcomp(
@@ -46,9 +46,6 @@ unsafe extern "C" {
 }
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_13 = 0;
-pub const CMD_profdel: CMD_index = 333;
-pub const CMD_profile: CMD_index = 332;
-pub const CMD_breakdel: CMD_index = 36;
 pub const DOCMD_EXCRESET: C2Rust_Unnamed_17 = 16;
 pub const DOCMD_VERBOSE: C2Rust_Unnamed_17 = 1;
 pub const ESTACK_NONE: estack_arg_T = 0;

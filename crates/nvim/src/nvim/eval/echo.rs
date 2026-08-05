@@ -12,8 +12,8 @@ use crate::src::nvim::eval::typval::{tv_clear, tv_get_string};
 use crate::src::nvim::eval::userfunc::{restore_funccal, save_funccal};
 use crate::src::nvim::eval::vars::set_var;
 use crate::src::nvim::eval::{
-    CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, DOCMD_NOWAIT, DOCMD_VERBOSE, FAIL,
-    NUL, OK, clear_evalarg, echo_hl_id, eval1, eval1_emsg, fill_evalarg_from_eap,
+    DOCMD_NOWAIT, DOCMD_VERBOSE, FAIL, NUL, OK, clear_evalarg, echo_hl_id, eval1, eval1_emsg,
+    fill_evalarg_from_eap,
 };
 use crate::src::nvim::ex_docmd::{check_nextcmd, do_cmdline};
 use crate::src::nvim::ex_eval::aborting;
@@ -33,9 +33,10 @@ use crate::src::nvim::os::libc::{gettext, memcpy, strlen};
 use crate::src::nvim::runtime::{get_scriptname, script_is_lua};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN,
-    VAR_UNLOCKED, evalarg_T, exarg_T, funccal_entry_T, garray_T, linenr_T, ptrdiff_t, sctx_T,
-    size_t, typval_T, typval_vval_union, var_flavour_T,
+    CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, VAR_FLAVOUR_DEFAULT,
+    VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, evalarg_T,
+    exarg_T, funccal_entry_T, garray_T, linenr_T, ptrdiff_t, sctx_T, size_t, typval_T,
+    typval_vval_union, var_flavour_T,
 };
 use crate::src::nvim::ui::ui_has;
 

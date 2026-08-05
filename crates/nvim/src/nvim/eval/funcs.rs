@@ -3,9 +3,9 @@
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::memory::ARENA_EMPTY;
 use crate::src::nvim::types::{
-    Array, CMD_index, Callback_data as C2Rust_Unnamed_22, ChannelPart, ChannelStreamType, Context,
-    GRegFlags, LuaRetMode, MotionType, Object, ProcType, String_0, XDGVarType, cmd_addr_T,
-    garray_T, object_data as C2Rust_Unnamed_16, size_t, uint64_t, uv__work, uv_loop_t, uv_req_type,
+    Array, Callback_data as C2Rust_Unnamed_22, ChannelPart, ChannelStreamType, Context, GRegFlags,
+    LuaRetMode, MotionType, Object, ProcType, String_0, XDGVarType, cmd_addr_T, garray_T,
+    object_data as C2Rust_Unnamed_16, size_t, uint64_t, uv__work, uv_loop_t, uv_req_type,
 };
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash
@@ -113,7 +113,6 @@ pub type C2Rust_Unnamed_38 = ::core::ffi::c_int;
 pub const EXPAND_FILES: C2Rust_Unnamed_38 = 2;
 pub type C2Rust_Unnamed_39 = ::core::ffi::c_uint;
 pub const NSUBEXP: C2Rust_Unnamed_39 = 10;
-pub const CMD_USER: CMD_index = -1;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub const kChannelStreamProc: ChannelStreamType = 0;
 pub const kChannelPartAll: ChannelPart = 4;

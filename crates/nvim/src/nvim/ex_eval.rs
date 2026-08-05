@@ -31,10 +31,10 @@ use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING, skip_regexp_err};
 use crate::src::nvim::runtime::{do_finish, estack_sfile, exestack, stacktrace_create};
 use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 use crate::src::nvim::types::{
-    CMD_index, OptInt, VAR_UNKNOWN, VAR_UNLOCKED, VV_EXCEPTION, VV_STACKTRACE, VV_THROWPOINT,
-    cleanup_T, colnr_T, cstack_T, eslist_T, estack_T, estack_arg_T, evalarg_T, exarg_T, except_T,
-    except_type_T, exception_state_T, int64_t, linenr_T, list_T, msglist_T, ptrdiff_t, regmatch_T,
-    regprog_T, size_t, typval_T, typval_vval_union,
+    CMD_else, CMD_elseif, CMD_endwhile, CMD_while, OptInt, VAR_UNKNOWN, VAR_UNLOCKED, VV_EXCEPTION,
+    VV_STACKTRACE, VV_THROWPOINT, cleanup_T, colnr_T, cstack_T, eslist_T, estack_T, estack_arg_T,
+    evalarg_T, exarg_T, except_T, except_type_T, exception_state_T, int64_t, linenr_T, list_T,
+    msglist_T, ptrdiff_t, regmatch_T, regprog_T, size_t, typval_T, typval_vval_union,
 };
 unsafe extern "C" {
     fn vim_regcomp(
@@ -75,16 +75,6 @@ pub const CSL_HAD_LOOP: C2Rust_Unnamed_5 = 1;
 pub const ET_INTERRUPT: except_type_T = 2;
 pub const ET_ERROR: except_type_T = 1;
 pub const ET_USER: except_type_T = 0;
-pub const CMD_while: CMD_index = 525;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_endwhile: CMD_index = 147;
-pub const CMD_elseif: CMD_index = 141;
-pub const CMD_else: CMD_index = 140;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
 pub const ESTACK_NONE: estack_arg_T = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;

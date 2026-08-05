@@ -64,12 +64,13 @@ use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
 use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::src::nvim::types::{
-    CMD_index, CMOD_LOCKMARKS, EvalFuncData, ExtmarkOp, FILE, FileInfo, OptInt, OptScope, OptVal,
-    OptValData, OptValType, String_0, TriState, aco_save_T, buf_T, bufref_T, cmd_addr_T, colnr_T,
-    cstack_T, diff_T, diffblock_S, diffline_S, diffline_T, diffline_change_S, diffline_change_T,
-    exarg_T, garray_T, hlf_T, int32_t, kFalse, kNone, kTrue, linenr_T, mmfile_t, scid_T, size_t,
-    tabpage_T, typval_T, uint8_t, uint64_t, uv_stat_t, uv_timespec_t, varnumber_T, win_T,
-    xdemitcb_t, xdemitconf_t, xdl_emit_hunk_consume_func_t, xpparam_t,
+    CMD_append, CMD_diffget, CMD_diffput, CMD_split, CMOD_LOCKMARKS, EvalFuncData, ExtmarkOp, FILE,
+    FileInfo, OptInt, OptScope, OptVal, OptValData, OptValType, String_0, TriState, aco_save_T,
+    buf_T, bufref_T, cmd_addr_T, colnr_T, cstack_T, diff_T, diffblock_S, diffline_S, diffline_T,
+    diffline_change_S, diffline_change_T, exarg_T, garray_T, hlf_T, int32_t, kFalse, kNone, kTrue,
+    linenr_T, mmfile_t, scid_T, size_t, tabpage_T, typval_T, uint8_t, uint64_t, uv_stat_t,
+    uv_timespec_t, varnumber_T, win_T, xdemitcb_t, xdemitconf_t, xdl_emit_hunk_consume_func_t,
+    xpparam_t,
 };
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::undo::{u_save, u_sync};
@@ -85,10 +86,6 @@ pub const kOptValTypeBoolean: OptValType = 0;
 pub const kOptScopeWin: OptScope = 1;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
-pub const CMD_split: CMD_index = 420;
-pub const CMD_diffput: CMD_index = 122;
-pub const CMD_diffget: CMD_index = 119;
-pub const CMD_append: CMD_index = 0;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]

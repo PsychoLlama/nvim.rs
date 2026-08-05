@@ -123,11 +123,11 @@ use crate::src::nvim::search::{
 use crate::src::nvim::strings::{has_non_ascii, vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::builders::static_cstring;
 use crate::src::nvim::types::{
-    CMD_index, Callback, Callback_data, DirStack, Direction, EvalFuncData, ExtmarkOp, FILE,
-    FileInfo, OptInt, OptVal, OptValData, OptValType, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX,
-    VarType, aco_save_T, bln_values, buf_T, bufref_T, cleanup_T, cmdidx_T, colnr_T, dict_T,
-    dictitem_T, dobuf_action_values, exarg_T, getf_values, handle_T, linenr_T, list_T, listitem_T,
-    optset_T, pos_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T,
+    Callback, Callback_data, DirStack, Direction, EvalFuncData, ExtmarkOp, FILE, FileInfo, OptInt,
+    OptVal, OptValData, OptValType, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, VarType,
+    aco_save_T, bln_values, buf_T, bufref_T, cleanup_T, cmdidx_T, colnr_T, dict_T, dictitem_T,
+    dobuf_action_values, exarg_T, getf_values, handle_T, linenr_T, list_T, listitem_T, optset_T,
+    pos_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T,
     regprog_T, scid_T, size_t, time_t, typval_T, typval_vval_union, varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::ui::ui_flush;
@@ -180,69 +180,6 @@ mod setprops;
 pub use self::setprops::*;
 mod eval;
 pub use self::eval::*;
-pub const CMD_vimgrep: CMD_index = 510;
-pub const CMD_vimgrepadd: CMD_index = 511;
-pub const CMD_lvimgrep: CMD_index = 267;
-pub const CMD_make: CMD_index = 274;
-pub const CMD_helpgrep: CMD_index = 178;
-pub const CMD_lvimgrepadd: CMD_index = 268;
-pub const CMD_lrewind: CMD_index = 261;
-pub const CMD_lpfile: CMD_index = 260;
-pub const CMD_lprevious: CMD_index = 259;
-pub const CMD_lolder: CMD_index = 257;
-pub const CMD_lnfile: CMD_index = 252;
-pub const CMD_lnext: CMD_index = 250;
-pub const CMD_lmake: CMD_index = 248;
-pub const CMD_ll: CMD_index = 243;
-pub const CMD_lhelpgrep: CMD_index = 241;
-pub const CMD_lgrepadd: CMD_index = 240;
-pub const CMD_lgrep: CMD_index = 239;
-pub const CMD_lfirst: CMD_index = 235;
-pub const CMD_lfdo: CMD_index = 234;
-pub const CMD_lfile: CMD_index = 233;
-pub const CMD_lexpr: CMD_index = 232;
-pub const CMD_ldo: CMD_index = 228;
-pub const CMD_lcd: CMD_index = 225;
-pub const CMD_lbelow: CMD_index = 223;
-pub const CMD_lbuffer: CMD_index = 221;
-pub const CMD_lafter: CMD_index = 219;
-pub const CMD_laddfile: CMD_index = 218;
-pub const CMD_laddbuffer: CMD_index = 217;
-pub const CMD_laddexpr: CMD_index = 216;
-pub const CMD_labove: CMD_index = 214;
-pub const CMD_lNfile: CMD_index = 212;
-pub const CMD_lNext: CMD_index = 211;
-pub const CMD_grepadd: CMD_index = 173;
-pub const CMD_grep: CMD_index = 172;
-pub const CMD_crewind: CMD_index = 104;
-pub const CMD_cpfile: CMD_index = 102;
-pub const CMD_cprevious: CMD_index = 101;
-pub const CMD_colder: CMD_index = 91;
-pub const CMD_cnfile: CMD_index = 86;
-pub const CMD_cnext: CMD_index = 84;
-pub const CMD_cfirst: CMD_index = 67;
-pub const CMD_cfdo: CMD_index = 66;
-pub const CMD_cfile: CMD_index = 65;
-pub const CMD_cgetfile: CMD_index = 68;
-pub const CMD_cgetbuffer: CMD_index = 69;
-pub const CMD_cgetexpr: CMD_index = 70;
-pub const CMD_lgetfile: CMD_index = 236;
-pub const CMD_lgetbuffer: CMD_index = 237;
-pub const CMD_lgetexpr: CMD_index = 238;
-pub const CMD_cexpr: CMD_index = 64;
-pub const CMD_cdo: CMD_index = 62;
-pub const CMD_cd: CMD_index = 61;
-pub const CMD_cc: CMD_index = 59;
-pub const CMD_cbelow: CMD_index = 57;
-pub const CMD_cbefore: CMD_index = 56;
-pub const CMD_cbuffer: CMD_index = 55;
-pub const CMD_cafter: CMD_index = 52;
-pub const CMD_caddfile: CMD_index = 51;
-pub const CMD_caddexpr: CMD_index = 50;
-pub const CMD_caddbuffer: CMD_index = 49;
-pub const CMD_cabove: CMD_index = 48;
-pub const CMD_cNfile: CMD_index = 45;
-pub const CMD_cNext: CMD_index = 44;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeBoolean: OptValType = 0;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;

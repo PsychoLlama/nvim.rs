@@ -112,8 +112,8 @@ use crate::src::nvim::syntax::{
 use crate::src::nvim::tag::expand_tags;
 use crate::src::nvim::types::ui::{kUICmdline, kUIMessages, kUIPopupmenu, kUIWildmenu};
 use crate::src::nvim::types::{
-    Arena, Array, CMD_index, CmdlineInfo, CompleteListItemGetter, Direction, Error, EvalFuncData,
-    LuaRetMode, Object, OptInt, buf_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T,
+    Arena, Array, CmdlineInfo, CompleteListItemGetter, Direction, Error, EvalFuncData, LuaRetMode,
+    Object, OptInt, buf_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T,
     fuzmatch_str_T, garray_T, hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, list_T,
     listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, regprog_T, scriptitem_T, size_t, ssize_t,
     typval_T, typval_vval_union, uint32_t, varnumber_T, xp_prefix_T,
@@ -128,8 +128,6 @@ use crate::src::nvim::window::{global_stl_height, last_status};
 use core::ffi::CStr;
 
 // The carve of the transpiled module; see each child's docs.
-mod cmdidx;
-pub(crate) use self::cmdidx::*;
 mod escape;
 pub use self::escape::*;
 mod expandone;

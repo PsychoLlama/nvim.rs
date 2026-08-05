@@ -82,7 +82,7 @@ use crate::src::nvim::profile::{
 use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::{
-    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, Arena, Array, CMD_index, Dict,
+    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, Arena, Array, Dict,
     DoInRuntimepathCB, Error, EvalFuncData, FILE, Integer, LineGetter, LuaRetMode, MHPutStatus,
     Map_String_int, MapHash, Object, OptInt, OptVal, OptValData, OptValType, Set_String, String_0,
     TriState, VAR_DICT, VAR_FIXED, VAR_LOCKED, XDGVarType, buf_T, cmd_addr_T, colnr_T, dict_T,
@@ -110,13 +110,6 @@ pub const EXPAND_FILES: C2Rust_Unnamed_13 = 2;
 pub const kOptValTypeString: OptValType = 2;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const CSTP_FINISH: C2Rust_Unnamed_15 = 32;
-pub const CMD_USER: CMD_index = -1;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const WILD_ICASE: C2Rust_Unnamed_16 = 256;

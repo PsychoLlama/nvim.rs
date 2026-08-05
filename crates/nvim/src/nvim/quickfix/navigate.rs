@@ -12,6 +12,12 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::{
+    CMD_cNext, CMD_cNfile, CMD_cabove, CMD_cafter, CMD_cbefore, CMD_cbelow, CMD_cc, CMD_cdo,
+    CMD_cfdo, CMD_cfirst, CMD_cnfile, CMD_cpfile, CMD_cprevious, CMD_crewind, CMD_lNext,
+    CMD_lNfile, CMD_labove, CMD_lafter, CMD_lbelow, CMD_ldo, CMD_lfdo, CMD_lfirst, CMD_ll,
+    CMD_lnfile, CMD_lpfile, CMD_lprevious, CMD_lrewind,
+};
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int};
 

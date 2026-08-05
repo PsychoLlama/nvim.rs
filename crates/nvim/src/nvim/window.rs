@@ -116,18 +116,18 @@ use crate::src::nvim::tag::tagstack_clear_entry;
 use crate::src::nvim::terminal::terminal_check_size;
 use crate::src::nvim::types::ui::{kUIMessages, kUIMultigrid, kUITabline};
 use crate::src::nvim::types::{
-    AlignTextPos, Boolean, CMD_index, CMOD_CONFIRM, CdCause, CdScope, Direction, Error, Float,
-    FloatAnchor, GridView, Integer, Map_int_ptr_t, MapHash, MotionType, OptInt, OptVal, OptValData,
-    OptValType, ScreenGrid, Set_uint32_t, StlClickDefinition, String_0, Terminal, TryState,
-    VAR_NUMBER, VAR_SCOPE, VAR_UNLOCKED, VirtText, VirtTextChunk, WinConfig, WinInfo, WinSplit,
-    WinStyle, Window, aucmdwin_T, bln_values, buf_T, bufref_T, cmd_addr_T, cmdidx_T, colnr_T,
-    dict_T, dobuf_action_values, dobuf_start_values, exarg_T, except_T, frame_T, garray_T,
-    getf_values, handle_T, hashitem_T, hashtab_T, int64_t, kCdScopeGlobal, kCdScopeTabpage,
-    kCdScopeWindow, kErrorTypeException, kErrorTypeNone, kFloatAnchorEast, kFloatAnchorSouth,
-    kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
-    linenr_T, list_T, lpos_T, msglist_T, oparg_T, optset_T, pos_T, ptr_t, ptrdiff_t, qf_info_T,
-    save_v_event_T, scid_T, size_t, switchwin_T, tabpage_T, taggy_T, typval_T, typval_vval_union,
-    uint32_t, varnumber_T, win_T,
+    AlignTextPos, Boolean, CMD_SIZE, CMD_close, CMD_tabnew, CMOD_CONFIRM, CdCause, CdScope,
+    Direction, Error, Float, FloatAnchor, GridView, Integer, Map_int_ptr_t, MapHash, MotionType,
+    OptInt, OptVal, OptValData, OptValType, ScreenGrid, Set_uint32_t, StlClickDefinition, String_0,
+    Terminal, TryState, VAR_NUMBER, VAR_SCOPE, VAR_UNLOCKED, VirtText, VirtTextChunk, WinConfig,
+    WinInfo, WinSplit, WinStyle, Window, aucmdwin_T, bln_values, buf_T, bufref_T, cmd_addr_T,
+    cmdidx_T, colnr_T, dict_T, dobuf_action_values, dobuf_start_values, exarg_T, except_T, frame_T,
+    garray_T, getf_values, handle_T, hashitem_T, hashtab_T, int64_t, kCdScopeGlobal,
+    kCdScopeTabpage, kCdScopeWindow, kErrorTypeException, kErrorTypeNone, kFloatAnchorEast,
+    kFloatAnchorSouth, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeTabline,
+    kFloatRelativeWindow, linenr_T, list_T, lpos_T, msglist_T, oparg_T, optset_T, pos_T, ptr_t,
+    ptrdiff_t, qf_info_T, save_v_event_T, scid_T, size_t, switchwin_T, tabpage_T, taggy_T,
+    typval_T, typval_vval_union, uint32_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_call_grid_destroy, ui_call_win_close, ui_call_win_external_pos, ui_call_win_float_pos,
@@ -163,224 +163,6 @@ pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeBoolean: OptValType = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const CMD_SIZE: CMD_index = 557;
-pub const CMD_Next: CMD_index = 556;
-pub const CMD_tilde: CMD_index = 555;
-pub const CMD_at: CMD_index = 554;
-pub const CMD_rshift: CMD_index = 553;
-pub const CMD_lshift: CMD_index = 551;
-pub const CMD_and: CMD_index = 550;
-pub const CMD_pound: CMD_index = 549;
-pub const CMD_bang: CMD_index = 548;
-pub const CMD_yank: CMD_index = 546;
-pub const CMD_wq: CMD_index = 532;
-pub const CMD_wincmd: CMD_index = 527;
-pub const CMD_while: CMD_index = 525;
-pub const CMD_write: CMD_index = 522;
-pub const CMD_vsplit: CMD_index = 519;
-pub const CMD_vnew: CMD_index = 517;
-pub const CMD_vimgrepadd: CMD_index = 511;
-pub const CMD_vimgrep: CMD_index = 510;
-pub const CMD_view: CMD_index = 509;
-pub const CMD_visual: CMD_index = 508;
-pub const CMD_vertical: CMD_index = 507;
-pub const CMD_verbose: CMD_index = 506;
-pub const CMD_vglobal: CMD_index = 504;
-pub const CMD_update: CMD_index = 503;
-pub const CMD_unlockvar: CMD_index = 499;
-pub const CMD_unlet: CMD_index = 498;
-pub const CMD_try: CMD_index = 488;
-pub const CMD_topleft: CMD_index = 484;
-pub const CMD_throw: CMD_index = 473;
-pub const CMD_terminal: CMD_index = 471;
-pub const CMD_tcl: CMD_index = 468;
-pub const CMD_tabrewind: CMD_index = 466;
-pub const CMD_tabNext: CMD_index = 465;
-pub const CMD_tabprevious: CMD_index = 464;
-pub const CMD_tabonly: CMD_index = 463;
-pub const CMD_tabnew: CMD_index = 462;
-pub const CMD_tabnext: CMD_index = 461;
-pub const CMD_tablast: CMD_index = 460;
-pub const CMD_tabmove: CMD_index = 459;
-pub const CMD_tabfirst: CMD_index = 458;
-pub const CMD_tabfind: CMD_index = 457;
-pub const CMD_tabedit: CMD_index = 456;
-pub const CMD_tabclose: CMD_index = 454;
-pub const CMD_tab: CMD_index = 453;
-pub const CMD_tchdir: CMD_index = 449;
-pub const CMD_tcd: CMD_index = 448;
-pub const CMD_syntax: CMD_index = 444;
-pub const CMD_sview: CMD_index = 442;
-pub const CMD_startreplace: CMD_index = 434;
-pub const CMD_startinsert: CMD_index = 432;
-pub const CMD_split: CMD_index = 420;
-pub const CMD_snomagic: CMD_index = 415;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_smagic: CMD_index = 410;
-pub const CMD_silent: CMD_index = 407;
-pub const CMD_sfind: CMD_index = 403;
-pub const CMD_substitute: CMD_index = 382;
-pub const CMD_rviminfo: CMD_index = 381;
-pub const CMD_ruby: CMD_index = 378;
-pub const CMD_rshada: CMD_index = 375;
-pub const CMD_rightbelow: CMD_index = 374;
-pub const CMD_return: CMD_index = 371;
-pub const CMD_redir: CMD_index = 363;
-pub const CMD_read: CMD_index = 360;
-pub const CMD_pythonx: CMD_index = 355;
-pub const CMD_pyx: CMD_index = 353;
-pub const CMD_python3: CMD_index = 351;
-pub const CMD_py3: CMD_index = 349;
-pub const CMD_python: CMD_index = 346;
-pub const CMD_put: CMD_index = 344;
-pub const CMD_psearch: CMD_index = 334;
-pub const CMD_perl: CMD_index = 323;
-pub const CMD_print: CMD_index = 318;
-pub const CMD_only: CMD_index = 311;
-pub const CMD_number: CMD_index = 304;
-pub const CMD_noswapfile: CMD_index = 302;
-pub const CMD_noautocmd: CMD_index = 298;
-pub const CMD_new: CMD_index = 291;
-pub const CMD_mzscheme: CMD_index = 288;
-pub const CMD_match: CMD_index = 278;
-pub const CMD_make: CMD_index = 274;
-pub const CMD_move: CMD_index = 272;
-pub const CMD_lvimgrepadd: CMD_index = 268;
-pub const CMD_lvimgrep: CMD_index = 267;
-pub const CMD_lua: CMD_index = 264;
-pub const CMD_lrewind: CMD_index = 261;
-pub const CMD_lpfile: CMD_index = 260;
-pub const CMD_lprevious: CMD_index = 259;
-pub const CMD_lolder: CMD_index = 257;
-pub const CMD_lockvar: CMD_index = 256;
-pub const CMD_lockmarks: CMD_index = 255;
-pub const CMD_lnfile: CMD_index = 252;
-pub const CMD_lnext: CMD_index = 250;
-pub const CMD_lmake: CMD_index = 248;
-pub const CMD_ll: CMD_index = 243;
-pub const CMD_lhelpgrep: CMD_index = 241;
-pub const CMD_lgrepadd: CMD_index = 240;
-pub const CMD_lgrep: CMD_index = 239;
-pub const CMD_lgetexpr: CMD_index = 238;
-pub const CMD_lgetbuffer: CMD_index = 237;
-pub const CMD_lgetfile: CMD_index = 236;
-pub const CMD_lfirst: CMD_index = 235;
-pub const CMD_lfdo: CMD_index = 234;
-pub const CMD_lfile: CMD_index = 233;
-pub const CMD_lexpr: CMD_index = 232;
-pub const CMD_let: CMD_index = 231;
-pub const CMD_leftabove: CMD_index = 230;
-pub const CMD_ldo: CMD_index = 228;
-pub const CMD_lchdir: CMD_index = 226;
-pub const CMD_lcd: CMD_index = 225;
-pub const CMD_lbelow: CMD_index = 223;
-pub const CMD_lbuffer: CMD_index = 221;
-pub const CMD_lafter: CMD_index = 219;
-pub const CMD_laddfile: CMD_index = 218;
-pub const CMD_laddbuffer: CMD_index = 217;
-pub const CMD_laddexpr: CMD_index = 216;
-pub const CMD_labove: CMD_index = 214;
-pub const CMD_lNfile: CMD_index = 212;
-pub const CMD_lNext: CMD_index = 211;
-pub const CMD_list: CMD_index = 210;
-pub const CMD_keepalt: CMD_index = 209;
-pub const CMD_keeppatterns: CMD_index = 208;
-pub const CMD_keepjumps: CMD_index = 207;
-pub const CMD_keepmarks: CMD_index = 206;
-pub const CMD_k: CMD_index = 205;
-pub const CMD_isplit: CMD_index = 199;
-pub const CMD_isearch: CMD_index = 198;
-pub const CMD_iput: CMD_index = 197;
-pub const CMD_ilist: CMD_index = 189;
-pub const CMD_ijump: CMD_index = 188;
-pub const CMD_if: CMD_index = 187;
-pub const CMD_insert: CMD_index = 184;
-pub const CMD_horizontal: CMD_index = 183;
-pub const CMD_hide: CMD_index = 181;
-pub const CMD_helpgrep: CMD_index = 178;
-pub const CMD_help: CMD_index = 176;
-pub const CMD_grepadd: CMD_index = 173;
-pub const CMD_grep: CMD_index = 172;
-pub const CMD_global: CMD_index = 170;
-pub const CMD_function: CMD_index = 168;
-pub const CMD_for: CMD_index = 167;
-pub const CMD_foldopen: CMD_index = 166;
-pub const CMD_folddoclosed: CMD_index = 165;
-pub const CMD_finally: CMD_index = 159;
-pub const CMD_filter: CMD_index = 157;
-pub const CMD_file: CMD_index = 154;
-pub const CMD_execute: CMD_index = 151;
-pub const CMD_eval: CMD_index = 149;
-pub const CMD_enew: CMD_index = 148;
-pub const CMD_endwhile: CMD_index = 147;
-pub const CMD_endtry: CMD_index = 146;
-pub const CMD_endfor: CMD_index = 145;
-pub const CMD_endif: CMD_index = 143;
-pub const CMD_elseif: CMD_index = 141;
-pub const CMD_else: CMD_index = 140;
-pub const CMD_echon: CMD_index = 139;
-pub const CMD_echomsg: CMD_index = 138;
-pub const CMD_echoerr: CMD_index = 136;
-pub const CMD_echo: CMD_index = 135;
-pub const CMD_earlier: CMD_index = 134;
-pub const CMD_edit: CMD_index = 133;
-pub const CMD_dsplit: CMD_index = 132;
-pub const CMD_dsearch: CMD_index = 131;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_dlist: CMD_index = 127;
-pub const CMD_djump: CMD_index = 126;
-pub const CMD_diffput: CMD_index = 122;
-pub const CMD_diffget: CMD_index = 119;
-pub const CMD_delfunction: CMD_index = 115;
-pub const CMD_delete: CMD_index = 109;
-pub const CMD_crewind: CMD_index = 104;
-pub const CMD_cpfile: CMD_index = 102;
-pub const CMD_cprevious: CMD_index = 101;
-pub const CMD_const: CMD_index = 99;
-pub const CMD_confirm: CMD_index = 97;
-pub const CMD_colder: CMD_index = 91;
-pub const CMD_cnfile: CMD_index = 86;
-pub const CMD_cnext: CMD_index = 84;
-pub const CMD_close: CMD_index = 79;
-pub const CMD_checktime: CMD_index = 75;
-pub const CMD_cgetexpr: CMD_index = 70;
-pub const CMD_cgetbuffer: CMD_index = 69;
-pub const CMD_cgetfile: CMD_index = 68;
-pub const CMD_cfirst: CMD_index = 67;
-pub const CMD_cfdo: CMD_index = 66;
-pub const CMD_cfile: CMD_index = 65;
-pub const CMD_cexpr: CMD_index = 64;
-pub const CMD_cdo: CMD_index = 62;
-pub const CMD_cd: CMD_index = 61;
-pub const CMD_cc: CMD_index = 59;
-pub const CMD_cbelow: CMD_index = 57;
-pub const CMD_cbefore: CMD_index = 56;
-pub const CMD_cbuffer: CMD_index = 55;
-pub const CMD_catch: CMD_index = 54;
-pub const CMD_call: CMD_index = 53;
-pub const CMD_cafter: CMD_index = 52;
-pub const CMD_caddfile: CMD_index = 51;
-pub const CMD_caddexpr: CMD_index = 50;
-pub const CMD_caddbuffer: CMD_index = 49;
-pub const CMD_cabove: CMD_index = 48;
-pub const CMD_cNfile: CMD_index = 45;
-pub const CMD_cNext: CMD_index = 44;
-pub const CMD_change: CMD_index = 43;
-pub const CMD_bwipeout: CMD_index = 42;
-pub const CMD_bunload: CMD_index = 41;
-pub const CMD_browse: CMD_index = 38;
-pub const CMD_botright: CMD_index = 31;
-pub const CMD_belowright: CMD_index = 26;
-pub const CMD_bdelete: CMD_index = 25;
-pub const CMD_balt: CMD_index = 24;
-pub const CMD_badd: CMD_index = 23;
-pub const CMD_autocmd: CMD_index = 17;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
-pub const CMD_aboveleft: CMD_index = 3;
-pub const CMD_append: CMD_index = 0;
 pub const ADDR_NONE: cmd_addr_T = 11;
 pub const ADDR_OTHER: cmd_addr_T = 10;
 pub const ADDR_UNSIGNED: cmd_addr_T = 9;

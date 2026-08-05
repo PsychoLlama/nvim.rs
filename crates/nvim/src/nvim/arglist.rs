@@ -98,6 +98,7 @@ mod all;
 mod eval;
 
 use crate::src::nvim::regexp::RE_MAGIC;
+use crate::src::nvim::types::{CMD_argdo, CMD_argglobal, CMD_arglocal, CMD_args, CMD_snext};
 pub use all::{arg_all, ex_all};
 pub use eval::{f_argc, f_argidx, f_arglistid, f_argv};
 

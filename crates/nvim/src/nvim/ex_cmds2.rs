@@ -42,25 +42,15 @@ use crate::src::nvim::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_s
 use crate::src::nvim::runtime::{DIP_ALL, source_runtime_vim_lua};
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::types::{
-    CMD_index, CMOD_CONFIRM, VV_SWAPCOMMAND, aco_save_T, aentry_T, buf_T, bufref_T, cmd_addr_T,
-    cstack_T, dobuf_action_values, dobuf_start_values, exarg, exarg_T, linenr_T, list_T, ptrdiff_t,
-    size_t, ssize_t, tabpage_T, uint8_t, uint64_t, varnumber_T, win_T,
+    CMD_append, CMD_argdo, CMD_bufdo, CMD_cdo, CMD_cfdo, CMD_first, CMD_ldo, CMD_lfdo, CMD_sfirst,
+    CMD_tabdo, CMD_windo, CMOD_CONFIRM, VV_SWAPCOMMAND, aco_save_T, aentry_T, buf_T, bufref_T,
+    cmd_addr_T, cstack_T, dobuf_action_values, dobuf_start_values, exarg, exarg_T, linenr_T,
+    list_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint8_t, uint64_t, varnumber_T, win_T,
 };
 use crate::src::nvim::undo::bufIsChanged;
 use crate::src::nvim::window::{
     goto_tabpage_tp, goto_tabpage_win, valid_tabpage, win_goto, win_split, win_valid,
 };
-pub const CMD_windo: CMD_index = 528;
-pub const CMD_tabdo: CMD_index = 455;
-pub const CMD_sfirst: CMD_index = 404;
-pub const CMD_lfdo: CMD_index = 234;
-pub const CMD_ldo: CMD_index = 228;
-pub const CMD_first: CMD_index = 161;
-pub const CMD_cfdo: CMD_index = 66;
-pub const CMD_cdo: CMD_index = 62;
-pub const CMD_bufdo: CMD_index = 40;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_append: CMD_index = 0;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const DOBUF_WIPE: dobuf_action_values = 4;

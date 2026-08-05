@@ -26,9 +26,8 @@ use crate::src::nvim::ex_docmd::window::{current_tab_nr, current_win_nr};
 use crate::src::nvim::ex_docmd::{
     ADDR_ARGUMENTS, ADDR_BUFFERS, ADDR_LINES, ADDR_LOADED_BUFFERS, ADDR_NONE, ADDR_OTHER,
     ADDR_QUICKFIX, ADDR_QUICKFIX_VALID, ADDR_TABS, ADDR_TABS_RELATIVE, ADDR_UNSIGNED, ADDR_WINDOWS,
-    CMD_SIZE, CMD_cc, CMD_diffget, CMD_diffput, CMD_ll, CMD_wincmd, EX_RANGE, EX_ZEROR,
-    EXPAND_NOTHING, FAIL, INT32_MAX, NUL, OK, cmdnames, e_backslash, e_invrange,
-    e_line_number_out_of_range, e_no_errors, e_norange, searchcmdlen,
+    EX_RANGE, EX_ZEROR, EXPAND_NOTHING, FAIL, INT32_MAX, NUL, OK, cmdnames, e_backslash,
+    e_invrange, e_line_number_out_of_range, e_no_errors, e_norange, searchcmdlen,
 };
 use crate::src::nvim::ex_docmd::{kMarkAll, kMarkBufLocal};
 use crate::src::nvim::fold::hasFolding;
@@ -47,8 +46,8 @@ use crate::src::nvim::search::{
 };
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    Direction, MarkGet, MarkMove, buf_T, cmd_addr_T, colnr_T, exarg_T, linenr_T, pos_T, size_t,
-    uint32_t,
+    CMD_SIZE, CMD_cc, CMD_diffget, CMD_diffput, CMD_ll, CMD_wincmd, Direction, MarkGet, MarkMove,
+    buf_T, cmd_addr_T, colnr_T, exarg_T, linenr_T, pos_T, size_t, uint32_t,
 };
 
 /// Where a `+N`/`-N` offset lands when the addresses count buffers.

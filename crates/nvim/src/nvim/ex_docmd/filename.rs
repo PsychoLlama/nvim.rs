@@ -21,7 +21,6 @@ use crate::src::nvim::eval::vars::get_vim_var_list;
 use crate::src::nvim::ex_docmd::cmdline::sourcing_entry;
 use crate::src::nvim::ex_docmd::scan::skip_grep_pat;
 use crate::src::nvim::ex_docmd::{
-    CMD_bang, CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make, CMD_terminal,
     ECMD_LAST, ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, EX_NOSPC, EXPAND_FILES, FAIL, FIND_EVAL,
     FIND_IDENT, FIND_STRING, FNAME_HYP, FNAME_MESS, MAXPATHL, NUL, OK, VALID_HEAD, VALID_PATH,
     WILD_ADD_SLASH, WILD_EXPAND_FREE, WILD_ICASE, WILD_LIST_NOTFOUND, WILD_NOERROR, dollar_command,
@@ -47,6 +46,7 @@ use crate::src::nvim::quickfix::grep_internal;
 use crate::src::nvim::runtime::estack_sfile;
 use crate::src::nvim::strings::{strrep, vim_strchr, vim_strsave_escaped};
 use crate::src::nvim::types::{
+    CMD_bang, CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make, CMD_terminal,
     VV_OLDFILES, exarg_T, expand_T, linenr_T, size_t, ssize_t, uint8_t, uint32_t,
 };
 

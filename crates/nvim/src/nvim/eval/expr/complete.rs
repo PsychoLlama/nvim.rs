@@ -7,14 +7,14 @@ use core::ffi::{c_char, c_int};
 use crate::src::nvim::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::src::nvim::charset::{skiptowhite, skipwhite};
 use crate::src::nvim::eval::{
-    CMD_call, CMD_const, CMD_let, EXPAND_COMMANDS, EXPAND_ENV_VARS, EXPAND_EXPRESSION,
-    EXPAND_FUNCTIONS, EXPAND_NOTHING, EXPAND_SETTINGS, EXPAND_USER_VARS, NUL,
+    EXPAND_COMMANDS, EXPAND_ENV_VARS, EXPAND_EXPRESSION, EXPAND_FUNCTIONS, EXPAND_NOTHING,
+    EXPAND_SETTINGS, EXPAND_USER_VARS, NUL,
 };
 use crate::src::nvim::ex_docmd::cmd_has_expr_args;
 use crate::src::nvim::mbyte::utf_head_off;
 use crate::src::nvim::os::libc::{strlen, strpbrk};
 use crate::src::nvim::strings::vim_strchr;
-use crate::src::nvim::types::{cmdidx_T, expand_T};
+use crate::src::nvim::types::{CMD_call, CMD_const, CMD_let, cmdidx_T, expand_T};
 
 /// The characters that end the plain-name part of an expression: whatever
 /// one of them introduces is what completion should look at instead.

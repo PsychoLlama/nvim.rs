@@ -14,9 +14,9 @@ use crate::src::nvim::path::{FreeWild, path_tail};
 use crate::src::nvim::spell::{did_set_spelltab, spell_enc, spelltab};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
-    CMD_index, OptInt, OptValType, SpellAddType, XDGVarType, buf_T, colnr_T, etype_T, exarg_T,
-    file_comparison, fromto_T, garray_T, hashitem_T, hashtab_T, regprog_T, size_t, spelltab_T,
-    time_t, uint8_t, vimconv_T,
+    CMD_spellrare, CMD_spellundo, CMD_spellwrong, OptInt, OptValType, SpellAddType, XDGVarType,
+    buf_T, colnr_T, etype_T, exarg_T, file_comparison, fromto_T, garray_T, hashitem_T, hashtab_T,
+    regprog_T, size_t, spelltab_T, time_t, uint8_t, vimconv_T,
 };
 use crate::src::nvim::ui::ui_flush;
 mod add;
@@ -59,9 +59,6 @@ unsafe extern "C" {
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISdigit: C2Rust_Unnamed = 2048;
-pub const CMD_spellwrong: CMD_index = 427;
-pub const CMD_spellundo: CMD_index = 426;
-pub const CMD_spellrare: CMD_index = 425;
 pub const kOptValTypeString: OptValType = 2;
 pub const ETYPE_SPELL: etype_T = 9;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;

@@ -16,10 +16,9 @@ use crate::src::nvim::global_cell::GlobalCell;
 // path; it belongs to `main`.
 pub(crate) use crate::src::nvim::main::e_invalblob;
 use crate::src::nvim::types::{
-    Array, CMD_index, ChannelStreamType, GRegFlags, LuaRetMode, Map_uint64_t_ptr_t, MapHash,
-    MarkGet, MotionType, Object, OptValType, Set_uint64_t, blob_T, dict_T, exprtype_T, funcexe_T,
-    key_extra, linenr_T, list_T, listwatch_T, partial_T, ptr_t, size_t, typval_T, uint32_t,
-    uint64_t,
+    Array, ChannelStreamType, GRegFlags, LuaRetMode, Map_uint64_t_ptr_t, MapHash, MarkGet,
+    MotionType, Object, OptValType, Set_uint64_t, blob_T, dict_T, exprtype_T, funcexe_T, key_extra,
+    linenr_T, list_T, listwatch_T, partial_T, ptr_t, size_t, typval_T, uint32_t, uint64_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
 
@@ -63,14 +62,6 @@ pub const kWinOptFoldexpr: c_int = 15;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNil: OptValType = -1;
 pub const kMarkAll: MarkGet = 1;
-pub const CMD_let: CMD_index = 231;
-pub const CMD_execute: CMD_index = 151;
-pub const CMD_echon: CMD_index = 139;
-pub const CMD_echomsg: CMD_index = 138;
-pub const CMD_echoerr: CMD_index = 136;
-pub const CMD_echo: CMD_index = 135;
-pub const CMD_const: CMD_index = 99;
-pub const CMD_call: CMD_index = 53;
 pub const kChannelStreamProc: ChannelStreamType = 0;
 pub const STR2NR_ALL: c_uint = 15;
 pub const CONV_NONE: c_uint = 0;

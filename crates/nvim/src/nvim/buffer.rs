@@ -112,16 +112,16 @@ use crate::src::nvim::syntax::{reset_synblock, syntax_clear};
 use crate::src::nvim::terminal::{terminal_check_size, terminal_close, terminal_running};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, BufUpdateCallbacks, CMD_index, CMOD_CONFIRM, CMOD_HIDE,
-    CMOD_KEEPALT, CdCause, ChangedtickDictItem, ExtmarkOp, FileID, Map_int_ptr_t, MarkAdjustMode,
-    MarkTree, MetaIndex, OptInt, OptVal, OptValData, OptValType, StlClickRecord, String_0,
-    StringBuilder, Timestamp, UndoObjectType, VAR_FIXED, VAR_NUMBER, VAR_SCOPE, WinInfo, WinSplit,
-    WinStyle, aco_save_T, bfa_values, bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T, colnr_T,
-    cstack_T, dictitem_T, dobuf_action_values, dobuf_start_values, etype_T, exarg_T, except_T,
-    fmark_T, fmarkv_T, fuzmatch_str_T, garray_T, getf_values, handle_T, hashitem_T, int16_t,
-    int64_t, intmax_t, kFalse, linenr_T, memfile_T, pos_T, ptr_t, ptrdiff_t, regmatch_T, regprog_T,
-    schar_T, scid_T, sctx_T, size_t, statuscol_T, stl_hlrec_t, tabpage_T, time_t, typval_T,
-    typval_vval_union, uint8_t, uint32_t, uint64_t, varnumber_T, win_T,
+    AdditionalData, AlignTextPos, BufUpdateCallbacks, CMD_append, CMD_sunhide, CMD_unhide,
+    CMOD_CONFIRM, CMOD_HIDE, CMOD_KEEPALT, CdCause, ChangedtickDictItem, ExtmarkOp, FileID,
+    Map_int_ptr_t, MarkAdjustMode, MarkTree, MetaIndex, OptInt, OptVal, OptValData, OptValType,
+    StlClickRecord, String_0, StringBuilder, Timestamp, UndoObjectType, VAR_FIXED, VAR_NUMBER,
+    VAR_SCOPE, WinInfo, WinSplit, WinStyle, aco_save_T, bfa_values, bln_values, buf_T, bufref_T,
+    cleanup_T, cmd_addr_T, colnr_T, cstack_T, dictitem_T, dobuf_action_values, dobuf_start_values,
+    etype_T, exarg_T, except_T, fmark_T, fmarkv_T, fuzmatch_str_T, garray_T, getf_values, handle_T,
+    hashitem_T, int16_t, int64_t, intmax_t, kFalse, linenr_T, memfile_T, pos_T, ptr_t, ptrdiff_t,
+    regmatch_T, regprog_T, schar_T, scid_T, sctx_T, size_t, statuscol_T, stl_hlrec_t, tabpage_T,
+    time_t, typval_T, typval_vval_union, uint8_t, uint32_t, uint64_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::src::nvim::undo::{
@@ -168,15 +168,6 @@ pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub const kMarkAdjustTerm: MarkAdjustMode = 2;
 pub const kMarkAdjustApi: MarkAdjustMode = 1;
 pub const kMarkAdjustNormal: MarkAdjustMode = 0;
-pub const CMD_unhide: CMD_index = 496;
-pub const CMD_sunhide: CMD_index = 438;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
-pub const CMD_append: CMD_index = 0;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const GETF_SWITCH: getf_values = 4;

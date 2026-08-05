@@ -10,6 +10,39 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::{
+    CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_abbreviate, CMD_aboveleft, CMD_amenu, CMD_and,
+    CMD_anoremenu, CMD_append, CMD_argdelete, CMD_argdo, CMD_augroup, CMD_aunmenu, CMD_autocmd,
+    CMD_bdelete, CMD_belowright, CMD_botright, CMD_breakadd, CMD_breakdel, CMD_browse, CMD_bufdo,
+    CMD_buffer, CMD_bunload, CMD_bwipeout, CMD_cabbrev, CMD_caddexpr, CMD_call, CMD_cd, CMD_cdo,
+    CMD_cexpr, CMD_cfdo, CMD_cgetexpr, CMD_chdir, CMD_checkhealth, CMD_checktime, CMD_cmap,
+    CMD_cmapclear, CMD_cmenu, CMD_cnoreabbrev, CMD_cnoremap, CMD_cnoremenu, CMD_colorscheme,
+    CMD_command, CMD_compiler, CMD_confirm, CMD_const, CMD_cunabbrev, CMD_cunmap, CMD_cunmenu,
+    CMD_debug, CMD_delcommand, CMD_delfunction, CMD_diffget, CMD_diffput, CMD_djump, CMD_dlist,
+    CMD_doautoall, CMD_doautocmd, CMD_dsearch, CMD_dsplit, CMD_echo, CMD_echoerr, CMD_echohl,
+    CMD_echomsg, CMD_echon, CMD_elseif, CMD_emenu, CMD_equal, CMD_execute, CMD_filetype,
+    CMD_filter, CMD_find, CMD_folddoclosed, CMD_folddoopen, CMD_for, CMD_function, CMD_global,
+    CMD_help, CMD_hide, CMD_highlight, CMD_history, CMD_horizontal, CMD_iabbrev, CMD_if, CMD_ijump,
+    CMD_ilist, CMD_imap, CMD_imapclear, CMD_imenu, CMD_inoreabbrev, CMD_inoremap, CMD_inoremenu,
+    CMD_isearch, CMD_isplit, CMD_iunabbrev, CMD_iunmap, CMD_iunmenu, CMD_keepalt, CMD_keepjumps,
+    CMD_keepmarks, CMD_keeppatterns, CMD_laddexpr, CMD_language, CMD_lcd, CMD_lchdir, CMD_ldo,
+    CMD_leftabove, CMD_let, CMD_lexpr, CMD_lfdo, CMD_lgetexpr, CMD_lmap, CMD_lmapclear,
+    CMD_lnoremap, CMD_lockmarks, CMD_lshift, CMD_lsp, CMD_ltag, CMD_lua, CMD_lunmap, CMD_map,
+    CMD_mapclear, CMD_match, CMD_menu, CMD_messages, CMD_nmap, CMD_nmapclear, CMD_nmenu,
+    CMD_nnoremap, CMD_nnoremenu, CMD_noautocmd, CMD_noreabbrev, CMD_noremap, CMD_noremenu,
+    CMD_noswapfile, CMD_nunmap, CMD_nunmenu, CMD_omap, CMD_omapclear, CMD_omenu, CMD_onoremap,
+    CMD_onoremenu, CMD_ounmap, CMD_ounmenu, CMD_ownsyntax, CMD_packadd, CMD_pbuffer, CMD_popup,
+    CMD_profdel, CMD_profile, CMD_psearch, CMD_ptag, CMD_ptjump, CMD_ptselect, CMD_read, CMD_redir,
+    CMD_restart, CMD_retab, CMD_return, CMD_rightbelow, CMD_rshift, CMD_runtime, CMD_sandbox,
+    CMD_sbuffer, CMD_scriptnames, CMD_set, CMD_setfiletype, CMD_setglobal, CMD_setlocal, CMD_sfind,
+    CMD_sign, CMD_silent, CMD_smap, CMD_smapclear, CMD_snoremap, CMD_stag, CMD_stjump,
+    CMD_stselect, CMD_substitute, CMD_sunmap, CMD_syntax, CMD_syntime, CMD_tab, CMD_tabdo,
+    CMD_tabfind, CMD_tag, CMD_tcd, CMD_tchdir, CMD_tjump, CMD_tlmenu, CMD_tlnoremenu, CMD_tlunmenu,
+    CMD_tmenu, CMD_topleft, CMD_tselect, CMD_tunmenu, CMD_unabbreviate, CMD_unlet, CMD_unmap,
+    CMD_unmenu, CMD_unsilent, CMD_update, CMD_verbose, CMD_vertical, CMD_vglobal, CMD_vmap,
+    CMD_vmapclear, CMD_vmenu, CMD_vnoremap, CMD_vnoremenu, CMD_vunmap, CMD_vunmenu, CMD_while,
+    CMD_windo, CMD_write, CMD_xmap, CMD_xmapclear, CMD_xnoremap, CMD_xunmap,
+};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 

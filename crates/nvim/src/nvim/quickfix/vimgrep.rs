@@ -18,7 +18,10 @@
 use super::*;
 use crate::src::nvim::file_search::Name;
 use crate::src::nvim::regexp::RE_MAGIC;
-use crate::src::nvim::types::CMOD_HIDE;
+use crate::src::nvim::types::{
+    CMD_grep, CMD_grepadd, CMD_lcd, CMD_lgrep, CMD_lgrepadd, CMD_lvimgrep, CMD_lvimgrepadd,
+    CMD_vimgrep, CMD_vimgrepadd, CMOD_HIDE,
+};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 

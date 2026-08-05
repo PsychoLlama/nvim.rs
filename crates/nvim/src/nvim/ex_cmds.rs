@@ -141,7 +141,8 @@ use crate::src::nvim::strings::{
 use crate::src::nvim::terminal::{terminal_check_size, terminal_running};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    AdditionalData, CMD_index, CMOD_BROWSE, CMOD_CONFIRM, CMOD_KEEPALT, CMOD_KEEPMARKS,
+    AdditionalData, CMD_append, CMD_center, CMD_change, CMD_edit, CMD_left, CMD_right, CMD_saveas,
+    CMD_tilde, CMD_wqall, CMD_xall, CMOD_BROWSE, CMOD_CONFIRM, CMOD_KEEPALT, CMOD_KEEPMARKS,
     CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, Callback, Callback_data as C2Rust_Unnamed_5, ExtmarkOp,
     OptInt, OptVal, OptValData, OptValType, String_0, SubReplacementString, Timestamp,
     UndoObjectType, VV_OLDFILES, VV_SWAPCOMMAND, bcount_t, bfa_values, bln_values, buf_T, bufref_T,
@@ -183,22 +184,6 @@ pub const kOptValTypeString: OptValType = 2;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
-pub const CMD_tilde: CMD_index = 555;
-pub const CMD_xall: CMD_index = 538;
-pub const CMD_wqall: CMD_index = 533;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_saveas: CMD_index = 387;
-pub const CMD_right: CMD_index = 373;
-pub const CMD_left: CMD_index = 229;
-pub const CMD_edit: CMD_index = 133;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_center: CMD_index = 63;
-pub const CMD_change: CMD_index = 43;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
-pub const CMD_append: CMD_index = 0;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const GETFILE_OPEN_OTHER: getf_retvalues = -1;
 pub const GETFILE_SAME_FILE: getf_retvalues = 0;

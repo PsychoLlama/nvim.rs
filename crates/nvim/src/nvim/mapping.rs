@@ -68,11 +68,11 @@ use crate::src::nvim::state::{
 };
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
-    Arena, Array, ArrayBuilder, Buffer, CMD_index, Dict, Error, EvalFuncData, FILE, Integer,
-    KeyDict_keymap, LuaRef, LuaRetMode, Object, RemapValues, String_0, buf_T, cmdidx_T, colnr_T,
-    dict_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, kObjectTypeLuaRef, kObjectTypeString,
-    key_extra, key_value_pair, linenr_T, mapblock_T, object_data as C2Rust_Unnamed, optset_T,
-    ptrdiff_t, regmatch_T, scid_T, size_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
+    Arena, Array, ArrayBuilder, Buffer, Dict, Error, EvalFuncData, FILE, Integer, KeyDict_keymap,
+    LuaRef, LuaRetMode, Object, RemapValues, String_0, buf_T, cmdidx_T, colnr_T, dict_T, exarg_T,
+    expand_T, fuzmatch_str_T, garray_T, kObjectTypeLuaRef, kObjectTypeString, key_extra,
+    key_value_pair, linenr_T, mapblock_T, object_data as C2Rust_Unnamed, optset_T, ptrdiff_t,
+    regmatch_T, scid_T, size_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -102,8 +102,6 @@ pub const MAXMAPLEN: C2Rust_Unnamed_13 = 50;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_int;
 pub const EXPAND_MAPPINGS: C2Rust_Unnamed_15 = 16;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_15 = 0;
-pub const CMD_unmap: CMD_index = 500;
-pub const CMD_map: CMD_index = 275;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
 pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_17 = -2147483648;
 pub const REMAP_SCRIPT: RemapValues = -2;

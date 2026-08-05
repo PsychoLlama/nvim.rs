@@ -16,6 +16,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::{CMD_cd, CMD_lcd};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

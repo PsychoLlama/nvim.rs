@@ -78,7 +78,7 @@ use crate::src::nvim::search::{restore_search_patterns, save_search_patterns};
 use crate::src::nvim::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::src::nvim::types::ui::kUICmdline;
 use crate::src::nvim::types::{
-    CMD_index, Callback, EvalFuncDef, LuaRef, OptInt, String_0, VAR_DEF_SCOPE, VAR_DICT, VAR_FIXED,
+    CMD_defer, Callback, EvalFuncDef, LuaRef, OptInt, String_0, VAR_DEF_SCOPE, VAR_DICT, VAR_FIXED,
     VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN,
     VAR_UNLOCKED, VV_TESTING, blob_T, buf_T, buffblock, buffblock_T, buffheader_T, colnr_T,
     cstack_T, dict_T, dictitem_T, estack_T, evalarg_T, exarg_T, except_T, exception_state_T,
@@ -113,13 +113,6 @@ pub type C2Rust_Unnamed_19 = ::core::ffi::c_int;
 pub const EXPAND_USER_FUNC: C2Rust_Unnamed_19 = 19;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const CSTP_RETURN: C2Rust_Unnamed_21 = 24;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_defer: CMD_index = 113;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const TFN_NO_DEREF: C2Rust_Unnamed_22 = 8;
 pub const TFN_NO_AUTOLOAD: C2Rust_Unnamed_22 = 4;

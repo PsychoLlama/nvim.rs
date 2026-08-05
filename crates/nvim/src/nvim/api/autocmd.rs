@@ -24,7 +24,7 @@ use crate::src::nvim::memory::{strequal, xfree, xmalloc, xrealloc};
 use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, strlen};
 use crate::src::nvim::strings::arena_printf;
 use crate::src::nvim::types::{
-    Arena, Array, ArrayBuilder, AutoCmd, AutoCmdVec, AutoPat, Buffer, CMD_index, Callback,
+    Arena, Array, ArrayBuilder, AutoCmd, AutoCmdVec, AutoPat, Buffer, Callback,
     Callback_data as C2Rust_Unnamed_5, Dict, Error, Integer, KeyDict_clear_autocmds,
     KeyDict_create_augroup, KeyDict_create_autocmd, KeyDict_exec_autocmds, KeyDict_get_autocmds,
     LuaRef, Object, String_0, TryState, auto_event, buf_T, event_T, exarg_T, except_T, int64_t,
@@ -36,12 +36,6 @@ use crate::src::nvim::types::{
 pub const NUM_EVENTS: auto_event = 145;
 pub const AUGROUP_DEFAULT: C2Rust_Unnamed_14 = -1;
 pub const AUGROUP_ERROR: C2Rust_Unnamed_14 = -2;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
 pub const AUGROUP_ALL: C2Rust_Unnamed_14 = -3;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

@@ -37,24 +37,11 @@ use crate::src::nvim::ex_docmd::scan::{
 use crate::src::nvim::ex_docmd::source::{ex_errmsg, getline_cookie, getline_equal};
 use crate::src::nvim::ex_docmd::verify::verify_command;
 use crate::src::nvim::ex_docmd::{
-    ADDR_LINES, ADDR_OTHER, BL_FIX, BL_SOL, CMD_SIZE, CMD_aboveleft, CMD_and, CMD_bang,
-    CMD_belowright, CMD_botright, CMD_browse, CMD_call, CMD_catch, CMD_checktime, CMD_confirm,
-    CMD_const, CMD_delfunction, CMD_djump, CMD_dlist, CMD_dsearch, CMD_dsplit, CMD_echo,
-    CMD_echoerr, CMD_echomsg, CMD_echon, CMD_edit, CMD_else, CMD_elseif, CMD_endfor, CMD_endif,
-    CMD_endtry, CMD_endwhile, CMD_eval, CMD_execute, CMD_file, CMD_filter, CMD_finally, CMD_for,
-    CMD_function, CMD_global, CMD_help, CMD_hide, CMD_horizontal, CMD_if, CMD_ijump, CMD_ilist,
-    CMD_iput, CMD_isearch, CMD_isplit, CMD_keepalt, CMD_keepjumps, CMD_keepmarks, CMD_keeppatterns,
-    CMD_leftabove, CMD_let, CMD_lockmarks, CMD_lockvar, CMD_lshift, CMD_lua, CMD_match,
-    CMD_mzscheme, CMD_noautocmd, CMD_noswapfile, CMD_perl, CMD_print, CMD_psearch, CMD_put,
-    CMD_py3, CMD_python, CMD_python3, CMD_pythonx, CMD_pyx, CMD_read, CMD_return, CMD_rightbelow,
-    CMD_rshift, CMD_ruby, CMD_silent, CMD_smagic, CMD_snomagic, CMD_substitute, CMD_syntax,
-    CMD_tab, CMD_tcl, CMD_terminal, CMD_throw, CMD_tilde, CMD_topleft, CMD_try, CMD_unlet,
-    CMD_unlockvar, CMD_update, CMD_verbose, CMD_vertical, CMD_vglobal, CMD_while, CMD_wincmd,
-    CMD_write, CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE, DOCMD_VERBOSE, EX_ARGOPT, EX_BANG,
-    EX_CMDARG, EX_CMDWIN, EX_COUNT, EX_DFLALL, EX_EXTRA, EX_FLAGS, EX_LOCK_OK, EX_MODIFY,
-    EX_NEEDARG, EX_RANGE, EX_SBOXOK, EX_TRLBAR, EX_WHOLEFOLD, FAIL, IOSIZE, NUL, PROF_YES,
-    cmdnames, e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_func_T,
-    exmode_plus, quitmore,
+    ADDR_LINES, ADDR_OTHER, BL_FIX, BL_SOL, CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE,
+    DOCMD_VERBOSE, EX_ARGOPT, EX_BANG, EX_CMDARG, EX_CMDWIN, EX_COUNT, EX_DFLALL, EX_EXTRA,
+    EX_FLAGS, EX_LOCK_OK, EX_MODIFY, EX_NEEDARG, EX_RANGE, EX_SBOXOK, EX_TRLBAR, EX_WHOLEFOLD,
+    FAIL, IOSIZE, NUL, PROF_YES, cmdnames, e_ambiguous_use_of_user_defined_command,
+    e_not_an_editor_command, ex_func_T, exmode_plus, quitmore,
 };
 use crate::src::nvim::ex_eval::{aborting, do_errthrow, do_intthrow, do_throw};
 use crate::src::nvim::ex_getln::{curbuf_locked, get_text_locked_msg, script_get, text_locked};
@@ -73,7 +60,20 @@ use crate::src::nvim::os::libc::{gettext, memmove, strcpy, strlen};
 use crate::src::nvim::profile::{func_line_exec, script_line_exec};
 use crate::src::nvim::runtime::{do_finish, getsourceline, source_finished};
 use crate::src::nvim::types::{
-    CMD_index, LineGetter, cmdidx_T, cmdmod_T, cstack_T, exarg_T, size_t, uint8_t, uint32_t,
+    CMD_SIZE, CMD_aboveleft, CMD_and, CMD_bang, CMD_belowright, CMD_botright, CMD_browse, CMD_call,
+    CMD_catch, CMD_checktime, CMD_confirm, CMD_const, CMD_delfunction, CMD_djump, CMD_dlist,
+    CMD_dsearch, CMD_dsplit, CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_edit, CMD_else,
+    CMD_elseif, CMD_endfor, CMD_endif, CMD_endtry, CMD_endwhile, CMD_eval, CMD_execute, CMD_file,
+    CMD_filter, CMD_finally, CMD_for, CMD_function, CMD_global, CMD_help, CMD_hide, CMD_horizontal,
+    CMD_if, CMD_ijump, CMD_ilist, CMD_index, CMD_iput, CMD_isearch, CMD_isplit, CMD_keepalt,
+    CMD_keepjumps, CMD_keepmarks, CMD_keeppatterns, CMD_leftabove, CMD_let, CMD_lockmarks,
+    CMD_lockvar, CMD_lshift, CMD_lua, CMD_match, CMD_mzscheme, CMD_noautocmd, CMD_noswapfile,
+    CMD_perl, CMD_print, CMD_psearch, CMD_put, CMD_py3, CMD_python, CMD_python3, CMD_pythonx,
+    CMD_pyx, CMD_read, CMD_return, CMD_rightbelow, CMD_rshift, CMD_ruby, CMD_silent, CMD_smagic,
+    CMD_snomagic, CMD_substitute, CMD_syntax, CMD_tab, CMD_tcl, CMD_terminal, CMD_throw, CMD_tilde,
+    CMD_topleft, CMD_try, CMD_unlet, CMD_unlockvar, CMD_update, CMD_verbose, CMD_vertical,
+    CMD_vglobal, CMD_while, CMD_wincmd, CMD_write, LineGetter, cmdidx_T, cmdmod_T, cstack_T,
+    exarg_T, size_t, uint8_t, uint32_t,
 };
 
 /// A zeroed `exarg_T` with the empty range the parsers start from.

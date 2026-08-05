@@ -14,6 +14,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::highlight_group::{HLF_D, HLF_N, HLF_QFL};
+use crate::src::nvim::types::{CMD_colder, CMD_lolder};
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 

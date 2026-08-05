@@ -17,11 +17,8 @@ use crate::src::nvim::eval::skip_expr;
 use crate::src::nvim::ex_cmds::skip_vimgrep_pat;
 use crate::src::nvim::ex_docmd::onecmd::shift_cmd_args;
 use crate::src::nvim::ex_docmd::{
-    ADDR_LINES, CMD_append, CMD_at, CMD_change, CMD_insert, CMD_iput, CMD_lvimgrep,
-    CMD_lvimgrepadd, CMD_put, CMD_redir, CMD_smagic, CMD_snomagic, CMD_substitute, CMD_vimgrep,
-    CMD_vimgrepadd, CPO_BAR, Ctrl_V, EX_BUFNAME, EX_COUNT, EX_CTRLV, EX_NOTRLCOM, EX_REGSTR,
-    EX_XFILE, EX_ZEROR, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, FAIL, INT32_MAX, NUL, OK,
-    e_zerocount,
+    ADDR_LINES, CPO_BAR, Ctrl_V, EX_BUFNAME, EX_COUNT, EX_CTRLV, EX_NOTRLCOM, EX_REGSTR, EX_XFILE,
+    EX_ZEROR, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, FAIL, INT32_MAX, NUL, OK, e_zerocount,
 };
 use crate::src::nvim::main::{curbuf, p_cpo};
 use crate::src::nvim::mbyte::utfc_ptr2len;
@@ -32,7 +29,11 @@ use crate::src::nvim::register::{set_expr_line, valid_yank_reg};
 use crate::src::nvim::strings::{del_trailing_spaces, vim_strchr};
 use crate::src::nvim::types::ex_cmds::exarg_T;
 use crate::src::nvim::types::pos::linenr_T;
-use crate::src::nvim::types::{size_t, uint32_t};
+use crate::src::nvim::types::{
+    CMD_append, CMD_at, CMD_change, CMD_insert, CMD_iput, CMD_lvimgrep, CMD_lvimgrepadd, CMD_put,
+    CMD_redir, CMD_smagic, CMD_snomagic, CMD_substitute, CMD_vimgrep, CMD_vimgrepadd, size_t,
+    uint32_t,
+};
 
 /// Step over a run of `:`, which is how a mapping's `:cmd<CR>` and a leading
 /// `::::print` both reach the command name.

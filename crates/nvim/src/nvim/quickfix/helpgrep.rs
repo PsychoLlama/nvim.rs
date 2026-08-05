@@ -10,6 +10,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING};
+use crate::src::nvim::types::{CMD_helpgrep, CMD_lhelpgrep};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

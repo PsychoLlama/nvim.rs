@@ -35,19 +35,20 @@ use crate::src::nvim::options::{kOptAleph, kOptFoldmethod, kOptInvalid, kOptWrap
 use crate::src::nvim::os::libc::{gettext, memmove, strlen, strncmp};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
-    CMD_index, OptIndex, OptInt, OptVal, OptValData, TriState, exarg_T, kFalse, kNone, kTrue,
-    scid_T, size_t, uint8_t, uint32_t, uvarnumber_T, vimoption_T, win_T,
+    CMD_index, CMD_setglobal, CMD_setlocal, OptIndex, OptInt, OptVal, OptValData, TriState,
+    exarg_T, kFalse, kNone, kTrue, scid_T, size_t, uint8_t, uint32_t, uvarnumber_T, vimoption_T,
+    win_T,
 };
 
 use super::{
-    CMD_setglobal, CMD_setlocal, FAIL, FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, IOSIZE, NUL, OK,
-    OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, OPT_GLOBAL, OPT_LOCAL, OPT_MODELINE, OPT_NOWIN,
-    OPT_ONECOLUMN, OPT_WINONLY, STR2NR_ALL, didset_options, didset_options2, get_option_default,
-    get_option_value, get_varp, get_varp_scope, is_tty_option, kOptFlagMLE, kOptFlagSecure,
-    kOptScopeBuf, kOptScopeWin, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber,
-    kOptValTypeString, option_has_scope, option_has_type, option_is_global_local,
-    option_is_window_local, option_scope_idx, optval_copy, optval_from_varp, set_option,
-    set_options_default, showoneopt, showoptions, stropt_get_newval, unset_option_local_value,
+    FAIL, FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, IOSIZE, NUL, OK, OP_ADDING, OP_NONE,
+    OP_PREPENDING, OP_REMOVING, OPT_GLOBAL, OPT_LOCAL, OPT_MODELINE, OPT_NOWIN, OPT_ONECOLUMN,
+    OPT_WINONLY, STR2NR_ALL, didset_options, didset_options2, get_option_default, get_option_value,
+    get_varp, get_varp_scope, is_tty_option, kOptFlagMLE, kOptFlagSecure, kOptScopeBuf,
+    kOptScopeWin, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber, kOptValTypeString,
+    option_has_scope, option_has_type, option_is_global_local, option_is_window_local,
+    option_scope_idx, optval_copy, optval_from_varp, set_option, set_options_default, showoneopt,
+    showoptions, stropt_get_newval, unset_option_local_value,
 };
 
 /// The messages the parse reports. They go back to [`do_set`] rather than

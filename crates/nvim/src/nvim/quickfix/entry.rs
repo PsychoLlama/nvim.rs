@@ -15,6 +15,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::file_search::Name;
+use crate::src::nvim::types::{CMD_cdo, CMD_cfdo, CMD_ldo, CMD_lfdo};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 

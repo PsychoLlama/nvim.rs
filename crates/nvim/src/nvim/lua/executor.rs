@@ -71,7 +71,7 @@ use crate::src::nvim::runtime::{
 use crate::src::nvim::strings::{arena_printf, vim_snprintf};
 use crate::src::nvim::types::ui::{kUICmdline, kUILinegrid};
 use crate::src::nvim::types::{
-    Arena, ArenaMem, Array, CMD_index, CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE,
+    Arena, ArenaMem, Array, CMD_equal, CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE,
     CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS,
     CMOD_NOAUTOCMD, CMOD_NOSWAPFILE, CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, Error, EvalFuncDef,
     Event, FileDescriptor, HlMessage, HlMessageChunk, LuaRef, LuaRetMode, MessageData, MultiQueue,
@@ -144,13 +144,6 @@ pub type luv_acquire_vm = Option<unsafe extern "C-unwind" fn() -> *mut lua_State
 pub type luv_release_vm = Option<unsafe extern "C-unwind" fn(*mut lua_State) -> ()>;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub const MAX_FUNC_ARGS: C2Rust_Unnamed_27 = 20;
-pub const CMD_equal: CMD_index = 552;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_args: CMD_index = 7;
 pub type C2Rust_Unnamed_30 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
 pub const FCERR_OTHER: C2Rust_Unnamed_31 = 6;
