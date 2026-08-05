@@ -3,9 +3,7 @@
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::{ptr, slice};
 
-use crate::src::nvim::ascii::{
-    ascii_isdigit, ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul,
-};
+use crate::src::nvim::ascii::{ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul};
 use crate::src::nvim::autocmd::{EVENT_FUNCUNDEFINED, apply_autocmds};
 use crate::src::nvim::charset::{getdigits, skiptowhite, skipwhite, vim_strsize};
 use crate::src::nvim::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
