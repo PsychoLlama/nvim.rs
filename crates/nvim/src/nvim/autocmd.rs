@@ -1,3 +1,7 @@
+use core::cmp::Ordering;
+use core::ffi::CStr;
+use core::slice;
+
 use crate::src::nvim::api::private::converter::object_to_vim;
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_object, api_free_string, copy_object, cstr_as_string, cstr_to_string,
@@ -64,7 +68,7 @@ use crate::src::nvim::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::src::nvim::runtime::{estack_pop, estack_push, exestack};
 use crate::src::nvim::search::{restore_search_patterns, save_search_patterns};
 use crate::src::nvim::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
-use crate::src::nvim::strings::{vim_strchr, vim_strnicmp_asc, xstrnsave};
+use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 use crate::src::nvim::types::{
     Arena, Array, AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, Buffer, Callback,
     Callback_data as C2Rust_Unnamed_5, Dict, Error, Event, Integer, KeyValuePair, LuaRetMode,
@@ -922,25 +926,22 @@ pub unsafe extern "C" fn event_name2nr(
     {
         p = p.offset(1);
     }
-    let mut hash_idx: ::core::ffi::c_int =
-        event_name2nr_hash(start, p.offset_from(start) as size_t);
+    let mut name_idx: ::core::ffi::c_int = event_name_index(start, p.offset_from(start) as size_t);
     if *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
         p = p.offset(1);
     }
     *end = p as *mut ::core::ffi::c_char;
-    if hash_idx < 0 as ::core::ffi::c_int {
+    if name_idx < 0 as ::core::ffi::c_int {
         return NUM_EVENTS;
     }
-    return abs((*event_names.ptr())[(*event_hash.ptr())[hash_idx as usize] as usize].event)
-        as event_T;
+    return abs((*event_names.ptr())[name_idx as usize].event) as event_T;
 }
 pub unsafe extern "C" fn event_name2nr_str(mut str: String_0) -> event_T {
-    let mut hash_idx: ::core::ffi::c_int = event_name2nr_hash(str.data, str.size);
-    if hash_idx < 0 as ::core::ffi::c_int {
+    let mut name_idx: ::core::ffi::c_int = event_name_index(str.data, str.size);
+    if name_idx < 0 as ::core::ffi::c_int {
         return NUM_EVENTS;
     }
-    return abs((*event_names.ptr())[(*event_hash.ptr())[hash_idx as usize] as usize].event)
-        as event_T;
+    return abs((*event_names.ptr())[name_idx as usize].event) as event_T;
 }
 pub unsafe extern "C" fn event_nr2name(mut event: event_T) -> *const ::core::ffi::c_char {
     return if event as ::core::ffi::c_uint >= 0 as ::core::ffi::c_uint
@@ -5139,560 +5140,40 @@ static autocmds: GlobalCell<[AutoCmdVec; 145]> = GlobalCell::new([
         items: ::core::ptr::null_mut::<AutoCmd>(),
     },
 ]);
-static event_hash: GlobalCell<[event_T; 145]> = GlobalCell::new([
-    EVENT_USER,
-    EVENT_BUFADD,
-    EVENT_BUFNEW,
-    EVENT_SIGNAL,
-    EVENT_SYNTAX,
-    EVENT_TABNEW,
-    EVENT_WINNEW,
-    EVENT_BUFREAD,
-    EVENT_EXITPRE,
-    EVENT_MARKSET,
-    EVENT_QUITPRE,
-    EVENT_UIENTER,
-    EVENT_UILEAVE,
-    EVENT_BUFENTER,
-    EVENT_BUFLEAVE,
-    EVENT_BUFWRITE,
-    EVENT_CHANINFO,
-    EVENT_CHANOPEN,
-    EVENT_FILETYPE,
-    EVENT_GUIENTER,
-    EVENT_PROGRESS,
-    EVENT_TABENTER,
-    EVENT_TABLEAVE,
-    EVENT_TERMOPEN,
-    EVENT_VIMENTER,
-    EVENT_VIMLEAVE,
-    EVENT_WINENTER,
-    EVENT_WINLEAVE,
-    EVENT_LSPATTACH,
-    EVENT_BUFCREATE,
-    EVENT_TABCLOSED,
-    EVENT_WINCLOSED,
-    EVENT_BUFDELETE,
-    EVENT_LSPDETACH,
-    EVENT_SAFESTATE,
-    EVENT_GUIFAILED,
-    EVENT_BUFHIDDEN,
-    EVENT_OPTIONSET,
-    EVENT_TERMCLOSE,
-    EVENT_TERMENTER,
-    EVENT_TERMLEAVE,
-    EVENT_LSPNOTIFY,
-    EVENT_WINNEWPRE,
-    EVENT_SOURCECMD,
-    EVENT_SOURCEPRE,
-    EVENT_VIMRESUME,
-    EVENT_BUFUNLOAD,
-    EVENT_FOCUSLOST,
-    EVENT_MENUPOPUP,
-    EVENT_BUFREADCMD,
-    EVENT_BUFREADPRE,
-    EVENT_DIRCHANGED,
-    EVENT_SOURCEPOST,
-    EVENT_BUFFILEPRE,
-    EVENT_BUFWIPEOUT,
-    EVENT_LSPREQUEST,
-    EVENT_CURSORHOLD,
-    EVENT_VIMRESIZED,
-    EVENT_VIMSUSPEND,
-    EVENT_WINRESIZED,
-    EVENT_BUFNEWFILE,
-    EVENT_SWAPEXISTS,
-    EVENT_BUFREADPOST,
-    EVENT_VIMLEAVEPRE,
-    EVENT_FILEREADCMD,
-    EVENT_FILEREADPRE,
-    EVENT_REMOTEREPLY,
-    EVENT_TERMREQUEST,
-    EVENT_FOCUSGAINED,
-    EVENT_MODECHANGED,
-    EVENT_PACKCHANGED,
-    EVENT_TERMCHANGED,
-    EVENT_TEXTCHANGED,
-    EVENT_BUFWRITECMD,
-    EVENT_BUFWRITEPRE,
-    EVENT_BUFFILEPOST,
-    EVENT_BUFWINENTER,
-    EVENT_BUFWINLEAVE,
-    EVENT_CMDWINENTER,
-    EVENT_CMDWINLEAVE,
-    EVENT_LSPPROGRESS,
-    EVENT_DIFFUPDATED,
-    EVENT_CURSORHOLDI,
-    EVENT_CURSORMOVED,
-    EVENT_WINSCROLLED,
-    EVENT_COLORSCHEME,
-    EVENT_INSERTENTER,
-    EVENT_INSERTLEAVE,
-    EVENT_TABCLOSEDPRE,
-    EVENT_CMDLINEENTER,
-    EVENT_CMDLINELEAVE,
-    EVENT_CMDUNDEFINED,
-    EVENT_STDINREADPRE,
-    EVENT_SHELLCMDPOST,
-    EVENT_BUFWRITEPOST,
-    EVENT_FILEENCODING,
-    EVENT_FILEREADPOST,
-    EVENT_FILEWRITECMD,
-    EVENT_FILEWRITEPRE,
-    EVENT_COMPLETEDONE,
-    EVENT_CURSORMOVEDC,
-    EVENT_CURSORMOVEDI,
-    EVENT_TERMRESPONSE,
-    EVENT_INSERTCHANGE,
-    EVENT_TEXTCHANGEDI,
-    EVENT_TEXTCHANGEDP,
-    EVENT_TEXTCHANGEDT,
-    EVENT_TEXTYANKPOST,
-    EVENT_FILEAPPENDCMD,
-    EVENT_FILEAPPENDPRE,
-    EVENT_FILECHANGEDRO,
-    EVENT_SEARCHWRAPPED,
-    EVENT_FILTERREADPRE,
-    EVENT_TABNEWENTERED,
-    EVENT_DIRCHANGEDPRE,
-    EVENT_STDINREADPOST,
-    EVENT_INSERTCHARPRE,
-    EVENT_FUNCUNDEFINED,
-    EVENT_FILEWRITEPOST,
-    EVENT_BUFMODIFIEDSET,
-    EVENT_CMDLINECHANGED,
-    EVENT_COLORSCHEMEPRE,
-    EVENT_FILEAPPENDPOST,
-    EVENT_FILTERREADPOST,
-    EVENT_FILTERWRITEPRE,
-    EVENT_INSERTLEAVEPRE,
-    EVENT_LSPTOKENUPDATE,
-    EVENT_PACKCHANGEDPRE,
-    EVENT_QUICKFIXCMDPRE,
-    EVENT_RECORDINGENTER,
-    EVENT_RECORDINGLEAVE,
-    EVENT_SESSIONLOADPRE,
-    EVENT_SESSIONLOADPOST,
-    EVENT_SHELLFILTERPOST,
-    EVENT_FILTERWRITEPOST,
-    EVENT_CMDLINELEAVEPRE,
-    EVENT_ENCODINGCHANGED,
-    EVENT_COMPLETECHANGED,
-    EVENT_COMPLETEDONEPRE,
-    EVENT_QUICKFIXCMDPOST,
-    EVENT_SESSIONWRITEPOST,
-    EVENT_FILECHANGEDSHELL,
-    EVENT_SPELLFILEMISSING,
-    EVENT_DIAGNOSTICCHANGED,
-    EVENT_FILECHANGEDSHELLPOST,
-]);
-unsafe extern "C" fn event_name2nr_hash(
-    mut str: *const ::core::ffi::c_char,
-    mut len: size_t,
-) -> ::core::ffi::c_int {
-    let mut low: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut high: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    match len {
-        4 => {
-            low = 0 as ::core::ffi::c_int;
-            high = 1 as ::core::ffi::c_int;
-        }
-        6 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            66 | 98 => {
-                low = 1 as ::core::ffi::c_int;
-                high = 3 as ::core::ffi::c_int;
-            }
-            83 | 115 => {
-                low = 3 as ::core::ffi::c_int;
-                high = 5 as ::core::ffi::c_int;
-            }
-            84 | 116 => {
-                low = 5 as ::core::ffi::c_int;
-                high = 6 as ::core::ffi::c_int;
-            }
-            87 | 119 => {
-                low = 6 as ::core::ffi::c_int;
-                high = 7 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        7 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            66 | 98 => {
-                low = 7 as ::core::ffi::c_int;
-                high = 8 as ::core::ffi::c_int;
-            }
-            69 | 101 => {
-                low = 8 as ::core::ffi::c_int;
-                high = 9 as ::core::ffi::c_int;
-            }
-            77 | 109 => {
-                low = 9 as ::core::ffi::c_int;
-                high = 10 as ::core::ffi::c_int;
-            }
-            81 | 113 => {
-                low = 10 as ::core::ffi::c_int;
-                high = 11 as ::core::ffi::c_int;
-            }
-            85 | 117 => {
-                low = 11 as ::core::ffi::c_int;
-                high = 13 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        8 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            66 | 98 => {
-                low = 13 as ::core::ffi::c_int;
-                high = 16 as ::core::ffi::c_int;
-            }
-            67 | 99 => {
-                low = 16 as ::core::ffi::c_int;
-                high = 18 as ::core::ffi::c_int;
-            }
-            70 | 102 => {
-                low = 18 as ::core::ffi::c_int;
-                high = 19 as ::core::ffi::c_int;
-            }
-            71 | 103 => {
-                low = 19 as ::core::ffi::c_int;
-                high = 20 as ::core::ffi::c_int;
-            }
-            80 | 112 => {
-                low = 20 as ::core::ffi::c_int;
-                high = 21 as ::core::ffi::c_int;
-            }
-            84 | 116 => {
-                low = 21 as ::core::ffi::c_int;
-                high = 24 as ::core::ffi::c_int;
-            }
-            86 | 118 => {
-                low = 24 as ::core::ffi::c_int;
-                high = 26 as ::core::ffi::c_int;
-            }
-            87 | 119 => {
-                low = 26 as ::core::ffi::c_int;
-                high = 28 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        9 => match *str.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            65 | 97 => {
-                low = 28 as ::core::ffi::c_int;
-                high = 29 as ::core::ffi::c_int;
-            }
-            67 | 99 => {
-                low = 29 as ::core::ffi::c_int;
-                high = 32 as ::core::ffi::c_int;
-            }
-            68 | 100 => {
-                low = 32 as ::core::ffi::c_int;
-                high = 34 as ::core::ffi::c_int;
-            }
-            69 | 101 => {
-                low = 34 as ::core::ffi::c_int;
-                high = 35 as ::core::ffi::c_int;
-            }
-            70 | 102 => {
-                low = 35 as ::core::ffi::c_int;
-                high = 36 as ::core::ffi::c_int;
-            }
-            72 | 104 => {
-                low = 36 as ::core::ffi::c_int;
-                high = 37 as ::core::ffi::c_int;
-            }
-            73 | 105 => {
-                low = 37 as ::core::ffi::c_int;
-                high = 38 as ::core::ffi::c_int;
-            }
-            77 | 109 => {
-                low = 38 as ::core::ffi::c_int;
-                high = 41 as ::core::ffi::c_int;
-            }
-            78 | 110 => {
-                low = 41 as ::core::ffi::c_int;
-                high = 43 as ::core::ffi::c_int;
-            }
-            82 | 114 => {
-                low = 43 as ::core::ffi::c_int;
-                high = 46 as ::core::ffi::c_int;
-            }
-            85 | 117 => {
-                low = 46 as ::core::ffi::c_int;
-                high = 49 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        10 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            65 | 97 => {
-                low = 49 as ::core::ffi::c_int;
-                high = 52 as ::core::ffi::c_int;
-            }
-            69 | 101 => {
-                low = 52 as ::core::ffi::c_int;
-                high = 53 as ::core::ffi::c_int;
-            }
-            76 | 108 => {
-                low = 53 as ::core::ffi::c_int;
-                high = 54 as ::core::ffi::c_int;
-            }
-            80 | 112 => {
-                low = 54 as ::core::ffi::c_int;
-                high = 55 as ::core::ffi::c_int;
-            }
-            81 | 113 => {
-                low = 55 as ::core::ffi::c_int;
-                high = 56 as ::core::ffi::c_int;
-            }
-            82 | 114 => {
-                low = 56 as ::core::ffi::c_int;
-                high = 57 as ::core::ffi::c_int;
-            }
-            83 | 115 => {
-                low = 57 as ::core::ffi::c_int;
-                high = 60 as ::core::ffi::c_int;
-            }
-            87 | 119 => {
-                low = 60 as ::core::ffi::c_int;
-                high = 61 as ::core::ffi::c_int;
-            }
-            88 | 120 => {
-                low = 61 as ::core::ffi::c_int;
-                high = 62 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        11 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            65 | 97 => {
-                low = 62 as ::core::ffi::c_int;
-                high = 64 as ::core::ffi::c_int;
-            }
-            69 | 101 => {
-                low = 64 as ::core::ffi::c_int;
-                high = 68 as ::core::ffi::c_int;
-            }
-            71 | 103 => {
-                low = 68 as ::core::ffi::c_int;
-                high = 69 as ::core::ffi::c_int;
-            }
-            72 | 104 => {
-                low = 69 as ::core::ffi::c_int;
-                high = 73 as ::core::ffi::c_int;
-            }
-            73 | 105 => {
-                low = 73 as ::core::ffi::c_int;
-                high = 75 as ::core::ffi::c_int;
-            }
-            76 | 108 => {
-                low = 75 as ::core::ffi::c_int;
-                high = 76 as ::core::ffi::c_int;
-            }
-            78 | 110 => {
-                low = 76 as ::core::ffi::c_int;
-                high = 80 as ::core::ffi::c_int;
-            }
-            79 | 111 => {
-                low = 80 as ::core::ffi::c_int;
-                high = 81 as ::core::ffi::c_int;
-            }
-            80 | 112 => {
-                low = 81 as ::core::ffi::c_int;
-                high = 82 as ::core::ffi::c_int;
-            }
-            82 | 114 => {
-                low = 82 as ::core::ffi::c_int;
-                high = 85 as ::core::ffi::c_int;
-            }
-            83 | 115 => {
-                low = 85 as ::core::ffi::c_int;
-                high = 86 as ::core::ffi::c_int;
-            }
-            84 | 116 => {
-                low = 86 as ::core::ffi::c_int;
-                high = 88 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        12 => match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            66 | 98 => {
-                low = 88 as ::core::ffi::c_int;
-                high = 89 as ::core::ffi::c_int;
-            }
-            68 | 100 => {
-                low = 89 as ::core::ffi::c_int;
-                high = 93 as ::core::ffi::c_int;
-            }
-            69 | 101 => {
-                low = 93 as ::core::ffi::c_int;
-                high = 94 as ::core::ffi::c_int;
-            }
-            70 | 102 => {
-                low = 94 as ::core::ffi::c_int;
-                high = 95 as ::core::ffi::c_int;
-            }
-            76 | 108 => {
-                low = 95 as ::core::ffi::c_int;
-                high = 99 as ::core::ffi::c_int;
-            }
-            77 | 109 => {
-                low = 99 as ::core::ffi::c_int;
-                high = 100 as ::core::ffi::c_int;
-            }
-            82 | 114 => {
-                low = 100 as ::core::ffi::c_int;
-                high = 103 as ::core::ffi::c_int;
-            }
-            83 | 115 => {
-                low = 103 as ::core::ffi::c_int;
-                high = 104 as ::core::ffi::c_int;
-            }
-            88 | 120 => {
-                low = 104 as ::core::ffi::c_int;
-                high = 108 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        13 => match *str.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            65 | 97 => {
-                low = 108 as ::core::ffi::c_int;
-                high = 110 as ::core::ffi::c_int;
-            }
-            67 | 99 => {
-                low = 110 as ::core::ffi::c_int;
-                high = 112 as ::core::ffi::c_int;
-            }
-            69 | 101 => {
-                low = 112 as ::core::ffi::c_int;
-                high = 114 as ::core::ffi::c_int;
-            }
-            72 | 104 => {
-                low = 114 as ::core::ffi::c_int;
-                high = 115 as ::core::ffi::c_int;
-            }
-            78 | 110 => {
-                low = 115 as ::core::ffi::c_int;
-                high = 116 as ::core::ffi::c_int;
-            }
-            82 | 114 => {
-                low = 116 as ::core::ffi::c_int;
-                high = 117 as ::core::ffi::c_int;
-            }
-            85 | 117 => {
-                low = 117 as ::core::ffi::c_int;
-                high = 118 as ::core::ffi::c_int;
-            }
-            87 | 119 => {
-                low = 118 as ::core::ffi::c_int;
-                high = 119 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        14 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            66 | 98 => {
-                low = 119 as ::core::ffi::c_int;
-                high = 120 as ::core::ffi::c_int;
-            }
-            67 | 99 => {
-                low = 120 as ::core::ffi::c_int;
-                high = 122 as ::core::ffi::c_int;
-            }
-            70 | 102 => {
-                low = 122 as ::core::ffi::c_int;
-                high = 125 as ::core::ffi::c_int;
-            }
-            73 | 105 => {
-                low = 125 as ::core::ffi::c_int;
-                high = 126 as ::core::ffi::c_int;
-            }
-            76 | 108 => {
-                low = 126 as ::core::ffi::c_int;
-                high = 127 as ::core::ffi::c_int;
-            }
-            80 | 112 => {
-                low = 127 as ::core::ffi::c_int;
-                high = 128 as ::core::ffi::c_int;
-            }
-            81 | 113 => {
-                low = 128 as ::core::ffi::c_int;
-                high = 129 as ::core::ffi::c_int;
-            }
-            82 | 114 => {
-                low = 129 as ::core::ffi::c_int;
-                high = 131 as ::core::ffi::c_int;
-            }
-            83 | 115 => {
-                low = 131 as ::core::ffi::c_int;
-                high = 132 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        15 => match *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            69 | 101 => {
-                low = 132 as ::core::ffi::c_int;
-                high = 133 as ::core::ffi::c_int;
-            }
-            72 | 104 => {
-                low = 133 as ::core::ffi::c_int;
-                high = 134 as ::core::ffi::c_int;
-            }
-            73 | 105 => {
-                low = 134 as ::core::ffi::c_int;
-                high = 135 as ::core::ffi::c_int;
-            }
-            77 | 109 => {
-                low = 135 as ::core::ffi::c_int;
-                high = 136 as ::core::ffi::c_int;
-            }
-            78 | 110 => {
-                low = 136 as ::core::ffi::c_int;
-                high = 137 as ::core::ffi::c_int;
-            }
-            79 | 111 => {
-                low = 137 as ::core::ffi::c_int;
-                high = 139 as ::core::ffi::c_int;
-            }
-            85 | 117 => {
-                low = 139 as ::core::ffi::c_int;
-                high = 140 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        16 => match *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            69 | 101 => {
-                low = 140 as ::core::ffi::c_int;
-                high = 141 as ::core::ffi::c_int;
-            }
-            73 | 105 => {
-                low = 141 as ::core::ffi::c_int;
-                high = 142 as ::core::ffi::c_int;
-            }
-            80 | 112 => {
-                low = 142 as ::core::ffi::c_int;
-                high = 143 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        17 => {
-            low = 143 as ::core::ffi::c_int;
-            high = 144 as ::core::ffi::c_int;
-        }
-        20 => {
-            low = 144 as ::core::ffi::c_int;
-            high = 145 as ::core::ffi::c_int;
-        }
-        _ => {}
+/// ASCII-case-folded comparison, the order [`event_names`] is in.
+///
+/// Upstream reaches the same rows through a generated perfect hash
+/// (`v0.12.4`'s `src/gen/gen_events.lua` calls `gen.hashy`, which emits a
+/// ~400-line `switch` on the name's length and one discriminating byte,
+/// plus a permutation table `event_hash` to undo the bucket order).  None
+/// of that is needed: `gen_events.lua` sorts the names by `name:lower()`
+/// before it numbers the enum, so [`event_names`] is *already* the sorted
+/// table and a binary search over it answers the same lookup.
+fn cmp_ignore_ascii_case(a: &[u8], b: &[u8]) -> Ordering {
+    a.iter()
+        .map(u8::to_ascii_lowercase)
+        .cmp(b.iter().map(u8::to_ascii_lowercase))
+}
+
+/// The index into [`event_names`] of the event spelled by the first `len`
+/// bytes of `name`, or -1 when no event is spelled that way.  ASCII case is
+/// folded and the whole name has to match -- `len` is the length the caller
+/// measured, so a name that merely starts with an event's name is not one.
+unsafe fn event_name_index(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int {
+    // `name` is only a valid pointer once there is a byte to read: the
+    // `String_0` overload can hand this an empty, null-data string.
+    let wanted: &[u8] = if len == 0 {
+        &[]
+    } else {
+        slice::from_raw_parts(name.cast::<u8>(), len)
+    };
+    let rows = &*event_names.ptr();
+    match rows
+        .binary_search_by(|row| cmp_ignore_ascii_case(CStr::from_ptr(row.name).to_bytes(), wanted))
+    {
+        Ok(at) => at as ::core::ffi::c_int,
+        Err(_) => -(1 as ::core::ffi::c_int),
     }
-    let mut i: ::core::ffi::c_int = low;
-    while i < high {
-        if vim_strnicmp_asc(
-            str,
-            (*event_names.ptr())[(*event_hash.ptr())[i as usize] as usize].name,
-            len,
-        ) == 0
-        {
-            return i;
-        }
-        i += 1;
-    }
-    return -1 as ::core::ffi::c_int;
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
