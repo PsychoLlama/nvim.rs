@@ -231,7 +231,6 @@ pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_int;
 pub const kMHExisting: MHPutStatus = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
@@ -489,20 +488,8 @@ pub(crate) enum KeyOutcome {
     /// Leave the command line for Normal mode.
     GotoNormalMode,
 }
-pub const KE_S_DOWN: key_extra = 5;
-pub const KE_S_UP: key_extra = 4;
-pub const KE_RIGHTRELEASE: key_extra = 52;
-pub const KE_LEFTRELEASE: key_extra = 46;
-pub const KE_IGNORE: key_extra = 53;
-pub const KE_C_LEFT: key_extra = 85;
-pub const KE_C_RIGHT: key_extra = 86;
-pub const KE_KDEL: key_extra = 80;
 pub const KE_WILD: key_extra = 108;
-pub const KE_XF2: key_extra = 58;
-pub const KE_XF1: key_extra = 57;
-pub const KE_NOP: key_extra = 97;
 pub const OPT_LOCAL: C2Rust_Unnamed_53 = 2;
-pub const KE_CMDWIN: key_extra = 84;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_51 {
@@ -511,14 +498,7 @@ pub struct C2Rust_Unnamed_51 {
     pub insert: bool,
     pub finish: bool,
 }
-pub const KE_COMMAND: key_extra = 104;
-pub const KE_EVENT: key_extra = 102;
-pub const KE_LUA: key_extra = 103;
 pub type C2Rust_Unnamed_53 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_54 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_55 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_56 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_57 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_58 = ::core::ffi::c_int;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
