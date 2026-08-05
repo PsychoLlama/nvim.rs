@@ -284,10 +284,7 @@ pub unsafe extern "C" fn skip_var_list(
                 if *p as ::core::ffi::c_int == ';' as ::core::ffi::c_int {
                     if *semicolon == 1 as ::core::ffi::c_int {
                         if !silent {
-                            emsg(gettext(
-                                (e_double_semicolon_in_list_of_variables.ptr() as *const _)
-                                    as *const ::core::ffi::c_char,
-                            ));
+                            emsg(gettext(e_double_semicolon_in_list_of_variables.as_ptr()));
                         }
                         return ::core::ptr::null::<::core::ffi::c_char>();
                     }
@@ -371,7 +368,7 @@ unsafe extern "C" fn ex_let_env(
         } else if !endchars.is_null()
             && vim_strchr(endchars, *skipwhite(arg) as uint8_t as ::core::ffi::c_int).is_null()
         {
-            emsg(gettext(e_letunexp.get()));
+            emsg(gettext(e_letunexp.as_ptr()));
         } else if !check_secure() {
             let mut tofree: *mut ::core::ffi::c_char =
                 ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -430,7 +427,7 @@ unsafe extern "C" fn ex_let_option(
             || !endchars.is_null()
                 && vim_strchr(endchars, *skipwhite(p) as uint8_t as ::core::ffi::c_int).is_null()
         {
-            emsg(gettext(e_letunexp.get()));
+            emsg(gettext(e_letunexp.as_ptr()));
             return ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
         let c1: ::core::ffi::c_char = *p;
@@ -607,7 +604,7 @@ unsafe extern "C" fn ex_let_register(
             )
             .is_null()
         {
-            emsg(gettext(e_letunexp.get()));
+            emsg(gettext(e_letunexp.as_ptr()));
         } else {
             let mut ptofree: *mut ::core::ffi::c_char =
                 ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -698,7 +695,7 @@ unsafe extern "C" fn ex_let_one(
                     && vim_strchr(endchars, *skipwhite(p) as uint8_t as ::core::ffi::c_int)
                         .is_null()
                 {
-                    emsg(gettext(e_letunexp.get()));
+                    emsg(gettext(e_letunexp.as_ptr()));
                 } else {
                     set_var_lval(&raw mut lv, p, tv, copy, is_const, op);
                     arg_end = p;

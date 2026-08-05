@@ -151,7 +151,7 @@ pub unsafe extern "C" fn f_islocked(
                 };
                 semsg(gettext(fmt), end);
             } else if lv.ll_tv.is_null() {
-                let di = find_var(lv.ll_name, lv.ll_name_len, ptr::null_mut(), 1);
+                let di = find_var(lv.ll_name, lv.ll_name_len, ptr::null_mut(), true);
                 if !di.is_null() {
                     let locked = (*di).di_flags as c_int & DI_FLAGS_LOCK as c_int != 0
                         || tv_islocked(&raw mut (*di).di_tv);

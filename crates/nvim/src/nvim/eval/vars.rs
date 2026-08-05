@@ -1,16 +1,20 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+
 use crate::src::nvim::api::private::helpers::{cstr_as_string, cstr_to_string};
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::src::nvim::charset::{getdigits_int, skiptowhite, skipwhite};
 use crate::src::nvim::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::src::nvim::eval::encode::{encode_tv2echo, encode_tv2string};
+use crate::src::nvim::eval::entry::tv_init;
 use crate::src::nvim::eval::funcs::{tv_get_buf, tv_get_buf_from_arg};
 use crate::src::nvim::eval::typval::QUEUE_INIT;
 use crate::src::nvim::eval::typval::{
-    tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_add, tv_dict_alloc, tv_dict_alloc_lock,
-    tv_dict_item_alloc, tv_dict_item_remove, tv_dict_set_keys_readonly, tv_dict_unref,
+    TV_INITIAL_VALUE, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_add, tv_dict_alloc,
+    tv_dict_alloc_lock, tv_dict_hi2di, tv_dict_item_alloc, tv_dict_item_alloc_len,
+    tv_dict_item_key, tv_dict_item_remove, tv_dict_set_keys_readonly, tv_dict_unref,
     tv_dict_watcher_notify, tv_free, tv_get_bool_chk, tv_get_number, tv_get_number_chk,
     tv_get_string, tv_get_string_buf_chk, tv_get_string_chk, tv_item_lock, tv_list_alloc,
     tv_list_append_allocated_string, tv_list_append_string, tv_list_append_tv, tv_list_find_nr,
@@ -68,8 +72,8 @@ use crate::src::nvim::options::{
 };
 use crate::src::nvim::os::env::{vim_getenv, vim_setenv_ext, vim_unsetenv_ext};
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, abort, gettext, memchr, memcpy, memmove, memset, snprintf,
-    strcmp, strcpy, strlen, strncmp,
+    __assert_fail, __ctype_b_loc, abort, gettext, memchr, memcpy, memmove, snprintf, strcmp,
+    strcpy, strlen, strncmp,
 };
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::register::{get_reg_contents, write_reg_contents};
@@ -93,8 +97,8 @@ use crate::src::nvim::types::{
     VarType, VimVarIndex, aco_save_T, blob_T, buf_T, dict_T, dictitem_T, evalarg_T, exarg_T,
     expand_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, kFalse,
     kListLenUnknown, kNone, kSpecialVarNull, kTrue, list_T, list_stack_T, listitem_T, lval_T,
-    partial_T, ptrdiff_t, queue, scid_T, scriptitem_T, scriptvar_T, sctx_T, size_t, ssize_t,
-    switchwin_T, tabpage_T, typval_T, typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T,
+    partial_T, ptrdiff_t, scid_T, scriptitem_T, scriptvar_T, sctx_T, size_t, ssize_t, switchwin_T,
+    tabpage_T, typval_T, typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T,
 };
 use crate::src::nvim::version::{highest_patch, min_vim_version};
 use crate::src::nvim::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
@@ -123,171 +127,165 @@ pub use self::scoped::*;
 pub use self::store::*;
 pub use self::unlet::*;
 pub use self::vvar::*;
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const _ISlower: C2Rust_Unnamed = 512;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const DO_NOT_FREE_CNT: C2Rust_Unnamed_15 = 1073741823;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const DI_FLAGS_ALLOC: C2Rust_Unnamed_17 = 16;
-pub const DI_FLAGS_LOCK: C2Rust_Unnamed_17 = 8;
-pub const DI_FLAGS_FIX: C2Rust_Unnamed_17 = 4;
-pub const DI_FLAGS_RO_SBX: C2Rust_Unnamed_17 = 2;
-pub const DI_FLAGS_RO: C2Rust_Unnamed_17 = 1;
+/// `__ctype_b_loc()`'s lower-case bit, the one `islower()` reads.
+pub const _ISlower: c_uint = 512;
+
+/// The reference count `init_var_dict` gives a scope dictionary: high enough
+/// that nothing ever frees one.
+pub const DO_NOT_FREE_CNT: c_int = 1073741823;
+
+/// `dictitem_T::di_flags`.
+pub const DI_FLAGS_ALLOC: uint8_t = 16;
+pub const DI_FLAGS_LOCK: uint8_t = 8;
+pub const DI_FLAGS_FIX: uint8_t = 4;
+pub const DI_FLAGS_RO_SBX: uint8_t = 2;
+pub const DI_FLAGS_RO: uint8_t = 1;
+
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeBoolean: OptValType = 0;
 pub const kOptValTypeNil: OptValType = -1;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const GLV_QUIET: C2Rust_Unnamed_21 = 2;
+
+/// `get_lval`'s "do not report" flag.
+pub const GLV_QUIET: c_int = 2;
+
+/// One `v:` variable: a `dictitem_T` whose flexible key member is spelled
+/// out at the longest name the table holds (`VIMVAR_KEY_LEN`, 16, plus the
+/// NUL), so that the whole table can be a `static`.
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct C2Rust_Unnamed_22 {
+pub struct VimVarItem {
     pub di_tv: typval_T,
     pub di_flags: uint8_t,
-    pub di_key: [::core::ffi::c_char; 17],
+    pub di_key: [c_char; 17],
 }
+
+/// One row of the `v:` table.
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct vimvar {
-    pub vv_name: *mut ::core::ffi::c_char,
-    pub vv_di: C2Rust_Unnamed_22,
-    pub vv_flags: ::core::ffi::c_char,
+pub struct VimVar {
+    pub vv_name: *mut c_char,
+    pub vv_di: VimVarItem,
+    pub vv_flags: c_char,
 }
+
 pub const kGRegExprSrc: GRegFlags = 2;
-pub type ex_unletlock_callback = Option<
-    unsafe extern "C" fn(
-        *mut lval_T,
-        *mut ::core::ffi::c_char,
-        *mut exarg_T,
-        ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int,
->;
-pub const OPT_LOCAL: C2Rust_Unnamed_23 = 2;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const INT64_MIN: ::core::ffi::c_long =
-    -9223372036854775807 as ::core::ffi::c_long - 1 as ::core::ffi::c_long;
-pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
-pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-pub const NUL: ::core::ffi::c_char = 0;
+
+/// What `ex_unletlock` does to each argument it resolves: `do_unlet_var` or
+/// `do_lock_var`.  The two are written together because the walk that finds
+/// the arguments is what makes `:unlet` and `:lockvar` agree.
+pub type ex_unletlock_callback = unsafe fn(*mut lval_T, *mut c_char, *mut exarg_T, c_int) -> c_int;
+
+pub const OPT_LOCAL: c_int = 2;
+pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
+pub const INT64_MIN: ::core::ffi::c_long = -9223372036854775807 - 1;
+pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807;
+pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615;
+
+/// The string terminator, as a byte: every comparison here is against a
+/// `char *` dereference.
+pub const NUL: c_char = 0;
+
 pub const VARNUMBER_MAX: ::core::ffi::c_long = INT64_MAX;
 pub const VARNUMBER_MIN: ::core::ffi::c_long = INT64_MIN;
-pub const BAD_KEEP: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-pub const BAD_DROP: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const FORCE_BIN: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FORCE_NOBIN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const CHAN_STDERR: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const FNE_INCL_BR: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FNE_CHECK_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn tv_init(tv: *mut typval_T) {
+pub const BAD_KEEP: c_int = -1;
+pub const BAD_DROP: c_int = -2;
+pub const FORCE_BIN: c_int = 1;
+pub const FORCE_NOBIN: c_int = 2;
+pub const OK: c_int = 1;
+pub const FAIL: c_int = 0;
+pub const NOTDONE: c_int = 2;
+pub const CHAN_STDERR: c_int = 2;
+pub const FNE_INCL_BR: c_int = 1;
+pub const FNE_CHECK_START: c_int = 2;
+pub const AUTOLOAD_CHAR: c_char = b'#' as c_char;
+
+/// The two `name_len` sentinels the `var_check_*` family accepts in place of
+/// a real length: translate the name and measure it, or just measure it.
+pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
+pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX - 1;
+
+/// How deep `:const` locks the value it stores.
+pub const DICT_MAXNEST: c_int = 100;
+
+pub const IOSIZE: c_int = 1024 + 1;
+pub const SID_LUA: c_int = -8;
+pub const SID_STR: c_int = -10;
+
+// The error texts this family owns.  They are `%`-format strings handed to
+// the variadic `semsg`/`emsg`, so they stay C strings rather than becoming
+// `semsg!` arguments.
+pub const e_letunexp: &CStr = c"E18: Unexpected characters in :let";
+pub const e_double_semicolon_in_list_of_variables: &CStr = c"E452: Double ; in list of variables";
+pub const e_lock_unlock: &CStr = c"E940: Cannot lock or unlock variable %s";
+pub const e_setting_v_str_to_value_with_wrong_type: &CStr =
+    c"E963: Setting v:%s to value with wrong type";
+pub const e_missing_end_marker_str: &CStr = c"E990: Missing end marker '%s'";
+pub const e_cannot_use_heredoc_here: &CStr = c"E991: Cannot use =<< here";
+
+/// The `scriptvar_T` of script `sid`: upstream's `SCRIPT_SV`.
+///
+/// # Safety
+/// `sid` is a live script id -- `1 ..= script_items.ga_len`.
+pub(crate) unsafe fn script_sv(sid: c_int) -> *mut scriptvar_T {
     unsafe {
-        if !tv.is_null() {
-            memset(
-                tv as *mut ::core::ffi::c_void,
-                0 as ::core::ffi::c_int,
-                ::core::mem::size_of::<typval_T>(),
-            );
-        }
+        (**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T).offset((sid - 1) as isize))
+            .sn_vars
     }
 }
-pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
-pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX.wrapping_sub(1 as ::core::ffi::c_ulong);
-pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-static e_letunexp: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(b"E18: Unexpected characters in :let\0".as_ptr() as *const ::core::ffi::c_char);
-static e_double_semicolon_in_list_of_variables: GlobalCell<[::core::ffi::c_char; 36]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
-            *b"E452: Double ; in list of variables\0",
-        )
-    });
-static e_lock_unlock: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
-    b"E940: Cannot lock or unlock variable %s\0".as_ptr() as *const ::core::ffi::c_char,
-);
-static e_setting_v_str_to_value_with_wrong_type: GlobalCell<[::core::ffi::c_char; 44]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
-            *b"E963: Setting v:%s to value with wrong type\0",
-        )
-    });
-static e_missing_end_marker_str: GlobalCell<[::core::ffi::c_char; 30]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
-        *b"E990: Missing end marker '%s'\0",
-    )
-});
-static e_cannot_use_heredoc_here: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E991: Cannot use =<< here\0")
-});
-static globvars_var: GlobalCell<ScopeDictDictItem> = GlobalCell::new(ScopeDictDictItem {
-    di_tv: typval_T {
-        v_type: VAR_UNKNOWN,
-        v_lock: VAR_UNLOCKED,
-        vval: typval_vval_union { v_number: 0 },
-    },
-    di_flags: 0,
-    di_key: [0; 1],
-});
-static globvardict: GlobalCell<dict_T> = GlobalCell::new(dict_T {
-    dv_lock: VAR_UNLOCKED,
-    dv_scope: VAR_NO_SCOPE,
-    dv_refcount: 0,
-    dv_copyID: 0,
-    dv_hashtab: hashtab_T {
-        ht_mask: 0,
-        ht_used: 0,
-        ht_filled: 0,
-        ht_changed: 0,
-        ht_locked: 0,
-        ht_array: ::core::ptr::null_mut::<hashitem_T>(),
-        ht_smallarray: [hashitem_T {
-            hi_hash: 0,
-            hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        }; 16],
-    },
-    dv_copydict: ::core::ptr::null_mut::<dict_T>(),
-    dv_used_next: ::core::ptr::null_mut::<dict_T>(),
-    dv_used_prev: ::core::ptr::null_mut::<dict_T>(),
-    watchers: QUEUE {
-        next: ::core::ptr::null_mut::<queue>(),
-        prev: ::core::ptr::null_mut::<queue>(),
-    },
-    lua_table_ref: 0,
-});
-static compat_hashtab: GlobalCell<hashtab_T> = GlobalCell::new(hashtab_T {
+
+/// A `hashtab_T` before `hash_init`: the shape every zeroed table has, and
+/// what the three `static` ones below start as.
+const EMPTY_HASHTAB: hashtab_T = hashtab_T {
     ht_mask: 0,
     ht_used: 0,
     ht_filled: 0,
     ht_changed: 0,
     ht_locked: 0,
-    ht_array: ::core::ptr::null_mut::<hashitem_T>(),
+    ht_array: ::core::ptr::null_mut(),
     ht_smallarray: [hashitem_T {
         hi_hash: 0,
-        hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        hi_key: ::core::ptr::null_mut(),
     }; 16],
-});
-/// One row of the `v:` table: everything about it that is not the same
-/// for all 106 rows.
-///
-/// c2rust expanded the C's designated initialiser field by field at
-/// every row -- 31 lines each, 3,311 in total, and a single item, so no
-/// carve could bring the file under the line cap while it stood.  Every
-/// row was identical but for these three fields: `v_lock` is always
-/// `VAR_UNLOCKED`, `vval` always the zero `v_number`, `di_flags` always
-/// 0 and `di_key` always the 17 zero bytes `evalvars_init` copies the
-/// name into.
-const fn vv(
-    name: &'static ::core::ffi::CStr,
-    v_type: VarType,
-    vv_flags: ::core::ffi::c_int,
-) -> vimvar {
-    vimvar {
-        vv_name: name.as_ptr() as *mut ::core::ffi::c_char,
-        vv_di: C2Rust_Unnamed_22 {
+};
+
+/// A scope dictionary before `init_var_dict`.
+const EMPTY_SCOPE_DICT: dict_T = dict_T {
+    dv_lock: VAR_UNLOCKED,
+    dv_scope: VAR_NO_SCOPE,
+    dv_refcount: 0,
+    dv_copyID: 0,
+    dv_hashtab: EMPTY_HASHTAB,
+    dv_copydict: ::core::ptr::null_mut(),
+    dv_used_next: ::core::ptr::null_mut(),
+    dv_used_prev: ::core::ptr::null_mut(),
+    watchers: QUEUE {
+        next: ::core::ptr::null_mut(),
+        prev: ::core::ptr::null_mut(),
+    },
+    lua_table_ref: 0,
+};
+
+/// The `dictitem_T` a scope dictionary is reached through -- what
+/// `find_var_in_ht` answers for a bare `g:` or `v:`.  Its key is the empty
+/// string; `init_var_dict` fills the rest in.
+const EMPTY_SCOPE_VAR: ScopeDictDictItem = ScopeDictDictItem {
+    di_tv: TV_INITIAL_VALUE,
+    di_flags: 0,
+    di_key: [0; 1],
+};
+
+static globvars_var: GlobalCell<ScopeDictDictItem> = GlobalCell::new(EMPTY_SCOPE_VAR);
+static globvardict: GlobalCell<dict_T> = GlobalCell::new(EMPTY_SCOPE_DICT);
+
+/// The names that mean `v:version` in every scope: upstream's
+/// `compat_hashtab`, which `evalvars_init` fills from the `VV_COMPAT` rows.
+static compat_hashtab: GlobalCell<hashtab_T> = GlobalCell::new(EMPTY_HASHTAB);
+
+const fn vv(name: &'static CStr, v_type: VarType, vv_flags: c_int) -> VimVar {
+    VimVar {
+        vv_name: name.as_ptr().cast_mut(),
+        vv_di: VimVarItem {
             di_tv: typval_T {
                 v_type,
                 v_lock: VAR_UNLOCKED,
@@ -296,11 +294,11 @@ const fn vv(
             di_flags: 0,
             di_key: [0; 17],
         },
-        vv_flags: vv_flags as ::core::ffi::c_char,
+        vv_flags: vv_flags as c_char,
     }
 }
 
-static vimvars: GlobalCell<[vimvar; 106]> = GlobalCell::new([
+static vimvars: GlobalCell<[VimVar; 106]> = GlobalCell::new([
     vv(c"count", VAR_NUMBER, VV_RO),
     vv(c"count1", VAR_NUMBER, VV_RO),
     vv(c"prevcount", VAR_NUMBER, VV_RO),
@@ -408,63 +406,17 @@ static vimvars: GlobalCell<[vimvar; 106]> = GlobalCell::new([
     vv(c"starttime", VAR_NUMBER, VV_RO),
     vv(c"exitreason", VAR_STRING, VV_RO),
 ]);
-static vimvars_var: GlobalCell<ScopeDictDictItem> = GlobalCell::new(ScopeDictDictItem {
-    di_tv: typval_T {
-        v_type: VAR_UNKNOWN,
-        v_lock: VAR_UNLOCKED,
-        vval: typval_vval_union { v_number: 0 },
-    },
-    di_flags: 0,
-    di_key: [0; 1],
-});
-static vimvardict: GlobalCell<dict_T> = GlobalCell::new(dict_T {
-    dv_lock: VAR_UNLOCKED,
-    dv_scope: VAR_NO_SCOPE,
-    dv_refcount: 0,
-    dv_copyID: 0,
-    dv_hashtab: hashtab_T {
-        ht_mask: 0,
-        ht_used: 0,
-        ht_filled: 0,
-        ht_changed: 0,
-        ht_locked: 0,
-        ht_array: ::core::ptr::null_mut::<hashitem_T>(),
-        ht_smallarray: [hashitem_T {
-            hi_hash: 0,
-            hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        }; 16],
-    },
-    dv_copydict: ::core::ptr::null_mut::<dict_T>(),
-    dv_used_next: ::core::ptr::null_mut::<dict_T>(),
-    dv_used_prev: ::core::ptr::null_mut::<dict_T>(),
-    watchers: QUEUE {
-        next: ::core::ptr::null_mut::<queue>(),
-        prev: ::core::ptr::null_mut::<queue>(),
-    },
-    lua_table_ref: 0,
-});
-static msgpack_type_names: GlobalCell<[*const ::core::ffi::c_char; 8]> = GlobalCell::new([
-    b"nil\0".as_ptr() as *const ::core::ffi::c_char,
-    b"boolean\0".as_ptr() as *const ::core::ffi::c_char,
-    b"integer\0".as_ptr() as *const ::core::ffi::c_char,
-    b"float\0".as_ptr() as *const ::core::ffi::c_char,
-    b"string\0".as_ptr() as *const ::core::ffi::c_char,
-    b"array\0".as_ptr() as *const ::core::ffi::c_char,
-    b"map\0".as_ptr() as *const ::core::ffi::c_char,
-    b"ext\0".as_ptr() as *const ::core::ffi::c_char,
-]);
-pub static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]> = GlobalCell::new([
-    ::core::ptr::null::<list_T>(),
-    ::core::ptr::null::<list_T>(),
-    ::core::ptr::null::<list_T>(),
-    ::core::ptr::null::<list_T>(),
-    ::core::ptr::null::<list_T>(),
-    ::core::ptr::null::<list_T>(),
-    ::core::ptr::null::<list_T>(),
-    ::core::ptr::null::<list_T>(),
-]);
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-pub const SID_LUA: ::core::ffi::c_int = -8 as ::core::ffi::c_int;
-pub const SID_STR: ::core::ffi::c_int = -10 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+static vimvars_var: GlobalCell<ScopeDictDictItem> = GlobalCell::new(EMPTY_SCOPE_VAR);
+static vimvardict: GlobalCell<dict_T> = GlobalCell::new(EMPTY_SCOPE_DICT);
+
+/// The eight `v:msgpack_types` keys, in `MessagePackType` order.
+const msgpack_type_names: [&CStr; 8] = [
+    c"nil", c"boolean", c"integer", c"float", c"string", c"array", c"map", c"ext",
+];
+
+/// The eight `v:msgpack_types` lists themselves, which the msgpack encoder
+/// and decoder compare against by identity.
+pub static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]> =
+    GlobalCell::new([::core::ptr::null(); 8]);
+pub const true_0: c_int = 1;
+pub const false_0: c_int = 0;

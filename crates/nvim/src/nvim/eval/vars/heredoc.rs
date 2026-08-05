@@ -131,9 +131,7 @@ pub unsafe extern "C" fn heredoc_get(
             line_arg = nl_ptr.offset(1 as ::core::ffi::c_int as isize);
             *nl_ptr = NUL;
         } else if (*eap).ea_getline.is_none() {
-            emsg(gettext(
-                (e_cannot_use_heredoc_here.ptr() as *const _) as *const ::core::ffi::c_char,
-            ));
+            emsg(gettext(e_cannot_use_heredoc_here.as_ptr()));
             return ::core::ptr::null_mut::<list_T>();
         }
         cmd = skipwhite(cmd);
@@ -218,13 +216,7 @@ pub unsafe extern "C" fn heredoc_get(
             if heredoc_in_string {
                 if *line_arg == NUL {
                     if !script_get {
-                        semsg(
-                            gettext(
-                                (e_missing_end_marker_str.ptr() as *const _)
-                                    as *const ::core::ffi::c_char,
-                            ),
-                            marker,
-                        );
+                        semsg(gettext(e_missing_end_marker_str.as_ptr()), marker);
                     }
                     break;
                 } else {
@@ -248,13 +240,7 @@ pub unsafe extern "C" fn heredoc_get(
                 );
                 if theline.is_null() {
                     if !script_get {
-                        semsg(
-                            gettext(
-                                (e_missing_end_marker_str.ptr() as *const _)
-                                    as *const ::core::ffi::c_char,
-                            ),
-                            marker,
-                        );
+                        semsg(gettext(e_missing_end_marker_str.as_ptr()), marker);
                     }
                     break;
                 }

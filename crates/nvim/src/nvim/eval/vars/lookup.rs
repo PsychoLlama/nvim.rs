@@ -1,471 +1,429 @@
 //! Resolving a name to the `dictitem_T` that holds it.
 //!
-//! `find_var_ht_dict` picks the scope from the name's prefix, `find_var_in_ht`
-//! finds the entry in it (and is where a bare `g:`/`b:`/`l:` becomes the
-//! scope's own dictionary item), and `eval_variable` is the whole path an
-//! expression takes.  `get_user_var_name` walks the same scopes backwards,
-//! for completion.
+//! [`find_var_ht_dict`] picks the scope from the name's prefix,
+//! [`find_var_in_ht`] finds the entry in it (and is where a bare
+//! `g:`/`b:`/`l:` becomes the scope's own dictionary item), and
+//! [`eval_variable`] is the whole path an expression takes.
+//! [`get_user_var_name`] walks the same scopes for completion.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
 #[allow(unused_imports)]
 use super::*;
 
-static varnamebuf: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+/// The buffer [`cat_prefix_varname`] hands its answer back in, and its size.
+///
+/// One buffer for the whole completion walk: every name it produces is read
+/// and copied before the next call, which is what lets it be reused.
+static varnamebuf: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+static varnamebuflen: GlobalCell<size_t> = GlobalCell::new(0);
 
-static varnamebuflen: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-
-pub unsafe extern "C" fn cat_prefix_varname(
-    mut prefix: ::core::ffi::c_int,
-    mut name: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+/// `"<prefix>:<name>"`, in a buffer that lives until the next call.
+///
+/// # Safety
+/// `name` is a NUL-terminated string.
+pub unsafe fn cat_prefix_varname(prefix: c_int, name: *const c_char) -> *mut c_char {
     unsafe {
-        let mut len: size_t = strlen(name).wrapping_add(3 as size_t);
+        let mut len = strlen(name) + 3;
         if len > varnamebuflen.get() {
-            xfree(varnamebuf.get() as *mut ::core::ffi::c_void);
-            len = len.wrapping_add(10 as size_t);
-            varnamebuf.set(xmalloc(len) as *mut ::core::ffi::c_char);
+            xfree(varnamebuf.get().cast());
+            len += 10;
+            varnamebuf.set(xmalloc(len) as *mut c_char);
             varnamebuflen.set(len);
         }
-        *varnamebuf.get() = prefix as ::core::ffi::c_char;
-        *(*varnamebuf.ptr()).offset(1 as ::core::ffi::c_int as isize) = ':' as ::core::ffi::c_char;
-        strcpy(
-            (*varnamebuf.ptr()).offset(2 as ::core::ffi::c_int as isize),
-            name as *mut ::core::ffi::c_char,
-        );
-        return varnamebuf.get();
+        let buf = varnamebuf.get();
+        *buf = prefix as c_char;
+        *buf.add(1) = b':' as c_char;
+        strcpy(buf.add(2), name);
+        buf
     }
 }
 
-pub unsafe extern "C" fn get_user_var_name(
-    mut xp: *mut expand_T,
-    mut idx: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+/// The `idx`-th variable name for command-line completion, or NULL when
+/// there are no more.
+///
+/// This is a generator, not a function: `idx == 0` restarts the walk and
+/// every later call resumes it, so the cursor into each scope lives in a
+/// `static`.  The five scopes are visited in turn -- `g:`, `b:`, `w:`, `t:`,
+/// then the whole `v:` table -- and only `g:` answers a bare name, because
+/// that is the scope an unprefixed one completes in.
+///
+/// # Safety
+/// `xp` is a live expansion context.
+pub unsafe extern "C" fn get_user_var_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     unsafe {
         static gdone: GlobalCell<size_t> = GlobalCell::new(0);
         static bdone: GlobalCell<size_t> = GlobalCell::new(0);
         static wdone: GlobalCell<size_t> = GlobalCell::new(0);
         static tdone: GlobalCell<size_t> = GlobalCell::new(0);
         static vidx: GlobalCell<size_t> = GlobalCell::new(0);
-        static hi: GlobalCell<*mut hashitem_T> =
-            GlobalCell::new(::core::ptr::null_mut::<hashitem_T>());
-        if idx == 0 as ::core::ffi::c_int {
-            vidx.set(0 as size_t);
-            wdone.set(vidx.get());
-            bdone.set(wdone.get());
-            gdone.set(bdone.get());
-            tdone.set(0 as size_t);
+        /// The hashtab cursor, shared by the four hashtab scopes: only one
+        /// of them is being walked at a time.
+        static hi: GlobalCell<*mut hashitem_T> = GlobalCell::new(ptr::null_mut());
+
+        if idx == 0 {
+            gdone.set(0);
+            bdone.set(0);
+            wdone.set(0);
+            tdone.set(0);
+            vidx.set(0);
         }
-        if gdone.get() < (*globvardict.ptr()).dv_hashtab.ht_used {
-            let c2rust_fresh0 = gdone.get();
-            gdone.set((*gdone.ptr()).wrapping_add(1));
-            if c2rust_fresh0 == 0 as size_t {
-                hi.set((*globvardict.ptr()).dv_hashtab.ht_array);
+
+        // One step through `ht`: the first call starts at the array, every
+        // later one advances past the slot the previous call answered and
+        // then skips the empty and removed ones.
+        let step = |done: &GlobalCell<size_t>, ht: *const hashtab_T| -> Option<*mut c_char> {
+            let n = done.get();
+            if n >= (*ht).ht_used {
+                return None;
+            }
+            done.set(n + 1);
+            hi.set(if n == 0 {
+                (*ht).ht_array
             } else {
-                hi.set((*hi.ptr()).offset(1));
+                hi.get().add(1)
+            });
+            while !(*hi.get()).is_kept() {
+                hi.set(hi.get().add(1));
             }
-            while (*hi.get()).hi_key.is_null()
-                || (*hi.get()).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
-            {
-                hi.set((*hi.ptr()).offset(1));
+            Some((*hi.get()).hi_key)
+        };
+
+        if let Some(key) = step(&gdone, &raw const (*globvardict.ptr()).dv_hashtab) {
+            if strncmp(c"g:".as_ptr(), (*xp).xp_pattern, 2) == 0 {
+                return cat_prefix_varname(b'g' as c_int, key);
             }
-            if strncmp(
-                b"g:\0".as_ptr() as *const ::core::ffi::c_char,
-                (*xp).xp_pattern,
-                2 as size_t,
-            ) == 0 as ::core::ffi::c_int
-            {
-                return cat_prefix_varname('g' as ::core::ffi::c_int, (*hi.get()).hi_key);
-            }
-            return (*hi.get()).hi_key;
+            return key;
         }
-        let mut ht: *const hashtab_T =
-            &raw mut (*(*(*(prevwin_curwin as unsafe extern "C" fn() -> *mut win_T)()).w_buffer)
-                .b_vars)
-                .dv_hashtab;
-        if bdone.get() < (*ht).ht_used {
-            let c2rust_fresh1 = bdone.get();
-            bdone.set((*bdone.ptr()).wrapping_add(1));
-            if c2rust_fresh1 == 0 as size_t {
-                hi.set((*ht).ht_array);
-            } else {
-                hi.set((*hi.ptr()).offset(1));
-            }
-            while (*hi.get()).hi_key.is_null()
-                || (*hi.get()).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
-            {
-                hi.set((*hi.ptr()).offset(1));
-            }
-            return cat_prefix_varname('b' as ::core::ffi::c_int, (*hi.get()).hi_key);
+        // The window this completes for is the one the command line was
+        // opened over, which is `prevwin` while the command-line window is
+        // current.
+        let win = prevwin_curwin();
+        if let Some(key) = step(&bdone, &raw const (*(*(*win).w_buffer).b_vars).dv_hashtab) {
+            return cat_prefix_varname(b'b' as c_int, key);
         }
-        ht = &raw mut (*(*(prevwin_curwin as unsafe extern "C" fn() -> *mut win_T)()).w_vars)
-            .dv_hashtab;
-        if wdone.get() < (*ht).ht_used {
-            let c2rust_fresh2 = wdone.get();
-            wdone.set((*wdone.ptr()).wrapping_add(1));
-            if c2rust_fresh2 == 0 as size_t {
-                hi.set((*ht).ht_array);
-            } else {
-                hi.set((*hi.ptr()).offset(1));
-            }
-            while (*hi.get()).hi_key.is_null()
-                || (*hi.get()).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
-            {
-                hi.set((*hi.ptr()).offset(1));
-            }
-            return cat_prefix_varname('w' as ::core::ffi::c_int, (*hi.get()).hi_key);
+        if let Some(key) = step(&wdone, &raw const (*(*win).w_vars).dv_hashtab) {
+            return cat_prefix_varname(b'w' as c_int, key);
         }
-        ht = &raw mut (*(*curtab.get()).tp_vars).dv_hashtab;
-        if tdone.get() < (*ht).ht_used {
-            let c2rust_fresh3 = tdone.get();
-            tdone.set((*tdone.ptr()).wrapping_add(1));
-            if c2rust_fresh3 == 0 as size_t {
-                hi.set((*ht).ht_array);
-            } else {
-                hi.set((*hi.ptr()).offset(1));
-            }
-            while (*hi.get()).hi_key.is_null()
-                || (*hi.get()).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
-            {
-                hi.set((*hi.ptr()).offset(1));
-            }
-            return cat_prefix_varname('t' as ::core::ffi::c_int, (*hi.get()).hi_key);
+        if let Some(key) = step(&tdone, &raw const (*(*curtab.get()).tp_vars).dv_hashtab) {
+            return cat_prefix_varname(b't' as c_int, key);
         }
-        if vidx.get()
-            < ::core::mem::size_of::<[vimvar; 106]>()
-                .wrapping_div(::core::mem::size_of::<vimvar>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[vimvar; 106]>()
-                        .wrapping_rem(::core::mem::size_of::<vimvar>())
-                        == 0) as ::core::ffi::c_int as usize,
-                )
-        {
-            let c2rust_fresh4 = vidx.get();
-            vidx.set((*vidx.ptr()).wrapping_add(1));
-            return cat_prefix_varname(
-                'v' as ::core::ffi::c_int,
-                get_vim_var_name(c2rust_fresh4 as VimVarIndex),
-            );
+        let v = vidx.get();
+        if v < (*vimvars.ptr()).len() {
+            vidx.set(v + 1);
+            return cat_prefix_varname(b'v' as c_int, get_vim_var_name(v as VimVarIndex));
         }
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            varnamebuf.ptr() as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL;
-        let _ = *ptr_;
-        varnamebuflen.set(0 as size_t);
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+
+        xfree(varnamebuf.get().cast());
+        varnamebuf.set(ptr::null_mut());
+        varnamebuflen.set(0);
+        ptr::null_mut()
     }
 }
 
-pub unsafe extern "C" fn eval_variable(
-    mut name: *const ::core::ffi::c_char,
-    mut len: ::core::ffi::c_int,
-    mut rettv: *mut typval_T,
-    mut dip: *mut *mut dictitem_T,
-    mut verbose: bool,
-    mut no_autoload: bool,
-) -> ::core::ffi::c_int {
+/// Read the variable `name[0..len]` into `rettv`, reporting E121 if it does
+/// not exist.
+///
+/// `rettv` may be NULL to ask only whether the variable exists, and `dip`
+/// takes the item it was found in.  `verbose` allows the error; the message
+/// is suppressed for a lookup that is allowed to fail.
+///
+/// # Safety
+/// `name` points at `len` readable bytes; `rettv`/`dip` are writable or
+/// NULL.
+pub unsafe fn eval_variable(
+    name: *const c_char,
+    len: c_int,
+    rettv: *mut typval_T,
+    dip: *mut *mut dictitem_T,
+    verbose: bool,
+    no_autoload: bool,
+) -> c_int {
     unsafe {
-        let mut ret: ::core::ffi::c_int = OK;
-        let mut tv: *mut typval_T = ::core::ptr::null_mut::<typval_T>();
-        let mut v: *mut dictitem_T = ::core::ptr::null_mut::<dictitem_T>();
-        v = find_var(
-            name,
-            len as size_t,
-            ::core::ptr::null_mut::<*mut hashtab_T>(),
-            no_autoload as ::core::ffi::c_int,
-        );
-        if !v.is_null() {
-            tv = &raw mut (*v).di_tv;
-            if !dip.is_null() {
-                *dip = v;
-            }
-        }
-        if tv.is_null() {
-            if !rettv.is_null() && verbose as ::core::ffi::c_int != 0 {
+        let v = find_var(name, len as size_t, ptr::null_mut(), no_autoload);
+        if v.is_null() {
+            if !rettv.is_null() && verbose {
                 semsg(
-                    gettext(
-                        b"E121: Undefined variable: %.*s\0".as_ptr() as *const ::core::ffi::c_char
-                    ),
+                    gettext(c"E121: Undefined variable: %.*s".as_ptr()),
                     len,
                     name,
                 );
             }
-            ret = FAIL;
-        } else if !rettv.is_null() {
-            tv_copy(tv, rettv);
+            return FAIL;
         }
-        return ret;
+        if !dip.is_null() {
+            *dip = v;
+        }
+        if !rettv.is_null() {
+            tv_copy(&raw mut (*v).di_tv, rettv);
+        }
+        OK
     }
 }
 
-pub unsafe extern "C" fn check_vars(mut name: *const ::core::ffi::c_char, mut len: size_t) {
+/// Note in `eval_lavars_used` that `name[0..len]` is a function-local
+/// variable or an argument, which is what makes a lambda capture it.
+///
+/// # Safety
+/// `name` points at `len` readable bytes.
+pub unsafe fn check_vars(name: *const c_char, len: size_t) {
     unsafe {
         if (*eval_lavars_used.ptr()).is_null() {
             return;
         }
-        let mut varname: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut ht: *mut hashtab_T = find_var_ht(name, len, &raw mut varname);
-        if ht == get_funccal_local_ht() || ht == get_funccal_args_ht() {
-            if !find_var(name, len, ::core::ptr::null_mut::<*mut hashtab_T>(), true_0).is_null() {
-                *eval_lavars_used.get() = true_0 != 0;
-            }
+        let mut varname: *const c_char = ptr::null();
+        let ht = find_var_ht(name, len, &raw mut varname);
+        if (ht == get_funccal_local_ht() || ht == get_funccal_args_ht())
+            && !find_var(name, len, ptr::null_mut(), true).is_null()
+        {
+            *eval_lavars_used.get() = true;
         }
     }
 }
 
-pub unsafe extern "C" fn find_var(
-    name: *const ::core::ffi::c_char,
+/// The item holding the variable `name[0..name_len]`, or NULL.
+///
+/// A non-NULL `htp` means the caller is about to *write*, and takes the
+/// scope's hashtab; it also suppresses autoloading, since a write does not
+/// want the script sourced.
+///
+/// # Safety
+/// `name` points at `name_len` readable bytes; `htp` is writable or NULL.
+pub unsafe fn find_var(
+    name: *const c_char,
     name_len: size_t,
-    mut htp: *mut *mut hashtab_T,
-    mut no_autoload: ::core::ffi::c_int,
+    htp: *mut *mut hashtab_T,
+    no_autoload: bool,
 ) -> *mut dictitem_T {
     unsafe {
-        let mut varname: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let ht: *mut hashtab_T = find_var_ht(name, name_len, &raw mut varname);
+        let mut varname: *const c_char = ptr::null();
+        let ht = find_var_ht(name, name_len, &raw mut varname);
         if !htp.is_null() {
             *htp = ht;
         }
         if ht.is_null() {
-            return ::core::ptr::null_mut::<dictitem_T>();
+            return ptr::null_mut();
         }
-        let ret: *mut dictitem_T = find_var_in_ht(
+        let no_autoload = no_autoload || !htp.is_null();
+        let ret = find_var_in_ht(
             ht,
-            *name as ::core::ffi::c_int,
+            *name as c_int,
             varname,
-            name_len.wrapping_sub(varname.offset_from(name) as size_t),
-            (no_autoload != 0 || !htp.is_null()) as ::core::ffi::c_int,
+            name_len - varname.offset_from(name) as size_t,
+            no_autoload,
         );
         if !ret.is_null() {
             return ret;
         }
-        return find_var_in_scoped_ht(
-            name,
-            name_len,
-            (no_autoload != 0 || !htp.is_null()) as ::core::ffi::c_int,
-        );
+        // Search the parent scope, which a lambda can reference.
+        find_var_in_scoped_ht(name, name_len, no_autoload as c_int)
     }
 }
 
-pub unsafe extern "C" fn find_var_in_ht(
+/// The item holding `varname[0..varname_len]` in `ht`, or NULL.
+///
+/// An empty name is the scope itself (`let g:` and friends), and answers the
+/// scope's own dictionary item; `htname` -- the name's first character -- is
+/// what says which scope that is.  Otherwise the name is looked up, and for
+/// `g:` a miss may source an autoload script and look again.
+///
+/// # Safety
+/// `ht` is a live hashtab and `varname` points at `varname_len` readable
+/// bytes.
+pub unsafe fn find_var_in_ht(
     ht: *mut hashtab_T,
-    mut htname: ::core::ffi::c_int,
-    varname: *const ::core::ffi::c_char,
+    htname: c_int,
+    varname: *const c_char,
     varname_len: size_t,
-    mut no_autoload: ::core::ffi::c_int,
+    no_autoload: bool,
 ) -> *mut dictitem_T {
     unsafe {
-        if varname_len == 0 as size_t {
-            match htname {
-                115 => {
-                    return &raw mut (*(**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)
-                        .offset(
-                            ((*current_sctx.ptr()).sc_sid as ::core::ffi::c_int
-                                - 1 as ::core::ffi::c_int) as isize,
-                        ))
-                    .sn_vars)
-                        .sv_var as *mut dictitem_T;
-                }
-                103 => return globvars_var.ptr() as *mut dictitem_T,
-                118 => return vimvars_var.ptr() as *mut dictitem_T,
-                98 => return &raw mut (*curbuf.get()).b_bufvar as *mut dictitem_T,
-                119 => return &raw mut (*curwin.get()).w_winvar as *mut dictitem_T,
-                116 => return &raw mut (*curtab.get()).tp_winvar as *mut dictitem_T,
-                108 => return get_funccal_local_var(),
-                97 => return get_funccal_args_var(),
-                _ => {}
-            }
-            return ::core::ptr::null_mut::<dictitem_T>();
+        if varname_len == 0 {
+            // Something like "s:", or `ht` would have been NULL.
+            return match htname as u8 {
+                b's' => (&raw mut (*script_sv((*current_sctx.ptr()).sc_sid)).sv_var).cast(),
+                b'g' => globvars_var.ptr().cast(),
+                b'v' => vimvars_var.ptr().cast(),
+                b'b' => (&raw mut (*curbuf.get()).b_bufvar).cast(),
+                b'w' => (&raw mut (*curwin.get()).w_winvar).cast(),
+                b't' => (&raw mut (*curtab.get()).tp_winvar).cast(),
+                b'l' => get_funccal_local_var(),
+                b'a' => get_funccal_args_var(),
+                _ => ptr::null_mut(),
+            };
         }
-        let mut hi: *mut hashitem_T = hash_find_len(ht, varname, varname_len);
-        if (*hi).hi_key.is_null()
-            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
-        {
-            if ht == get_globvar_ht() && no_autoload == 0 {
-                if !script_autoload(varname, varname_len, false_0 != 0)
-                    || aborting() as ::core::ffi::c_int != 0
-                {
-                    return ::core::ptr::null_mut::<dictitem_T>();
+
+        let mut hi = hash_find_len(ht, varname, varname_len);
+        if !(*hi).is_kept() {
+            // A global may be an autoload variable; sourcing its script may
+            // define it.  Don't source one that ran already, or every check
+            // of "is this name a Funcref variable" would re-run it.
+            if ht == get_globvar_ht() && !no_autoload {
+                // script_autoload() may invalidate `hi`, so it has to be
+                // asked for again rather than reused.
+                if !script_autoload(varname, varname_len, false) || aborting() {
+                    return ptr::null_mut();
                 }
                 hi = hash_find_len(ht, varname, varname_len);
             }
-            if (*hi).hi_key.is_null()
-                || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
-            {
-                return ::core::ptr::null_mut::<dictitem_T>();
+            if !(*hi).is_kept() {
+                return ptr::null_mut();
             }
         }
-        return (*hi).hi_key.offset(-(17 as ::core::ffi::c_ulong as isize)) as *mut dictitem_T;
+        tv_dict_hi2di(hi)
     }
 }
 
-pub(crate) unsafe extern "C" fn find_var_ht_dict(
-    mut name: *const ::core::ffi::c_char,
+/// The scope dictionary and hashtab `name[0..name_len]` belongs to, or NULL
+/// when the name names no scope.
+///
+/// A name with no prefix is `v:version` if the compatibility table has it,
+/// otherwise the function-local scope if there is one and `g:` if not.  A
+/// prefixed one names its scope directly -- and `s:` is where an anonymous
+/// Lua or `:execute` chunk is given a script id, so that it can have script
+/// variables at all (#15994).
+///
+/// # Safety
+/// `name` points at `name_len` readable bytes; `varname` and `d` are
+/// writable.
+pub(crate) unsafe fn find_var_ht_dict(
+    name: *const c_char,
     name_len: size_t,
-    mut varname: *mut *const ::core::ffi::c_char,
-    mut d: *mut *mut dict_T,
+    varname: *mut *const c_char,
+    d: *mut *mut dict_T,
 ) -> *mut hashtab_T {
     unsafe {
-        *d = ::core::ptr::null_mut::<dict_T>();
-        if name_len == 0 as size_t {
-            return ::core::ptr::null_mut::<hashtab_T>();
+        *d = ptr::null_mut();
+        if name_len == 0 {
+            return ptr::null_mut();
         }
-        if name_len == 1 as size_t
-            || *name.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                != ':' as ::core::ffi::c_int
-        {
-            if *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == ':' as ::core::ffi::c_int
-                || *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == AUTOLOAD_CHAR
-            {
-                return ::core::ptr::null_mut::<hashtab_T>();
+
+        if name_len == 1 || *name.add(1) != b':' as c_char {
+            // An implicit scope. The name must not start with a colon or a
+            // '#'.
+            if *name == b':' as c_char || *name == AUTOLOAD_CHAR {
+                return ptr::null_mut();
             }
             *varname = name;
-            let mut hi: *mut hashitem_T = hash_find_len(compat_hashtab.ptr(), name, name_len);
-            if !((*hi).hi_key.is_null()
-                || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
-            {
+
+            // "version" is "v:version" in every scope.
+            if (*hash_find_len(compat_hashtab.ptr(), name, name_len)).is_kept() {
                 return compat_hashtab.ptr();
             }
+
             *d = get_funccal_local_dict();
             if (*d).is_null() {
                 *d = get_globvar_dict();
             }
         } else {
-            *varname = name.offset(2 as ::core::ffi::c_int as isize);
-            if *name as ::core::ffi::c_int == 'g' as ::core::ffi::c_int {
+            *varname = name.add(2);
+            if *name == b'g' as c_char {
                 *d = get_globvar_dict();
-            } else if name_len > 2 as size_t
-                && (!memchr(
-                    name.offset(2 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-                    ':' as ::core::ffi::c_int,
-                    name_len.wrapping_sub(2 as size_t),
-                )
-                .is_null()
-                    || !memchr(
-                        name.offset(2 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-                        AUTOLOAD_CHAR,
-                        name_len.wrapping_sub(2 as size_t),
-                    )
-                    .is_null())
+            } else if name_len > 2
+                && (!memchr(name.add(2).cast(), b':' as c_int, name_len - 2).is_null()
+                    || !memchr(name.add(2).cast(), AUTOLOAD_CHAR as c_int, name_len - 2).is_null())
             {
-                return ::core::ptr::null_mut::<hashtab_T>();
+                // Without `g:` there must be no ':' or '#' in the rest.
+                return ptr::null_mut();
             }
-            if *name as ::core::ffi::c_int == 'b' as ::core::ffi::c_int {
-                *d = (*curbuf.get()).b_vars;
-            } else if *name as ::core::ffi::c_int == 'w' as ::core::ffi::c_int {
-                *d = (*curwin.get()).w_vars;
-            } else if *name as ::core::ffi::c_int == 't' as ::core::ffi::c_int {
-                *d = (*curtab.get()).tp_vars;
-            } else if *name as ::core::ffi::c_int == 'v' as ::core::ffi::c_int {
-                *d = get_vimvar_dict();
-            } else if *name as ::core::ffi::c_int == 'a' as ::core::ffi::c_int {
-                *d = get_funccal_args_dict();
-            } else if *name as ::core::ffi::c_int == 'l' as ::core::ffi::c_int {
-                *d = get_funccal_local_dict();
-            } else if *name as ::core::ffi::c_int == 's' as ::core::ffi::c_int
-                && ((*current_sctx.ptr()).sc_sid > 0 as ::core::ffi::c_int
-                    || (*current_sctx.ptr()).sc_sid == SID_STR
-                    || (*current_sctx.ptr()).sc_sid == SID_LUA)
-                && (*current_sctx.ptr()).sc_sid <= (*script_items.ptr()).ga_len
-            {
-                nlua_set_sctx(current_sctx.ptr());
-                if (*current_sctx.ptr()).sc_sid == SID_STR
-                    || (*current_sctx.ptr()).sc_sid == SID_LUA
-                {
-                    new_script_item(
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        &raw mut (*current_sctx.ptr()).sc_sid,
-                    );
+
+            match *name as u8 {
+                b'b' => *d = (*curbuf.get()).b_vars,
+                b'w' => *d = (*curwin.get()).w_vars,
+                b't' => *d = (*curtab.get()).tp_vars,
+                b'v' => *d = get_vimvar_dict(),
+                b'a' => *d = get_funccal_args_dict(),
+                b'l' => *d = get_funccal_local_dict(),
+                b's' => {
+                    let sctx = current_sctx.ptr();
+                    if ((*sctx).sc_sid > 0
+                        || (*sctx).sc_sid == SID_STR
+                        || (*sctx).sc_sid == SID_LUA)
+                        && (*sctx).sc_sid <= (*script_items.ptr()).ga_len
+                    {
+                        // Resolve the Lua filename and line number, so that
+                        // a later "Last set from" can name them.
+                        nlua_set_sctx(sctx);
+                        if (*sctx).sc_sid == SID_STR || (*sctx).sc_sid == SID_LUA {
+                            // An anonymous chunk has no script item yet.
+                            new_script_item(ptr::null_mut(), &raw mut (*sctx).sc_sid);
+                        }
+                        *d = &raw mut (*script_sv((*sctx).sc_sid)).sv_dict;
+                    }
                 }
-                *d = &raw mut (*(**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)
-                    .offset(
-                        ((*current_sctx.ptr()).sc_sid as ::core::ffi::c_int
-                            - 1 as ::core::ffi::c_int) as isize,
-                    ))
-                .sn_vars)
-                    .sv_dict;
+                _ => {}
             }
         }
-        return if !(*d).is_null() {
-            &raw mut (**d).dv_hashtab
-        } else {
-            ::core::ptr::null_mut::<hashtab_T>()
-        };
+
+        (*d).as_mut()
+            .map_or(ptr::null_mut(), |d| &raw mut d.dv_hashtab)
     }
 }
 
-pub unsafe extern "C" fn find_var_ht(
-    mut name: *const ::core::ffi::c_char,
+/// [`find_var_ht_dict`] without the dictionary.
+///
+/// # Safety
+/// As [`find_var_ht_dict`].
+pub unsafe fn find_var_ht(
+    name: *const c_char,
     name_len: size_t,
-    mut varname: *mut *const ::core::ffi::c_char,
+    varname: *mut *const c_char,
 ) -> *mut hashtab_T {
     unsafe {
-        let mut d: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
-        return find_var_ht_dict(name, name_len, varname, &raw mut d);
+        let mut d: *mut dict_T = ptr::null_mut();
+        find_var_ht_dict(name, name_len, varname, &raw mut d)
     }
 }
 
-pub unsafe extern "C" fn get_var_value(
-    name: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+/// The string value of the variable `name`, or NULL when it does not exist.
+///
+/// # Safety
+/// `name` is a NUL-terminated string.  The answer is only valid for as long
+/// as `tv_get_string` promises.
+pub unsafe fn get_var_value(name: *const c_char) -> *mut c_char {
     unsafe {
-        let mut v: *mut dictitem_T = ::core::ptr::null_mut::<dictitem_T>();
-        v = find_var(
-            name,
-            strlen(name),
-            ::core::ptr::null_mut::<*mut hashtab_T>(),
-            false_0,
-        );
+        let v = find_var(name, strlen(name), ptr::null_mut(), false);
         if v.is_null() {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+            return ptr::null_mut();
         }
-        return tv_get_string(&raw mut (*v).di_tv) as *mut ::core::ffi::c_char;
+        tv_get_string(&raw mut (*v).di_tv) as *mut c_char
     }
 }
 
-pub unsafe extern "C" fn var_exists(mut var: *const ::core::ffi::c_char) -> bool {
+/// `exists()` over a variable name: whether `var` names something, including
+/// everything a subscript on it reaches.
+///
+/// # Safety
+/// `var` is a NUL-terminated string.
+pub unsafe fn var_exists(mut var: *const c_char) -> bool {
     unsafe {
-        let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut n: bool = false_0 != 0;
-        let mut name: *const ::core::ffi::c_char = var;
-        let len: ::core::ffi::c_int =
-            get_name_len(&raw mut var, &raw mut tofree, true_0 != 0, false_0 != 0);
-        if len > 0 as ::core::ffi::c_int {
-            let mut tv: typval_T = typval_T {
-                v_type: VAR_UNKNOWN,
-                v_lock: VAR_UNLOCKED,
-                vval: typval_vval_union { v_number: 0 },
-            };
+        let mut tofree: *mut c_char = ptr::null_mut();
+        let mut n = false;
+        let mut name = var;
+        // Get the variable name, expanding a `{curly}` name into `tofree`.
+        let len = get_name_len(&raw mut var, &raw mut tofree, true, false);
+        if len > 0 {
+            let mut tv = TV_INITIAL_VALUE;
             if !tofree.is_null() {
                 name = tofree;
             }
-            n = eval_variable(
-                name,
-                len,
-                &raw mut tv,
-                ::core::ptr::null_mut::<*mut dictitem_T>(),
-                false_0 != 0,
-                true_0 != 0,
-            ) == OK;
+            n = eval_variable(name, len, &raw mut tv, ptr::null_mut(), false, true) == OK;
             if n {
-                n = handle_subscript(
-                    &raw mut var,
-                    &raw mut tv,
-                    EVALARG_EVALUATE.ptr(),
-                    false_0 != 0,
-                ) == OK;
+                // Handle `d.key`, `l[idx]` and `Func()`.
+                n = handle_subscript(&raw mut var, &raw mut tv, EVALARG_EVALUATE.ptr(), false)
+                    == OK;
                 if n {
                     tv_clear(&raw mut tv);
                 }
             }
         }
         if *var != NUL {
-            n = false_0 != 0;
+            n = false;
         }
-        xfree(tofree as *mut ::core::ffi::c_void);
-        return n;
+        xfree(tofree.cast());
+        n
     }
 }

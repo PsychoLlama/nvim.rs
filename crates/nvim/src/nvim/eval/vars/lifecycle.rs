@@ -16,16 +16,15 @@ pub unsafe extern "C" fn evalvars_init() {
         (*vimvardict.ptr()).dv_lock = VAR_FIXED;
         hash_init(compat_hashtab.ptr());
         let mut i: size_t = 0 as size_t;
-        while i < ::core::mem::size_of::<[vimvar; 106]>()
-            .wrapping_div(::core::mem::size_of::<vimvar>())
+        while i < ::core::mem::size_of::<[VimVar; 106]>()
+            .wrapping_div(::core::mem::size_of::<VimVar>())
             .wrapping_div(
-                (::core::mem::size_of::<[vimvar; 106]>()
-                    .wrapping_rem(::core::mem::size_of::<vimvar>())
+                (::core::mem::size_of::<[VimVar; 106]>()
+                    .wrapping_rem(::core::mem::size_of::<VimVar>())
                     == 0) as ::core::ffi::c_int as usize,
             )
         {
-            let mut p: *mut vimvar =
-                (vimvars.ptr() as *mut vimvar).offset(i as isize) as *mut vimvar;
+            let mut p: *mut VimVar = (vimvars.ptr() as *mut VimVar).offset(i as isize);
             '_c2rust_label: {
                 if strlen((*p).vv_name) <= 16 as size_t {
                 } else {
@@ -77,19 +76,11 @@ pub unsafe extern "C" fn evalvars_init() {
         );
         let msgpack_types_dict: *mut dict_T = tv_dict_alloc();
         let mut i_0: size_t = 0 as size_t;
-        while i_0
-            < ::core::mem::size_of::<[*const ::core::ffi::c_char; 8]>()
-                .wrapping_div(::core::mem::size_of::<*const ::core::ffi::c_char>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[*const ::core::ffi::c_char; 8]>()
-                        .wrapping_rem(::core::mem::size_of::<*const ::core::ffi::c_char>())
-                        == 0) as ::core::ffi::c_int as usize,
-                )
-        {
+        while i_0 < msgpack_type_names.len() {
             let type_list: *mut list_T = tv_list_alloc(0 as ptrdiff_t);
             tv_list_set_lock(type_list, VAR_FIXED);
             tv_list_ref(type_list);
-            let di: *mut dictitem_T = tv_dict_item_alloc((*msgpack_type_names.ptr())[i_0 as usize]);
+            let di: *mut dictitem_T = tv_dict_item_alloc(msgpack_type_names[i_0 as usize].as_ptr());
             (*di).di_flags = ((*di).di_flags as ::core::ffi::c_int
                 | (DI_FLAGS_RO as ::core::ffi::c_int | DI_FLAGS_FIX as ::core::ffi::c_int))
                 as uint8_t;

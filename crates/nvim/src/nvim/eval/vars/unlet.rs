@@ -20,15 +20,7 @@ pub unsafe fn ex_unlet(mut eap: *mut exarg_T) {
             } else {
                 0 as ::core::ffi::c_int
             },
-            Some(
-                do_unlet_var
-                    as unsafe extern "C" fn(
-                        *mut lval_T,
-                        *mut ::core::ffi::c_char,
-                        *mut exarg_T,
-                        ::core::ffi::c_int,
-                    ) -> ::core::ffi::c_int,
-            ),
+            do_unlet_var,
         );
     }
 }
@@ -43,25 +35,11 @@ pub unsafe fn ex_lockvar(mut eap: *mut exarg_T) {
             deep = getdigits_int(&raw mut arg, false_0 != 0, -1 as ::core::ffi::c_int);
             arg = skipwhite(arg);
         }
-        ex_unletlock(
-            eap,
-            arg,
-            deep,
-            0 as ::core::ffi::c_int,
-            Some(
-                do_lock_var
-                    as unsafe extern "C" fn(
-                        *mut lval_T,
-                        *mut ::core::ffi::c_char,
-                        *mut exarg_T,
-                        ::core::ffi::c_int,
-                    ) -> ::core::ffi::c_int,
-            ),
-        );
+        ex_unletlock(eap, arg, deep, 0 as ::core::ffi::c_int, do_lock_var);
     }
 }
 
-unsafe extern "C" fn ex_unletlock(
+unsafe fn ex_unletlock(
     mut eap: *mut exarg_T,
     mut argstart: *mut ::core::ffi::c_char,
     mut deep: ::core::ffi::c_int,
@@ -114,11 +92,7 @@ unsafe extern "C" fn ex_unletlock(
                     );
                     }
                 };
-                if !error
-                    && (*eap).skip == 0
-                    && callback.expect("non-null function pointer")(&raw mut lv, arg, eap, deep)
-                        == FAIL
-                {
+                if !error && (*eap).skip == 0 && callback(&raw mut lv, arg, eap, deep) == FAIL {
                     error = true_0 != 0;
                 }
                 name_end = arg;
@@ -153,12 +127,7 @@ unsafe extern "C" fn ex_unletlock(
                 } else {
                     if !error
                         && (*eap).skip == 0
-                        && callback.expect("non-null function pointer")(
-                            &raw mut lv,
-                            name_end,
-                            eap,
-                            deep,
-                        ) == FAIL
+                        && callback(&raw mut lv, name_end, eap, deep) == FAIL
                     {
                         error = true_0 != 0;
                     }
@@ -176,7 +145,7 @@ unsafe extern "C" fn ex_unletlock(
     }
 }
 
-unsafe extern "C" fn do_unlet_var(
+unsafe fn do_unlet_var(
     mut lp: *mut lval_T,
     mut name_end: *mut ::core::ffi::c_char,
     mut eap: *mut exarg_T,
@@ -312,7 +281,7 @@ pub unsafe extern "C" fn do_unlet(
                         *name as ::core::ffi::c_int,
                         b"\0".as_ptr() as *const ::core::ffi::c_char,
                         0 as size_t,
-                        false_0,
+                        false,
                     );
                     d = (*di).di_tv.vval.v_dict;
                 }
@@ -387,7 +356,7 @@ pub unsafe extern "C" fn do_unlet(
     }
 }
 
-unsafe extern "C" fn do_lock_var(
+unsafe fn do_lock_var(
     mut lp: *mut lval_T,
     mut _name_end: *mut ::core::ffi::c_char,
     mut eap: *mut exarg_T,
@@ -399,14 +368,14 @@ unsafe extern "C" fn do_lock_var(
         let mut ret: ::core::ffi::c_int = OK;
         if (*lp).ll_tv.is_null() {
             if *(*lp).ll_name as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
-                semsg(gettext(e_lock_unlock.get()), (*lp).ll_name);
+                semsg(gettext(e_lock_unlock.as_ptr()), (*lp).ll_name);
                 ret = FAIL;
             } else {
                 let di: *mut dictitem_T = find_var(
                     (*lp).ll_name,
                     (*lp).ll_name_len,
                     ::core::ptr::null_mut::<*mut hashtab_T>(),
-                    true_0,
+                    true,
                 );
                 if di.is_null() {
                     ret = FAIL;
@@ -417,7 +386,7 @@ unsafe extern "C" fn do_lock_var(
                     && (*di).di_tv.v_type as ::core::ffi::c_uint
                         != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    semsg(gettext(e_lock_unlock.get()), (*lp).ll_name);
+                    semsg(gettext(e_lock_unlock.as_ptr()), (*lp).ll_name);
                     ret = FAIL;
                 } else {
                     if lock {

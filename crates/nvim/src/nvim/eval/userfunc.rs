@@ -702,7 +702,7 @@ pub unsafe extern "C" fn deref_func_name(
         name,
         *lenp as size_t,
         ::core::ptr::null_mut::<*mut hashtab_T>(),
-        no_autoload as ::core::ffi::c_int,
+        no_autoload,
     );
     if v.is_null() {
         return name as *mut ::core::ffi::c_char;
@@ -3856,7 +3856,7 @@ pub unsafe fn ex_function(mut eap: *mut exarg_T) {
                             namelen = 0 as size_t;
                             if fudi.fd_dict.is_null() {
                                 let mut v: *mut dictitem_T =
-                                    find_var(name, strlen(name), &raw mut ht, false_0);
+                                    find_var(name, strlen(name), &raw mut ht, false);
                                 if !v.is_null()
                                     && (*v).di_tv.v_type as ::core::ffi::c_uint
                                         == VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -5276,7 +5276,7 @@ pub unsafe extern "C" fn find_var_in_scoped_ht(
                 *name as ::core::ffi::c_int,
                 varname,
                 namelen.wrapping_sub(varname.offset_from(name) as size_t),
-                no_autoload,
+                no_autoload != 0,
             );
             if !v.is_null() {
                 break;

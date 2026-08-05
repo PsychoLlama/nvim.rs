@@ -20,7 +20,7 @@ pub unsafe extern "C" fn prepare_vimvar(mut idx: ::core::ffi::c_int, mut save_tv
         {
             hash_add(
                 &raw mut (*vimvardict.ptr()).dv_hashtab,
-                &raw mut (*(vimvars.ptr() as *mut vimvar).offset(idx as isize))
+                &raw mut (*(vimvars.ptr() as *mut VimVar).offset(idx as isize))
                     .vv_di
                     .di_key as *mut ::core::ffi::c_char,
             );
@@ -38,7 +38,7 @@ pub unsafe extern "C" fn restore_vimvar(mut idx: ::core::ffi::c_int, mut save_tv
         }
         let mut hi: *mut hashitem_T = hash_find(
             &raw mut (*vimvardict.ptr()).dv_hashtab,
-            &raw mut (*(vimvars.ptr() as *mut vimvar).offset(idx as isize))
+            &raw mut (*(vimvars.ptr() as *mut VimVar).offset(idx as isize))
                 .vv_di
                 .di_key as *mut ::core::ffi::c_char,
         );
@@ -68,7 +68,7 @@ pub unsafe extern "C" fn get_vim_var_name(idx: VimVarIndex) -> *mut ::core::ffi:
 
 pub unsafe extern "C" fn get_vim_var_tv(idx: VimVarIndex) -> *mut typval_T {
     unsafe {
-        return &raw mut (*(vimvars.ptr() as *mut vimvar).offset(idx as isize))
+        return &raw mut (*(vimvars.ptr() as *mut VimVar).offset(idx as isize))
             .vv_di
             .di_tv;
     }

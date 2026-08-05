@@ -575,7 +575,7 @@ pub unsafe fn get_lval(
             } else {
                 &raw mut ht
             },
-            flags & GLV_NO_AUTOLOAD as c_int,
+            flags & GLV_NO_AUTOLOAD as c_int != 0,
         );
         if v.is_null() {
             if !quiet {

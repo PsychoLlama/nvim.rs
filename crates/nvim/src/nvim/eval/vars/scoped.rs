@@ -79,7 +79,7 @@ unsafe extern "C" fn get_var_from(
                         ht = &raw mut (*(*tp).tp_vars).dv_hashtab;
                     }
                     let v_0: *const dictitem_T =
-                        find_var_in_ht(ht, htname, varname, strlen(varname), false_0);
+                        find_var_in_ht(ht, htname, varname, strlen(varname), false);
                     if !v_0.is_null() {
                         tv_copy(&raw const (*v_0).di_tv, rettv);
                         done = true_0 != 0;
