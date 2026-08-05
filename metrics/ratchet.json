@@ -60,7 +60,7 @@
     "crates/nvim/src/nvim/arglist.rs": {"unsafe": 33},
     "crates/nvim/src/nvim/arglist/all.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/arglist/eval.rs": {"unsafe": 5},
-    "crates/nvim/src/nvim/autocmd.rs": {"lines": 5174, "no_mangle": 2, "unsafe": 80},
+    "crates/nvim/src/nvim/autocmd.rs": {"lines": 3878, "no_mangle": 2, "unsafe": 80},
     "crates/nvim/src/nvim/buffer.rs": {"lines": 5030, "no_mangle": 13, "unsafe": 104},
     "crates/nvim/src/nvim/buffer_updates.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/bufwrite.rs": {"unsafe": 5},

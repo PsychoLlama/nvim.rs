@@ -3655,1486 +3655,190 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NO_SCREEN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
+/// One row of [`event_names`]: an event's name, and which event it is.
+///
+/// The sign of `event` is upstream's window-local flag -- `gen_events.lua`
+/// negates the event of every name whose `auevents.lua` entry is `true` --
+/// and it is read back as `event <= 0`, which is why `BufAdd`, event 0,
+/// counts as window-local by having no sign at all.
+const fn named(name: &'static CStr, event: auto_event) -> event_name {
+    event_name {
+        len: name.count_bytes(),
+        name: name.as_ptr() as *mut ::core::ffi::c_char,
+        event: event as ::core::ffi::c_int,
+    }
+}
+
+/// [`named`] for an event that is window-local, so it may be listed in
+/// 'eventignorewin' as well as 'eventignore'.
+const fn named_win_local(name: &'static CStr, event: auto_event) -> event_name {
+    event_name {
+        len: name.count_bytes(),
+        name: name.as_ptr() as *mut ::core::ffi::c_char,
+        event: -(event as ::core::ffi::c_int),
+    }
+}
+
+/// Every autocommand event's name, sorted by lower-cased name -- the order
+/// `gen_events.lua` numbers the `auto_event` enum in, so a row's index *is*
+/// its event number, and the order [`event_name_index`] binary searches.
 static event_names: GlobalCell<[event_name; 145]> = GlobalCell::new([
-    event_name {
-        len: 6 as size_t,
-        name: b"BufAdd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFADD as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"BufCreate\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFADD as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"BufDelete\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFDELETE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 8 as size_t,
-        name: b"BufEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFENTER as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"BufFilePost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFFILEPOST as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 10 as size_t,
-        name: b"BufFilePre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFFILEPRE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"BufHidden\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFHIDDEN as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 8 as size_t,
-        name: b"BufLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFLEAVE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 14 as size_t,
-        name: b"BufModifiedSet\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFMODIFIEDSET as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 6 as size_t,
-        name: b"BufNew\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFNEW as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 10 as size_t,
-        name: b"BufNewFile\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFNEWFILE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 7 as size_t,
-        name: b"BufRead\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFREADPOST as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 10 as size_t,
-        name: b"BufReadCmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFREADCMD as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"BufReadPost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFREADPOST as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 10 as size_t,
-        name: b"BufReadPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFREADPRE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"BufUnload\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFUNLOAD as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"BufWinEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFWINENTER as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"BufWinLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFWINLEAVE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 10 as size_t,
-        name: b"BufWipeout\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFWIPEOUT as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 8 as size_t,
-        name: b"BufWrite\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFWRITEPRE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"BufWriteCmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFWRITECMD as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"BufWritePost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFWRITEPOST as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"BufWritePre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_BUFWRITEPRE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 8 as size_t,
-        name: b"ChanInfo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_CHANINFO as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 8 as size_t,
-        name: b"ChanOpen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_CHANOPEN as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 14 as size_t,
-        name: b"CmdlineChanged\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: EVENT_CMDLINECHANGED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"CmdlineEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_CMDLINEENTER as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"CmdlineLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_CMDLINELEAVE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 15 as size_t,
-        name: b"CmdlineLeavePre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: EVENT_CMDLINELEAVEPRE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"CmdUndefined\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_CMDUNDEFINED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"CmdwinEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_CMDWINENTER as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"CmdwinLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_CMDWINLEAVE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"ColorScheme\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_COLORSCHEME as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 14 as size_t,
-        name: b"ColorSchemePre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: EVENT_COLORSCHEMEPRE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 15 as size_t,
-        name: b"CompleteChanged\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: EVENT_COMPLETECHANGED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"CompleteDone\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_COMPLETEDONE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 15 as size_t,
-        name: b"CompleteDonePre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: EVENT_COMPLETEDONEPRE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 10 as size_t,
-        name: b"CursorHold\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_CURSORHOLD as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"CursorHoldI\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_CURSORHOLDI as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"CursorMoved\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_CURSORMOVED as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"CursorMovedC\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_CURSORMOVEDC as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"CursorMovedI\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_CURSORMOVEDI as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 17 as size_t,
-        name: b"DiagnosticChanged\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: EVENT_DIAGNOSTICCHANGED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"DiffUpdated\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_DIFFUPDATED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 10 as size_t,
-        name: b"DirChanged\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_DIRCHANGED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 13 as size_t,
-        name: b"DirChangedPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_DIRCHANGEDPRE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 15 as size_t,
-        name: b"EncodingChanged\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: EVENT_ENCODINGCHANGED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 7 as size_t,
-        name: b"ExitPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_EXITPRE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 13 as size_t,
-        name: b"FileAppendCmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILEAPPENDCMD as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 14 as size_t,
-        name: b"FileAppendPost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILEAPPENDPOST as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 13 as size_t,
-        name: b"FileAppendPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILEAPPENDPRE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 13 as size_t,
-        name: b"FileChangedRO\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILECHANGEDRO as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 16 as size_t,
-        name: b"FileChangedShell\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILECHANGEDSHELL as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 20 as size_t,
-        name: b"FileChangedShellPost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILECHANGEDSHELLPOST as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"FileEncoding\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_ENCODINGCHANGED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"FileReadCmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILEREADCMD as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"FileReadPost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILEREADPOST as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"FileReadPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILEREADPRE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 8 as size_t,
-        name: b"FileType\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILETYPE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"FileWriteCmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILEWRITECMD as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 13 as size_t,
-        name: b"FileWritePost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILEWRITEPOST as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"FileWritePre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILEWRITEPRE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 14 as size_t,
-        name: b"FilterReadPost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILTERREADPOST as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 13 as size_t,
-        name: b"FilterReadPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILTERREADPRE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 15 as size_t,
-        name: b"FilterWritePost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILTERWRITEPOST as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 14 as size_t,
-        name: b"FilterWritePre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: -(EVENT_FILTERWRITEPRE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"FocusGained\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_FOCUSGAINED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"FocusLost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_FOCUSLOST as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 13 as size_t,
-        name: b"FuncUndefined\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_FUNCUNDEFINED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 8 as size_t,
-        name: b"GUIEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_GUIENTER as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"GUIFailed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_GUIFAILED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"InsertChange\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_INSERTCHANGE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 13 as size_t,
-        name: b"InsertCharPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_INSERTCHARPRE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"InsertEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_INSERTENTER as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"InsertLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_INSERTLEAVE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 14 as size_t,
-        name: b"InsertLeavePre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: -(EVENT_INSERTLEAVEPRE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"LspAttach\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_LSPATTACH as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"LspDetach\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_LSPDETACH as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"LspNotify\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_LSPNOTIFY as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"LspProgress\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_LSPPROGRESS as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 10 as size_t,
-        name: b"LspRequest\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_LSPREQUEST as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 14 as size_t,
-        name: b"LspTokenUpdate\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: EVENT_LSPTOKENUPDATE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 7 as size_t,
-        name: b"MarkSet\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_MARKSET as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"MenuPopup\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_MENUPOPUP as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"ModeChanged\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_MODECHANGED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"OptionSet\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_OPTIONSET as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"PackChanged\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_PACKCHANGED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 14 as size_t,
-        name: b"PackChangedPre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: EVENT_PACKCHANGEDPRE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 8 as size_t,
-        name: b"Progress\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_PROGRESS as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 15 as size_t,
-        name: b"QuickFixCmdPost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: EVENT_QUICKFIXCMDPOST as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 14 as size_t,
-        name: b"QuickFixCmdPre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: EVENT_QUICKFIXCMDPRE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 7 as size_t,
-        name: b"QuitPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_QUITPRE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 14 as size_t,
-        name: b"RecordingEnter\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: -(EVENT_RECORDINGENTER as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 14 as size_t,
-        name: b"RecordingLeave\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: -(EVENT_RECORDINGLEAVE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"RemoteReply\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_REMOTEREPLY as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"SafeState\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_SAFESTATE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 13 as size_t,
-        name: b"SearchWrapped\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_SEARCHWRAPPED as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 15 as size_t,
-        name: b"SessionLoadPost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: EVENT_SESSIONLOADPOST as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 14 as size_t,
-        name: b"SessionLoadPre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: EVENT_SESSIONLOADPRE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 16 as size_t,
-        name: b"SessionWritePost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: EVENT_SESSIONWRITEPOST as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"ShellCmdPost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_SHELLCMDPOST as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 15 as size_t,
-        name: b"ShellFilterPost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: -(EVENT_SHELLFILTERPOST as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 6 as size_t,
-        name: b"Signal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_SIGNAL as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"SourceCmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_SOURCECMD as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 10 as size_t,
-        name: b"SourcePost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_SOURCEPOST as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"SourcePre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_SOURCEPRE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 16 as size_t,
-        name: b"SpellFileMissing\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        event: EVENT_SPELLFILEMISSING as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 13 as size_t,
-        name: b"StdinReadPost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_STDINREADPOST as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"StdinReadPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_STDINREADPRE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 10 as size_t,
-        name: b"SwapExists\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_SWAPEXISTS as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 6 as size_t,
-        name: b"Syntax\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_SYNTAX as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"TabClosed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_TABCLOSED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"TabClosedPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_TABCLOSEDPRE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 8 as size_t,
-        name: b"TabEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_TABENTER as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 8 as size_t,
-        name: b"TabLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_TABLEAVE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 6 as size_t,
-        name: b"TabNew\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_TABNEW as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 13 as size_t,
-        name: b"TabNewEntered\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_TABNEWENTERED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"TermChanged\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_TERMCHANGED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"TermClose\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_TERMCLOSE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"TermEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_TERMENTER as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"TermLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_TERMLEAVE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 8 as size_t,
-        name: b"TermOpen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_TERMOPEN as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"TermRequest\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_TERMREQUEST as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"TermResponse\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_TERMRESPONSE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"TextChanged\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_TEXTCHANGED as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"TextChangedI\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_TEXTCHANGEDI as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"TextChangedP\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_TEXTCHANGEDP as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"TextChangedT\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_TEXTCHANGEDT as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 12 as size_t,
-        name: b"TextYankPost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_TEXTYANKPOST as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 7 as size_t,
-        name: b"UIEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_UIENTER as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 7 as size_t,
-        name: b"UILeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_UILEAVE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 4 as size_t,
-        name: b"User\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_USER as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 8 as size_t,
-        name: b"VimEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_VIMENTER as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 8 as size_t,
-        name: b"VimLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_VIMLEAVE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"VimLeavePre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_VIMLEAVEPRE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 10 as size_t,
-        name: b"VimResized\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_VIMRESIZED as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"VimResume\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_VIMRESUME as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 10 as size_t,
-        name: b"VimSuspend\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_VIMSUSPEND as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"WinClosed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_WINCLOSED as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 8 as size_t,
-        name: b"WinEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_WINENTER as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 8 as size_t,
-        name: b"WinLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_WINLEAVE as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 6 as size_t,
-        name: b"WinNew\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_WINNEW as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 9 as size_t,
-        name: b"WinNewPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: EVENT_WINNEWPRE as ::core::ffi::c_int,
-    },
-    event_name {
-        len: 10 as size_t,
-        name: b"WinResized\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_WINRESIZED as ::core::ffi::c_int),
-    },
-    event_name {
-        len: 11 as size_t,
-        name: b"WinScrolled\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        event: -(EVENT_WINSCROLLED as ::core::ffi::c_int),
-    },
+    named_win_local(c"BufAdd", EVENT_BUFADD),
+    named_win_local(c"BufCreate", EVENT_BUFADD),
+    named_win_local(c"BufDelete", EVENT_BUFDELETE),
+    named_win_local(c"BufEnter", EVENT_BUFENTER),
+    named_win_local(c"BufFilePost", EVENT_BUFFILEPOST),
+    named_win_local(c"BufFilePre", EVENT_BUFFILEPRE),
+    named_win_local(c"BufHidden", EVENT_BUFHIDDEN),
+    named_win_local(c"BufLeave", EVENT_BUFLEAVE),
+    named_win_local(c"BufModifiedSet", EVENT_BUFMODIFIEDSET),
+    named_win_local(c"BufNew", EVENT_BUFNEW),
+    named_win_local(c"BufNewFile", EVENT_BUFNEWFILE),
+    named_win_local(c"BufRead", EVENT_BUFREADPOST),
+    named_win_local(c"BufReadCmd", EVENT_BUFREADCMD),
+    named_win_local(c"BufReadPost", EVENT_BUFREADPOST),
+    named_win_local(c"BufReadPre", EVENT_BUFREADPRE),
+    named_win_local(c"BufUnload", EVENT_BUFUNLOAD),
+    named_win_local(c"BufWinEnter", EVENT_BUFWINENTER),
+    named_win_local(c"BufWinLeave", EVENT_BUFWINLEAVE),
+    named_win_local(c"BufWipeout", EVENT_BUFWIPEOUT),
+    named_win_local(c"BufWrite", EVENT_BUFWRITEPRE),
+    named_win_local(c"BufWriteCmd", EVENT_BUFWRITECMD),
+    named_win_local(c"BufWritePost", EVENT_BUFWRITEPOST),
+    named_win_local(c"BufWritePre", EVENT_BUFWRITEPRE),
+    named(c"ChanInfo", EVENT_CHANINFO),
+    named(c"ChanOpen", EVENT_CHANOPEN),
+    named(c"CmdlineChanged", EVENT_CMDLINECHANGED),
+    named(c"CmdlineEnter", EVENT_CMDLINEENTER),
+    named(c"CmdlineLeave", EVENT_CMDLINELEAVE),
+    named(c"CmdlineLeavePre", EVENT_CMDLINELEAVEPRE),
+    named(c"CmdUndefined", EVENT_CMDUNDEFINED),
+    named(c"CmdwinEnter", EVENT_CMDWINENTER),
+    named(c"CmdwinLeave", EVENT_CMDWINLEAVE),
+    named(c"ColorScheme", EVENT_COLORSCHEME),
+    named(c"ColorSchemePre", EVENT_COLORSCHEMEPRE),
+    named(c"CompleteChanged", EVENT_COMPLETECHANGED),
+    named(c"CompleteDone", EVENT_COMPLETEDONE),
+    named(c"CompleteDonePre", EVENT_COMPLETEDONEPRE),
+    named_win_local(c"CursorHold", EVENT_CURSORHOLD),
+    named_win_local(c"CursorHoldI", EVENT_CURSORHOLDI),
+    named_win_local(c"CursorMoved", EVENT_CURSORMOVED),
+    named_win_local(c"CursorMovedC", EVENT_CURSORMOVEDC),
+    named_win_local(c"CursorMovedI", EVENT_CURSORMOVEDI),
+    named(c"DiagnosticChanged", EVENT_DIAGNOSTICCHANGED),
+    named(c"DiffUpdated", EVENT_DIFFUPDATED),
+    named(c"DirChanged", EVENT_DIRCHANGED),
+    named(c"DirChangedPre", EVENT_DIRCHANGEDPRE),
+    named(c"EncodingChanged", EVENT_ENCODINGCHANGED),
+    named(c"ExitPre", EVENT_EXITPRE),
+    named_win_local(c"FileAppendCmd", EVENT_FILEAPPENDCMD),
+    named_win_local(c"FileAppendPost", EVENT_FILEAPPENDPOST),
+    named_win_local(c"FileAppendPre", EVENT_FILEAPPENDPRE),
+    named_win_local(c"FileChangedRO", EVENT_FILECHANGEDRO),
+    named_win_local(c"FileChangedShell", EVENT_FILECHANGEDSHELL),
+    named_win_local(c"FileChangedShellPost", EVENT_FILECHANGEDSHELLPOST),
+    named(c"FileEncoding", EVENT_ENCODINGCHANGED),
+    named_win_local(c"FileReadCmd", EVENT_FILEREADCMD),
+    named_win_local(c"FileReadPost", EVENT_FILEREADPOST),
+    named_win_local(c"FileReadPre", EVENT_FILEREADPRE),
+    named_win_local(c"FileType", EVENT_FILETYPE),
+    named_win_local(c"FileWriteCmd", EVENT_FILEWRITECMD),
+    named_win_local(c"FileWritePost", EVENT_FILEWRITEPOST),
+    named_win_local(c"FileWritePre", EVENT_FILEWRITEPRE),
+    named_win_local(c"FilterReadPost", EVENT_FILTERREADPOST),
+    named_win_local(c"FilterReadPre", EVENT_FILTERREADPRE),
+    named_win_local(c"FilterWritePost", EVENT_FILTERWRITEPOST),
+    named_win_local(c"FilterWritePre", EVENT_FILTERWRITEPRE),
+    named(c"FocusGained", EVENT_FOCUSGAINED),
+    named(c"FocusLost", EVENT_FOCUSLOST),
+    named(c"FuncUndefined", EVENT_FUNCUNDEFINED),
+    named(c"GUIEnter", EVENT_GUIENTER),
+    named(c"GUIFailed", EVENT_GUIFAILED),
+    named_win_local(c"InsertChange", EVENT_INSERTCHANGE),
+    named_win_local(c"InsertCharPre", EVENT_INSERTCHARPRE),
+    named_win_local(c"InsertEnter", EVENT_INSERTENTER),
+    named_win_local(c"InsertLeave", EVENT_INSERTLEAVE),
+    named_win_local(c"InsertLeavePre", EVENT_INSERTLEAVEPRE),
+    named(c"LspAttach", EVENT_LSPATTACH),
+    named(c"LspDetach", EVENT_LSPDETACH),
+    named(c"LspNotify", EVENT_LSPNOTIFY),
+    named(c"LspProgress", EVENT_LSPPROGRESS),
+    named(c"LspRequest", EVENT_LSPREQUEST),
+    named(c"LspTokenUpdate", EVENT_LSPTOKENUPDATE),
+    named(c"MarkSet", EVENT_MARKSET),
+    named(c"MenuPopup", EVENT_MENUPOPUP),
+    named(c"ModeChanged", EVENT_MODECHANGED),
+    named(c"OptionSet", EVENT_OPTIONSET),
+    named(c"PackChanged", EVENT_PACKCHANGED),
+    named(c"PackChangedPre", EVENT_PACKCHANGEDPRE),
+    named(c"Progress", EVENT_PROGRESS),
+    named(c"QuickFixCmdPost", EVENT_QUICKFIXCMDPOST),
+    named(c"QuickFixCmdPre", EVENT_QUICKFIXCMDPRE),
+    named(c"QuitPre", EVENT_QUITPRE),
+    named_win_local(c"RecordingEnter", EVENT_RECORDINGENTER),
+    named_win_local(c"RecordingLeave", EVENT_RECORDINGLEAVE),
+    named(c"RemoteReply", EVENT_REMOTEREPLY),
+    named(c"SafeState", EVENT_SAFESTATE),
+    named_win_local(c"SearchWrapped", EVENT_SEARCHWRAPPED),
+    named(c"SessionLoadPost", EVENT_SESSIONLOADPOST),
+    named(c"SessionLoadPre", EVENT_SESSIONLOADPRE),
+    named(c"SessionWritePost", EVENT_SESSIONWRITEPOST),
+    named(c"ShellCmdPost", EVENT_SHELLCMDPOST),
+    named_win_local(c"ShellFilterPost", EVENT_SHELLFILTERPOST),
+    named(c"Signal", EVENT_SIGNAL),
+    named(c"SourceCmd", EVENT_SOURCECMD),
+    named(c"SourcePost", EVENT_SOURCEPOST),
+    named(c"SourcePre", EVENT_SOURCEPRE),
+    named(c"SpellFileMissing", EVENT_SPELLFILEMISSING),
+    named(c"StdinReadPost", EVENT_STDINREADPOST),
+    named(c"StdinReadPre", EVENT_STDINREADPRE),
+    named(c"SwapExists", EVENT_SWAPEXISTS),
+    named(c"Syntax", EVENT_SYNTAX),
+    named(c"TabClosed", EVENT_TABCLOSED),
+    named(c"TabClosedPre", EVENT_TABCLOSEDPRE),
+    named(c"TabEnter", EVENT_TABENTER),
+    named(c"TabLeave", EVENT_TABLEAVE),
+    named(c"TabNew", EVENT_TABNEW),
+    named(c"TabNewEntered", EVENT_TABNEWENTERED),
+    named(c"TermChanged", EVENT_TERMCHANGED),
+    named(c"TermClose", EVENT_TERMCLOSE),
+    named(c"TermEnter", EVENT_TERMENTER),
+    named(c"TermLeave", EVENT_TERMLEAVE),
+    named(c"TermOpen", EVENT_TERMOPEN),
+    named(c"TermRequest", EVENT_TERMREQUEST),
+    named(c"TermResponse", EVENT_TERMRESPONSE),
+    named_win_local(c"TextChanged", EVENT_TEXTCHANGED),
+    named_win_local(c"TextChangedI", EVENT_TEXTCHANGEDI),
+    named_win_local(c"TextChangedP", EVENT_TEXTCHANGEDP),
+    named_win_local(c"TextChangedT", EVENT_TEXTCHANGEDT),
+    named_win_local(c"TextYankPost", EVENT_TEXTYANKPOST),
+    named(c"UIEnter", EVENT_UIENTER),
+    named(c"UILeave", EVENT_UILEAVE),
+    named(c"User", EVENT_USER),
+    named(c"VimEnter", EVENT_VIMENTER),
+    named(c"VimLeave", EVENT_VIMLEAVE),
+    named(c"VimLeavePre", EVENT_VIMLEAVEPRE),
+    named(c"VimResized", EVENT_VIMRESIZED),
+    named(c"VimResume", EVENT_VIMRESUME),
+    named(c"VimSuspend", EVENT_VIMSUSPEND),
+    named_win_local(c"WinClosed", EVENT_WINCLOSED),
+    named_win_local(c"WinEnter", EVENT_WINENTER),
+    named_win_local(c"WinLeave", EVENT_WINLEAVE),
+    named(c"WinNew", EVENT_WINNEW),
+    named(c"WinNewPre", EVENT_WINNEWPRE),
+    named_win_local(c"WinResized", EVENT_WINRESIZED),
+    named_win_local(c"WinScrolled", EVENT_WINSCROLLED),
 ]);
-static autocmds: GlobalCell<[AutoCmdVec; 145]> = GlobalCell::new([
-    AutoCmdVec {
-        size: 0 as size_t,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-    AutoCmdVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<AutoCmd>(),
-    },
-]);
+/// The state every event's autocommand list starts in: an empty `kvec`
+/// with nothing allocated.
+const AUTOCMDVEC_INIT: AutoCmdVec = AutoCmdVec {
+    size: 0 as size_t,
+    capacity: 0,
+    items: ::core::ptr::null_mut::<AutoCmd>(),
+};
+
+/// The autocommands defined for each event, indexed by event number.
+static autocmds: GlobalCell<[AutoCmdVec; 145]> = GlobalCell::new([AUTOCMDVEC_INIT; 145]);
 /// ASCII-case-folded comparison, the order [`event_names`] is in.
 ///
 /// Upstream reaches the same rows through a generated perfect hash
