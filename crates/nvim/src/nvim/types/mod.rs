@@ -116,6 +116,12 @@ pub mod xdiff;
 pub mod xdiffi;
 pub mod xtypes;
 
+// Not part of the namespace: a guard that walks the modules above and
+// asserts no two of them declare the same name (an E0659 that only fires
+// once something uses it).
+#[cfg(test)]
+mod name_uniqueness;
+
 pub use self::api::*;
 pub use self::arglist::*;
 pub use self::autocmd::*;
