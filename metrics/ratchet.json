@@ -203,7 +203,7 @@
     "crates/nvim/src/nvim/eval/userfunc/call.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/eval/userfunc/define.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/eval/userfunc/dispatch.rs": {"unsafe": 4},
-    "crates/nvim/src/nvim/eval/userfunc/funccall.rs": {"unsafe": 41},
+    "crates/nvim/src/nvim/eval/userfunc/funccall.rs": {"unsafe": 40},
     "crates/nvim/src/nvim/eval/userfunc/lambda.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/eval/userfunc/listing.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/eval/userfunc/name.rs": {"unsafe": 15},

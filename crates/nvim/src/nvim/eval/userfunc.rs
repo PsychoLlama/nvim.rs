@@ -14,7 +14,8 @@ use crate::src::nvim::eval::funcs::{
     call_internal_func, call_internal_method, check_internal_func, find_internal_func,
 };
 use crate::src::nvim::eval::typval::{
-    GARRAY_EMPTY, TV_INITIAL_VALUE, tv_is_func, tv_list_set_lock,
+    GARRAY_EMPTY, TV_INITIAL_VALUE, tv_dict_hi2di, tv_dict_iter, tv_is_func, tv_list_iter,
+    tv_list_set_lock,
 };
 use crate::src::nvim::eval::typval::{
     tv_clear, tv_copy, tv_dict_add, tv_dict_item_alloc, tv_dict_item_alloc_len,
@@ -42,7 +43,6 @@ use crate::src::nvim::ex_getln::{
 use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_grow, ga_init};
 use crate::src::nvim::getchar::{restoreRedobuff, saveRedobuff};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::hashtab::{hash_add, hash_find, hash_find_len, hash_init, hash_remove};
 use crate::src::nvim::insexpand::ins_compl_active;
 use crate::src::nvim::keycodes::K_SPECIAL;
@@ -69,8 +69,8 @@ use crate::src::nvim::message::{
 };
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, abort, gettext, memcmp, memcpy, memmove, memset, snprintf,
-    strcmp, strcpy, strlen, strncmp, strstr,
+    __assert_fail, abort, gettext, memcmp, memcpy, memmove, memset, snprintf, strcmp, strcpy,
+    strlen, strncmp, strstr,
 };
 use crate::src::nvim::path::path_fnamecmp;
 use crate::src::nvim::profile::{
@@ -92,9 +92,9 @@ use crate::src::nvim::types::{
     VAR_UNLOCKED, VV_TESTING, buf_T, buffblock, buffblock_T, buffheader_T, colnr_T, cstack_T,
     dict_T, dictitem_T, estack_T, evalarg_T, exarg_T, except_T, exception_state_T, expand_T,
     funccal_entry_T, funccall_S_fc_fixvar as C2Rust_Unnamed_7, funccall_T, funcdict_T, funcexe_T,
-    garray_T, hashitem_T, hashtab_T, ht_stack_T, key_extra, linenr_T, list_T, list_stack_T,
-    listitem_T, lval_T, partial_T, proftime_T, regmatch_T, save_redo_T, sctx_T, size_t, typval_T,
-    typval_vval_union, ufunc_T, uint8_t, varnumber_T,
+    garray_T, hashitem_T, hashtab_T, key_extra, linenr_T, list_T, listitem_T, lval_T, partial_T,
+    proftime_T, regmatch_T, save_redo_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_T,
+    uint8_t, varnumber_T,
 };
 use crate::src::nvim::ui::ui_has;
 

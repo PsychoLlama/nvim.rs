@@ -11,143 +11,167 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{c_char, c_int, c_void};
+use core::mem::offset_of;
+use core::ptr;
+
 #[allow(unused_imports)]
 use super::*;
 
-pub unsafe extern "C" fn func_init() {
+/// Build the function table, once, at startup.
+pub unsafe fn func_init() {
     unsafe {
         hash_init(func_hashtab.ptr());
     }
 }
 
-pub unsafe extern "C" fn func_tbl_get() -> *mut hashtab_T {
-    return func_hashtab.ptr();
+/// The function table itself, for the callers outside this family.
+pub unsafe fn func_tbl_get() -> *mut hashtab_T {
+    func_hashtab.ptr()
 }
 
-unsafe extern "C" fn free_funccal(mut fc: *mut funccall_T) {
+/// The functions a funccall registered as closures over it.
+///
+/// # Safety
+/// `fc` is a live funccall.
+unsafe fn fc_ufuncs(fc: *mut funccall_T) -> *mut [*mut ufunc_T] {
     unsafe {
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < (*fc).fc_ufuncs.ga_len {
-            let mut fp: *mut ufunc_T =
-                *((*fc).fc_ufuncs.ga_data as *mut *mut ufunc_T).offset(i as isize);
-            if !fp.is_null() && (*fp).uf_scoped == fc {
-                (*fp).uf_scoped = ::core::ptr::null_mut::<funccall_T>();
-            }
-            i += 1;
-        }
-        ga_clear(&raw mut (*fc).fc_ufuncs);
-        func_ptr_unref((*fc).fc_func);
-        xfree(fc as *mut ::core::ffi::c_void);
+        let ga = &raw mut (*fc).fc_ufuncs;
+        ptr::slice_from_raw_parts_mut((*ga).ga_data as *mut *mut ufunc_T, (*ga).ga_len as usize)
     }
 }
 
-unsafe extern "C" fn free_funccal_contents(mut fc: *mut funccall_T) {
+/// Free the funccall itself, having already dealt with what it holds.
+///
+/// # Safety
+/// `fc` has been through [`cleanup_function_call`] and is off every list.
+unsafe fn free_funccal(fc: *mut funccall_T) {
     unsafe {
+        for i in 0..(*fc).fc_ufuncs.ga_len as usize {
+            let fp = (*fc_ufuncs(fc))[i];
+            // When garbage collecting, a funccall_T may be freed before the
+            // function that references it, so clear its `uf_scoped`.  The
+            // function may have been redefined and now point at another
+            // funccall_T; don't clear it then.
+            if !fp.is_null() && (*fp).uf_scoped == fc {
+                (*fp).uf_scoped = ptr::null_mut();
+            }
+        }
+        ga_clear(&raw mut (*fc).fc_ufuncs);
+
+        // The reference `create_funccal` took.  This is the *only* place it
+        // is given back, which is why a funccall parked for the garbage
+        // collector keeps its function undeletable until then.
+        func_ptr_unref((*fc).fc_func);
+        xfree(fc as *mut c_void);
+    }
+}
+
+/// Free `fc` and everything in it.  Only for a funccall that was kept beyond
+/// its call, i.e. after [`cleanup_function_call`] has run on it.
+///
+/// # Safety
+/// `fc` is a parked funccall, already unlinked from `previous_funccal`.
+unsafe fn free_funccal_contents(fc: *mut funccall_T) {
+    unsafe {
+        // All l: variables, then all a: variables, then the a:000 items.
         vars_clear(&raw mut (*fc).fc_l_vars.dv_hashtab);
         vars_clear(&raw mut (*fc).fc_l_avars.dv_hashtab);
-        let l_: *mut list_T = &raw mut (*fc).fc_l_varlist;
-        if !l_.is_null() {
-            let mut li: *mut listitem_T = (*l_).lv_first;
-            while !li.is_null() {
-                tv_clear(&raw mut (*li).li_tv);
-                li = (*li).li_next;
-            }
+        for li in tv_list_iter(Some(&(*fc).fc_l_varlist)) {
+            tv_clear(&raw mut (*li).li_tv);
         }
         free_funccal(fc);
     }
 }
 
-pub(crate) unsafe extern "C" fn cleanup_function_call(mut fc: *mut funccall_T) {
+/// The last part of returning from a function: free the local hashtable,
+/// unless a closure, a returned `a:000` or an escaped `l:` is still using it.
+///
+/// # Safety
+/// `fc` is the funccall that has just finished, and is `current_funccal`.
+pub(crate) unsafe fn cleanup_function_call(fc: *mut funccall_T) {
     unsafe {
-        let mut may_free_fc: bool = (*fc).fc_refcount <= 0 as ::core::ffi::c_int;
-        let mut free_fc: bool = true_0 != 0;
+        let may_free_fc = (*fc).fc_refcount <= 0;
+        let mut free_fc = true;
         current_funccal.set((*fc).fc_caller);
-        if may_free_fc as ::core::ffi::c_int != 0
-            && (*fc).fc_l_vars.dv_refcount == DO_NOT_FREE_CNT as ::core::ffi::c_int
-        {
+
+        // Free all l: variables if not referred to.
+        if may_free_fc && (*fc).fc_l_vars.dv_refcount == DO_NOT_FREE_CNT {
             vars_clear(&raw mut (*fc).fc_l_vars.dv_hashtab);
         } else {
-            free_fc = false_0 != 0;
+            free_fc = false;
         }
-        if may_free_fc as ::core::ffi::c_int != 0
-            && (*fc).fc_l_avars.dv_refcount == DO_NOT_FREE_CNT as ::core::ffi::c_int
-        {
-            vars_clear_ext(&raw mut (*fc).fc_l_avars.dv_hashtab, false_0 != 0);
+
+        // If the a:000 list and the l: and a: dicts are not referenced and no
+        // closure is using them, the funccall_T and what is in it can go.
+        if may_free_fc && (*fc).fc_l_avars.dv_refcount == DO_NOT_FREE_CNT {
+            vars_clear_ext(&raw mut (*fc).fc_l_avars.dv_hashtab, false);
         } else {
-            free_fc = false_0 != 0;
-            let dihi_ht_: *mut hashtab_T = &raw mut (*fc).fc_l_avars.dv_hashtab;
-            let mut dihi_todo_: size_t = (*dihi_ht_).ht_used;
-            let mut dihi_: *mut hashitem_T = (*dihi_ht_).ht_array;
-            while dihi_todo_ != 0 {
-                if !((*dihi_).hi_key.is_null()
-                    || (*dihi_).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
-                {
-                    dihi_todo_ = dihi_todo_.wrapping_sub(1);
-                    let di: *mut dictitem_T = (*dihi_)
-                        .hi_key
-                        .offset(-(17 as ::core::ffi::c_ulong as isize))
-                        as *mut dictitem_T;
-                    tv_copy(&raw mut (*di).di_tv, &raw mut (*di).di_tv);
-                }
-                dihi_ = dihi_.offset(1);
+            free_fc = false;
+            // Make a copy of the a: variables, since that was not done above.
+            for hi in tv_dict_iter(&(*fc).fc_l_avars) {
+                let di = tv_dict_hi2di(hi);
+                tv_copy(&raw mut (*di).di_tv, &raw mut (*di).di_tv);
             }
         }
-        if may_free_fc as ::core::ffi::c_int != 0
-            && (*fc).fc_l_varlist.lv_refcount == DO_NOT_FREE_CNT as ::core::ffi::c_int
-        {
-            (*fc).fc_l_varlist.lv_first = ::core::ptr::null_mut::<listitem_T>();
+
+        if may_free_fc && (*fc).fc_l_varlist.lv_refcount == DO_NOT_FREE_CNT {
+            (*fc).fc_l_varlist.lv_first = ptr::null_mut();
         } else {
-            free_fc = false_0 != 0;
-            let l_: *mut list_T = &raw mut (*fc).fc_l_varlist;
-            if !l_.is_null() {
-                let mut li: *mut listitem_T = (*l_).lv_first;
-                while !li.is_null() {
-                    tv_copy(&raw mut (*li).li_tv, &raw mut (*li).li_tv);
-                    li = (*li).li_next;
-                }
+            free_fc = false;
+            // Make a copy of the a:000 items, since that was not done above.
+            for li in tv_list_iter(Some(&(*fc).fc_l_varlist)) {
+                tv_copy(&raw mut (*li).li_tv, &raw mut (*li).li_tv);
             }
         }
+
         if free_fc {
             free_funccal(fc);
+            return;
+        }
+
+        // "fc" is still in use.  This happens when returning "a:000",
+        // assigning "l:" to a global variable, or defining a closure.  Link
+        // it into the list for garbage collection later.
+        static made_copy: GlobalCell<c_int> = GlobalCell::new(0);
+        (*fc).fc_caller = previous_funccal.get();
+        previous_funccal.set(fc);
+
+        if want_garbage_collect.get() {
+            // The collector is ready anyway; clear the count.
+            made_copy.set(0);
         } else {
-            static made_copy: GlobalCell<::core::ffi::c_int> =
-                GlobalCell::new(0 as ::core::ffi::c_int);
-            (*fc).fc_caller = previous_funccal.get();
-            previous_funccal.set(fc);
-            if want_garbage_collect.get() {
-                made_copy.set(0 as ::core::ffi::c_int);
-            } else {
-                (*made_copy.ptr()) += 1;
-                if made_copy.get()
-                    >= ((4096 as ::core::ffi::c_int * 1024 as ::core::ffi::c_int) as usize)
-                        .wrapping_div(::core::mem::size_of::<funccall_T>())
-                        as ::core::ffi::c_int
-                {
-                    made_copy.set(0 as ::core::ffi::c_int);
-                    want_garbage_collect.set(true_0 != 0);
-                }
+            made_copy.set(made_copy.get() + 1);
+            if made_copy.get() >= (4096 * 1024 / size_of::<funccall_T>()) as c_int {
+                // Four megabytes' worth of copies, which happens when a
+                // function that references itself is called repeatedly.  Ask
+                // for a collection soon rather than grow without bound.
+                made_copy.set(0);
+                want_garbage_collect.set(true);
             }
-        };
+        }
     }
 }
 
-pub(crate) unsafe extern "C" fn funccal_unref(
-    mut fc: *mut funccall_T,
-    mut fp: *mut ufunc_T,
-    mut force: bool,
-) {
+/// Drop a reference to `fc` and free it when the last one goes.  `fp` is
+/// detached from it either way.
+///
+/// # Safety
+/// `fc` is null or a live funccall; `fp` is a live function.
+pub(crate) unsafe fn funccal_unref(fc: *mut funccall_T, fp: *mut ufunc_T, force: bool) {
     unsafe {
         if fc.is_null() {
             return;
         }
+
         (*fc).fc_refcount -= 1;
-        if if force as ::core::ffi::c_int != 0 {
-            ((*fc).fc_refcount <= 0 as ::core::ffi::c_int) as ::core::ffi::c_int
+        let unused = if force {
+            (*fc).fc_refcount <= 0
         } else {
-            !fc_referenced(fc) as ::core::ffi::c_int
-        } != 0
-        {
-            let mut pfc: *mut *mut funccall_T = previous_funccal.ptr();
+            !fc_referenced(fc)
+        };
+        if unused {
+            let mut pfc = previous_funccal.ptr();
             while !(*pfc).is_null() {
                 if fc == *pfc {
                     *pfc = (*fc).fc_caller;
@@ -157,190 +181,220 @@ pub(crate) unsafe extern "C" fn funccal_unref(
                 pfc = &raw mut (**pfc).fc_caller;
             }
         }
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < (*fc).fc_ufuncs.ga_len {
-            if *((*fc).fc_ufuncs.ga_data as *mut *mut ufunc_T).offset(i as isize) == fp {
-                *((*fc).fc_ufuncs.ga_data as *mut *mut ufunc_T).offset(i as isize) =
-                    ::core::ptr::null_mut::<ufunc_T>();
+        for slot in (*fc_ufuncs(fc)).iter_mut() {
+            if *slot == fp {
+                *slot = ptr::null_mut();
             }
-            i += 1;
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn func_remove(mut fp: *mut ufunc_T) -> bool {
+/// Take the function out of the function hashtable.  Answers whether it was
+/// there: a function deleted while it still had references is already gone.
+///
+/// # Safety
+/// `fp` is a live function.
+pub(crate) unsafe fn func_remove(fp: *mut ufunc_T) -> bool {
     unsafe {
-        let mut hi: *mut hashitem_T = hash_find(
-            func_hashtab.ptr(),
-            &raw mut (*fp).uf_name as *mut ::core::ffi::c_char,
-        );
-        if (*hi).hi_key.is_null()
-            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
-        {
-            return false_0 != 0;
+        let hi = hash_find(func_hashtab.ptr(), uf_name_ptr(fp));
+        if !(*hi).is_kept() {
+            return false;
         }
         hash_remove(func_hashtab.ptr(), hi);
-        return true_0 != 0;
+        true
     }
 }
 
-pub(crate) unsafe extern "C" fn func_clear_items(mut fp: *mut ufunc_T) {
+/// Free everything hanging off `fp` -- its argument names, its defaults, its
+/// body, its Lua reference and its profiling counters.
+///
+/// # Safety
+/// `fp` is a live function.
+pub(crate) unsafe fn func_clear_items(fp: *mut ufunc_T) {
     unsafe {
         ga_clear_strings(&raw mut (*fp).uf_args);
         ga_clear_strings(&raw mut (*fp).uf_def_args);
         ga_clear_strings(&raw mut (*fp).uf_lines);
+
         if (*fp).uf_flags & FC_LUAREF != 0 {
             api_free_luaref((*fp).uf_luaref);
             (*fp).uf_luaref = LUA_NOREF as LuaRef;
         }
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut (*fp).uf_tml_count as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL;
-        let _ = *ptr_;
-        let mut ptr__0: *mut *mut ::core::ffi::c_void =
-            &raw mut (*fp).uf_tml_total as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr__0);
-        *ptr__0 = NULL;
-        let _ = *ptr__0;
-        let mut ptr__1: *mut *mut ::core::ffi::c_void =
-            &raw mut (*fp).uf_tml_self as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr__1);
-        *ptr__1 = NULL;
-        let _ = *ptr__1;
+        for counter in [
+            &raw mut (*fp).uf_tml_count as *mut *mut c_void,
+            &raw mut (*fp).uf_tml_total as *mut *mut c_void,
+            &raw mut (*fp).uf_tml_self as *mut *mut c_void,
+        ] {
+            xfree(*counter);
+            *counter = ptr::null_mut();
+        }
     }
 }
 
-unsafe extern "C" fn func_clear(mut fp: *mut ufunc_T, mut force: bool) {
+/// Free everything `fp` holds, once.
+///
+/// # Safety
+/// `fp` is a live function.
+unsafe fn func_clear(fp: *mut ufunc_T, force: bool) {
     unsafe {
         if (*fp).uf_cleared {
             return;
         }
-        (*fp).uf_cleared = true_0 != 0;
+        (*fp).uf_cleared = true;
         func_clear_items(fp);
+        // Drop the reference on the scope this function closed over.
         funccal_unref((*fp).uf_scoped, fp, force);
     }
 }
 
-unsafe extern "C" fn func_free(mut fp: *mut ufunc_T) {
+/// Free `fp` itself, having already cleared what it holds.
+///
+/// # Safety
+/// `fp` has been through [`func_clear`].
+unsafe fn func_free(fp: *mut ufunc_T) {
     unsafe {
-        if (*fp).uf_flags & (FC_DELETED | FC_REMOVED) == 0 as ::core::ffi::c_int {
+        // Only remove it when not done already, otherwise we would remove a
+        // newer version of the function.
+        if (*fp).uf_flags & (FC_DELETED | FC_REMOVED) == 0 {
             func_remove(fp);
         }
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut (*fp).uf_name_exp as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL;
-        let _ = *ptr_;
-        xfree(fp as *mut ::core::ffi::c_void);
+        xfree((*fp).uf_name_exp as *mut c_void);
+        (*fp).uf_name_exp = ptr::null_mut();
+        xfree(fp as *mut c_void);
     }
 }
 
-pub(crate) unsafe extern "C" fn func_clear_free(mut fp: *mut ufunc_T, mut force: bool) {
+/// Free a function and everything it holds.
+///
+/// # Safety
+/// `fp` is a live function that nothing is running.
+pub(crate) unsafe fn func_clear_free(fp: *mut ufunc_T, force: bool) {
     unsafe {
         func_clear(fp, force);
         func_free(fp);
     }
 }
 
-pub unsafe extern "C" fn create_funccal(
-    mut fp: *mut ufunc_T,
-    mut rettv: *mut typval_T,
-) -> *mut funccall_T {
+/// Start a call of `fp`: allocate its funccall, make it the current one, and
+/// take a reference to the function for as long as it lives.
+///
+/// # Safety
+/// `fp` is a live function and `rettv` outlives the call.
+pub unsafe fn create_funccal(fp: *mut ufunc_T, rettv: *mut typval_T) -> *mut funccall_T {
     unsafe {
-        let mut fc: *mut funccall_T =
-            xcalloc(1 as size_t, ::core::mem::size_of::<funccall_T>()) as *mut funccall_T;
+        let fc = xcalloc(1, size_of::<funccall_T>()) as *mut funccall_T;
         (*fc).fc_caller = current_funccal.get();
         current_funccal.set(fc);
         (*fc).fc_func = fp;
         func_ptr_ref(fp);
         (*fc).fc_rettv = rettv;
-        return fc;
+        fc
     }
 }
 
+/// The stack of saved call stacks: what `save_funccal` pushes when something
+/// (an autocommand, a callback) has to run outside the call in progress.
 pub(crate) static funccal_stack: GlobalCell<*mut funccal_entry_T> =
-    GlobalCell::new(::core::ptr::null_mut::<funccal_entry_T>());
+    GlobalCell::new(ptr::null_mut());
 
-pub unsafe extern "C" fn save_funccal(mut entry: *mut funccal_entry_T) {
+/// Put the call stack aside, so that what runs next starts from nothing.
+///
+/// # Safety
+/// `entry` outlives the matching [`restore_funccal`].
+pub unsafe fn save_funccal(entry: *mut funccal_entry_T) {
     unsafe {
-        (*entry).top_funccal = current_funccal.get() as *mut ::core::ffi::c_void;
+        (*entry).top_funccal = current_funccal.get() as *mut c_void;
         (*entry).next = funccal_stack.get();
         funccal_stack.set(entry);
-        current_funccal.set(::core::ptr::null_mut::<funccall_T>());
+        current_funccal.set(ptr::null_mut());
     }
 }
 
-pub unsafe extern "C" fn restore_funccal() {
+/// Put back what [`save_funccal`] set aside.
+pub unsafe fn restore_funccal() {
     unsafe {
-        if (*funccal_stack.ptr()).is_null() {
-            iemsg(b"INTERNAL: restore_funccal()\0".as_ptr() as *const ::core::ffi::c_char);
-        } else {
-            current_funccal.set((*funccal_stack.get()).top_funccal as *mut funccall_T);
-            funccal_stack.set((*funccal_stack.get()).next);
-        };
+        if funccal_stack.get().is_null() {
+            iemsg(c"INTERNAL: restore_funccal()".as_ptr());
+            return;
+        }
+        current_funccal.set((*funccal_stack.get()).top_funccal as *mut funccall_T);
+        funccal_stack.set((*funccal_stack.get()).next);
     }
 }
 
-pub unsafe extern "C" fn get_current_funccal() -> *mut funccall_T {
-    return current_funccal.get();
+/// The call in progress, or null.
+pub unsafe fn get_current_funccal() -> *mut funccall_T {
+    current_funccal.get()
 }
 
-pub unsafe extern "C" fn set_current_funccal(mut fc: *mut funccall_T) {
+/// Make `fc` the call in progress.
+pub unsafe fn set_current_funccal(fc: *mut funccall_T) {
     current_funccal.set(fc);
 }
 
-pub unsafe extern "C" fn func_unref(mut name: *mut ::core::ffi::c_char) {
+/// Drop a reference held by *name*, which only the numbered functions and
+/// the lambdas have.
+///
+/// # Safety
+/// `name` is null or NUL-terminated.
+pub unsafe fn func_unref(name: *mut c_char) {
     unsafe {
         if name.is_null() || !func_name_refcount(name) {
             return;
         }
-        let mut fp: *mut ufunc_T = find_func(name);
-        if fp.is_null()
-            && *(*__ctype_b_loc()).offset(*name as uint8_t as ::core::ffi::c_int as isize)
-                as ::core::ffi::c_int
-                & _ISdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                != 0
-        {
-            internal_error(b"func_unref()\0".as_ptr() as *const ::core::ffi::c_char);
+        let fp = find_func(name);
+        if fp.is_null() && (*name as u8).is_ascii_digit() {
+            // Only give an error for a numbered function.
+            internal_error(c"func_unref()".as_ptr());
             abort();
         }
         func_ptr_unref(fp);
     }
 }
 
-pub unsafe extern "C" fn func_ptr_unref(mut fp: *mut ufunc_T) {
+/// Drop a reference and free the function when the last one goes.
+///
+/// # Safety
+/// `fp` is null or a live function.
+pub unsafe fn func_ptr_unref(fp: *mut ufunc_T) {
     unsafe {
-        if !fp.is_null() && {
-            (*fp).uf_refcount -= 1;
-            (*fp).uf_refcount <= 0 as ::core::ffi::c_int
-        } {
-            if (*fp).uf_calls == 0 as ::core::ffi::c_int {
-                func_clear_free(fp, false_0 != 0);
-            }
+        if fp.is_null() {
+            return;
+        }
+        (*fp).uf_refcount -= 1;
+        // Only delete it when it is not running; otherwise that is done when
+        // `uf_calls` reaches zero.
+        if (*fp).uf_refcount <= 0 && (*fp).uf_calls == 0 {
+            func_clear_free(fp, false);
         }
     }
 }
 
-pub unsafe extern "C" fn func_ref(mut name: *mut ::core::ffi::c_char) {
+/// Count a reference held by *name*.
+///
+/// # Safety
+/// `name` is null or NUL-terminated.
+pub unsafe fn func_ref(name: *mut c_char) {
     unsafe {
         if name.is_null() || !func_name_refcount(name) {
             return;
         }
-        let mut fp: *mut ufunc_T = find_func(name);
+        let fp = find_func(name);
         if !fp.is_null() {
             (*fp).uf_refcount += 1;
-        } else if *(*__ctype_b_loc()).offset(*name as uint8_t as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int
-            & _ISdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-            != 0
-        {
-            internal_error(b"func_ref()\0".as_ptr() as *const ::core::ffi::c_char);
+        } else if (*name as u8).is_ascii_digit() {
+            // Only give an error for a numbered function; fail silently when
+            // a named or lambda function isn't found.
+            internal_error(c"func_ref()".as_ptr());
         }
     }
 }
 
-pub unsafe extern "C" fn func_ptr_ref(mut fp: *mut ufunc_T) {
+/// Count a reference held by pointer.
+///
+/// # Safety
+/// `fp` is null or a live function.
+pub unsafe fn func_ptr_ref(fp: *mut ufunc_T) {
     unsafe {
         if !fp.is_null() {
             (*fp).uf_refcount += 1;
@@ -348,149 +402,164 @@ pub unsafe extern "C" fn func_ptr_ref(mut fp: *mut ufunc_T) {
     }
 }
 
-#[inline(always)]
-unsafe extern "C" fn fc_referenced(fc: *const funccall_T) -> bool {
+/// Whether anything outside `fc` still holds it.
+///
+/// `l:`, `a:` and `a:000` all live inside the funccall_T, so a reference to
+/// any of them is a reference to the whole thing.
+///
+/// # Safety
+/// `fc` is a live funccall.
+unsafe fn fc_referenced(fc: *const funccall_T) -> bool {
     unsafe {
-        return (*fc).fc_l_varlist.lv_refcount != DO_NOT_FREE_CNT as ::core::ffi::c_int
-            || (*fc).fc_l_vars.dv_refcount != DO_NOT_FREE_CNT as ::core::ffi::c_int
-            || (*fc).fc_l_avars.dv_refcount != DO_NOT_FREE_CNT as ::core::ffi::c_int
-            || (*fc).fc_refcount > 0 as ::core::ffi::c_int;
+        (*fc).fc_l_varlist.lv_refcount != DO_NOT_FREE_CNT
+            || (*fc).fc_l_vars.dv_refcount != DO_NOT_FREE_CNT
+            || (*fc).fc_l_avars.dv_refcount != DO_NOT_FREE_CNT
+            || (*fc).fc_refcount > 0
     }
 }
 
-unsafe extern "C" fn can_free_funccal(
-    mut fc: *mut funccall_T,
-    mut copyID: ::core::ffi::c_int,
-) -> bool {
+/// Whether nothing in `fc` carries `copyID`, i.e. nothing in use reaches it.
+///
+/// # Safety
+/// `fc` is a live funccall.
+unsafe fn can_free_funccal(fc: *mut funccall_T, copyID: c_int) -> bool {
     unsafe {
-        return (*fc).fc_l_varlist.lv_copyID != copyID
+        (*fc).fc_l_varlist.lv_copyID != copyID
             && (*fc).fc_l_vars.dv_copyID != copyID
             && (*fc).fc_l_avars.dv_copyID != copyID
-            && (*fc).fc_copyID != copyID;
+            && (*fc).fc_copyID != copyID
     }
 }
 
-pub unsafe extern "C" fn free_unref_funccal(
-    mut copyID: ::core::ffi::c_int,
-    mut testing: ::core::ffi::c_int,
-) -> bool {
+/// Free every parked funccall the garbage collector did not reach.  This is
+/// what finally gives back the reference `create_funccal` took.
+///
+/// # Safety
+/// Called from the collector, with `copyID` the mark just used.
+pub unsafe fn free_unref_funccal(copyID: c_int, testing: c_int) -> bool {
     unsafe {
-        let mut did_free: bool = false_0 != 0;
-        let mut did_free_funccal: bool = false_0 != 0;
-        let mut pfc: *mut *mut funccall_T = previous_funccal.ptr();
+        let mut did_free = false;
+        let mut pfc = previous_funccal.ptr();
         while !(*pfc).is_null() {
             if can_free_funccal(*pfc, copyID) {
-                let mut fc: *mut funccall_T = *pfc;
+                let fc = *pfc;
                 *pfc = (*fc).fc_caller;
                 free_funccal_contents(fc);
-                did_free = true_0 != 0;
-                did_free_funccal = true_0 != 0;
+                did_free = true;
             } else {
                 pfc = &raw mut (**pfc).fc_caller;
             }
         }
-        if did_free_funccal {
+        if did_free {
+            // Freeing a funccal may have made more items collectable.
             garbage_collect(testing != 0);
         }
-        return did_free;
+        did_free
     }
 }
 
-pub unsafe extern "C" fn get_funccal() -> *mut funccall_T {
+/// The funccall the debugger is looking at, which `:backtrace` moves.
+pub unsafe fn get_funccal() -> *mut funccall_T {
     unsafe {
-        let mut funccal: *mut funccall_T = current_funccal.get();
-        if debug_backtrace_level.get() > 0 as ::core::ffi::c_int {
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < debug_backtrace_level.get() {
-                let mut temp_funccal: *mut funccall_T = (*funccal).fc_caller;
-                if !temp_funccal.is_null() {
-                    funccal = temp_funccal;
-                } else {
-                    debug_backtrace_level.set(i);
-                }
-                i += 1;
+        let mut funccal = current_funccal.get();
+        // The bound is re-read every step on purpose: the overflow arm below
+        // lowers it, and that is what ends the walk.
+        let mut i = 0;
+        while i < debug_backtrace_level.get() {
+            let caller = (*funccal).fc_caller;
+            if !caller.is_null() {
+                funccal = caller;
+            } else {
+                // Backtrace level overflow; reset it to the maximum.
+                debug_backtrace_level.set(i);
             }
+            i += 1;
         }
-        return funccal;
+        funccal
     }
 }
 
-pub unsafe extern "C" fn get_funccal_local_dict() -> *mut dict_T {
+/// Whether there is a `l:` scope to read at all.
+unsafe fn have_funccal_scope() -> bool {
     unsafe {
-        if (*current_funccal.ptr()).is_null()
-            || (*current_funccal.get()).fc_l_vars.dv_refcount == 0 as ::core::ffi::c_int
-        {
-            return ::core::ptr::null_mut::<dict_T>();
-        }
-        return &raw mut (*(get_funccal as unsafe extern "C" fn() -> *mut funccall_T)()).fc_l_vars;
+        !current_funccal.get().is_null() && (*current_funccal.get()).fc_l_vars.dv_refcount != 0
     }
 }
 
-pub unsafe extern "C" fn get_funccal_local_ht() -> *mut hashtab_T {
+/// The `l:` scope dictionary, or null when there is no call.
+pub unsafe fn get_funccal_local_dict() -> *mut dict_T {
     unsafe {
-        let mut d: *mut dict_T = get_funccal_local_dict();
-        return if !d.is_null() {
-            &raw mut (*d).dv_hashtab
+        if !have_funccal_scope() {
+            return ptr::null_mut();
+        }
+        &raw mut (*get_funccal()).fc_l_vars
+    }
+}
+
+/// The `l:` scope hashtab, or null when there is no call.
+pub unsafe fn get_funccal_local_ht() -> *mut hashtab_T {
+    unsafe {
+        let d = get_funccal_local_dict();
+        if d.is_null() {
+            ptr::null_mut()
         } else {
-            ::core::ptr::null_mut::<hashtab_T>()
-        };
-    }
-}
-
-pub unsafe extern "C" fn get_funccal_local_var() -> *mut dictitem_T {
-    unsafe {
-        if (*current_funccal.ptr()).is_null()
-            || (*current_funccal.get()).fc_l_vars.dv_refcount == 0 as ::core::ffi::c_int
-        {
-            return ::core::ptr::null_mut::<dictitem_T>();
-        }
-        return &raw mut (*(get_funccal as unsafe extern "C" fn() -> *mut funccall_T)())
-            .fc_l_vars_var as *mut dictitem_T;
-    }
-}
-
-pub unsafe extern "C" fn get_funccal_args_dict() -> *mut dict_T {
-    unsafe {
-        if (*current_funccal.ptr()).is_null()
-            || (*current_funccal.get()).fc_l_vars.dv_refcount == 0 as ::core::ffi::c_int
-        {
-            return ::core::ptr::null_mut::<dict_T>();
-        }
-        return &raw mut (*(get_funccal as unsafe extern "C" fn() -> *mut funccall_T)()).fc_l_avars;
-    }
-}
-
-pub unsafe extern "C" fn get_funccal_args_ht() -> *mut hashtab_T {
-    unsafe {
-        let mut d: *mut dict_T = get_funccal_args_dict();
-        return if !d.is_null() {
             &raw mut (*d).dv_hashtab
-        } else {
-            ::core::ptr::null_mut::<hashtab_T>()
-        };
-    }
-}
-
-pub unsafe extern "C" fn get_funccal_args_var() -> *mut dictitem_T {
-    unsafe {
-        if (*current_funccal.ptr()).is_null()
-            || (*current_funccal.get()).fc_l_vars.dv_refcount == 0 as ::core::ffi::c_int
-        {
-            return ::core::ptr::null_mut::<dictitem_T>();
         }
-        return &raw mut (*(get_funccal as unsafe extern "C" fn() -> *mut funccall_T)())
-            .fc_l_avars_var as *mut dictitem_T;
     }
 }
 
-pub unsafe extern "C" fn list_func_vars(mut first: *mut ::core::ffi::c_int) {
+/// The `l:` scope variable, or null when there is no call.
+pub unsafe fn get_funccal_local_var() -> *mut dictitem_T {
     unsafe {
-        if !(*current_funccal.ptr()).is_null()
-            && (*current_funccal.get()).fc_l_vars.dv_refcount > 0 as ::core::ffi::c_int
-        {
+        if !have_funccal_scope() {
+            return ptr::null_mut();
+        }
+        (&raw mut (*get_funccal()).fc_l_vars_var) as *mut dictitem_T
+    }
+}
+
+/// The `a:` scope dictionary, or null when there is no call.
+pub unsafe fn get_funccal_args_dict() -> *mut dict_T {
+    unsafe {
+        if !have_funccal_scope() {
+            return ptr::null_mut();
+        }
+        &raw mut (*get_funccal()).fc_l_avars
+    }
+}
+
+/// The `a:` scope hashtab, or null when there is no call.
+pub unsafe fn get_funccal_args_ht() -> *mut hashtab_T {
+    unsafe {
+        let d = get_funccal_args_dict();
+        if d.is_null() {
+            ptr::null_mut()
+        } else {
+            &raw mut (*d).dv_hashtab
+        }
+    }
+}
+
+/// The `a:` scope variable, or null when there is no call.
+pub unsafe fn get_funccal_args_var() -> *mut dictitem_T {
+    unsafe {
+        if !have_funccal_scope() {
+            return ptr::null_mut();
+        }
+        (&raw mut (*get_funccal()).fc_l_avars_var) as *mut dictitem_T
+    }
+}
+
+/// List the `l:` variables, when there is a function running.
+///
+/// # Safety
+/// `first` is writable.
+pub unsafe fn list_func_vars(first: *mut c_int) {
+    unsafe {
+        if !current_funccal.get().is_null() && (*current_funccal.get()).fc_l_vars.dv_refcount > 0 {
             list_hashtable_vars(
                 &raw mut (*current_funccal.get()).fc_l_vars.dv_hashtab,
-                b"l:\0".as_ptr() as *const ::core::ffi::c_char,
+                c"l:".as_ptr(),
                 false,
                 first,
             );
@@ -498,266 +567,263 @@ pub unsafe extern "C" fn list_func_vars(mut first: *mut ::core::ffi::c_int) {
     }
 }
 
-pub unsafe extern "C" fn get_current_funccal_dict(mut ht: *mut hashtab_T) -> *mut dict_T {
+/// The dictionary `ht` belongs to, when `ht` is the current `l:`.
+///
+/// # Safety
+/// `ht` is a live hashtab.
+pub unsafe fn get_current_funccal_dict(ht: *mut hashtab_T) -> *mut dict_T {
     unsafe {
-        if !(*current_funccal.ptr()).is_null()
+        if !current_funccal.get().is_null()
             && ht == &raw mut (*current_funccal.get()).fc_l_vars.dv_hashtab
         {
             return &raw mut (*current_funccal.get()).fc_l_vars;
         }
-        return ::core::ptr::null_mut::<dict_T>();
+        ptr::null_mut()
     }
 }
 
-pub unsafe extern "C" fn find_hi_in_scoped_ht(
-    mut name: *const ::core::ffi::c_char,
-    mut pht: *mut *mut hashtab_T,
-) -> *mut hashitem_T {
+/// Walk the chain of captured scopes a closure body can see, running `probe`
+/// on each in turn with `current_funccal` set to it, and stop at the first
+/// that answers.
+///
+/// # Safety
+/// A call is in progress and its function has a captured scope.
+unsafe fn walk_scoped_funccals<T>(mut probe: impl FnMut() -> Option<T>) -> Option<T> {
     unsafe {
-        if (*current_funccal.ptr()).is_null()
-            || (*(*current_funccal.get()).fc_func).uf_scoped.is_null()
-        {
-            return ::core::ptr::null_mut::<hashitem_T>();
-        }
-        let mut old_current_funccal: *mut funccall_T = current_funccal.get();
-        let mut hi: *mut hashitem_T = ::core::ptr::null_mut::<hashitem_T>();
-        let namelen: size_t = strlen(name);
-        let mut varname: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+        let old_current_funccal = current_funccal.get();
+        let mut found = None;
         current_funccal.set((*(*current_funccal.get()).fc_func).uf_scoped);
-        while !(*current_funccal.ptr()).is_null() {
-            let mut ht: *mut hashtab_T = find_var_ht(name, namelen, &raw mut varname);
-            if !ht.is_null() && *varname as ::core::ffi::c_int != NUL {
-                hi = hash_find_len(
-                    ht,
-                    varname,
-                    namelen.wrapping_sub(varname.offset_from(name) as size_t),
-                );
-                if !((*hi).hi_key.is_null()
-                    || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
-                {
-                    *pht = ht;
-                    break;
-                }
-            }
-            if current_funccal.get() == (*(*current_funccal.get()).fc_func).uf_scoped {
+        while !current_funccal.get().is_null() {
+            found = probe();
+            if found.is_some() {
                 break;
             }
-            current_funccal.set((*(*current_funccal.get()).fc_func).uf_scoped);
+            let scoped = (*(*current_funccal.get()).fc_func).uf_scoped;
+            if current_funccal.get() == scoped {
+                break;
+            }
+            current_funccal.set(scoped);
         }
         current_funccal.set(old_current_funccal);
-        return hi;
+        found
     }
 }
 
-pub unsafe extern "C" fn find_var_in_scoped_ht(
-    mut name: *const ::core::ffi::c_char,
-    namelen: size_t,
-    mut no_autoload: ::core::ffi::c_int,
-) -> *mut dictitem_T {
+/// Find a hashitem in a parent scope, i.e. one a lambda captured.
+///
+/// # Safety
+/// `name` is NUL-terminated and `pht` is writable.
+pub unsafe fn find_hi_in_scoped_ht(
+    name: *const c_char,
+    pht: *mut *mut hashtab_T,
+) -> *mut hashitem_T {
     unsafe {
-        if (*current_funccal.ptr()).is_null()
+        if current_funccal.get().is_null()
             || (*(*current_funccal.get()).fc_func).uf_scoped.is_null()
         {
-            return ::core::ptr::null_mut::<dictitem_T>();
+            return ptr::null_mut();
         }
-        let mut v: *mut dictitem_T = ::core::ptr::null_mut::<dictitem_T>();
-        let mut old_current_funccal: *mut funccall_T = current_funccal.get();
-        let mut varname: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        current_funccal.set((*(*current_funccal.get()).fc_func).uf_scoped);
-        while !(*current_funccal.ptr()).is_null() {
-            let mut ht: *mut hashtab_T = find_var_ht(name, namelen, &raw mut varname);
-            if !ht.is_null() && *varname as ::core::ffi::c_int != NUL {
-                v = find_var_in_ht(
+        let namelen = strlen(name);
+        // Upstream answers the *last* hashitem it looked at, not only a
+        // found one, so a miss still hands back a non-null empty slot.
+        let mut last: *mut hashitem_T = ptr::null_mut();
+        walk_scoped_funccals(|| {
+            let mut varname: *const c_char = ptr::null();
+            let ht = find_var_ht(name, namelen, &raw mut varname);
+            if !ht.is_null() && *varname != NUL as c_char {
+                let hi = hash_find_len(ht, varname, namelen - varname.offset_from(name) as size_t);
+                last = hi;
+                if (*hi).is_kept() {
+                    *pht = ht;
+                    return Some(hi);
+                }
+            }
+            None
+        });
+        last
+    }
+}
+
+/// Find a variable in a parent scope, i.e. one a lambda captured.
+///
+/// # Safety
+/// `name` has `namelen` readable bytes.
+pub unsafe fn find_var_in_scoped_ht(
+    name: *const c_char,
+    namelen: size_t,
+    no_autoload: c_int,
+) -> *mut dictitem_T {
+    unsafe {
+        if current_funccal.get().is_null()
+            || (*(*current_funccal.get()).fc_func).uf_scoped.is_null()
+        {
+            return ptr::null_mut();
+        }
+        walk_scoped_funccals(|| {
+            let mut varname: *const c_char = ptr::null();
+            let ht = find_var_ht(name, namelen, &raw mut varname);
+            if !ht.is_null() && *varname != NUL as c_char {
+                let v = find_var_in_ht(
                     ht,
-                    *name as ::core::ffi::c_int,
+                    *name as c_int,
                     varname,
-                    namelen.wrapping_sub(varname.offset_from(name) as size_t),
+                    namelen - varname.offset_from(name) as size_t,
                     no_autoload != 0,
                 );
                 if !v.is_null() {
-                    break;
+                    return Some(v);
                 }
             }
-            if current_funccal.get() == (*(*current_funccal.get()).fc_func).uf_scoped {
-                break;
-            }
-            current_funccal.set((*(*current_funccal.get()).fc_func).uf_scoped);
-        }
-        current_funccal.set(old_current_funccal);
-        return v;
+            None
+        })
+        .unwrap_or(ptr::null_mut())
     }
 }
 
-pub unsafe extern "C" fn set_ref_in_previous_funccal(mut copyID: ::core::ffi::c_int) -> bool {
+/// Mark the parked funccalls with `copyID + 1`, so that the collector can
+/// tell "reachable from a live value" from "merely parked".
+pub unsafe fn set_ref_in_previous_funccal(copyID: c_int) -> bool {
     unsafe {
-        let mut fc: *mut funccall_T = previous_funccal.get();
+        let mut fc = previous_funccal.get();
         while !fc.is_null() {
-            (*fc).fc_copyID = copyID + 1 as ::core::ffi::c_int;
+            (*fc).fc_copyID = copyID + 1;
             if set_ref_in_ht(
                 &raw mut (*fc).fc_l_vars.dv_hashtab,
-                copyID + 1 as ::core::ffi::c_int,
-                ::core::ptr::null_mut::<*mut list_stack_T>(),
-            ) as ::core::ffi::c_int
-                != 0
-                || set_ref_in_ht(
-                    &raw mut (*fc).fc_l_avars.dv_hashtab,
-                    copyID + 1 as ::core::ffi::c_int,
-                    ::core::ptr::null_mut::<*mut list_stack_T>(),
-                ) as ::core::ffi::c_int
-                    != 0
-                || set_ref_in_list_items(
-                    &raw mut (*fc).fc_l_varlist,
-                    copyID + 1 as ::core::ffi::c_int,
-                    ::core::ptr::null_mut::<*mut ht_stack_T>(),
-                ) as ::core::ffi::c_int
-                    != 0
+                copyID + 1,
+                ptr::null_mut(),
+            ) || set_ref_in_ht(
+                &raw mut (*fc).fc_l_avars.dv_hashtab,
+                copyID + 1,
+                ptr::null_mut(),
+            ) || set_ref_in_list_items(&raw mut (*fc).fc_l_varlist, copyID + 1, ptr::null_mut())
             {
-                return true_0 != 0;
+                return true;
             }
             fc = (*fc).fc_caller;
         }
-        return false_0 != 0;
+        false
     }
 }
 
-unsafe extern "C" fn set_ref_in_funccal(
-    mut fc: *mut funccall_T,
-    mut copyID: ::core::ffi::c_int,
-) -> bool {
+/// Mark everything `fc` holds, once per collection.
+///
+/// # Safety
+/// `fc` is a live funccall.
+unsafe fn set_ref_in_funccal(fc: *mut funccall_T, copyID: c_int) -> bool {
     unsafe {
-        if (*fc).fc_copyID != copyID {
-            (*fc).fc_copyID = copyID;
-            if set_ref_in_ht(
-                &raw mut (*fc).fc_l_vars.dv_hashtab,
-                copyID,
-                ::core::ptr::null_mut::<*mut list_stack_T>(),
-            ) as ::core::ffi::c_int
-                != 0
-                || set_ref_in_ht(
-                    &raw mut (*fc).fc_l_avars.dv_hashtab,
-                    copyID,
-                    ::core::ptr::null_mut::<*mut list_stack_T>(),
-                ) as ::core::ffi::c_int
-                    != 0
-                || set_ref_in_list_items(
-                    &raw mut (*fc).fc_l_varlist,
-                    copyID,
-                    ::core::ptr::null_mut::<*mut ht_stack_T>(),
-                ) as ::core::ffi::c_int
-                    != 0
-                || set_ref_in_func(
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    (*fc).fc_func,
-                    copyID,
-                ) as ::core::ffi::c_int
-                    != 0
-            {
-                return true_0 != 0;
-            }
+        if (*fc).fc_copyID == copyID {
+            return false;
         }
-        return false_0 != 0;
+        (*fc).fc_copyID = copyID;
+        set_ref_in_ht(&raw mut (*fc).fc_l_vars.dv_hashtab, copyID, ptr::null_mut())
+            || set_ref_in_ht(
+                &raw mut (*fc).fc_l_avars.dv_hashtab,
+                copyID,
+                ptr::null_mut(),
+            )
+            || set_ref_in_list_items(&raw mut (*fc).fc_l_varlist, copyID, ptr::null_mut())
+            || set_ref_in_func(ptr::null_mut(), (*fc).fc_func, copyID)
     }
 }
 
-pub unsafe extern "C" fn set_ref_in_call_stack(mut copyID: ::core::ffi::c_int) -> bool {
+/// Mark every local and argument on the call stack, including the stacks
+/// `save_funccal` set aside.
+pub unsafe fn set_ref_in_call_stack(copyID: c_int) -> bool {
     unsafe {
-        let mut fc: *mut funccall_T = current_funccal.get();
+        let mut fc = current_funccal.get();
         while !fc.is_null() {
             if set_ref_in_funccal(fc, copyID) {
-                return true_0 != 0;
+                return true;
             }
             fc = (*fc).fc_caller;
         }
-        let mut entry: *mut funccal_entry_T = funccal_stack.get();
+
+        let mut entry = funccal_stack.get();
         while !entry.is_null() {
-            let mut fc_0: *mut funccall_T = (*entry).top_funccal as *mut funccall_T;
-            while !fc_0.is_null() {
-                if set_ref_in_funccal(fc_0, copyID) {
-                    return true_0 != 0;
+            let mut fc = (*entry).top_funccal as *mut funccall_T;
+            while !fc.is_null() {
+                if set_ref_in_funccal(fc, copyID) {
+                    return true;
                 }
-                fc_0 = (*fc_0).fc_caller;
+                fc = (*fc).fc_caller;
             }
             entry = (*entry).next;
         }
-        return false_0 != 0;
+        false
     }
 }
 
-pub unsafe extern "C" fn set_ref_in_functions(mut copyID: ::core::ffi::c_int) -> bool {
+/// Mark everything reachable from a function that is still available by name.
+pub unsafe fn set_ref_in_functions(copyID: c_int) -> bool {
     unsafe {
-        let mut todo: ::core::ffi::c_int = (*func_hashtab.ptr()).ht_used as ::core::ffi::c_int;
-        let mut hi: *mut hashitem_T = (*func_hashtab.ptr()).ht_array;
-        while todo > 0 as ::core::ffi::c_int && !got_int.get() {
-            if !((*hi).hi_key.is_null()
-                || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
-            {
+        let mut todo = (*func_hashtab.ptr()).ht_used as c_int;
+        let mut hi = (*func_hashtab.ptr()).ht_array;
+        while todo > 0 && !got_int.get() {
+            if (*hi).is_kept() {
                 todo -= 1;
-                let mut fp: *mut ufunc_T =
-                    (*hi).hi_key.offset(-(240 as ::core::ffi::c_ulong as isize)) as *mut ufunc_T;
-                if !func_name_refcount(&raw mut (*fp).uf_name as *mut ::core::ffi::c_char)
-                    && set_ref_in_func(::core::ptr::null_mut::<::core::ffi::c_char>(), fp, copyID)
-                        as ::core::ffi::c_int
-                        != 0
+                let fp = (*hi).hi_key.sub(offset_of!(ufunc_T, uf_name)) as *mut ufunc_T;
+                if !func_name_refcount(uf_name_ptr(fp))
+                    && set_ref_in_func(ptr::null_mut(), fp, copyID)
                 {
-                    return true_0 != 0;
+                    return true;
                 }
             }
-            hi = hi.offset(1);
+            hi = hi.add(1);
         }
-        return false_0 != 0;
+        false
     }
 }
 
-pub unsafe extern "C" fn set_ref_in_func_args(mut copyID: ::core::ffi::c_int) -> bool {
+/// Mark everything reachable from an argument of a call in progress.
+pub unsafe fn set_ref_in_func_args(copyID: c_int) -> bool {
     unsafe {
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < (*funcargs.ptr()).ga_len {
-            if set_ref_in_item(
-                *((*funcargs.ptr()).ga_data as *mut *mut typval_T).offset(i as isize),
-                copyID,
-                ::core::ptr::null_mut::<*mut ht_stack_T>(),
-                ::core::ptr::null_mut::<*mut list_stack_T>(),
-            ) {
-                return true_0 != 0;
+        let args = &*funcargs.ptr();
+        for i in 0..args.ga_len as usize {
+            let tv = *(args.ga_data as *mut *mut typval_T).add(i);
+            if set_ref_in_item(tv, copyID, ptr::null_mut(), ptr::null_mut()) {
+                return true;
             }
-            i += 1;
         }
-        return false_0 != 0;
+        false
     }
 }
 
-pub unsafe extern "C" fn set_ref_in_func(
-    mut name: *mut ::core::ffi::c_char,
-    mut fp_in: *mut ufunc_T,
-    mut copyID: ::core::ffi::c_int,
-) -> bool {
+/// Mark every list and dictionary reachable through the function `name`, or
+/// through `fp_in` when the caller already has it.  Answers whether marking
+/// failed somehow.
+///
+/// # Safety
+/// `name` is null or NUL-terminated; `fp_in` is null or a live function.
+pub unsafe fn set_ref_in_func(name: *mut c_char, fp_in: *mut ufunc_T, copyID: c_int) -> bool {
     unsafe {
-        let mut fp: *mut ufunc_T = fp_in;
-        let mut error: ::core::ffi::c_int = FCERR_NONE as ::core::ffi::c_int;
-        let mut fname_buf: [::core::ffi::c_char; 41] = [0; 41];
-        let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut abort_0: bool = false_0 != 0;
         if name.is_null() && fp_in.is_null() {
-            return false_0 != 0;
+            return false;
         }
-        if fp_in.is_null() {
-            let mut fname: *mut ::core::ffi::c_char = fname_trans_sid(
+
+        let mut error = FCERR_NONE;
+        let mut fname_buf: [c_char; FLEN_FIXED as usize + 1] = [0; FLEN_FIXED as usize + 1];
+        let mut tofree: *mut c_char = ptr::null_mut();
+        let fp = if fp_in.is_null() {
+            let fname = fname_trans_sid(
                 name,
-                &raw mut fname_buf as *mut ::core::ffi::c_char,
+                fname_buf.as_mut_ptr(),
                 &raw mut tofree,
                 &raw mut error,
             );
-            fp = find_func(fname);
-        }
+            find_func(fname)
+        } else {
+            fp_in
+        };
+
+        let mut aborted = false;
         if !fp.is_null() {
-            let mut fc: *mut funccall_T = (*fp).uf_scoped;
+            let mut fc = (*fp).uf_scoped;
             while !fc.is_null() {
-                abort_0 = abort_0 as ::core::ffi::c_int != 0
-                    || set_ref_in_funccal(fc, copyID) as ::core::ffi::c_int != 0;
+                aborted = aborted || set_ref_in_funccal(fc, copyID);
                 fc = (*(*fc).fc_func).uf_scoped;
             }
         }
-        xfree(tofree as *mut ::core::ffi::c_void);
-        return abort_0;
+        xfree(tofree as *mut c_void);
+        aborted
     }
 }
