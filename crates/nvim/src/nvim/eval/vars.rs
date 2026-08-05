@@ -94,11 +94,11 @@ use crate::src::nvim::types::{
     VV_OPTION_OLDLOCAL, VV_OPTION_TYPE, VV_PREVCOUNT, VV_REG, VV_RO, VV_RO_SBX, VV_SEARCHFORWARD,
     VV_STDERR, VV_THROWPOINT, VV_TRUE, VV_TYPE_BLOB, VV_TYPE_BOOL, VV_TYPE_DICT, VV_TYPE_FLOAT,
     VV_TYPE_FUNC, VV_TYPE_LIST, VV_TYPE_NUMBER, VV_TYPE_STRING, VV_VAL, VV_VERSION, VV_VERSIONLONG,
-    VarType, VimVarIndex, aco_save_T, blob_T, buf_T, dict_T, dictitem_T, evalarg_T, exarg_T,
-    expand_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, kFalse,
-    kListLenUnknown, kNone, kSpecialVarNull, kTrue, list_T, list_stack_T, listitem_T, lval_T,
-    partial_T, ptrdiff_t, scid_T, scriptitem_T, scriptvar_T, sctx_T, size_t, ssize_t, switchwin_T,
-    tabpage_T, typval_T, typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T,
+    VarType, VimVarIndex, aco_save_T, buf_T, dict_T, dictitem_T, evalarg_T, exarg_T, expand_T,
+    garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, kFalse, kListLenUnknown,
+    kNone, kSpecialVarNull, kTrue, list_T, list_stack_T, listitem_T, lval_T, partial_T, ptrdiff_t,
+    scid_T, scriptitem_T, scriptvar_T, sctx_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T,
+    typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T,
 };
 use crate::src::nvim::version::{highest_patch, min_vim_version};
 use crate::src::nvim::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};

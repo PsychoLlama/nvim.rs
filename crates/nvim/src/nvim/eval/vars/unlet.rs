@@ -1,182 +1,178 @@
 //! `:unlet`, `:lockvar` and `:unlockvar`.
 //!
-//! All three share `ex_unletlock`'s argument walk and differ only in the
-//! callback it is given, so deleting and locking are written here together
-//! -- as they are upstream.
+//! All three share [`ex_unletlock`]'s argument walk and differ only in the
+//! callback it is given, so deleting and locking are written here together --
+//! as they are upstream.  That one walk is what makes `:unlet` and
+//! `:lockvar` agree on what an argument means.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
 #[allow(unused_imports)]
 use super::*;
 
-pub unsafe fn ex_unlet(mut eap: *mut exarg_T) {
+/// `:unlet`.
+///
+/// # Safety
+/// `eap` is a live `:unlet` command.
+pub unsafe fn ex_unlet(eap: *mut exarg_T) {
     unsafe {
-        ex_unletlock(
-            eap,
-            (*eap).arg,
-            0 as ::core::ffi::c_int,
-            if (*eap).forceit != 0 {
-                GLV_QUIET as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            },
-            do_unlet_var,
-        );
+        // `:unlet!` means "do not complain", which reaches `get_lval` as
+        // GLV_QUIET and `do_unlet` as `forceit`.
+        let glv_flags = if (*eap).forceit != 0 { GLV_QUIET } else { 0 };
+        ex_unletlock(eap, (*eap).arg, 0, glv_flags, do_unlet_var);
     }
 }
 
-pub unsafe fn ex_lockvar(mut eap: *mut exarg_T) {
+/// `:lockvar` and `:unlockvar`.
+///
+/// # Safety
+/// `eap` is a live `:lockvar`/`:unlockvar` command.
+pub unsafe fn ex_lockvar(eap: *mut exarg_T) {
     unsafe {
-        let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
-        let mut deep: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+        let mut arg = (*eap).arg;
+        // Two levels by default: the variable and what it directly holds.
+        // `!` is everything, and an explicit count says how deep.
+        let mut deep = 2;
         if (*eap).forceit != 0 {
-            deep = -1 as ::core::ffi::c_int;
-        } else if ascii_isdigit(*arg as ::core::ffi::c_int) {
-            deep = getdigits_int(&raw mut arg, false_0 != 0, -1 as ::core::ffi::c_int);
+            deep = -1;
+        } else if ascii_isdigit(*arg as c_int) {
+            deep = getdigits_int(&raw mut arg, false, -1);
             arg = skipwhite(arg);
         }
-        ex_unletlock(eap, arg, deep, 0 as ::core::ffi::c_int, do_lock_var);
+        ex_unletlock(eap, arg, deep, 0, do_lock_var);
     }
 }
 
+/// The argument walk `:unlet`, `:lockvar` and `:unlockvar` share, calling
+/// `callback` on each name it resolves.
+///
+/// A failure does not stop the walk: parsing carries on so that the trailing
+/// arguments are still checked, but `error` suppresses every later callback.
+///
+/// # Safety
+/// `eap` is a live command and `argstart` a NUL-terminated string.
 unsafe fn ex_unletlock(
-    mut eap: *mut exarg_T,
-    mut argstart: *mut ::core::ffi::c_char,
-    mut deep: ::core::ffi::c_int,
-    mut glv_flags: ::core::ffi::c_int,
-    mut callback: ex_unletlock_callback,
+    eap: *mut exarg_T,
+    argstart: *mut c_char,
+    deep: c_int,
+    glv_flags: c_int,
+    callback: ex_unletlock_callback,
 ) {
     unsafe {
-        let mut arg: *mut ::core::ffi::c_char = argstart;
-        let mut name_end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut error: bool = false_0 != 0;
-        let mut lv: lval_T = lval_T {
-            ll_name: ::core::ptr::null::<::core::ffi::c_char>(),
-            ll_name_len: 0,
-            ll_exp_name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ll_tv: ::core::ptr::null_mut::<typval_T>(),
-            ll_li: ::core::ptr::null_mut::<listitem_T>(),
-            ll_list: ::core::ptr::null_mut::<list_T>(),
-            ll_range: false,
-            ll_empty2: false,
-            ll_n1: 0,
-            ll_n2: 0,
-            ll_dict: ::core::ptr::null_mut::<dict_T>(),
-            ll_di: ::core::ptr::null_mut::<dictitem_T>(),
-            ll_newkey: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ll_blob: ::core::ptr::null_mut::<blob_T>(),
-        };
+        let mut arg = argstart;
+        let mut name_end;
+        let mut error = false;
+        let mut lv = LVAL_INITIAL_VALUE;
+
         loop {
-            if *arg as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
+            if *arg == b'$' as c_char {
+                // An environment variable: `get_lval` does not parse one, so
+                // the lvalue is filled in by hand.
                 lv.ll_name = arg;
-                lv.ll_tv = ::core::ptr::null_mut::<typval_T>();
-                arg = arg.offset(1);
-                if get_env_len(&raw mut arg as *mut *const ::core::ffi::c_char)
-                    == 0 as ::core::ffi::c_int
-                {
-                    semsg(
-                        gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                        arg.offset(-(1 as ::core::ffi::c_int as isize)),
-                    );
+                lv.ll_tv = ptr::null_mut();
+                arg = arg.add(1);
+                if get_env_len(&raw mut arg as *mut *const c_char) == 0 {
+                    semsg(gettext(&raw const e_invarg2 as *const c_char), arg.sub(1));
                     return;
                 }
-                '_c2rust_label: {
-                    if *lv.ll_name as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
-                    } else {
-                        __assert_fail(
-                        b"*lv.ll_name == '$'\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/eval/vars.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        1570 as ::core::ffi::c_uint,
-                        b"void ex_unletlock(exarg_T *, char *, int, int, ex_unletlock_callback)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                    }
-                };
                 if !error && (*eap).skip == 0 && callback(&raw mut lv, arg, eap, deep) == FAIL {
-                    error = true_0 != 0;
+                    error = true;
                 }
                 name_end = arg;
             } else {
                 name_end = get_lval(
                     arg,
-                    ::core::ptr::null_mut::<typval_T>(),
+                    ptr::null_mut(),
                     &raw mut lv,
-                    true_0 != 0,
-                    (*eap).skip != 0 || error as ::core::ffi::c_int != 0,
+                    true,
+                    (*eap).skip != 0 || error,
                     glv_flags,
                     FNE_CHECK_START,
                 );
                 if lv.ll_name.is_null() {
-                    error = true_0 != 0;
+                    // An error, but carry on parsing.
+                    error = true;
                 }
                 if name_end.is_null()
-                    || !ascii_iswhite(*name_end as ::core::ffi::c_int)
-                        && ends_excmd(*name_end as ::core::ffi::c_int) == 0
+                    || (!ascii_iswhite(*name_end as c_int) && ends_excmd(*name_end as c_int) == 0)
                 {
                     if !name_end.is_null() {
-                        emsg_severe.set(true_0 != 0);
+                        emsg_severe.set(true);
                         semsg(
-                            gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
+                            gettext(&raw const e_trailing_arg as *const c_char),
                             name_end,
                         );
                     }
-                    if !((*eap).skip != 0 || error as ::core::ffi::c_int != 0) {
+                    if !((*eap).skip != 0 || error) {
                         clear_lval(&raw mut lv);
                     }
                     break;
-                } else {
-                    if !error
-                        && (*eap).skip == 0
-                        && callback(&raw mut lv, name_end, eap, deep) == FAIL
-                    {
-                        error = true_0 != 0;
-                    }
-                    if (*eap).skip == 0 {
-                        clear_lval(&raw mut lv);
-                    }
+                }
+
+                if !error && (*eap).skip == 0 && callback(&raw mut lv, name_end, eap, deep) == FAIL
+                {
+                    error = true;
+                }
+                if (*eap).skip == 0 {
+                    clear_lval(&raw mut lv);
                 }
             }
             arg = skipwhite(name_end);
-            if ends_excmd(*arg as ::core::ffi::c_int) != 0 {
+            if ends_excmd(*arg as c_int) != 0 {
                 break;
             }
         }
+
         (*eap).nextcmd = check_nextcmd(arg);
     }
 }
 
+/// `:unlet`'s callback: delete what `lp` names.
+///
+/// # Safety
+/// `lp` is a resolved lvalue, `name_end` points into the command line and
+/// `eap` is live.
 unsafe fn do_unlet_var(
-    mut lp: *mut lval_T,
-    mut name_end: *mut ::core::ffi::c_char,
-    mut eap: *mut exarg_T,
-    mut _deep: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+    lp: *mut lval_T,
+    name_end: *mut c_char,
+    eap: *mut exarg_T,
+    _deep: c_int,
+) -> c_int {
     unsafe {
-        let mut forceit: ::core::ffi::c_int = (*eap).forceit;
-        let mut ret: ::core::ffi::c_int = OK;
         if (*lp).ll_tv.is_null() {
-            let mut cc: ::core::ffi::c_int = *name_end as uint8_t as ::core::ffi::c_int;
+            // A whole variable: an environment variable, a plain name or an
+            // expanded one.  Terminate the name in place, so that the error
+            // does not quote the rest of the command.
+            let cc = *name_end;
             *name_end = NUL;
-            if *(*lp).ll_name as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
-                vim_unsetenv_ext((*lp).ll_name.offset(1 as ::core::ffi::c_int as isize));
-            } else if do_unlet((*lp).ll_name, (*lp).ll_name_len, forceit != 0) == FAIL {
-                ret = FAIL;
-            }
-            *name_end = cc as ::core::ffi::c_char;
-        } else if !(*lp).ll_list.is_null()
+            let ret = if *(*lp).ll_name == b'$' as c_char {
+                vim_unsetenv_ext((*lp).ll_name.add(1));
+                OK
+            } else {
+                do_unlet((*lp).ll_name, (*lp).ll_name_len, (*eap).forceit != 0)
+            };
+            *name_end = cc;
+            return ret;
+        }
+
+        // `ll_list` is non-NULL whenever the lvalue *is* in a list; a NULL
+        // list yields E689 before reaching here.
+        if (!(*lp).ll_list.is_null()
             && value_check_lock(
                 tv_list_locked((*lp).ll_list),
                 (*lp).ll_name,
                 (*lp).ll_name_len,
-            ) as ::core::ffi::c_int
-                != 0
-            || !(*lp).ll_dict.is_null()
-                && value_check_lock((*(*lp).ll_dict).dv_lock, (*lp).ll_name, (*lp).ll_name_len)
-                    as ::core::ffi::c_int
-                    != 0
+            ))
+            || (!(*lp).ll_dict.is_null()
+                && value_check_lock((*(*lp).ll_dict).dv_lock, (*lp).ll_name, (*lp).ll_name_len))
         {
             return FAIL;
-        } else if (*lp).ll_range {
+        }
+
+        if (*lp).ll_range {
             tv_list_unlet_range(
                 (*lp).ll_list,
                 (*lp).ll_li,
@@ -185,71 +181,55 @@ unsafe fn do_unlet_var(
                 (*lp).ll_n2,
             );
         } else if !(*lp).ll_list.is_null() {
+            // One List item.
             tv_list_item_remove((*lp).ll_list, (*lp).ll_li);
         } else {
-            let mut d: *mut dict_T = (*lp).ll_dict;
-            '_c2rust_label: {
-                if !d.is_null() {
-                } else {
-                    __assert_fail(
-                        b"d != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/eval/vars.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        1652 as ::core::ffi::c_uint,
-                        b"int do_unlet_var(lval_T *, char *, exarg_T *, int)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            let mut di: *mut dictitem_T = (*lp).ll_di;
-            let mut watched: bool = tv_dict_is_watched(d);
-            let mut key: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-            let mut oldtv: typval_T = typval_T {
-                v_type: VAR_UNKNOWN,
-                v_lock: VAR_UNLOCKED,
-                vval: typval_vval_union { v_number: 0 },
-            };
+            // One Dict item.
+            let d = (*lp).ll_dict;
+            debug_assert!(!d.is_null());
+            let di = (*lp).ll_di;
+            let watched = tv_dict_is_watched(d);
+
+            let mut oldtv = TV_INITIAL_VALUE;
+            let mut key: *mut c_char = ptr::null_mut();
             if watched {
                 tv_copy(&raw mut (*di).di_tv, &raw mut oldtv);
-                key = xstrdup(&raw mut (*di).di_key as *mut ::core::ffi::c_char);
+                // The key has to be saved: removing the item frees it.
+                key = xstrdup(tv_dict_item_key(di));
             }
+
             tv_dict_item_remove(d, di);
+
             if watched {
-                tv_dict_watcher_notify(d, key, ::core::ptr::null_mut::<typval_T>(), &raw mut oldtv);
+                tv_dict_watcher_notify(d, key, ptr::null_mut(), &raw mut oldtv);
                 tv_clear(&raw mut oldtv);
-                xfree(key as *mut ::core::ffi::c_void);
+                xfree(key.cast());
             }
         }
-        return ret;
+        OK
     }
 }
 
-unsafe extern "C" fn tv_list_unlet_range(
+/// Delete the items of `l` from `li_first` through the `n2`-th, or to the
+/// end when `has_n2` is false.
+///
+/// # Safety
+/// `l` is a live list and `li_first` one of its items.
+unsafe fn tv_list_unlet_range(
     l: *mut list_T,
     li_first: *mut listitem_T,
-    n1_arg: ::core::ffi::c_int,
+    n1_arg: c_int,
     has_n2: bool,
-    n2: ::core::ffi::c_int,
+    n2: c_int,
 ) {
     unsafe {
-        '_c2rust_label: {
-            if !l.is_null() {
-            } else {
-                __assert_fail(
-                b"l != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/eval/vars.rs\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                1681 as ::core::ffi::c_uint,
-                b"void tv_list_unlet_range(list_T *const, listitem_T *const, const int, const _Bool, const int)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-            );
-            }
-        };
-        let mut li_last: *mut listitem_T = li_first;
-        let mut n1: ::core::ffi::c_int = n1_arg;
+        debug_assert!(!l.is_null());
+        let mut li_last = li_first;
+        let mut n1 = n1_arg;
         loop {
-            let li: *mut listitem_T = (*li_last).li_next;
+            let li = (*li_last).li_next;
             n1 += 1;
-            if li.is_null() || has_n2 as ::core::ffi::c_int != 0 && n2 < n1 {
+            if li.is_null() || (has_n2 && n2 < n1) {
                 break;
             }
             li_last = li;
@@ -258,168 +238,139 @@ unsafe extern "C" fn tv_list_unlet_range(
     }
 }
 
-pub unsafe extern "C" fn do_unlet(
-    name: *const ::core::ffi::c_char,
-    name_len: size_t,
-    forceit: bool,
-) -> ::core::ffi::c_int {
+/// Delete the variable `name[0..name_len]`, reporting E108 if it does not
+/// exist and `forceit` is not set.
+///
+/// # Safety
+/// `name` points at `name_len` readable bytes and is NUL-terminated there.
+pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> c_int {
     unsafe {
-        let mut varname: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut dict: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
-        let mut ht: *mut hashtab_T =
-            find_var_ht_dict(name, name_len, &raw mut varname, &raw mut dict);
+        let mut varname: *const c_char = ptr::null();
+        let mut dict: *mut dict_T = ptr::null_mut();
+        let mut ht = find_var_ht_dict(name, name_len, &raw mut varname, &raw mut dict);
+
         if !ht.is_null() && *varname != NUL {
-            let mut d: *mut dict_T = get_current_funccal_dict(ht);
+            // The dictionary whose lock decides whether the item may go.
+            let mut d = get_current_funccal_dict(ht);
             if d.is_null() {
-                if ht == &raw mut (*globvardict.ptr()).dv_hashtab {
+                if ht == get_globvar_ht() {
                     d = globvardict.ptr();
                 } else if ht == compat_hashtab.ptr() {
                     d = vimvardict.ptr();
                 } else {
-                    let di: *mut dictitem_T = find_var_in_ht(
-                        ht,
-                        *name as ::core::ffi::c_int,
-                        b"\0".as_ptr() as *const ::core::ffi::c_char,
-                        0 as size_t,
-                        false,
-                    );
+                    // The scope's own dictionary item holds it.
+                    let di = find_var_in_ht(ht, *name as c_int, c"".as_ptr(), 0, false);
                     d = (*di).di_tv.vval.v_dict;
                 }
                 if d.is_null() {
-                    internal_error(b"do_unlet()\0".as_ptr() as *const ::core::ffi::c_char);
+                    internal_error(c"do_unlet()".as_ptr());
                     return FAIL;
                 }
             }
-            let mut hi: *mut hashitem_T = hash_find(ht, varname);
-            if (*hi).hi_key.is_null()
-                || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
-            {
+
+            let mut hi = hash_find(ht, varname);
+            if !(*hi).is_kept() {
                 hi = find_hi_in_scoped_ht(name, &raw mut ht);
             }
-            if !hi.is_null()
-                && !((*hi).hi_key.is_null()
-                    || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
-            {
-                let di_0: *mut dictitem_T =
-                    (*hi).hi_key.offset(-(17 as ::core::ffi::c_ulong as isize)) as *mut dictitem_T;
-                if var_check_fixed(
-                    (*di_0).di_flags as ::core::ffi::c_int,
-                    name,
-                    TV_CSTRING as size_t,
-                ) as ::core::ffi::c_int
-                    != 0
-                    || var_check_ro(
-                        (*di_0).di_flags as ::core::ffi::c_int,
-                        name,
-                        TV_CSTRING as size_t,
-                    ) as ::core::ffi::c_int
-                        != 0
+            if !hi.is_null() && (*hi).is_kept() {
+                let di = tv_dict_hi2di(hi);
+                if var_check_fixed((*di).di_flags as c_int, name, TV_CSTRING as size_t)
+                    || var_check_ro((*di).di_flags as c_int, name, TV_CSTRING as size_t)
                     || value_check_lock((*d).dv_lock, name, TV_CSTRING as size_t)
-                        as ::core::ffi::c_int
-                        != 0
                 {
                     return FAIL;
                 }
+                // Upstream asks the same question a second time here. It can
+                // only answer the same way -- nothing above it changes
+                // `dv_lock` -- so the repetition is dead; kept because
+                // deleting it is a change no gate could confirm.
                 if value_check_lock((*d).dv_lock, name, TV_CSTRING as size_t) {
                     return FAIL;
                 }
-                let mut oldtv: typval_T = typval_T {
-                    v_type: VAR_UNKNOWN,
-                    v_lock: VAR_UNLOCKED,
-                    vval: typval_vval_union { v_number: 0 },
-                };
-                let mut watched: bool = tv_dict_is_watched(dict);
+
+                let mut oldtv = TV_INITIAL_VALUE;
+                let watched = tv_dict_is_watched(dict);
                 if watched {
-                    tv_copy(&raw mut (*di_0).di_tv, &raw mut oldtv);
+                    tv_copy(&raw mut (*di).di_tv, &raw mut oldtv);
                 }
+
                 delete_var(ht, hi);
+
                 if watched {
-                    tv_dict_watcher_notify(
-                        dict,
-                        varname,
-                        ::core::ptr::null_mut::<typval_T>(),
-                        &raw mut oldtv,
-                    );
+                    tv_dict_watcher_notify(dict, varname, ptr::null_mut(), &raw mut oldtv);
                     tv_clear(&raw mut oldtv);
                 }
                 return OK;
             }
         }
+
         if forceit {
             return OK;
         }
-        semsg(
-            gettext(b"E108: No such variable: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
-            name,
-        );
-        return FAIL;
+        semsg(gettext(c"E108: No such variable: \"%s\"".as_ptr()), name);
+        FAIL
     }
 }
 
+/// `:lockvar`'s and `:unlockvar`'s callback: lock or unlock what `lp` names,
+/// to `deep` levels.
+///
+/// # Safety
+/// As [`do_unlet_var`].
 unsafe fn do_lock_var(
-    mut lp: *mut lval_T,
-    mut _name_end: *mut ::core::ffi::c_char,
-    mut eap: *mut exarg_T,
-    mut deep: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+    lp: *mut lval_T,
+    _name_end: *mut c_char,
+    eap: *mut exarg_T,
+    deep: c_int,
+) -> c_int {
     unsafe {
-        let mut lock: bool =
-            (*eap).cmdidx as ::core::ffi::c_int == CMD_lockvar as ::core::ffi::c_int;
-        let mut ret: ::core::ffi::c_int = OK;
+        let lock = (*eap).cmdidx as c_int == CMD_lockvar as c_int;
+
         if (*lp).ll_tv.is_null() {
-            if *(*lp).ll_name as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
+            // A whole variable.
+            if *(*lp).ll_name == b'$' as c_char {
+                // An environment variable has no lock to set.
                 semsg(gettext(e_lock_unlock.as_ptr()), (*lp).ll_name);
-                ret = FAIL;
-            } else {
-                let di: *mut dictitem_T = find_var(
-                    (*lp).ll_name,
-                    (*lp).ll_name_len,
-                    ::core::ptr::null_mut::<*mut hashtab_T>(),
-                    true,
-                );
-                if di.is_null() {
-                    ret = FAIL;
-                } else if (*di).di_flags as ::core::ffi::c_int & DI_FLAGS_FIX as ::core::ffi::c_int
-                    != 0
-                    && (*di).di_tv.v_type as ::core::ffi::c_uint
-                        != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-                    && (*di).di_tv.v_type as ::core::ffi::c_uint
-                        != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    semsg(gettext(e_lock_unlock.as_ptr()), (*lp).ll_name);
-                    ret = FAIL;
-                } else {
-                    if lock {
-                        (*di).di_flags = ((*di).di_flags as ::core::ffi::c_int
-                            | DI_FLAGS_LOCK as ::core::ffi::c_int)
-                            as uint8_t;
-                    } else {
-                        (*di).di_flags = ((*di).di_flags as ::core::ffi::c_int
-                            & !(DI_FLAGS_LOCK as ::core::ffi::c_int) as uint8_t
-                                as ::core::ffi::c_int)
-                            as uint8_t;
-                    }
-                    if deep != 0 as ::core::ffi::c_int {
-                        tv_item_lock(&raw mut (*di).di_tv, deep, lock, false_0 != 0);
-                    }
-                }
+                return FAIL;
             }
-        } else if deep != 0 as ::core::ffi::c_int {
+            let di = find_var((*lp).ll_name, (*lp).ll_name_len, ptr::null_mut(), true);
+            if di.is_null() {
+                return FAIL;
+            }
+            // A fixed variable -- one of `v:` or a scope dictionary -- can
+            // only be locked through the container it holds.
+            if (*di).di_flags & DI_FLAGS_FIX != 0
+                && (*di).di_tv.v_type != VAR_DICT
+                && (*di).di_tv.v_type != VAR_LIST
+            {
+                semsg(gettext(e_lock_unlock.as_ptr()), (*lp).ll_name);
+                return FAIL;
+            }
+            if lock {
+                (*di).di_flags |= DI_FLAGS_LOCK;
+            } else {
+                (*di).di_flags &= !DI_FLAGS_LOCK;
+            }
+            if deep != 0 {
+                tv_item_lock(&raw mut (*di).di_tv, deep, lock, false);
+            }
+        } else if deep != 0 {
             if (*lp).ll_range {
-                let mut li: *mut listitem_T = (*lp).ll_li;
-                while !li.is_null()
-                    && ((*lp).ll_empty2 as ::core::ffi::c_int != 0 || (*lp).ll_n2 >= (*lp).ll_n1)
-                {
-                    tv_item_lock(&raw mut (*li).li_tv, deep, lock, false_0 != 0);
+                // A range of List items.
+                let mut li = (*lp).ll_li;
+                while !li.is_null() && ((*lp).ll_empty2 || (*lp).ll_n2 >= (*lp).ll_n1) {
+                    tv_item_lock(&raw mut (*li).li_tv, deep, lock, false);
                     li = (*li).li_next;
                     (*lp).ll_n1 += 1;
                 }
             } else if !(*lp).ll_list.is_null() {
-                tv_item_lock(&raw mut (*(*lp).ll_li).li_tv, deep, lock, false_0 != 0);
+                // One List item.
+                tv_item_lock(&raw mut (*(*lp).ll_li).li_tv, deep, lock, false);
             } else {
-                tv_item_lock(&raw mut (*(*lp).ll_di).di_tv, deep, lock, false_0 != 0);
+                // One Dict item.
+                tv_item_lock(&raw mut (*(*lp).ll_di).di_tv, deep, lock, false);
             }
         }
-        return ret;
+        OK
     }
 }
