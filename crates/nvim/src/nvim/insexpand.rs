@@ -317,6 +317,22 @@ pub type C2Rust_Unnamed_35 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_36 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_37 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_38 = ::core::ffi::c_int;
+/// A zeroed `save_v_event_T`, which `get_v_event` fills in.
+pub(crate) const SAVE_V_EVENT_INIT: save_v_event_T = save_v_event_T {
+    sve_did_save: false,
+    sve_hashtab: hashtab_T {
+        ht_mask: 0,
+        ht_used: 0,
+        ht_filled: 0,
+        ht_changed: 0,
+        ht_locked: 0,
+        ht_array: ptr::null_mut(),
+        ht_smallarray: [hashitem_T {
+            hi_hash: 0,
+            hi_key: ptr::null_mut(),
+        }; 16],
+    },
+};
 /// A zeroed `String_0`, C's `STRING_INIT`.
 pub(crate) const STRING_INIT: String_0 = String_0 {
     data: ptr::null_mut(),
