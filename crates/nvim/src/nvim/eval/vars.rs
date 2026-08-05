@@ -9,6 +9,7 @@ use crate::src::nvim::charset::{getdigits_int, skiptowhite, skipwhite};
 use crate::src::nvim::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::src::nvim::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::src::nvim::eval::entry::tv_init;
+use crate::src::nvim::eval::executor::eexe_mod_op;
 use crate::src::nvim::eval::funcs::{tv_get_buf, tv_get_buf_from_arg};
 use crate::src::nvim::eval::typval::QUEUE_INIT;
 use crate::src::nvim::eval::typval::{

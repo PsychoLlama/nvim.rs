@@ -528,6 +528,99 @@ pub unsafe fn before_set_vvar(
     }
 }
 
+/// A write to a `v:` variable that reached the scope dictionary directly:
+/// `let v:['name'] = value`.
+///
+/// The subscripted spelling makes `get_lval` resolve `v:` to a plain
+/// `dict_T` and `set_var_lval` store straight into the `dictitem_T`, so
+/// upstream never runs [`before_set_vvar`] for it and the declared type of
+/// the variable is simply replaced.  That is a crash and not only a
+/// surprise: `get_vim_var_list(VV_OLDFILES)` reads `vval.v_list` with no
+/// type test, so `let v:['oldfiles'] = 1` followed by `:oldfiles`
+/// dereferences the address 1.  See docket O-B14-10.
+///
+/// This does the same work `set_var_const` does for the unsubscripted
+/// spelling, including the compound operators -- which `set_whole_var`
+/// applies to a *copy* of the current value before handing the result to
+/// `set_var_const`, so that `let v:searchforward .= 'x'` converts back to a
+/// Number rather than replacing one.
+///
+/// # Safety
+/// `di` is an item of the `v:` scope dictionary, `tv` the value being
+/// assigned, and `op` NULL or the assignment's one-character operator.
+pub(crate) unsafe fn set_vvar_item(
+    di: *mut dictitem_T,
+    tv: *mut typval_T,
+    copy: bool,
+    op: *const c_char,
+) {
+    unsafe {
+        let varname = tv_dict_item_key(di);
+        let watched = tv_dict_is_watched(vimvardict.ptr());
+
+        // `+=` and friends act on the current value, so evaluate them into a
+        // temporary first and enforce the type on the *result*.
+        let mut tmp = TV_INITIAL_VALUE;
+        let compound = !op.is_null() && *op != b'=' as c_char;
+        let val = if compound {
+            tv_copy(&raw mut (*di).di_tv, &raw mut tmp);
+            if eexe_mod_op(&raw mut tmp, tv, op) != OK {
+                tv_clear(&raw mut tmp);
+                return;
+            }
+            &raw mut tmp
+        } else {
+            tv
+        };
+
+        let mut type_error = false;
+        // The temporary is ours to free, so the store must copy out of it
+        // rather than take its string.
+        if !before_set_vvar(
+            varname,
+            di,
+            val,
+            copy || compound,
+            watched,
+            &raw mut type_error,
+        ) {
+            if type_error {
+                semsg(
+                    gettext(e_setting_v_str_to_value_with_wrong_type.as_ptr()),
+                    varname,
+                );
+            }
+            tv_clear(&raw mut tmp);
+            return;
+        }
+
+        // The declared type matched: the ordinary store, as `set_var_const`
+        // performs it.
+        let mut oldtv = TV_INITIAL_VALUE;
+        if watched {
+            tv_copy(&raw mut (*di).di_tv, &raw mut oldtv);
+        }
+        tv_clear(&raw mut (*di).di_tv);
+        if !compound && (copy || (*val).v_type == VAR_NUMBER || (*val).v_type == VAR_FLOAT) {
+            tv_copy(val, &raw mut (*di).di_tv);
+        } else {
+            (*di).di_tv = *val;
+            (*di).di_tv.v_lock = VAR_UNLOCKED;
+            tv_init(val);
+        }
+        if watched {
+            tv_dict_watcher_notify(
+                vimvardict.ptr(),
+                varname,
+                &raw mut (*di).di_tv,
+                &raw mut oldtv,
+            );
+            tv_clear(&raw mut oldtv);
+        }
+        tv_clear(&raw mut tmp);
+    }
+}
+
 /// Blank the six `v:option_*` variables the `OptionSet` autocommand reads.
 ///
 /// # Safety

@@ -40,7 +40,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::userfunc::get_funccal_args_ht;
 use crate::src::nvim::eval::vars::{
-    eval_variable, find_var, get_vimvar_dict, set_var, set_var_const, valid_varname,
+    eval_variable, find_var, get_vimvar_dict, set_var, set_var_const, set_vvar_item, valid_varname,
     var_check_lock, var_check_ro, var_wrong_func_name,
 };
 use crate::src::nvim::eval::{
@@ -684,6 +684,17 @@ pub unsafe fn set_var_lval(
 
         if is_const {
             emsg(gettext(c"E996: Cannot lock a list or dict".as_ptr()));
+            return;
+        }
+
+        // Writing an *existing* key of the `v:` scope dictionary is a write
+        // to a `v:` variable, and has to pass the same type enforcement the
+        // unsubscripted spelling does. Upstream stores straight into the
+        // item, which permanently re-types the variable and, for
+        // `v:oldfiles`, crashes the next reader (docket O-B14-10). A new key
+        // cannot happen here: `get_lval` refuses to add one to `v:`.
+        if dict == get_vimvar_dict() && (*lp).ll_newkey.is_null() {
+            set_vvar_item((*lp).ll_di, rettv, copy, op);
             return;
         }
 
