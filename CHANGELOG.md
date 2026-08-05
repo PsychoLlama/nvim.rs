@@ -40,6 +40,9 @@ and this project adheres to [CalVer](https://calver.org/).
   `msgpackparse()` — JSON's scanner, its `\u` and surrogate-pair escapes, the
   special dictionaries a map or an oversized integer needs, and the msgpack
   parser callbacks.
+- Rewrote the variable layer: `:let`, `:unlet`, `:const`, `:lockvar`, the
+  `g:`/`b:`/`w:`/`t:`/`v:`/`l:`/`s:` scopes and their dictionaries, the
+  `getbufvar()`/`setwinvar()` family, here-documents and `:redir =>`.
 
 ### Fixed
 
@@ -47,6 +50,11 @@ and this project adheres to [CalVer](https://calver.org/).
   leaked. The key's item was allocated without initialising its flags, so
   whether it refused assignment and whether it was ever freed depended on
   what the heap block last held.
+- Assigning to a `v:` variable through the `v:` dictionary — `let v:['errmsg']
+= 4` rather than `let v:errmsg = 4` — no longer replaces the variable's
+  type. It skipped the check the plain spelling passes, so a `v:` variable
+  could be left holding a value of the wrong type permanently, and reading
+  `v:oldfiles` after `let v:['oldfiles'] = 1` crashed.
 
 ## [2026.08.02-af6bcec290]
 
