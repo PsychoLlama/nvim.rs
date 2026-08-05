@@ -302,7 +302,7 @@
     "crates/nvim/src/nvim/insexpand/getexp.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/insexpand/insert.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/insexpand/keys.rs": {"unsafe": 11},
-    "crates/nvim/src/nvim/insexpand/matchlist.rs": {"unsafe": 31},
+    "crates/nvim/src/nvim/insexpand/matchlist.rs": {"unsafe": 23},
     "crates/nvim/src/nvim/insexpand/mode.rs": {"unsafe": 21},
     "crates/nvim/src/nvim/insexpand/pum.rs": {"unsafe": 14},
     "crates/nvim/src/nvim/insexpand/session.rs": {"unsafe": 12},

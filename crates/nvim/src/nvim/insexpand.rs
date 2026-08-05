@@ -1,6 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 
 use crate::src::nvim::api::private::helpers::{cbuf_to_string, copy_string, cstr_as_string};
@@ -317,6 +317,17 @@ pub type C2Rust_Unnamed_35 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_36 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_37 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_38 = ::core::ffi::c_int;
+/// A zeroed `String_0`, C's `STRING_INIT`.
+pub(crate) const STRING_INIT: String_0 = String_0 {
+    data: ptr::null_mut(),
+    size: 0,
+};
+/// A zeroed `extmark_undo_vec_t`, which is what C's `kv_destroy` leaves.
+pub(crate) const EXTMARK_UNDO_VEC_INIT: extmark_undo_vec_t = extmark_undo_vec_t {
+    size: 0,
+    capacity: 0,
+    items: ptr::null_mut(),
+};
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -430,10 +441,7 @@ static compl_best_matches: GlobalCell<*mut *mut compl_T> =
     GlobalCell::new(::core::ptr::null_mut::<*mut compl_T>());
 static compl_num_bests: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static compl_enter_selects: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static compl_leader: GlobalCell<String_0> = GlobalCell::new(String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    size: 0 as size_t,
-});
+static compl_leader: GlobalCell<String_0> = GlobalCell::new(STRING_INIT);
 static compl_get_longest: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static compl_used_match: GlobalCell<bool> = GlobalCell::new(false);
 static compl_was_interrupted: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
@@ -442,14 +450,8 @@ static compl_restarting: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static compl_started: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static ctrl_x_mode: GlobalCell<::core::ffi::c_int> = GlobalCell::new(CTRL_X_NORMAL);
 static compl_matches: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static compl_pattern: GlobalCell<String_0> = GlobalCell::new(String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    size: 0 as size_t,
-});
-static cpt_compl_pattern: GlobalCell<String_0> = GlobalCell::new(String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    size: 0 as size_t,
-});
+static compl_pattern: GlobalCell<String_0> = GlobalCell::new(STRING_INIT);
+static cpt_compl_pattern: GlobalCell<String_0> = GlobalCell::new(STRING_INIT);
 static compl_direction: GlobalCell<Direction> = GlobalCell::new(FORWARD);
 static compl_shows_dir: GlobalCell<Direction> = GlobalCell::new(FORWARD);
 static compl_pending: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
@@ -462,15 +464,8 @@ static compl_length: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::cor
 static compl_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
 static compl_col: GlobalCell<colnr_T> = GlobalCell::new(0 as colnr_T);
 static compl_ins_end_col: GlobalCell<colnr_T> = GlobalCell::new(0 as colnr_T);
-static compl_orig_text: GlobalCell<String_0> = GlobalCell::new(String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    size: 0 as size_t,
-});
-static compl_orig_extmarks: GlobalCell<extmark_undo_vec_t> = GlobalCell::new(extmark_undo_vec_t {
-    size: 0,
-    capacity: 0,
-    items: ::core::ptr::null_mut::<ExtmarkUndoObject>(),
-});
+static compl_orig_text: GlobalCell<String_0> = GlobalCell::new(STRING_INIT);
+static compl_orig_extmarks: GlobalCell<extmark_undo_vec_t> = GlobalCell::new(EXTMARK_UNDO_VEC_INIT);
 static compl_cont_mode: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static compl_xp: GlobalCell<expand_T> = GlobalCell::new(expand_T {
     xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
