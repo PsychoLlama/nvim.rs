@@ -173,6 +173,10 @@ pub unsafe fn call_user_func(
             [ptr::null_mut(); MAX_FUNC_ARGS as usize];
         let mut tv_to_free_len = 0;
         let mut default_arg_err = false;
+        // Hoisted out of the loop: neither garray moves while it runs, and
+        // this is the hottest loop in the family.
+        let declared = ga_strings(&(*fp).uf_args);
+        let defaults = ga_strings(&(*fp).uf_def_args);
         let mut i = 0;
         while i < argcount || i < (*fp).uf_args.ga_len {
             let mut addlocal = false;
@@ -185,7 +189,7 @@ pub unsafe fn call_user_func(
             let ai = i - (*fp).uf_args.ga_len;
             if ai < 0 {
                 // A declared argument: use its name.
-                name = ga_strings(&(*fp).uf_args)[i as usize];
+                name = declared[i as usize];
                 if islambda {
                     addlocal = true;
                 }
@@ -195,8 +199,7 @@ pub unsafe fn call_user_func(
                 if isdefault {
                     def_rettv.v_type = VAR_NUMBER;
                     def_rettv.vval.v_number = -1;
-                    let mut default_expr =
-                        ga_strings(&(*fp).uf_def_args)[(ai + (*fp).uf_def_args.ga_len) as usize];
+                    let mut default_expr = defaults[(ai + defaults.len() as c_int) as usize];
                     if eval1(
                         &raw mut default_expr,
                         &raw mut def_rettv,
