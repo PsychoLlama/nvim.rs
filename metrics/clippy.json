@@ -81,7 +81,6 @@
     "crates/nvim/src/nvim/insexpand/insert.rs": 6,
     "crates/nvim/src/nvim/insexpand/keys.rs": 3,
     "crates/nvim/src/nvim/insexpand/matchlist.rs": 4,
-    "crates/nvim/src/nvim/insexpand/mode.rs": 6,
     "crates/nvim/src/nvim/insexpand/pum.rs": 16,
     "crates/nvim/src/nvim/insexpand/session.rs": 17,
     "crates/nvim/src/nvim/insexpand/sources.rs": 17,

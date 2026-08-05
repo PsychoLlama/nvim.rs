@@ -1,5 +1,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{c_char, c_int, c_uint};
+use core::ptr;
+
 use crate::src::nvim::api::private::helpers::{cbuf_to_string, copy_string, cstr_as_string};
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
 use crate::src::nvim::autocmd::{
@@ -51,7 +54,8 @@ use crate::src::nvim::highlight_group::{HLF_COUNT, HLF_E, HLF_R, HLF_W, syn_name
 use crate::src::nvim::indent::{get_indent, inindent};
 use crate::src::nvim::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::src::nvim::keycodes::{
-    K_BS, K_DOWN, K_KENTER, K_KPAGEDOWN, K_KPAGEUP, K_PAGEDOWN, K_PAGEUP, K_S_TAB, K_SELECT, K_UP,
+    K_BS, K_COMMAND, K_DOWN, K_EVENT, K_KENTER, K_KPAGEDOWN, K_KPAGEUP, K_LUA, K_PAGEDOWN,
+    K_PAGEUP, K_S_DOWN, K_S_TAB, K_S_UP, K_SELECT, K_UP,
 };
 use crate::src::nvim::lua::executor::nlua_expand_pat;
 use crate::src::nvim::main::{
