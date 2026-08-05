@@ -899,7 +899,6 @@ pub unsafe extern "C" fn do_augroup(mut arg: *mut ::core::ffi::c_char, mut del_g
         msg_end();
     };
 }
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn is_aucmd_win(mut win: *mut win_T) -> bool {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*aucmd_win_vec.ptr()).size as ::core::ffi::c_int {
@@ -1696,7 +1695,6 @@ pub unsafe extern "C" fn check_nomodeline(mut argp: *mut *mut ::core::ffi::c_cha
     }
     return true_0 != 0;
 }
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn aucmd_prepbuf(mut aco: *mut aco_save_T, mut buf: *mut buf_T) {
     let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut need_append: bool = true_0 != 0;
@@ -1814,7 +1812,6 @@ pub unsafe extern "C" fn aucmd_prepbuf(mut aco: *mut aco_save_T, mut buf: *mut b
         VIsual_active.set(false_0 != 0);
     }
 }
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn aucmd_restbuf(mut aco: *mut aco_save_T) {
     if (*aco).use_aucmd_win_idx >= 0 as ::core::ffi::c_int {
         let mut awp: *mut win_T = (*(*aucmd_win_vec.ptr())
@@ -2045,7 +2042,6 @@ unsafe extern "C" fn deferred_event(mut argv: *mut *mut ::core::ffi::c_void) {
     }
     xfree(e as *mut ::core::ffi::c_void);
 }
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn apply_autocmds(
     mut event: event_T,
     mut fname: *mut ::core::ffi::c_char,
@@ -2135,7 +2131,6 @@ pub unsafe extern "C" fn trigger_cursorhold() -> bool {
     }
     return false_0 != 0;
 }
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn apply_autocmds_group(
     mut event: event_T,
     mut fname: *mut ::core::ffi::c_char,
