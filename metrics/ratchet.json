@@ -1,6 +1,6 @@
 {
   "internal_exports": 45,
-  "files_without_forbid_unsafe": 712,
+  "files_without_forbid_unsafe": 713,
   "files_without_deny_unsafe_op": 193,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -347,7 +347,8 @@
     "crates/nvim/src/nvim/lua/api_wrappers/win_config.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/lua/api_wrappers/window.rs": {"unsafe": 40},
     "crates/nvim/src/nvim/lua/base64.rs": {"unsafe": 4},
-    "crates/nvim/src/nvim/lua/converter.rs": {"lines": 4372, "unsafe": 35},
+    "crates/nvim/src/nvim/lua/converter.rs": {"lines": 2593, "unsafe": 30},
+    "crates/nvim/src/nvim/lua/converter/push.rs": {"unsafe": 19},
     "crates/nvim/src/nvim/lua/executor.rs": {"lines": 4137, "unsafe": 125},
     "crates/nvim/src/nvim/lua/ffi.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/lua/secure.rs": {"unsafe": 2},

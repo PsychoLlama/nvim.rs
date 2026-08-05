@@ -75,7 +75,7 @@
     "crates/nvim/src/nvim/indent_c.rs": 73,
     "crates/nvim/src/nvim/input.rs": 3,
     "crates/nvim/src/nvim/log.rs": 31,
-    "crates/nvim/src/nvim/lua/converter.rs": 145,
+    "crates/nvim/src/nvim/lua/converter.rs": 97,
     "crates/nvim/src/nvim/lua/executor.rs": 253,
     "crates/nvim/src/nvim/lua/spell.rs": 1,
     "crates/nvim/src/nvim/lua/stdlib.rs": 92,
