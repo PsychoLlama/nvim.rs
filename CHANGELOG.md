@@ -25,6 +25,12 @@ and this project adheres to [CalVer](https://calver.org/).
   its history, the command-line window, `'incsearch'` and `'inccommand'`
   previews, command-line highlighting, `input()` and the `getcmd*()` and
   `setcmdline()` functions, and the `ext_cmdline` UI events.
+- Rewrote insert-mode completion, covering every `CTRL-X` source from
+  keywords and whole lines to dictionaries, thesauruses, tags, file names and
+  registers, `'complete'` and `'completeopt'` including fuzzy matching and
+  `preinsert`, `'completefunc'`/`'omnifunc'`/`'thesaurusfunc'`, the completion
+  popup menu, and the `complete()`, `complete_info()` and `CompleteDone`
+  interfaces.
 
 ## [2026.08.02-af6bcec290]
 
