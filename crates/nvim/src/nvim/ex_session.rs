@@ -37,7 +37,7 @@ use crate::src::nvim::runtime::do_source;
 use crate::src::nvim::strings::vim_strsave_escaped;
 use crate::src::nvim::types::{
     CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FILE, OptInt, VAR_FLAVOUR_SESSION, VAR_FLOAT,
-    VAR_NUMBER, VAR_STRING, VV_THIS_SESSION, aentry_T, buf_T, dict_T, dictitem_T, exarg_T, float_T,
+    VAR_NUMBER, VAR_STRING, VV_THIS_SESSION, aentry_T, buf_T, dictitem_T, exarg_T, float_T,
     frame_T, garray_T, hashitem_T, hashtab_T, int64_t, ptrdiff_t, size_t, tabpage_T, win_T,
 };
 use crate::src::nvim::window::tabpage_index;
@@ -616,8 +616,7 @@ unsafe extern "C" fn put_view(
     return OK;
 }
 unsafe extern "C" fn store_session_globals(mut fd: *mut FILE) -> ::core::ffi::c_int {
-    let this_varhi_ht_: *mut hashtab_T =
-        &raw mut (*(get_globvar_dict as unsafe extern "C" fn() -> *mut dict_T)()).dv_hashtab;
+    let this_varhi_ht_: *mut hashtab_T = &raw mut (*get_globvar_dict()).dv_hashtab;
     let mut this_varhi_todo_: size_t = (*this_varhi_ht_).ht_used;
     let mut this_varhi_: *mut hashitem_T = (*this_varhi_ht_).ht_array;
     while this_varhi_todo_ != 0 {

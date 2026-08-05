@@ -266,7 +266,7 @@
     "crates/nvim/src/nvim/ex_getln/prompt.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/ex_getln/uiext.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/ex_getln/wildchar.rs": {"unsafe": 2},
-    "crates/nvim/src/nvim/ex_session.rs": {"lines": 1554, "unsafe": 24},
+    "crates/nvim/src/nvim/ex_session.rs": {"lines": 1553, "unsafe": 23},
     "crates/nvim/src/nvim/extmark.rs": {"lines": 1475, "no_mangle": 1, "unsafe": 16},
     "crates/nvim/src/nvim/file_search.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/file_search/chdir.rs": {"unsafe": 3},

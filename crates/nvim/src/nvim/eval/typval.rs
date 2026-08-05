@@ -43,9 +43,10 @@ use crate::src::nvim::types::{
     MPConvPartialStage, MPConvStackValType, QUEUE, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT,
     VAR_FIXED, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_LOCKED, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL,
     VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VarLockStatus, blob_T, buf_T, dict_T,
-    dictitem_T, float_T, funcexe_T, garray_T, hashitem_T, int64_t, kBoolVarTrue, kListLenMayKnow,
-    kSpecialVarNull, linenr_T, list_T, listitem_T, listwatch_T, partial_T, ptrdiff_t, size_t,
-    ssize_t, staticList10_T, typval_T, typval_vval_union, ufunc_T, uint8_t, varnumber_T, vimconv_T,
+    dictitem_T, float_T, funcexe_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarTrue,
+    kListLenMayKnow, kSpecialVarNull, linenr_T, list_T, listitem_T, listwatch_T, partial_T,
+    ptrdiff_t, size_t, ssize_t, staticList10_T, typval_T, typval_vval_union, ufunc_T, uint8_t,
+    varnumber_T, vimconv_T,
 };
 
 // The carve of the transpiled module; see each child's docs.

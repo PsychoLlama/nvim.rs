@@ -16,9 +16,10 @@ use crate::src::nvim::eval::typval::{
     tv_dict_alloc_lock, tv_dict_hi2di, tv_dict_item_alloc, tv_dict_item_alloc_len,
     tv_dict_item_key, tv_dict_item_remove, tv_dict_set_keys_readonly, tv_dict_unref,
     tv_dict_watcher_notify, tv_free, tv_get_bool_chk, tv_get_number, tv_get_number_chk,
-    tv_get_string, tv_get_string_buf_chk, tv_get_string_chk, tv_item_lock, tv_list_alloc,
-    tv_list_append_allocated_string, tv_list_append_string, tv_list_append_tv, tv_list_find_nr,
-    tv_list_find_str, tv_list_free, tv_list_item_remove, tv_list_remove_items, value_check_lock,
+    tv_get_string, tv_get_string_buf_chk, tv_get_string_chk, tv_ht_iter, tv_item_lock,
+    tv_list_alloc, tv_list_append_allocated_string, tv_list_append_string, tv_list_append_tv,
+    tv_list_find_nr, tv_list_find_str, tv_list_free, tv_list_item_remove, tv_list_remove_items,
+    value_check_lock,
 };
 use crate::src::nvim::eval::typval::{
     tv_dict_is_watched, tv_dict_set_ret, tv_is_func, tv_list_first, tv_list_len, tv_list_locked,
@@ -41,7 +42,6 @@ use crate::src::nvim::ex_docmd::{check_nextcmd, ends_excmd};
 use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::hashtab::{
     hash_add, hash_clear, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_unlock,
 };
@@ -72,8 +72,8 @@ use crate::src::nvim::options::{
 };
 use crate::src::nvim::os::env::{vim_getenv, vim_setenv_ext, vim_unsetenv_ext};
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, abort, gettext, memchr, memcpy, memmove, snprintf, strcmp,
-    strcpy, strlen, strncmp,
+    __ctype_b_loc, abort, gettext, memchr, memcpy, memmove, snprintf, strcmp, strcpy, strlen,
+    strncmp,
 };
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::register::{get_reg_contents, write_reg_contents};
@@ -96,8 +96,8 @@ use crate::src::nvim::types::{
     VV_TYPE_FUNC, VV_TYPE_LIST, VV_TYPE_NUMBER, VV_TYPE_STRING, VV_VAL, VV_VERSION, VV_VERSIONLONG,
     VarType, VimVarIndex, aco_save_T, buf_T, dict_T, dictitem_T, evalarg_T, exarg_T, expand_T,
     garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, kFalse, kListLenUnknown,
-    kNone, kSpecialVarNull, kTrue, list_T, list_stack_T, listitem_T, lval_T, partial_T, ptrdiff_t,
-    scid_T, scriptitem_T, scriptvar_T, sctx_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T,
+    kNone, kSpecialVarNull, kTrue, list_T, listitem_T, lval_T, partial_T, ptrdiff_t, scid_T,
+    scriptitem_T, scriptvar_T, sctx_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T,
     typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T,
 };
 use crate::src::nvim::version::{highest_patch, min_vim_version};

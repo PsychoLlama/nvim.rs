@@ -269,9 +269,19 @@ impl Iterator for DictIter {
 /// pointer as upstream's does.  That is also what makes this one safe.
 #[inline]
 pub(crate) fn tv_dict_iter(d: &dict_T) -> DictIter {
+    tv_ht_iter(&d.dv_hashtab)
+}
+
+/// [`tv_dict_iter`] over a bare hashtab: upstream's `HASHTAB_ITER`.
+///
+/// The variable scopes are reached both ways -- as a `dict_T` and as the
+/// `hashtab_T` inside it -- so both spellings exist. The contract is the
+/// same one.
+#[inline]
+pub(crate) fn tv_ht_iter(ht: &hashtab_T) -> DictIter {
     DictIter {
-        hi: d.dv_hashtab.ht_array,
-        todo: d.dv_hashtab.ht_used,
+        hi: ht.ht_array,
+        todo: ht.ht_used,
     }
 }
 

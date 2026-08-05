@@ -54,8 +54,6 @@
     "crates/nvim/src/nvim/eval/userfunc.rs": 158,
     "crates/nvim/src/nvim/eval/vars/external.rs": 1,
     "crates/nvim/src/nvim/eval/vars/heredoc.rs": 5,
-    "crates/nvim/src/nvim/eval/vars/lifecycle.rs": 6,
-    "crates/nvim/src/nvim/eval/vars/listing.rs": 15,
     "crates/nvim/src/nvim/eval/vars/redir.rs": 4,
     "crates/nvim/src/nvim/eval/vars/scoped.rs": 6,
     "crates/nvim/src/nvim/event/rstream.rs": 1,

@@ -1,378 +1,323 @@
 //! `:let` with no value: printing variables rather than setting them.
 //!
-//! `list_arg_vars` resolves each argument (including a bare scope name) and
-//! `list_one_var_a` does the printing, padding the name to column 22 and
-//! prefixing the value with `#`, `*`, `[` or `{` by type.  That layout is a
-//! contract: it is what a user sees.
+//! [`list_arg_vars`] resolves each argument (including a bare scope name)
+//! and [`list_one_var_a`] does the printing, padding the name to column 22
+//! and prefixing the value with `#`, `*`, `[` or `{` by type.  That layout
+//! is a contract: it is what a user sees.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
 #[allow(unused_imports)]
 use super::*;
 
-pub(crate) unsafe extern "C" fn list_vim_vars(mut first: *mut ::core::ffi::c_int) {
+/// Every variable of `ht`, one per line, each name prefixed with `prefix`.
+///
+/// `empty` includes the variables holding the null string, which only the
+/// scopes that can hold one want.  `:filter` is applied to the prefixed
+/// name.
+///
+/// # Safety
+/// `ht` is a live variable hashtab, `prefix` a NUL-terminated string and
+/// `first` writable.
+pub unsafe fn list_hashtable_vars(
+    ht: *mut hashtab_T,
+    prefix: *const c_char,
+    empty: bool,
+    first: *mut c_int,
+) {
     unsafe {
-        list_hashtable_vars(
-            &raw mut (*vimvardict.ptr()).dv_hashtab,
-            b"v:\0".as_ptr() as *const ::core::ffi::c_char,
-            false_0,
-            first,
-        );
+        for hi in tv_ht_iter(&*ht) {
+            // Upstream re-reads `got_int` in the loop condition, so a `:let`
+            // listing stops at the interrupt rather than at the end.
+            if got_int.get() {
+                break;
+            }
+            let di = tv_dict_hi2di(hi);
+            let mut buf = [0 as c_char; IOSIZE as usize];
+            xstrlcpy(buf.as_mut_ptr(), prefix, IOSIZE as size_t);
+            xstrlcat(buf.as_mut_ptr(), tv_dict_item_key(di), IOSIZE as size_t);
+            if message_filtered(buf.as_mut_ptr()) {
+                continue;
+            }
+            if empty || (*di).di_tv.v_type != VAR_STRING || !(*di).di_tv.vval.v_string.is_null() {
+                list_one_var(di, prefix, first);
+            }
+        }
     }
 }
 
-pub(crate) unsafe extern "C" fn list_script_vars(mut first: *mut ::core::ffi::c_int) {
+/// The `g:` scope.
+///
+/// # Safety
+/// `first` is writable.
+pub(crate) unsafe fn list_glob_vars(first: *mut c_int) {
+    unsafe { list_hashtable_vars(get_globvar_ht(), c"".as_ptr(), true, first) }
+}
+
+/// The current buffer's `b:` scope.
+///
+/// # Safety
+/// As [`list_glob_vars`].
+pub(crate) unsafe fn list_buf_vars(first: *mut c_int) {
     unsafe {
-        if (*current_sctx.ptr()).sc_sid > 0 as ::core::ffi::c_int
-            && (*current_sctx.ptr()).sc_sid <= (*script_items.ptr()).ga_len
-        {
+        list_hashtable_vars(
+            &raw mut (*(*curbuf.get()).b_vars).dv_hashtab,
+            c"b:".as_ptr(),
+            true,
+            first,
+        )
+    }
+}
+
+/// The current window's `w:` scope.
+///
+/// # Safety
+/// As [`list_glob_vars`].
+pub(crate) unsafe fn list_win_vars(first: *mut c_int) {
+    unsafe {
+        list_hashtable_vars(
+            &raw mut (*(*curwin.get()).w_vars).dv_hashtab,
+            c"w:".as_ptr(),
+            true,
+            first,
+        )
+    }
+}
+
+/// The current tab page's `t:` scope.
+///
+/// # Safety
+/// As [`list_glob_vars`].
+pub(crate) unsafe fn list_tab_vars(first: *mut c_int) {
+    unsafe {
+        list_hashtable_vars(
+            &raw mut (*(*curtab.get()).tp_vars).dv_hashtab,
+            c"t:".as_ptr(),
+            true,
+            first,
+        )
+    }
+}
+
+/// The `v:` scope.  `empty` is false: the `v:` variables that hold no string
+/// are not listed.
+///
+/// # Safety
+/// As [`list_glob_vars`].
+pub(crate) unsafe fn list_vim_vars(first: *mut c_int) {
+    unsafe {
+        list_hashtable_vars(
+            &raw mut (*vimvardict.ptr()).dv_hashtab,
+            c"v:".as_ptr(),
+            false,
+            first,
+        )
+    }
+}
+
+/// The current script's `s:` scope, if there is one.
+///
+/// # Safety
+/// As [`list_glob_vars`].
+pub(crate) unsafe fn list_script_vars(first: *mut c_int) {
+    unsafe {
+        let sid = (*current_sctx.ptr()).sc_sid;
+        if sid > 0 && sid <= (*script_items.ptr()).ga_len {
             list_hashtable_vars(
-                &raw mut (*(**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T).offset(
-                    ((*current_sctx.ptr()).sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                        as isize,
-                ))
-                .sn_vars)
-                    .sv_dict
-                    .dv_hashtab,
-                b"s:\0".as_ptr() as *const ::core::ffi::c_char,
-                false_0,
+                &raw mut (*script_sv(sid)).sv_dict.dv_hashtab,
+                c"s:".as_ptr(),
+                false,
                 first,
             );
         }
     }
 }
 
-pub unsafe extern "C" fn list_hashtable_vars(
-    mut ht: *mut hashtab_T,
-    mut prefix: *const ::core::ffi::c_char,
-    mut empty: ::core::ffi::c_int,
-    mut first: *mut ::core::ffi::c_int,
-) {
+/// `:let name …`: print each named variable, or the whole of a scope named
+/// on its own.  Answers where it stopped.
+///
+/// # Safety
+/// `eap` is live, `arg` a NUL-terminated string and `first` writable.
+pub(crate) unsafe fn list_arg_vars(
+    eap: *mut exarg_T,
+    mut arg: *const c_char,
+    first: *mut c_int,
+) -> *const c_char {
     unsafe {
-        let mut hi: *mut hashitem_T = ::core::ptr::null_mut::<hashitem_T>();
-        let mut di: *mut dictitem_T = ::core::ptr::null_mut::<dictitem_T>();
-        let mut todo: ::core::ffi::c_int = 0;
-        todo = (*ht).ht_used as ::core::ffi::c_int;
-        hi = (*ht).ht_array;
-        while todo > 0 as ::core::ffi::c_int && !got_int.get() {
-            if !((*hi).hi_key.is_null()
-                || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
-            {
-                todo -= 1;
-                di = (*hi).hi_key.offset(-(17 as ::core::ffi::c_ulong as isize)) as *mut dictitem_T;
-                let mut buf: [::core::ffi::c_char; 1025] = [0; 1025];
-                xstrlcpy(
-                    &raw mut buf as *mut ::core::ffi::c_char,
-                    prefix,
-                    IOSIZE as size_t,
-                );
-                xstrlcat(
-                    &raw mut buf as *mut ::core::ffi::c_char,
-                    &raw mut (*di).di_key as *mut ::core::ffi::c_char,
-                    IOSIZE as size_t,
-                );
-                if !message_filtered(&raw mut buf as *mut ::core::ffi::c_char) {
-                    if empty != 0
-                        || (*di).di_tv.v_type as ::core::ffi::c_uint
-                            != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                        || !(*di).di_tv.vval.v_string.is_null()
-                    {
-                        list_one_var(di, prefix, first);
-                    }
-                }
-            }
-            hi = hi.offset(1);
-        }
-    }
-}
-
-pub(crate) unsafe extern "C" fn list_glob_vars(mut first: *mut ::core::ffi::c_int) {
-    unsafe {
-        list_hashtable_vars(
-            &raw mut (*globvardict.ptr()).dv_hashtab,
-            b"\0".as_ptr() as *const ::core::ffi::c_char,
-            true_0,
-            first,
-        );
-    }
-}
-
-pub(crate) unsafe extern "C" fn list_buf_vars(mut first: *mut ::core::ffi::c_int) {
-    unsafe {
-        list_hashtable_vars(
-            &raw mut (*(*curbuf.get()).b_vars).dv_hashtab,
-            b"b:\0".as_ptr() as *const ::core::ffi::c_char,
-            true_0,
-            first,
-        );
-    }
-}
-
-pub(crate) unsafe extern "C" fn list_win_vars(mut first: *mut ::core::ffi::c_int) {
-    unsafe {
-        list_hashtable_vars(
-            &raw mut (*(*curwin.get()).w_vars).dv_hashtab,
-            b"w:\0".as_ptr() as *const ::core::ffi::c_char,
-            true_0,
-            first,
-        );
-    }
-}
-
-pub(crate) unsafe extern "C" fn list_tab_vars(mut first: *mut ::core::ffi::c_int) {
-    unsafe {
-        list_hashtable_vars(
-            &raw mut (*(*curtab.get()).tp_vars).dv_hashtab,
-            b"t:\0".as_ptr() as *const ::core::ffi::c_char,
-            true_0,
-            first,
-        );
-    }
-}
-
-pub(crate) unsafe extern "C" fn list_arg_vars(
-    mut eap: *mut exarg_T,
-    mut arg: *const ::core::ffi::c_char,
-    mut first: *mut ::core::ffi::c_int,
-) -> *const ::core::ffi::c_char {
-    unsafe {
-        let mut error: bool = false_0 != 0;
-        let mut len: ::core::ffi::c_int = 0;
-        let mut name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut name_start: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut tv: typval_T = typval_T {
-            v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
-            vval: typval_vval_union { v_number: 0 },
-        };
-        while ends_excmd(*arg as ::core::ffi::c_int) == 0 && !got_int.get() {
-            if error as ::core::ffi::c_int != 0 || (*eap).skip != 0 {
+        let mut error = false;
+        while ends_excmd(*arg as c_int) == 0 && !got_int.get() {
+            if error || (*eap).skip != 0 {
+                // Nothing is being printed any more; just check that what is
+                // left parses as names.
                 arg = find_name_end(
                     arg,
-                    ::core::ptr::null_mut::<*const ::core::ffi::c_char>(),
-                    ::core::ptr::null_mut::<*const ::core::ffi::c_char>(),
+                    ptr::null_mut(),
+                    ptr::null_mut(),
                     FNE_INCL_BR | FNE_CHECK_START,
                 );
-                if !ascii_iswhite(*arg as ::core::ffi::c_int)
-                    && ends_excmd(*arg as ::core::ffi::c_int) == 0
-                {
-                    emsg_severe.set(true_0 != 0);
-                    semsg(
-                        gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
-                        arg,
-                    );
+                if !ascii_iswhite(*arg as c_int) && ends_excmd(*arg as c_int) == 0 {
+                    emsg_severe.set(true);
+                    semsg(gettext(&raw const e_trailing_arg as *const c_char), arg);
                     break;
                 }
-            } else {
-                name = arg;
-                name_start = name;
-                let mut tofree: *mut ::core::ffi::c_char =
-                    ::core::ptr::null_mut::<::core::ffi::c_char>();
-                len = get_name_len(&raw mut arg, &raw mut tofree, true_0 != 0, true_0 != 0);
-                if len <= 0 as ::core::ffi::c_int {
-                    if len < 0 as ::core::ffi::c_int && !aborting() {
-                        emsg_severe.set(true_0 != 0);
-                        semsg(
-                            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                            arg,
-                        );
-                        break;
-                    } else {
-                        error = true_0 != 0;
+                arg = skipwhite(arg);
+                continue;
+            }
+
+            let name_start = arg;
+            let mut name = arg;
+            // A `{curly}` name is expanded into `tofree`.
+            let mut tofree: *mut c_char = ptr::null_mut();
+            let len = get_name_len(&raw mut arg, &raw mut tofree, true, true);
+            'done: {
+                if len <= 0 {
+                    if len < 0 && !aborting() {
+                        emsg_severe.set(true);
+                        semsg(gettext(&raw const e_invarg2 as *const c_char), arg);
+                        xfree(tofree.cast());
+                        return arg;
                     }
-                } else {
-                    if !tofree.is_null() {
-                        name = tofree;
-                    }
-                    if eval_variable(
-                        name,
-                        len,
-                        &raw mut tv,
-                        ::core::ptr::null_mut::<*mut dictitem_T>(),
-                        true_0 != 0,
-                        false_0 != 0,
-                    ) == FAIL
-                    {
-                        error = true_0 != 0;
-                    } else {
-                        let arg_subsc: *const ::core::ffi::c_char = arg;
-                        if handle_subscript(
-                            &raw mut arg,
-                            &raw mut tv,
-                            EVALARG_EVALUATE.ptr(),
-                            true_0 != 0,
-                        ) == FAIL
-                        {
-                            error = true_0 != 0;
-                        } else {
-                            if arg == arg_subsc
-                                && len == 2 as ::core::ffi::c_int
-                                && *name.offset(1 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int
-                                    == ':' as ::core::ffi::c_int
-                            {
-                                match *name as ::core::ffi::c_int {
-                                    103 => {
-                                        list_glob_vars(first);
-                                    }
-                                    98 => {
-                                        list_buf_vars(first);
-                                    }
-                                    119 => {
-                                        list_win_vars(first);
-                                    }
-                                    116 => {
-                                        list_tab_vars(first);
-                                    }
-                                    118 => {
-                                        list_vim_vars(first);
-                                    }
-                                    115 => {
-                                        list_script_vars(first);
-                                    }
-                                    108 => {
-                                        list_func_vars(first);
-                                    }
-                                    _ => {
-                                        semsg(
-                                            gettext(
-                                                b"E738: Can't list variables for %s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
-                                            name,
-                                        );
-                                    }
-                                }
-                            } else {
-                                let s: *mut ::core::ffi::c_char =
-                                    encode_tv2echo(&raw mut tv, ::core::ptr::null_mut::<size_t>());
-                                let used_name: *const ::core::ffi::c_char =
-                                    if arg == arg_subsc { name } else { name_start };
-                                '_c2rust_label: {
-                                    if !used_name.is_null() {
-                                    } else {
-                                        __assert_fail(
-                                        b"used_name != NULL\0".as_ptr()
-                                            as *const ::core::ffi::c_char,
-                                        b"src/nvim/eval/vars.rs\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
-                                        1266 as ::core::ffi::c_uint,
-                                        b"const char *list_arg_vars(exarg_T *, const char *, int *)\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
-                                    );
-                                    }
-                                };
-                                let name_size: ptrdiff_t =
-                                    if used_name == tofree as *const ::core::ffi::c_char {
-                                        strlen(used_name) as ptrdiff_t
-                                    } else {
-                                        arg.offset_from(used_name)
-                                    };
-                                list_one_var_a(
-                                    b"\0".as_ptr() as *const ::core::ffi::c_char,
-                                    used_name,
-                                    name_size,
-                                    tv.v_type,
-                                    if s.is_null() {
-                                        b"\0".as_ptr() as *const ::core::ffi::c_char
-                                    } else {
-                                        s as *const ::core::ffi::c_char
-                                    },
-                                    first,
-                                );
-                                xfree(s as *mut ::core::ffi::c_void);
-                            }
-                            tv_clear(&raw mut tv);
+                    error = true;
+                    break 'done;
+                }
+                if !tofree.is_null() {
+                    name = tofree;
+                }
+
+                let mut tv = TV_INITIAL_VALUE;
+                if eval_variable(name, len, &raw mut tv, ptr::null_mut(), true, false) == FAIL {
+                    error = true;
+                    break 'done;
+                }
+                let arg_subsc = arg;
+                if handle_subscript(&raw mut arg, &raw mut tv, EVALARG_EVALUATE.ptr(), true) == FAIL
+                {
+                    error = true;
+                    break 'done;
+                }
+
+                if arg == arg_subsc && len == 2 && *name.add(1) == b':' as c_char {
+                    // A bare scope name lists the whole scope.
+                    match *name as u8 {
+                        b'g' => list_glob_vars(first),
+                        b'b' => list_buf_vars(first),
+                        b'w' => list_win_vars(first),
+                        b't' => list_tab_vars(first),
+                        b'v' => list_vim_vars(first),
+                        b's' => list_script_vars(first),
+                        b'l' => list_func_vars(first),
+                        _ => {
+                            semsg(gettext(c"E738: Can't list variables for %s".as_ptr()), name);
                         }
                     }
+                } else {
+                    let s = encode_tv2echo(&raw mut tv, ptr::null_mut());
+                    // Without a subscript the expanded name is what was
+                    // looked up; with one, the command line's own text is
+                    // what should be shown.
+                    let used_name = if arg == arg_subsc { name } else { name_start };
+                    let name_size = if used_name == tofree as *const c_char {
+                        strlen(used_name) as ptrdiff_t
+                    } else {
+                        arg.offset_from(used_name)
+                    };
+                    list_one_var_a(
+                        c"".as_ptr(),
+                        used_name,
+                        name_size,
+                        tv.v_type,
+                        if s.is_null() { c"".as_ptr() } else { s },
+                        first,
+                    );
+                    xfree(s.cast());
                 }
-                xfree(tofree as *mut ::core::ffi::c_void);
+                tv_clear(&raw mut tv);
             }
+            xfree(tofree.cast());
             arg = skipwhite(arg);
         }
-        return arg;
+        arg
     }
 }
 
-unsafe extern "C" fn list_one_var(
-    mut v: *mut dictitem_T,
-    mut prefix: *const ::core::ffi::c_char,
-    mut first: *mut ::core::ffi::c_int,
-) {
+/// One variable, rendering its value with `encode_tv2echo`.
+///
+/// # Safety
+/// `v` is a live item, `prefix` a NUL-terminated string, `first` writable.
+unsafe fn list_one_var(v: *mut dictitem_T, prefix: *const c_char, first: *mut c_int) {
     unsafe {
-        let s: *mut ::core::ffi::c_char =
-            encode_tv2echo(&raw mut (*v).di_tv, ::core::ptr::null_mut::<size_t>());
+        let key = tv_dict_item_key(v);
+        let s = encode_tv2echo(&raw mut (*v).di_tv, ptr::null_mut());
         list_one_var_a(
             prefix,
-            &raw mut (*v).di_key as *mut ::core::ffi::c_char,
-            strlen(&raw mut (*v).di_key as *mut ::core::ffi::c_char) as ptrdiff_t,
+            key,
+            strlen(key) as ptrdiff_t,
             (*v).di_tv.v_type,
-            if s.is_null() {
-                b"\0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                s as *const ::core::ffi::c_char
-            },
+            if s.is_null() { c"".as_ptr() } else { s },
             first,
         );
-        xfree(s as *mut ::core::ffi::c_void);
+        xfree(s.cast());
     }
 }
 
-unsafe extern "C" fn list_one_var_a(
-    mut prefix: *const ::core::ffi::c_char,
-    mut name: *const ::core::ffi::c_char,
+/// Print one `name  <sigil><value>` line.
+///
+/// The name is padded to column 22 and the sigil says what the type is:
+/// `#` a Number, `*` a Funcref, `[` a List, `{` a Dict, a space anything
+/// else.  For a List or a Dict the sigil replaces the bracket the rendered
+/// value already starts with.
+///
+/// `first` clears the rest of the screen on the first line and is set false;
+/// a NULL `name` is an `a:` variable, which stores none.
+///
+/// # Safety
+/// `prefix` and `string` are NUL-terminated; `name` is NULL or `name_len`
+/// bytes; `first` is writable.
+unsafe fn list_one_var_a(
+    prefix: *const c_char,
+    name: *const c_char,
     name_len: ptrdiff_t,
     type_0: VarType,
-    mut string: *const ::core::ffi::c_char,
-    mut first: *mut ::core::ffi::c_int,
+    mut string: *const c_char,
+    first: *mut c_int,
 ) {
     unsafe {
         if *first != 0 {
-            msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
+            msg_ext_set_kind(c"list_cmd".as_ptr());
             msg_start();
         } else {
-            msg_putchar('\n' as ::core::ffi::c_int);
+            msg_putchar(b'\n' as c_int);
         }
+        // Not `msg()`, which would overwrite "v:statusmsg".
         if *prefix != NUL {
             msg_puts(prefix);
         }
         if !name.is_null() {
-            msg_puts_len(name, name_len, 0 as ::core::ffi::c_int, false_0 != 0);
+            msg_puts_len(name, name_len, 0, false);
         }
-        msg_putchar(' ' as ::core::ffi::c_int);
-        msg_advance(22 as ::core::ffi::c_int);
-        if type_0 as ::core::ffi::c_uint == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            msg_putchar('#' as ::core::ffi::c_int);
-        } else if type_0 as ::core::ffi::c_uint
-            == VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-            || type_0 as ::core::ffi::c_uint
-                == VAR_PARTIAL as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            msg_putchar('*' as ::core::ffi::c_int);
-        } else if type_0 as ::core::ffi::c_uint
-            == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            msg_putchar('[' as ::core::ffi::c_int);
-            if *string as ::core::ffi::c_int == '[' as ::core::ffi::c_int {
-                string = string.offset(1);
-            }
-        } else if type_0 as ::core::ffi::c_uint
-            == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            msg_putchar('{' as ::core::ffi::c_int);
-            if *string as ::core::ffi::c_int == '{' as ::core::ffi::c_int {
-                string = string.offset(1);
-            }
-        } else {
-            msg_putchar(' ' as ::core::ffi::c_int);
+        msg_putchar(b' ' as c_int);
+        msg_advance(22);
+
+        // The sigil, and the bracket it stands in for.
+        let sigil: u8 = match type_0 {
+            VAR_NUMBER => b'#',
+            VAR_FUNC | VAR_PARTIAL => b'*',
+            VAR_LIST => b'[',
+            VAR_DICT => b'{',
+            _ => b' ',
+        };
+        msg_putchar(sigil as c_int);
+        if (type_0 == VAR_LIST || type_0 == VAR_DICT) && *string == sigil as c_char {
+            string = string.add(1);
         }
-        msg_outtrans(string, 0 as ::core::ffi::c_int, false_0 != 0);
-        if type_0 as ::core::ffi::c_uint == VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-            || type_0 as ::core::ffi::c_uint
-                == VAR_PARTIAL as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            msg_puts(b"()\0".as_ptr() as *const ::core::ffi::c_char);
+
+        msg_outtrans(string, 0, false);
+
+        if type_0 == VAR_FUNC || type_0 == VAR_PARTIAL {
+            msg_puts(c"()".as_ptr());
         }
         if *first != 0 {
             msg_clr_eos();

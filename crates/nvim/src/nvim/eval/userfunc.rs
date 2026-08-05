@@ -5206,7 +5206,7 @@ pub unsafe extern "C" fn list_func_vars(mut first: *mut ::core::ffi::c_int) {
         list_hashtable_vars(
             &raw mut (*current_funccal.get()).fc_l_vars.dv_hashtab,
             b"l:\0".as_ptr() as *const ::core::ffi::c_char,
-            false_0,
+            false,
             first,
         );
     }
