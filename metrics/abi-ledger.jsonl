@@ -74,7 +74,7 @@
 {"symbol":"intersect_mov_test","kind":"fn","file":"crates/nvim/src/nvim/marktree.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"invocation_path_tail","kind":"fn","file":"crates/nvim/src/nvim/path/names.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"is_aucmd_win","kind":"fn","file":"crates/nvim/src/nvim/autocmd.rs","class":"internal","refs":[]}
-{"symbol":"json_decode_string","kind":"fn","file":"crates/nvim/src/nvim/eval/decode.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"json_decode_string","kind":"fn","file":"crates/nvim/src/nvim/eval/decode/json.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"kTVCstring","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"lastwin","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"internal","refs":[]}
 {"symbol":"marktree_check","kind":"fn","file":"crates/nvim/src/nvim/marktree/check.rs","class":"test","refs":["unit-specs"]}
