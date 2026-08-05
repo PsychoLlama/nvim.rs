@@ -12,13 +12,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-/// C's `XFREE_CLEAR(s->data); s->size = 0;` over one of the module's
-/// `String_0` statics.
-unsafe fn clear_string(cell: &GlobalCell<String_0>) {
-    unsafe { xfree(cell.get().data.cast::<c_void>()) };
-    cell.set(STRING_INIT);
-}
-
 /// Free the four `cptext` strings a caller handed to [`ins_compl_add`].
 #[inline]
 pub(crate) unsafe fn free_cptext(cptext: *const *mut c_char) {

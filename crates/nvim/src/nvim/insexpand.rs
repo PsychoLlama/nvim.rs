@@ -54,8 +54,9 @@ use crate::src::nvim::highlight_group::{HLF_COUNT, HLF_E, HLF_R, HLF_W, syn_name
 use crate::src::nvim::indent::{get_indent, inindent};
 use crate::src::nvim::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::src::nvim::keycodes::{
-    K_BS, K_COMMAND, K_DOWN, K_EVENT, K_KENTER, K_KPAGEDOWN, K_KPAGEUP, K_LUA, K_PAGEDOWN,
-    K_PAGEUP, K_S_DOWN, K_S_TAB, K_S_UP, K_SELECT, K_UP,
+    K_BS, K_COMMAND, K_DOWN, K_EVENT, K_IGNORE, K_KENTER, K_KPAGEDOWN, K_KPAGEUP, K_LUA,
+    K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP, K_PAGEDOWN, K_PAGEUP, K_S_DOWN,
+    K_S_TAB, K_S_UP, K_SELECT, K_UP,
 };
 use crate::src::nvim::lua::executor::nlua_expand_pat;
 use crate::src::nvim::main::{
@@ -69,8 +70,8 @@ use crate::src::nvim::main::{
     textlock,
 };
 use crate::src::nvim::mbyte::{
-    mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_ptr2char_adv, mb_tolower, mb_toupper,
-    utf_char2bytes, utf_char2len, utf_head_off, utf_ptr2char, utf_ptr2len, utf8len_tab,
+    MB_MAXCHAR, mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_ptr2char_adv, mb_tolower,
+    mb_toupper, utf_char2bytes, utf_char2len, utf_head_off, utf_ptr2char, utf_ptr2len, utf8len_tab,
     utfc_ptr2len,
 };
 use crate::src::nvim::memline::{dec, ml_delete, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
@@ -459,6 +460,13 @@ pub(crate) fn ctrl_x_msg(mode: c_int) -> *mut c_char {
         Some(msg) => unsafe { gettext(msg.as_ptr()) },
         None => ptr::null_mut(),
     }
+}
+
+/// C's `XFREE_CLEAR(s->data); s->size = 0;` over one of the module's
+/// `String_0` statics.
+pub(crate) unsafe fn clear_string(cell: &GlobalCell<String_0>) {
+    unsafe { xfree(cell.get().data.cast::<c_void>()) };
+    cell.set(STRING_INIT);
 }
 
 /// C's `e_hitend`.
