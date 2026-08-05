@@ -1,206 +1,203 @@
 //! `b:`, `w:` and `t:` from somewhere else.
 //!
-//! `get_var_from` and `setwinvar` switch to the requested buffer, window or
-//! tabpage, do the lookup there and switch back; the `f_*` entries below
+//! [`get_var_from`] and [`setwinvar`] switch to the requested buffer, window
+//! or tabpage, do the lookup there and switch back; the `f_*` entries below
 //! them are the Vimscript builtins that call them.  The `&option` spelling
-//! of a name lands in `tv_to_optval`/`optval_as_tv` instead.
+//! of a name lands in [`tv_to_optval`]/[`optval_as_tv`] instead.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
 #[allow(unused_imports)]
 use super::*;
 
-unsafe extern "C" fn get_var_from(
-    mut varname: *const ::core::ffi::c_char,
-    mut rettv: *mut typval_T,
-    mut deftv: *mut typval_T,
-    mut htname: ::core::ffi::c_int,
-    mut tp: *mut tabpage_T,
-    mut win: *mut win_T,
-    mut buf: *mut buf_T,
+/// The zeroed `switchwin_T` [`switch_win`] fills in.
+const SWITCHWIN_INITIAL_VALUE: switchwin_T = switchwin_T {
+    sw_curwin: ptr::null_mut(),
+    sw_curtab: ptr::null_mut(),
+    sw_same_win: false,
+    sw_visual_active: false,
+};
+
+/// `getbufvar()`, `getwinvar()`, `gettabvar()` and `gettabwinvar()`: read
+/// `varname` in the scope `htname` names, falling back to `deftv`.
+///
+/// An empty `varname` is the whole scope as a dictionary, and one starting
+/// with `&` is an option rather than a variable.  Errors are suppressed
+/// throughout: these functions answer the default instead.
+///
+/// # Safety
+/// `rettv` is writable and holds nothing; `deftv` is a live value;
+/// `tp`/`win`/`buf` are live or NULL.
+unsafe fn get_var_from(
+    mut varname: *const c_char,
+    rettv: *mut typval_T,
+    deftv: *mut typval_T,
+    htname: c_int,
+    tp: *mut tabpage_T,
+    win: *mut win_T,
+    buf: *mut buf_T,
 ) {
     unsafe {
-        let mut done: bool = false_0 != 0;
-        let do_change_curbuf: bool = !buf.is_null() && htname == 'b' as ::core::ffi::c_int;
+        let mut done = false;
+        let do_change_curbuf = !buf.is_null() && htname == b'b' as c_int;
+
         (*emsg_off.ptr()) += 1;
         (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        (*rettv).vval.v_string = ptr::null_mut();
+
         if !varname.is_null()
             && !tp.is_null()
             && !win.is_null()
-            && (htname != 'b' as ::core::ffi::c_int || !buf.is_null())
+            && (htname != b'b' as c_int || !buf.is_null())
         {
-            let need_switch_win: bool =
-                !(tp == curtab.get() && win == curwin.get()) && !do_change_curbuf;
-            let mut switchwin: switchwin_T = switchwin_T {
-                sw_curwin: ::core::ptr::null_mut::<win_T>(),
-                sw_curtab: ::core::ptr::null_mut::<tabpage_T>(),
-                sw_same_win: false,
-                sw_visual_active: false,
-            };
-            if !need_switch_win || switch_win(&raw mut switchwin, win, tp, true_0 != 0) == OK {
-                if *varname as ::core::ffi::c_int == '&' as ::core::ffi::c_int
-                    && htname != 't' as ::core::ffi::c_int
-                {
-                    let save_curbuf: *mut buf_T = curbuf.get();
+            // Make `win` current, and its tab page with it, or the window is
+            // not valid. Only when needed, since it blocks autocommands --
+            // and not at all with a buffer in hand, where `curbuf` is saved
+            // and restored directly instead.
+            let need_switch_win = !(tp == curtab.get() && win == curwin.get()) && !do_change_curbuf;
+            let mut switchwin = SWITCHWIN_INITIAL_VALUE;
+            if !need_switch_win || switch_win(&raw mut switchwin, win, tp, true) == OK {
+                if *varname == b'&' as c_char && htname != b't' as c_int {
+                    // An option: read it from the right buffer.
+                    let save_curbuf = curbuf.get();
                     if do_change_curbuf {
                         curbuf.set(buf);
                     }
-                    if *varname.offset(1 as ::core::ffi::c_int as isize) == NUL {
-                        let mut opts: *mut dict_T = get_winbuf_options(
-                            (htname == 'b' as ::core::ffi::c_int) as ::core::ffi::c_int,
-                        );
+                    if *varname.add(1) == NUL {
+                        // A bare "&": every window- or buffer-local option.
+                        let opts = get_winbuf_options(c_int::from(htname == b'b' as c_int));
                         if !opts.is_null() {
                             tv_dict_set_ret(rettv, opts);
-                            done = true_0 != 0;
+                            done = true;
                         }
-                    } else if eval_option(&raw mut varname, rettv, true_0 != 0) == OK {
-                        done = true_0 != 0;
+                    } else if eval_option(&raw mut varname, rettv, true) == OK {
+                        done = true;
                     }
                     curbuf.set(save_curbuf);
                 } else if *varname == NUL {
-                    let mut v: *const ScopeDictDictItem = ::core::ptr::null::<ScopeDictDictItem>();
-                    if htname == 'b' as ::core::ffi::c_int {
-                        v = &raw mut (*buf).b_bufvar;
-                    } else if htname == 'w' as ::core::ffi::c_int {
-                        v = &raw mut (*win).w_winvar;
-                    } else {
-                        v = &raw mut (*tp).tp_winvar;
-                    }
+                    // An empty name: the whole scope as a dictionary.
+                    let v: *const ScopeDictDictItem = match htname as u8 {
+                        b'b' => &raw mut (*buf).b_bufvar,
+                        b'w' => &raw mut (*win).w_winvar,
+                        _ => &raw mut (*tp).tp_winvar,
+                    };
                     tv_copy(&raw const (*v).di_tv, rettv);
-                    done = true_0 != 0;
+                    done = true;
                 } else {
-                    let mut ht: *mut hashtab_T = ::core::ptr::null_mut::<hashtab_T>();
-                    if htname == 'b' as ::core::ffi::c_int {
-                        ht = &raw mut (*(*buf).b_vars).dv_hashtab;
-                    } else if htname == 'w' as ::core::ffi::c_int {
-                        ht = &raw mut (*(*win).w_vars).dv_hashtab;
-                    } else {
-                        ht = &raw mut (*(*tp).tp_vars).dv_hashtab;
-                    }
-                    let v_0: *const dictitem_T =
-                        find_var_in_ht(ht, htname, varname, strlen(varname), false);
-                    if !v_0.is_null() {
-                        tv_copy(&raw const (*v_0).di_tv, rettv);
-                        done = true_0 != 0;
+                    let ht = match htname as u8 {
+                        b'b' => &raw mut (*(*buf).b_vars).dv_hashtab,
+                        b'w' => &raw mut (*(*win).w_vars).dv_hashtab,
+                        _ => &raw mut (*(*tp).tp_vars).dv_hashtab,
+                    };
+                    let v = find_var_in_ht(ht, htname, varname, strlen(varname), false);
+                    if !v.is_null() {
+                        tv_copy(&raw const (*v).di_tv, rettv);
+                        done = true;
                     }
                 }
             }
             if need_switch_win {
-                restore_win(&raw mut switchwin, true_0 != 0);
+                restore_win(&raw mut switchwin, true);
             }
         }
-        if !done
-            && (*deftv).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+
+        if !done && (*deftv).v_type != VAR_UNKNOWN {
             tv_copy(deftv, rettv);
         }
         (*emsg_off.ptr()) -= 1;
     }
 }
 
-unsafe extern "C" fn getwinvar(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut off: ::core::ffi::c_int,
-) {
+/// `getwinvar()`, and `gettabwinvar()` with `off` 1 -- which is where the
+/// extra leading tab-page argument goes.
+///
+/// # Safety
+/// `argvars` holds at least `off + 3` values; `rettv` is writable.
+unsafe fn getwinvar(argvars: *mut typval_T, rettv: *mut typval_T, off: c_int) {
     unsafe {
-        let mut tp: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
-        if off == 1 as ::core::ffi::c_int {
-            tp = find_tabpage(tv_get_number_chk(
-                argvars.offset(0 as ::core::ffi::c_int as isize),
-                ::core::ptr::null_mut::<bool>(),
-            ) as ::core::ffi::c_int);
+        let tp = if off == 1 {
+            find_tabpage(tv_get_number_chk(argvars, ptr::null_mut()) as c_int)
         } else {
-            tp = curtab.get();
-        }
-        let win: *mut win_T = find_win_by_nr(argvars.offset(off as isize), tp);
-        let varname: *const ::core::ffi::c_char =
-            tv_get_string_chk(argvars.offset((off + 1 as ::core::ffi::c_int) as isize));
+            curtab.get()
+        };
+        let win = find_win_by_nr(argvars.offset(off as isize), tp);
+        let varname = tv_get_string_chk(argvars.offset((off + 1) as isize));
         get_var_from(
             varname,
             rettv,
-            argvars.offset((off + 2 as ::core::ffi::c_int) as isize),
-            'w' as ::core::ffi::c_int,
+            argvars.offset((off + 2) as isize),
+            b'w' as c_int,
             tp,
             win,
-            ::core::ptr::null_mut::<buf_T>(),
+            ptr::null_mut(),
         );
     }
 }
 
-pub(crate) unsafe extern "C" fn tv_to_optval(
-    mut tv: *mut typval_T,
-    mut opt_idx: OptIndex,
-    mut option: *const ::core::ffi::c_char,
-    mut error: *mut bool,
+/// `tv` as the value of option `opt_idx`, or `NIL_OPTVAL` with `error` set.
+///
+/// The option's declared types decide the conversion; a Funcref is accepted
+/// (as its name) only by an option that takes one.
+///
+/// # Safety
+/// `tv` is a live value, `option` a NUL-terminated name matching `opt_idx`,
+/// and `error` writable or NULL.
+pub(crate) unsafe fn tv_to_optval(
+    tv: *mut typval_T,
+    opt_idx: OptIndex,
+    option: *const c_char,
+    error: *mut bool,
 ) -> OptVal {
     unsafe {
-        let mut value: OptVal = OptVal {
-            type_0: kOptValTypeNil,
-            data: OptValData { boolean: kFalse },
-        };
-        let mut nbuf: [::core::ffi::c_char; 65] = [0; 65];
-        let mut err: bool = false_0 != 0;
-        let is_tty_opt: bool = is_tty_option(option);
-        let option_has_bool: bool =
-            !is_tty_opt && option_has_type(opt_idx, kOptValTypeBoolean) as ::core::ffi::c_int != 0;
-        let option_has_num: bool =
-            !is_tty_opt && option_has_type(opt_idx, kOptValTypeNumber) as ::core::ffi::c_int != 0;
-        let option_has_str: bool = is_tty_opt as ::core::ffi::c_int != 0
-            || option_has_type(opt_idx, kOptValTypeString) as ::core::ffi::c_int != 0;
-        if !is_tty_opt
-            && (*get_option(opt_idx)).flags & kOptFlagFunc as ::core::ffi::c_int as uint32_t != 0
-            && tv_is_func(*tv) as ::core::ffi::c_int != 0
+        let mut nbuf = [0 as c_char; 65];
+        let mut err = false;
+        let is_tty_opt = is_tty_option(option);
+        let option_has_bool = !is_tty_opt && option_has_type(opt_idx, kOptValTypeBoolean);
+        let option_has_num = !is_tty_opt && option_has_type(opt_idx, kOptValTypeNumber);
+        let option_has_str = is_tty_opt || option_has_type(opt_idx, kOptValTypeString);
+
+        let value = if !is_tty_opt
+            && (*get_option(opt_idx)).flags & kOptFlagFunc as uint32_t != 0
+            && tv_is_func(*tv)
         {
-            let mut strval: *mut ::core::ffi::c_char =
-                encode_tv2string(tv, ::core::ptr::null_mut::<size_t>());
+            // An option that takes a function reference or a lambda stores
+            // the name of one.
+            let strval = encode_tv2string(tv, ptr::null_mut());
             err = strval.is_null();
-            value = OptVal {
+            OptVal {
                 type_0: kOptValTypeString,
                 data: OptValData {
                     string: cstr_as_string(strval),
                 },
-            };
-        } else if option_has_bool as ::core::ffi::c_int != 0
-            || option_has_num as ::core::ffi::c_int != 0
-        {
-            let mut n: varnumber_T = if option_has_num as ::core::ffi::c_int != 0 {
+            }
+        } else if option_has_bool || option_has_num {
+            let n = if option_has_num {
                 tv_get_number_chk(tv, &raw mut err)
             } else {
                 tv_get_bool_chk(tv, &raw mut err)
             };
-            if !err
-                && (*tv).v_type as ::core::ffi::c_uint
-                    == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                && n == 0 as varnumber_T
-            {
-                let mut idx: ::core::ffi::c_uint = 0;
-                idx = 0 as ::core::ffi::c_uint;
-                while !(*tv).vval.v_string.is_null()
-                    && *(*tv).vval.v_string.offset(idx as isize) as ::core::ffi::c_int
-                        == '0' as ::core::ffi::c_int
-                {
-                    idx = idx.wrapping_add(1);
+            // A String answers 0 both when it *is* zero and when it is not a
+            // number at all, so a zero from a String has to be re-read: it
+            // is only honest if the string is all '0's and nothing else.
+            if !err && (*tv).v_type == VAR_STRING && n == 0 {
+                let s = (*tv).vval.v_string;
+                let mut idx = 0;
+                while !s.is_null() && *s.add(idx) == b'0' as c_char {
+                    idx += 1;
                 }
-                if idx == 0 as ::core::ffi::c_uint
-                    || *(*tv).vval.v_string.offset(idx as isize) != NUL
-                {
-                    err = true_0 != 0;
+                if idx == 0 || *s.add(idx) != NUL {
+                    err = true;
                     semsg(
-                        gettext(b"E521: Number required: &%s = '%s'\0".as_ptr()
-                            as *const ::core::ffi::c_char),
+                        gettext(c"E521: Number required: &%s = '%s'".as_ptr()),
                         option,
-                        if (*tv).vval.v_string.is_null() {
-                            b"\0".as_ptr() as *const ::core::ffi::c_char
-                        } else {
-                            (*tv).vval.v_string as *const ::core::ffi::c_char
-                        },
+                        if s.is_null() { c"".as_ptr() } else { s },
                     );
                 }
             }
-            value = if option_has_num as ::core::ffi::c_int != 0 {
+            if option_has_num {
                 OptVal {
                     type_0: kOptValTypeNumber,
                     data: OptValData { number: n },
@@ -209,104 +206,100 @@ pub(crate) unsafe extern "C" fn tv_to_optval(
                 OptVal {
                     type_0: kOptValTypeBoolean,
                     data: OptValData {
-                        boolean: (if n == 0 as varnumber_T {
-                            kFalse as ::core::ffi::c_int
-                        } else if n >= 1 as varnumber_T {
-                            kTrue as ::core::ffi::c_int
-                        } else {
-                            kNone as ::core::ffi::c_int
-                        }) as TriState,
+                        boolean: tristate_from_int(n),
                     },
                 }
-            };
+            }
         } else if option_has_str {
-            if (*tv).v_type as ::core::ffi::c_uint
-                != VAR_BOOL as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*tv).v_type as ::core::ffi::c_uint
-                    != VAR_SPECIAL as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                let mut strval_0: *const ::core::ffi::c_char =
-                    tv_get_string_buf_chk(tv, &raw mut nbuf as *mut ::core::ffi::c_char);
-                err = strval_0.is_null();
-                value = OptVal {
+            // Never set a string option to `v:true` or `v:null`.
+            if (*tv).v_type != VAR_BOOL && (*tv).v_type != VAR_SPECIAL {
+                let strval = tv_get_string_buf_chk(tv, nbuf.as_mut_ptr());
+                err = strval.is_null();
+                OptVal {
                     type_0: kOptValTypeString,
                     data: OptValData {
-                        string: cstr_to_string(strval_0),
+                        string: cstr_to_string(strval),
                     },
-                };
-            } else if !is_tty_opt {
-                err = true_0 != 0;
-                emsg(gettext(
-                    &raw const e_string_required as *const ::core::ffi::c_char,
-                ));
+                }
+            } else {
+                if !is_tty_opt {
+                    err = true;
+                    emsg(gettext(&raw const e_string_required as *const c_char));
+                }
+                NIL_OPTVAL
             }
         } else {
+            // Every option has at least one type.
             abort();
-        }
+        };
+
         if !error.is_null() {
             *error = err;
         }
-        return value;
+        value
     }
 }
 
-pub unsafe extern "C" fn optval_as_tv(mut value: OptVal, mut numbool: bool) -> typval_T {
+/// An option's value as a typval.  `numbool` renders a Boolean option as a
+/// Number, which is what the old spelling of the accessors answered.
+///
+/// # Safety
+/// `value` is a live option value; the String case hands its buffer over.
+pub unsafe fn optval_as_tv(value: OptVal, numbool: bool) -> typval_T {
     unsafe {
-        let mut rettv: typval_T = typval_T {
+        let mut rettv = typval_T {
             v_type: VAR_SPECIAL,
             v_lock: VAR_UNLOCKED,
             vval: typval_vval_union {
                 v_special: kSpecialVarNull,
             },
         };
-        match value.type_0 as ::core::ffi::c_int {
-            0 => {
+        match value.type_0 {
+            kOptValTypeBoolean => {
                 if numbool {
                     rettv.v_type = VAR_NUMBER;
                     rettv.vval.v_number = value.data.boolean as varnumber_T;
-                } else if value.data.boolean as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
+                } else if value.data.boolean != kNone {
+                    // A `kNone` boolean has no Vimscript spelling and stays
+                    // the `v:null` this started as.
                     rettv.v_type = VAR_BOOL;
-                    rettv.vval.v_bool =
-                        (value.data.boolean as ::core::ffi::c_int == kTrue as ::core::ffi::c_int)
-                            as ::core::ffi::c_int as BoolVarValue;
+                    rettv.vval.v_bool = c_int::from(value.data.boolean == kTrue) as BoolVarValue;
                 }
             }
-            1 => {
+            kOptValTypeNumber => {
                 rettv.v_type = VAR_NUMBER;
                 rettv.vval.v_number = value.data.number as varnumber_T;
             }
-            2 => {
+            kOptValTypeString => {
                 rettv.v_type = VAR_STRING;
                 rettv.vval.v_string = value.data.string.data;
             }
-            -1 | _ => {}
+            // `kOptValTypeNil` is the remaining arm.
+            _ => {}
         }
-        return rettv;
+        rettv
     }
 }
 
-unsafe extern "C" fn set_option_from_tv(
-    mut varname: *const ::core::ffi::c_char,
-    mut varp: *mut typval_T,
-) {
+/// `setbufvar()`/`setwinvar()`'s `&option` spelling: set the local value of
+/// `varname` from `varp`.
+///
+/// # Safety
+/// `varname` is a NUL-terminated name and `varp` a live value.
+unsafe fn set_option_from_tv(varname: *const c_char, varp: *mut typval_T) {
     unsafe {
-        let mut opt_idx: OptIndex = find_option(varname);
-        if opt_idx as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int {
+        let opt_idx = find_option(varname);
+        if opt_idx == kOptInvalid {
             semsg(
-                gettext(&raw const e_unknown_option2 as *const ::core::ffi::c_char),
+                gettext(&raw const e_unknown_option2 as *const c_char),
                 varname,
             );
             return;
         }
-        let mut error: bool = false_0 != 0;
-        let mut value: OptVal = tv_to_optval(varp, opt_idx, varname, &raw mut error);
+        let mut error = false;
+        let value = tv_to_optval(varp, opt_idx, varname, &raw mut error);
         if !error {
-            let mut errmsg: *const ::core::ffi::c_char = set_option_value_handle_tty(
-                varname,
-                opt_idx,
-                value,
-                OPT_LOCAL as ::core::ffi::c_int,
-            );
+            let errmsg = set_option_value_handle_tty(varname, opt_idx, value, OPT_LOCAL);
             if !errmsg.is_null() {
                 emsg(errmsg);
             }
@@ -315,132 +308,134 @@ unsafe extern "C" fn set_option_from_tv(
     }
 }
 
-unsafe extern "C" fn setwinvar(mut argvars: *mut typval_T, mut off: ::core::ffi::c_int) {
+/// `setwinvar()`, and `settabwinvar()` with `off` 1.
+///
+/// # Safety
+/// `argvars` holds at least `off + 3` values.
+unsafe fn setwinvar(argvars: *mut typval_T, off: c_int) {
     unsafe {
         if check_secure() {
             return;
         }
-        let mut tp: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
-        if off == 1 as ::core::ffi::c_int {
-            tp = find_tabpage(tv_get_number_chk(
-                argvars.offset(0 as ::core::ffi::c_int as isize),
-                ::core::ptr::null_mut::<bool>(),
-            ) as ::core::ffi::c_int);
+        let tp = if off == 1 {
+            find_tabpage(tv_get_number_chk(argvars, ptr::null_mut()) as c_int)
         } else {
-            tp = curtab.get();
-        }
-        let win: *mut win_T = find_win_by_nr(argvars.offset(off as isize), tp);
-        let mut varname: *const ::core::ffi::c_char =
-            tv_get_string_chk(argvars.offset((off + 1 as ::core::ffi::c_int) as isize));
-        let mut varp: *mut typval_T = argvars.offset((off + 2 as ::core::ffi::c_int) as isize);
+            curtab.get()
+        };
+        let win = find_win_by_nr(argvars.offset(off as isize), tp);
+        let varname = tv_get_string_chk(argvars.offset((off + 1) as isize));
+        let varp = argvars.offset((off + 2) as isize);
         if win.is_null() || varname.is_null() {
             return;
         }
-        let mut need_switch_win: bool = !(tp == curtab.get() && win == curwin.get());
-        let mut switchwin: switchwin_T = switchwin_T {
-            sw_curwin: ::core::ptr::null_mut::<win_T>(),
-            sw_curtab: ::core::ptr::null_mut::<tabpage_T>(),
-            sw_same_win: false,
-            sw_visual_active: false,
-        };
-        if !need_switch_win || switch_win(&raw mut switchwin, win, tp, true_0 != 0) == OK {
-            if *varname as ::core::ffi::c_int == '&' as ::core::ffi::c_int {
-                set_option_from_tv(varname.offset(1 as ::core::ffi::c_int as isize), varp);
+
+        let need_switch_win = !(tp == curtab.get() && win == curwin.get());
+        let mut switchwin = SWITCHWIN_INITIAL_VALUE;
+        if !need_switch_win || switch_win(&raw mut switchwin, win, tp, true) == OK {
+            if *varname == b'&' as c_char {
+                set_option_from_tv(varname.add(1), varp);
             } else {
-                let varname_len: size_t = strlen(varname);
-                let winvarname: *mut ::core::ffi::c_char =
-                    xmalloc(varname_len.wrapping_add(3 as size_t)) as *mut ::core::ffi::c_char;
-                memcpy(
-                    winvarname as *mut ::core::ffi::c_void,
-                    b"w:\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-                    2 as size_t,
-                );
-                memcpy(
-                    winvarname.offset(2 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-                    varname as *const ::core::ffi::c_void,
-                    varname_len.wrapping_add(1 as size_t),
-                );
-                set_var(
-                    winvarname,
-                    varname_len.wrapping_add(2 as size_t),
-                    varp,
-                    true_0 != 0,
-                );
-                xfree(winvarname as *mut ::core::ffi::c_void);
+                set_scoped_var(c"w:", varname, varp);
             }
         }
         if need_switch_win {
-            restore_win(&raw mut switchwin, true_0 != 0);
+            restore_win(&raw mut switchwin, true);
         }
     }
 }
 
+/// Set `<scope><varname>` from `varp`, in whatever buffer, window or tab
+/// page is current.
+///
+/// `set_var` takes a name with its scope prefix, so the two are joined into
+/// a scratch buffer first; `scope` is `"b:"`, `"w:"` or `"t:"`.
+///
+/// # Safety
+/// `varname` is a NUL-terminated name and `varp` a live value.
+unsafe fn set_scoped_var(scope: &CStr, varname: *const c_char, varp: *mut typval_T) {
+    unsafe {
+        let varname_len = strlen(varname);
+        let name = xmalloc(varname_len + 3) as *mut c_char;
+        memcpy(name.cast(), scope.as_ptr().cast(), 2);
+        memcpy(name.add(2).cast(), varname.cast(), varname_len + 1);
+        set_var(name, varname_len + 2, varp, true);
+        xfree(name.cast());
+    }
+}
+
+/// `gettabvar()`.
+///
+/// # Safety
+/// As a `VimLFunc`.
 pub unsafe extern "C" fn f_gettabvar(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        let varname: *const ::core::ffi::c_char =
-            tv_get_string_chk(argvars.offset(1 as ::core::ffi::c_int as isize));
-        let tp: *mut tabpage_T = find_tabpage(tv_get_number_chk(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-            ::core::ptr::null_mut::<bool>(),
-        ) as ::core::ffi::c_int);
-        let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        if !tp.is_null() {
-            win = if tp == curtab.get() || (*tp).tp_firstwin.is_null() {
-                firstwin.get()
-            } else {
-                (*tp).tp_firstwin
-            };
-        }
+        let varname = tv_get_string_chk(argvars.add(1));
+        let tp = find_tabpage(tv_get_number_chk(argvars, ptr::null_mut()) as c_int);
+        // Any window of that tab page will do: only its `t:` scope is read.
+        let win = if tp.is_null() {
+            ptr::null_mut()
+        } else if tp == curtab.get() || (*tp).tp_firstwin.is_null() {
+            firstwin.get()
+        } else {
+            (*tp).tp_firstwin
+        };
         get_var_from(
             varname,
             rettv,
-            argvars.offset(2 as ::core::ffi::c_int as isize),
-            't' as ::core::ffi::c_int,
+            argvars.add(2),
+            b't' as c_int,
             tp,
             win,
-            ::core::ptr::null_mut::<buf_T>(),
+            ptr::null_mut(),
         );
     }
 }
 
+/// `gettabwinvar()`.
+///
+/// # Safety
+/// As a `VimLFunc`.
 pub unsafe extern "C" fn f_gettabwinvar(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        getwinvar(argvars, rettv, 1 as ::core::ffi::c_int);
-    }
+    unsafe { getwinvar(argvars, rettv, 1) }
 }
 
+/// `getwinvar()`.
+///
+/// # Safety
+/// As a `VimLFunc`.
 pub unsafe extern "C" fn f_getwinvar(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        getwinvar(argvars, rettv, 0 as ::core::ffi::c_int);
-    }
+    unsafe { getwinvar(argvars, rettv, 0) }
 }
 
+/// `getbufvar()`.
+///
+/// # Safety
+/// As a `VimLFunc`.
 pub unsafe extern "C" fn f_getbufvar(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        let varname: *const ::core::ffi::c_char =
-            tv_get_string_chk(argvars.offset(1 as ::core::ffi::c_int as isize));
-        let buf: *mut buf_T = tv_get_buf_from_arg(argvars.offset(0 as ::core::ffi::c_int as isize));
+        let varname = tv_get_string_chk(argvars.add(1));
+        let buf = tv_get_buf_from_arg(argvars);
         get_var_from(
             varname,
             rettv,
-            argvars.offset(2 as ::core::ffi::c_int as isize),
-            'b' as ::core::ffi::c_int,
+            argvars.add(2),
+            b'b' as c_int,
             curtab.get(),
             curwin.get(),
             buf,
@@ -448,50 +443,35 @@ pub unsafe extern "C" fn f_getbufvar(
     }
 }
 
+/// `settabvar()`.
+///
+/// # Safety
+/// As a `VimLFunc`.
 pub unsafe extern "C" fn f_settabvar(
-    mut argvars: *mut typval_T,
-    mut _rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    _rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
         if check_secure() {
             return;
         }
-        let tp: *mut tabpage_T = find_tabpage(tv_get_number_chk(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-            ::core::ptr::null_mut::<bool>(),
-        ) as ::core::ffi::c_int);
-        let varname: *const ::core::ffi::c_char =
-            tv_get_string_chk(argvars.offset(1 as ::core::ffi::c_int as isize));
-        let varp: *mut typval_T = argvars.offset(2 as ::core::ffi::c_int as isize);
+        let tp = find_tabpage(tv_get_number_chk(argvars, ptr::null_mut()) as c_int);
+        let varname = tv_get_string_chk(argvars.add(1));
+        let varp = argvars.add(2);
         if varname.is_null() || tp.is_null() {
             return;
         }
-        let save_curtab: *mut tabpage_T = curtab.get();
-        let save_lu_tp: *mut tabpage_T = lastused_tabpage.get();
-        goto_tabpage_tp(tp, false_0 != 0, false_0 != 0);
-        let varname_len: size_t = strlen(varname);
-        let tabvarname: *mut ::core::ffi::c_char =
-            xmalloc(varname_len.wrapping_add(3 as size_t)) as *mut ::core::ffi::c_char;
-        memcpy(
-            tabvarname as *mut ::core::ffi::c_void,
-            b"t:\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-            2 as size_t,
-        );
-        memcpy(
-            tabvarname.offset(2 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-            varname as *const ::core::ffi::c_void,
-            varname_len.wrapping_add(1 as size_t),
-        );
-        set_var(
-            tabvarname,
-            varname_len.wrapping_add(2 as size_t),
-            varp,
-            true_0 != 0,
-        );
-        xfree(tabvarname as *mut ::core::ffi::c_void);
+
+        let save_curtab = curtab.get();
+        let save_lu_tp = lastused_tabpage.get();
+        goto_tabpage_tp(tp, false, false);
+
+        set_scoped_var(c"t:", varname, varp);
+
         if valid_tabpage(save_curtab) {
-            goto_tabpage_tp(save_curtab, false_0 != 0, false_0 != 0);
+            goto_tabpage_tp(save_curtab, false, false);
+            // Going back must not count as a use of the previous tab page.
             if valid_tabpage(save_lu_tp) {
                 lastused_tabpage.set(save_lu_tp);
             }
@@ -499,73 +479,62 @@ pub unsafe extern "C" fn f_settabvar(
     }
 }
 
+/// `settabwinvar()`.
+///
+/// # Safety
+/// As a `VimLFunc`.
 pub unsafe extern "C" fn f_settabwinvar(
-    mut argvars: *mut typval_T,
-    mut _rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    _rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        setwinvar(argvars, 1 as ::core::ffi::c_int);
-    }
+    unsafe { setwinvar(argvars, 1) }
 }
 
+/// `setwinvar()`.
+///
+/// # Safety
+/// As a `VimLFunc`.
 pub unsafe extern "C" fn f_setwinvar(
-    mut argvars: *mut typval_T,
-    mut _rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    _rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        setwinvar(argvars, 0 as ::core::ffi::c_int);
-    }
+    unsafe { setwinvar(argvars, 0) }
 }
 
+/// `setbufvar()`.
+///
+/// # Safety
+/// As a `VimLFunc`.
 pub unsafe extern "C" fn f_setbufvar(
-    mut argvars: *mut typval_T,
-    mut _rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    _rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        if check_secure() as ::core::ffi::c_int != 0
-            || !tv_check_str_or_nr(argvars.offset(0 as ::core::ffi::c_int as isize))
-        {
+        if check_secure() || !tv_check_str_or_nr(argvars) {
             return;
         }
-        let mut varname: *const ::core::ffi::c_char =
-            tv_get_string_chk(argvars.offset(1 as ::core::ffi::c_int as isize));
-        let buf: *mut buf_T = tv_get_buf(argvars.offset(0 as ::core::ffi::c_int as isize), false_0);
-        let mut varp: *mut typval_T = argvars.offset(2 as ::core::ffi::c_int as isize);
+        let varname = tv_get_string_chk(argvars.add(1));
+        let buf = tv_get_buf(argvars, false_0);
+        let varp = argvars.add(2);
         if buf.is_null() || varname.is_null() {
             return;
         }
-        if *varname as ::core::ffi::c_int == '&' as ::core::ffi::c_int {
-            let mut aco: aco_save_T = aco_save_T::default();
+
+        if *varname == b'&' as c_char {
+            // An option: the buffer has to be current for the autocommands
+            // the change fires, which `aucmd_prepbuf` arranges.
+            let mut aco = aco_save_T::default();
             aucmd_prepbuf(&raw mut aco, buf);
-            set_option_from_tv(varname.offset(1 as ::core::ffi::c_int as isize), varp);
+            set_option_from_tv(varname.add(1), varp);
             aucmd_restbuf(&raw mut aco);
         } else {
-            let varname_len: size_t = strlen(varname);
-            let bufvarname: *mut ::core::ffi::c_char =
-                xmalloc(varname_len.wrapping_add(3 as size_t)) as *mut ::core::ffi::c_char;
-            let save_curbuf: *mut buf_T = curbuf.get();
+            let save_curbuf = curbuf.get();
             curbuf.set(buf);
-            memcpy(
-                bufvarname as *mut ::core::ffi::c_void,
-                b"b:\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-                2 as size_t,
-            );
-            memcpy(
-                bufvarname.offset(2 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-                varname as *const ::core::ffi::c_void,
-                varname_len.wrapping_add(1 as size_t),
-            );
-            set_var(
-                bufvarname,
-                varname_len.wrapping_add(2 as size_t),
-                varp,
-                true_0 != 0,
-            );
-            xfree(bufvarname as *mut ::core::ffi::c_void);
+            set_scoped_var(c"b:", varname, varp);
             curbuf.set(save_curbuf);
-        };
+        }
     }
 }

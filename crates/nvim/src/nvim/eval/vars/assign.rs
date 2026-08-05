@@ -524,7 +524,7 @@ unsafe fn ex_let_option(
 
 /// Upstream's `TRISTATE_FROM_INT`: anything positive is true, zero is false,
 /// and a negative number is "unset".
-fn tristate_from_int(n: OptInt) -> TriState {
+pub(crate) fn tristate_from_int(n: OptInt) -> TriState {
     if n == 0 {
         kFalse
     } else if n >= 1 {

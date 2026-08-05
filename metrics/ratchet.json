@@ -206,7 +206,7 @@
     "crates/nvim/src/nvim/eval/vars/listing.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/eval/vars/lookup.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/eval/vars/redir.rs": {"unsafe": 4},
-    "crates/nvim/src/nvim/eval/vars/scoped.rs": {"unsafe": 14},
+    "crates/nvim/src/nvim/eval/vars/scoped.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/eval/vars/store.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/eval/vars/unlet.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/eval/vars/vvar.rs": {"unsafe": 26},
