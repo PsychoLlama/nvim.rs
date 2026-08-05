@@ -8,295 +8,259 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{c_char, c_int, c_void};
+use core::ptr;
+
 #[allow(unused_imports)]
 use super::*;
 
-unsafe extern "C" fn one_function_arg(
-    mut arg: *mut ::core::ffi::c_char,
-    mut newargs: *mut garray_T,
-    mut skip: bool,
-) -> *mut ::core::ffi::c_char {
+/// Read one argument name at `arg` and append a copy of it to `newargs`.
+///
+/// Answers the end of the name, or `arg` itself when what is there cannot be
+/// one: empty, starting with a digit, a duplicate of an earlier argument, or
+/// one of the two names the `a:` scope already gives a meaning.
+///
+/// # Safety
+/// `arg` is a NUL-terminated, *writable* string -- the name is terminated in
+/// place while it is copied.  `newargs`, when non-null, is a `char *` garray.
+unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut garray_T, skip: bool) -> *mut c_char {
     unsafe {
-        let mut p: *mut ::core::ffi::c_char = arg;
-        while *p as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-            && *p as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-            || *p as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-                && *p as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-            || ascii_isdigit(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-            || *p as ::core::ffi::c_int == '_' as ::core::ffi::c_int
-        {
-            p = p.offset(1);
+        let mut p = arg;
+        while ascii_isident(*p as c_int) {
+            p = p.add(1);
         }
+        let len = p.offset_from(arg);
+        // `isdigit()` is one of the ctype predicates the C standard fixes to
+        // ASCII in every locale, so this really is the same test.
         if arg == p
-            || *(*__ctype_b_loc()).offset(*arg as uint8_t as ::core::ffi::c_int as isize)
-                as ::core::ffi::c_int
-                & _ISdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                != 0
-            || p.offset_from(arg) == 9 as isize
-                && strncmp(
-                    arg,
-                    b"firstline\0".as_ptr() as *const ::core::ffi::c_char,
-                    9 as size_t,
-                ) == 0 as ::core::ffi::c_int
-            || p.offset_from(arg) == 8 as isize
-                && strncmp(
-                    arg,
-                    b"lastline\0".as_ptr() as *const ::core::ffi::c_char,
-                    8 as size_t,
-                ) == 0 as ::core::ffi::c_int
+            || (*arg as u8).is_ascii_digit()
+            || (len == 9 && strncmp(arg, c"firstline".as_ptr(), 9) == 0)
+            || (len == 8 && strncmp(arg, c"lastline".as_ptr(), 8) == 0)
         {
             if !skip {
-                semsg(
-                    gettext(b"E125: Illegal argument: %s\0".as_ptr() as *const ::core::ffi::c_char),
-                    arg,
-                );
+                semsg(gettext(c"E125: Illegal argument: %s".as_ptr()), arg);
             }
             return arg;
         }
         if !newargs.is_null() {
-            ga_grow(newargs, 1 as ::core::ffi::c_int);
-            let mut c: uint8_t = *p as uint8_t;
-            *p = NUL as ::core::ffi::c_char;
-            let mut arg_copy: *mut ::core::ffi::c_char = xstrdup(arg);
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < (*newargs).ga_len {
-                if strcmp(
-                    *((*newargs).ga_data as *mut *mut ::core::ffi::c_char).offset(i as isize),
-                    arg_copy,
-                ) == 0 as ::core::ffi::c_int
-                {
+            ga_grow(newargs, 1);
+            let c = *p;
+            *p = NUL as c_char;
+            let arg_copy = xstrdup(arg);
+            for &earlier in ga_strings(&*newargs) {
+                if strcmp(earlier, arg_copy) == 0 {
                     semsg(
-                        gettext(b"E853: Duplicate argument name: %s\0".as_ptr()
-                            as *const ::core::ffi::c_char),
+                        gettext(c"E853: Duplicate argument name: %s".as_ptr()),
                         arg_copy,
                     );
-                    xfree(arg_copy as *mut ::core::ffi::c_void);
+                    xfree(arg_copy as *mut c_void);
+                    // Upstream leaves the name NUL-terminated here; the
+                    // caller stops on `p == arg` either way.
                     return arg;
                 }
-                i += 1;
             }
-            *((*newargs).ga_data as *mut *mut ::core::ffi::c_char)
-                .offset((*newargs).ga_len as isize) = arg_copy;
-            (*newargs).ga_len += 1;
-            *p = c as ::core::ffi::c_char;
+            ga_push_string(newargs, arg_copy);
+            *p = c;
         }
-        return p;
+        p
     }
 }
 
-pub(crate) unsafe extern "C" fn get_function_args(
-    mut argp: *mut *mut ::core::ffi::c_char,
-    mut endchar: ::core::ffi::c_char,
-    mut newargs: *mut garray_T,
-    mut varargs: *mut ::core::ffi::c_int,
-    mut default_args: *mut garray_T,
-    mut skip: bool,
-) -> ::core::ffi::c_int {
+/// Parse a definition's argument list, up to and including `endchar`.
+///
+/// Fills `newargs` with the names, `default_args` with the *source* of each
+/// `= expr` default (evaluated afresh on every call, not here) and `varargs`
+/// with whether a `...` was seen.  Any of the three may be null, which is how
+/// a caller that only wants to skip the list says so.
+///
+/// # Safety
+/// `*argp` is a NUL-terminated, writable string; the three out-parameters are
+/// null or writable.
+pub(crate) unsafe fn get_function_args(
+    argp: *mut *mut c_char,
+    endchar: c_char,
+    newargs: *mut garray_T,
+    varargs: *mut c_int,
+    default_args: *mut garray_T,
+    skip: bool,
+) -> c_int {
     unsafe {
-        let mut mustend: bool = false_0 != 0;
-        let mut arg: *mut ::core::ffi::c_char = *argp;
-        let mut p: *mut ::core::ffi::c_char = arg;
+        let mut mustend = false;
+        let mut p = *argp;
         if !newargs.is_null() {
-            ga_init(
-                newargs,
-                ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-                3 as ::core::ffi::c_int,
-            );
+            ga_init(newargs, size_of::<*mut c_char>() as c_int, 3);
         }
         if !default_args.is_null() {
-            ga_init(
-                default_args,
-                ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-                3 as ::core::ffi::c_int,
-            );
+            ga_init(default_args, size_of::<*mut c_char>() as c_int, 3);
         }
         if !varargs.is_null() {
-            *varargs = false_0;
+            *varargs = 0;
         }
-        let mut any_default: bool = false_0 != 0;
-        '_err_ret: {
-            while *p as ::core::ffi::c_int != endchar as ::core::ffi::c_int {
-                if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '.' as ::core::ffi::c_int
-                    && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == '.' as ::core::ffi::c_int
-                    && *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == '.' as ::core::ffi::c_int
+
+        // Isolate the arguments: "arg1, arg2, ...)".
+        let mut any_default = false;
+        let closed = 'parse: {
+            while *p != endchar {
+                if *p == b'.' as c_char
+                    && *p.add(1) == b'.' as c_char
+                    && *p.add(2) == b'.' as c_char
                 {
                     if !varargs.is_null() {
-                        *varargs = true_0;
+                        *varargs = 1;
                     }
-                    p = p.offset(3 as ::core::ffi::c_int as isize);
-                    mustend = true_0 != 0;
+                    p = p.add(3);
+                    mustend = true;
                 } else {
-                    arg = p;
+                    let arg = p;
                     p = one_function_arg(p, newargs, skip);
                     if p == arg {
                         break;
                     }
-                    if *skipwhite(p) as ::core::ffi::c_int == '=' as ::core::ffi::c_int
-                        && !default_args.is_null()
-                    {
-                        let mut rettv: typval_T = typval_T {
-                            v_type: VAR_UNKNOWN,
-                            v_lock: VAR_UNLOCKED,
-                            vval: typval_vval_union { v_number: 0 },
-                        };
-                        any_default = true_0 != 0;
-                        p = skipwhite(p).offset(1 as ::core::ffi::c_int as isize);
-                        p = skipwhite(p);
-                        let mut expr: *mut ::core::ffi::c_char = p;
-                        if eval1(
-                            &raw mut p,
-                            &raw mut rettv,
-                            ::core::ptr::null_mut::<evalarg_T>(),
-                        ) != FAIL
-                        {
-                            ga_grow(default_args, 1 as ::core::ffi::c_int);
-                            while p > expr
-                                && ascii_iswhite(*p.offset(-1 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int)
-                                    as ::core::ffi::c_int
-                                    != 0
-                            {
-                                p = p.offset(-1);
+                    if *skipwhite(p) == b'=' as c_char && !default_args.is_null() {
+                        let mut rettv = TV_INITIAL_VALUE;
+                        any_default = true;
+                        p = skipwhite(skipwhite(p).add(1));
+                        let mut expr = p;
+                        if eval1(&raw mut p, &raw mut rettv, ptr::null_mut()) != FAIL {
+                            ga_grow(default_args, 1);
+                            while p > expr && ascii_iswhite(*p.sub(1) as c_int) {
+                                p = p.sub(1);
                             }
-                            let mut c: uint8_t = *p as uint8_t;
-                            *p = NUL as ::core::ffi::c_char;
+                            // The default is kept as source, so it is copied
+                            // out from under a temporary terminator.
+                            let c = *p;
+                            *p = NUL as c_char;
                             expr = xstrdup(expr);
-                            *((*default_args).ga_data as *mut *mut ::core::ffi::c_char)
-                                .offset((*default_args).ga_len as isize) = expr;
-                            (*default_args).ga_len += 1;
-                            *p = c as ::core::ffi::c_char;
+                            ga_push_string(default_args, expr);
+                            *p = c;
                         } else {
-                            mustend = true_0 != 0;
+                            mustend = true;
                         }
                     } else if any_default {
                         emsg(gettext(
-                            b"E989: Non-default argument follows default argument\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            c"E989: Non-default argument follows default argument".as_ptr(),
                         ));
-                        mustend = true_0 != 0;
+                        mustend = true;
                     }
-                    if ascii_iswhite(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-                        && *skipwhite(p) as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-                    {
+                    if ascii_iswhite(*p as c_int) && *skipwhite(p) == b',' as c_char {
                         if !skip {
                             semsg(
                                 gettext(E_NO_WHITE_SPACE_ALLOWED_BEFORE_STR_STR.as_ptr()),
-                                b",\0".as_ptr() as *const ::core::ffi::c_char,
+                                c",".as_ptr(),
                                 p,
                             );
-                            break '_err_ret;
-                        } else {
-                            p = skipwhite(p);
+                            break 'parse false;
                         }
+                        p = skipwhite(p);
                     }
-                    if *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
-                        p = p.offset(1);
+                    if *p == b',' as c_char {
+                        p = p.add(1);
                     } else {
-                        mustend = true_0 != 0;
+                        mustend = true;
                     }
                 }
                 p = skipwhite(p);
-                if !(mustend as ::core::ffi::c_int != 0
-                    && *p as ::core::ffi::c_int != endchar as ::core::ffi::c_int)
-                {
-                    continue;
+                if mustend && *p != endchar {
+                    if !skip {
+                        semsg(gettext(&raw const e_invarg2 as *const c_char), *argp);
+                    }
+                    break;
                 }
-                if !skip {
-                    semsg(
-                        gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                        *argp,
-                    );
-                }
-                break;
             }
-            if *p as ::core::ffi::c_int == endchar as ::core::ffi::c_int {
-                p = p.offset(1);
-                *argp = p;
-                return OK;
-            }
+            *p == endchar
+        };
+        if closed {
+            *argp = p.add(1);
+            return OK;
         }
+
         if !newargs.is_null() {
             ga_clear_strings(newargs);
         }
         if !default_args.is_null() {
             ga_clear_strings(default_args);
         }
-        return FAIL;
+        FAIL
     }
 }
 
-pub(crate) unsafe extern "C" fn get_func_arguments(
-    mut arg: *mut *mut ::core::ffi::c_char,
+/// Evaluate the arguments of a call, from the `(` at `*arg` to its `)`.
+///
+/// Stops at `MAX_FUNC_ARGS` less whatever a partial has already bound.
+///
+/// # Safety
+/// `*arg` points at the `(`; `argvars` has room for `MAX_FUNC_ARGS` values
+/// past `*argcount`.
+pub(crate) unsafe fn get_func_arguments(
+    arg: *mut *mut c_char,
     evalarg: *mut evalarg_T,
-    mut partial_argc: ::core::ffi::c_int,
-    mut argvars: *mut typval_T,
-    mut argcount: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+    partial_argc: c_int,
+    argvars: *mut typval_T,
+    argcount: *mut c_int,
+) -> c_int {
     unsafe {
-        let mut argp: *mut ::core::ffi::c_char = *arg;
-        let mut ret: ::core::ffi::c_int = OK;
-        while *argcount < MAX_FUNC_ARGS as ::core::ffi::c_int - partial_argc {
-            argp = skipwhite(argp.offset(1 as ::core::ffi::c_int as isize));
-            if *argp as ::core::ffi::c_int == ')' as ::core::ffi::c_int
-                || *argp as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-                || *argp as ::core::ffi::c_int == NUL
-            {
+        let mut argp = *arg;
+        let mut ret = OK;
+        while *argcount < MAX_FUNC_ARGS - partial_argc {
+            argp = skipwhite(argp.add(1)); // skip the '(' or ','
+            if *argp == b')' as c_char || *argp == b',' as c_char || *argp == NUL as c_char {
                 break;
             }
             if eval1(&raw mut argp, argvars.offset(*argcount as isize), evalarg) == FAIL {
                 ret = FAIL;
                 break;
-            } else {
-                *argcount += 1;
-                if *argp as ::core::ffi::c_int != ',' as ::core::ffi::c_int {
-                    break;
-                }
+            }
+            *argcount += 1;
+            if *argp != b',' as c_char {
+                break;
             }
         }
         argp = skipwhite(argp);
-        if *argp as ::core::ffi::c_int == ')' as ::core::ffi::c_int {
-            argp = argp.offset(1);
+        if *argp == b')' as c_char {
+            argp = argp.add(1);
         } else {
             ret = FAIL;
         }
         *arg = argp;
-        return ret;
+        ret
     }
 }
 
-pub unsafe extern "C" fn get_func_arity(
-    mut name: *const ::core::ffi::c_char,
-    mut required: *mut ::core::ffi::c_int,
-    mut optional: *mut ::core::ffi::c_int,
-    mut varargs: *mut bool,
-) -> ::core::ffi::c_int {
+/// How many arguments `name` takes: required, optional, and whether it also
+/// takes a `...`.  Answers `FAIL` when there is no such function.
+///
+/// # Safety
+/// `name` is NUL-terminated and the three out-parameters are writable.
+pub unsafe fn get_func_arity(
+    name: *const c_char,
+    required: *mut c_int,
+    optional: *mut c_int,
+    varargs: *mut bool,
+) -> c_int {
     unsafe {
-        let mut argcount: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut min_argcount: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut fdef: *const EvalFuncDef = find_internal_func(name);
+        let argcount;
+        let min_argcount;
+        let fdef = find_internal_func(name);
         if !fdef.is_null() {
-            argcount = (*fdef).max_argc as ::core::ffi::c_int;
-            min_argcount = (*fdef).min_argc as ::core::ffi::c_int;
-            *varargs = false_0 != 0;
+            argcount = (*fdef).max_argc as c_int;
+            min_argcount = (*fdef).min_argc as c_int;
+            *varargs = false;
         } else {
-            let mut fname_buf: [::core::ffi::c_char; 41] = [0; 41];
-            let mut tofree: *mut ::core::ffi::c_char =
-                ::core::ptr::null_mut::<::core::ffi::c_char>();
-            let mut error: ::core::ffi::c_int = FCERR_NONE as ::core::ffi::c_int;
-            let mut fname: *mut ::core::ffi::c_char = fname_trans_sid(
+            let mut fname_buf: [c_char; FLEN_FIXED as usize + 1] = [0; FLEN_FIXED as usize + 1];
+            let mut tofree: *mut c_char = ptr::null_mut();
+            let mut error = FCERR_NONE;
+            let fname = fname_trans_sid(
                 name,
-                &raw mut fname_buf as *mut ::core::ffi::c_char,
+                fname_buf.as_mut_ptr(),
                 &raw mut tofree,
                 &raw mut error,
             );
-            let mut ufunc: *mut ufunc_T = ::core::ptr::null_mut::<ufunc_T>();
-            if error == FCERR_NONE as ::core::ffi::c_int {
-                ufunc = find_func(fname);
-            }
-            xfree(tofree as *mut ::core::ffi::c_void);
+            let ufunc = if error == FCERR_NONE {
+                find_func(fname)
+            } else {
+                ptr::null_mut()
+            };
+            xfree(tofree as *mut c_void);
             if ufunc.is_null() {
                 return FAIL;
             }
@@ -306,23 +270,28 @@ pub unsafe extern "C" fn get_func_arity(
         }
         *required = min_argcount;
         *optional = argcount - min_argcount;
-        return OK;
+        OK
     }
 }
 
-pub(crate) unsafe extern "C" fn add_nr_var(
-    mut dp: *mut dict_T,
-    mut v: *mut dictitem_T,
-    mut name: *mut ::core::ffi::c_char,
-    mut nr: varnumber_T,
+/// Add one of `a:`'s fixed numbers, into a slot of the funccall's own
+/// `fc_fixvar` array rather than an allocation.
+///
+/// # Safety
+/// `v` is a `dictitem_T` whose key member has room for `name`, and `dp` is
+/// the dictionary it is being linked into.  `v` must outlive `dp`.
+pub(crate) unsafe fn add_nr_var(
+    dp: *mut dict_T,
+    v: *mut dictitem_T,
+    name: *mut c_char,
+    nr: varnumber_T,
 ) {
     unsafe {
-        strcpy(&raw mut (*v).di_key as *mut ::core::ffi::c_char, name);
-        (*v).di_flags =
-            (DI_FLAGS_RO as ::core::ffi::c_int | DI_FLAGS_FIX as ::core::ffi::c_int) as uint8_t;
+        strcpy((&raw mut (*v).di_key) as *mut c_char, name);
+        (*v).di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
         hash_add(
             &raw mut (*dp).dv_hashtab,
-            &raw mut (*v).di_key as *mut ::core::ffi::c_char,
+            (&raw mut (*v).di_key) as *mut c_char,
         );
         (*v).di_tv.v_type = VAR_NUMBER;
         (*v).di_tv.v_lock = VAR_FIXED;
@@ -330,39 +299,52 @@ pub(crate) unsafe extern "C" fn add_nr_var(
     }
 }
 
-pub(crate) unsafe extern "C" fn check_user_func_argcount(
-    mut fp: *mut ufunc_T,
-    mut argcount: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Whether `argcount` arguments can be given to `fp`: `FCERR_UNKNOWN` when
+/// they can, one of `FCERR_TOOFEW`/`FCERR_TOOMANY` when they cannot.
+///
+/// # Safety
+/// `fp` is a live function.
+pub(crate) unsafe fn check_user_func_argcount(fp: *mut ufunc_T, argcount: c_int) -> c_int {
     unsafe {
-        let regular_args: ::core::ffi::c_int = (*fp).uf_args.ga_len;
+        let regular_args = (*fp).uf_args.ga_len;
         if argcount < regular_args - (*fp).uf_def_args.ga_len {
-            return FCERR_TOOFEW as ::core::ffi::c_int;
+            FCERR_TOOFEW
         } else if (*fp).uf_varargs == 0 && argcount > regular_args {
-            return FCERR_TOOMANY as ::core::ffi::c_int;
+            FCERR_TOOMANY
+        } else {
+            FCERR_UNKNOWN
         }
-        return FCERR_UNKNOWN as ::core::ffi::c_int;
     }
 }
 
-pub(crate) unsafe extern "C" fn argv_add_base(
+/// Put `basetv` in front of the argument list, which is what makes
+/// `base->Method(a)` a call of `Method(base, a)`.
+///
+/// The arguments move into `new_argvars`, the caller's own array, because the
+/// one they came from has no room at the front.
+///
+/// # Safety
+/// `new_argvars` has room for `*argcount + 1` values, and the four
+/// out-parameters are writable.
+pub(crate) unsafe fn argv_add_base(
     basetv: *mut typval_T,
     argvars: *mut *mut typval_T,
-    argcount: *mut ::core::ffi::c_int,
+    argcount: *mut c_int,
     new_argvars: *mut typval_T,
-    argv_base: *mut ::core::ffi::c_int,
+    argv_base: *mut c_int,
 ) {
     unsafe {
         if !basetv.is_null() {
+            // Method call: base->Method()
             memmove(
-                new_argvars.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-                *argvars as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<typval_T>().wrapping_mul(*argcount as size_t),
+                new_argvars.add(1) as *mut c_void,
+                *argvars as *const c_void,
+                size_of::<typval_T>().wrapping_mul(*argcount as size_t),
             );
-            *new_argvars.offset(0 as ::core::ffi::c_int as isize) = *basetv;
+            *new_argvars = *basetv;
             *argcount += 1;
             *argvars = new_argvars;
-            *argv_base = 1 as ::core::ffi::c_int;
+            *argv_base = 1;
         }
     }
 }

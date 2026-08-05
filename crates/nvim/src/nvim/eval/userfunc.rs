@@ -3,7 +3,9 @@
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::{ptr, slice};
 
-use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_nl_or_nul};
+use crate::src::nvim::ascii::{
+    ascii_isdigit, ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul,
+};
 use crate::src::nvim::autocmd::{EVENT_FUNCUNDEFINED, apply_autocmds};
 use crate::src::nvim::charset::{getdigits, skiptowhite, skipwhite, vim_strsize};
 use crate::src::nvim::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
@@ -11,7 +13,9 @@ use crate::src::nvim::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::src::nvim::eval::funcs::{
     call_internal_func, call_internal_method, check_internal_func, find_internal_func,
 };
-use crate::src::nvim::eval::typval::{GARRAY_EMPTY, tv_is_func, tv_list_set_lock};
+use crate::src::nvim::eval::typval::{
+    GARRAY_EMPTY, TV_INITIAL_VALUE, tv_is_func, tv_list_set_lock,
+};
 use crate::src::nvim::eval::typval::{
     tv_clear, tv_copy, tv_dict_add, tv_dict_item_alloc, tv_dict_item_alloc_len,
     tv_dict_item_remove, tv_dict_unref, tv_get_number_chk, tv_list_append, tv_list_init_static,
@@ -229,6 +233,48 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_basetv: ptr::null_mut(),
     fe_found_var: false,
 };
+
+/// The name a `ufunc_T` carries in the flexible member at its end -- C's
+/// `UF2HIKEY`, and the key the function hashtable is indexed by.
+///
+/// # Safety
+/// `fp` is a live function.
+pub(crate) unsafe fn uf_name_ptr(fp: *mut ufunc_T) -> *mut c_char {
+    unsafe { (&raw mut (*fp).uf_name) as *mut c_char }
+}
+
+/// The innermost entry of the `:source`/function call stack: what C's
+/// `SOURCING_LNUM` and `SOURCING_NAME` macros read.
+///
+/// # Safety
+/// The exec stack is non-empty, which it is whenever anything is running.
+pub(crate) unsafe fn sourcing_entry() -> *mut estack_T {
+    unsafe {
+        let stack = &*exestack.ptr();
+        (stack.ga_data as *mut estack_T).offset(stack.ga_len as isize - 1)
+    }
+}
+
+/// The line number the innermost exec-stack entry is on.
+///
+/// # Safety
+/// As [`sourcing_entry`].
+pub(crate) unsafe fn sourcing_lnum() -> linenr_T {
+    unsafe { (*sourcing_entry()).es_lnum }
+}
+
+/// Append `s`, already owned, to a `char *` garray that has room for it.
+///
+/// # Safety
+/// `gap` is a `char *` garray with at least one free slot (the caller has
+/// just called `ga_grow`), and `s` is an allocation `ga_clear_strings` may
+/// free.
+pub(crate) unsafe fn ga_push_string(gap: *mut garray_T, s: *mut c_char) {
+    unsafe {
+        *((*gap).ga_data as *mut *mut c_char).offset((*gap).ga_len as isize) = s;
+        (*gap).ga_len += 1;
+    }
+}
 
 /// The `char *` items a string `garray_T` holds, as a slice.
 ///
