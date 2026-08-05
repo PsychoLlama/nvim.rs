@@ -169,7 +169,7 @@ pub const INT64_MIN: ::core::ffi::c_long =
     -9223372036854775807 as ::core::ffi::c_long - 1 as ::core::ffi::c_long;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
+pub const NUL: ::core::ffi::c_char = 0;
 pub const VARNUMBER_MAX: ::core::ffi::c_long = INT64_MAX;
 pub const VARNUMBER_MIN: ::core::ffi::c_long = INT64_MIN;
 pub const BAD_KEEP: ::core::ffi::c_int = -1 as ::core::ffi::c_int;

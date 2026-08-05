@@ -187,7 +187,7 @@ unsafe extern "C" fn do_unlet_var(
         let mut ret: ::core::ffi::c_int = OK;
         if (*lp).ll_tv.is_null() {
             let mut cc: ::core::ffi::c_int = *name_end as uint8_t as ::core::ffi::c_int;
-            *name_end = NUL as ::core::ffi::c_char;
+            *name_end = NUL;
             if *(*lp).ll_name as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
                 vim_unsetenv_ext((*lp).ll_name.offset(1 as ::core::ffi::c_int as isize));
             } else if do_unlet((*lp).ll_name, (*lp).ll_name_len, forceit != 0) == FAIL {
@@ -299,7 +299,7 @@ pub unsafe extern "C" fn do_unlet(
         let mut dict: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
         let mut ht: *mut hashtab_T =
             find_var_ht_dict(name, name_len, &raw mut varname, &raw mut dict);
-        if !ht.is_null() && *varname as ::core::ffi::c_int != NUL {
+        if !ht.is_null() && *varname != NUL {
             let mut d: *mut dict_T = get_current_funccal_dict(ht);
             if d.is_null() {
                 if ht == &raw mut (*globvardict.ptr()).dv_hashtab {

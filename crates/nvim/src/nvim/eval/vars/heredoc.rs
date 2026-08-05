@@ -18,7 +18,7 @@ pub unsafe extern "C" fn eval_one_expr_in_str(
         let mut block_start: *mut ::core::ffi::c_char =
             skipwhite(p.offset(1 as ::core::ffi::c_int as isize));
         let mut block_end: *mut ::core::ffi::c_char = block_start;
-        if *block_start as ::core::ffi::c_int == NUL {
+        if *block_start == NUL {
             semsg(
                 gettext(&raw const e_missing_close_curly_str as *const ::core::ffi::c_char),
                 p,
@@ -37,7 +37,7 @@ pub unsafe extern "C" fn eval_one_expr_in_str(
             return ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
         if evaluate {
-            *block_end = NUL as ::core::ffi::c_char;
+            *block_end = NUL;
             let mut expr_val: *mut ::core::ffi::c_char =
                 eval_to_string(block_start, false_0 != 0, false_0 != 0);
             *block_end = '}' as ::core::ffi::c_char;
@@ -68,16 +68,16 @@ unsafe extern "C" fn eval_all_expr_in_str(
             80 as ::core::ffi::c_int,
         );
         let mut p: *mut ::core::ffi::c_char = str;
-        while *p as ::core::ffi::c_int != NUL {
+        while *p != NUL {
             let mut escaped_brace: bool = false_0 != 0;
             let mut lit_start: *mut ::core::ffi::c_char = p;
             while *p as ::core::ffi::c_int != '{' as ::core::ffi::c_int
                 && *p as ::core::ffi::c_int != '}' as ::core::ffi::c_int
-                && *p as ::core::ffi::c_int != NUL
+                && *p != NUL
             {
                 p = p.offset(1);
             }
-            if *p as ::core::ffi::c_int != NUL
+            if *p != NUL
                 && *p as ::core::ffi::c_int
                     == *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             {
@@ -92,7 +92,7 @@ unsafe extern "C" fn eval_all_expr_in_str(
                 return ::core::ptr::null_mut::<::core::ffi::c_char>();
             }
             ga_concat_len(&raw mut ga, lit_start, p.offset_from(lit_start) as size_t);
-            if *p as ::core::ffi::c_int == NUL {
+            if *p == NUL {
                 break;
             }
             if escaped_brace {
@@ -129,7 +129,7 @@ pub unsafe extern "C" fn heredoc_get(
         if !nl_ptr.is_null() {
             heredoc_in_string = true_0 != 0;
             line_arg = nl_ptr.offset(1 as ::core::ffi::c_int as isize);
-            *nl_ptr = NUL as ::core::ffi::c_char;
+            *nl_ptr = NUL;
         } else if (*eap).ea_getline.is_none() {
             emsg(gettext(
                 (e_cannot_use_heredoc_here.ptr() as *const _) as *const ::core::ffi::c_char,
@@ -145,7 +145,7 @@ pub unsafe extern "C" fn heredoc_get(
                 b"trim\0".as_ptr() as *const ::core::ffi::c_char,
                 4 as size_t,
             ) == 0 as ::core::ffi::c_int
-                && (*cmd.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
+                && (*cmd.offset(4 as ::core::ffi::c_int as isize) == NUL
                     || ascii_iswhite(
                         *cmd.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     ) as ::core::ffi::c_int
@@ -164,7 +164,7 @@ pub unsafe extern "C" fn heredoc_get(
                     b"eval\0".as_ptr() as *const ::core::ffi::c_char,
                     4 as size_t,
                 ) == 0 as ::core::ffi::c_int
-                    && (*cmd.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
+                    && (*cmd.offset(4 as ::core::ffi::c_int as isize) == NUL
                         || ascii_iswhite(
                             *cmd.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         ) as ::core::ffi::c_int
@@ -177,12 +177,10 @@ pub unsafe extern "C" fn heredoc_get(
             }
         }
         let comment_char: ::core::ffi::c_char = '"' as ::core::ffi::c_char;
-        if *cmd as ::core::ffi::c_int != NUL
-            && *cmd as ::core::ffi::c_int != comment_char as ::core::ffi::c_int
-        {
+        if *cmd != NUL && *cmd as ::core::ffi::c_int != comment_char as ::core::ffi::c_int {
             marker = skipwhite(cmd);
             let mut p_0: *mut ::core::ffi::c_char = skiptowhite(marker);
-            if *skipwhite(p_0) as ::core::ffi::c_int != NUL
+            if *skipwhite(p_0) != NUL
                 && *skipwhite(p_0) as ::core::ffi::c_int != comment_char as ::core::ffi::c_int
             {
                 semsg(
@@ -191,7 +189,7 @@ pub unsafe extern "C" fn heredoc_get(
                 );
                 return ::core::ptr::null_mut::<list_T>();
             }
-            *p_0 = NUL as ::core::ffi::c_char;
+            *p_0 = NUL;
             if !script_get
                 && *(*__ctype_b_loc()).offset(*marker as uint8_t as ::core::ffi::c_int as isize)
                     as ::core::ffi::c_int
@@ -218,7 +216,7 @@ pub unsafe extern "C" fn heredoc_get(
             let mut mi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             let mut ti: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             if heredoc_in_string {
-                if *line_arg as ::core::ffi::c_int == NUL {
+                if *line_arg == NUL {
                     if !script_get {
                         semsg(
                             gettext(
@@ -236,14 +234,14 @@ pub unsafe extern "C" fn heredoc_get(
                     if next_line.is_null() {
                         line_arg = line_arg.offset(strlen(line_arg) as isize);
                     } else {
-                        *next_line = NUL as ::core::ffi::c_char;
+                        *next_line = NUL;
                         line_arg = next_line.offset(1 as ::core::ffi::c_int as isize);
                     }
                 }
             } else {
                 xfree(theline as *mut ::core::ffi::c_void);
                 theline = (*eap).ea_getline.expect("non-null function pointer")(
-                    NUL,
+                    NUL as ::core::ffi::c_int,
                     (*eap).cookie,
                     0 as ::core::ffi::c_int,
                     false_0 != 0,
@@ -273,8 +271,7 @@ pub unsafe extern "C" fn heredoc_get(
             if eval_failed {
                 continue;
             }
-            if text_indent_len == -1 as ::core::ffi::c_int && *theline as ::core::ffi::c_int != NUL
-            {
+            if text_indent_len == -1 as ::core::ffi::c_int && *theline != NUL {
                 let mut p_1: *mut ::core::ffi::c_char = theline;
                 text_indent_len = 0 as ::core::ffi::c_int;
                 while ascii_iswhite(*p_1 as ::core::ffi::c_int) {

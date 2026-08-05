@@ -77,7 +77,7 @@ pub unsafe fn ex_let(mut eap: *mut exarg_T) {
                 tv_list_set_ret(&raw mut rettv, l);
                 if (*eap).skip == 0 {
                     op[0 as ::core::ffi::c_int as usize] = '=' as ::core::ffi::c_char;
-                    op[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+                    op[1 as ::core::ffi::c_int as usize] = NUL;
                     ex_let_vars(
                         (*eap).arg,
                         &raw mut rettv,
@@ -94,7 +94,7 @@ pub unsafe fn ex_let(mut eap: *mut exarg_T) {
         }
         rettv.v_type = VAR_UNKNOWN;
         op[0 as ::core::ffi::c_int as usize] = '=' as ::core::ffi::c_char;
-        op[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+        op[1 as ::core::ffi::c_int as usize] = NUL;
         if *expr as ::core::ffi::c_int != '=' as ::core::ffi::c_int {
             if !vim_strchr(
                 b"+-*/%.\0".as_ptr() as *const ::core::ffi::c_char,
@@ -313,7 +313,7 @@ unsafe extern "C" fn skip_var_one(
 ) -> *const ::core::ffi::c_char {
     unsafe {
         if *arg as ::core::ffi::c_int == '@' as ::core::ffi::c_int
-            && *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
+            && *arg.offset(1 as ::core::ffi::c_int as isize) != NUL
         {
             return arg.offset(2 as ::core::ffi::c_int as isize);
         }
@@ -376,7 +376,7 @@ unsafe extern "C" fn ex_let_env(
             let mut tofree: *mut ::core::ffi::c_char =
                 ::core::ptr::null_mut::<::core::ffi::c_char>();
             let c1: ::core::ffi::c_char = *name.offset(len as isize);
-            *name.offset(len as isize) = NUL as ::core::ffi::c_char;
+            *name.offset(len as isize) = NUL;
             let mut p: *const ::core::ffi::c_char = tv_get_string_chk(tv);
             if !p.is_null()
                 && !op.is_null()
@@ -434,7 +434,7 @@ unsafe extern "C" fn ex_let_option(
             return ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
         let c1: ::core::ffi::c_char = *p;
-        *p = NUL as ::core::ffi::c_char;
+        *p = NUL;
         let mut is_tty_opt: bool = is_tty_option(arg);
         let mut hidden: bool = is_option_hidden(opt_idx);
         let mut curval: OptVal = if is_tty_opt as ::core::ffi::c_int != 0 {

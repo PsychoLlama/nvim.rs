@@ -69,10 +69,10 @@ pub unsafe extern "C" fn var_redir_start(
         ));
         if (*redir_endp.ptr()).is_null()
             || (*redir_lval.get()).ll_name.is_null()
-            || *redir_endp.get() as ::core::ffi::c_int != NUL
+            || *redir_endp.get() != NUL
         {
             clear_lval(redir_lval.get());
-            if !(*redir_endp.ptr()).is_null() && *redir_endp.get() as ::core::ffi::c_int != NUL {
+            if !(*redir_endp.ptr()).is_null() && *redir_endp.get() != NUL {
                 semsg(
                     gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
                     redir_endp.get(),

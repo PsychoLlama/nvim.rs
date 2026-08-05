@@ -462,7 +462,7 @@ pub unsafe extern "C" fn var_exists(mut var: *const ::core::ffi::c_char) -> bool
                 }
             }
         }
-        if *var as ::core::ffi::c_int != NUL {
+        if *var != NUL {
             n = false_0 != 0;
         }
         xfree(tofree as *mut ::core::ffi::c_void);

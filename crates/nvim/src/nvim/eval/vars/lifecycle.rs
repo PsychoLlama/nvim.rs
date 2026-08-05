@@ -298,7 +298,7 @@ pub unsafe extern "C" fn init_var_dict(
         (*dict_var).di_flags =
             (DI_FLAGS_RO as ::core::ffi::c_int | DI_FLAGS_FIX as ::core::ffi::c_int) as uint8_t;
         *(&raw mut (*dict_var).di_key as *mut ::core::ffi::c_char)
-            .offset(0 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
+            .offset(0 as ::core::ffi::c_int as isize) = NUL;
         QUEUE_INIT(&raw mut (*dict).watchers);
     }
 }

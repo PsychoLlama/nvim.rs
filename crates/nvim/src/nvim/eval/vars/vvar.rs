@@ -146,7 +146,7 @@ pub unsafe extern "C" fn set_vim_var_char(mut c: ::core::ffi::c_int) {
         let mut buf: [::core::ffi::c_char; 7] = [0; 7];
         let mut buflen: ::core::ffi::c_int =
             utf_char2bytes(c, &raw mut buf as *mut ::core::ffi::c_char);
-        buf[buflen as usize] = NUL as ::core::ffi::c_char;
+        buf[buflen as usize] = NUL;
         set_vim_var_string(
             VV_CHAR,
             &raw mut buf as *mut ::core::ffi::c_char,
@@ -215,7 +215,7 @@ pub unsafe extern "C" fn set_reg_var(mut c: ::core::ffi::c_int) {
         } else {
             regname[0 as ::core::ffi::c_int as usize] = c as ::core::ffi::c_char;
         }
-        regname[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+        regname[1 as ::core::ffi::c_int as usize] = NUL;
         let mut tv: *mut typval_T = get_vim_var_tv(VV_REG);
         if (*tv).vval.v_string.is_null()
             || *(*tv).vval.v_string.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -300,7 +300,7 @@ pub unsafe extern "C" fn set_cmdarg(
                         b" ++nobin\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                 } else {
-                    *newval = NUL as ::core::ffi::c_char;
+                    *newval = NUL;
                 }
                 if rc >= 0 as ::core::ffi::c_int {
                     xlen = xlen.wrapping_add(rc as size_t);

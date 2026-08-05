@@ -33,7 +33,7 @@ pub unsafe extern "C" fn set_var_const(
         let mut ht: *mut hashtab_T =
             find_var_ht_dict(name, name_len, &raw mut varname, &raw mut dict);
         let watched: bool = tv_dict_is_watched(dict);
-        if ht.is_null() || *varname as ::core::ffi::c_int == NUL {
+        if ht.is_null() || *varname == NUL {
             semsg(
                 gettext(&raw const e_illvar as *const ::core::ffi::c_char),
                 name,
@@ -303,7 +303,7 @@ pub unsafe extern "C" fn var_wrong_func_name(
 pub unsafe extern "C" fn valid_varname(mut varname: *const ::core::ffi::c_char) -> bool {
     unsafe {
         let mut p: *const ::core::ffi::c_char = varname;
-        while *p as ::core::ffi::c_int != NUL {
+        while *p != NUL {
             if !eval_isnamec1(*p as uint8_t as ::core::ffi::c_int)
                 && (p == varname || !ascii_isdigit(*p as ::core::ffi::c_int))
                 && *p as ::core::ffi::c_int != AUTOLOAD_CHAR

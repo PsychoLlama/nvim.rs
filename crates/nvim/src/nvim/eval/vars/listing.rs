@@ -333,7 +333,7 @@ unsafe extern "C" fn list_one_var_a(
         } else {
             msg_putchar('\n' as ::core::ffi::c_int);
         }
-        if *prefix as ::core::ffi::c_int != NUL {
+        if *prefix != NUL {
             msg_puts(prefix);
         }
         if !name.is_null() {

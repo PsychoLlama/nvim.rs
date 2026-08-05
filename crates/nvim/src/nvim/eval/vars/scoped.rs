@@ -46,9 +46,7 @@ unsafe extern "C" fn get_var_from(
                     if do_change_curbuf {
                         curbuf.set(buf);
                     }
-                    if *varname.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == NUL
-                    {
+                    if *varname.offset(1 as ::core::ffi::c_int as isize) == NUL {
                         let mut opts: *mut dict_T = get_winbuf_options(
                             (htname == 'b' as ::core::ffi::c_int) as ::core::ffi::c_int,
                         );
@@ -60,7 +58,7 @@ unsafe extern "C" fn get_var_from(
                         done = true_0 != 0;
                     }
                     curbuf.set(save_curbuf);
-                } else if *varname as ::core::ffi::c_int == NUL {
+                } else if *varname == NUL {
                     let mut v: *const ScopeDictDictItem = ::core::ptr::null::<ScopeDictDictItem>();
                     if htname == 'b' as ::core::ffi::c_int {
                         v = &raw mut (*buf).b_bufvar;
@@ -187,7 +185,7 @@ pub(crate) unsafe extern "C" fn tv_to_optval(
                     idx = idx.wrapping_add(1);
                 }
                 if idx == 0 as ::core::ffi::c_uint
-                    || *(*tv).vval.v_string.offset(idx as isize) as ::core::ffi::c_int != NUL
+                    || *(*tv).vval.v_string.offset(idx as isize) != NUL
                 {
                     err = true_0 != 0;
                     semsg(
