@@ -40,9 +40,9 @@ use crate::src::nvim::runtime::script_is_lua;
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
 use crate::src::nvim::types::{
     Buffer, Dict, Error, ErrorType, HlMessage, Integer, Map_int_ptr_t, Object, String_0, Tabpage,
-    TryState, VarLockStatus, VarType, Window, buf_T, colnr_T, except_type_T, fmarkv_T, int64_t,
-    kObjectTypeNil, linenr_T, msglist_T, object, object_data, pos_T, ptr_t, scid_T, sctx_T, size_t,
-    tabpage_T, uint32_t, uint64_t, win_T,
+    TryState, Window, buf_T, colnr_T, except_type_T, fmarkv_T, int64_t, kObjectTypeNil, linenr_T,
+    msglist_T, object, object_data, pos_T, ptr_t, scid_T, sctx_T, size_t, tabpage_T, uint32_t,
+    uint64_t, win_T,
 };
 
 mod keydict;
@@ -55,8 +55,6 @@ pub(crate) use self::text::*;
 pub(crate) use self::value::*;
 pub(crate) use self::vimdict::*;
 
-const VAR_UNKNOWN: VarType = 0;
-const VAR_UNLOCKED: VarLockStatus = 0;
 const ET_ERROR: except_type_T = 1;
 
 /// `dictitem_T.di_flags`: the key cannot be changed, cannot be changed right

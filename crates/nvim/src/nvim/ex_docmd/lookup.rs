@@ -12,7 +12,6 @@ use core::ptr;
 
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::charset::skipwhite;
-use crate::src::nvim::eval::typval::VAR_STRING;
 use crate::src::nvim::eval::typval::tv_get_string;
 use crate::src::nvim::ex_docmd::address::skip_range;
 use crate::src::nvim::ex_docmd::modifier::{CMDMODS, shared_prefix};
@@ -25,7 +24,7 @@ use crate::src::nvim::memory::xstrdup;
 use crate::src::nvim::message::iemsg;
 use crate::src::nvim::os::libc::{gettext, strncmp};
 use crate::src::nvim::types::{
-    EvalFuncData, cmdidx_T, exarg_T, expand_T, size_t, typval_T, uint32_t,
+    EvalFuncData, VAR_STRING, cmdidx_T, exarg_T, expand_T, size_t, typval_T, uint32_t,
 };
 use crate::src::nvim::usercmd::{expand_user_command_name, find_ucmd, get_user_command_name};
 

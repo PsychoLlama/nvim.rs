@@ -15,7 +15,8 @@ use crate::src::nvim::register::{
     PLUS_REGISTER, STAR_REGISTER, kMTBlockWise, kMTCharWise, kMTLineWise, kMTUnknown,
 };
 use crate::src::nvim::types::{
-    AdditionalData, String_0, VarType, ptrdiff_t, size_t, ssize_t, yankreg_T,
+    AdditionalData, String_0, VAR_LIST, VAR_NUMBER, VAR_STRING, ptrdiff_t, size_t, ssize_t,
+    yankreg_T,
 };
 
 use crate::src::nvim::api::private::helpers::cstr_to_string;
@@ -27,9 +28,6 @@ use crate::src::nvim::os::libc::strlen;
 use crate::src::nvim::register::{
     free_register, get_y_previous, get_y_register, update_yankreg_width,
 };
-pub const VAR_LIST: VarType = 4;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
 
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22;

@@ -114,8 +114,8 @@ use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, CdCause,
     ChangedtickDictItem, ExtmarkOp, FileID, FloatRelative, Map_int_ptr_t, MarkAdjustMode, MarkTree,
-    MetaIndex, OptInt, OptVal, OptValData, OptValType, ScopeType, SpecialVarValue, StlClickRecord,
-    String_0, StringBuilder, Timestamp, UndoObjectType, VarLockStatus, VarType, WinInfo, WinSplit,
+    MetaIndex, OptInt, OptVal, OptValData, OptValType, SpecialVarValue, StlClickRecord, String_0,
+    StringBuilder, Timestamp, UndoObjectType, VAR_FIXED, VAR_NUMBER, VAR_SCOPE, WinInfo, WinSplit,
     WinStyle, aco_save_T, bfa_values, bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T, colnr_T,
     cstack_T, dictitem_T, dobuf_action_values, dobuf_start_values, etype_T, exarg_T, except_T,
     fmark_T, fmarkv_T, fuzmatch_str_T, garray_T, getf_values, handle_T, hashitem_T, int16_t,
@@ -147,24 +147,9 @@ unsafe extern "C" {
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISdigit: C2Rust_Unnamed = 2048;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub const kAlignLeft: AlignTextPos = 0;

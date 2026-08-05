@@ -9,6 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::{VAR_DICT, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
 
 /// C's `NUMBUFLEN`: the size of the scratch buffer `tv_get_string_buf_chk`
 /// and friends format a non-string value into.

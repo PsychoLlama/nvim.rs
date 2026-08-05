@@ -5,6 +5,9 @@
 use super::*;
 
 pub type BoolVarValue = ::core::ffi::c_uint;
+/// The two `VAR_BOOL` values: `v:false` and `v:true`.
+pub const kBoolVarFalse: BoolVarValue = 0;
+pub const kBoolVarTrue: BoolVarValue = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Callback {
@@ -30,10 +33,53 @@ pub struct DictWatcher {
     pub needs_free: bool,
 }
 pub type ListLenSpecials = ::core::ffi::c_int;
+/// The negative lengths `tv_list_alloc` accepts in place of a real count.
+pub const kListLenUnknown: ListLenSpecials = -1;
+pub const kListLenShouldKnow: ListLenSpecials = -2;
+pub const kListLenMayKnow: ListLenSpecials = -3;
 pub type ScopeType = ::core::ffi::c_uint;
+/// `dv_scope`: whether a dict is a scope dict, and whether it is the
+/// function-local one `l:` refers to by default.
+pub const VAR_NO_SCOPE: ScopeType = 0;
+pub const VAR_SCOPE: ScopeType = 1;
+pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub type SpecialVarValue = ::core::ffi::c_uint;
+/// The only `VAR_SPECIAL` value: `v:null`.
+pub const kSpecialVarNull: SpecialVarValue = 0;
 pub type VarLockStatus = ::core::ffi::c_uint;
+/// `v_lock`: `:lockvar` sets `VAR_LOCKED`; `VAR_FIXED` is a slot that
+/// cannot be unlocked at all (`v:` variables, `a:` arguments).
+pub const VAR_UNLOCKED: VarLockStatus = 0;
+pub const VAR_LOCKED: VarLockStatus = 1;
+pub const VAR_FIXED: VarLockStatus = 2;
 pub type VarType = ::core::ffi::c_uint;
+/// `typval_T::v_type` — which arm of `typval_T::vval` is live.
+pub const VAR_UNKNOWN: VarType = 0;
+pub const VAR_NUMBER: VarType = 1;
+pub const VAR_STRING: VarType = 2;
+pub const VAR_FUNC: VarType = 3;
+pub const VAR_LIST: VarType = 4;
+pub const VAR_DICT: VarType = 5;
+pub const VAR_FLOAT: VarType = 6;
+pub const VAR_BOOL: VarType = 7;
+pub const VAR_SPECIAL: VarType = 8;
+pub const VAR_PARTIAL: VarType = 9;
+pub const VAR_BLOB: VarType = 10;
+/// The numbers `type()` answers with.  A separate enum from [`VarType`]:
+/// funcref and partial share one code, and the codes are the documented
+/// `v:t_*` values, so they are not free to follow `v_type`.
+pub type VarTypeCode = ::core::ffi::c_uint;
+pub const VAR_TYPE_NUMBER: VarTypeCode = 0;
+pub const VAR_TYPE_STRING: VarTypeCode = 1;
+pub const VAR_TYPE_FUNC: VarTypeCode = 2;
+pub const VAR_TYPE_LIST: VarTypeCode = 3;
+pub const VAR_TYPE_DICT: VarTypeCode = 4;
+pub const VAR_TYPE_FLOAT: VarTypeCode = 5;
+pub const VAR_TYPE_BOOL: VarTypeCode = 6;
+pub const VAR_TYPE_SPECIAL: VarTypeCode = 7;
+pub const VAR_TYPE_BLOB: VarTypeCode = 10;
+/// Longest variable name `eval_variable` will look up without allocating.
+pub const VAR_SHORT_LEN: ::core::ffi::c_uint = 20;
 pub type blob_T = blobvar_S;
 #[derive(Copy, Clone)]
 #[repr(C)]

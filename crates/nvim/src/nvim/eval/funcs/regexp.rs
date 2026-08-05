@@ -3,8 +3,8 @@
 
 use super::args::{Args, frame};
 use super::{
-    FAIL, NSUBEXP, SomeMatchType, VAR_BOOL, VAR_LIST, VAR_STRING, kListLenMayKnow, kListLenUnknown,
-    kSomeMatch, kSomeMatchEnd, kSomeMatchList, kSomeMatchStr, kSomeMatchStrPos, tv_get_buf,
+    FAIL, NSUBEXP, SomeMatchType, kSomeMatch, kSomeMatchEnd, kSomeMatchList, kSomeMatchStr,
+    kSomeMatchStrPos, tv_get_buf,
 };
 use crate::src::nvim::eval::encode::encode_tv2echo;
 use crate::src::nvim::eval::typval::{
@@ -26,8 +26,8 @@ use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree};
 use crate::src::nvim::types::{
-    EvalFuncData, buf_T, colnr_T, dict_T, linenr_T, list_T, listitem_T, regmatch_T, regprog_T,
-    typval_T, varnumber_T,
+    EvalFuncData, VAR_BOOL, VAR_LIST, VAR_STRING, buf_T, colnr_T, dict_T, kListLenMayKnow,
+    kListLenUnknown, linenr_T, list_T, listitem_T, regmatch_T, regprog_T, typval_T, varnumber_T,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;

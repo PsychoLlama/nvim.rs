@@ -38,30 +38,14 @@ use crate::src::nvim::types::{
     DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict,
     Error, Integer, KeyDict_empty, KeyDict_exec_opts, KeyValuePair, LuaRetMode,
     MsgpackRpcRequestHandler, Object, OptIndex, OptScope, OptVal, OptValData, OptValType,
-    ScopeType, SpecialVarValue, String_0, StringBuilder, Tabpage, VarLockStatus, VarType, VirtText,
-    VirtTextChunk, Window, buf_T, colnr_T, int64_t, kFalse, kObjectTypeArray, kObjectTypeDict,
-    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, lua_State, object,
-    object_data as C2Rust_Unnamed, schar_T, sctx_T, size_t, tabpage_T, uint8_t, uint16_t, uint32_t,
-    uint64_t, win_T,
+    SpecialVarValue, String_0, StringBuilder, Tabpage, VirtText, VirtTextChunk, Window, buf_T,
+    colnr_T, int64_t, kFalse, kObjectTypeArray, kObjectTypeDict, kObjectTypeInteger,
+    kObjectTypeNil, kObjectTypeString, lua_State, object, object_data as C2Rust_Unnamed, schar_T,
+    sctx_T, size_t, tabpage_T, uint8_t, uint16_t, uint32_t, uint64_t, win_T,
 };
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const kRetObject: LuaRetMode = 0;
 pub const OPT_GLOBAL: C2Rust_Unnamed_17 = 1;

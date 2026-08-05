@@ -114,38 +114,23 @@ use crate::src::nvim::types::{
     KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
     KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, KeyValuePair, LuaRef,
     LuaRetMode, MessageData, MessageType, MotionType, NS, Object, OptScope, OptVal, OptValData,
-    OptValType, RemapValues, ScopeType, ScreenGrid, SignTextAttrs, SpecialVarValue, StlClickRecord,
-    String_0, StringBuilder, Tabpage, TerminalOptions, TryState, VV_LNUM, VV_RELNUM, VV_VIRTNUM,
-    VarLockStatus, VarType, Window, bln_values, buf_T, bufref_T, dictitem_T, dobuf_action_values,
-    dobuf_start_values, except_T, foldinfo_T, handle_T, hlf_T, int64_t, kCdScopeGlobal, kFalse,
-    kNone, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
-    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
-    kTrue, key_extra, key_value_pair, linenr_T, mpack_token_type_t, msg_data, msglist_T, object,
-    object_data as C2Rust_Unnamed, pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T,
-    stl_hlrec_t, tabpage_T, uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
+    OptValType, RemapValues, ScreenGrid, SignTextAttrs, SpecialVarValue, StlClickRecord, String_0,
+    StringBuilder, Tabpage, TerminalOptions, TryState, VV_LNUM, VV_RELNUM, VV_VIRTNUM, Window,
+    bln_values, buf_T, bufref_T, dictitem_T, dobuf_action_values, dobuf_start_values, except_T,
+    foldinfo_T, handle_T, hlf_T, int64_t, kCdScopeGlobal, kFalse, kNone, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil,
+    kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kTrue, key_extra, key_value_pair,
+    linenr_T, mpack_token_type_t, msg_data, msglist_T, object, object_data as C2Rust_Unnamed,
+    pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T, stl_hlrec_t, tabpage_T,
+    uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::src::nvim::window::{
     global_stl_height, goto_tabpage_tp, goto_tabpage_win, win_find_tabpage,
 };
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kMessageTypeNotification: MessageType = 2;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptScopeBuf: OptScope = 2;

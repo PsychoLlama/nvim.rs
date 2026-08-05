@@ -39,11 +39,11 @@ use crate::src::nvim::os::libc::{__assert_fail, memchr, memset, strcasecmp};
 use crate::src::nvim::runtime::script_autoload;
 use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::{
-    BoolVarValue, Buffer, Error, Map_int_ptr_t, ScopeType, SpecialVarValue, String_0, Tabpage,
-    TryState, VarLockStatus, VarType, Window, aco_save_T, buf_T, cmdmod_T, colnr_T, dict_T,
-    dictitem_T, except_T, handle_T, intptr_t, linenr_T, lua_Integer, lua_Number, lua_State,
-    luaL_Reg, msglist_T, pos_T, ptr_t, ptrdiff_t, regmatch_T, regprog_T, size_t, ssize_t,
-    switchwin_T, tabpage_T, typval_T, typval_vval_union, uint32_t, vimconv_T, win_T, win_execute_T,
+    BoolVarValue, Buffer, Error, Map_int_ptr_t, SpecialVarValue, String_0, Tabpage, TryState,
+    VAR_UNKNOWN, VAR_UNLOCKED, Window, aco_save_T, buf_T, cmdmod_T, colnr_T, dict_T, dictitem_T,
+    except_T, handle_T, intptr_t, linenr_T, lua_Integer, lua_Number, lua_State, luaL_Reg,
+    msglist_T, pos_T, ptr_t, ptrdiff_t, regmatch_T, regprog_T, size_t, ssize_t, switchwin_T,
+    tabpage_T, typval_T, typval_vval_union, uint32_t, vimconv_T, win_T, win_execute_T,
 };
 use crate::src::nvim::window::win_find_tabpage;
 unsafe extern "C" {
@@ -54,24 +54,9 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
 pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_12 = 4096;
 pub const CMOD_LOCKMARKS: C2Rust_Unnamed_12 = 2048;

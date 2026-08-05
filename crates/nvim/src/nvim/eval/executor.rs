@@ -11,15 +11,16 @@
 //! would be unsound.
 
 use crate::src::nvim::eval::typval::{
-    FAIL, OK, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
-    VAR_STRING, VAR_UNKNOWN, tv_clear, tv_get_number, tv_get_string, tv_get_string_buf,
-    tv_list_extend,
+    FAIL, OK, tv_clear, tv_get_number, tv_get_string, tv_get_string_buf, tv_list_extend,
 };
 use crate::src::nvim::eval::{grow_string_tv, num_divide, num_modulus};
 use crate::src::nvim::garray::ga_grow;
 use crate::src::nvim::os::libc::{abort, memmove};
 use crate::src::nvim::strings::concat_str;
-use crate::src::nvim::types::{blob_T, float_T, listitem_T, typval_T, uint8_t, varnumber_T};
+use crate::src::nvim::types::{
+    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
+    VAR_STRING, VAR_UNKNOWN, blob_T, float_T, listitem_T, typval_T, uint8_t, varnumber_T,
+};
 use core::ffi::{CStr, c_char, c_int};
 
 /// The size of the buffer `tv_get_string_buf` formats a number into.

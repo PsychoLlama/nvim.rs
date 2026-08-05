@@ -1,5 +1,6 @@
 use super::*;
 use crate::src::nvim::pos::equalpos;
+use crate::src::nvim::types::VAR_STRING;
 
 /// Switch to a window for executing user code.
 /// Caller must call win_execute_after() later regardless of return value.

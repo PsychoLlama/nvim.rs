@@ -37,8 +37,8 @@ use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::runtime::{getsourceline, source_runtime};
 use crate::src::nvim::state::MODE_LANGMAP;
 use crate::src::nvim::types::{
-    BoolVarValue, EvalFuncData, OptInt, VarType, exarg_T, garray_T, int16_t, list_T, typval_T,
-    varnumber_T, win_T,
+    BoolVarValue, EvalFuncData, OptInt, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, exarg_T,
+    garray_T, int16_t, list_T, typval_T, varnumber_T, win_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -51,10 +51,6 @@ const OK: c_int = 1;
 const FAIL: c_int = 0;
 /// Highlight ids used by the `:digraphs` listing.
 
-const VAR_UNKNOWN: VarType = 0;
-const VAR_STRING: VarType = 2;
-const VAR_LIST: VarType = 4;
-const VAR_BOOL: VarType = 7;
 const K_BOOL_VAR_FALSE: BoolVarValue = 0;
 const K_BOOL_VAR_TRUE: BoolVarValue = 1;
 

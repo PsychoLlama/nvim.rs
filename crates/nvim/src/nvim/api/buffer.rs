@@ -39,33 +39,17 @@ use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTy
 use crate::src::nvim::types::{
     AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, Dict, Error,
     ExtmarkOp, FloatRelative, Integer, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty,
-    KeyDict_keymap, KeyValuePair, LuaRef, LuaRetMode, MarkAdjustMode, MarkGet, Object, ScopeType,
-    SpecialVarValue, String_0, TryState, UndoObjectType, VarLockStatus, VarType, WinSplit,
-    WinStyle, aco_save_T, bcount_t, buf_T, colnr_T, dobuf_action_values, dobuf_start_values,
-    except_T, fmark_T, int64_t, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil,
-    kObjectTypeString, key_value_pair, linenr_T, lua_State, msglist_T, object,
-    object_data as C2Rust_Unnamed, pos_T, ptrdiff_t, size_t, tabpage_T, u_header_T, uint64_t,
-    win_T,
+    KeyDict_keymap, KeyValuePair, LuaRef, LuaRetMode, MarkAdjustMode, MarkGet, Object,
+    SpecialVarValue, String_0, TryState, UndoObjectType, WinSplit, WinStyle, aco_save_T, bcount_t,
+    buf_T, colnr_T, dobuf_action_values, dobuf_start_values, except_T, fmark_T, int64_t,
+    kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, key_value_pair,
+    linenr_T, lua_State, msglist_T, object, object_data as C2Rust_Unnamed, pos_T, ptrdiff_t,
+    size_t, tabpage_T, u_header_T, uint64_t, win_T,
 };
 use crate::src::nvim::undo::u_save_buf;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub const kAlignLeft: AlignTextPos = 0;

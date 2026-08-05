@@ -30,32 +30,14 @@ use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{__assert_fail, memmove, strcmp, strlen, strstr};
 use crate::src::nvim::strings::reverse_text;
 use crate::src::nvim::types::{
-    BoolVarValue, EvalFuncData, ListLenSpecials, ScopeType, SpecialVarValue, VV_KEY, VV_VAL,
-    VarLockStatus, VarType, blob_T, dict_T, dictitem_T, garray_T, hashitem_T, hashtab_T, int64_t,
-    list_T, listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
-    vimconv_T,
+    BoolVarValue, EvalFuncData, SpecialVarValue, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FIXED, VAR_LIST,
+    VAR_LOCKED, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_KEY, VV_VAL, VarLockStatus,
+    blob_T, dict_T, dictitem_T, garray_T, hashitem_T, hashtab_T, int64_t, kListLenUnknown, list_T,
+    listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T, vimconv_T,
 };
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const kListLenMayKnow: ListLenSpecials = -3;
-pub const kListLenUnknown: ListLenSpecials = -1;
 pub type filtermap_T = ::core::ffi::c_uint;
 pub const FILTERMAP_FOREACH: filtermap_T = 3;
 pub const FILTERMAP_MAPNEW: filtermap_T = 2;

@@ -36,35 +36,20 @@ use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::runtime::do_source;
 use crate::src::nvim::strings::vim_strsave_escaped;
 use crate::src::nvim::types::{
-    BoolVarValue, CMD_index, CdCause, FILE, OptInt, ScopeType, SpecialVarValue, VV_THIS_SESSION,
-    VarLockStatus, VarType, aentry_T, buf_T, dict_T, dictitem_T, exarg_T, float_T, frame_T,
-    garray_T, hashitem_T, hashtab_T, int64_t, ptrdiff_t, size_t, tabpage_T, var_flavour_T, win_T,
+    BoolVarValue, CMD_index, CdCause, FILE, OptInt, SpecialVarValue, VAR_FLAVOUR_SESSION,
+    VAR_FLOAT, VAR_NUMBER, VAR_STRING, VV_THIS_SESSION, aentry_T, buf_T, dict_T, dictitem_T,
+    exarg_T, float_T, frame_T, garray_T, hashitem_T, hashtab_T, int64_t, ptrdiff_t, size_t,
+    tabpage_T, win_T,
 };
 use crate::src::nvim::window::tabpage_index;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kCdCauseOther: CdCause = -1;
 pub const CMD_mkview: CMD_index = 286;
 pub const CMD_mkvimrc: CMD_index = 285;
 pub const CMD_mksession: CMD_index = 283;
-pub const VAR_FLAVOUR_SESSION: var_flavour_T = 2;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const VSE_NONE: C2Rust_Unnamed_14 = 0;
 pub const DOSO_NONE: C2Rust_Unnamed_17 = 0;

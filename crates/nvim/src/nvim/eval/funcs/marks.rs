@@ -2,7 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::frame;
-use super::{FAIL, NUL, OK, kListLenMayKnow, kListLenUnknown, tv_get_buf};
+use super::{FAIL, NUL, OK, tv_get_buf};
 use crate::src::nvim::eval::typval::{
     tv_check_for_dict_arg, tv_check_for_string_arg, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc,
     tv_dict_alloc_ret, tv_get_number, tv_get_string, tv_get_string_chk, tv_list_alloc,
@@ -16,7 +16,8 @@ use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::src::nvim::types::{
-    EvalFuncData, buf_T, dict_T, list_T, pos_T, typval_T, varnumber_T, win_T,
+    EvalFuncData, buf_T, dict_T, kListLenMayKnow, kListLenUnknown, list_T, pos_T, typval_T,
+    varnumber_T, win_T,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;

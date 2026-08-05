@@ -45,31 +45,16 @@ use crate::src::nvim::state::{MODE_INSERT, MODE_NORMAL, VREPLACE_FLAG};
 use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 use crate::src::nvim::textobject::startPS;
 use crate::src::nvim::types::{
-    BoolVarValue, ScopeType, SpecialVarValue, VV_CHAR, VV_COUNT, VV_LNUM, VarLockStatus, VarType,
-    colnr_T, linenr_T, oparg_T, pos_T, ptrdiff_t, sctx_T, size_t, uint8_t, varnumber_T, win_T,
+    BoolVarValue, SpecialVarValue, VV_CHAR, VV_COUNT, VV_LNUM, colnr_T, linenr_T, oparg_T, pos_T,
+    ptrdiff_t, sctx_T, size_t, uint8_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::ui_cursor_shape;
 use crate::src::nvim::undo::{u_save, u_save_cursor};
 use crate::src::nvim::window::win_fdccol_count;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
 pub const kBufOptFormatexpr: C2Rust_Unnamed_14 = 36;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;

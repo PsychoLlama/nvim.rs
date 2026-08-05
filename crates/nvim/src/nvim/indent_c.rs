@@ -22,29 +22,13 @@ use crate::src::nvim::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    BoolVarValue, EvalFuncData, ScopeType, SpecialVarValue, VarLockStatus, VarType, buf_T, colnr_T,
-    int64_t, intptr_t, linenr_T, lpos_T, oparg_T, pos_T, ptrdiff_t, size_t, typval_T, uint8_t,
-    uintmax_t, varnumber_T,
+    BoolVarValue, EvalFuncData, SpecialVarValue, buf_T, colnr_T, int64_t, intptr_t, linenr_T,
+    lpos_T, oparg_T, pos_T, ptrdiff_t, size_t, typval_T, uint8_t, uintmax_t, varnumber_T,
 };
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const KEY_COMPLETE: C2Rust_Unnamed_14 = 259;
 pub const KEY_OPEN_BACK: C2Rust_Unnamed_14 = 258;

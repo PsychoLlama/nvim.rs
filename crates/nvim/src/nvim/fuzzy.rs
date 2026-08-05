@@ -54,9 +54,9 @@ use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::pos::equalpos;
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::types::{
-    Callback, Callback_data, EvalFuncData, ListLenSpecials, VarLockStatus, VarType, buf_T, dict_T,
-    fuzmatch_str_T, garray_T, linenr_T, list_T, listitem_T, pos_T, typval_T, typval_vval_union,
-    varnumber_T,
+    Callback, Callback_data, EvalFuncData, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
+    VAR_UNLOCKED, buf_T, dict_T, fuzmatch_str_T, garray_T, kListLenMayKnow, kListLenUnknown,
+    linenr_T, list_T, listitem_T, pos_T, typval_T, typval_vval_union, varnumber_T,
 };
 
 /// The most characters of a pattern or a candidate that are looked at, and
@@ -65,14 +65,6 @@ pub const FUZZY_MATCH_MAX_LEN: usize = 1024;
 /// The score of a candidate the pattern does not match at all.
 pub const FUZZY_SCORE_NONE: c_int = c_int::MIN;
 
-const VAR_UNLOCKED: VarLockStatus = 0;
-const VAR_UNKNOWN: VarType = 0;
-const VAR_NUMBER: VarType = 1;
-const VAR_STRING: VarType = 2;
-const VAR_LIST: VarType = 4;
-const VAR_DICT: VarType = 5;
-const kListLenUnknown: ListLenSpecials = -1;
-const kListLenMayKnow: ListLenSpecials = -3;
 const FAIL: c_int = 0;
 
 /// An unset typval, as `VAR_UNKNOWN` spells it.

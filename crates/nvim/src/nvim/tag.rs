@@ -68,10 +68,10 @@ use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     AdditionalData, Callback, Callback_data as C2Rust_Unnamed_5, FILE, OptInt, SpecialVarValue,
-    Timestamp, VarLockStatus, VarType, buf_T, colnr_T, dict_T, dictitem_T, exarg_T, expand_T,
-    file_comparison, fmark_T, fmarkv_T, getf_retvalues, getf_values, int64_t, linenr_T, list_T,
-    off_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, size_t, taggy_T,
-    typval_T, typval_vval_union, varnumber_T, vimconv_T, win_T,
+    Timestamp, buf_T, colnr_T, dict_T, dictitem_T, exarg_T, expand_T, file_comparison, fmark_T,
+    fmarkv_T, getf_retvalues, getf_values, int64_t, linenr_T, list_T, off_T, optmagic_T, optset_T,
+    pos_T, ptrdiff_t, regmatch_T, regprog_T, size_t, taggy_T, typval_T, typval_vval_union,
+    varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::window::{
@@ -108,14 +108,7 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
 pub const EXPAND_FILES: C2Rust_Unnamed_16 = 2;

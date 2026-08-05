@@ -81,13 +81,13 @@ use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
     __uid_t, AdditionalData, AdditionalDataBuilder, Arena, Dict, FileDescriptor, FileInfo, Integer,
     KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
-    KeyDict__shada_search_pat, KeyValuePair, ListLenSpecials, MHPutStatus, Map_cstr_t_ptr_t,
-    MapHash, MarkGet, MotionType, OptionalKeys, PackerBuffer, SearchOffset, SearchPattern,
-    Set_cstr_t, Set_ptr_t, String_0, StringArray, SubReplacementString, Timestamp, VarLockStatus,
-    VarType, bln_values, buf_T, colnr_T, cstr_t, dictitem_T, fmark_T, fmarkv_T, hashitem_T,
-    int64_t, kObjectTypeInteger, kObjectTypeString, linenr_T, list_T, pos_T, ptr_t, ptrdiff_t,
-    size_t, ssize_t, tabpage_T, typval_T, typval_vval_union, uint8_t, uint32_t, uint64_t,
-    uintmax_t, uv_gid_t, uv_uid_t, var_flavour_T, win_T, xfmark_T, yankreg_T,
+    KeyDict__shada_search_pat, KeyValuePair, MHPutStatus, Map_cstr_t_ptr_t, MapHash, MarkGet,
+    MotionType, OptionalKeys, PackerBuffer, SearchOffset, SearchPattern, Set_cstr_t, Set_ptr_t,
+    String_0, StringArray, SubReplacementString, Timestamp, VAR_UNKNOWN, VAR_UNLOCKED, bln_values,
+    buf_T, colnr_T, cstr_t, dictitem_T, fmark_T, fmarkv_T, hashitem_T, int64_t, kObjectTypeInteger,
+    kObjectTypeString, linenr_T, list_T, pos_T, ptr_t, ptrdiff_t, size_t, ssize_t, tabpage_T,
+    typval_T, typval_vval_union, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
+    var_flavour_T, win_T, xfmark_T, yankreg_T,
 };
 use crate::src::nvim::version::longVersion;
 
@@ -121,16 +121,7 @@ pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const UV_ENOENT: C2Rust_Unnamed = -2;
 pub const UV_ELOOP: C2Rust_Unnamed = -40;
 pub const UV_EEXIST: C2Rust_Unnamed = -17;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const kListLenUnknown: ListLenSpecials = -1;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const VAR_TYPE_BLOB: C2Rust_Unnamed_16 = 10;
 pub const kMHExisting: MHPutStatus = 0;
 pub const kMarkBufLocal: MarkGet = 0;
 pub const BLN_LISTED: bln_values = 2;
@@ -139,9 +130,6 @@ pub const HIST_SEARCH: C2Rust_Unnamed_17 = 1;
 pub const HIST_CMD: C2Rust_Unnamed_17 = 0;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const HIST_COUNT: C2Rust_Unnamed_18 = 5;
-pub const VAR_FLAVOUR_SHADA: var_flavour_T = 4;
-pub const VAR_FLAVOUR_SESSION: var_flavour_T = 2;
-pub const VAR_FLAVOUR_DEFAULT: var_flavour_T = 1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;

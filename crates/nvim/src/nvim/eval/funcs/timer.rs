@@ -1,10 +1,8 @@
 //! Time: the `timer_*()` family, `wait()` and the `reltime()` clock.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::FAIL;
 use super::args::frame;
-use super::{
-    FAIL, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kListLenUnknown,
-};
 use crate::semsg;
 use crate::src::nvim::eval::typval::{
     kCallbackNone, tv_check_for_nonnull_dict_arg, tv_check_for_number_arg,
@@ -31,8 +29,9 @@ use crate::src::nvim::profile::{
     profile_end, profile_msg, profile_signed, profile_start, profile_sub,
 };
 use crate::src::nvim::types::{
-    Callback, Callback_data, EvalFuncData, MultiQueue, TimeWatcher, float_T, int32_t, proftime_T,
-    time_t, typval_T, typval_vval_union, varnumber_T,
+    Callback, Callback_data, EvalFuncData, MultiQueue, TimeWatcher, VAR_FLOAT, VAR_LIST,
+    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, float_T, int32_t, kListLenUnknown,
+    proftime_T, time_t, typval_T, typval_vval_union, varnumber_T,
 };
 use crate::src::nvim::ui::ui_flush;
 use core::ffi::{c_char, c_int, c_void};

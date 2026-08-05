@@ -42,33 +42,17 @@ use crate::src::nvim::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_s
 use crate::src::nvim::runtime::{DIP_ALL, source_runtime_vim_lua};
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::types::{
-    BoolVarValue, CMD_index, ScopeType, SpecialVarValue, VV_SWAPCOMMAND, VarLockStatus, VarType,
-    aco_save_T, aentry_T, buf_T, bufref_T, cmd_addr_T, cstack_T, dobuf_action_values,
-    dobuf_start_values, exarg, exarg_T, linenr_T, list_T, ptrdiff_t, size_t, ssize_t, tabpage_T,
-    uint8_t, uint64_t, varnumber_T, win_T,
+    BoolVarValue, CMD_index, SpecialVarValue, VV_SWAPCOMMAND, aco_save_T, aentry_T, buf_T,
+    bufref_T, cmd_addr_T, cstack_T, dobuf_action_values, dobuf_start_values, exarg, exarg_T,
+    linenr_T, list_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint8_t, uint64_t, varnumber_T, win_T,
 };
 use crate::src::nvim::undo::bufIsChanged;
 use crate::src::nvim::window::{
     goto_tabpage_tp, goto_tabpage_win, valid_tabpage, win_goto, win_split, win_valid,
 };
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const CMD_windo: CMD_index = 528;
 pub const CMD_tabdo: CMD_index = 455;
 pub const CMD_sfirst: CMD_index = 404;

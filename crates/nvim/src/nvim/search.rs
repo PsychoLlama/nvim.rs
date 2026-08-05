@@ -84,9 +84,9 @@ use crate::src::nvim::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsav
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     Direction, EvalFuncData, FILE, MotionType, OptInt, SearchOffset, SearchPattern, TriState,
-    VarType, buf_T, cmdarg_T, colnr_T, dict_T, file_comparison, int64_t, linenr_T, list_T, lpos_T,
-    magic_T, oparg_T, pos_T, proftime_T, ptrdiff_t, regmatch_T, regmmatch_T, regprog_T,
-    searchit_arg_T, size_t, typval_T, varnumber_T, win_T,
+    buf_T, cmdarg_T, colnr_T, dict_T, file_comparison, int64_t, linenr_T, list_T, lpos_T, magic_T,
+    oparg_T, pos_T, proftime_T, ptrdiff_t, regmatch_T, regmmatch_T, regprog_T, searchit_arg_T,
+    size_t, typval_T, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep,
@@ -125,8 +125,6 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub const VAR_LIST: VarType = 4;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const BACKWARD_FILE: Direction = -3;

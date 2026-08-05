@@ -29,33 +29,18 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::strings::{arena_printf, vim_strchr, xstrnsave};
 use crate::src::nvim::types::{
-    Arena, BoolVarValue, CMD_index, Dict, Integer, LuaRef, Object, OptInt, ScopeType,
-    SpecialVarValue, String_0, VarLockStatus, VarType, buf_T, cmd_addr_T, cmdmod_T, estack_T,
-    exarg_T, expand_T, garray_T, int64_t, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
-    kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, key_value_pair, mod_entry_T, object,
-    object_data as C2Rust_Unnamed, scid_T, sctx_T, size_t, ucmd_T, uint8_t, uint32_t, win_T,
+    Arena, BoolVarValue, CMD_index, Dict, Integer, LuaRef, Object, OptInt, SpecialVarValue,
+    String_0, buf_T, cmd_addr_T, cmdmod_T, estack_T, exarg_T, expand_T, garray_T, int64_t,
+    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil,
+    kObjectTypeString, key_value_pair, mod_entry_T, object, object_data as C2Rust_Unnamed, scid_T,
+    sctx_T, size_t, ucmd_T, uint8_t, uint32_t, win_T,
 };
 use crate::src::nvim::window::{
     WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, prevwin_curwin, tabpage_index,
 };
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
 pub const EXPAND_SHELLCMDLINE: C2Rust_Unnamed_14 = 57;
 pub const EXPAND_USER_ADDR_TYPE: C2Rust_Unnamed_14 = 43;

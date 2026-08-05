@@ -2,10 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::frame;
-use super::{
-    ARENA_BLOCK_SIZE, FAIL, MPACK_EOF, MPACK_ERROR, MPACK_OK, OK, VAR_BLOB, VAR_LIST, VAR_NUMBER,
-    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kListLenMayKnow,
-};
+use super::{ARENA_BLOCK_SIZE, FAIL, MPACK_EOF, MPACK_ERROR, MPACK_OK, OK};
 use crate::semsg;
 use crate::src::mpack::object::mpack_parser_init;
 use crate::src::nvim::api::private::helpers::api_free_string;
@@ -26,7 +23,8 @@ use crate::src::nvim::message::semsg;
 use crate::src::nvim::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
 use crate::src::nvim::os::libc::{gettext, memmove, strlen};
 use crate::src::nvim::types::{
-    EvalFuncData, blob_T, list_T, mpack_parser_t, typval_T, typval_vval_union,
+    EvalFuncData, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T,
+    kListLenMayKnow, list_T, mpack_parser_t, typval_T, typval_vval_union,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::fmt::Write as _;

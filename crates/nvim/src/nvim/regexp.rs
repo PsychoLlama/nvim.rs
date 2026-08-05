@@ -19,8 +19,8 @@
 
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::types::{
-    MarkGet, VarLockStatus, VarType, buf_T, colnr_T, garray_T, int16_t, int64_t, linenr_T, lpos_T,
-    magic_T, proftime_T, regengine, regengine_T, regmatch_T, regmmatch_T, size_t, uint8_t, win_T,
+    MarkGet, buf_T, colnr_T, garray_T, int16_t, int64_t, linenr_T, lpos_T, magic_T, proftime_T,
+    regengine, regengine_T, regmatch_T, regmmatch_T, size_t, uint8_t, win_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint};
 /// Last-pattern selectors and the regexp-engine/flag bits.
@@ -58,12 +58,6 @@ pub const _ISpunct: c_uint = 4;
 pub const _IScntrl: c_uint = 2;
 pub const _ISgraph: c_uint = 32768;
 pub const _ISalpha: c_uint = 1024;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const NSUBEXP: c_uint = 10;
 pub const MAGIC_ALL: magic_T = 4;
 pub const MAGIC_ON: magic_T = 3;

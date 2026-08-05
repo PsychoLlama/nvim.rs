@@ -27,8 +27,8 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::strings::{striequal, vim_strchr, vim_strsave_escaped};
 use crate::src::nvim::types::{
-    BoolVarValue, Direction, ScopeType, SpecialVarValue, VV_PROGPATH, VarLockStatus, VarType,
-    buf_T, evalarg_T, expand_T, int64_t, pos_T, ptrdiff_t, sctx_T, size_t, uint8_t, xp_prefix_T,
+    BoolVarValue, Direction, SpecialVarValue, VV_PROGPATH, buf_T, evalarg_T, expand_T, int64_t,
+    pos_T, ptrdiff_t, sctx_T, size_t, uint8_t, xp_prefix_T,
 };
 unsafe extern "C" {
     fn uname(__name: *mut utsname) -> ::core::ffi::c_int;
@@ -43,25 +43,9 @@ pub const UV_EISDIR: C2Rust_Unnamed = -21;
 pub const UV_EINVAL: C2Rust_Unnamed = -22;
 pub const UV_EEXIST: C2Rust_Unnamed = -17;
 pub const UV_EBADF: C2Rust_Unnamed = -9;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;

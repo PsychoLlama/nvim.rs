@@ -53,7 +53,6 @@ pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;
 pub const NUL: c_int = 0;
 pub const TAB: c_int = '\t' as c_int;
-pub const VAR_STRING: VarType = 2;
 pub const VIRTTEXT_EMPTY: VirtText = VirtText {
     size: 0,
     capacity: 0,

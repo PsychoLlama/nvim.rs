@@ -23,10 +23,10 @@ use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::terminal::terminal_receive;
 use crate::src::nvim::types::{
-    CallbackReader, Channel, RStream, list_T, size_t, typval_T, typval_vval_union, varnumber_T,
+    CallbackReader, Channel, RStream, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
+    kListLenMayKnow, list_T, size_t, typval_T, typval_vval_union, varnumber_T,
 };
 
-use super::known::*;
 use super::{channel_decref, channel_incref};
 
 /// Starts buffering a reader's output under `type_0`, which names it in the

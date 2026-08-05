@@ -5,8 +5,7 @@
 use super::args::{Args, frame};
 use super::{
     AUTOLOAD_CHAR, DOCMD_KEYTYPED, DOCMD_NOWAIT, DOCMD_REPEAT, DOCMD_VERBOSE, FAIL, MAX_FUNC_ARGS,
-    NUL, OK, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET, VAR_DICT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, true_0,
+    NUL, OK, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET, true_0,
 };
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::ascii::ascii_isdigit;
@@ -42,8 +41,8 @@ use crate::src::nvim::os::env::{expand_env_save, os_env_exists};
 use crate::src::nvim::os::libc::{gettext, strcmp, strncmp};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    EvalFuncData, VarType, funcdict_T, garray_T, list_T, listitem_T, partial_T, typval_T, uint8_t,
-    varnumber_T,
+    EvalFuncData, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VarType,
+    funcdict_T, garray_T, list_T, listitem_T, partial_T, typval_T, uint8_t, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;

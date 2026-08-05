@@ -10,6 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::{VAR_DICT, VAR_LIST, VAR_UNKNOWN, kListLenMayKnow};
 
 /// The four highlight keys a sign definition carries, in the order every
 /// reader in this family reports them.

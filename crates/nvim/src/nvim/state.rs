@@ -22,30 +22,13 @@ use crate::src::nvim::os::input::{input_available, input_get, os_breakcheck};
 use crate::src::nvim::os::libc::{strcmp, strcpy};
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
-    BoolVarValue, Direction, Event, ProcType, ScopeType, SpecialVarValue, VarLockStatus, VarType,
-    VimState, dict_T, hashitem_T, hashtab_T, kNone, key_extra, save_v_event_T, size_t, uint8_t,
-    win_T,
+    BoolVarValue, Direction, Event, ProcType, SpecialVarValue, VimState, dict_T, hashitem_T,
+    hashtab_T, kNone, key_extra, save_v_event_T, size_t, uint8_t, win_T,
 };
 use crate::src::nvim::ui::ui_flush;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kProcTypePty: ProcType = 1;
 pub const kDirectionNotSet: Direction = 0;
 /// The editor-mode bitmask `State` carries, and the masks that read it.

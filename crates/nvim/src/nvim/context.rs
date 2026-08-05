@@ -21,29 +21,13 @@ use crate::src::nvim::shada::{
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Context, Dict, Error, KeyDict_exec_opts, KeyValuePair, Object,
-    OptVal, OptValData, OptValType, ScopeType, SpecialVarValue, String_0, VarLockStatus, VarType,
+    OptVal, OptValData, OptValType, SpecialVarValue, String_0, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED,
     hashitem_T, hashtab_T, kObjectTypeArray, kObjectTypeString, key_value_pair, object,
     object_data as C2Rust_Unnamed_0, size_t, typval_T, typval_vval_union, uint8_t, uint64_t,
 };
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeBoolean: OptValType = 0;

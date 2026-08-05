@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
-use super::{FAIL, NUL, VAR_UNKNOWN, false_0, true_0};
+use super::{FAIL, NUL, false_0, true_0};
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::cursor::check_cursor;
 use crate::src::nvim::eval::typval::{
@@ -32,8 +32,8 @@ use crate::src::nvim::search::{
     BACKWARD, FORWARD, SEARCH_COL, SEARCH_END, SEARCH_KEEP, SEARCH_START, searchit,
 };
 use crate::src::nvim::types::{
-    Direction, EvalFuncData, OptVal, OptValData, int64_t, linenr_T, pos_T, searchit_arg_T,
-    typval_T, varnumber_T,
+    Direction, EvalFuncData, OptVal, OptValData, VAR_UNKNOWN, int64_t, linenr_T, pos_T,
+    searchit_arg_T, typval_T, varnumber_T,
 };
 use core::ffi::{c_char, c_int};
 use core::ptr;

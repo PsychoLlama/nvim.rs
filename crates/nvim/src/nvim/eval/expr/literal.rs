@@ -19,8 +19,7 @@ use crate::src::nvim::eval::typval::{tv_blob_alloc, tv_blob_set_ret, tv_clear};
 use crate::src::nvim::eval::vars::{eval_one_expr_in_str, optval_as_tv};
 use crate::src::nvim::eval::{
     BS, CAR, ESC, FAIL, FF, FSK_IN_STRING, FSK_KEYCODE, FSK_SIMPLIFY, NL, NUL, OK, STR2NR_ALL, TAB,
-    VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, find_option_var_end, get_env_len,
-    kOptValTypeNil,
+    find_option_var_end, get_env_len, kOptValTypeNil,
 };
 use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_init};
 use crate::src::nvim::keycodes::{find_special_key, trans_special};
@@ -33,8 +32,8 @@ use crate::src::nvim::options::{kOptAleph, kOptInvalid};
 use crate::src::nvim::os::env::{expand_env_save, vim_getenv};
 use crate::src::nvim::os::libc::{gettext, strlen, strncasecmp, strtod, toupper};
 use crate::src::nvim::types::{
-    OptIndex, OptVal, blob_T, float_T, garray_T, size_t, typval_T, typval_vval_union, uint8_t,
-    varnumber_T,
+    OptIndex, OptVal, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T,
+    float_T, garray_T, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
 };
 
 /// A freshly declared typval.

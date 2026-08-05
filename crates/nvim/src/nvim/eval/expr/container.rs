@@ -12,15 +12,13 @@ use crate::src::nvim::eval::typval::{
     tv_dict_item_free, tv_dict_set_ret, tv_get_string_buf_chk, tv_list_alloc,
     tv_list_append_owned_tv, tv_list_free, tv_list_set_ret,
 };
-use crate::src::nvim::eval::{
-    EVAL_EVALUATE, FAIL, NOTDONE, NUL, OK, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, e_list_end,
-    eval1, kListLenShouldKnow,
-};
+use crate::src::nvim::eval::{EVAL_EVALUATE, FAIL, NOTDONE, NUL, OK, e_list_end, eval1};
 use crate::src::nvim::memory::xmemdupz;
 use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::types::{
-    dict_T, dictitem_T, evalarg_T, list_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
+    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T, evalarg_T, kListLenShouldKnow,
+    list_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
 };
 
 /// The scratch a non-String dict key is rendered into.

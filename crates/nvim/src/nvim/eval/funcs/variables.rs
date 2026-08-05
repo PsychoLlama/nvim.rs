@@ -2,10 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::frame;
-use super::{
-    DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY, NUL, VAR_DICT, VAR_FUNC,
-    VAR_NUMBER, VAR_STRING, dummy_ap,
-};
+use super::{DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY, NUL, dummy_ap};
 use crate::semsg;
 use crate::src::nvim::eval::typval::{
     callback_free, kCallbackNone, tv_dict_watcher_add, tv_dict_watcher_remove, tv_get_string,
@@ -19,7 +16,10 @@ use crate::src::nvim::memory::xmalloc;
 use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::strings::vim_vsnprintf_typval;
-use crate::src::nvim::types::{Callback, Callback_data, EvalFuncData, typval_T, varnumber_T};
+use crate::src::nvim::types::{
+    Callback, Callback_data, EvalFuncData, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING, typval_T,
+    varnumber_T,
+};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

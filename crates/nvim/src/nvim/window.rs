@@ -119,11 +119,11 @@ use crate::src::nvim::types::ui::{kUIMessages, kUIMultigrid, kUITabline};
 use crate::src::nvim::types::{
     AlignTextPos, BoolVarValue, Boolean, CMD_index, CdCause, CdScope, Direction, Error, Float,
     FloatAnchor, FloatRelative, GridView, Integer, Map_int_ptr_t, MapHash, MotionType, OptInt,
-    OptVal, OptValData, OptValType, ScopeType, ScreenGrid, Set_uint32_t, SpecialVarValue,
-    StlClickDefinition, String_0, Terminal, TryState, VarLockStatus, VarType, VirtText,
-    VirtTextChunk, WinConfig, WinInfo, WinSplit, WinStyle, Window, aucmdwin_T, bln_values, buf_T,
-    bufref_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, dobuf_action_values, dobuf_start_values,
-    exarg_T, except_T, frame_T, garray_T, getf_values, handle_T, hashitem_T, hashtab_T, int64_t,
+    OptVal, OptValData, OptValType, ScreenGrid, Set_uint32_t, SpecialVarValue, StlClickDefinition,
+    String_0, Terminal, TryState, VAR_NUMBER, VAR_SCOPE, VAR_UNLOCKED, VirtText, VirtTextChunk,
+    WinConfig, WinInfo, WinSplit, WinStyle, Window, aucmdwin_T, bln_values, buf_T, bufref_T,
+    cmd_addr_T, cmdidx_T, colnr_T, dict_T, dobuf_action_values, dobuf_start_values, exarg_T,
+    except_T, frame_T, garray_T, getf_values, handle_T, hashitem_T, hashtab_T, int64_t,
     kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, linenr_T, list_T, lpos_T, msglist_T, oparg_T,
     optset_T, pos_T, ptr_t, ptrdiff_t, qf_info_T, save_v_event_T, scid_T, size_t, switchwin_T,
     tabpage_T, taggy_T, typval_T, typval_vval_union, uint32_t, varnumber_T, win_T,
@@ -142,24 +142,9 @@ use crate::src::nvim::winfloat::{
     win_float_find_altwin, win_float_update_statusline, win_new_float, win_reconfig_floats,
 };
 unsafe extern "C" {}
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleMinimal: WinStyle = 1;
 pub const kWinStyleUnused: WinStyle = 0;

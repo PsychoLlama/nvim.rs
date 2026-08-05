@@ -2,10 +2,10 @@
 //! generator.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::VARNUMBER_MAX;
 use super::args::{Args, frame};
 use super::uv_random;
 use super::wrappers::tv_get_float_chk;
-use super::{VAR_FLOAT, VAR_LIST, VAR_NUMBER, VARNUMBER_MAX};
 use crate::semsg;
 use crate::src::nvim::charset::skipwhite;
 use crate::src::nvim::eval::string2float;
@@ -19,7 +19,9 @@ use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::env::os_get_pid;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::os::time::os_hrtime;
-use crate::src::nvim::types::{EvalFuncData, float_T, typval_T, varnumber_T};
+use crate::src::nvim::types::{
+    EvalFuncData, VAR_FLOAT, VAR_LIST, VAR_NUMBER, float_T, typval_T, varnumber_T,
+};
 use core::ffi::{c_char, c_double, c_int, c_void};
 use core::ptr;
 

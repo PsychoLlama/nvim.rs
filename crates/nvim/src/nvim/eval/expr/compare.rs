@@ -15,13 +15,16 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::{
     EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_IS, EXPR_ISNOT, EXPR_MATCH, EXPR_NEQUAL,
-    EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, FAIL, NUL, OK, VAR_BLOB, VAR_DICT, VAR_FLOAT,
-    VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, e_invalblob, partial_name, pattern_match,
+    EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, FAIL, NUL, OK, e_invalblob, partial_name,
+    pattern_match,
 };
 use crate::src::nvim::mbyte::mb_strcmp_ic;
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{gettext, strcmp};
-use crate::src::nvim::types::{dict_T, exprtype_T, float_T, typval_T, varnumber_T};
+use crate::src::nvim::types::{
+    VAR_BLOB, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, dict_T, exprtype_T,
+    float_T, typval_T, varnumber_T,
+};
 
 /// The scratch a Number or Float is rendered into for a String comparison.
 const NUMBUFLEN: usize = 65;

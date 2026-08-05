@@ -13,6 +13,7 @@
 use super::*;
 use crate::src::nvim::regexp::RE_LAST;
 use crate::src::nvim::search::{SEARCH_KEEP, SEARCH_STAT_DEF_TIMEOUT};
+use crate::src::nvim::types::{VAR_LIST, VAR_UNKNOWN};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

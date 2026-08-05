@@ -154,14 +154,14 @@ use crate::src::nvim::types::{
     ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
     ExprParserFlags, HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt,
     OptVal, OptValData, OptValType, ParserHighlight, ParserHighlightChunk, ParserLine,
-    ParserPosition, ParserState, RemapValues, ScopeType, Set_ptr_t, SpecialVarValue, String_0,
-    TryState, UndoObjectType, VarLockStatus, VarType, VimState, aco_save_T, buf_T, bufref_T,
-    cmd_addr_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T, dobuf_action_values,
-    dobuf_start_values, event_T, exarg_T, except_T, expand_T, garray_T, handle_T, hashitem_T,
-    hashtab_T, key_extra, linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T, optmagic_T,
-    optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, regmatch_T, regprog_T, save_v_event_T, sctx_T,
-    searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union, u_header_T, uint8_t,
-    uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
+    ParserPosition, ParserState, RemapValues, Set_ptr_t, SpecialVarValue, String_0, TryState,
+    UndoObjectType, VimState, aco_save_T, buf_T, bufref_T, cmd_addr_T, cmdmod_T, colnr_T, cstack_T,
+    dict_T, disptick_T, dobuf_action_values, dobuf_start_values, event_T, exarg_T, except_T,
+    expand_T, garray_T, handle_T, hashitem_T, hashtab_T, key_extra, linenr_T, list_T, listitem_T,
+    magic_T, msglist_T, oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t,
+    regmatch_T, regprog_T, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t,
+    typval_T, typval_vval_union, u_header_T, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T,
+    xp_prefix_T,
 };
 use crate::src::nvim::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -211,24 +211,9 @@ pub use self::prompt::*;
 unsafe extern "C" {
     static pum_want: GlobalCell<C2Rust_Unnamed_51>;
 }
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub const kMHExisting: MHPutStatus = 0;

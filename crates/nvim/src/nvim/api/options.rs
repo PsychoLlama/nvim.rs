@@ -21,29 +21,14 @@ use crate::src::nvim::os::libc::{__assert_fail, strcmp};
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
     Arena, BoolVarValue, Dict, Error, KeyDict_option, KeyValuePair, Object, OptIndex, OptScope,
-    OptVal, OptValData, OptValType, ScopeType, SpecialVarValue, String_0, TryState, VarLockStatus,
-    VarType, aco_save_T, bln_values, buf_T, bufref_T, except_T, int64_t, kObjectTypeNil, linenr_T,
-    msglist_T, object, object_data as C2Rust_Unnamed, sctx_T, size_t, uint64_t, win_T,
+    OptVal, OptValData, OptValType, SpecialVarValue, String_0, TryState, aco_save_T, bln_values,
+    buf_T, bufref_T, except_T, int64_t, kObjectTypeNil, linenr_T, msglist_T, object,
+    object_data as C2Rust_Unnamed, sctx_T, size_t, uint64_t, win_T,
 };
 use crate::src::nvim::window::close_windows;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeNil: OptValType = -1;

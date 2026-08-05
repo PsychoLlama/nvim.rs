@@ -10,6 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::VAR_FIXED;
 
 /// Insert `len` bytes of `p` at the cursor, `-1` meaning up to its NUL.
 pub(crate) unsafe fn ins_compl_insert_bytes(p: *mut c_char, mut len: c_int) {

@@ -48,7 +48,7 @@ unsafe extern "C" {
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
-    use super::{CMD_index, VarType, bln_values, c_int, c_uint, file_comparison};
+    use super::{CMD_index, bln_values, c_int, c_uint, file_comparison};
 
     /// `alist_set`/`alist_add` "what to do with the name" selector.
     pub const AL_SET: c_uint = 1;
@@ -84,10 +84,6 @@ mod flag {
     pub const WSP_BELOW: c_uint = 64;
 
     pub const kEqualFiles: file_comparison = 1;
-
-    pub const VAR_UNKNOWN: VarType = 0;
-    pub const VAR_NUMBER: VarType = 1;
-    pub const VAR_STRING: VarType = 2;
 
     pub const CMD_args: CMD_index = 7;
     pub const CMD_argdo: CMD_index = 10;

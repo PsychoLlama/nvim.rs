@@ -1,4 +1,5 @@
 use super::*;
+use crate::src::nvim::types::{VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 
 /// Find a buffer by number or exact name.
 pub unsafe extern "C" fn find_buffer(avar: *mut typval_T) -> *mut buf_T {

@@ -1,4 +1,5 @@
 use super::*;
+use crate::src::nvim::types::{VAR_LIST, VAR_STRING, VAR_UNKNOWN};
 
 /// Set line or list of lines in buffer "buf" to "lines".
 /// Any type is allowed and converted to a string.

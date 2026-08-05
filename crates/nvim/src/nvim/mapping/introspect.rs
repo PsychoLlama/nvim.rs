@@ -11,6 +11,7 @@
 use super::*;
 use crate::src::nvim::kvec::InitVec;
 use crate::src::nvim::types::builders::static_cstring;
+use crate::src::nvim::types::{VAR_DICT, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kListLenUnknown};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

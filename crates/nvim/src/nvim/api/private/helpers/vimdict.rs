@@ -6,9 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{
-    DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO, NIL, VAR_UNKNOWN, VAR_UNLOCKED, api_set_error,
-};
+use super::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO, NIL, api_set_error};
 use crate::src::nvim::api::private::converter::{object_to_vim, vim_to_object};
 use crate::src::nvim::eval::typval::{
     tv_clear, tv_copy, tv_dict_add, tv_dict_find, tv_dict_is_watched, tv_dict_item_alloc_len,
@@ -17,8 +15,8 @@ use crate::src::nvim::eval::typval::{
 use crate::src::nvim::eval::vars::{before_set_vvar, get_vimvar_dict};
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
-    Arena, Error, Object, String_0, dict_T, dictitem_T, ptrdiff_t, size_t, typval_T,
-    typval_vval_union,
+    Arena, Error, Object, String_0, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T, ptrdiff_t,
+    size_t, typval_T, typval_vval_union,
 };
 use core::ffi::c_int;
 use core::ptr;

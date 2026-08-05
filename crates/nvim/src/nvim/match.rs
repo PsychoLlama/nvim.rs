@@ -49,9 +49,9 @@ use crate::src::nvim::regexp::vim_regexec_multi;
 use crate::src::nvim::regexp::{RE_MAGIC, skip_regexp};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    EvalFuncData, ListLenSpecials, VarType, colnr_T, dict_T, dictitem_T, exarg_T, int64_t,
-    linenr_T, list_T, llpos_T, match_T, matchitem_T, ptrdiff_t, regprog_T, size_t, typval_T,
-    uint8_t, varnumber_T, win_T,
+    EvalFuncData, VAR_LIST, VAR_NUMBER, colnr_T, dict_T, dictitem_T, exarg_T, int64_t, linenr_T,
+    list_T, llpos_T, match_T, matchitem_T, ptrdiff_t, regprog_T, size_t, typval_T, uint8_t,
+    varnumber_T, win_T,
 };
 
 mod searchhl;
@@ -65,11 +65,6 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
 }
 
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const NUL: c_int = '\0' as c_int;
 pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;

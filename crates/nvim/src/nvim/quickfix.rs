@@ -124,12 +124,11 @@ use crate::src::nvim::strings::{has_non_ascii, vim_snprintf, vim_snprintf_safele
 use crate::src::nvim::types::builders::static_cstring;
 use crate::src::nvim::types::{
     CMD_index, Callback, Callback_data, DirStack, Direction, EvalFuncData, ExtmarkOp, FILE,
-    FileInfo, ListLenSpecials, OptInt, OptVal, OptValData, OptValType, QFLT_INTERNAL,
-    QFLT_LOCATION, QFLT_QUICKFIX, VarLockStatus, VarType, aco_save_T, bln_values, buf_T, bufref_T,
-    cleanup_T, cmdidx_T, colnr_T, dict_T, dictitem_T, dobuf_action_values, exarg_T, getf_values,
-    handle_T, linenr_T, list_T, listitem_T, optset_T, pos_T, ptrdiff_t, qf_info_T, qf_list_T,
-    qfline_T, qfltype_T, regmatch_T, regmmatch_T, regprog_T, scid_T, size_t, time_t, typval_T,
-    typval_vval_union, varnumber_T, vimconv_T, win_T,
+    FileInfo, OptInt, OptVal, OptValData, OptValType, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX,
+    VarType, aco_save_T, bln_values, buf_T, bufref_T, cleanup_T, cmdidx_T, colnr_T, dict_T,
+    dictitem_T, dobuf_action_values, exarg_T, getf_values, handle_T, linenr_T, list_T, listitem_T,
+    optset_T, pos_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T,
+    regprog_T, scid_T, size_t, time_t, typval_T, typval_vval_union, varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::u_clearallandblockfree;
@@ -181,15 +180,6 @@ mod setprops;
 pub use self::setprops::*;
 mod eval;
 pub use self::eval::*;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const CMD_vimgrep: CMD_index = 510;
 pub const CMD_vimgrepadd: CMD_index = 511;
 pub const CMD_lvimgrep: CMD_index = 267;

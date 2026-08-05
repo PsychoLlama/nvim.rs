@@ -11,6 +11,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::{VAR_STRING, VAR_UNKNOWN};
 
 /// The command line being edited, whether or not it holds any text.
 ///

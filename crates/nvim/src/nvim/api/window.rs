@@ -24,33 +24,18 @@ use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Boolean, Buffer, Dict, Error, Integer, KeyDict_win_text_height,
-    LuaRef, LuaRetMode, NS, Object, ScopeType, SpecialVarValue, String_0, Tabpage, TryState,
-    VarLockStatus, VarType, Window, buf_T, colnr_T, except_T, int64_t, kObjectTypeInteger,
-    kObjectTypeNil, key_value_pair, linenr_T, msglist_T, object, object_data as C2Rust_Unnamed,
-    pos_T, size_t, switchwin_T, tabpage_T, win_T, win_execute_T,
+    LuaRef, LuaRetMode, NS, Object, SpecialVarValue, String_0, Tabpage, TryState, Window, buf_T,
+    colnr_T, except_T, int64_t, kObjectTypeInteger, kObjectTypeNil, key_value_pair, linenr_T,
+    msglist_T, object, object_data as C2Rust_Unnamed, pos_T, size_t, switchwin_T, tabpage_T, win_T,
+    win_execute_T,
 };
 use crate::src::nvim::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
     win_set_buf, win_setheight_win, win_setwidth_win,
 };
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const kRetLuaref: LuaRetMode = 2;
 pub const kRetNilBool: LuaRetMode = 1;

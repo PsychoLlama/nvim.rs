@@ -3,10 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
-use super::{
-    Ctrl_V, FAIL, NUL, OK, OP_NOP, VAR_DICT, kListLenMayKnow, kMTBlockWise, kMTCharWise,
-    kMTLineWise,
-};
+use super::{Ctrl_V, FAIL, NUL, OK, OP_NOP, kMTBlockWise, kMTCharWise, kMTLineWise};
 use crate::src::nvim::api::private::helpers::cbuf_to_string;
 use crate::src::nvim::buffer::buflist_findnr;
 use crate::src::nvim::charset::getdigits_int;
@@ -31,8 +28,8 @@ use crate::src::nvim::plines::getvvcol;
 use crate::src::nvim::pos::{MAXCOL, equalpos, lt};
 use crate::src::nvim::state::virtual_active;
 use crate::src::nvim::types::{
-    EvalFuncData, MotionType, String_0, TriState, block_def, buf_T, colnr_T, linenr_T, oparg_T,
-    pos_T, typval_T, varnumber_T,
+    EvalFuncData, MotionType, String_0, TriState, VAR_DICT, block_def, buf_T, colnr_T,
+    kListLenMayKnow, linenr_T, oparg_T, pos_T, typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;

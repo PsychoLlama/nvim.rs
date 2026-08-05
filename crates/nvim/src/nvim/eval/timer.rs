@@ -15,9 +15,7 @@ use crate::src::nvim::eval::typval::{
     callback_free, callback_put, tv_clear, tv_dict_add, tv_dict_add_nr, tv_dict_alloc,
     tv_dict_item_alloc, tv_list_alloc_ret, tv_list_append_dict,
 };
-use crate::src::nvim::eval::{
-    FAIL, MH_TOMBSTONE, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, callback_call, last_timer_id, timers,
-};
+use crate::src::nvim::eval::{FAIL, MH_TOMBSTONE, callback_call, last_timer_id, timers};
 use crate::src::nvim::event::multiqueue::{multiqueue_free, multiqueue_new_child};
 use crate::src::nvim::event::time::{
     time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
@@ -28,8 +26,9 @@ use crate::src::nvim::main::{called_emsg, did_emsg, did_throw, main_loop};
 use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::types::{
-    Callback, Map_uint64_t_ptr_t, TimeWatcher, dict_T, dictitem_T, int64_t, list_T, ptr_t,
-    ptrdiff_t, size_t, timer_T, typval_T, typval_vval_union, uint32_t, uint64_t, varnumber_T,
+    Callback, Map_uint64_t_ptr_t, TimeWatcher, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, dict_T,
+    dictitem_T, int64_t, list_T, ptr_t, ptrdiff_t, size_t, timer_T, typval_T, typval_vval_union,
+    uint32_t, uint64_t, varnumber_T,
 };
 
 /// How many consecutive errors a timer's callback may raise before the

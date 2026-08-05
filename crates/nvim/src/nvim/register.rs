@@ -79,32 +79,16 @@ use crate::src::nvim::terminal::terminal_paste;
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     AdditionalData, Arena, BoolVarValue, CMD_index, CharsizeArg, CharsizeKind, Direction,
-    ExtmarkOp, GRegFlags, MotionType, OptInt, RemapValues, ScopeType, SpecialVarValue, StrCharInfo,
-    String_0, Timestamp, UndoObjectType, VarLockStatus, VarType, bcount_t, block_def, buf_T,
-    cmd_addr_T, colnr_T, dict_T, exarg_T, garray_T, hashitem_T, hashtab_T, int64_t, linenr_T,
-    list_T, oparg_T, pos_T, ptrdiff_t, save_v_event_T, size_t, ssize_t, uint8_t, yankreg_T,
+    ExtmarkOp, GRegFlags, MotionType, OptInt, RemapValues, SpecialVarValue, StrCharInfo, String_0,
+    Timestamp, UndoObjectType, VAR_FIXED, bcount_t, block_def, buf_T, cmd_addr_T, colnr_T, dict_T,
+    exarg_T, garray_T, hashitem_T, hashtab_T, int64_t, linenr_T, list_T, oparg_T, pos_T, ptrdiff_t,
+    save_v_event_T, size_t, ssize_t, uint8_t, yankreg_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::undo::{u_save, u_save_cursor};
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;

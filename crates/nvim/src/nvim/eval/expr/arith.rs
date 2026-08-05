@@ -14,16 +14,16 @@ use crate::src::nvim::eval::typval::{
     tv_blob_alloc, tv_blob_len, tv_blob_set_ret, tv_clear, tv_get_number_chk, tv_get_string_buf,
     tv_get_string_buf_chk, tv_list_concat,
 };
-use crate::src::nvim::eval::{
-    FAIL, INT_MAX, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VARNUMBER_MAX,
-    VARNUMBER_MIN,
-};
+use crate::src::nvim::eval::{FAIL, INT_MAX, VARNUMBER_MAX, VARNUMBER_MIN};
 use crate::src::nvim::garray::ga_grow;
 use crate::src::nvim::memory::xrealloc;
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::strings::concat_str;
-use crate::src::nvim::types::{blob_T, float_T, typval_T, typval_vval_union, varnumber_T};
+use crate::src::nvim::types::{
+    VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T, float_T, typval_T,
+    typval_vval_union, varnumber_T,
+};
 
 /// The length of the scratch buffer `tv_get_string_buf` may render a Number
 /// or a Float into. `NUMBUFLEN` in the C.

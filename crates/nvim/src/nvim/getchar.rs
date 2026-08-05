@@ -77,11 +77,11 @@ use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, CharsizeArg, Error, EvalFuncData, FileDescriptor, Integer, LuaRef,
-    LuaRetMode, MotionType, MultiQueue, Object, OptInt, RemapValues, ScopeType, SpecialVarValue,
-    String_0, TriState, VV_MOUSE_COL, VV_MOUSE_LNUM, VV_MOUSE_WIN, VV_MOUSE_WINID, VarLockStatus,
-    VarType, buffblock, buffblock_T, buffheader_T, colnr_T, flush_buffers_T, garray_T, kFalse,
-    kNone, key_extra, linenr_T, mapblock_T, oparg_T, ptrdiff_t, save_redo_T, size_t, tasave_T,
-    typebuf_T, typval_T, uint8_t, uint64_t, varnumber_T,
+    LuaRetMode, MotionType, MultiQueue, Object, OptInt, RemapValues, SpecialVarValue, String_0,
+    TriState, VV_MOUSE_COL, VV_MOUSE_LNUM, VV_MOUSE_WIN, VV_MOUSE_WINID, buffblock, buffblock_T,
+    buffheader_T, colnr_T, flush_buffers_T, garray_T, kFalse, kNone, key_extra, linenr_T,
+    mapblock_T, oparg_T, ptrdiff_t, save_redo_T, size_t, tasave_T, typebuf_T, typval_T, uint8_t,
+    uint64_t, varnumber_T,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::src::nvim::undo::u_sync;
@@ -109,24 +109,9 @@ mod cmdkey;
 pub use self::cmdkey::*;
 mod paste;
 pub use self::paste::*;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub const MAXMAPLEN: C2Rust_Unnamed_27 = 50;
 pub const REMAP_SKIP: RemapValues = -3;

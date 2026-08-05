@@ -10,6 +10,7 @@ use core::ptr;
 
 use super::*;
 use crate::src::nvim::pos::MAXCOL;
+use crate::src::nvim::types::kListLenMayKnow;
 
 /// Add information about mark 'mname' to list 'l'
 pub(super) unsafe extern "C" fn add_mark(

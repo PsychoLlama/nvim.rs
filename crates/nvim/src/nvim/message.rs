@@ -94,11 +94,11 @@ use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::ui::{kUIMessages, kUIMultigrid};
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Dict, Error, Event, FILE, HlMessage, HlMessageChunk, Integer,
-    KeyDict_echo_opts, MessageData, Object, OptInt, ScopeType, SpecialVarValue, String_0,
-    VV_ERRMSG, VV_SCROLLSTART, VV_STATUSMSG, VV_WARNINGMSG, VarLockStatus, VarType, colnr_T,
-    estack_T, estack_arg_T, exarg_T, flush_buffers_T, garray_T, int64_t, kObjectTypeInteger,
-    kObjectTypeNil, object, object_data as C2Rust_Unnamed_11, ptrdiff_t, regmatch_T, sattr_T,
-    schar_T, size_t, ssize_t, typval_T, typval_vval_union, uint64_t,
+    KeyDict_echo_opts, MessageData, Object, OptInt, SpecialVarValue, String_0, VV_ERRMSG,
+    VV_SCROLLSTART, VV_STATUSMSG, VV_WARNINGMSG, colnr_T, estack_T, estack_arg_T, exarg_T,
+    flush_buffers_T, garray_T, int64_t, kObjectTypeInteger, kObjectTypeNil, object,
+    object_data as C2Rust_Unnamed_11, ptrdiff_t, regmatch_T, sattr_T, schar_T, size_t, ssize_t,
+    typval_T, typval_vval_union, uint64_t,
 };
 use crate::src::nvim::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
@@ -137,27 +137,9 @@ pub use self::errors::*;
 unsafe extern "C" {
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-/// Vimscript value tags and lock states. Kept as a family because ffigen
-/// exports them to the unit specs' flat cdef namespace, where the LuaJIT
-/// side names them; nothing in this module reads most of them.
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 /// The compositor layer messages float on.
 pub const kZIndexMessages: c_uint = 200;
 /// One entry of the message history. See [`self::history`].

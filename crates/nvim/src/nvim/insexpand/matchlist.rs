@@ -11,6 +11,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::VAR_FIXED;
 
 /// Free the four `cptext` strings a caller handed to [`ins_compl_add`].
 #[inline]

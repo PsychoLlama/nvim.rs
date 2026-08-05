@@ -61,10 +61,10 @@ use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::ui::{kUIMessages, kUITabline, kUIWildmenu};
 use crate::src::nvim::types::{
     AlignTextPos, Arena, Array, BoolVarValue, Buffer, Dict, FloatRelative, Integer, Object,
-    OptIndex, OptInt, OptValType, ScopeType, ScreenGrid, SignTextAttrs, SpecialVarValue,
-    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13, StlClickRecord, StlFlag,
-    String_0, Tabpage, VV_LNUM, VV_RELNUM, VV_VIRTNUM, VarLockStatus, VarType, WinSplit, WinStyle,
-    buf_T, colnr_T, frame_T, hlf_T, int64_t, kObjectTypeArray, kObjectTypeBuffer, kObjectTypeDict,
+    OptIndex, OptInt, OptValType, ScreenGrid, SignTextAttrs, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_13, StlClickRecord, StlFlag, String_0, Tabpage,
+    VAR_NUMBER, VAR_UNLOCKED, VV_LNUM, VV_RELNUM, VV_VIRTNUM, WinSplit, WinStyle, buf_T, colnr_T,
+    frame_T, hlf_T, int64_t, kObjectTypeArray, kObjectTypeBuffer, kObjectTypeDict,
     kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, key_value_pair,
     linenr_T, object, object_data as C2Rust_Unnamed, ptrdiff_t, schar_T, size_t, ssize_t,
     statuscol_T, stl_hlrec_t, tabpage_T, typval_T, typval_vval_union, uint8_t, varnumber_T, win_T,
@@ -72,24 +72,9 @@ use crate::src::nvim::types::{
 use crate::src::nvim::ui::{ui_call_msg_ruler, ui_call_tabline_update, ui_has};
 use crate::src::nvim::undo::bufIsChanged;
 use crate::src::nvim::window::{global_stl_height, lastwin_nofloating, tabline_height};
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kStlClickFuncRun: C2Rust_Unnamed_13 = 3;
 pub const kStlClickTabClose: C2Rust_Unnamed_13 = 2;
 pub const kStlClickTabSwitch: C2Rust_Unnamed_13 = 1;

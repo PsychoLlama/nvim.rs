@@ -31,8 +31,8 @@ use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::strings::xstrnsave;
 use crate::src::nvim::types::{
-    AdditionalData, EvalFuncData, HistoryType, OptInt, Timestamp, VarType, exarg_T, expand_T,
-    regmatch_T, size_t, typval_T, varnumber_T,
+    AdditionalData, EvalFuncData, HistoryType, OptInt, Timestamp, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, exarg_T, expand_T, regmatch_T, size_t, typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -675,8 +675,6 @@ pub unsafe extern "C" fn f_histdel(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    const VAR_UNKNOWN: VarType = 0;
-    const VAR_NUMBER: VarType = 1;
     let name = tv_get_string_chk(argvars);
     let n = if name.is_null() {
         0
@@ -704,8 +702,6 @@ pub unsafe extern "C" fn f_histget(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    const VAR_UNKNOWN: VarType = 0;
-    const VAR_STRING: VarType = 2;
     let name = tv_get_string_chk(argvars);
     if name.is_null() {
         (*rettv).vval.v_string = core::ptr::null_mut();

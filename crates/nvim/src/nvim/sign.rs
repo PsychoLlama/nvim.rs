@@ -70,9 +70,9 @@ use crate::src::nvim::os::libc::{atoi, gettext, snprintf, strcmp, strlen, strncm
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
     DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight, DecorVirtText,
-    Error, EvalFuncData, Integer, ListLenSpecials, MTKey, MTPair, MarkTree, MarkTreeIter, NS,
-    SignItem, VarType, buf_T, dict_T, dictitem_T, exarg_T, expand_T, int64_t, linenr_T, list_T,
-    listitem_T, ptrdiff_t, schar_T, sign_T, size_t, typval_T, uint16_t, uint32_t, varnumber_T,
+    Error, EvalFuncData, Integer, MTKey, MTPair, MarkTree, MarkTreeIter, NS, SignItem, buf_T,
+    dict_T, dictitem_T, exarg_T, expand_T, int64_t, linenr_T, list_T, listitem_T, ptrdiff_t,
+    schar_T, sign_T, size_t, typval_T, uint16_t, uint32_t, varnumber_T,
 };
 use crate::src::nvim::window::buf_jump_open_win;
 
@@ -82,11 +82,6 @@ mod complete;
 pub use self::complete::*;
 mod vimscript;
 pub use self::vimscript::*;
-
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const kListLenMayKnow: ListLenSpecials = -3;
 
 pub const EXPAND_SIGN: c_int = 34;
 pub const EXPAND_HIGHLIGHT: c_int = 13;

@@ -46,9 +46,8 @@ use crate::src::nvim::eval::vars::{
     garbage_collect_globvars, garbage_collect_scriptvars, garbage_collect_vimvars,
 };
 use crate::src::nvim::eval::{
-    CONV_NONE, COPYID_INC, COPYID_MASK, DICT_MAXNEST, FAIL, NUL, OK, VAR_BLOB, VAR_BOOL, VAR_DICT,
-    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
-    VAR_UNLOCKED, e_variable_nested_too_deep_for_making_copy, kMTCharWise, set_ref_in_callback,
+    CONV_NONE, COPYID_INC, COPYID_MASK, DICT_MAXNEST, FAIL, NUL, OK,
+    e_variable_nested_too_deep_for_making_copy, kMTCharWise, set_ref_in_callback,
     set_ref_in_callback_reader,
 };
 use crate::src::nvim::ex_docmd::set_ref_in_findfunc;
@@ -70,10 +69,12 @@ use crate::src::nvim::register::op_global_reg_iter;
 use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::tag::set_ref_in_tagfunc;
 use crate::src::nvim::types::{
-    AdditionalData, Channel, DictWatcher, OptInt, QUEUE, String_0, buf_T, dict_T, dictitem_T,
-    fmark_T, fmarkv_T, hashitem_T, hashtab_T, ht_stack_S, ht_stack_T, list_T, list_stack_S,
-    list_stack_T, listitem_T, partial_T, pos_T, size_t, tabpage_T, timer_T, typval_T,
-    typval_vval_union, ufunc_T, vimconv_T, win_T, xfmark_T, yankreg_T,
+    AdditionalData, Channel, DictWatcher, OptInt, QUEUE, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT,
+    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
+    VAR_UNLOCKED, buf_T, dict_T, dictitem_T, fmark_T, fmarkv_T, hashitem_T, hashtab_T, ht_stack_S,
+    ht_stack_T, list_T, list_stack_S, list_stack_T, listitem_T, partial_T, pos_T, size_t,
+    tabpage_T, timer_T, typval_T, typval_vval_union, ufunc_T, vimconv_T, win_T, xfmark_T,
+    yankreg_T,
 };
 
 /// A freshly declared typval.

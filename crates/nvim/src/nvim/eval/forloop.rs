@@ -24,8 +24,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::vars::{ex_let_vars, skip_var_list};
 use crate::src::nvim::eval::{
-    EVAL_EVALUATE, NUL, OK, VAR_BLOB, VAR_FIXED, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VAR_UNLOCKED, e_string_list_or_blob_required, eval0, forinfo_T,
+    EVAL_EVALUATE, NUL, OK, e_string_list_or_blob_required, eval0, forinfo_T,
 };
 use crate::src::nvim::main::emsg_skip;
 use crate::src::nvim::mbyte::utfc_ptr2len;
@@ -33,7 +32,8 @@ use crate::src::nvim::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::types::{
-    evalarg_T, exarg_T, listitem_T, size_t, typval_T, typval_vval_union, varnumber_T,
+    VAR_BLOB, VAR_FIXED, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, evalarg_T,
+    exarg_T, listitem_T, size_t, typval_T, typval_vval_union, varnumber_T,
 };
 
 /// A freshly declared typval.

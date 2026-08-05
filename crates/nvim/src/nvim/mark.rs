@@ -74,7 +74,6 @@ pub const CMOD_LOCKMARKS: c_int = 2048;
 pub const BUF_HAS_QF_ENTRY: c_int = 1;
 pub const BUF_HAS_LL_ENTRY: c_int = 2;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
-pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kMTCharWise: MotionType = 0;
 pub const ARRAY_DICT_INIT: Dict = Dict {
     size: 0,

@@ -9,6 +9,9 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::{
+    VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
+};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

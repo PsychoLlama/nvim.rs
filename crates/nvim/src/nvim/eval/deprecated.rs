@@ -14,27 +14,13 @@ use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::types::channel::kChannelStdinPipe;
 use crate::src::nvim::types::{
     BoolVarValue, Callback, Callback_data as C2Rust_Unnamed_19, CallbackReader, Channel,
-    ChannelPart, EvalFuncData, ScopeType, SpecialVarValue, VarLockStatus, VarType, buf_T, dict_T,
-    garray_T, list_T, listitem_T, size_t, typval_T, uint16_t, uint64_t, varnumber_T,
+    ChannelPart, EvalFuncData, SpecialVarValue, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, buf_T, dict_T, garray_T, list_T, listitem_T, size_t, typval_T, uint16_t, uint64_t,
+    varnumber_T,
 };
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kChannelPartRpc: ChannelPart = 3;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {

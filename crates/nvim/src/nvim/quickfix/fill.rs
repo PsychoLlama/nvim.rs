@@ -12,6 +12,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::{VAR_DICT, VAR_FIXED, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

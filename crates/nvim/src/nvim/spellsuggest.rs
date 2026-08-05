@@ -74,7 +74,7 @@ use crate::src::nvim::spellsuggest::soundalike::{
 };
 use crate::src::nvim::spellsuggest::walk::suggest_trie_walk;
 use crate::src::nvim::strings::vim_strchr;
-use crate::src::nvim::types::{FILE, VarType, garray_T, hashtab_T, hlf_T, langp_T, slang_T};
+use crate::src::nvim::types::{FILE, VAR_LIST, garray_T, hashtab_T, hlf_T, langp_T, slang_T};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
 
@@ -96,13 +96,6 @@ const MAXPATHL: usize = 4096;
 /// `spell_check_sps`'s two answers, as the option code expects them.
 const OK: c_int = 1;
 const FAIL: c_int = 0;
-
-/// "No highlight", which `spell_check` leaves in place when it finds
-/// nothing wrong with the word.
-/// Move to any kind of spelling mistake, not just bad or rare words.
-/// A `v:t_list` typval, which is what a `'spellsuggest'` expression must
-/// yield one of per suggestion.
-const VAR_LIST: VarType = 4;
 
 // Word flags. These live beside each word in the tree, except for
 // `WF_MIXCAP`, which only ever appears in `su_badflags`.

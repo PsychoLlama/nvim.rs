@@ -10,7 +10,7 @@ use crate::src::nvim::buffer::buflist_findnr;
 use crate::src::nvim::eval::typval::{
     tv_get_string_chk, tv_list_find, tv_list_find_nr, tv_list_len,
 };
-use crate::src::nvim::eval::{FAIL, NUL, OK, VAR_LIST, VAR_STRING, kMarkAll};
+use crate::src::nvim::eval::{FAIL, NUL, OK, kMarkAll};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{VIsual, VIsual_active, curbuf, curwin};
 use crate::src::nvim::mark::mark_get;
@@ -19,7 +19,8 @@ use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::r#move::{check_cursor_moved, update_topline, validate_botline_win};
 use crate::src::nvim::os::libc::strcmp;
 use crate::src::nvim::types::{
-    buf_T, colnr_T, fmark_T, linenr_T, list_T, listitem_T, pos_T, typval_T, uint8_t, win_T,
+    VAR_LIST, VAR_STRING, buf_T, colnr_T, fmark_T, linenr_T, list_T, listitem_T, pos_T, typval_T,
+    uint8_t, win_T,
 };
 
 /// The character index of byte index `byteidx` in a buffer line.

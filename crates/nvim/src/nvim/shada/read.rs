@@ -15,7 +15,7 @@
 use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
-use crate::src::nvim::types::VV_OLDFILES;
+use crate::src::nvim::types::{VAR_UNKNOWN, VV_OLDFILES, kListLenUnknown};
 
 /// What a mark restored from a file starts its view at: nothing is known
 /// about where the window was scrolled to.

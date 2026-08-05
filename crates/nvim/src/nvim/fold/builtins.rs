@@ -14,7 +14,7 @@ use core::ptr;
 
 use super::text::*;
 use super::*;
-use crate::src::nvim::types::{VV_FOLDDASHES, VV_FOLDEND, VV_FOLDSTART};
+use crate::src::nvim::types::{VAR_STRING, VV_FOLDDASHES, VV_FOLDEND, VV_FOLDSTART};
 
 /// "foldclosed()" and "foldclosedend()" functions
 pub(super) unsafe extern "C" fn foldclosed_both(

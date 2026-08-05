@@ -114,11 +114,11 @@ use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::ui::{kUICmdline, kUIMessages, kUIPopupmenu, kUIWildmenu};
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, CMD_index, CmdlineInfo, CompleteListItemGetter, Direction, Error,
-    EvalFuncData, LuaRetMode, Object, OptInt, ScopeType, SpecialVarValue, VarLockStatus, VarType,
-    buf_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T, fuzmatch_str_T, garray_T,
-    hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, list_T, listitem_T, pos_T, ptrdiff_t,
-    pumitem_T, regmatch_T, regprog_T, scriptitem_T, size_t, ssize_t, typval_T, typval_vval_union,
-    uint32_t, varnumber_T, xp_prefix_T,
+    EvalFuncData, LuaRetMode, Object, OptInt, SpecialVarValue, buf_T, cmd_addr_T, cmdidx_T,
+    colnr_T, dict_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, hashtab_T, hlf_T,
+    kObjectTypeArray, kObjectTypeString, list_T, listitem_T, pos_T, ptrdiff_t, pumitem_T,
+    regmatch_T, regprog_T, scriptitem_T, size_t, ssize_t, typval_T, typval_vval_union, uint32_t,
+    varnumber_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has, vim_beep};
 use crate::src::nvim::usercmd::{
@@ -166,24 +166,9 @@ unsafe extern "C" {
     fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T)
     -> bool;
 }
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;

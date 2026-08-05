@@ -86,7 +86,7 @@ use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, Arena, Array, BoolVarValue,
     CMD_index, Dict, DoInRuntimepathCB, Error, EvalFuncData, FILE, Integer, LineGetter, LuaRetMode,
     MHPutStatus, Map_String_int, MapHash, Object, OptInt, OptVal, OptValData, OptValType,
-    ScopeType, Set_String, SpecialVarValue, String_0, TriState, VarLockStatus, VarType, XDGVarType,
+    Set_String, SpecialVarValue, String_0, TriState, VAR_DICT, VAR_FIXED, VAR_LOCKED, XDGVarType,
     buf_T, cmd_addr_T, colnr_T, dict_T, dictitem_T, estack_T, estack_arg_T, etype_T, exarg_T,
     expand_T, funccal_entry_T, garray_T, handle_T, hashitem_T, hashtab_T, int64_t, kFalse, kNone,
     kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
@@ -104,25 +104,9 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kMHExisting: MHPutStatus = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
 pub const EXPAND_RUNTIME: C2Rust_Unnamed_13 = 51;

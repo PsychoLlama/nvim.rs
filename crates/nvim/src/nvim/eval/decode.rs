@@ -21,35 +21,20 @@ use crate::src::nvim::memory::{xfree, xmalloc, xmallocz, xmemdupz, xrealloc};
 use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memchr, memcpy, strlen, strncmp};
 use crate::src::nvim::types::{
-    BoolVarValue, ListLenSpecials, MessagePackType, ScopeType, SpecialVarValue, VarLockStatus,
-    VarType, blob_T, dict_T, dictitem_T, hashitem_T, hashtab_T, list_T, mpack_data_t, mpack_node_t,
-    mpack_parser_t, mpack_tokbuf_t, mpack_token_s_data as C2Rust_Unnamed_0, mpack_token_t,
-    mpack_token_type_t, mpack_uint32_t, mpack_value_t, ptrdiff_t, size_t, typval_T,
-    typval_vval_union, uint8_t, uint32_t, uint64_t, uvarnumber_T, varnumber_T,
+    BoolVarValue, MessagePackType, SpecialVarValue, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_LIST,
+    VAR_NUMBER, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dict_T, dictitem_T,
+    hashitem_T, hashtab_T, kListLenMayKnow, list_T, mpack_data_t, mpack_node_t, mpack_parser_t,
+    mpack_tokbuf_t, mpack_token_s_data as C2Rust_Unnamed_0, mpack_token_t, mpack_token_type_t,
+    mpack_uint32_t, mpack_value_t, ptrdiff_t, size_t, typval_T, typval_vval_union, uint8_t,
+    uint32_t, uint64_t, uvarnumber_T, varnumber_T,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MPACK_OK: C2Rust_Unnamed = 0;
 pub const MPACK_TOKEN_CHUNK: mpack_token_type_t = 6;
 pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
-pub const kListLenMayKnow: ListLenSpecials = -3;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_2 = ::core::ffi::c_uint;
 pub const STR2NR_FORCE: C2Rust_Unnamed_2 = 128;
 pub const STR2NR_HEX: C2Rust_Unnamed_2 = 4;

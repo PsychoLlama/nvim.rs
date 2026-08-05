@@ -25,9 +25,8 @@ use super::api::with_rex;
 use super::submatch::{clear_submatch_list, fill_submatch_list};
 use super::{
     CAR, Ctrl_H, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, NUL, REGSUB_BACKSLASH, REGSUB_COPY,
-    REGSUB_MAGIC, TAB, VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN,
-    can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len, reg_prev_sub, reg_prev_sublen,
-    regsubmatch_T, rex, rsm,
+    REGSUB_MAGIC, TAB, can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len,
+    reg_prev_sub, reg_prev_sublen, regsubmatch_T, rex, rsm,
 };
 use crate::src::nvim::eval::typval::{tv_clear, tv_get_string_buf_chk, tv_list_len};
 use crate::src::nvim::eval::userfunc::call_func;
@@ -44,7 +43,8 @@ use crate::src::nvim::os::libc::{gettext, memmove, strcpy, strlen, strncmp};
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::src::nvim::types::{
-    funcexe_T, linenr_T, partial_T, regmatch_T, regmmatch_T, staticList10_T, typval_T,
+    VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, funcexe_T, linenr_T,
+    partial_T, regmatch_T, regmmatch_T, staticList10_T, typval_T,
 };
 
 /// How deep a `\=` expression may nest substitutions before it is more

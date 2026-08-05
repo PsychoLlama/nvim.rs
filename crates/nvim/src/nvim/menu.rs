@@ -41,38 +41,21 @@ use crate::src::nvim::state::{
 };
 use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 use crate::src::nvim::types::{
-    AlignTextPos, BoolVarValue, CMD_index, EvalFuncData, FloatRelative, ListLenSpecials,
-    RemapValues, ScopeType, SpecialVarValue, String_0, TriState, VarLockStatus, VarType, WinSplit,
-    WinStyle, buffblock, buffblock_T, buffheader_T, colnr_T, dict_T, exarg_T, expand_T, garray_T,
-    kFalse, kNone, kTrue, linenr_T, list_T, pos_T, ptrdiff_t, save_state_T, scid_T, size_t,
-    ssize_t, tasave_T, typebuf_T, typval_T, uint8_t, varnumber_T, vimmenu_T,
+    AlignTextPos, BoolVarValue, CMD_index, EvalFuncData, FloatRelative, RemapValues,
+    SpecialVarValue, String_0, TriState, VAR_UNKNOWN, WinSplit, WinStyle, buffblock, buffblock_T,
+    buffheader_T, colnr_T, dict_T, exarg_T, expand_T, garray_T, kFalse, kListLenMayKnow, kNone,
+    kTrue, linenr_T, list_T, pos_T, ptrdiff_t, save_state_T, scid_T, size_t, ssize_t, tasave_T,
+    typebuf_T, typval_T, uint8_t, varnumber_T, vimmenu_T,
 };
 use crate::src::nvim::ui::ui_call_update_menu;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
 pub const kFloatRelativeEditor: FloatRelative = 0;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
-pub const kListLenMayKnow: ListLenSpecials = -3;
-pub const kListLenUnknown: ListLenSpecials = -1;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
 pub const EXPAND_MENUNAMES: C2Rust_Unnamed_14 = 21;
 pub const EXPAND_MENUS: C2Rust_Unnamed_14 = 11;

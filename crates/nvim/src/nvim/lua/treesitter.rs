@@ -23,10 +23,9 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
-    BoolVarValue, LuaRef, Map_cstr_t_ptr_t, Map_int_ptr_t, MapHash, ScopeType, Set_cstr_t,
-    SpecialVarValue, VarLockStatus, VarType, buf_T, cstr_t, handle_T, int32_t, linenr_T,
-    lua_Integer, lua_Number, lua_State, luaL_Reg, ptr_t, size_t, uint8_t, uint16_t, uint32_t,
-    uint64_t, uv_lib_t,
+    BoolVarValue, LuaRef, Map_cstr_t_ptr_t, Map_int_ptr_t, MapHash, Set_cstr_t, SpecialVarValue,
+    buf_T, cstr_t, handle_T, int32_t, linenr_T, lua_Integer, lua_Number, lua_State, luaL_Reg,
+    ptr_t, size_t, uint8_t, uint16_t, uint32_t, uint64_t, uv_lib_t,
 };
 // Opaque C types: layout unknown here, only ever used behind a pointer.
 #[repr(C)]
@@ -324,24 +323,9 @@ pub struct TSLanguageMetadata {
     pub minor_version: uint8_t,
     pub patch_version: uint8_t,
 }
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSLuaTree {

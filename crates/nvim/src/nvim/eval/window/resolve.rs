@@ -1,4 +1,5 @@
 use super::*;
+use crate::src::nvim::types::{VAR_UNKNOWN, kListLenMayKnow};
 
 pub unsafe extern "C" fn win_id2wp(id: c_int) -> *mut win_T {
     win_id2wp_tp(id, ptr::null_mut())

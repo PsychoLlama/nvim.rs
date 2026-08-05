@@ -3,6 +3,7 @@
 use super::file::*;
 use super::*;
 use crate::src::nvim::highlight_group::HLF_T;
+use crate::src::nvim::types::{VAR_STRING, VAR_UNKNOWN, kListLenMayKnow};
 
 pub unsafe fn ex_undolist(mut _eap: *mut exarg_T) {
     let mut changes: c_int = 1;

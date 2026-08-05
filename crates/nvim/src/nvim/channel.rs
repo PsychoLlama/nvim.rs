@@ -82,15 +82,7 @@ mod known {
     pub const kChannelPartAll: ChannelPart = 4;
 
     pub const kProcTypePty: c_int = 1;
-    pub const kListLenMayKnow: c_int = -3;
     pub const LUA_NOREF: c_int = -2;
-
-    pub const VAR_UNKNOWN: c_int = 0;
-    pub const VAR_NUMBER: c_int = 1;
-    pub const VAR_STRING: c_int = 2;
-    pub const VAR_LIST: c_int = 4;
-    pub const VAR_DICT: c_int = 5;
-    pub const VAR_UNLOCKED: c_int = 0;
 
     /// `fcntl` command: dup to the lowest free descriptor at or above the
     /// third argument, with close-on-exec set.

@@ -3,9 +3,8 @@
 
 use super::args::{Args, frame};
 use super::{
-    FAIL, NUL, VAR_BLOB, VAR_DICT, VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VARNUMBER_MAX, VARNUMBER_MIN,
-    e_missing_function_argument, e_string_list_or_blob_required,
+    FAIL, NUL, VARNUMBER_MAX, VARNUMBER_MIN, e_missing_function_argument,
+    e_string_list_or_blob_required,
 };
 use crate::src::nvim::eval::typval::{
     tv_blob_get, tv_blob_len, tv_check_for_number_arg, tv_check_for_string_arg, tv_clear, tv_copy,
@@ -22,7 +21,9 @@ use crate::src::nvim::memory::xmemdupz;
 use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::types::{
-    EvalFuncData, blob_T, dictitem_T, typval_T, typval_vval_union, varnumber_T,
+    EvalFuncData, VAR_BLOB, VAR_DICT, VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dictitem_T, typval_T, typval_vval_union,
+    varnumber_T,
 };
 use core::ffi::{c_char, c_int, c_void};
 

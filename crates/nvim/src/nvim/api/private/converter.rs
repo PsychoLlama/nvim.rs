@@ -23,30 +23,16 @@ use crate::src::nvim::types::{
     MPConvStack, MPConvStackVal, MPConvStackVal_data as C2Rust_Unnamed_2,
     MPConvStackVal_data_a as C2Rust_Unnamed_3, MPConvStackVal_data_d as C2Rust_Unnamed_6,
     MPConvStackVal_data_l as C2Rust_Unnamed_5, MPConvStackValType, MessagePackType, Object,
-    ScopeType, SpecialVarValue, String_0, VarLockStatus, VarType, blob_T, dict_T, dictitem_T,
-    float_T, hashitem_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeFloat,
+    SpecialVarValue, String_0, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dict_T, dictitem_T, float_T,
+    hashitem_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeFloat,
     kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, list_T, listitem_T,
     object, object_data as C2Rust_Unnamed, partial_T, ptrdiff_t, size_t, typval_T,
     typval_vval_union, ufunc_T, uint32_t, uint64_t, varnumber_T,
 };
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_1 {

@@ -65,12 +65,11 @@ use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::src::nvim::types::{
     BoolVarValue, CMD_index, EvalFuncData, ExtmarkOp, FILE, FileInfo, OptInt, OptScope, OptVal,
-    OptValData, OptValType, ScopeType, SpecialVarValue, String_0, TriState, VarLockStatus, VarType,
-    aco_save_T, buf_T, bufref_T, cmd_addr_T, colnr_T, cstack_T, diff_T, diffblock_S, diffline_S,
-    diffline_T, diffline_change_S, diffline_change_T, exarg_T, garray_T, hlf_T, int32_t, kFalse,
-    kNone, kTrue, linenr_T, mmfile_t, scid_T, size_t, tabpage_T, typval_T, uint8_t, uint64_t,
-    uv_stat_t, uv_timespec_t, varnumber_T, win_T, xdemitcb_t, xdemitconf_t,
-    xdl_emit_hunk_consume_func_t, xpparam_t,
+    OptValData, OptValType, SpecialVarValue, String_0, TriState, aco_save_T, buf_T, bufref_T,
+    cmd_addr_T, colnr_T, cstack_T, diff_T, diffblock_S, diffline_S, diffline_T, diffline_change_S,
+    diffline_change_T, exarg_T, garray_T, hlf_T, int32_t, kFalse, kNone, kTrue, linenr_T, mmfile_t,
+    scid_T, size_t, tabpage_T, typval_T, uint8_t, uint64_t, uv_stat_t, uv_timespec_t, varnumber_T,
+    win_T, xdemitcb_t, xdemitconf_t, xdl_emit_hunk_consume_func_t, xpparam_t,
 };
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::undo::{u_save, u_sync};
@@ -80,24 +79,9 @@ use crate::src::nvim::window::{
 use crate::src::xdiff::xdiffi::xdl_diff;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISdigit: C2Rust_Unnamed = 2048;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeBoolean: OptValType = 0;

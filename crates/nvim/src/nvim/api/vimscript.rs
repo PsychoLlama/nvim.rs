@@ -23,12 +23,12 @@ use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Boolean, CMD_index, Dict, Error, ExprAST, ExprASTNode,
     ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
     ExprParserFlags, Integer, KeyDict_exec_opts, KeyValuePair, Object, ParserHighlight,
-    ParserHighlightChunk, ParserLine, ParserPosition, ParserState, ScopeType, SpecialVarValue,
-    String_0, TryState, VarLockStatus, VarType, dict_T, dictitem_T, exarg_T, except_T, funcexe_T,
-    garray_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, key_value_pair, linenr_T, msglist_T,
-    object, object_data as C2Rust_Unnamed, partial_T, ptrdiff_t, sctx_T, size_t, typval_T,
-    typval_vval_union, uint64_t, uvarnumber_T,
+    ParserHighlightChunk, ParserLine, ParserPosition, ParserState, SpecialVarValue, String_0,
+    TryState, VAR_DICT, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T,
+    exarg_T, except_T, funcexe_T, garray_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
+    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, key_value_pair,
+    linenr_T, msglist_T, object, object_data as C2Rust_Unnamed, partial_T, ptrdiff_t, sctx_T,
+    size_t, typval_T, typval_vval_union, uint64_t, uvarnumber_T,
 };
 use crate::src::nvim::viml::parser::expressions::{
     ccs_tab, east_node_type_tab, eltkn_cmp_type_tab, expr_asgn_type_tab, viml_pexpr_free_ast,
@@ -37,24 +37,9 @@ use crate::src::nvim::viml::parser::expressions::{
 use crate::src::nvim::viml::parser::parser::{
     parser_simple_get_line, viml_parser_destroy, viml_parser_init,
 };
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const MAX_FUNC_ARGS: C2Rust_Unnamed_13 = 20;
 pub const CMD_snext: CMD_index = 414;

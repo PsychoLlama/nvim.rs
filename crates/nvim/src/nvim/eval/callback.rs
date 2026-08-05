@@ -13,9 +13,8 @@ use crate::src::nvim::eval::typval::{
 use crate::src::nvim::eval::userfunc::{call_func, func_ref, get_scriptlocal_funcname};
 use crate::src::nvim::eval::vars::get_vim_var_partial;
 use crate::src::nvim::eval::{
-    ARRAY_DICT_INIT, FAIL, FUNCEXE_INIT, NUL, OK, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, callback_depth, check_luafunc_name,
-    kRetNilBool, partial_name,
+    ARRAY_DICT_INIT, FAIL, FUNCEXE_INIT, NUL, OK, callback_depth, check_luafunc_name, kRetNilBool,
+    partial_name,
 };
 use crate::src::nvim::lua::executor::{
     nlua_call_ref, nlua_is_table_from_lua, nlua_register_table_as_callable,
@@ -25,7 +24,8 @@ use crate::src::nvim::memory::xstrdup;
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{gettext, memcmp, strlen};
 use crate::src::nvim::types::{
-    Arena, Callback, CallbackReader, Error, Object, OptInt, VV_LUA, funcexe_T, ht_stack_T,
+    Arena, Callback, CallbackReader, Error, Object, OptInt, VAR_DICT, VAR_FUNC, VAR_NUMBER,
+    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_LUA, funcexe_T, ht_stack_T,
     kObjectTypeBoolean, list_stack_T, partial_T, size_t, typval_T, typval_vval_union,
 };
 

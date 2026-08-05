@@ -29,9 +29,9 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::log::{LOGLVL_INF, logmsg};
 use crate::src::nvim::main::entry::event_teardown;
 use crate::src::nvim::main::{
-    NUL, VAR_NUMBER, curbuf, curtab, did_emsg, ex_exitval, exiting, exmode_active, first_tabpage,
-    firstbuf, firstwin, garbage_collect_at_exit, no_wait_return, p_shada, p_title, p_titleold,
-    stderr_isatty, stdout_isatty, ui_client_channel_id, ui_client_exit_status, used_stdin, v_dying,
+    NUL, curbuf, curtab, did_emsg, ex_exitval, exiting, exmode_active, first_tabpage, firstbuf,
+    firstwin, garbage_collect_at_exit, no_wait_return, p_shada, p_title, p_titleold, stderr_isatty,
+    stdout_isatty, ui_client_channel_id, ui_client_exit_status, used_stdin, v_dying,
 };
 use crate::src::nvim::memfile::mf_fname;
 use crate::src::nvim::memline::{ml_close_all, ml_close_notmod, ml_sync_all};
@@ -41,7 +41,9 @@ use crate::src::nvim::os::signal::signal_reject_deadly;
 use crate::src::nvim::profile::{profile_dump, time_finish};
 use crate::src::nvim::shada::shada_write_file;
 use crate::src::nvim::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
-use crate::src::nvim::types::{VV_EXITING, VV_EXITREASON, bufref_T, tabpage_T, varnumber_T};
+use crate::src::nvim::types::{
+    VAR_NUMBER, VV_EXITING, VV_EXITREASON, bufref_T, tabpage_T, varnumber_T,
+};
 use crate::src::nvim::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::src::nvim::ui_client::ui_client_stop;
 

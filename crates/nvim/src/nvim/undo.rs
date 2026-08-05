@@ -65,7 +65,7 @@ use core::ptr;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod header {
-    use super::{ExtmarkOp, ListLenSpecials, UndoObjectType, VarType, c_int, c_ulong};
+    use super::{ExtmarkOp, UndoObjectType, c_int, c_ulong};
 
     pub const NUL: c_int = 0;
     pub const OK: c_int = 1;
@@ -95,13 +95,10 @@ mod header {
     pub const UH_RELOAD: c_int = 4;
 
     pub const UPD_NOT_VALID: c_int = 40;
-    pub const kListLenMayKnow: ListLenSpecials = -3;
     pub const kExtmarkNOOP: ExtmarkOp = 0;
     pub const kExtmarkUndo: ExtmarkOp = 1;
     pub const kExtmarkSplice: UndoObjectType = 0;
     pub const kExtmarkMove: UndoObjectType = 1;
-    pub const VAR_UNKNOWN: VarType = 0;
-    pub const VAR_STRING: VarType = 2;
 }
 use header::*;
 

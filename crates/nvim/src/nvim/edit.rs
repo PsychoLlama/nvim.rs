@@ -145,11 +145,11 @@ use crate::src::nvim::textobject::{bck_word, fwd_word};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     AdditionalData, BoolVarValue, CharsizeArg, CharsizeKind, Direction, GraphemeState, MotionType,
-    OptInt, ScopeType, SpecialVarValue, StrCharInfo, String_0, TriState, UndoObjectType, VV_CHAR,
-    VV_INSERTMODE, VarLockStatus, VarType, VimState, aco_save_T, buf_T, cmdarg_T, colnr_T, event_T,
-    fmark_T, fmarkv_T, foldinfo_T, int32_t, int64_t, kFalse, kNone, kTrue, key_extra, linenr_T,
-    pos_T, ptrdiff_t, schar_T, size_t, ssize_t, state_check_callback, state_execute_callback,
-    uint8_t, uint32_t, varnumber_T, win_T, yankreg_T,
+    OptInt, SpecialVarValue, StrCharInfo, String_0, TriState, UndoObjectType, VV_CHAR,
+    VV_INSERTMODE, VimState, aco_save_T, buf_T, cmdarg_T, colnr_T, event_T, fmark_T, fmarkv_T,
+    foldinfo_T, int32_t, int64_t, kFalse, kNone, kTrue, key_extra, linenr_T, pos_T, ptrdiff_t,
+    schar_T, size_t, ssize_t, state_check_callback, state_execute_callback, uint8_t, uint32_t,
+    varnumber_T, win_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::src::nvim::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -161,24 +161,9 @@ pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
 pub const _ISlower: C2Rust_Unnamed = 512;
 pub const _ISupper: C2Rust_Unnamed = 256;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;

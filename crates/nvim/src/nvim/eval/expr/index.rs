@@ -19,11 +19,9 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::userfunc::make_partial;
 use crate::src::nvim::eval::{
-    EVAL_EVALUATE, FAIL, OK, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VARNUMBER_MAX,
-    call_func_rettv, check_luafunc_name, e_cannot_index_a_funcref, e_cannot_index_special_variable,
-    e_cannot_slice_dictionary, e_missbrac, eval_isdictc, eval_lambda, eval_method, eval1,
-    tv_is_luafunc,
+    EVAL_EVALUATE, FAIL, OK, VARNUMBER_MAX, call_func_rettv, check_luafunc_name,
+    e_cannot_index_a_funcref, e_cannot_index_special_variable, e_cannot_slice_dictionary,
+    e_missbrac, eval_isdictc, eval_lambda, eval_method, eval1, tv_is_luafunc,
 };
 use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::main::{e_dictkey, e_dictkey_len, e_using_float_as_string};
@@ -32,8 +30,9 @@ use crate::src::nvim::memory::xmemdupz;
 use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::types::{
-    EvalFuncData, dict_T, dictitem_T, evalarg_T, ptrdiff_t, size_t, ssize_t, typval_T,
-    typval_vval_union, varnumber_T,
+    EvalFuncData, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T, evalarg_T,
+    ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, varnumber_T,
 };
 
 /// A freshly declared typval.

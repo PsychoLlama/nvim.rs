@@ -27,30 +27,14 @@ use crate::src::nvim::types::{
     BoolVarValue, DecorHighlightInline, DecorInline, DecorInlineData, Error, ExtmarkInfoArray,
     ExtmarkMove, ExtmarkOp, ExtmarkSavePos, ExtmarkSplice, ExtmarkType, ExtmarkUndoObject, MTKey,
     MTNode, MTPair, MTPos, Map_uint32_t_uint32_t, MapHash, MarkTree, MarkTreeIter,
-    MarkTreeIter_s as C2Rust_Unnamed_14, ScopeType, Set_uint32_t, SpecialVarValue, UndoObjectType,
-    VarLockStatus, VarType, bcount_t, buf_T, colnr_T, extmark_undo_vec_t, int32_t, int64_t, kNone,
-    kTrue, linenr_T, size_t, u_header_T, uint16_t, uint32_t, uint64_t, undo_object,
-    undo_object_data as C2Rust_Unnamed_6,
+    MarkTreeIter_s as C2Rust_Unnamed_14, Set_uint32_t, SpecialVarValue, UndoObjectType, bcount_t,
+    buf_T, colnr_T, extmark_undo_vec_t, int32_t, int64_t, kNone, kTrue, linenr_T, size_t,
+    u_header_T, uint16_t, uint32_t, uint64_t, undo_object, undo_object_data as C2Rust_Unnamed_6,
 };
 use crate::src::nvim::undo::u_force_get_undo_header;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kExtmarkSavePos: UndoObjectType = 3;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;

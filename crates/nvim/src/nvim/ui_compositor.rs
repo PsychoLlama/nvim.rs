@@ -13,31 +13,16 @@ use crate::src::nvim::os::libc::{__assert_fail, abort, llabs, memcpy};
 use crate::src::nvim::os::time::os_sleep;
 use crate::src::nvim::types::ui::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
 use crate::src::nvim::types::{
-    BoolVarValue, Boolean, Integer, LineFlags, RemoteUI, ScopeType, ScreenGrid, SpecialVarValue,
-    String_0, VarLockStatus, VarType, handle_T, sattr_T, schar_T, size_t, ssize_t, uint64_t, win_T,
+    BoolVarValue, Boolean, Integer, LineFlags, RemoteUI, ScreenGrid, SpecialVarValue, String_0,
+    handle_T, sattr_T, schar_T, size_t, ssize_t, uint64_t, win_T,
 };
 use crate::src::nvim::ui::{
     ui_call_flush, ui_composed_call_grid_cursor_goto, ui_composed_call_grid_resize,
     ui_composed_call_grid_scroll, ui_composed_call_raw_line, ui_has,
 };
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_15 {

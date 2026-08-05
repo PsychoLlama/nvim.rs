@@ -16,29 +16,13 @@ use crate::src::nvim::os::input::input_get;
 use crate::src::nvim::os::libc::{atoi, gettext, memmove, snprintf};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    BoolVarValue, Callback, Callback_data as C2Rust_Unnamed, MultiQueue, ScopeType,
-    SpecialVarValue, VarLockStatus, VarType, key_extra, size_t, uint8_t,
+    BoolVarValue, Callback, Callback_data as C2Rust_Unnamed, MultiQueue, SpecialVarValue,
+    key_extra, size_t, uint8_t,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has};
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_1 = ::core::ffi::c_int;
 pub const EXPAND_FILES: C2Rust_Unnamed_1 = 2;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_1 = 0;

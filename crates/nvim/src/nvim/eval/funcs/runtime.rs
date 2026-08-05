@@ -4,7 +4,7 @@
 
 use super::args::frame;
 use super::wrappers::non_zero_arg;
-use super::{MENU_ALL_MODES, NUL, VAR_STRING, kListLenMayKnow, kRetNilBool, true_0};
+use super::{MENU_ALL_MODES, NUL, kRetNilBool, true_0};
 use crate::src::nvim::api::private::converter::object_to_vim;
 use crate::src::nvim::api::private::helpers::api_metadata;
 use crate::src::nvim::ascii::ascii_isdigit;
@@ -39,9 +39,9 @@ use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::syntax::syntax_present;
 use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::{
-    Arena, Array, Error, EvalFuncData, Object, String_0, TriState, VV_SHELL_ERROR, colnr_T,
-    garray_T, kFalse, kNone, kObjectTypeBoolean, kTrue, tabpage_T, typval_T, uint8_t, varnumber_T,
-    win_T,
+    Arena, Array, Error, EvalFuncData, Object, String_0, TriState, VAR_STRING, VV_SHELL_ERROR,
+    colnr_T, garray_T, kFalse, kListLenMayKnow, kNone, kObjectTypeBoolean, kTrue, tabpage_T,
+    typval_T, uint8_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::ui_gui_attached;
 use crate::src::nvim::version::{has_nvim_version, has_vim_patch};
@@ -399,7 +399,7 @@ pub unsafe extern "C" fn f_menu_get(
         let list = tv_list_alloc_ret(rettv, kListLenMayKnow as isize);
         // A non-String second argument is not an error: it just leaves the
         // mode set at "all".
-        let modes = if args.ty(1) == super::VAR_STRING {
+        let modes = if args.ty(1) == VAR_STRING {
             get_menu_cmd_modes(
                 tv_get_string(args.ptr(1)),
                 false,

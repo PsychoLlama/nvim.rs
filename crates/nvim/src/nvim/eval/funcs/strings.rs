@@ -4,10 +4,7 @@
 
 use super::args::{Args, frame};
 use super::wrappers::non_zero_arg;
-use super::{
-    CONV_NONE, FAIL, GA_EMPTY_INIT_VALUE, NSUBEXP, NUL, VAR_BLOB, VAR_LIST, VAR_STRING, VSE_NONE,
-    kListLenMayKnow,
-};
+use super::{CONV_NONE, FAIL, GA_EMPTY_INIT_VALUE, NSUBEXP, NUL, VSE_NONE};
 use crate::semsg;
 use crate::src::nvim::cursor::get_cursor_pos_ptr;
 use crate::src::nvim::eval::do_string_sub;
@@ -45,8 +42,8 @@ use crate::src::nvim::strings::{
     vim_strsave_escaped, vim_strsave_shellescape, vim_vsnprintf_typval,
 };
 use crate::src::nvim::types::{
-    EvalFuncData, blob_T, colnr_T, garray_T, hlf_T, list_T, regmatch_T, regprog_T, time_t, tm,
-    typval_T, varnumber_T, vimconv_T,
+    EvalFuncData, VAR_BLOB, VAR_LIST, VAR_STRING, blob_T, colnr_T, garray_T, hlf_T,
+    kListLenMayKnow, list_T, regmatch_T, regprog_T, time_t, tm, typval_T, varnumber_T, vimconv_T,
 };
 use core::ffi::{CStr, VaList, c_char, c_int, c_void};
 use core::ptr;

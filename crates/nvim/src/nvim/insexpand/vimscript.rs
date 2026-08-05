@@ -15,6 +15,9 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::{
+    VAR_DICT, VAR_FIXED, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
+};
 
 /// Fire `CompleteDone` with `v:event` describing how the completion ended.
 pub(crate) unsafe fn do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c_char) {

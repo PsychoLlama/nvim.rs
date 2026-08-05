@@ -49,34 +49,16 @@ use crate::src::nvim::runtime::script_is_lua;
 use crate::src::nvim::strings::{concat_str, vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::src::nvim::types::{
     __off_t, BoolVarValue, CdScope, Direction, EvalFuncData, FILE, FileDescriptor, FileInfo,
-    ListLenSpecials, ScopeType, SpecialVarValue, VV_VAL, VarLockStatus, VarType, blob_T, buf_T,
-    expand_T, garray_T, int32_t, int64_t, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage,
-    kCdScopeWindow, list_T, listitem_T, off_T, pos_T, ptrdiff_t, sctx_T, size_t, ssize_t,
-    tabpage_T, typval_T, typval_vval_union, uint8_t, uint64_t, uv_stat_t, uv_timespec_t,
-    varnumber_T, win_T, xp_prefix_T,
+    SpecialVarValue, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_VAL,
+    blob_T, buf_T, expand_T, garray_T, int32_t, int64_t, kCdScopeGlobal, kCdScopeInvalid,
+    kCdScopeTabpage, kCdScopeWindow, kListLenUnknown, list_T, listitem_T, off_T, pos_T, ptrdiff_t,
+    sctx_T, size_t, ssize_t, tabpage_T, typval_T, typval_vval_union, uint8_t, uint64_t, uv_stat_t,
+    uv_timespec_t, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::src::nvim::window::find_tabpage;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const kListLenMayKnow: ListLenSpecials = -3;
-pub const kListLenUnknown: ListLenSpecials = -1;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;

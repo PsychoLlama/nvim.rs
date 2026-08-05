@@ -1,4 +1,5 @@
 use super::*;
+use crate::src::nvim::types::{VAR_STRING, VAR_UNKNOWN, kListLenMayKnow, kListLenUnknown};
 
 /// Returns information about a window as a dictionary.
 unsafe extern "C" fn get_win_info(wp: *mut win_T, tpnr: int16_t, winnr: int16_t) -> *mut dict_T {

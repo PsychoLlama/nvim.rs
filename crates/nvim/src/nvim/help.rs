@@ -33,33 +33,17 @@ use crate::src::nvim::tag::{do_tag, find_tags};
 use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Direction, Error, FILE, LuaRetMode, Object, OptInt, OptVal,
-    OptValData, OptValType, ScopeType, SpecialVarValue, String_0, VarLockStatus, VarType, buf_T,
-    exarg_T, expand_T, file_comparison, garray_T, kObjectTypeNil, kObjectTypeString, linenr_T,
-    object, object_data as C2Rust_Unnamed_13, pos_T, scid_T, sctx_T, size_t, uint8_t, win_T,
-    xp_prefix_T,
+    OptValData, OptValType, SpecialVarValue, String_0, buf_T, exarg_T, expand_T, file_comparison,
+    garray_T, kObjectTypeNil, kObjectTypeString, linenr_T, object,
+    object_data as C2Rust_Unnamed_13, pos_T, scid_T, sctx_T, size_t, uint8_t, win_T, xp_prefix_T,
 };
 use crate::src::nvim::window::{
     WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_int;

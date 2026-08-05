@@ -16,8 +16,7 @@ use crate::src::nvim::eval::userfunc::get_scriptlocal_funcname;
 use crate::src::nvim::eval::{callback_call, get_copyID, set_ref_in_callback};
 use crate::src::nvim::ex_docmd::{
     CMD_lcd, CMD_lchdir, CMD_tcd, CMD_tchdir, CPO_NOSYMLINKS, FAIL, MAXPATHL, NUL, OK, OPT_GLOBAL,
-    OPT_LOCAL, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, ffu_cb, kBoolVarFalse,
-    kBoolVarTrue, kCdCauseManual, prev_dir,
+    OPT_LOCAL, ffu_cb, kBoolVarFalse, kBoolVarTrue, kCdCauseManual, prev_dir,
 };
 use crate::src::nvim::ex_getln::allbuf_locked;
 use crate::src::nvim::file_search::{do_autocmd_dirchanged, vim_chdir};
@@ -38,8 +37,9 @@ use crate::src::nvim::os::libc::{gettext, strcmp};
 use crate::src::nvim::path::pathcmp;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    BoolVarValue, Callback, CdScope, OptInt, buf_T, exarg_T, kCdScopeGlobal, kCdScopeTabpage,
-    kCdScopeWindow, list_T, listitem_T, optset_T, sctx_T, size_t, typval_T,
+    BoolVarValue, Callback, CdScope, OptInt, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
+    VAR_UNLOCKED, buf_T, exarg_T, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, list_T,
+    listitem_T, optset_T, sctx_T, size_t, typval_T,
 };
 
 /// The buffer-local 'findfunc' if it is set, and the global one otherwise.

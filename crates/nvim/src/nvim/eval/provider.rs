@@ -18,10 +18,7 @@ use crate::src::nvim::eval::userfunc::{
     call_func, find_func, get_current_funccal, restore_funccal, save_funccal,
 };
 use crate::src::nvim::eval::vars::eval_variable;
-use crate::src::nvim::eval::{
-    FAIL, FUNCEXE_INIT, NUL, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
-    callback_call, kChannelStreamProc,
-};
+use crate::src::nvim::eval::{FAIL, FUNCEXE_INIT, NUL, callback_call, kChannelStreamProc};
 use crate::src::nvim::event::proc::proc_is_stopped;
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::lua::executor::nlua_is_deferred_safe;
@@ -37,9 +34,9 @@ use crate::src::nvim::os::libc::{gettext, snprintf, strlen};
 use crate::src::nvim::runtime::{exestack, script_autoload};
 use crate::src::nvim::strings::concat_str;
 use crate::src::nvim::types::{
-    Callback, CallbackReader, Channel, buf_T, caller_scope, colnr_T, dict_T, estack_T,
-    funccal_entry_T, funcexe_T, list_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union,
-    uint64_t, varnumber_T,
+    Callback, CallbackReader, Channel, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
+    buf_T, caller_scope, colnr_T, dict_T, estack_T, funccal_entry_T, funcexe_T, list_T, ptrdiff_t,
+    size_t, ssize_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 use crate::src::nvim::undo::u_clearallandblockfree;
 

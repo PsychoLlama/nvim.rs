@@ -75,58 +75,36 @@ use crate::src::nvim::runtime::{new_script_item, script_autoload, script_items};
 use crate::src::nvim::search::set_search_direction;
 use crate::src::nvim::strings::{concat_str, vim_strchr};
 use crate::src::nvim::types::{
-    BoolVarValue, CMD_index, EvalFuncData, GRegFlags, ListLenSpecials, OptIndex, OptInt, OptVal,
-    OptValData, OptValType, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, TriState,
-    VV_CC_FROM, VV_CC_TO, VV_CHAR, VV_CMDARG, VV_COMPAT, VV_COMPLETED_ITEM, VV_COUNT, VV_COUNT1,
-    VV_ECHOSPACE, VV_ERRORS, VV_EVENT, VV_EXCEPTION, VV_EXITING, VV_FALSE, VV_FNAME_DIFF,
-    VV_FNAME_IN, VV_FNAME_NEW, VV_FNAME_OUT, VV_HLSEARCH, VV_LUA, VV_MAXCOL, VV_MSGPACK_TYPES,
-    VV_NULL, VV_NUMBERMAX, VV_NUMBERMIN, VV_NUMBERSIZE, VV_OPTION_COMMAND, VV_OPTION_NEW,
-    VV_OPTION_OLD, VV_OPTION_OLDGLOBAL, VV_OPTION_OLDLOCAL, VV_OPTION_TYPE, VV_PREVCOUNT, VV_REG,
-    VV_RO, VV_RO_SBX, VV_SEARCHFORWARD, VV_STDERR, VV_THROWPOINT, VV_TRUE, VV_TYPE_BLOB,
-    VV_TYPE_BOOL, VV_TYPE_DICT, VV_TYPE_FLOAT, VV_TYPE_FUNC, VV_TYPE_LIST, VV_TYPE_NUMBER,
-    VV_TYPE_STRING, VV_VAL, VV_VERSION, VV_VERSIONLONG, VarLockStatus, VarType, VimVarIndex,
+    BoolVarValue, CMD_index, EvalFuncData, GRegFlags, OptIndex, OptInt, OptVal, OptValData,
+    OptValType, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, TriState, VAR_BLOB, VAR_BOOL,
+    VAR_DEF_SCOPE, VAR_DICT, VAR_FIXED, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER,
+    VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT,
+    VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN,
+    VAR_UNLOCKED, VV_CC_FROM, VV_CC_TO, VV_CHAR, VV_CMDARG, VV_COMPAT, VV_COMPLETED_ITEM, VV_COUNT,
+    VV_COUNT1, VV_ECHOSPACE, VV_ERRORS, VV_EVENT, VV_EXCEPTION, VV_EXITING, VV_FALSE,
+    VV_FNAME_DIFF, VV_FNAME_IN, VV_FNAME_NEW, VV_FNAME_OUT, VV_HLSEARCH, VV_LUA, VV_MAXCOL,
+    VV_MSGPACK_TYPES, VV_NULL, VV_NUMBERMAX, VV_NUMBERMIN, VV_NUMBERSIZE, VV_OPTION_COMMAND,
+    VV_OPTION_NEW, VV_OPTION_OLD, VV_OPTION_OLDGLOBAL, VV_OPTION_OLDLOCAL, VV_OPTION_TYPE,
+    VV_PREVCOUNT, VV_REG, VV_RO, VV_RO_SBX, VV_SEARCHFORWARD, VV_STDERR, VV_THROWPOINT, VV_TRUE,
+    VV_TYPE_BLOB, VV_TYPE_BOOL, VV_TYPE_DICT, VV_TYPE_FLOAT, VV_TYPE_FUNC, VV_TYPE_LIST,
+    VV_TYPE_NUMBER, VV_TYPE_STRING, VV_VAL, VV_VERSION, VV_VERSIONLONG, VarType, VimVarIndex,
     aco_save_T, blob_T, buf_T, dict_T, dictitem_T, evalarg_T, exarg_T, expand_T, garray_T,
-    hashitem_T, hashtab_T, int64_t, kFalse, kNone, kTrue, list_T, list_stack_T, listitem_T, lval_T,
-    partial_T, ptrdiff_t, queue, scid_T, scriptitem_T, scriptvar_T, sctx_T, size_t, ssize_t,
-    switchwin_T, tabpage_T, typval_T, typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T,
+    hashitem_T, hashtab_T, int64_t, kFalse, kListLenUnknown, kNone, kTrue, list_T, list_stack_T,
+    listitem_T, lval_T, partial_T, ptrdiff_t, queue, scid_T, scriptitem_T, scriptvar_T, sctx_T,
+    size_t, ssize_t, switchwin_T, tabpage_T, typval_T, typval_vval_union, uint8_t, uint32_t,
+    varnumber_T, win_T,
 };
 use crate::src::nvim::version::{highest_patch, min_vim_version};
 use crate::src::nvim::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISlower: C2Rust_Unnamed = 512;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const DO_NOT_FREE_CNT: C2Rust_Unnamed_15 = 1073741823;
-pub const kListLenUnknown: ListLenSpecials = -1;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const VAR_TYPE_BLOB: C2Rust_Unnamed_16 = 10;
-pub const VAR_TYPE_BOOL: C2Rust_Unnamed_16 = 6;
-pub const VAR_TYPE_FLOAT: C2Rust_Unnamed_16 = 5;
-pub const VAR_TYPE_DICT: C2Rust_Unnamed_16 = 4;
-pub const VAR_TYPE_LIST: C2Rust_Unnamed_16 = 3;
-pub const VAR_TYPE_FUNC: C2Rust_Unnamed_16 = 2;
-pub const VAR_TYPE_STRING: C2Rust_Unnamed_16 = 1;
-pub const VAR_TYPE_NUMBER: C2Rust_Unnamed_16 = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const DI_FLAGS_ALLOC: C2Rust_Unnamed_17 = 16;
 pub const DI_FLAGS_LOCK: C2Rust_Unnamed_17 = 8;

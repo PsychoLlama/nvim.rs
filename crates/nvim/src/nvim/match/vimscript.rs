@@ -10,6 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::{VAR_DICT, VAR_LIST, VAR_UNKNOWN, kListLenMayKnow};
 
 /// How many `posN` keys a saved position match can carry.
 ///

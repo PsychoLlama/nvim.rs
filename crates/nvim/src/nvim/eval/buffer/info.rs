@@ -1,5 +1,6 @@
 use super::*;
 use crate::src::nvim::buffer::buf_get_changedtick;
+use crate::src::nvim::types::{VAR_DICT, VAR_UNKNOWN, kListLenMayKnow};
 
 /// Returns buffer options, variables and other attributes in a dictionary.
 unsafe fn get_buffer_info(buf: *mut buf_T) -> *mut dict_T {

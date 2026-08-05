@@ -11,31 +11,15 @@ use crate::src::nvim::os::libc::abort;
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Boolean, Buffer, Error, Integer, KeyDict_tabpage_config, Object,
-    ScopeType, SpecialVarValue, String_0, Tabpage, TryState, VarLockStatus, VarType, Window, buf_T,
-    except_T, kObjectTypeNil, kObjectTypeWindow, msglist_T, object, object_data as C2Rust_Unnamed,
-    size_t, tabpage_T, win_T,
+    SpecialVarValue, String_0, Tabpage, TryState, Window, buf_T, except_T, kObjectTypeNil,
+    kObjectTypeWindow, msglist_T, object, object_data as C2Rust_Unnamed, size_t, tabpage_T, win_T,
 };
 use crate::src::nvim::window::{
     tabpage_index, tabpage_win_valid, valid_tabpage, win_goto, win_new_tabpage, win_set_buf,
 };
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,

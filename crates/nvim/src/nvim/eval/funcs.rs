@@ -4,9 +4,9 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::memory::ARENA_EMPTY;
 use crate::src::nvim::types::{
     Array, BoolVarValue, CMD_index, Callback_data as C2Rust_Unnamed_22, ChannelPart,
-    ChannelStreamType, Context, GRegFlags, ListLenSpecials, LuaRetMode, MotionType, Object,
-    ProcType, SpecialVarValue, String_0, VarLockStatus, VarType, XDGVarType, cmd_addr_T, garray_T,
-    object_data as C2Rust_Unnamed_16, size_t, uint64_t, uv__work, uv_loop_t, uv_req_type,
+    ChannelStreamType, Context, GRegFlags, LuaRetMode, MotionType, Object, ProcType,
+    SpecialVarValue, String_0, XDGVarType, cmd_addr_T, garray_T, object_data as C2Rust_Unnamed_16,
+    size_t, uint64_t, uv__work, uv_loop_t, uv_req_type,
 };
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash
@@ -101,37 +101,12 @@ pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const MPACK_ERROR: C2Rust_Unnamed_13 = 2;
 pub const MPACK_EOF: C2Rust_Unnamed_13 = 1;
 pub const MPACK_OK: C2Rust_Unnamed_13 = 0;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kProcTypePty: ProcType = 1;
 pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
-pub const kListLenMayKnow: ListLenSpecials = -3;
-pub const kListLenShouldKnow: ListLenSpecials = -2;
-pub const kListLenUnknown: ListLenSpecials = -1;
 pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
-pub const VAR_TYPE_BLOB: C2Rust_Unnamed_33 = 10;
-pub const VAR_TYPE_SPECIAL: C2Rust_Unnamed_33 = 7;
-pub const VAR_TYPE_BOOL: C2Rust_Unnamed_33 = 6;
-pub const VAR_TYPE_FLOAT: C2Rust_Unnamed_33 = 5;
-pub const VAR_TYPE_DICT: C2Rust_Unnamed_33 = 4;
-pub const VAR_TYPE_LIST: C2Rust_Unnamed_33 = 3;
-pub const VAR_TYPE_FUNC: C2Rust_Unnamed_33 = 2;
-pub const VAR_TYPE_STRING: C2Rust_Unnamed_33 = 1;
-pub const VAR_TYPE_NUMBER: C2Rust_Unnamed_33 = 0;
 pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
 pub const DI_FLAGS_LOCK: C2Rust_Unnamed_34 = 8;
 pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;

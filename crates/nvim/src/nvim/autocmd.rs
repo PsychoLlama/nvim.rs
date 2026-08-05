@@ -70,8 +70,8 @@ use crate::src::nvim::types::{
     Arena, Array, AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue, Buffer,
     CMD_index, Callback, Callback_data as C2Rust_Unnamed_5, Dict, Error, Event, Integer,
     KeyValuePair, LuaRetMode, Map_String_int, Map_int_String, Map_int_ptr_t, MapHash, Object,
-    OptInt, OptVal, OptValData, OptValType, ScopeType, Set_String, Set_int, SpecialVarValue,
-    String_0, Timestamp, TriState, VV_CMDBANG, VV_TERMRESPONSE, VarLockStatus, VarType, aco_save_T,
+    OptInt, OptVal, OptValData, OptValType, Set_String, Set_int, SpecialVarValue, String_0,
+    Timestamp, TriState, VAR_UNKNOWN, VAR_UNLOCKED, VV_CMDBANG, VV_TERMRESPONSE, aco_save_T,
     aucmdwin_T, auto_event, buf_T, buffblock, buffblock_T, buffheader_T, bufref_T, dict_T,
     estack_T, etype_T, event_T, exarg_T, expand_T, funccal_entry_T, handle_T, hashitem_T,
     hashtab_T, int64_t, kFalse, kNone, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
@@ -96,24 +96,9 @@ unsafe extern "C" {
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
 }
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_int;
 pub const EXPAND_EVENTS: C2Rust_Unnamed_28 = 10;
 pub const EXPAND_FILES: C2Rust_Unnamed_28 = 2;

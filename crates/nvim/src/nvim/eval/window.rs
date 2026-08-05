@@ -71,10 +71,6 @@ pub const FAIL: c_int = 0;
 pub const MAXPATHL: c_int = 4096;
 pub const FR_LEAF: c_int = 0;
 pub const FR_ROW: c_int = 1;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const VAR_STRING: VarType = 2;
-pub const kListLenUnknown: ListLenSpecials = -1;
-pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const LOWEST_WIN_ID: c_uint = 1000;
 use crate::src::nvim::window::{
     check_split_disallowed, find_tabpage, goto_tabpage_tp, goto_tabpage_win, tabpage_index,

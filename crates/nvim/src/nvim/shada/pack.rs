@@ -17,6 +17,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use crate::src::nvim::types::builders::static_cstring;
 
 use super::*;
+use crate::src::nvim::types::{VAR_BLOB, VAR_TYPE_BLOB};
 
 /// Room the packer keeps free, so that a handful of small tokens can be
 /// written without checking after each one.

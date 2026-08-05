@@ -21,6 +21,9 @@ use core::mem::offset_of;
 use crate::src::nvim::cmdhist::{HIST_DEBUG, HIST_EXPR, HIST_INPUT};
 
 use super::*;
+use crate::src::nvim::types::{
+    VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_PARTIAL,
+};
 
 /// Whether a buffer's marks are not worth remembering: it has no file name,
 /// it was unlisted on purpose, it is a quickfix or terminal buffer, or its

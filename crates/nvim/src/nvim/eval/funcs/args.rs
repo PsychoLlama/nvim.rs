@@ -11,8 +11,7 @@
 //! That is the whole contract, and [`Args`] is it, expressed once.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::VAR_UNKNOWN;
-use crate::src::nvim::types::{VarType, typval_T};
+use crate::src::nvim::types::{VAR_UNKNOWN, VarType, typval_T};
 use core::marker::PhantomData;
 
 /// The size of the evaluator's argument buffer, minus its terminator slot.

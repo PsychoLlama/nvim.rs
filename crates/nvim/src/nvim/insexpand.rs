@@ -120,11 +120,10 @@ use crate::src::nvim::tag::find_tags;
 use crate::src::nvim::textformat::auto_format;
 use crate::src::nvim::types::{
     Arena, BoolVarValue, Callback, Callback_data as C2Rust_Unnamed_5, Direction, EvalFuncData,
-    ExtmarkOp, ListLenSpecials, OptInt, ScopeType, SpecialVarValue, String_0, VV_COMPLETED_ITEM,
-    VarLockStatus, VarType, buf_T, colnr_T, dict_T, expand_T, extmark_undo_vec_t, garray_T,
-    hashitem_T, hashtab_T, linenr_T, list_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T,
-    save_v_event_T, sctx_T, size_t, typval_T, typval_vval_union, uint8_t, uint64_t, varnumber_T,
-    win_T, xp_prefix_T,
+    ExtmarkOp, OptInt, SpecialVarValue, String_0, VAR_UNKNOWN, VAR_UNLOCKED, VV_COMPLETED_ITEM,
+    buf_T, colnr_T, dict_T, expand_T, extmark_undo_vec_t, garray_T, hashitem_T, hashtab_T,
+    linenr_T, list_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T, sctx_T,
+    size_t, typval_T, typval_vval_union, uint8_t, uint64_t, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::{ui_flush, vim_beep};
 use crate::src::nvim::undo::undo_allowed;
@@ -154,25 +153,9 @@ mod session;
 pub use self::session::*;
 mod keys;
 pub use self::keys::*;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;

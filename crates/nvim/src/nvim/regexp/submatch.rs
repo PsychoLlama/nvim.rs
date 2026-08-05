@@ -12,14 +12,16 @@
 
 use core::ffi::{c_char, c_int};
 
-use super::{LineOrigin, NUL, VAR_STRING, can_f_submatch, reg_line, reg_line_len, rsm};
+use super::{LineOrigin, NUL, can_f_submatch, reg_line, reg_line_len, rsm};
 use crate::src::nvim::eval::typval::{
     tv_list_alloc, tv_list_append_string, tv_list_first, tv_list_init_static10, tv_list_ref,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz};
 use crate::src::nvim::os::libc::{strcpy, strncpy};
 use crate::src::nvim::strings::xstrnsave;
-use crate::src::nvim::types::{colnr_T, linenr_T, list_T, staticList10_T, typval_T, ufunc_T};
+use crate::src::nvim::types::{
+    VAR_STRING, colnr_T, linenr_T, list_T, staticList10_T, typval_T, ufunc_T,
+};
 
 /// The text of the submatch line `lnum` lines into the match `submatch()`
 /// and a `\=` expression see.

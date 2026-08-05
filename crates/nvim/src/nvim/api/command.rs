@@ -34,11 +34,11 @@ use crate::src::nvim::types::{
     CmdParseInfo_magic as C2Rust_Unnamed_13, Dict, Direction, Error, Integer, KeyDict_cmd,
     KeyDict_cmd_magic, KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty,
     KeyDict_get_commands, KeyDict_user_command, KeySetLink, KeyValuePair, LuaRef, Object,
-    OptionalKeys, ScopeType, SpecialVarValue, String_0, StringBuilder, TryState, VarLockStatus,
-    VarType, buf_T, cmd_addr_T, cmdmod_T, cstack_T, exarg_T, except_T, expand_T, garray_T, int64_t,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil,
-    kObjectTypeString, key_value_pair, linenr_T, msglist_T, object, object_data as C2Rust_Unnamed,
-    regmatch_T, regprog_T, sctx_T, size_t, ucmd_T, uint8_t, uint32_t, uint64_t,
+    OptionalKeys, SpecialVarValue, String_0, StringBuilder, TryState, buf_T, cmd_addr_T, cmdmod_T,
+    cstack_T, exarg_T, except_T, expand_T, garray_T, int64_t, kObjectTypeBoolean, kObjectTypeDict,
+    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, key_value_pair,
+    linenr_T, msglist_T, object, object_data as C2Rust_Unnamed, regmatch_T, regprog_T, sctx_T,
+    size_t, ucmd_T, uint8_t, uint32_t, uint64_t,
 };
 use crate::src::nvim::usercmd::{
     commands_array, free_ucmd, get_user_command_name, parse_addr_type_arg, parse_compl_arg,
@@ -51,25 +51,9 @@ unsafe extern "C" {
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
 }
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_17 = 8192;
 pub const CMOD_LOCKMARKS: C2Rust_Unnamed_17 = 2048;
 pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_17 = 4096;

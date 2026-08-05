@@ -13,6 +13,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use crate::src::nvim::msgpack_rpc::unpacker::MPACK_OK;
 
 use super::*;
+use crate::src::nvim::types::VAR_TYPE_BLOB;
 
 /// Parse the payload of an entry whose type this Nvim knows.
 pub(crate) unsafe fn parse_known(

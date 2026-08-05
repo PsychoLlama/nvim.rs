@@ -28,36 +28,17 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::plines::linetabsize_col;
 use crate::src::nvim::types::{
-    Arena, BoolVarValue, EvalFuncData, ListLenSpecials, ScopeType, SpecialVarValue, String_0,
-    StringBuilder, VarLockStatus, VarType, float_T, garray_T, int16_t, int64_t, intmax_t,
-    keyvalue_T, ptrdiff_t, size_t, typval_T, uint8_t, uint16_t, uintmax_t, uvarnumber_T,
-    varnumber_T,
+    Arena, BoolVarValue, EvalFuncData, SpecialVarValue, String_0, StringBuilder, VAR_FLOAT,
+    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, float_T, garray_T, int16_t, int64_t, intmax_t,
+    kListLenUnknown, keyvalue_T, ptrdiff_t, size_t, typval_T, uint8_t, uint16_t, uintmax_t,
+    uvarnumber_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use core::slice;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const kListLenMayKnow: ListLenSpecials = -3;
-pub const kListLenShouldKnow: ListLenSpecials = -2;
-pub const kListLenUnknown: ListLenSpecials = -1;
 pub const TYPE_FLOAT: C2Rust_Unnamed_1 = 12;
 pub const TYPE_SIZET: C2Rust_Unnamed_1 = 7;
 pub const TYPE_UNSIGNEDLONGLONGINT: C2Rust_Unnamed_1 = 6;

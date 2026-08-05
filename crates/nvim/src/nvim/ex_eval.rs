@@ -31,11 +31,10 @@ use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING, skip_regexp_err};
 use crate::src::nvim::runtime::{do_finish, estack_sfile, exestack, stacktrace_create};
 use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 use crate::src::nvim::types::{
-    BoolVarValue, CMD_index, OptInt, ScopeType, SpecialVarValue, VV_EXCEPTION, VV_STACKTRACE,
-    VV_THROWPOINT, VarLockStatus, VarType, cleanup_T, colnr_T, cstack_T, eslist_T, estack_T,
-    estack_arg_T, evalarg_T, exarg_T, except_T, except_type_T, exception_state_T, int64_t,
-    linenr_T, list_T, msglist_T, ptrdiff_t, regmatch_T, regprog_T, size_t, typval_T,
-    typval_vval_union,
+    BoolVarValue, CMD_index, OptInt, SpecialVarValue, VAR_UNKNOWN, VAR_UNLOCKED, VV_EXCEPTION,
+    VV_STACKTRACE, VV_THROWPOINT, cleanup_T, colnr_T, cstack_T, eslist_T, estack_T, estack_arg_T,
+    evalarg_T, exarg_T, except_T, except_type_T, exception_state_T, int64_t, linenr_T, list_T,
+    msglist_T, ptrdiff_t, regmatch_T, regprog_T, size_t, typval_T, typval_vval_union,
 };
 unsafe extern "C" {
     fn vim_regcomp(
@@ -46,24 +45,9 @@ unsafe extern "C" {
     fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T)
     -> bool;
 }
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub type C2Rust_Unnamed_1 = ::core::ffi::c_uint;
 pub const CSTACK_LEN: C2Rust_Unnamed_1 = 50;
 pub type C2Rust_Unnamed_3 = ::core::ffi::c_uint;

@@ -11,6 +11,7 @@
 use super::*;
 use crate::src::nvim::highlight_group::HLF_D;
 use crate::src::nvim::pos::MAXCOL;
+use crate::src::nvim::types::{VAR_DICT, VAR_LIST};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

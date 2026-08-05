@@ -154,3 +154,9 @@ pub struct timer_T {
     pub callback: Callback,
 }
 pub type var_flavour_T = ::core::ffi::c_uint;
+/// Which persistence a global variable qualifies for, from the case of its
+/// name: all-lowercase is session-only, `Mixed` reaches ShaDa, ALLCAPS
+/// neither.
+pub const VAR_FLAVOUR_DEFAULT: var_flavour_T = 1;
+pub const VAR_FLAVOUR_SESSION: var_flavour_T = 2;
+pub const VAR_FLAVOUR_SHADA: var_flavour_T = 4;

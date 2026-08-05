@@ -1,4 +1,5 @@
 use super::*;
+use crate::src::nvim::types::{VAR_STRING, VAR_UNKNOWN};
 use crate::src::nvim::window::{WSP_ABOVE, WSP_BELOW, WSP_VERT};
 
 /// "getwinpos({timeout})" function

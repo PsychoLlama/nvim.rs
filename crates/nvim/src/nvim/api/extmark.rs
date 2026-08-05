@@ -48,31 +48,16 @@ use crate::src::nvim::types::{
     DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ExtmarkInfoArray, ExtmarkType, Integer,
     KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_ns_opts, KeyDict_set_decoration_provider,
     KeyDict_set_extmark, KeySetLink, LuaRef, MHPutStatus, MTKey, MTPair, Map_String_int,
-    Map_uint32_t_uint32_t, MapHash, MarkTree, NS, Object, OptionalKeys, ScopeType, Set_ptr_t,
-    Set_uint32_t, SpecialVarValue, String_0, UndoObjectType, VarLockStatus, VarType, VirtLines,
-    VirtText, VirtTextChunk, Window, buf_T, colnr_T, handle_T, int32_t, int64_t, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, key_value_pair,
-    linenr_T, object, object_data as C2Rust_Unnamed, ptr_t, schar_T, size_t, tabpage_T, uint8_t,
-    uint16_t, uint32_t, virt_line, win_T,
+    Map_uint32_t_uint32_t, MapHash, MarkTree, NS, Object, OptionalKeys, Set_ptr_t, Set_uint32_t,
+    SpecialVarValue, String_0, UndoObjectType, VirtLines, VirtText, VirtTextChunk, Window, buf_T,
+    colnr_T, handle_T, int32_t, int64_t, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
+    kObjectTypeInteger, kObjectTypeString, key_value_pair, linenr_T, object,
+    object_data as C2Rust_Unnamed, ptr_t, schar_T, size_t, tabpage_T, uint8_t, uint16_t, uint32_t,
+    virt_line, win_T,
 };
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const kSpecialVarNull: SpecialVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;

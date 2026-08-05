@@ -1,6 +1,7 @@
 //! The `argc()`, `argidx()`, `arglistid()` and `argv()` builtins.
 
 use super::*;
+use crate::src::nvim::types::{VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 
 pub unsafe extern "C" fn f_argc(
     mut argvars: *mut typval_T,
