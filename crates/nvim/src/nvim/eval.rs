@@ -8,6 +8,7 @@ pub mod funcs;
 pub mod gc;
 pub mod list;
 pub mod typval;
+pub(crate) mod typval_encode;
 pub mod userfunc;
 pub mod vars;
 pub mod window;

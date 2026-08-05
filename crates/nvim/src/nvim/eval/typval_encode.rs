@@ -1,0 +1,378 @@
+//! The container walk every typval encoder shares: upstream's
+//! `eval/typval_encode.c.h`.
+//!
+//! Upstream spells one algorithm as a 132-line header that is `#include`d
+//! **seven** times — msgpack and JSON in `eval/encode.rs`, `string()` and
+//! `echo` beside them, Lua in `lua/converter.rs`, api `Object`s in
+//! `api/private/converter.rs`, and the `nothing` sink `tv_clear` deep-frees
+//! with in `eval/typval/`.  Each includer defines a set of
+//! `TYPVAL_ENCODE_CONV_*` macros and the header emits the same walk around
+//! them; transpiled, that came to some 12,700 lines of one algorithm.  Here
+//! the walk is written once, generic over [`TypvalSink`], and each includer
+//! becomes an `impl`.  Generic, not `dyn`: the walk is monomorphised per sink
+//! so every hook stays the direct call the macro expansion was.
+//!
+//! The walk is deliberately **not recursive**.  Containers are pushed onto an
+//! explicit stack ([`ConvStack`]) and marked with the current `copyID` while
+//! they are on it, so a container that references itself is recognised instead
+//! of overflowing the machine stack.  That is the whole reason upstream wrote
+//! it this way, and it is why a hook can only ask the walk to stop ([`Flow`])
+//! — it never gets to decline the descent.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ptr;
+
+use crate::src::nvim::types::{
+    blob_T, dict_T, float_T, hashitem_T, int64_t, list_T, listitem_T, partial_T, ptrdiff_t, size_t,
+    typval_T,
+};
+
+// The walk itself; this half is the contract it runs against.
+mod walk;
+pub(crate) use self::walk::encode_typval;
+
+/// What a hook tells the walk to do next.
+///
+/// Upstream's hooks say this by falling through, by `goto`ing the
+/// `typval_encode_stop_converting_one_item` label, or by `return FAIL` — the
+/// label meaning two different things depending on which of the header's two
+/// functions the macro was expanded into.  Here it is one verdict and the two
+/// call sites read it their own way.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) enum Flow {
+    /// Carry on.  The macro fell through.
+    Go,
+    /// Stop converting this value and resume the stack walk.
+    Stop,
+    /// Abandon the encode.
+    Fail,
+}
+
+/// The three container kinds `check_self_reference` can be asked about:
+/// upstream's `MPConvStackValType` less the two partial stages, which are
+/// never `copyID`-marked.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) enum ConvType {
+    Dict,
+    List,
+    /// A special dictionary's `_VAL`, a list of `[key, value]` pairs walked as
+    /// though it were a dictionary.
+    Pairs,
+}
+
+/// Which of a partial's three parts the walk is up to.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) enum PartialStage {
+    Args,
+    Self_,
+    End,
+}
+
+/// One suspended container: upstream's `MPConvStackVal`, whose `type` tag and
+/// `data` union become one enum.
+#[derive(Copy, Clone)]
+pub(crate) enum Frame {
+    Dict {
+        dict: *mut dict_T,
+        /// Where the dictionary pointer *lives*, so a sink can clear it.  For
+        /// a `typval_T` that is `&tv->vval.v_dict`; for a partial's self
+        /// dictionary, `&pt->pt_dict`.
+        dictp: *mut *mut dict_T,
+        hi: *mut hashitem_T,
+        todo: size_t,
+    },
+    List {
+        list: *mut list_T,
+        li: *mut listitem_T,
+    },
+    Pairs {
+        list: *mut list_T,
+        li: *mut listitem_T,
+    },
+    Partial {
+        stage: PartialStage,
+        pt: *mut partial_T,
+    },
+    PartialArgs {
+        arg: *mut typval_T,
+        argv: *mut typval_T,
+        todo: size_t,
+    },
+}
+
+/// A stack entry: the value being walked plus the `copyID` to restore when it
+/// is popped.
+#[derive(Copy, Clone)]
+pub(crate) struct ConvFrame {
+    /// The `typval_T` this container came out of.  NULL for the two frames a
+    /// partial pushes, which stand for its argument list and self dictionary.
+    pub tv: *mut typval_T,
+    pub saved_copyid: c_int,
+    pub frame: Frame,
+}
+
+impl ConvFrame {
+    /// The container this frame walks and which kind it is, for a sink
+    /// resolving a self-reference back to a stack position.
+    ///
+    /// Note that a `Pairs` frame answers `Pairs`, never `List`: upstream's
+    /// backref searches compare the *tag* first, and a special map's `_VAL`
+    /// list is therefore never found by a `kMPConvList` lookup.  Keep that
+    /// asymmetry — the index it produces is in the `@N` markers `string()`
+    /// and `echo` print.
+    pub(crate) fn container(&self) -> Option<(ConvType, *const c_void)> {
+        match self.frame {
+            Frame::Dict { dict, .. } => Some((ConvType::Dict, dict.cast())),
+            Frame::List { list, .. } => Some((ConvType::List, list.cast())),
+            Frame::Pairs { list, .. } => Some((ConvType::Pairs, list.cast())),
+            Frame::Partial { .. } | Frame::PartialArgs { .. } => None,
+        }
+    }
+}
+
+/// Frames held without allocating.  Upstream's `MPConvStack` is a
+/// `kvec_withinit_t` of the same size, and the reason for it is `tv_clear`:
+/// the `nothing` sink runs this walk on *every* container the interpreter
+/// frees, so a malloc per walk would be a malloc per free.
+const INLINE_FRAMES: usize = 8;
+
+const EMPTY_FRAME: ConvFrame = ConvFrame {
+    tv: ptr::null_mut(),
+    saved_copyid: 0,
+    frame: Frame::List {
+        list: ptr::null_mut(),
+        li: ptr::null_mut(),
+    },
+};
+
+/// The walk's explicit stack of suspended containers.
+///
+/// Indexable from the bottom, because that is the order the error path names
+/// them in and the position a `@N` self-reference marker counts to.
+pub(crate) struct ConvStack {
+    inline: [ConvFrame; INLINE_FRAMES],
+    spilled: Vec<ConvFrame>,
+    len: usize,
+}
+
+impl ConvStack {
+    fn new() -> Self {
+        ConvStack {
+            inline: [EMPTY_FRAME; INLINE_FRAMES],
+            spilled: Vec::new(),
+            len: 0,
+        }
+    }
+
+    fn push(&mut self, frame: ConvFrame) {
+        if self.len < INLINE_FRAMES {
+            self.inline[self.len] = frame;
+        } else {
+            self.spilled.push(frame);
+        }
+        self.len += 1;
+    }
+
+    /// Drop the top frame.  The caller has already read whatever it needs out
+    /// of it — upstream's `kv_pop` only decrements the count and its callers
+    /// keep reading the popped slot.
+    fn pop(&mut self) {
+        self.len -= 1;
+        if self.len >= INLINE_FRAMES {
+            self.spilled.pop();
+        }
+    }
+
+    fn get_mut(&mut self, i: usize) -> &mut ConvFrame {
+        if i < INLINE_FRAMES {
+            &mut self.inline[i]
+        } else {
+            &mut self.spilled[i - INLINE_FRAMES]
+        }
+    }
+
+    fn last(&self) -> ConvFrame {
+        let last = self.len - 1;
+        if last < INLINE_FRAMES {
+            self.inline[last]
+        } else {
+            self.spilled[last - INLINE_FRAMES]
+        }
+    }
+
+    fn last_mut(&mut self) -> &mut ConvFrame {
+        let last = self.len - 1;
+        self.get_mut(last)
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.len
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// The frames from the outermost inwards.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &ConvFrame> {
+        self.inline[..self.len.min(INLINE_FRAMES)]
+            .iter()
+            .chain(self.spilled.iter())
+    }
+}
+
+/// What the two failing hooks need to name the value they failed on: the path
+/// down to it and the name of the object being dumped.
+pub(crate) struct ConvPath<'a> {
+    pub stack: &'a ConvStack,
+    pub objname: *const c_char,
+}
+
+/// The `TYPVAL_ENCODE_CONV_*` macros one includer of `typval_encode.c.h`
+/// defines, as one trait.
+///
+/// Every method is `unsafe` because every one of them is handed a raw pointer
+/// the walk borrowed from its caller.  The ones with a `Flow` return are the
+/// ones some sink uses to stop; the rest are `()` because no sink needs to,
+/// and the defaults are for the ones most sinks leave empty.
+pub(crate) trait TypvalSink {
+    /// `TYPVAL_ENCODE_ALLOW_SPECIALS`: whether a two-key `{_TYPE, _VAL}`
+    /// dictionary is read as the value it stands for rather than as a plain
+    /// dictionary.
+    const ALLOW_SPECIALS: bool;
+
+    /// The name `internal_error` reports for a `VAR_UNKNOWN`, which upstream
+    /// spells with the instantiation's own function name.
+    const CONVERT_FN_NAME: &'static CStr;
+
+    /// `TYPVAL_ENCODE_CHECK_BEFORE`, run before every value.
+    unsafe fn check_before(&mut self) {}
+
+    unsafe fn conv_nil(&mut self, tv: *mut typval_T);
+    unsafe fn conv_bool(&mut self, tv: *mut typval_T, num: bool);
+    unsafe fn conv_number(&mut self, tv: *mut typval_T, num: int64_t);
+    /// Only reachable through a special dictionary, so sinks that refuse
+    /// those leave it empty.
+    unsafe fn conv_unsigned_number(&mut self, tv: *mut typval_T, num: u64) {
+        let _ = (tv, num);
+    }
+    unsafe fn conv_float(&mut self, tv: *mut typval_T, flt: float_T) -> Flow;
+
+    /// A `VAR_STRING`, or the `_VAL` of a special string.  `buf` may be NULL.
+    unsafe fn conv_string(&mut self, tv: *mut typval_T, buf: *mut c_char, len: size_t) -> Flow;
+    /// A string that is known to be text rather than bytes: a dictionary key,
+    /// or a special string's contents.  Only msgpack and `nothing` tell the
+    /// two apart.
+    ///
+    /// For a dictionary key the buffer is the dictionary's.  For a special
+    /// string it is the walk's, freed the way [`Self::conv_ext_string`]
+    /// describes — so a sink that fails here leaks it, exactly as upstream's
+    /// JSON encoder does.
+    unsafe fn conv_str_string(&mut self, tv: *mut typval_T, buf: *mut c_char, len: size_t) -> Flow {
+        unsafe { self.conv_string(tv, buf, len) }
+    }
+    /// A special `ext` value.
+    ///
+    /// `buf` is the walk's, and the walk frees it — *unless* the hook returns
+    /// something other than [`Flow::Go`], in which case it never gets there
+    /// and the hook owns it.  Upstream has exactly this split (the `xfree`
+    /// sits after the macro, which the bailing sinks `return` past), and one
+    /// of the two paths it produces is a leak: see [`Self::conv_str_string`].
+    unsafe fn conv_ext_string(
+        &mut self,
+        tv: *mut typval_T,
+        buf: *mut c_char,
+        len: size_t,
+        ext_type: i8,
+    ) -> Flow;
+
+    unsafe fn conv_blob(&mut self, tv: *mut typval_T, blob: *const blob_T, len: c_int);
+
+    /// A funcref or partial, before its arguments.  `fun` may be NULL;
+    /// `prefix` is `"g:"` where the name needs qualifying.
+    unsafe fn conv_func_start(
+        &mut self,
+        tv: *mut typval_T,
+        fun: *mut c_char,
+        prefix: &'static CStr,
+        path: &ConvPath,
+    ) -> Flow;
+    unsafe fn conv_func_before_args(&mut self, tv: *mut typval_T, len: ptrdiff_t) {
+        let _ = (tv, len);
+    }
+    /// `len` is −1 when the partial has no self dictionary.
+    unsafe fn conv_func_before_self(&mut self, tv: *mut typval_T, len: ptrdiff_t) {
+        let _ = (tv, len);
+    }
+    unsafe fn conv_func_end(&mut self, tv: *mut typval_T, copyid: c_int) {
+        let _ = (tv, copyid);
+    }
+
+    unsafe fn conv_empty_list(&mut self, tv: *mut typval_T);
+    /// `dictp` is where the dictionary pointer lives, so a sink can clear it;
+    /// `None` is upstream's `TYPVAL_ENCODE_NODICT_VAR`, meaning the map being
+    /// emitted has no `dict_T` behind it.
+    unsafe fn conv_empty_dict(&mut self, tv: *mut typval_T, dictp: Option<*mut *mut dict_T>);
+
+    unsafe fn conv_list_start(&mut self, tv: *mut typval_T, len: c_int) -> Flow;
+    /// Called with the frame just pushed for this list, which a sink may edit
+    /// to make the walk skip its items.
+    unsafe fn conv_real_list_after_start(
+        &mut self,
+        tv: *mut typval_T,
+        frame: &mut ConvFrame,
+    ) -> Flow {
+        let _ = (tv, frame);
+        Flow::Go
+    }
+    unsafe fn conv_list_between_items(&mut self, tv: *mut typval_T) {
+        let _ = tv;
+    }
+    unsafe fn conv_list_end(&mut self, tv: *mut typval_T) {
+        let _ = tv;
+    }
+
+    unsafe fn conv_dict_start(&mut self, tv: *mut typval_T, len: size_t) -> Flow;
+    /// The dictionary counterpart of [`Self::conv_real_list_after_start`].
+    unsafe fn conv_real_dict_after_start(
+        &mut self,
+        tv: *mut typval_T,
+        dictp: Option<*mut *mut dict_T>,
+        frame: &mut ConvFrame,
+    ) -> Flow {
+        let _ = (tv, dictp, frame);
+        Flow::Go
+    }
+    /// `TYPVAL_ENCODE_SPECIAL_DICT_KEY_CHECK`: veto a key a special map is
+    /// about to emit.
+    unsafe fn special_dict_key_check(&mut self, key: *const typval_T) -> Flow {
+        let _ = key;
+        Flow::Go
+    }
+    unsafe fn conv_dict_after_key(&mut self, tv: *mut typval_T, dictp: Option<*mut *mut dict_T>) {
+        let _ = (tv, dictp);
+    }
+    unsafe fn conv_dict_between_items(
+        &mut self,
+        tv: *mut typval_T,
+        dictp: Option<*mut *mut dict_T>,
+    ) {
+        let _ = (tv, dictp);
+    }
+    unsafe fn conv_dict_end(&mut self, tv: *mut typval_T, dictp: Option<*mut *mut dict_T>) {
+        let _ = (tv, dictp);
+    }
+
+    /// The container `val` is already on the stack.  Returning [`Flow::Go`]
+    /// means "handled, stop converting this value" — a sink that writes a
+    /// marker and one that says nothing both answer that; only the sinks that
+    /// refuse self-reference outright answer [`Flow::Fail`].
+    unsafe fn conv_recurse(
+        &mut self,
+        val: *mut c_void,
+        conv_type: ConvType,
+        path: &ConvPath,
+    ) -> Flow;
+}
