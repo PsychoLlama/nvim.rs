@@ -202,7 +202,14 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                 // Check the name of the function, unless it is a dictionary
                 // function that is being overwritten.
                 let arg = if name.is_null() { fudi.fd_newkey } else { name };
-                if !arg.is_null() && (fudi.fd_di.is_null() || !tv_is_func((*fudi.fd_di).di_tv)) {
+                // A dictionary function defined with bracket notation
+                // (`obj['foo-bar']()`) is named by a *dictionary key*, which
+                // need not follow the function naming rules, so the
+                // identifier check is skipped for it.
+                if !arg.is_null()
+                    && (fudi.fd_di.is_null() || !tv_is_func((*fudi.fd_di).di_tv))
+                    && arg != fudi.fd_newkey
+                {
                     let mut name_base = arg;
                     if *arg as u8 as c_int == K_SPECIAL {
                         // Skip the "<SNR>123_" mangling.
