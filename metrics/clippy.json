@@ -53,8 +53,6 @@
     "crates/nvim/src/nvim/eval/system.rs": 1,
     "crates/nvim/src/nvim/eval/userfunc.rs": 158,
     "crates/nvim/src/nvim/eval/vars/external.rs": 1,
-    "crates/nvim/src/nvim/eval/vars/heredoc.rs": 5,
-    "crates/nvim/src/nvim/eval/vars/redir.rs": 4,
     "crates/nvim/src/nvim/event/rstream.rs": 1,
     "crates/nvim/src/nvim/ex_cmds.rs": 123,
     "crates/nvim/src/nvim/ex_cmds2.rs": 48,

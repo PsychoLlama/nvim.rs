@@ -40,7 +40,7 @@ use crate::src::nvim::eval::{
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::ex_docmd::{check_nextcmd, ends_excmd};
 use crate::src::nvim::ex_eval::aborting;
-use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_grow, ga_init};
+use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::{
     hash_add, hash_clear, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_unlock,
@@ -72,8 +72,7 @@ use crate::src::nvim::options::{
 };
 use crate::src::nvim::os::env::{vim_getenv, vim_setenv_ext, vim_unsetenv_ext};
 use crate::src::nvim::os::libc::{
-    __ctype_b_loc, abort, gettext, memchr, memcpy, memmove, snprintf, strcmp, strcpy, strlen,
-    strncmp,
+    __ctype_b_loc, abort, gettext, memchr, memcpy, snprintf, strcmp, strcpy, strlen, strncmp,
 };
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::register::{get_reg_contents, write_reg_contents};
