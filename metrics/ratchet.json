@@ -128,7 +128,7 @@
     "crates/nvim/src/nvim/eval/decode.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/eval/decode/json.rs": {"no_mangle": 1, "unsafe": 1},
     "crates/nvim/src/nvim/eval/decode/json/scan.rs": {"unsafe": 2},
-    "crates/nvim/src/nvim/eval/decode/json/stack.rs": {"unsafe": 1},
+    "crates/nvim/src/nvim/eval/decode/json/stack.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/eval/decode/msgpack.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/eval/deprecated.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/eval/echo.rs": {"unsafe": 6},

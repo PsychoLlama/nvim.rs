@@ -1,25 +1,16 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::src::nvim::ascii::{ascii_isdigit, ascii_isxdigit};
-use crate::src::nvim::charset::vim_str2nr;
-use crate::src::nvim::eval::string2float;
+use crate::src::nvim::eval::typval::tv_list_ref;
 use crate::src::nvim::eval::typval::{
-    tv_blob_alloc_ret, tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_item_alloc,
-    tv_dict_item_alloc_len, tv_list_alloc, tv_list_append_list, tv_list_append_owned_tv,
+    tv_blob_alloc_ret, tv_dict_add, tv_dict_alloc, tv_dict_item_alloc_len, tv_list_alloc,
 };
-use crate::src::nvim::eval::typval::{tv_list_len, tv_list_ref};
 use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
 use crate::src::nvim::garray::ga_concat_len;
-use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::mbyte::{utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len};
-use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xrealloc};
-use crate::src::nvim::message::{emsg, semsg};
-use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memchr, strncmp};
+use crate::src::nvim::memory::xmemdupz;
+use crate::src::nvim::os::libc::{__assert_fail, memchr};
 use crate::src::nvim::types::{
-    MessagePackType, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VAR_STRING,
-    VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dict_T, dictitem_T, kBoolVarFalse, kBoolVarTrue,
-    kListLenMayKnow, kSpecialVarNull, list_T, mpack_token_type_t, ptrdiff_t, size_t, typval_T,
-    typval_vval_union, uint8_t, uvarnumber_T, varnumber_T,
+    MessagePackType, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dict_T,
+    dictitem_T, list_T, mpack_token_type_t, ptrdiff_t, size_t, typval_T, typval_vval_union,
 };
 
 // The carve of the transpiled module; see each child's docs.

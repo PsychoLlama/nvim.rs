@@ -1,236 +1,262 @@
-//! The decoder's two stacks, and the pop that joins a value to its container.
+//! The decoder's state: two stacks, and the step that joins a value to the
+//! container above it.
 //!
-//! `ValuesStack` holds values not yet stored anywhere; `ContainerStack` holds
-//! the containers each next one is nested inside.  `json_decoder_pop` is where
-//! a finished value meets the container above it — including the restart that
-//! converts a plain dictionary into a special map.
+//! [`Decoder::stack`] holds values not yet stored anywhere — including the
+//! containers themselves, which sit there until they close — and
+//! [`Decoder::containers`] says which of those are open and what each one is.
+//! [`Decoder::finish_value`] is upstream's `json_decoder_pop`: every scanned
+//! value goes through it, and it is where a plain dictionary discovers it has
+//! to be re-parsed as a special map.
+//!
+//! Upstream spells the stacks as two `kvec_t`s and passes them, the parse
+//! position and the three flag bytes as seven separate arguments to every
+//! scanning function.  They are one struct here.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::super::*;
+use core::ffi::{CStr, c_char, c_int};
 
+use super::super::FAIL;
+use crate::src::nvim::eval::typval::{
+    tv_clear, tv_dict_add, tv_dict_find, tv_dict_item_alloc, tv_list_alloc, tv_list_append_list,
+    tv_list_append_owned_tv, tv_list_len,
+};
+use crate::src::nvim::message::semsg;
+use crate::src::nvim::os::libc::{abort, gettext};
+use crate::src::nvim::types::{VAR_LIST, VAR_STRING, list_T, typval_T};
+
+const E474_COMMA_BEFORE_LIST_ITEM: &CStr = c"E474: Expected comma before list item: %s";
+const E474_COLON_BEFORE_DICT_VALUE: &CStr = c"E474: Expected colon before dictionary value: %s";
+const E474_STRING_KEY: &CStr = c"E474: Expected string key: %s";
+const E474_COMMA_BEFORE_DICT_KEY: &CStr = c"E474: Expected comma before dictionary key: %s";
+
+/// One container the decoder is currently inside.
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ContainerStackItem {
-    pub stack_index: size_t,
-    pub special_val: *mut list_T,
-    pub s: *const ::core::ffi::c_char,
-    pub container: typval_T,
+pub(crate) struct Container {
+    /// Where the container's own value sits in [`Decoder::stack`].
+    pub(crate) stack_index: usize,
+    /// The `_VAL` list of a special map, or NULL when the container is an
+    /// ordinary list or dictionary.
+    pub(crate) special_val: *mut list_T,
+    /// Offset of the byte that opened it: what the restart rewinds to, and
+    /// what an error inside it is reported against.
+    pub(crate) at: usize,
+    /// The container's own value: `VAR_LIST` for `[`, `VAR_DICT` for `{`
+    /// — a special map's is the special dictionary, with the `_VAL` list in
+    /// [`Self::special_val`].
+    pub(crate) container: typval_T,
 }
 
+/// One decoded value not yet stored in any container.
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ContainerStack {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ContainerStackItem,
+pub(crate) struct Value {
+    /// The value is a special dictionary wrapping a string, so it can be a
+    /// dictionary *value* but never a key.
+    pub(crate) is_special_string: bool,
+    /// Whether a comma, or a colon, was the token before this value.  Each is
+    /// recorded per value because the restart has to put them back.
+    pub(crate) didcomma: bool,
+    pub(crate) didcolon: bool,
+    pub(crate) val: typval_T,
 }
 
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ValuesStackItem {
-    pub is_special_string: bool,
-    pub didcomma: bool,
-    pub didcolon: bool,
-    pub val: typval_T,
+/// Everything the JSON scanner carries from byte to byte.
+pub(crate) struct Decoder<'a> {
+    /// The whole document.  Every position in the decoder is an offset into
+    /// it, so an error can quote the rest of the input.
+    pub(crate) buf: &'a [u8],
+    pub(crate) stack: Vec<Value>,
+    pub(crate) containers: Vec<Container>,
+    pub(crate) didcomma: bool,
+    pub(crate) didcolon: bool,
+    /// Set when the dictionary being parsed turned out to need a special map.
+    /// The scanner then resumes at the rewound position *without* advancing,
+    /// so that the `{` is read a second time.
+    pub(crate) next_map_special: bool,
 }
 
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ValuesStack {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ValuesStackItem,
-}
-
-#[inline]
-pub(crate) unsafe extern "C" fn json_decoder_pop(
-    mut obj: ValuesStackItem,
-    stack: *mut ValuesStack,
-    container_stack: *mut ContainerStack,
-    pp: *mut *const ::core::ffi::c_char,
-    next_map_special: *mut bool,
-    didcomma: *mut bool,
-    didcolon: *mut bool,
-) -> ::core::ffi::c_int {
-    unsafe {
-        if (*container_stack).size == 0 as size_t {
-            if (*stack).size == (*stack).capacity {
-                (*stack).capacity = if (*stack).capacity != 0 {
-                    (*stack).capacity << 1 as ::core::ffi::c_int
-                } else {
-                    8 as size_t
-                };
-                (*stack).items = xrealloc(
-                    (*stack).items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<ValuesStackItem>().wrapping_mul((*stack).capacity),
-                ) as *mut ValuesStackItem;
-            } else {
-            };
-            let c2rust_fresh4 = (*stack).size;
-            (*stack).size = (*stack).size.wrapping_add(1);
-            *(*stack).items.offset(c2rust_fresh4 as isize) = obj;
-            return OK;
+impl<'a> Decoder<'a> {
+    pub(crate) fn new(buf: &'a [u8]) -> Self {
+        Decoder {
+            buf,
+            stack: Vec::new(),
+            containers: Vec::new(),
+            didcomma: false,
+            didcolon: false,
+            next_map_special: false,
         }
-        let mut last_container: ContainerStackItem = *(*container_stack).items.offset(
-            (*container_stack)
-                .size
-                .wrapping_sub(0 as size_t)
-                .wrapping_sub(1 as size_t) as isize,
-        );
-        let mut val_location: *const ::core::ffi::c_char = *pp;
-        if obj.val.v_type as ::core::ffi::c_uint
-            == last_container.container.v_type as ::core::ffi::c_uint
-            && obj.val.vval.v_list as *mut ::core::ffi::c_void
-                == last_container.container.vval.v_list as *mut ::core::ffi::c_void
-        {
-            (*container_stack).size = (*container_stack).size.wrapping_sub(1);
-            val_location = last_container.s;
-            last_container = *(*container_stack).items.offset(
-                (*container_stack)
-                    .size
-                    .wrapping_sub(0 as size_t)
-                    .wrapping_sub(1 as size_t) as isize,
-            );
+    }
+
+    /// `semsg(_(fmt), LENP(p, e))`: report `fmt` with the document from `at`
+    /// onwards as its `%.*s` argument.
+    ///
+    /// The bytes go out as they came in — an invalid UTF-8 sequence is quoted
+    /// verbatim, which is what several of these messages are about.
+    pub(crate) fn emsg_rest(&self, fmt: &CStr, at: usize) {
+        let rest = &self.buf[at..];
+        // SAFETY: `rest` outlives the call and `semsg` copies what it keeps;
+        // `%.*s` reads at most the length given.
+        unsafe {
+            semsg(
+                gettext(fmt.as_ptr()),
+                rest.len() as c_int,
+                rest.as_ptr() as *const c_char,
+            )
+        };
+    }
+
+    /// Upstream's `OBJ()`: a scanned value, tagged with the punctuation that
+    /// preceded it.
+    pub(crate) fn value(&self, val: typval_T, is_special_string: bool) -> Value {
+        Value {
+            is_special_string,
+            didcomma: self.didcomma,
+            didcolon: self.didcolon,
+            val,
         }
-        if last_container.container.v_type as ::core::ffi::c_uint
-            == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            if tv_list_len(last_container.container.vval.v_list) != 0 as ::core::ffi::c_int
-                && !obj.didcomma
+    }
+
+    /// The innermost open container.
+    ///
+    /// Every caller has just checked that there is one, or has just closed a
+    /// container the grammar guarantees is nested inside another — a
+    /// top-level container never reaches [`Self::finish_value`], because the
+    /// scanner ends the document instead.  Upstream reads `kv_last` of an
+    /// empty vector here rather than saying so.
+    fn innermost(&self) -> Container {
+        *self
+            .containers
+            .last()
+            .expect("finish_value is only reached inside a container")
+    }
+
+    /// Store a finished value: upstream's `json_decoder_pop`.
+    ///
+    /// `at` is the parse position, used for error text and rewound when the
+    /// container has to be restarted as a special map — in which case
+    /// [`Self::next_map_special`] is set and the caller must resume the scan
+    /// without advancing.  Answers `false` after reporting an error, having
+    /// cleared `obj`.
+    ///
+    /// # Safety
+    /// `obj` owns its value and `at` indexes [`Self::buf`].
+    pub(crate) unsafe fn finish_value(&mut self, mut obj: Value, at: &mut usize) -> bool {
+        unsafe {
+            if self.containers.is_empty() {
+                self.stack.push(obj);
+                return true;
+            }
+
+            let mut last = self.innermost();
+            let mut val_location = *at;
+            // The value being stored *is* the container on top: it has just
+            // closed, so it belongs to the one below, and the error position
+            // to report against is where it opened.
+            if obj.val.v_type == last.container.v_type
+                // vval.v_list and vval.v_dict have the same size and offset.
+                && obj.val.vval.v_list == last.container.vval.v_list
             {
-                semsg(
-                    gettext(b"E474: Expected comma before list item: %s\0".as_ptr()
-                        as *const ::core::ffi::c_char),
-                    val_location,
-                );
-                tv_clear(&raw mut obj.val);
-                return FAIL;
+                self.containers.pop();
+                val_location = last.at;
+                last = self.innermost();
             }
-            '_c2rust_label: {
-                if last_container.special_val.is_null() {
-                } else {
-                    __assert_fail(
-                    b"last_container.special_val == NULL\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                    b"src/nvim/eval/decode.rs\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    133 as ::core::ffi::c_uint,
-                    b"int json_decoder_pop(ValuesStackItem, ValuesStack *const, ContainerStack *const, const char **const, _Bool *const, _Bool *const, _Bool *const)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-                }
-            };
-            tv_list_append_owned_tv(last_container.container.vval.v_list, obj.val);
-        } else if last_container.stack_index == (*stack).size.wrapping_sub(2 as size_t) {
-            if !obj.didcolon {
-                semsg(
-                    gettext(
-                        b"E474: Expected colon before dictionary value: %s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
-                    val_location,
-                );
-                tv_clear(&raw mut obj.val);
-                return FAIL;
-            }
-            (*stack).size = (*stack).size.wrapping_sub(1);
-            let mut key: ValuesStackItem = *(*stack).items.offset((*stack).size as isize);
-            if last_container.special_val.is_null() {
-                '_c2rust_label_0: {
-                    if !(key.is_special_string as ::core::ffi::c_int != 0
-                        || key.val.vval.v_string.is_null())
-                    {
-                    } else {
-                        __assert_fail(
-                        b"!(key.is_special_string || key.val.vval.v_string == NULL)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/eval/decode.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        145 as ::core::ffi::c_uint,
-                        b"int json_decoder_pop(ValuesStackItem, ValuesStack *const, ContainerStack *const, const char **const, _Bool *const, _Bool *const, _Bool *const)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+
+            if last.container.v_type == VAR_LIST {
+                if tv_list_len(last.container.vval.v_list) != 0 && !obj.didcomma {
+                    semsg(
+                        gettext(E474_COMMA_BEFORE_LIST_ITEM.as_ptr()),
+                        self.buf[val_location..].as_ptr() as *const c_char,
                     );
+                    tv_clear(&raw mut obj.val);
+                    return false;
+                }
+                debug_assert!(last.special_val.is_null());
+                tv_list_append_owned_tv(last.container.vval.v_list, obj.val);
+                return true;
+            }
+
+            // A dictionary, with its key already on the stack: this is the
+            // value that goes with it.
+            if last.stack_index == self.stack.len().wrapping_sub(2) {
+                if !obj.didcolon {
+                    semsg(
+                        gettext(E474_COLON_BEFORE_DICT_VALUE.as_ptr()),
+                        self.buf[val_location..].as_ptr() as *const c_char,
+                    );
+                    tv_clear(&raw mut obj.val);
+                    return false;
+                }
+                let mut key = self.stack.pop().expect("a dictionary key below the value");
+                if last.special_val.is_null() {
+                    // A key that could not be a `dict_T` key has already sent
+                    // this container down the special-map path below.
+                    debug_assert!(!(key.is_special_string || key.val.vval.v_string.is_null()));
+                    let obj_di = tv_dict_item_alloc(key.val.vval.v_string);
+                    tv_clear(&raw mut key.val);
+                    if tv_dict_add(last.container.vval.v_dict, obj_di) == FAIL {
+                        abort();
                     }
-                };
-                let obj_di: *mut dictitem_T = tv_dict_item_alloc(key.val.vval.v_string);
-                tv_clear(&raw mut key.val);
-                if tv_dict_add(last_container.container.vval.v_dict, obj_di) == FAIL {
-                    abort();
-                }
-                (*obj_di).di_tv = obj.val;
-            } else {
-                let kv_pair: *mut list_T = tv_list_alloc(2 as ptrdiff_t);
-                tv_list_append_list(last_container.special_val, kv_pair);
-                tv_list_append_owned_tv(kv_pair, key.val);
-                tv_list_append_owned_tv(kv_pair, obj.val);
-            }
-        } else {
-            if !obj.is_special_string
-                && obj.val.v_type as ::core::ffi::c_uint
-                    != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                semsg(
-                    gettext(
-                        b"E474: Expected string key: %s\0".as_ptr() as *const ::core::ffi::c_char
-                    ),
-                    *pp,
-                );
-                tv_clear(&raw mut obj.val);
-                return FAIL;
-            } else if !obj.didcomma
-                && (last_container.special_val.is_null()
-                    && (*last_container.container.vval.v_dict).dv_hashtab.ht_used != 0 as size_t)
-            {
-                semsg(
-                    gettext(b"E474: Expected comma before dictionary key: %s\0".as_ptr()
-                        as *const ::core::ffi::c_char),
-                    val_location,
-                );
-                tv_clear(&raw mut obj.val);
-                return FAIL;
-            }
-            if last_container.special_val.is_null()
-                && (obj.is_special_string as ::core::ffi::c_int != 0
-                    || obj.val.vval.v_string.is_null()
-                    || !tv_dict_find(
-                        last_container.container.vval.v_dict,
-                        obj.val.vval.v_string,
-                        -1 as ptrdiff_t,
-                    )
-                    .is_null())
-            {
-                tv_clear(&raw mut obj.val);
-                (*container_stack).size = (*container_stack).size.wrapping_sub(1);
-                let mut last_container_val: ValuesStackItem =
-                    *(*stack).items.offset(last_container.stack_index as isize);
-                while (*stack).size > last_container.stack_index {
-                    (*stack).size = (*stack).size.wrapping_sub(1);
-                    tv_clear(&raw mut (*(*stack).items.offset((*stack).size as isize)).val);
-                }
-                *pp = last_container.s;
-                *didcomma = last_container_val.didcomma;
-                *didcolon = last_container_val.didcolon;
-                *next_map_special = true_0 != 0;
-                return OK;
-            }
-            if (*stack).size == (*stack).capacity {
-                (*stack).capacity = if (*stack).capacity != 0 {
-                    (*stack).capacity << 1 as ::core::ffi::c_int
+                    (*obj_di).di_tv = obj.val;
                 } else {
-                    8 as size_t
-                };
-                (*stack).items = xrealloc(
-                    (*stack).items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<ValuesStackItem>().wrapping_mul((*stack).capacity),
-                ) as *mut ValuesStackItem;
-            } else {
-            };
-            let c2rust_fresh5 = (*stack).size;
-            (*stack).size = (*stack).size.wrapping_add(1);
-            *(*stack).items.offset(c2rust_fresh5 as isize) = obj;
+                    let kv_pair = tv_list_alloc(2);
+                    tv_list_append_list(last.special_val, kv_pair);
+                    tv_list_append_owned_tv(kv_pair, key.val);
+                    tv_list_append_owned_tv(kv_pair, obj.val);
+                }
+                return true;
+            }
+
+            // A dictionary with nothing pending: this value is a key.
+            if !obj.is_special_string && obj.val.v_type != VAR_STRING {
+                semsg(
+                    gettext(E474_STRING_KEY.as_ptr()),
+                    self.buf[*at..].as_ptr() as *const c_char,
+                );
+                tv_clear(&raw mut obj.val);
+                return false;
+            }
+            if !obj.didcomma
+                && last.special_val.is_null()
+                && (*last.container.vval.v_dict).dv_hashtab.ht_used != 0
+            {
+                semsg(
+                    gettext(E474_COMMA_BEFORE_DICT_KEY.as_ptr()),
+                    self.buf[val_location..].as_ptr() as *const c_char,
+                );
+                tv_clear(&raw mut obj.val);
+                return false;
+            }
+
+            // Three kinds of key a `dict_T` cannot hold: one that is itself a
+            // special dictionary, one carrying an embedded NUL (decoded as a
+            // blob, so `v_string` is NULL), and a duplicate.  Any of them
+            // sends the whole container back to be re-parsed as a special
+            // map, which can hold every one of them.
+            if last.special_val.is_null()
+                && (obj.is_special_string
+                    || obj.val.vval.v_string.is_null()
+                    || !tv_dict_find(last.container.vval.v_dict, obj.val.vval.v_string, -1)
+                        .is_null())
+            {
+                tv_clear(&raw mut obj.val);
+                // Rewind to the `{` and reopen it as a special map.
+                // Everything decoded inside it is dropped — the container's
+                // own value included, which frees the half-filled dictionary.
+                self.containers.pop();
+                let reopened = self.stack[last.stack_index];
+                while self.stack.len() > last.stack_index {
+                    let mut dropped = self.stack.pop().expect("the loop bound is the depth");
+                    tv_clear(&raw mut dropped.val);
+                }
+                *at = last.at;
+                self.didcomma = reopened.didcomma;
+                self.didcolon = reopened.didcolon;
+                self.next_map_special = true;
+                return true;
+            }
+
+            self.stack.push(obj);
+            true
         }
-        return OK;
     }
 }
