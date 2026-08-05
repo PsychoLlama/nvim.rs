@@ -298,7 +298,7 @@
     "crates/nvim/src/nvim/indent_c.rs": {"lines": 4328, "unsafe": 60},
     "crates/nvim/src/nvim/input.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/insexpand.rs": {"unsafe": 2},
-    "crates/nvim/src/nvim/insexpand/callbacks.rs": {"unsafe": 25},
+    "crates/nvim/src/nvim/insexpand/callbacks.rs": {"unsafe": 26},
     "crates/nvim/src/nvim/insexpand/getexp.rs": {"unsafe": 13},
     "crates/nvim/src/nvim/insexpand/insert.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/insexpand/keys.rs": {"unsafe": 11},

@@ -122,10 +122,10 @@ use crate::src::nvim::types::{
     Arena, BoolVarValue, Callback, Callback_data as C2Rust_Unnamed_5, Direction, EvalFuncData,
     ExtmarkOp, ExtmarkUndoObject, FILE, ListLenSpecials, OptInt, ScopeType, SpecialVarValue,
     String_0, VV_COMPLETED_ITEM, VarLockStatus, VarType, buf_T, colnr_T, dict_T, dictitem_T,
-    expand_T, extmark_undo_vec_t, garray_T, hashitem_T, hashtab_T, hlf_T, ht_stack_T, key_extra,
-    linenr_T, list_T, list_stack_T, listitem_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T,
-    regprog_T, save_v_event_T, sctx_T, searchit_arg_T, size_t, typval_T, typval_vval_union,
-    uint8_t, uint64_t, varnumber_T, win_T, xp_prefix_T, yankreg_T,
+    expand_T, extmark_undo_vec_t, garray_T, hashitem_T, hashtab_T, hlf_T, key_extra, linenr_T,
+    list_T, listitem_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, regprog_T,
+    save_v_event_T, sctx_T, searchit_arg_T, size_t, typval_T, typval_vval_union, uint8_t, uint64_t,
+    varnumber_T, win_T, xp_prefix_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_flush, vim_beep};
 use crate::src::nvim::undo::undo_allowed;
@@ -333,6 +333,14 @@ pub(crate) const INS_COMPL_NEXT_STATE_INIT: ins_compl_next_state_T = ins_compl_n
     dict_f: 0,
     func_cb: ptr::null_mut(),
 };
+/// An unset `typval_T`, which the transpile writes out at every declaration
+/// (C leaves these uninitialised and has the callee fill them in).
+pub(crate) const TYPVAL_T_INIT: typval_T = typval_T {
+    v_type: VAR_UNKNOWN,
+    v_lock: VAR_UNLOCKED,
+    vval: typval_vval_union { v_number: 0 },
+};
+
 /// A zeroed `pos_T`.
 pub(crate) const POS_T_INIT: pos_T = pos_T {
     lnum: 0,
