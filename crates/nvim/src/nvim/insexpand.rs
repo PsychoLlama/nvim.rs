@@ -122,9 +122,9 @@ use crate::src::nvim::types::{
     Arena, BoolVarValue, Callback, Callback_data as C2Rust_Unnamed_5, Direction, EvalFuncData,
     ExtmarkOp, ListLenSpecials, OptInt, ScopeType, SpecialVarValue, String_0, VV_COMPLETED_ITEM,
     VarLockStatus, VarType, buf_T, colnr_T, dict_T, expand_T, extmark_undo_vec_t, garray_T,
-    hashitem_T, hashtab_T, key_extra, linenr_T, list_T, optset_T, pos_T, ptrdiff_t, pumitem_T,
-    regmatch_T, save_v_event_T, sctx_T, size_t, typval_T, typval_vval_union, uint8_t, uint64_t,
-    varnumber_T, win_T, xp_prefix_T,
+    hashitem_T, hashtab_T, linenr_T, list_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T,
+    save_v_event_T, sctx_T, size_t, typval_T, typval_vval_union, uint8_t, uint64_t, varnumber_T,
+    win_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::{ui_flush, vim_beep};
 use crate::src::nvim::undo::undo_allowed;
@@ -210,8 +210,6 @@ pub const CTRL_X_SPELL: C2Rust_Unnamed_36 = 14;
 pub const CTRL_X_EVAL: C2Rust_Unnamed_36 = 16;
 pub const CTRL_X_REGISTER: C2Rust_Unnamed_36 = 19;
 pub const CTRL_X_BUFNAMES: C2Rust_Unnamed_36 = 18;
-pub const KE_S_DOWN: key_extra = 5;
-pub const KE_S_UP: key_extra = 4;
 pub type compl_T = compl_S;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -251,9 +249,6 @@ pub struct cpt_source_T {
     pub cs_flag: ::core::ffi::c_char,
 }
 pub const CP_EQUAL: C2Rust_Unnamed_37 = 8;
-pub const KE_LUA: key_extra = 103;
-pub const KE_COMMAND: key_extra = 104;
-pub const KE_EVENT: key_extra = 102;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ins_compl_next_state_T {
@@ -270,7 +265,6 @@ pub struct ins_compl_next_state_T {
     pub dict_f: ::core::ffi::c_int,
     pub func_cb: *mut Callback,
 }
-pub const KE_IGNORE: key_extra = 53;
 pub const NUM_REGISTERS: C2Rust_Unnamed_29 = 39;
 pub const EW_SILENT: C2Rust_Unnamed_28 = 32;
 pub const EW_ADDSLASH: C2Rust_Unnamed_28 = 8;
@@ -291,11 +285,6 @@ pub const INS_COMPL_CPT_OK: C2Rust_Unnamed_38 = 1;
 pub const INS_COMPL_CPT_END: C2Rust_Unnamed_38 = 3;
 pub const CTRL_X_LOCAL_MSG: C2Rust_Unnamed_36 = 15;
 pub const CTRL_X_FINISHED: C2Rust_Unnamed_36 = 8;
-pub const KE_MOUSEMOVE: key_extra = 100;
-pub const KE_MOUSERIGHT: key_extra = 78;
-pub const KE_MOUSELEFT: key_extra = 77;
-pub const KE_MOUSEUP: key_extra = 76;
-pub const KE_MOUSEDOWN: key_extra = 75;
 pub const OPT_GLOBAL: C2Rust_Unnamed_27 = 1;
 pub const OPT_LOCAL: C2Rust_Unnamed_27 = 2;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_int;
@@ -374,7 +363,6 @@ pub(crate) const EXTMARK_UNDO_VEC_INIT: extmark_undo_vec_t = extmark_undo_vec_t 
     items: ptr::null_mut(),
 };
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -607,5 +595,4 @@ pub const CI_WHAT_MATCHES: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
 pub const CI_WHAT_PREINSERTED_TEXT: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
 pub const CI_WHAT_ALL: ::core::ffi::c_int = 0xff as ::core::ffi::c_int;
 pub const MIN_SPACE: ::core::ffi::c_int = 75 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
