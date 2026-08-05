@@ -264,6 +264,29 @@ static e_non_null_dict_required_for_argument_nr: GlobalCell<[::core::ffi::c_char
             *b"E1297: Non-NULL Dictionary required for argument %d\0",
         )
     });
+/// A zeroed `sortinfo_T`, which is what a bare `sortinfo_T info;` declaration
+/// is before `parse_sort_uniq_args` fills it in.
+pub const SORTINFO_INIT: sortinfo_T = sortinfo_T {
+    item_compare_ic: 0,
+    item_compare_lc: false,
+    item_compare_numeric: false,
+    item_compare_numbers: false,
+    item_compare_float: false,
+    item_compare_func: ::core::ptr::null(),
+    item_compare_partial: ::core::ptr::null_mut(),
+    item_compare_selfdict: ::core::ptr::null_mut(),
+    item_compare_func_err: false,
+};
+/// A zeroed `garray_T`, which is what a bare `garray_T ga;` declaration is
+/// before `ga_init` fills it in.  c2rust writes the five fields out at every
+/// such declaration.
+pub const GARRAY_EMPTY: garray_T = garray_T {
+    ga_len: 0,
+    ga_maxlen: 0,
+    ga_itemsize: 0,
+    ga_growsize: 0,
+    ga_data: ::core::ptr::null_mut(),
+};
 /// `TV_INITIAL_VALUE`: an unlocked `VAR_UNKNOWN` object, which is what a
 /// `typval_T` is initialised to and what one is left as after being moved out
 /// of.  c2rust writes the designated initialiser out at every use site.

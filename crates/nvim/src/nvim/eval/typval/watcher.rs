@@ -5,169 +5,174 @@
 //! key that just changed, building the `{old, new}` dictionary each callback
 //! is handed.  The `callback_*` half is `Callback`'s own lifetime — funcref,
 //! partial and LuaRef each reference-counted differently.
+//!
+//! The three walks over `dv_watchers` are written out rather than folded into
+//! a shared iterator: each is upstream's `QUEUE_FOREACH`, which caches the
+//! next node *before* running the body precisely so the body may unlink the
+//! current one, and a callback fired from the middle of one can re-enter and
+//! edit the queue.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
 
-pub(crate) unsafe extern "C" fn tv_dict_watcher_free(mut watcher: *mut DictWatcher) {
+/// Free `watcher` and the callback and pattern it owns.
+pub(crate) unsafe extern "C" fn tv_dict_watcher_free(watcher: *mut DictWatcher) {
     unsafe {
         callback_free(&raw mut (*watcher).callback);
-        xfree((*watcher).key_pattern as *mut ::core::ffi::c_void);
-        xfree(watcher as *mut ::core::ffi::c_void);
+        xfree((*watcher).key_pattern.cast());
+        xfree(watcher.cast());
     }
 }
 
+/// Register `callback` to fire when a key of `dict` matching `key_pattern`
+/// changes.  A trailing `*` in the pattern matches a prefix.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_dict_watcher_add(
     dict: *mut dict_T,
     key_pattern: *const ::core::ffi::c_char,
     key_pattern_len: size_t,
-    mut callback: Callback,
+    callback: Callback,
 ) {
     unsafe {
         if dict.is_null() {
             return;
         }
-        let watcher: *mut DictWatcher =
-            xmalloc(::core::mem::size_of::<DictWatcher>()) as *mut DictWatcher;
-        (*watcher).key_pattern =
-            xmemdupz(key_pattern as *const ::core::ffi::c_void, key_pattern_len)
-                as *mut ::core::ffi::c_char;
+        let watcher = xmalloc(::core::mem::size_of::<DictWatcher>()) as *mut DictWatcher;
+        (*watcher).key_pattern = xmemdupz(key_pattern.cast(), key_pattern_len).cast();
         (*watcher).key_pattern_len = key_pattern_len;
         (*watcher).callback = callback;
-        (*watcher).busy = false_0 != 0;
-        (*watcher).needs_free = false_0 != 0;
+        (*watcher).busy = false;
+        (*watcher).needs_free = false;
         QUEUE_INSERT_TAIL(&raw mut (*dict).watchers, &raw mut (*watcher).node);
     }
 }
 
-pub unsafe extern "C" fn tv_callback_equal(
-    mut cb1: *const Callback,
-    mut cb2: *const Callback,
-) -> bool {
+/// Whether `cb1` and `cb2` name the same function.
+pub unsafe extern "C" fn tv_callback_equal(cb1: *const Callback, cb2: *const Callback) -> bool {
     unsafe {
-        if (*cb1).type_0 as ::core::ffi::c_uint != (*cb2).type_0 as ::core::ffi::c_uint {
-            return false_0 != 0;
+        if (*cb1).type_0 != (*cb2).type_0 {
+            return false;
         }
-        match (*cb1).type_0 as ::core::ffi::c_uint {
-            1 => {
-                return strcmp((*cb1).data.funcref, (*cb2).data.funcref) == 0 as ::core::ffi::c_int;
-            }
-            2 => return (*cb1).data.partial == (*cb2).data.partial,
-            3 => return (*cb1).data.luaref == (*cb2).data.luaref,
-            0 => return true_0 != 0,
-            _ => {}
+        match (*cb1).type_0 {
+            kCallbackFuncref => strcmp((*cb1).data.funcref, (*cb2).data.funcref) == 0,
+            kCallbackPartial => (*cb1).data.partial == (*cb2).data.partial,
+            kCallbackLua => (*cb1).data.luaref == (*cb2).data.luaref,
+            kCallbackNone => true,
+            _ => abort(),
         }
-        abort();
     }
 }
 
+/// Drop whatever `callback` holds and leave it `kCallbackNone`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn callback_free(mut callback: *mut Callback) {
+pub unsafe extern "C" fn callback_free(callback: *mut Callback) {
     unsafe {
-        match (*callback).type_0 as ::core::ffi::c_uint {
-            1 => {
+        match (*callback).type_0 {
+            kCallbackFuncref => {
                 func_unref((*callback).data.funcref);
-                xfree((*callback).data.funcref as *mut ::core::ffi::c_void);
+                xfree((*callback).data.funcref.cast());
             }
-            2 => {
-                partial_unref((*callback).data.partial);
-            }
-            3 => {
+            kCallbackPartial => partial_unref((*callback).data.partial),
+            kCallbackLua => {
+                // NLUA_CLEAR_REF
                 if (*callback).data.luaref != LUA_NOREF {
                     api_free_luaref((*callback).data.luaref);
                     (*callback).data.luaref = LUA_NOREF as LuaRef;
                 }
             }
-            0 | _ => {}
+            _ => {}
         }
         (*callback).type_0 = kCallbackNone;
-        (*callback).data.funcref = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        (*callback).data.funcref = ::core::ptr::null_mut();
     }
 }
 
-pub unsafe extern "C" fn callback_put(mut cb: *mut Callback, mut tv: *mut typval_T) {
+/// Store `cb` in `tv` as a Vimscript value, taking a reference to it.
+///
+/// A Lua callback has no Vimscript form and comes out as `v:null`.
+pub unsafe extern "C" fn callback_put(cb: *mut Callback, tv: *mut typval_T) {
     unsafe {
-        match (*cb).type_0 as ::core::ffi::c_uint {
-            2 => {
+        match (*cb).type_0 {
+            kCallbackPartial => {
                 (*tv).v_type = VAR_PARTIAL;
                 (*tv).vval.v_partial = (*cb).data.partial;
                 (*(*cb).data.partial).pt_refcount += 1;
             }
-            1 => {
+            kCallbackFuncref => {
                 (*tv).v_type = VAR_FUNC;
                 (*tv).vval.v_string = xstrdup((*cb).data.funcref);
                 func_ref((*cb).data.funcref);
             }
-            3 | _ => {
+            _ => {
+                // kCallbackLua and kCallbackNone: no Vimscript representation.
                 (*tv).v_type = VAR_SPECIAL;
                 (*tv).vval.v_special = kSpecialVarNull;
             }
-        };
+        }
     }
 }
 
-pub unsafe extern "C" fn callback_copy(mut dest: *mut Callback, mut src: *mut Callback) {
+/// Copy `src` into `dest`, taking a reference to whatever it holds.
+pub unsafe extern "C" fn callback_copy(dest: *mut Callback, src: *mut Callback) {
     unsafe {
         (*dest).type_0 = (*src).type_0;
-        match (*src).type_0 as ::core::ffi::c_uint {
-            2 => {
+        match (*src).type_0 {
+            kCallbackPartial => {
                 (*dest).data.partial = (*src).data.partial;
                 (*(*dest).data.partial).pt_refcount += 1;
             }
-            1 => {
+            kCallbackFuncref => {
                 (*dest).data.funcref = xstrdup((*src).data.funcref);
                 func_ref((*src).data.funcref);
             }
-            3 => {
-                (*dest).data.luaref = api_new_luaref((*src).data.luaref);
-            }
-            _ => {
-                (*dest).data.funcref = ::core::ptr::null_mut::<::core::ffi::c_char>();
-            }
-        };
+            kCallbackLua => (*dest).data.luaref = api_new_luaref((*src).data.luaref),
+            _ => (*dest).data.funcref = ::core::ptr::null_mut(),
+        }
     }
 }
 
+/// A freshly allocated description of `cb`, as `string()` prints it.
 pub unsafe extern "C" fn callback_to_string(
-    mut cb: *mut Callback,
-    mut arena: *mut Arena,
+    cb: *mut Callback,
+    arena: *mut Arena,
 ) -> *mut ::core::ffi::c_char {
     unsafe {
-        if (*cb).type_0 as ::core::ffi::c_uint
-            == kCallbackLua as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if (*cb).type_0 == kCallbackLua {
             return nlua_funcref_str((*cb).data.luaref, arena);
         }
-        let msglen: size_t = 100 as size_t;
-        let mut msg: *mut ::core::ffi::c_char = xmallocz(msglen) as *mut ::core::ffi::c_char;
-        match (*cb).type_0 as ::core::ffi::c_uint {
-            1 => {
+
+        let msglen: size_t = 100;
+        let msg = xmallocz(msglen) as *mut ::core::ffi::c_char;
+        match (*cb).type_0 {
+            kCallbackFuncref => {
                 snprintf(
                     msg,
                     msglen,
-                    b"<vim function: %s>\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"<vim function: %s>".as_ptr(),
                     (*cb).data.funcref,
                 );
             }
-            2 => {
+            kCallbackPartial => {
                 snprintf(
                     msg,
                     msglen,
-                    b"<vim partial: %s>\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"<vim partial: %s>".as_ptr(),
                     (*(*cb).data.partial).pt_name,
                 );
             }
-            _ => {
-                *msg = NUL as ::core::ffi::c_char;
-            }
+            _ => *msg = NUL as ::core::ffi::c_char,
         }
-        return msg;
+        msg
     }
 }
 
+/// Unregister the watcher on `dict` with this exact pattern and callback.
+///
+/// A watcher removed while any watcher on the queue is mid-callback is only
+/// marked `needs_free`; [`tv_dict_watcher_notify`] unlinks it when the walk
+/// that is running finishes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_dict_watcher_remove(
     dict: *mut dict_T,
@@ -177,67 +182,69 @@ pub unsafe extern "C" fn tv_dict_watcher_remove(
 ) -> bool {
     unsafe {
         if dict.is_null() {
-            return false_0 != 0;
+            return false;
         }
-        let mut w: *mut QUEUE = ::core::ptr::null_mut::<QUEUE>();
-        let mut watcher: *mut DictWatcher = ::core::ptr::null_mut::<DictWatcher>();
-        let mut matched: bool = false_0 != 0;
-        let mut queue_is_busy: bool = false_0 != 0;
-        w = (*dict).watchers.next as *mut QUEUE;
+
+        let mut watcher = ::core::ptr::null_mut::<DictWatcher>();
+        let mut matched = false;
+        let mut queue_is_busy = false;
+        // QUEUE_FOREACH; `w` stays on the matching node when the walk breaks.
+        let mut w = (*dict).watchers.next;
         while w != &raw mut (*dict).watchers {
-            let mut next: *mut QUEUE = (*w).next as *mut QUEUE;
+            let next = (*w).next;
             watcher = tv_dict_watcher_node_data(w);
             if (*watcher).busy {
                 queue_is_busy = true;
             }
             if tv_callback_equal(&raw mut (*watcher).callback, &raw mut callback)
-                as ::core::ffi::c_int
-                != 0
                 && (*watcher).key_pattern_len == key_pattern_len
                 && memcmp(
-                    (*watcher).key_pattern as *const ::core::ffi::c_void,
-                    key_pattern as *const ::core::ffi::c_void,
+                    (*watcher).key_pattern.cast(),
+                    key_pattern.cast(),
                     key_pattern_len,
-                ) == 0 as ::core::ffi::c_int
+                ) == 0
             {
                 matched = true;
                 break;
-            } else {
-                w = next;
             }
+            w = next;
         }
+
         if !matched {
-            return false_0 != 0;
+            return false;
         }
+
         if queue_is_busy {
-            (*watcher).needs_free = true_0 != 0;
+            (*watcher).needs_free = true;
         } else {
             QUEUE_REMOVE(w);
             tv_dict_watcher_free(watcher);
         }
-        return true_0 != 0;
+        true
     }
 }
 
+/// Whether `watcher`'s pattern matches `key`.  A trailing `*` makes it a
+/// prefix match.
 pub(crate) unsafe extern "C" fn tv_dict_watcher_matches(
-    mut watcher: *mut DictWatcher,
+    watcher: *mut DictWatcher,
     key: *const ::core::ffi::c_char,
 ) -> bool {
     unsafe {
-        let len: size_t = (*watcher).key_pattern_len;
-        if len != 0
-            && *(*watcher)
-                .key_pattern
-                .offset(len.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
-                == '*' as ::core::ffi::c_int
-        {
-            return strncmp(key, (*watcher).key_pattern, len.wrapping_sub(1 as size_t))
-                == 0 as ::core::ffi::c_int;
+        let len = (*watcher).key_pattern_len;
+        if len != 0 && *(*watcher).key_pattern.add(len - 1) as ::core::ffi::c_int == '*' as i32 {
+            return strncmp(key, (*watcher).key_pattern, len - 1) == 0;
         }
-        return strcmp(key, (*watcher).key_pattern) == 0 as ::core::ffi::c_int;
+        strcmp(key, (*watcher).key_pattern) == 0
     }
 }
 
+/// Fire every watcher of `dict` that matches `key`, handing each
+/// `(dict, key, {old, new})`.
+///
+/// A callback may add or remove watchers, and may re-enter this function; the
+/// `busy` flag is what stops a watcher firing inside its own callback, and the
+/// second walk is the deferred deletion the first one could not do.
 pub unsafe extern "C" fn tv_dict_watcher_notify(
     dict: *mut dict_T,
     key: *const ::core::ffi::c_char,
@@ -245,64 +252,50 @@ pub unsafe extern "C" fn tv_dict_watcher_notify(
     oldtv: *mut typval_T,
 ) {
     unsafe {
-        let mut argv: [typval_T; 3] = [typval_T {
-            v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
-            vval: typval_vval_union { v_number: 0 },
-        }; 3];
-        argv[0 as ::core::ffi::c_int as usize].v_type = VAR_DICT;
-        argv[0 as ::core::ffi::c_int as usize].v_lock = VAR_UNLOCKED;
-        argv[0 as ::core::ffi::c_int as usize].vval.v_dict = dict;
-        argv[1 as ::core::ffi::c_int as usize].v_type = VAR_STRING;
-        argv[1 as ::core::ffi::c_int as usize].v_lock = VAR_UNLOCKED;
-        argv[1 as ::core::ffi::c_int as usize].vval.v_string = xstrdup(key);
-        argv[2 as ::core::ffi::c_int as usize].v_type = VAR_DICT;
-        argv[2 as ::core::ffi::c_int as usize].v_lock = VAR_UNLOCKED;
-        argv[2 as ::core::ffi::c_int as usize].vval.v_dict = tv_dict_alloc();
-        (*argv[2 as ::core::ffi::c_int as usize].vval.v_dict).dv_refcount += 1;
-        if !newtv.is_null() {
-            let v: *mut dictitem_T = tv_dict_item_alloc_len(
-                b"new\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
-            );
-            tv_copy(newtv, &raw mut (*v).di_tv);
-            tv_dict_add(argv[2 as ::core::ffi::c_int as usize].vval.v_dict, v);
-        }
-        if !oldtv.is_null()
-            && (*oldtv).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let v_0: *mut dictitem_T = tv_dict_item_alloc_len(
-                b"old\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
-            );
-            tv_copy(oldtv, &raw mut (*v_0).di_tv);
-            tv_dict_add(argv[2 as ::core::ffi::c_int as usize].vval.v_dict, v_0);
-        }
-        let mut rettv: typval_T = typval_T {
-            v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
-            vval: typval_vval_union { v_number: 0 },
+        let mut argv = [TV_INITIAL_VALUE; 3];
+        argv[0].v_type = VAR_DICT;
+        argv[0].v_lock = VAR_UNLOCKED;
+        argv[0].vval.v_dict = dict;
+        argv[1].v_type = VAR_STRING;
+        argv[1].v_lock = VAR_UNLOCKED;
+        argv[1].vval.v_string = xstrdup(key);
+        argv[2].v_type = VAR_DICT;
+        argv[2].v_lock = VAR_UNLOCKED;
+        argv[2].vval.v_dict = tv_dict_alloc();
+        (*argv[2].vval.v_dict).dv_refcount += 1;
+
+        // `tv_dict_item_alloc_len` copies exactly the length given and appends
+        // the NUL itself, so a Rust `&str` is upstream's `S_LEN(…)`.
+        let event = argv[2].vval.v_dict;
+        let add = |name: &str, from: *mut typval_T| {
+            let v = tv_dict_item_alloc_len(name.as_ptr().cast(), name.len());
+            tv_copy(from, &raw mut (*v).di_tv);
+            tv_dict_add(event, v);
         };
-        let mut any_needs_free: bool = false_0 != 0;
+        if !newtv.is_null() {
+            add("new", newtv);
+        }
+        if !oldtv.is_null() && (*oldtv).v_type != VAR_UNKNOWN {
+            add("old", oldtv);
+        }
+
+        let mut any_needs_free = false;
+        // Hold the dictionary across the callbacks: one of them may drop the
+        // last other reference to it.
         (*dict).dv_refcount += 1;
-        let mut w: *mut QUEUE = ::core::ptr::null_mut::<QUEUE>();
-        w = (*dict).watchers.next as *mut QUEUE;
+        // QUEUE_FOREACH: the next node is read before the body, so a callback
+        // that unlinks the current watcher does not strand the walk.
+        let mut w = (*dict).watchers.next;
         while w != &raw mut (*dict).watchers {
-            let mut next: *mut QUEUE = (*w).next as *mut QUEUE;
-            let mut watcher: *mut DictWatcher = tv_dict_watcher_node_data(w);
-            if !(*watcher).busy && tv_dict_watcher_matches(watcher, key) as ::core::ffi::c_int != 0
-            {
-                rettv = typval_T {
-                    v_type: VAR_UNKNOWN,
-                    v_lock: VAR_UNLOCKED,
-                    vval: typval_vval_union { v_number: 0 },
-                };
+            let next = (*w).next;
+            let watcher = tv_dict_watcher_node_data(w);
+            if !(*watcher).busy && tv_dict_watcher_matches(watcher, key) {
+                let mut rettv = TV_INITIAL_VALUE;
                 (*watcher).busy = true;
                 callback_call(
                     &raw mut (*watcher).callback,
-                    3 as ::core::ffi::c_int,
-                    &raw mut argv as *mut typval_T,
+                    3,
+                    argv.as_mut_ptr(),
                     &raw mut rettv,
                 );
                 (*watcher).busy = false;
@@ -313,30 +306,24 @@ pub unsafe extern "C" fn tv_dict_watcher_notify(
             }
             w = next;
         }
+
         if any_needs_free {
-            w = (*dict).watchers.next as *mut QUEUE;
+            let mut w = (*dict).watchers.next;
             while w != &raw mut (*dict).watchers {
-                let mut next_0: *mut QUEUE = (*w).next as *mut QUEUE;
-                let mut watcher_0: *mut DictWatcher = tv_dict_watcher_node_data(w);
-                if (*watcher_0).needs_free {
+                let next = (*w).next;
+                let watcher = tv_dict_watcher_node_data(w);
+                if (*watcher).needs_free {
                     QUEUE_REMOVE(w);
-                    tv_dict_watcher_free(watcher_0);
+                    tv_dict_watcher_free(watcher);
                 }
-                w = next_0;
+                w = next;
             }
         }
         tv_dict_unref(dict);
-        let mut i: size_t = 1 as size_t;
-        while i < ::core::mem::size_of::<[typval_T; 3]>()
-            .wrapping_div(::core::mem::size_of::<typval_T>())
-            .wrapping_div(
-                (::core::mem::size_of::<[typval_T; 3]>()
-                    .wrapping_rem(::core::mem::size_of::<typval_T>())
-                    == 0) as ::core::ffi::c_int as usize,
-            )
-        {
-            tv_clear((&raw mut argv as *mut typval_T).offset(i as isize));
-            i = i.wrapping_add(1);
+
+        // From 1: `argv[0]` is the caller's dictionary, which it still owns.
+        for tv in &mut argv[1..] {
+            tv_clear(tv);
         }
     }
 }
