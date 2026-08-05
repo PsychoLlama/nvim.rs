@@ -11,115 +11,116 @@
 #[allow(unused_imports)]
 use super::*;
 
-pub(crate) unsafe extern "C" fn ins_compl_dictionaries(
-    mut dict_start: *mut ::core::ffi::c_char,
-    mut pat: *mut ::core::ffi::c_char,
-    mut flags: ::core::ffi::c_int,
-    mut thesaurus: bool,
+/// Add every identifier matching `pat` in the `'dictionary'`-style list
+/// `dict_start` to the completions.
+///
+/// `flags` is `DICT_FIRST` and/or `DICT_EXACT`; `thesaurus` selects thesaurus
+/// completion.
+pub(crate) unsafe fn ins_compl_dictionaries(
+    dict_start: *mut c_char,
+    pat: *mut c_char,
+    flags: c_int,
+    thesaurus: bool,
 ) {
     unsafe {
-        let mut dict: *mut ::core::ffi::c_char = dict_start;
-        let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut regmatch: regmatch_T = regmatch_T {
-            regprog: ::core::ptr::null_mut::<regprog_T>(),
-            startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-            endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-            rm_matchcol: 0,
-            rm_ic: false,
-        };
-        let mut files: *mut *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-        let mut count: ::core::ffi::c_int = 0;
-        let mut dir: Direction = compl_direction.get();
-        if *dict as ::core::ffi::c_int == NUL {
+        let mut dict = dict_start;
+        let mut dir = compl_direction.get();
+
+        if *dict as c_int == NUL {
+            // When 'dictionary' is empty and spell checking is enabled use
+            // "spell".
             if !thesaurus && (*curwin.get()).w_onebuf_opt.wo_spell != 0 {
-                dict =
-                    b"spell\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                dict = c"spell".as_ptr().cast_mut();
             } else {
                 return;
             }
         }
-        let mut buf: *mut ::core::ffi::c_char =
-            xmalloc(LSIZE as size_t) as *mut ::core::ffi::c_char;
-        regmatch.regprog = ::core::ptr::null_mut::<regprog_T>();
-        let mut save_p_scs: ::core::ffi::c_int = p_scs.get();
+
+        let mut buf = xmalloc(LSIZE as size_t).cast::<c_char>();
+        // So that we can leave through 'theend.
+        let mut regmatch = regmatch_T {
+            regprog: ptr::null_mut(),
+            startp: [ptr::null_mut(); 10],
+            endp: [ptr::null_mut(); 10],
+            rm_matchcol: 0,
+            rm_ic: false,
+        };
+
+        // If 'infercase' is set, don't use 'smartcase' here.
+        let save_p_scs = p_scs.get();
         if (*curbuf.get()).b_p_inf != 0 {
-            p_scs.set(false_0);
+            p_scs.set(0);
         }
-        '_theend: {
+
+        // C's `goto theend`, i.e. free and restore below without scanning.
+        'theend: {
+            // When invoked to match whole lines for CTRL-X CTRL-L adjust the
+            // pattern to only match at the start of a line.  Otherwise just
+            // match the pattern.  Also need to double backslashes.
             if ctrl_x_mode_line_or_eval() {
-                let mut pat_esc: *mut ::core::ffi::c_char =
-                    vim_strsave_escaped(pat, b"\\\0".as_ptr() as *const ::core::ffi::c_char);
-                let mut len: size_t = strlen(pat_esc).wrapping_add(10 as size_t);
-                ptr = xmalloc(len) as *mut ::core::ffi::c_char;
-                vim_snprintf(
-                    ptr,
-                    len,
-                    b"^\\s*\\zs\\V%s\0".as_ptr() as *const ::core::ffi::c_char,
-                    pat_esc,
-                );
+                let pat_esc = vim_strsave_escaped(pat, c"\\".as_ptr());
+                let len = strlen(pat_esc) + 10;
+                let ptr = xmalloc(len).cast::<c_char>();
+                vim_snprintf(ptr, len, c"^\\s*\\zs\\V%s".as_ptr(), pat_esc);
                 regmatch.regprog = vim_regcomp(ptr, RE_MAGIC);
-                xfree(pat_esc as *mut ::core::ffi::c_void);
-                xfree(ptr as *mut ::core::ffi::c_void);
+                xfree(pat_esc.cast::<c_void>());
+                xfree(ptr.cast::<c_void>());
             } else {
-                regmatch.regprog = vim_regcomp(
-                    pat,
-                    if magic_isset() as ::core::ffi::c_int != 0 {
-                        RE_MAGIC
-                    } else {
-                        0 as ::core::ffi::c_int
-                    },
-                );
+                regmatch.regprog = vim_regcomp(pat, if magic_isset() { RE_MAGIC } else { 0 });
                 if regmatch.regprog.is_null() {
-                    break '_theend;
+                    break 'theend;
                 }
             }
+
+            // Ignore case depends on 'ignorecase', 'smartcase' and "pat".
             regmatch.rm_ic = ignorecase(pat) != 0;
-            while *dict as ::core::ffi::c_int != NUL && !got_int.get() && !compl_interrupted.get() {
+            while *dict as c_int != NUL && !got_int.get() && !compl_interrupted.get() {
+                // Copy one dictionary file name into buf.
+                // Upstream leaves both uninitialised: every path that reads
+                // them either assigns first or is guarded by `count > 0`.
+                let mut files: *mut *mut c_char = ptr::null_mut();
+                let mut count = 0;
                 if flags == DICT_EXACT {
-                    count = 1 as ::core::ffi::c_int;
+                    count = 1;
                     files = &raw mut dict;
                 } else {
+                    // Expand wildcards in the dictionary name, but do not allow
+                    // backticks (for security, the 'dict' option may have been
+                    // set in a modeline).
                     copy_option_part(
                         &raw mut dict,
                         buf,
                         LSIZE as size_t,
-                        b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                        c",".as_ptr().cast_mut(),
                     );
-                    if !thesaurus
-                        && strcmp(buf, b"spell\0".as_ptr() as *const ::core::ffi::c_char)
-                            == 0 as ::core::ffi::c_int
-                    {
-                        count = -1 as ::core::ffi::c_int;
-                    } else if !vim_strchr(buf, '`' as ::core::ffi::c_int).is_null()
+                    if !thesaurus && strcmp(buf, c"spell".as_ptr()) == 0 {
+                        count = -1;
+                    } else if !vim_strchr(buf, '`' as c_int).is_null()
                         || expand_wildcards(
-                            1 as ::core::ffi::c_int,
+                            1,
                             &raw mut buf,
                             &raw mut count,
                             &raw mut files,
                             EW_FILE | EW_SILENT,
                         ) != OK
                     {
-                        count = 0 as ::core::ffi::c_int;
+                        count = 0;
                     }
                 }
-                if count == -1 as ::core::ffi::c_int {
-                    if *pat.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == '\\' as ::core::ffi::c_int
-                        && *pat.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            == '<' as ::core::ffi::c_int
+
+                if count == -1 {
+                    // Complete from active spelling.  Skip "\<" in the pattern,
+                    // we don't use it as a RE.
+                    let word = if *pat as c_int == '\\' as c_int
+                        && *pat.offset(1) as c_int == '<' as c_int
                     {
-                        ptr = pat.offset(2 as ::core::ffi::c_int as isize);
+                        pat.offset(2)
                     } else {
-                        ptr = pat;
-                    }
-                    spell_dump_compl(
-                        ptr,
-                        regmatch.rm_ic as ::core::ffi::c_int,
-                        &raw mut dir,
-                        0 as ::core::ffi::c_int,
-                    );
-                } else if count > 0 as ::core::ffi::c_int {
+                        pat
+                    };
+                    spell_dump_compl(word, regmatch.rm_ic as c_int, &raw mut dir, 0);
+                } else if count > 0 {
+                    // Avoid a warning for using "files" uninitialised.
                     ins_compl_files(
                         count,
                         files,
@@ -133,422 +134,427 @@ pub(crate) unsafe extern "C" fn ins_compl_dictionaries(
                         FreeWild(count, files);
                     }
                 }
-                if flags != 0 as ::core::ffi::c_int {
+                if flags != 0 {
                     break;
                 }
             }
         }
+
         p_scs.set(save_p_scs);
         vim_regfree(regmatch.regprog);
-        xfree(buf as *mut ::core::ffi::c_void);
+        xfree(buf.cast::<c_void>());
     }
 }
 
-pub(crate) unsafe extern "C" fn thesaurus_add_words_in_line(
-    mut fname: *mut ::core::ffi::c_char,
-    mut buf_arg: *mut *mut ::core::ffi::c_char,
-    mut dir: ::core::ffi::c_int,
-    mut skip_word: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+/// Add all the words in the line `*buf_arg` from the thesaurus file `fname`,
+/// skipping the word at `skip_word`; answers OK on success.
+pub(crate) unsafe fn thesaurus_add_words_in_line(
+    fname: *mut c_char,
+    buf_arg: *mut *mut c_char,
+    dir: c_int,
+    skip_word: *const c_char,
+) -> c_int {
     unsafe {
-        let mut status: ::core::ffi::c_int = OK;
-        let mut ptr: *mut ::core::ffi::c_char = *buf_arg;
+        let mut status = OK;
+
+        // Add the other matches on the line.
+        let mut ptr = *buf_arg;
         while !got_int.get() {
+            // Find the start of the next word, skipping white space and
+            // punctuation.
             ptr = find_word_start(ptr);
-            if *ptr as ::core::ffi::c_int == NUL || *ptr as ::core::ffi::c_int == NL {
+            if *ptr as c_int == NUL || *ptr as c_int == NL {
                 break;
             }
-            let mut wstart: *mut ::core::ffi::c_char = ptr;
-            while *ptr as ::core::ffi::c_int != NUL {
-                let l: ::core::ffi::c_int = utfc_ptr2len(ptr);
-                if l < 2 as ::core::ffi::c_int
-                    && !vim_iswordc(*ptr as uint8_t as ::core::ffi::c_int)
-                {
+            let wstart = ptr;
+
+            // Find the end of the word.  Japanese words may have characters in
+            // different classes, so only separate words with single-byte
+            // non-word characters.
+            while *ptr as c_int != NUL {
+                let l = utfc_ptr2len(ptr);
+                if l < 2 && !vim_iswordc(*ptr as u8 as c_int) {
                     break;
                 }
                 ptr = ptr.offset(l as isize);
             }
-            if wstart == skip_word as *mut ::core::ffi::c_char {
-                continue;
-            }
-            status = ins_compl_add_infercase(
-                wstart,
-                ptr.offset_from(wstart) as ::core::ffi::c_int,
-                p_ic.get() != 0,
-                fname,
-                dir as Direction,
-                false_0 != 0,
-                FUZZY_SCORE_NONE,
-            );
-            if status == FAIL {
-                break;
+
+            // Add the word, skipping the regexp match.
+            if wstart != skip_word.cast_mut() {
+                status = ins_compl_add_infercase(
+                    wstart,
+                    ptr.offset_from(wstart) as c_int,
+                    p_ic.get() != 0,
+                    fname,
+                    dir,
+                    false,
+                    FUZZY_SCORE_NONE,
+                );
+                if status == FAIL {
+                    break;
+                }
             }
         }
+
         *buf_arg = ptr;
-        return status;
+        status
     }
 }
 
-pub(crate) unsafe extern "C" fn ins_compl_files(
-    mut count: ::core::ffi::c_int,
-    mut files: *mut *mut ::core::ffi::c_char,
-    mut thesaurus: bool,
-    mut flags: ::core::ffi::c_int,
-    mut regmatch: *mut regmatch_T,
-    mut buf: *mut ::core::ffi::c_char,
-    mut dir: *mut Direction,
+/// Read `count` dictionary/thesaurus `files` and add the text matching
+/// `regmatch`.
+pub(crate) unsafe fn ins_compl_files(
+    count: c_int,
+    files: *mut *mut c_char,
+    thesaurus: bool,
+    flags: c_int,
+    regmatch: *mut regmatch_T,
+    buf: *mut c_char,
+    dir: *mut Direction,
 ) {
     unsafe {
-        let mut leader: *mut ::core::ffi::c_char = if cot_fuzzy() as ::core::ffi::c_int != 0 {
+        let leader = if cot_fuzzy() {
             ins_compl_leader()
         } else {
-            ::core::ptr::null_mut::<::core::ffi::c_char>()
+            ptr::null_mut()
         };
-        let mut leader_len: ::core::ffi::c_int = if cot_fuzzy() as ::core::ffi::c_int != 0 {
-            ins_compl_leader_len() as ::core::ffi::c_int
+        let leader_len = if cot_fuzzy() {
+            ins_compl_leader_len() as c_int
         } else {
-            0 as ::core::ffi::c_int
+            0
         };
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < count && !got_int.get() && !ins_compl_interrupted() {
-            let mut fp: *mut FILE = os_fopen(
-                *files.offset(i as isize),
-                b"r\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+
+        let mut i = 0;
+        while i < count as isize && !got_int.get() && !ins_compl_interrupted() {
+            let file = *files.offset(i);
+            let fp = os_fopen(file, c"r".as_ptr()); // open dictionary file
             if flags != DICT_EXACT && !shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete.get() {
                 vim_snprintf(
-                    IObuff.ptr() as *mut ::core::ffi::c_char,
+                    IObuff.ptr().cast::<c_char>(),
                     IOSIZE as size_t,
-                    gettext(b"Scanning dictionary: %s\0".as_ptr() as *const ::core::ffi::c_char),
-                    *files.offset(i as isize),
+                    gettext(c"Scanning dictionary: %s".as_ptr()),
+                    file,
                 );
                 msg_progress(
-                    IObuff.ptr() as *mut ::core::ffi::c_char,
-                    b"completion\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    b"running\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                    IObuff.ptr().cast::<c_char>(),
+                    c"completion".as_ptr().cast_mut(),
+                    c"running".as_ptr().cast_mut(),
                     HLF_R,
-                    false_0 != 0,
-                    true_0 != 0,
+                    false,
+                    true,
                 );
             }
-            if !fp.is_null() {
-                while !got_int.get() && !ins_compl_interrupted() && !vim_fgets(buf, LSIZE, fp) {
-                    let mut ptr: *mut ::core::ffi::c_char = buf;
-                    if cot_fuzzy() as ::core::ffi::c_int != 0
-                        && leader_len > 0 as ::core::ffi::c_int
-                    {
-                        let mut line_end: *mut ::core::ffi::c_char = find_line_end(ptr);
-                        while ptr < line_end {
-                            let mut score: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            if !fuzzy_match_str_in_line(
-                                &raw mut ptr,
-                                leader,
-                                &raw mut len,
-                                ::core::ptr::null_mut::<pos_T>(),
-                                &raw mut score,
-                            ) {
-                                continue;
-                            }
-                            let mut end_ptr: *mut ::core::ffi::c_char =
-                                if ctrl_x_mode_line_or_eval() as ::core::ffi::c_int != 0 {
-                                    find_line_end(ptr)
-                                } else {
-                                    find_word_end(ptr)
-                                };
-                            let mut add_r: ::core::ffi::c_int = ins_compl_add_infercase(
+
+            if fp.is_null() {
+                i += 1;
+                continue;
+            }
+
+            // Read the dictionary file line by line, checking each for a match.
+            while !got_int.get() && !ins_compl_interrupted() && !vim_fgets(buf, LSIZE, fp) {
+                let mut ptr = buf;
+                if cot_fuzzy() && leader_len > 0 {
+                    let line_end = find_line_end(ptr);
+                    while ptr < line_end {
+                        let mut score = 0;
+                        let mut len = 0;
+                        if fuzzy_match_str_in_line(
+                            &raw mut ptr,
+                            leader,
+                            &raw mut len,
+                            ptr::null_mut(),
+                            &raw mut score,
+                        ) {
+                            let end_ptr = if ctrl_x_mode_line_or_eval() {
+                                find_line_end(ptr)
+                            } else {
+                                find_word_end(ptr)
+                            };
+                            let add_r = ins_compl_add_infercase(
                                 ptr,
-                                end_ptr.offset_from(ptr) as ::core::ffi::c_int,
+                                end_ptr.offset_from(ptr) as c_int,
                                 p_ic.get() != 0,
-                                *files.offset(i as isize),
+                                file,
                                 *dir,
-                                false_0 != 0,
+                                false,
                                 score,
                             );
                             if add_r == FAIL {
                                 break;
                             }
-                            ptr = end_ptr;
-                            if compl_get_longest.get() as ::core::ffi::c_int != 0
-                                && ctrl_x_mode_normal() as ::core::ffi::c_int != 0
+                            ptr = end_ptr; // start from the next word
+                            if compl_get_longest.get()
+                                && ctrl_x_mode_normal()
                                 && !(*compl_first_match.get()).cp_next.is_null()
                                 && score == (*(*compl_first_match.get()).cp_next).cp_score
                             {
                                 (*compl_num_bests.ptr()) += 1;
                             }
                         }
-                    } else if !regmatch.is_null() {
-                        while vim_regexec(regmatch, buf, ptr.offset_from(buf) as colnr_T) {
-                            ptr = (*regmatch).startp[0 as ::core::ffi::c_int as usize];
-                            ptr = if ctrl_x_mode_line_or_eval() as ::core::ffi::c_int != 0 {
-                                find_line_end(ptr)
-                            } else {
-                                find_word_end(ptr)
-                            };
-                            let mut add_r_0: ::core::ffi::c_int = ins_compl_add_infercase(
-                                (*regmatch).startp[0 as ::core::ffi::c_int as usize],
-                                ptr.offset_from(
-                                    (*regmatch).startp[0 as ::core::ffi::c_int as usize],
-                                ) as ::core::ffi::c_int,
-                                p_ic.get() != 0,
-                                *files.offset(i as isize),
-                                *dir,
-                                false_0 != 0,
-                                FUZZY_SCORE_NONE,
-                            );
-                            if thesaurus {
-                                ptr = buf;
-                                add_r_0 = thesaurus_add_words_in_line(
-                                    *files.offset(i as isize),
-                                    &raw mut ptr,
-                                    *dir as ::core::ffi::c_int,
-                                    (*regmatch).startp[0 as ::core::ffi::c_int as usize],
-                                );
-                            }
-                            if add_r_0 == OK {
-                                *dir = FORWARD;
-                            } else if add_r_0 == FAIL {
-                                break;
-                            }
-                            if *ptr as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
-                                || got_int.get() as ::core::ffi::c_int != 0
-                            {
-                                break;
-                            }
+                    }
+                } else if !regmatch.is_null() {
+                    while vim_regexec(regmatch, buf, ptr.offset_from(buf) as colnr_T) {
+                        let start = (*regmatch).startp[0];
+                        ptr = if ctrl_x_mode_line_or_eval() {
+                            find_line_end(start)
+                        } else {
+                            find_word_end(start)
+                        };
+                        let mut add_r = ins_compl_add_infercase(
+                            start,
+                            ptr.offset_from(start) as c_int,
+                            p_ic.get() != 0,
+                            file,
+                            *dir,
+                            false,
+                            FUZZY_SCORE_NONE,
+                        );
+                        if thesaurus {
+                            // For a thesaurus, add all the words in the line.
+                            ptr = buf;
+                            add_r = thesaurus_add_words_in_line(file, &raw mut ptr, *dir, start);
+                        }
+                        if add_r == OK {
+                            // If dir was BACKWARD then honour it just once.
+                            *dir = FORWARD;
+                        } else if add_r == FAIL {
+                            break;
+                        }
+                        // Avoid an expensive call to vim_regexec() at the end
+                        // of the line.
+                        if *ptr as c_int == '\n' as c_int || got_int.get() {
+                            break;
                         }
                     }
-                    line_breakcheck();
-                    ins_compl_check_keys(50 as ::core::ffi::c_int, false_0 != 0);
                 }
-                fclose(fp);
+                line_breakcheck();
+                ins_compl_check_keys(50, false);
             }
+            fclose(fp);
             i += 1;
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn ins_compl_next_buf(
-    mut buf: *mut buf_T,
-    mut flag: ::core::ffi::c_int,
-) -> *mut buf_T {
+/// The next window, loaded buffer or non-loaded buffer (depending on `flag`)
+/// after `buf` that has not been scanned; `curbuf` when there is none.
+///
+/// `curbuf` is special: called with `buf == curbuf` this has to be the first
+/// call for a given flag/expansion. -- Acevedo
+pub(crate) unsafe fn ins_compl_next_buf(mut buf: *mut buf_T, flag: c_int) -> *mut buf_T {
     unsafe {
-        static wp: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-        if flag == 'w' as ::core::ffi::c_int {
+        static wp: GlobalCell<*mut win_T> = GlobalCell::new(ptr::null_mut());
+
+        if flag == 'w' as c_int {
+            // Just windows.
             if buf == curbuf.get() || !win_valid(wp.get()) {
+                // First call for this flag/expansion, or the window was closed.
                 wp.set(curwin.get());
             }
-            '_c2rust_label: {
-                if !(*wp.ptr()).is_null() {
-                } else {
-                    __assert_fail(
-                        b"wp\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        2872 as ::core::ffi::c_uint,
-                        b"buf_T *ins_compl_next_buf(buf_T *, int)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(!wp.get().is_null());
             loop {
+                // Move to the next window, wrapping to the first at the end.
                 wp.set(if !(*wp.get()).w_next.is_null() {
                     (*wp.get()).w_next
                 } else {
                     firstwin.get()
                 });
+                // Stop if we're back at the start, or found an unscanned
+                // buffer in a focusable window.
                 if wp.get() == curwin.get()
-                    || !(*(*wp.get()).w_buffer).b_scanned
-                        && (*wp.get()).w_config.focusable as ::core::ffi::c_int != 0
+                    || (!(*(*wp.get()).w_buffer).b_scanned && (*wp.get()).w_config.focusable)
                 {
                     break;
                 }
             }
             buf = (*wp.get()).w_buffer;
         } else {
+            // 'b' (just loaded buffers), 'u' (just non-loaded buffers) or 'U'
+            // (unlisted buffers).  When completing whole lines skip unloaded
+            // buffers.
             loop {
+                // Move to the next buffer, wrapping to the first at the end.
                 buf = if !(*buf).b_next.is_null() {
                     (*buf).b_next
                 } else {
                     firstbuf.get()
                 };
+                // Stop if we're back at the start buffer.
                 if buf == curbuf.get() {
                     break;
                 }
-                let mut skip_buffer: bool = false;
-                if flag == 'U' as ::core::ffi::c_int {
-                    skip_buffer = (*buf).b_p_bl != 0;
+                let skip_buffer = if flag == 'U' as c_int {
+                    (*buf).b_p_bl != 0
                 } else {
-                    skip_buffer = (*buf).b_p_bl == 0
-                        || (*buf).b_ml.ml_mfp.is_null() as ::core::ffi::c_int
-                            != (flag == 'u' as ::core::ffi::c_int) as ::core::ffi::c_int;
-                }
+                    (*buf).b_p_bl == 0 || (*buf).b_ml.ml_mfp.is_null() != (flag == 'u' as c_int)
+                };
+                // Stop if we found a buffer that matches our criteria.
                 if !skip_buffer && !(*buf).b_scanned {
                     break;
                 }
             }
         }
-        return buf;
+        buf
     }
 }
 
-pub(crate) unsafe extern "C" fn ins_compl_get_next_word_or_line(
-    mut ins_buf: *mut buf_T,
-    mut cur_match_pos: *mut pos_T,
-    mut match_len: *mut ::core::ffi::c_int,
-    mut cont_s_ipos: *mut bool,
-) -> *mut ::core::ffi::c_char {
+/// The next word or line from `ins_buf` at `cur_match_pos`, with its length in
+/// `match_len`; `cont_s_ipos` says the next `CTRL-X <>` sets the initial
+/// position.
+pub(crate) unsafe fn ins_compl_get_next_word_or_line(
+    ins_buf: *mut buf_T,
+    cur_match_pos: *mut pos_T,
+    match_len: *mut c_int,
+    cont_s_ipos: *mut bool,
+) -> *mut c_char {
     unsafe {
-        *match_len = 0 as ::core::ffi::c_int;
-        let mut ptr: *mut ::core::ffi::c_char =
+        *match_len = 0;
+        let mut ptr =
             ml_get_buf(ins_buf, (*cur_match_pos).lnum).offset((*cur_match_pos).col as isize);
-        let mut len: ::core::ffi::c_int = ml_get_buf_len(ins_buf, (*cur_match_pos).lnum)
-            - (*cur_match_pos).col as ::core::ffi::c_int;
+        let mut len = ml_get_buf_len(ins_buf, (*cur_match_pos).lnum) - (*cur_match_pos).col;
+        let iobuff = IObuff.ptr().cast::<c_char>();
+
         if ctrl_x_mode_line_or_eval() {
             if compl_status_adding() {
                 if (*cur_match_pos).lnum >= (*ins_buf).b_ml.ml_line_count {
-                    return ::core::ptr::null_mut::<::core::ffi::c_char>();
+                    return ptr::null_mut();
                 }
-                ptr = ml_get_buf(ins_buf, (*cur_match_pos).lnum + 1 as linenr_T);
-                len = ml_get_buf_len(ins_buf, (*cur_match_pos).lnum + 1 as linenr_T)
-                    as ::core::ffi::c_int;
+                ptr = ml_get_buf(ins_buf, (*cur_match_pos).lnum + 1);
+                len = ml_get_buf_len(ins_buf, (*cur_match_pos).lnum + 1);
                 if p_paste.get() == 0 {
-                    let mut tmp_ptr: *mut ::core::ffi::c_char = ptr;
+                    let tmp_ptr = ptr;
                     ptr = skipwhite(tmp_ptr);
-                    len -= ptr.offset_from(tmp_ptr) as ::core::ffi::c_int;
+                    len -= ptr.offset_from(tmp_ptr) as c_int;
                 }
             }
         } else {
-            let mut tmp_ptr_0: *mut ::core::ffi::c_char = ptr;
-            if compl_status_adding() as ::core::ffi::c_int != 0 && compl_length.get() <= len {
-                tmp_ptr_0 = tmp_ptr_0.offset(compl_length.get() as isize);
-                if vim_iswordp(tmp_ptr_0) {
-                    return ::core::ptr::null_mut::<::core::ffi::c_char>();
+            let mut tmp_ptr = ptr;
+            if compl_status_adding() && compl_length.get() <= len {
+                tmp_ptr = tmp_ptr.offset(compl_length.get() as isize);
+                // Skip if already inside a word.
+                if vim_iswordp(tmp_ptr) {
+                    return ptr::null_mut();
                 }
-                tmp_ptr_0 = find_word_start(tmp_ptr_0);
+                // Find the start of the next word.
+                tmp_ptr = find_word_start(tmp_ptr);
             }
-            tmp_ptr_0 = find_word_end(tmp_ptr_0);
-            len = tmp_ptr_0.offset_from(ptr) as ::core::ffi::c_int;
-            if compl_status_adding() as ::core::ffi::c_int != 0 && len == compl_length.get() {
+            // Find the end of this word.
+            tmp_ptr = find_word_end(tmp_ptr);
+            len = tmp_ptr.offset_from(ptr) as c_int;
+
+            if compl_status_adding() && len == compl_length.get() {
                 if (*cur_match_pos).lnum < (*ins_buf).b_ml.ml_line_count {
-                    strncpy(IObuff.ptr() as *mut ::core::ffi::c_char, ptr, len as size_t);
-                    ptr = ml_get_buf(ins_buf, (*cur_match_pos).lnum + 1 as linenr_T);
-                    ptr = skipwhite(ptr);
-                    tmp_ptr_0 = ptr;
-                    tmp_ptr_0 = find_word_start(tmp_ptr_0);
-                    tmp_ptr_0 = find_word_end(tmp_ptr_0);
-                    if tmp_ptr_0 > ptr {
-                        if *ptr as ::core::ffi::c_int != ')' as ::core::ffi::c_int
-                            && (*IObuff.ptr())[(len - 1 as ::core::ffi::c_int) as usize]
-                                as ::core::ffi::c_int
-                                != TAB
+                    // Try the next line, if any: the new word will be "joined"
+                    // as if the normal command "J" was used.  IOSIZE is always
+                    // greater than compl_length, so the strncpy always works
+                    // -- Acevedo
+                    strncpy(iobuff, ptr, len as size_t);
+                    ptr = skipwhite(ml_get_buf(ins_buf, (*cur_match_pos).lnum + 1));
+                    // Find the start and then the end of the next word.
+                    tmp_ptr = find_word_end(find_word_start(ptr));
+                    if tmp_ptr > ptr {
+                        if *ptr as c_int != ')' as c_int
+                            && *iobuff.offset((len - 1) as isize) as c_int != TAB
                         {
-                            if (*IObuff.ptr())[(len - 1 as ::core::ffi::c_int) as usize]
-                                as ::core::ffi::c_int
-                                != ' ' as ::core::ffi::c_int
-                            {
-                                let c2rust_fresh3 = len;
-                                len = len + 1;
-                                (*IObuff.ptr())[c2rust_fresh3 as usize] =
-                                    ' ' as ::core::ffi::c_char;
+                            if *iobuff.offset((len - 1) as isize) as c_int != ' ' as c_int {
+                                *iobuff.offset(len as isize) = ' ' as c_char;
+                                len += 1;
                             }
+                            // IObuff =~ "\k.* ", thus len >= 2.
                             if p_js.get() != 0
-                                && ((*IObuff.ptr())[(len - 2 as ::core::ffi::c_int) as usize]
-                                    as ::core::ffi::c_int
-                                    == '.' as ::core::ffi::c_int
-                                    || (*IObuff.ptr())[(len - 2 as ::core::ffi::c_int) as usize]
-                                        as ::core::ffi::c_int
-                                        == '?' as ::core::ffi::c_int
-                                    || (*IObuff.ptr())[(len - 2 as ::core::ffi::c_int) as usize]
-                                        as ::core::ffi::c_int
-                                        == '!' as ::core::ffi::c_int)
+                                && matches!(
+                                    *iobuff.offset((len - 2) as isize) as u8,
+                                    b'.' | b'?' | b'!'
+                                )
                             {
-                                let c2rust_fresh4 = len;
-                                len = len + 1;
-                                (*IObuff.ptr())[c2rust_fresh4 as usize] =
-                                    ' ' as ::core::ffi::c_char;
+                                *iobuff.offset(len as isize) = ' ' as c_char;
+                                len += 1;
                             }
                         }
-                        if tmp_ptr_0.offset_from(ptr) >= (IOSIZE - len) as isize {
-                            tmp_ptr_0 = ptr
-                                .offset(IOSIZE as isize)
-                                .offset(-(len as isize))
-                                .offset(-(1 as ::core::ffi::c_int as isize));
+                        // Copy as much as possible of the new word.
+                        if tmp_ptr.offset_from(ptr) >= (IOSIZE - len) as isize {
+                            tmp_ptr = ptr.offset((IOSIZE - len - 1) as isize);
                         }
-                        xstrlcpy(
-                            (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
-                            ptr,
-                            (IOSIZE - len) as size_t,
-                        );
-                        len += tmp_ptr_0.offset_from(ptr) as ::core::ffi::c_int;
-                        *cont_s_ipos = true_0 != 0;
+                        xstrlcpy(iobuff.offset(len as isize), ptr, (IOSIZE - len) as size_t);
+                        len += tmp_ptr.offset_from(ptr) as c_int;
+                        *cont_s_ipos = true;
                     }
-                    (*IObuff.ptr())[len as usize] = NUL as ::core::ffi::c_char;
-                    ptr = IObuff.ptr() as *mut ::core::ffi::c_char;
+                    *iobuff.offset(len as isize) = NUL as c_char;
+                    ptr = iobuff;
                 }
                 if len == compl_length.get() {
-                    return ::core::ptr::null_mut::<::core::ffi::c_char>();
+                    return ptr::null_mut();
                 }
             }
         }
+
         *match_len = len;
-        return ptr;
+        ptr
     }
 }
 
-pub(crate) unsafe extern "C" fn get_next_default_completion(
-    mut st: *mut ins_compl_next_state_T,
-    mut start_pos: *mut pos_T,
-) -> ::core::ffi::c_int {
+/// The next set of words matching `compl_pattern` for default completion —
+/// normal `^P`/`^N` and `^X^L`.
+///
+/// Searches `st->ins_buf` from `start_pos` in the `compl_direction` direction;
+/// with `st->set_match_pos` set, `st->first_match_pos` and `st->last_match_pos`
+/// are set too. Answers OK if a new match was found, otherwise FAIL.
+pub(crate) unsafe fn get_next_default_completion(
+    st: *mut ins_compl_next_state_T,
+    start_pos: *mut pos_T,
+) -> c_int {
     unsafe {
-        let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut in_fuzzy_collect: bool = !compl_status_adding()
-            && cot_fuzzy() as ::core::ffi::c_int != 0
-            && compl_length.get() > 0 as ::core::ffi::c_int;
-        let mut leader: *mut ::core::ffi::c_char = ins_compl_leader();
-        let mut score: ::core::ffi::c_int = FUZZY_SCORE_NONE;
-        let in_curbuf: bool = (*st).ins_buf == curbuf.get();
-        let save_p_scs: ::core::ffi::c_int = p_scs.get();
-        '_c2rust_label: {
-            if !(*st).ins_buf.is_null() {
-            } else {
-                __assert_fail(
-                    b"st->ins_buf\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/insexpand.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    4275 as ::core::ffi::c_uint,
-                    b"int get_next_default_completion(ins_compl_next_state_T *, pos_T *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        let mut ptr: *mut c_char = ptr::null_mut();
+        let mut len = 0;
+        let in_fuzzy_collect = !compl_status_adding() && cot_fuzzy() && compl_length.get() > 0;
+        let leader = ins_compl_leader();
+        let mut score = FUZZY_SCORE_NONE;
+        let in_curbuf = (*st).ins_buf == curbuf.get();
+
+        // If 'infercase' is set, don't use 'smartcase' here.
+        let save_p_scs = p_scs.get();
+        debug_assert!(!(*st).ins_buf.is_null());
         if (*(*st).ins_buf).b_p_inf != 0 {
-            p_scs.set(false_0);
+            p_scs.set(0);
         }
-        let save_p_ws: ::core::ffi::c_int = p_ws.get();
+
+        // Buffers other than curbuf are scanned from the beginning or the end
+        // but never from the middle, thus setting nowrapscan in these buffers
+        // is a good idea; on the other hand, we always set wrapscan for curbuf
+        // to avoid missing matches -- Acevedo, Webb
+        let save_p_ws = p_ws.get();
         if !in_curbuf {
-            p_ws.set(false_0);
-        } else if *(*st).e_cpt as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
-            p_ws.set(true_0);
+            p_ws.set(0);
+        } else if *(*st).e_cpt as c_int == '.' as c_int {
+            p_ws.set(1);
         }
-        let mut looped_around: bool = false_0 != 0;
-        let mut found_new_match: ::core::ffi::c_int = FAIL;
+
+        let mut looped_around = false;
+        let mut found_new_match;
         loop {
-            let mut cont_s_ipos: bool = false_0 != 0;
-            (*msg_silent.ptr()) += 1;
+            let mut cont_s_ipos = false;
+
+            (*msg_silent.ptr()) += 1; // Don't want messages for wrapscan.
             if in_fuzzy_collect {
-                let dir = compl_direction.get() as ::core::ffi::c_int;
-                let pos = (*st).cur_match_pos;
-                let m = search_for_fuzzy_match((*st).ins_buf, pos, leader, dir, start_pos);
+                let hit = search_for_fuzzy_match(
+                    (*st).ins_buf,
+                    (*st).cur_match_pos,
+                    leader,
+                    compl_direction.get(),
+                    start_pos,
+                );
                 found_new_match = FAIL;
-                if let Some(hit) = m {
+                if let Some(hit) = hit {
                     (ptr, len) = (hit.ptr, hit.len);
                     score = hit.score.unwrap_or(score);
-                    found_new_match = true_0;
+                    found_new_match = OK;
                 }
-            } else if ctrl_x_mode_whole_line() as ::core::ffi::c_int != 0
-                || ctrl_x_mode_eval() as ::core::ffi::c_int != 0
+            } else if ctrl_x_mode_whole_line()
+                || ctrl_x_mode_eval()
                 || compl_cont_status.get() & CONT_SOL != 0
             {
+                // ctrl_x_mode_line_or_eval(), or a word-wise search that has
+                // added a word that was at the beginning of the line.
                 found_new_match = search_for_exact_line(
                     (*st).ins_buf,
                     (*st).cur_match_pos,
@@ -557,61 +563,66 @@ pub(crate) unsafe extern "C" fn get_next_default_completion(
                 );
             } else {
                 found_new_match = searchit(
-                    ::core::ptr::null_mut::<win_T>(),
+                    ptr::null_mut(),
                     (*st).ins_buf,
                     (*st).cur_match_pos,
-                    ::core::ptr::null_mut::<pos_T>(),
+                    ptr::null_mut(),
                     compl_direction.get(),
                     (*compl_pattern.ptr()).data,
                     (*compl_pattern.ptr()).size,
-                    1 as ::core::ffi::c_int,
-                    SEARCH_KEEP as ::core::ffi::c_int + SEARCH_NFMSG as ::core::ffi::c_int,
-                    RE_LAST as ::core::ffi::c_int,
-                    ::core::ptr::null_mut::<searchit_arg_T>(),
+                    1,
+                    SEARCH_KEEP + SEARCH_NFMSG,
+                    RE_LAST,
+                    ptr::null_mut(),
                 );
             }
             (*msg_silent.ptr()) -= 1;
-            if !compl_started.get() || (*st).set_match_pos as ::core::ffi::c_int != 0 {
-                compl_started.set(true_0 != 0);
-                (*st).first_match_pos = *(*st).cur_match_pos;
-                (*st).last_match_pos = *(*st).cur_match_pos;
-                (*st).set_match_pos = false_0 != 0;
+
+            let pos = *(*st).cur_match_pos;
+            if !compl_started.get() || (*st).set_match_pos {
+                // Set "compl_started" even on failure.
+                compl_started.set(true);
+                (*st).first_match_pos = pos;
+                (*st).last_match_pos = pos;
+                (*st).set_match_pos = false;
             } else if (*st).first_match_pos.lnum == (*st).last_match_pos.lnum
                 && (*st).first_match_pos.col == (*st).last_match_pos.col
             {
                 found_new_match = FAIL;
-            } else if compl_dir_forward() as ::core::ffi::c_int != 0
-                && ((*st).prev_match_pos.lnum > (*(*st).cur_match_pos).lnum
-                    || (*st).prev_match_pos.lnum == (*(*st).cur_match_pos).lnum
-                        && (*st).prev_match_pos.col >= (*(*st).cur_match_pos).col)
-            {
-                if looped_around {
-                    found_new_match = FAIL;
+            } else {
+                // Passing the previous match going forwards (or backwards) is
+                // the wrap-around; the second time round there is nothing new.
+                let passed = if compl_dir_forward() {
+                    (*st).prev_match_pos.lnum > pos.lnum
+                        || ((*st).prev_match_pos.lnum == pos.lnum
+                            && (*st).prev_match_pos.col >= pos.col)
                 } else {
-                    looped_around = true_0 != 0;
-                }
-            } else if !compl_dir_forward()
-                && ((*st).prev_match_pos.lnum < (*(*st).cur_match_pos).lnum
-                    || (*st).prev_match_pos.lnum == (*(*st).cur_match_pos).lnum
-                        && (*st).prev_match_pos.col <= (*(*st).cur_match_pos).col)
-            {
-                if looped_around {
-                    found_new_match = FAIL;
-                } else {
-                    looped_around = true_0 != 0;
+                    (*st).prev_match_pos.lnum < pos.lnum
+                        || ((*st).prev_match_pos.lnum == pos.lnum
+                            && (*st).prev_match_pos.col <= pos.col)
+                };
+                if passed {
+                    if looped_around {
+                        found_new_match = FAIL;
+                    } else {
+                        looped_around = true;
+                    }
                 }
             }
-            (*st).prev_match_pos = *(*st).cur_match_pos;
+            (*st).prev_match_pos = pos;
             if found_new_match == FAIL {
                 break;
             }
-            if compl_status_adding() as ::core::ffi::c_int != 0
-                && in_curbuf as ::core::ffi::c_int != 0
+
+            // When ADDING, the text before the cursor matches: skip it.
+            if compl_status_adding()
+                && in_curbuf
                 && (*start_pos).lnum == (*(*st).cur_match_pos).lnum
                 && (*start_pos).col == (*(*st).cur_match_pos).col
             {
                 continue;
             }
+
             if !in_fuzzy_collect {
                 ptr = ins_compl_get_next_word_or_line(
                     (*st).ins_buf,
@@ -620,168 +631,146 @@ pub(crate) unsafe extern "C" fn get_next_default_completion(
                     &raw mut cont_s_ipos,
                 );
             }
-            if ptr.is_null()
-                || ins_compl_has_preinsert() as ::core::ffi::c_int != 0
-                    && strcmp(ptr, ins_compl_leader()) == 0 as ::core::ffi::c_int
+            if ptr.is_null() || (ins_compl_has_preinsert() && strcmp(ptr, ins_compl_leader()) == 0)
             {
                 continue;
             }
-            if is_nearest_active() as ::core::ffi::c_int != 0
-                && in_curbuf as ::core::ffi::c_int != 0
-            {
-                score = ((*(*st).cur_match_pos).lnum - (*curwin.get()).w_cursor.lnum)
-                    as ::core::ffi::c_int;
-                if score < 0 as ::core::ffi::c_int {
-                    score = -score;
-                }
+
+            if is_nearest_active() && in_curbuf {
+                score = ((*(*st).cur_match_pos).lnum - (*curwin.get()).w_cursor.lnum) as c_int;
+                score = score.abs();
             }
+
             if ins_compl_add_infercase(
                 ptr,
                 len,
                 p_ic.get() != 0,
-                if in_curbuf as ::core::ffi::c_int != 0 {
-                    ::core::ptr::null_mut::<::core::ffi::c_char>()
+                if in_curbuf {
+                    ptr::null_mut()
                 } else {
                     (*(*st).ins_buf).b_sfname
                 },
                 kDirectionNotSet,
                 cont_s_ipos,
                 score,
-            ) == NOTDONE
+            ) != NOTDONE
             {
-                continue;
+                if in_fuzzy_collect && score == (*(*compl_first_match.get()).cp_next).cp_score {
+                    (*compl_num_bests.ptr()) += 1;
+                }
+                found_new_match = OK;
+                break;
             }
-            if in_fuzzy_collect as ::core::ffi::c_int != 0
-                && score == (*(*compl_first_match.get()).cp_next).cp_score
-            {
-                (*compl_num_bests.ptr()) += 1;
-            }
-            found_new_match = OK;
-            break;
         }
+
         p_scs.set(save_p_scs);
         p_ws.set(save_p_ws);
-        return found_new_match;
+        found_new_match
     }
 }
 
-pub(crate) unsafe extern "C" fn get_register_completion() {
+/// Add completion matches from the contents of every usable register.
+pub(crate) unsafe fn get_register_completion() {
     unsafe {
-        let mut dir: Direction = compl_direction.get();
-        let mut adding_mode: bool = compl_status_adding();
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < NUM_REGISTERS {
-            let mut regname: ::core::ffi::c_int = get_register_name(i);
-            if !(!valid_yank_reg(regname, false_0 != 0) || regname == '_' as ::core::ffi::c_int) {
-                let mut reg: *mut yankreg_T = copy_register(regname);
-                if (*reg).y_array.is_null() || (*reg).y_size == 0 as size_t {
-                    free_register(reg);
-                    xfree(reg as *mut ::core::ffi::c_void);
+        // Upstream's `!compl_orig_text.data || (p_ic ? STRNICMP : strncmp)(…)`:
+        // a candidate counts when there is no original text to compare against,
+        // or it starts with it.
+        let starts_with_orig = |s: *mut c_char| {
+            let orig = *compl_orig_text.ptr();
+            orig.data.is_null()
+                || if p_ic.get() != 0 {
+                    strncasecmp(s, orig.data, orig.size) == 0
                 } else {
-                    let mut j: size_t = 0 as size_t;
-                    while j < (*reg).y_size {
-                        let mut str: *mut ::core::ffi::c_char =
-                            (*(*reg).y_array.offset(j as isize)).data;
-                        if !str.is_null() {
-                            if adding_mode {
-                                let mut str_len: ::core::ffi::c_int =
-                                    strlen(str) as ::core::ffi::c_int;
-                                if str_len != 0 as ::core::ffi::c_int {
-                                    if (*compl_orig_text.ptr()).data.is_null()
-                                        || (if p_ic.get() != 0 {
-                                            (strncasecmp(
-                                                str,
-                                                (*compl_orig_text.ptr()).data,
-                                                (*compl_orig_text.ptr()).size,
-                                            ) == 0 as ::core::ffi::c_int)
-                                                as ::core::ffi::c_int
-                                        } else {
-                                            (strncmp(
-                                                str,
-                                                (*compl_orig_text.ptr()).data,
-                                                (*compl_orig_text.ptr()).size,
-                                            ) == 0 as ::core::ffi::c_int)
-                                                as ::core::ffi::c_int
-                                        }) != 0
-                                    {
-                                        if ins_compl_add_infercase(
-                                            str,
-                                            str_len,
-                                            p_ic.get() != 0,
-                                            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                                            dir,
-                                            false_0 != 0,
-                                            FUZZY_SCORE_NONE,
-                                        ) == OK
-                                        {
-                                            dir = FORWARD;
-                                        }
-                                    }
-                                }
-                            } else {
-                                let mut str_end: *mut ::core::ffi::c_char =
-                                    str.offset(strlen(str) as isize);
-                                let mut p: *mut ::core::ffi::c_char = str;
-                                while p < str_end && *p as ::core::ffi::c_int != NUL {
-                                    let mut old_p: *mut ::core::ffi::c_char = p;
-                                    p = find_word_start(p);
-                                    if p >= str_end || *p as ::core::ffi::c_int == NUL {
-                                        break;
-                                    }
-                                    let mut word_end: *mut ::core::ffi::c_char = find_word_end(p);
-                                    if word_end <= p {
-                                        word_end = p.offset(utfc_ptr2len(p) as isize);
-                                    }
-                                    if word_end > str_end {
-                                        word_end = str_end;
-                                    }
-                                    let mut len: ::core::ffi::c_int =
-                                        word_end.offset_from(p) as ::core::ffi::c_int;
-                                    if len > 0 as ::core::ffi::c_int
-                                        && ((*compl_orig_text.ptr()).data.is_null()
-                                            || (if p_ic.get() != 0 {
-                                                (strncasecmp(
-                                                    p,
-                                                    (*compl_orig_text.ptr()).data,
-                                                    (*compl_orig_text.ptr()).size,
-                                                ) == 0 as ::core::ffi::c_int)
-                                                    as ::core::ffi::c_int
-                                            } else {
-                                                (strncmp(
-                                                    p,
-                                                    (*compl_orig_text.ptr()).data,
-                                                    (*compl_orig_text.ptr()).size,
-                                                ) == 0 as ::core::ffi::c_int)
-                                                    as ::core::ffi::c_int
-                                            }) != 0)
-                                    {
-                                        if ins_compl_add_infercase(
-                                            p,
-                                            len,
-                                            p_ic.get() != 0,
-                                            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                                            dir,
-                                            false_0 != 0,
-                                            FUZZY_SCORE_NONE,
-                                        ) == OK
-                                        {
-                                            dir = FORWARD;
-                                        }
-                                    }
-                                    p = word_end;
-                                    if p <= old_p {
-                                        p = old_p.offset(utfc_ptr2len(old_p) as isize);
-                                    }
-                                }
-                            }
-                        }
-                        j = j.wrapping_add(1);
+                    strncmp(s, orig.data, orig.size) == 0
+                }
+        };
+
+        let mut dir = compl_direction.get();
+        let adding_mode = compl_status_adding();
+
+        for i in 0..NUM_REGISTERS {
+            let regname = get_register_name(i);
+            // Skip an invalid or black hole register.
+            if !valid_yank_reg(regname, false) || regname == '_' as c_int {
+                continue;
+            }
+
+            let reg = copy_register(regname);
+            if (*reg).y_array.is_null() || (*reg).y_size == 0 {
+                free_register(reg);
+                xfree(reg.cast::<c_void>());
+                continue;
+            }
+
+            for j in 0..(*reg).y_size as isize {
+                let str = (*(*reg).y_array.offset(j)).data;
+                if str.is_null() {
+                    continue;
+                }
+
+                if adding_mode {
+                    let str_len = strlen(str) as c_int;
+                    if str_len == 0 {
+                        continue;
                     }
-                    free_register(reg);
-                    xfree(reg as *mut ::core::ffi::c_void);
+                    if starts_with_orig(str)
+                        && ins_compl_add_infercase(
+                            str,
+                            str_len,
+                            p_ic.get() != 0,
+                            ptr::null_mut(),
+                            dir,
+                            false,
+                            FUZZY_SCORE_NONE,
+                        ) == OK
+                    {
+                        dir = FORWARD;
+                    }
+                } else {
+                    // The safe end of the string, to avoid NUL byte issues.
+                    let str_end = str.add(strlen(str));
+                    let mut p = str;
+                    while p < str_end && *p as c_int != NUL {
+                        let old_p = p;
+                        p = find_word_start(p);
+                        if p >= str_end || *p as c_int == NUL {
+                            break;
+                        }
+
+                        let mut word_end = find_word_end(p);
+                        if word_end <= p {
+                            word_end = p.offset(utfc_ptr2len(p) as isize);
+                        }
+                        if word_end > str_end {
+                            word_end = str_end;
+                        }
+
+                        let len = word_end.offset_from(p) as c_int;
+                        if len > 0
+                            && starts_with_orig(p)
+                            && ins_compl_add_infercase(
+                                p,
+                                len,
+                                p_ic.get() != 0,
+                                ptr::null_mut(),
+                                dir,
+                                false,
+                                FUZZY_SCORE_NONE,
+                            ) == OK
+                        {
+                            dir = FORWARD;
+                        }
+
+                        p = word_end;
+                        if p <= old_p {
+                            p = old_p.offset(utfc_ptr2len(old_p) as isize);
+                        }
+                    }
                 }
             }
-            i += 1;
+
+            free_register(reg);
+            xfree(reg.cast::<c_void>());
         }
     }
 }
