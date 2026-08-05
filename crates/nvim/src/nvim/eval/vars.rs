@@ -96,7 +96,7 @@ use crate::src::nvim::types::{
     VarType, VimVarIndex, aco_save_T, buf_T, dict_T, dictitem_T, evalarg_T, exarg_T, expand_T,
     garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, kFalse, kListLenUnknown,
     kNone, kSpecialVarNull, kTrue, list_T, listitem_T, lval_T, partial_T, ptrdiff_t, scid_T,
-    scriptitem_T, scriptvar_T, sctx_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T,
+    scriptitem_T, scriptvar_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T,
     typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T,
 };
 use crate::src::nvim::version::{highest_patch, min_vim_version};
