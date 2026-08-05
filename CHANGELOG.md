@@ -21,6 +21,10 @@ and this project adheres to [CalVer](https://calver.org/).
   popup menu, every `EXPAND_*` source from file names to `:command
 -complete=customlist,` and buffer-text search patterns, and
   `getcompletion()`.
+- Rewrote the command-line editor, covering the `:`, `/` and `?` key loop and
+  its history, the command-line window, `'incsearch'` and `'inccommand'`
+  previews, command-line highlighting, `input()` and the `getcmd*()` and
+  `setcmdline()` functions, and the `ext_cmdline` UI events.
 
 ## [2026.08.02-af6bcec290]
 
