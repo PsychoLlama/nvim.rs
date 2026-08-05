@@ -207,7 +207,14 @@ unsafe extern "C-unwind" fn typval_parse_enter(
             // Whether this can be a dict_T is not knowable yet, so the pairs
             // are decoded into a flat `[key, value] * length` scratch array.
             MPACK_TOKEN_MAP => {
-                (*node).data[1].p = xmallocz(len * 2 * ::core::mem::size_of::<typval_T>());
+                // `length * 2` is `mpack_uint32_t` arithmetic upstream, so a
+                // header claiming 2^31 pairs or more wraps and under-allocates
+                // — docket O-B14-9, kept rather than fixed.  Widening the
+                // multiply is not free: the honest size is 64 GB, which is a
+                // fatal `E41` here where upstream answers `E475: Incomplete
+                // msgpack string`.
+                let pairs = (*node).tok.length.wrapping_mul(2) as size_t;
+                (*node).data[1].p = xmallocz(pairs * ::core::mem::size_of::<typval_T>());
             }
             _ => {}
         }
