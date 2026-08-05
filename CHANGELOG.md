@@ -43,6 +43,10 @@ and this project adheres to [CalVer](https://calver.org/).
 - Rewrote the variable layer: `:let`, `:unlet`, `:const`, `:lockvar`, the
   `g:`/`b:`/`w:`/`t:`/`v:`/`l:`/`s:` scopes and their dictionaries, the
   `getbufvar()`/`setwinvar()` family, here-documents and `:redir =>`.
+- Rewrote user functions: `:function` and `:delfunction`, the argument list
+  with its defaults and `...`, funcrefs, partials, closures and lambdas,
+  `:call`, `:return` and `:defer`, autoloading, and the `a:`/`l:` scopes a
+  call runs in.
 
 ### Fixed
 
