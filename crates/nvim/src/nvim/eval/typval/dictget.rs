@@ -176,8 +176,7 @@ pub unsafe extern "C" fn tv_dict_to_env(denv: *mut dict_T) -> *mut *mut ::core::
         let env = xmalloc((env_size + 1) * ::core::mem::size_of::<*mut ::core::ffi::c_char>())
             as *mut *mut ::core::ffi::c_char;
 
-        let mut i = 0;
-        for hi in tv_dict_iter(&*denv) {
+        for (i, hi) in tv_dict_iter(&*denv).enumerate() {
             let var = tv_dict_hi2di(hi);
             let key = tv_dict_item_key(var);
             let str = tv_get_string(&raw mut (*var).di_tv);
@@ -185,7 +184,6 @@ pub unsafe extern "C" fn tv_dict_to_env(denv: *mut dict_T) -> *mut *mut ::core::
             let len = strlen(key) + strlen(str) + strlen(c"=".as_ptr()) + 1;
             *env.add(i) = xmalloc(len) as *mut ::core::ffi::c_char;
             snprintf(*env.add(i), len, c"%s=%s".as_ptr(), key, str);
-            i += 1;
         }
 
         // must be null terminated

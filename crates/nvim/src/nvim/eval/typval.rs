@@ -145,11 +145,6 @@ pub type DictListType = ::core::ffi::c_uint;
 pub const kDict2ListItems: DictListType = 2;
 pub const kDict2ListValues: DictListType = 1;
 pub const kDict2ListKeys: DictListType = 0;
-pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 58] = unsafe {
-    ::core::mem::transmute::<[u8; 58], [::core::ffi::c_char; 58]>(
-        *b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0",
-    )
-};
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
@@ -297,8 +292,7 @@ pub const TV_INITIAL_VALUE: typval_T = typval_T {
 };
 pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-pub static tv_empty_string: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(b"\0".as_ptr() as *const ::core::ffi::c_char);
+pub static tv_empty_string: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(c"".as_ptr());
 /// `ARRAY_SIZE(sl->sl_items)`: how many `listitem_T`s a `staticList10_T`
 /// embeds.  c2rust renders `ARRAY_SIZE` as a division by the macro's own
 /// `== 0` static assertion; the value it computes is just the length.
@@ -309,30 +303,30 @@ pub const ITEM_COMPARE_FAIL: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
 pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = false_0;
 static tv_equal_recurse_limit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static num_errors: GlobalCell<[*const ::core::ffi::c_char; 11]> = GlobalCell::new([
-    b"E685: using an invalid value as a Number\0".as_ptr() as *const ::core::ffi::c_char,
+    c"E685: using an invalid value as a Number".as_ptr(),
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
-    b"E703: Using a Funcref as a Number\0".as_ptr() as *const ::core::ffi::c_char,
-    b"E745: Using a List as a Number\0".as_ptr() as *const ::core::ffi::c_char,
-    b"E728: Using a Dictionary as a Number\0".as_ptr() as *const ::core::ffi::c_char,
-    b"E805: Using a Float as a Number\0".as_ptr() as *const ::core::ffi::c_char,
+    c"E703: Using a Funcref as a Number".as_ptr(),
+    c"E745: Using a List as a Number".as_ptr(),
+    c"E728: Using a Dictionary as a Number".as_ptr(),
+    c"E805: Using a Float as a Number".as_ptr(),
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
-    b"E703: Using a Funcref as a Number\0".as_ptr() as *const ::core::ffi::c_char,
-    b"E974: Using a Blob as a Number\0".as_ptr() as *const ::core::ffi::c_char,
+    c"E703: Using a Funcref as a Number".as_ptr(),
+    c"E974: Using a Blob as a Number".as_ptr(),
 ]);
 static str_errors: GlobalCell<[*const ::core::ffi::c_char; 11]> = GlobalCell::new([
     (e_using_invalid_value_as_string.as_raw() as *const _) as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
-    b"E729: Using a Funcref as a String\0".as_ptr() as *const ::core::ffi::c_char,
-    b"E730: Using a List as a String\0".as_ptr() as *const ::core::ffi::c_char,
-    b"E731: Using a Dictionary as a String\0".as_ptr() as *const ::core::ffi::c_char,
+    c"E729: Using a Funcref as a String".as_ptr(),
+    c"E730: Using a List as a String".as_ptr(),
+    c"E731: Using a Dictionary as a String".as_ptr(),
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
-    b"E729: Using a Funcref as a String\0".as_ptr() as *const ::core::ffi::c_char,
-    b"E976: Using a Blob as a String\0".as_ptr() as *const ::core::ffi::c_char,
+    c"E729: Using a Funcref as a String".as_ptr(),
+    c"E976: Using a Blob as a String".as_ptr(),
 ]);
 pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_argv_func: None,
