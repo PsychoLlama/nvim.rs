@@ -317,6 +317,35 @@ pub type C2Rust_Unnamed_35 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_36 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_37 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_38 = ::core::ffi::c_int;
+/// A zeroed `garray_T`, which `ga_init` then fills in.
+pub(crate) const GARRAY_T_INIT: garray_T = garray_T {
+    ga_len: 0,
+    ga_maxlen: 0,
+    ga_itemsize: 0,
+    ga_growsize: 0,
+    ga_data: ptr::null_mut(),
+};
+/// A zeroed `ins_compl_next_state_T`: C's `CLEAR_FIELD(st)`.
+pub(crate) const INS_COMPL_NEXT_STATE_INIT: ins_compl_next_state_T = ins_compl_next_state_T {
+    e_cpt_copy: ptr::null_mut(),
+    e_cpt: ptr::null_mut(),
+    ins_buf: ptr::null_mut(),
+    cur_match_pos: ptr::null_mut(),
+    prev_match_pos: POS_T_INIT,
+    set_match_pos: false,
+    first_match_pos: POS_T_INIT,
+    last_match_pos: POS_T_INIT,
+    found_all: false,
+    dict: ptr::null_mut(),
+    dict_f: 0,
+    func_cb: ptr::null_mut(),
+};
+/// A zeroed `pos_T`.
+pub(crate) const POS_T_INIT: pos_T = pos_T {
+    lnum: 0,
+    col: 0,
+    coladd: 0,
+};
 /// A zeroed `save_v_event_T`, which `get_v_event` fills in.
 pub(crate) const SAVE_V_EVENT_INIT: save_v_event_T = save_v_event_T {
     sve_did_save: false,
@@ -471,11 +500,7 @@ static cpt_compl_pattern: GlobalCell<String_0> = GlobalCell::new(STRING_INIT);
 static compl_direction: GlobalCell<Direction> = GlobalCell::new(FORWARD);
 static compl_shows_dir: GlobalCell<Direction> = GlobalCell::new(FORWARD);
 static compl_pending: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static compl_startpos: GlobalCell<pos_T> = GlobalCell::new(pos_T {
-    lnum: 0,
-    col: 0,
-    coladd: 0,
-});
+static compl_startpos: GlobalCell<pos_T> = GlobalCell::new(POS_T_INIT);
 static compl_length: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static compl_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
 static compl_col: GlobalCell<colnr_T> = GlobalCell::new(0 as colnr_T);

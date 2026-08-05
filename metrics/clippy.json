@@ -77,7 +77,6 @@
     "crates/nvim/src/nvim/input.rs": 3,
     "crates/nvim/src/nvim/insexpand.rs": 34,
     "crates/nvim/src/nvim/insexpand/callbacks.rs": 11,
-    "crates/nvim/src/nvim/insexpand/getexp.rs": 21,
     "crates/nvim/src/nvim/insexpand/insert.rs": 6,
     "crates/nvim/src/nvim/insexpand/keys.rs": 3,
     "crates/nvim/src/nvim/insexpand/session.rs": 17,

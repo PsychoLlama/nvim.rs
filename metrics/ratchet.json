@@ -299,7 +299,7 @@
     "crates/nvim/src/nvim/input.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/insexpand.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/insexpand/callbacks.rs": {"unsafe": 25},
-    "crates/nvim/src/nvim/insexpand/getexp.rs": {"unsafe": 15},
+    "crates/nvim/src/nvim/insexpand/getexp.rs": {"unsafe": 13},
     "crates/nvim/src/nvim/insexpand/insert.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/insexpand/keys.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/insexpand/matchlist.rs": {"unsafe": 23},
