@@ -16,9 +16,7 @@ pub(crate) unsafe extern "C" fn function_list_modified(
 ) -> ::core::ffi::c_int {
     unsafe {
         if prev_ht_changed != (*func_hashtab.ptr()).ht_changed {
-            emsg(gettext(
-                (e_function_list_was_modified.ptr() as *const _) as *const ::core::ffi::c_char,
-            ));
+            emsg(gettext(E_FUNCTION_LIST_WAS_MODIFIED.as_ptr()));
             return true_0;
         }
         return false_0;
@@ -338,9 +336,9 @@ pub unsafe fn ex_function(mut eap: *mut exarg_T) {
                             if KeyTyped.get() {
                                 if (*eap).skip == 0 && (*eap).forceit == 0 {
                                     if !fudi.fd_dict.is_null() && fudi.fd_newkey.is_null() {
-                                        emsg(gettext(e_funcdict.get()));
+                                        emsg(gettext(E_FUNCDICT.as_ptr()));
                                     } else if !name.is_null() && !find_func(name).is_null() {
-                                        emsg_funcname(e_funcexts.get(), name);
+                                        emsg_funcname(E_FUNCEXTS.as_ptr(), name);
                                     }
                                 }
                                 if (*eap).skip == 0 && did_emsg.get() != 0 {
@@ -390,7 +388,7 @@ pub unsafe fn ex_function(mut eap: *mut exarg_T) {
                                                     || (*fp).uf_script_ctx.sc_seq
                                                         == (*current_sctx.ptr()).sc_seq)
                                             {
-                                                emsg_funcname(e_funcexts.get(), name);
+                                                emsg_funcname(E_FUNCEXTS.as_ptr(), name);
                                                 break '_errret_keep;
                                             } else if (*fp).uf_calls > 0 as ::core::ffi::c_int {
                                                 emsg_funcname(
@@ -426,7 +424,7 @@ pub unsafe fn ex_function(mut eap: *mut exarg_T) {
                                     let mut numbuf: [::core::ffi::c_char; 65] = [0; 65];
                                     fp = ::core::ptr::null_mut::<ufunc_T>();
                                     if fudi.fd_newkey.is_null() && (*eap).forceit == 0 {
-                                        emsg(gettext(e_funcdict.get()));
+                                        emsg(gettext(E_FUNCDICT.as_ptr()));
                                         break '_erret;
                                     } else {
                                         if fudi.fd_di.is_null() {

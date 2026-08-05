@@ -183,10 +183,7 @@ pub(crate) unsafe extern "C" fn get_function_args(
                     {
                         if !skip {
                             semsg(
-                                gettext(
-                                    (e_no_white_space_allowed_before_str_str.ptr() as *const _)
-                                        as *const ::core::ffi::c_char,
-                                ),
+                                gettext(E_NO_WHITE_SPACE_ALLOWED_BEFORE_STR_STR.as_ptr()),
                                 b",\0".as_ptr() as *const ::core::ffi::c_char,
                                 p,
                             );

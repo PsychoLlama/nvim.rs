@@ -431,7 +431,7 @@ pub unsafe extern "C" fn trans_function_name(
                         && flags & TFN_QUIET as ::core::ffi::c_int == 0
                         && (fdp.is_null() || lv.ll_dict.is_null() || (*fdp).fd_newkey.is_null())
                     {
-                        emsg(gettext(e_funcref.get()));
+                        emsg(gettext(E_FUNCREF.as_ptr()));
                     } else {
                         *pp = end as *mut ::core::ffi::c_char;
                     }

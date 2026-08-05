@@ -1,5 +1,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::{ptr, slice};
+
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_nl_or_nul};
 use crate::src::nvim::autocmd::{EVENT_FUNCUNDEFINED, apply_autocmds};
 use crate::src::nvim::charset::{getdigits, skiptowhite, skipwhite, vim_strsize};
@@ -8,12 +11,12 @@ use crate::src::nvim::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::src::nvim::eval::funcs::{
     call_internal_func, call_internal_method, check_internal_func, find_internal_func,
 };
+use crate::src::nvim::eval::typval::{GARRAY_EMPTY, tv_is_func, tv_list_set_lock};
 use crate::src::nvim::eval::typval::{
     tv_clear, tv_copy, tv_dict_add, tv_dict_item_alloc, tv_dict_item_alloc_len,
     tv_dict_item_remove, tv_dict_unref, tv_get_number_chk, tv_list_append, tv_list_init_static,
     value_check_lock,
 };
-use crate::src::nvim::eval::typval::{tv_is_func, tv_list_set_lock};
 use crate::src::nvim::eval::vars::{
     find_var, find_var_ht, find_var_in_ht, get_vim_var_nr, init_var_dict, list_hashtable_vars,
     skip_var_list, vars_clear, vars_clear_ext,
@@ -113,62 +116,81 @@ pub use self::lambda::*;
 pub use self::listing::*;
 pub use self::name::*;
 pub use self::ret::*;
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const _ISdigit: C2Rust_Unnamed = 2048;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const DO_NOT_FREE_CNT: C2Rust_Unnamed_14 = 1073741823;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const DI_FLAGS_FIX: C2Rust_Unnamed_15 = 4;
-pub const DI_FLAGS_RO_SBX: C2Rust_Unnamed_15 = 2;
-pub const DI_FLAGS_RO: C2Rust_Unnamed_15 = 1;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const MAX_FUNC_ARGS: C2Rust_Unnamed_16 = 20;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const FIXVAR_CNT: C2Rust_Unnamed_18 = 12;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_int;
-pub const EXPAND_USER_FUNC: C2Rust_Unnamed_19 = 19;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const CSTP_RETURN: C2Rust_Unnamed_21 = 24;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const TFN_NO_DEREF: C2Rust_Unnamed_22 = 8;
-pub const TFN_NO_AUTOLOAD: C2Rust_Unnamed_22 = 4;
-pub const TFN_QUIET: C2Rust_Unnamed_22 = 2;
-pub const TFN_INT: C2Rust_Unnamed_22 = 1;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub const GLV_READ_ONLY: C2Rust_Unnamed_23 = 16;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
-pub const EVAL_EVALUATE: C2Rust_Unnamed_24 = 1;
-pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
-pub const FCERR_DELETED: C2Rust_Unnamed_25 = 7;
-pub const FCERR_NONE: C2Rust_Unnamed_25 = 5;
-pub const FCERR_DICT: C2Rust_Unnamed_25 = 4;
-pub const FCERR_SCRIPT: C2Rust_Unnamed_25 = 3;
-pub const FCERR_TOOFEW: C2Rust_Unnamed_25 = 2;
-pub const FCERR_TOOMANY: C2Rust_Unnamed_25 = 1;
-pub const FCERR_UNKNOWN: C2Rust_Unnamed_25 = 0;
-pub const DOCMD_REPEAT: C2Rust_Unnamed_27 = 4;
-pub const DOCMD_VERBOSE: C2Rust_Unnamed_27 = 1;
-pub const DOCMD_NOWAIT: C2Rust_Unnamed_27 = 2;
+/// The refcount an item that must never be freed carries.
+pub const DO_NOT_FREE_CNT: c_int = 1073741823;
+
+/// `dictitem_T::di_flags`: fixed (the item lives inside its owner), and
+/// read-only always or only inside the sandbox.
+pub const DI_FLAGS_FIX: u8 = 4;
+pub const DI_FLAGS_RO_SBX: u8 = 2;
+pub const DI_FLAGS_RO: u8 = 1;
+
+/// How many arguments a call may carry, and how many locals live in the
+/// funccall's own `fc_fixvar` array before one has to be allocated.
+pub const MAX_FUNC_ARGS: c_int = 20;
+pub const FIXVAR_CNT: c_int = 12;
+
+pub const EXPAND_USER_FUNC: c_int = 19;
+pub const CSTP_RETURN: c_int = 24;
+
+/// `trans_function_name` flags.
+pub const TFN_NO_DEREF: c_int = 8;
+pub const TFN_NO_AUTOLOAD: c_int = 4;
+pub const TFN_QUIET: c_int = 2;
+pub const TFN_INT: c_int = 1;
+
+pub const GLV_READ_ONLY: c_int = 16;
+pub const EVAL_EVALUATE: c_int = 1;
+
+/// Why a call could not be made; `user_func_error` turns one into a message.
+pub const FCERR_DELETED: c_int = 7;
+pub const FCERR_NONE: c_int = 5;
+pub const FCERR_DICT: c_int = 4;
+pub const FCERR_SCRIPT: c_int = 3;
+pub const FCERR_TOOFEW: c_int = 2;
+pub const FCERR_TOOMANY: c_int = 1;
+pub const FCERR_UNKNOWN: c_int = 0;
+
+pub const DOCMD_REPEAT: c_int = 4;
+pub const DOCMD_VERBOSE: c_int = 1;
+pub const DOCMD_NOWAIT: c_int = 2;
 pub const KE_SNR: key_extra = 82;
-pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
-    ga_len: 0 as ::core::ffi::c_int,
-    ga_maxlen: 0 as ::core::ffi::c_int,
-    ga_itemsize: 0 as ::core::ffi::c_int,
-    ga_growsize: 1 as ::core::ffi::c_int,
-    ga_data: NULL,
-};
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const FNE_INCL_BR: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FNE_CHECK_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
-pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX.wrapping_sub(1 as ::core::ffi::c_ulong);
+pub const KS_EXTRA: c_int = 253;
+pub const LUA_NOREF: c_int = -2;
+pub const NUL: c_int = 0;
+pub const OK: c_int = 1;
+pub const FAIL: c_int = 0;
+pub const NOTDONE: c_int = 2;
+pub const FNE_INCL_BR: c_int = 1;
+pub const FNE_CHECK_START: c_int = 2;
+pub const AUTOLOAD_CHAR: c_int = '#' as c_int;
+pub const TV_CSTRING: size_t = size_t::MAX - 1;
+pub const IOSIZE: c_int = 1024 + 1;
+pub const MSG_BUF_LEN: c_int = 480;
+pub const MSG_BUF_CLEN: c_int = MSG_BUF_LEN / 6;
+pub const PROF_YES: c_int = 1;
+
+// Transitional: the transpile's spellings of `true`, `false`, `NULL`,
+// `isdigit()`'s ctype bit and an empty `garray_T`.  Each child drops its uses
+// as it is rewritten; the last one to go deletes this block.
+pub const true_0: c_int = 1;
+pub const false_0: c_int = 0;
+pub const NULL: *mut c_void = ptr::null_mut();
+pub const _ISdigit: c_uint = 2048;
+pub const GA_EMPTY_INIT_VALUE: garray_T = GARRAY_EMPTY;
+
+/// The error texts this file owns, which upstream keeps as file statics.
+pub const E_FUNCEXTS: &CStr = c"E122: Function %s already exists, add ! to replace it";
+pub const E_FUNCDICT: &CStr = c"E717: Dictionary entry already exists";
+pub const E_FUNCREF: &CStr = c"E718: Funcref required";
+pub const E_NOFUNC: &CStr = c"E130: Unknown function: %s";
+pub const E_FUNCTION_LIST_WAS_MODIFIED: &CStr = c"E454: Function list was modified";
+pub const E_FUNCTION_NESTING_TOO_DEEP: &CStr = c"E1058: Function nesting too deep";
+pub const E_NO_WHITE_SPACE_ALLOWED_BEFORE_STR_STR: &CStr =
+    c"E1068: No white space allowed before '%s': %s";
+pub const E_MISSING_HEREDOC_END_MARKER_STR: &CStr = c"E1145: Missing heredoc end marker: %s";
+pub const E_CANNOT_USE_PARTIAL_WITH_DICTIONARY_FOR_DEFER: &CStr =
+    c"E1300: Cannot use a partial with dictionary for :defer";
 static func_hashtab: GlobalCell<hashtab_T> = GlobalCell::new(hashtab_T {
     ht_mask: 0,
     ht_used: 0,
@@ -181,76 +203,42 @@ static func_hashtab: GlobalCell<hashtab_T> = GlobalCell::new(hashtab_T {
         hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     }; 16],
 });
-static funcargs: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
-static current_funccal: GlobalCell<*mut funccall_T> =
-    GlobalCell::new(::core::ptr::null_mut::<funccall_T>());
-static previous_funccal: GlobalCell<*mut funccall_T> =
-    GlobalCell::new(::core::ptr::null_mut::<funccall_T>());
-static e_funcexts: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
-    b"E122: Function %s already exists, add ! to replace it\0".as_ptr()
-        as *const ::core::ffi::c_char,
-);
-static e_funcdict: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
-    b"E717: Dictionary entry already exists\0".as_ptr() as *const ::core::ffi::c_char,
-);
-static e_funcref: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(b"E718: Funcref required\0".as_ptr() as *const ::core::ffi::c_char);
-static e_nofunc: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(b"E130: Unknown function: %s\0".as_ptr() as *const ::core::ffi::c_char);
-static e_function_list_was_modified: GlobalCell<[::core::ffi::c_char; 33]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
-            *b"E454: Function list was modified\0",
-        )
-    });
-static e_function_nesting_too_deep: GlobalCell<[::core::ffi::c_char; 33]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
-            *b"E1058: Function nesting too deep\0",
-        )
-    });
-static e_no_white_space_allowed_before_str_str: GlobalCell<[::core::ffi::c_char; 46]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 46], [::core::ffi::c_char; 46]>(
-            *b"E1068: No white space allowed before '%s': %s\0",
-        )
-    });
-static e_missing_heredoc_end_marker_str: GlobalCell<[::core::ffi::c_char; 38]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
-            *b"E1145: Missing heredoc end marker: %s\0",
-        )
-    });
-static e_cannot_use_partial_with_dictionary_for_defer: GlobalCell<[::core::ffi::c_char; 55]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 55], [::core::ffi::c_char; 55]>(
-            *b"E1300: Cannot use a partial with dictionary for :defer\0",
-        )
-    });
-pub const FC_ABORT: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const FC_RANGE: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const FC_DICT: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-pub const FC_CLOSURE: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
-pub const FC_DELETED: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
-pub const FC_REMOVED: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
-pub const FC_SANDBOX: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
-pub const FC_NOARGS: ::core::ffi::c_int = 0x200 as ::core::ffi::c_int;
-pub const FC_LUAREF: ::core::ffi::c_int = 0x800 as ::core::ffi::c_int;
+static funcargs: GlobalCell<garray_T> = GlobalCell::new(GARRAY_EMPTY);
+static current_funccal: GlobalCell<*mut funccall_T> = GlobalCell::new(ptr::null_mut());
+static previous_funccal: GlobalCell<*mut funccall_T> = GlobalCell::new(ptr::null_mut());
+
+/// `ufunc_T::uf_flags`.
+pub const FC_ABORT: c_int = 0x1;
+pub const FC_RANGE: c_int = 0x2;
+pub const FC_DICT: c_int = 0x4;
+pub const FC_CLOSURE: c_int = 0x8;
+pub const FC_DELETED: c_int = 0x10;
+pub const FC_REMOVED: c_int = 0x20;
+pub const FC_SANDBOX: c_int = 0x40;
+pub const FC_NOARGS: c_int = 0x200;
+pub const FC_LUAREF: c_int = 0x800;
+
 pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_argv_func: None,
-    fe_firstline: 0 as linenr_T,
-    fe_lastline: 0 as linenr_T,
-    fe_doesrange: ::core::ptr::null_mut::<bool>(),
-    fe_evaluate: false_0 != 0,
-    fe_partial: ::core::ptr::null_mut::<partial_T>(),
-    fe_selfdict: ::core::ptr::null_mut::<dict_T>(),
-    fe_basetv: ::core::ptr::null_mut::<typval_T>(),
-    fe_found_var: false_0 != 0,
+    fe_firstline: 0,
+    fe_lastline: 0,
+    fe_doesrange: ptr::null_mut(),
+    fe_evaluate: false,
+    fe_partial: ptr::null_mut(),
+    fe_selfdict: ptr::null_mut(),
+    fe_basetv: ptr::null_mut(),
+    fe_found_var: false,
 };
-pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
-pub const MSG_BUF_CLEN: ::core::ffi::c_int = MSG_BUF_LEN / 6 as ::core::ffi::c_int;
-pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+
+/// The `char *` items a string `garray_T` holds, as a slice.
+///
+/// Every `uf_args`/`uf_def_args`/`uf_lines` walk in this family is a read of
+/// exactly this array, and c2rust spelled each one as a cast plus an index.
+/// Safe, because the array belongs to the `garray_T` the borrow names.
+pub(crate) fn ga_strings(gap: &garray_T) -> &[*mut c_char] {
+    if gap.ga_data.is_null() {
+        return &[];
+    }
+    // SAFETY: a `char *` garray's data is `ga_len` initialised pointers.
+    unsafe { slice::from_raw_parts(gap.ga_data as *const *mut c_char, gap.ga_len as usize) }
+}

@@ -173,8 +173,7 @@ unsafe extern "C" fn ex_defer_inner(
         if !partial.is_null() {
             if !(*partial).pt_dict.is_null() {
                 emsg(gettext(
-                    (e_cannot_use_partial_with_dictionary_for_defer.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
+                    E_CANNOT_USE_PARTIAL_WITH_DICTIONARY_FOR_DEFER.as_ptr(),
                 ));
                 return FAIL;
             }

@@ -309,7 +309,7 @@ pub unsafe fn ex_delfunction(mut eap: *mut exarg_T) {
         xfree(fudi.fd_newkey as *mut ::core::ffi::c_void);
         if name.is_null() {
             if !fudi.fd_dict.is_null() && (*eap).skip == 0 {
-                emsg(gettext(e_funcref.get()));
+                emsg(gettext(E_FUNCREF.as_ptr()));
             }
             return;
         }
@@ -347,7 +347,7 @@ pub unsafe fn ex_delfunction(mut eap: *mut exarg_T) {
         if (*eap).skip == 0 {
             if fp.is_null() {
                 if (*eap).forceit == 0 {
-                    semsg(gettext(e_nofunc.get()), (*eap).arg);
+                    semsg(gettext(E_NOFUNC.as_ptr()), (*eap).arg);
                 }
                 return;
             }

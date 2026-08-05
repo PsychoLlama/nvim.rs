@@ -80,10 +80,7 @@ pub(crate) unsafe extern "C" fn get_function_body(
                 if theline.is_null() {
                     if !skip_until.is_null() {
                         semsg(
-                            gettext(
-                                (e_missing_heredoc_end_marker_str.ptr() as *const _)
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(E_MISSING_HEREDOC_END_MARKER_STR.as_ptr()),
                             skip_until,
                         );
                     } else {
@@ -258,10 +255,7 @@ pub(crate) unsafe extern "C" fn get_function_body(
                                 if *skipwhite(p) as ::core::ffi::c_int == '(' as ::core::ffi::c_int
                                 {
                                     if nesting == MAX_FUNC_NESTING - 1 as ::core::ffi::c_int {
-                                        emsg(gettext(
-                                            (e_function_nesting_too_deep.ptr() as *const _)
-                                                as *const ::core::ffi::c_char,
-                                        ));
+                                        emsg(gettext(E_FUNCTION_NESTING_TOO_DEEP.as_ptr()));
                                     } else {
                                         nesting += 1;
                                         indent += 2 as ::core::ffi::c_int;
