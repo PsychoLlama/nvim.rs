@@ -578,7 +578,7 @@ pub(crate) unsafe fn ins_compl_show_statusmsg() {
         // Show a message about what (completion) mode we're in.
         if is_first_match((*compl_first_match.get()).cp_next) {
             edit_submode_extra.set(if compl_status_adding() && compl_length.get() > 1 {
-                gettext(e_hitend.ptr().cast::<c_char>())
+                gettext(E_HITEND.as_ptr())
             } else {
                 gettext((&raw const e_patnotf).cast::<c_char>())
             });

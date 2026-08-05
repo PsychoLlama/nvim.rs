@@ -28,8 +28,7 @@ pub unsafe fn ins_ctrl_x() {
                 compl_cont_status.set(0);
             }
             ctrl_x_mode.set(CTRL_X_NOT_DEFINED_YET);
-            let msg = ctrl_x_msgs.get()[(ctrl_x_mode.get() & !CTRL_X_WANT_IDENT) as usize];
-            edit_submode.set(gettext(msg));
+            edit_submode.set(ctrl_x_msg(ctrl_x_mode.get()));
             edit_submode_pre.set(ptr::null_mut());
             redraw_mode.set(true);
         }
@@ -575,9 +574,12 @@ pub(crate) unsafe fn set_ctrl_x_mode(c: c_int) -> bool {
 /// running.
 pub(crate) fn ins_compl_mode() -> *mut c_char {
     if ctrl_x_mode_not_defined_yet() || ctrl_x_mode_scroll() || compl_started.get() {
-        // Upstream indexes unconditionally: the three NULL rows of the table
+        // Upstream indexes unconditionally: the two NULL rows of the table
         // answer a null pointer, which is what the caller then handles.
-        return ctrl_x_mode_names.get()[(ctrl_x_mode.get() & !CTRL_X_WANT_IDENT) as usize];
+        return match CTRL_X_MODE_NAMES[(ctrl_x_mode.get() & !CTRL_X_WANT_IDENT) as usize] {
+            Some(name) => name.as_ptr().cast_mut(),
+            None => ptr::null_mut(),
+        };
     }
     c"".as_ptr().cast_mut()
 }

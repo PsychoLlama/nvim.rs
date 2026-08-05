@@ -428,9 +428,7 @@ pub(crate) unsafe extern "C" fn expand_by_function(
         check_cursor(curwin.get());
         validate_cursor(curwin.get());
         if !equalpos((*curwin.get()).w_cursor, pos) {
-            emsg(gettext(
-                (e_compldel.ptr() as *const _) as *const ::core::ffi::c_char,
-            ));
+            emsg(gettext(E_COMPLDEL.as_ptr()));
         } else if !matchlist.is_null() {
             ins_compl_add_list(matchlist);
         } else if !matchdict.is_null() {

@@ -1,6 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
 use crate::src::nvim::api::private::helpers::{cbuf_to_string, copy_string, cstr_as_string};
@@ -102,7 +102,7 @@ use crate::src::nvim::popupmenu::{
     pum_clear, pum_display, pum_get_height, pum_set_event_info, pum_undisplay, pum_visible,
 };
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM, equalpos};
-use crate::src::nvim::regexp::{RE_LAST, RE_MAGIC};
+use crate::src::nvim::regexp::{RE_LAST, RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::register::get_register_name;
 use crate::src::nvim::register::{copy_register, free_register, valid_yank_reg};
 use crate::src::nvim::search::{
@@ -154,14 +154,6 @@ mod session;
 pub use self::session::*;
 mod keys;
 pub use self::keys::*;
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-}
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;
@@ -406,74 +398,75 @@ pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 pub const BS_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const CTRL_X_WANT_IDENT: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
-static ctrl_x_msgs: GlobalCell<[*mut ::core::ffi::c_char; 20]> = GlobalCell::new([
-    b" Keyword completion (^N^P)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-    b" ^X mode (^]^D^E^F^I^K^L^N^O^P^Rs^U^V^Y)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    b" Whole line completion (^L^N^P)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-    b" File name completion (^F^N^P)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-    b" Tag completion (^]^N^P)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-    b" Path pattern completion (^N^P)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-    b" Definition completion (^D^N^P)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    b" Dictionary completion (^K^N^P)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-    b" Thesaurus completion (^T^N^P)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-    b" Command-line completion (^V^N^P)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-    b" User defined completion (^U^N^P)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-    b" Omni completion (^O^N^P)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-    b" Spelling suggestion (^S^N^P)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-    b" Keyword Local completion (^N^P)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    b" Command-line completion (^V^N^P)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    b" Register completion (^N^P)\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-]);
-static ctrl_x_mode_names: GlobalCell<[*mut ::core::ffi::c_char; 20]> = GlobalCell::new([
-    b"keyword\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"ctrl_x\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"scroll\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"whole_line\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"files\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"tags\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"path_patterns\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"path_defines\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"unknown\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"dictionary\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"thesaurus\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"cmdline\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"function\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"omni\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"spell\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    b"eval\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"cmdline\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    b"register\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-]);
-static e_hitend: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"Hit end of paragraph\0")
-});
-static e_compldel: GlobalCell<[::core::ffi::c_char; 39]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
-        *b"E840: Completion function deleted text\0",
-    )
-});
+/// Message for CTRL-X mode, indexed by `ctrl_x_mode` with `CTRL_X_WANT_IDENT`
+/// masked off (C's `CTRL_X_MSG(i)` macro; see `ctrl_x_msg`). `None` is
+/// upstream's NULL: the mode either computes its own message or has none.
+pub(crate) const CTRL_X_MSGS: [Option<&CStr>; 20] = [
+    Some(c" Keyword completion (^N^P)"), // CTRL_X_NORMAL, ^P/^N compl.
+    Some(c" ^X mode (^]^D^E^F^I^K^L^N^O^P^Rs^U^V^Y)"),
+    None, // CTRL_X_SCROLL: depends on state
+    Some(c" Whole line completion (^L^N^P)"),
+    Some(c" File name completion (^F^N^P)"),
+    Some(c" Tag completion (^]^N^P)"),
+    Some(c" Path pattern completion (^N^P)"),
+    Some(c" Definition completion (^D^N^P)"),
+    None, // CTRL_X_FINISHED
+    Some(c" Dictionary completion (^K^N^P)"),
+    Some(c" Thesaurus completion (^T^N^P)"),
+    Some(c" Command-line completion (^V^N^P)"),
+    Some(c" User defined completion (^U^N^P)"),
+    Some(c" Omni completion (^O^N^P)"),
+    Some(c" Spelling suggestion (^S^N^P)"),
+    Some(c" Keyword Local completion (^N^P)"),
+    None, // CTRL_X_EVAL doesn't use msg.
+    Some(c" Command-line completion (^V^N^P)"),
+    None, // CTRL_X_BUFNAMES
+    Some(c" Register completion (^N^P)"),
+];
+
+/// The name `complete_info()` and `v:event.complete_type` report for each
+/// CTRL-X mode, indexed as `CTRL_X_MSGS` is.
+pub(crate) const CTRL_X_MODE_NAMES: [Option<&CStr>; 20] = [
+    Some(c"keyword"),
+    Some(c"ctrl_x"),
+    Some(c"scroll"),
+    Some(c"whole_line"),
+    Some(c"files"),
+    Some(c"tags"),
+    Some(c"path_patterns"),
+    Some(c"path_defines"),
+    Some(c"unknown"), // CTRL_X_FINISHED
+    Some(c"dictionary"),
+    Some(c"thesaurus"),
+    Some(c"cmdline"),
+    Some(c"function"),
+    Some(c"omni"),
+    Some(c"spell"),
+    None, // CTRL_X_LOCAL_MSG, only used in CTRL_X_MSGS
+    Some(c"eval"),
+    Some(c"cmdline"),
+    None, // CTRL_X_BUFNAMES
+    Some(c"register"),
+];
+
+/// C's `_(CTRL_X_MSG(mode))`: the translated CTRL-X mode message. Upstream
+/// indexes and passes the result to `gettext()` unconditionally, so the NULL
+/// rows answer a null pointer here rather than panicking; no caller reaches
+/// one (the three modes without a message never take these paths).
+pub(crate) fn ctrl_x_msg(mode: c_int) -> *mut c_char {
+    match CTRL_X_MSGS[(mode & !CTRL_X_WANT_IDENT) as usize] {
+        // SAFETY: a `CStr` constant is a valid NUL-terminated string.
+        Some(msg) => unsafe { gettext(msg.as_ptr()) },
+        None => ptr::null_mut(),
+    }
+}
+
+/// C's `e_hitend`.
+pub(crate) const E_HITEND: &CStr = c"Hit end of paragraph";
+
+/// C's `e_compldel`.
+pub(crate) const E_COMPLDEL: &CStr = c"E840: Completion function deleted text";
+
 static compl_first_match: GlobalCell<*mut compl_T> =
     GlobalCell::new(::core::ptr::null_mut::<compl_T>());
 static compl_curr_match: GlobalCell<*mut compl_T> =

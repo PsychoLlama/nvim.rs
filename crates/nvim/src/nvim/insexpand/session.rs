@@ -346,9 +346,7 @@ pub(crate) unsafe extern "C" fn get_userdefined_compl_info(
         check_cursor(curwin.get());
         validate_cursor(curwin.get());
         if !equalpos((*curwin.get()).w_cursor, pos) {
-            emsg(gettext(
-                (e_compldel.ptr() as *const _) as *const ::core::ffi::c_char,
-            ));
+            emsg(gettext(E_COMPLDEL.as_ptr()));
             return FAIL;
         }
         if !startcol.is_null() {
@@ -579,12 +577,9 @@ pub(crate) unsafe extern "C" fn ins_compl_start() -> ::core::ffi::c_int {
         }
         if !shortmess(SHM_COMPLETIONMENU) && !compl_autocomplete.get() {
             if compl_cont_status.get() & CONT_LOCAL != 0 {
-                edit_submode.set(gettext((*ctrl_x_msgs.ptr())[CTRL_X_LOCAL_MSG as usize]));
+                edit_submode.set(ctrl_x_msg(CTRL_X_LOCAL_MSG));
             } else {
-                edit_submode.set(gettext(
-                    (*ctrl_x_msgs.ptr())
-                        [(ctrl_x_mode.get() & !(0x100 as ::core::ffi::c_int)) as usize],
-                ));
+                edit_submode.set(ctrl_x_msg(ctrl_x_mode.get()));
             }
         }
         ins_compl_fixRedoBufForLeader(::core::ptr::null_mut::<::core::ffi::c_char>());

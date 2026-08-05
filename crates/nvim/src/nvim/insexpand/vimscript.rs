@@ -35,8 +35,8 @@ pub(crate) unsafe extern "C" fn do_autocmd_completedone(
         let mut v_event: *mut dict_T = get_v_event(&raw mut save_v_event);
         mode = mode & !CTRL_X_WANT_IDENT;
         let mut mode_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if !(*ctrl_x_mode_names.ptr())[mode as usize].is_null() {
-            mode_str = (*ctrl_x_mode_names.ptr())[mode as usize];
+        if let Some(name) = CTRL_X_MODE_NAMES[mode as usize] {
+            mode_str = name.as_ptr().cast_mut();
         }
         tv_dict_add_str(
             v_event,
