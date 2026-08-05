@@ -80,7 +80,6 @@
     "crates/nvim/src/nvim/insexpand/keys.rs": 3,
     "crates/nvim/src/nvim/insexpand/session.rs": 17,
     "crates/nvim/src/nvim/insexpand/sources.rs": 17,
-    "crates/nvim/src/nvim/insexpand/text.rs": 8,
     "crates/nvim/src/nvim/insexpand/vimscript.rs": 61,
     "crates/nvim/src/nvim/log.rs": 31,
     "crates/nvim/src/nvim/lua/converter.rs": 145,
