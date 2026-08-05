@@ -22,8 +22,8 @@ use crate::src::nvim::eval::typval::{
     value_check_lock,
 };
 use crate::src::nvim::eval::vars::{
-    find_var, find_var_ht, find_var_in_ht, get_vim_var_nr, init_var_dict, list_hashtable_vars,
-    skip_var_list, vars_clear, vars_clear_ext,
+    LVAL_INITIAL_VALUE, find_var, find_var_ht, find_var_in_ht, get_vim_var_nr, init_var_dict,
+    list_hashtable_vars, skip_var_list, vars_clear, vars_clear_ext,
 };
 use crate::src::nvim::eval::{
     callback_call, check_luafunc_name, clear_evalarg, clear_lval, eval_isnamec, eval_isnamec1,
@@ -69,8 +69,8 @@ use crate::src::nvim::message::{
 };
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, abort, gettext, memchr, memcmp, memcpy, memmove, memset,
-    snprintf, strchr, strcmp, strcpy, strlen, strncmp, strstr,
+    __assert_fail, __ctype_b_loc, abort, gettext, memcmp, memcpy, memmove, memset, snprintf,
+    strcmp, strcpy, strlen, strncmp, strstr,
 };
 use crate::src::nvim::path::path_fnamecmp;
 use crate::src::nvim::profile::{
@@ -89,12 +89,12 @@ use crate::src::nvim::types::ui::kUICmdline;
 use crate::src::nvim::types::{
     CMD_defer, Callback, EvalFuncDef, LuaRef, OptInt, String_0, VAR_DEF_SCOPE, VAR_DICT, VAR_FIXED,
     VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN,
-    VAR_UNLOCKED, VV_TESTING, blob_T, buf_T, buffblock, buffblock_T, buffheader_T, colnr_T,
-    cstack_T, dict_T, dictitem_T, estack_T, evalarg_T, exarg_T, except_T, exception_state_T,
-    expand_T, funccal_entry_T, funccall_S_fc_fixvar as C2Rust_Unnamed_7, funccall_T, funcdict_T,
-    funcexe_T, garray_T, hashitem_T, hashtab_T, ht_stack_T, intmax_t, key_extra, linenr_T, list_T,
-    list_stack_T, listitem_T, lval_T, partial_T, proftime_T, regmatch_T, regprog_T, save_redo_T,
-    sctx_T, size_t, typval_T, typval_vval_union, ufunc_T, uint8_t, varnumber_T,
+    VAR_UNLOCKED, VV_TESTING, buf_T, buffblock, buffblock_T, buffheader_T, colnr_T, cstack_T,
+    dict_T, dictitem_T, estack_T, evalarg_T, exarg_T, except_T, exception_state_T, expand_T,
+    funccal_entry_T, funccall_S_fc_fixvar as C2Rust_Unnamed_7, funccall_T, funcdict_T, funcexe_T,
+    garray_T, hashitem_T, hashtab_T, ht_stack_T, key_extra, linenr_T, list_T, list_stack_T,
+    listitem_T, lval_T, partial_T, proftime_T, regmatch_T, save_redo_T, sctx_T, size_t, typval_T,
+    typval_vval_union, ufunc_T, uint8_t, varnumber_T,
 };
 use crate::src::nvim::ui::ui_has;
 
@@ -232,6 +232,22 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_selfdict: ptr::null_mut(),
     fe_basetv: ptr::null_mut(),
     fe_found_var: false,
+};
+
+/// A zeroed `regmatch_T`, for the two places that compile a pattern here.
+pub(crate) const REGMATCH_INIT: regmatch_T = regmatch_T {
+    regprog: ptr::null_mut(),
+    startp: [ptr::null_mut(); 10],
+    endp: [ptr::null_mut(); 10],
+    rm_matchcol: 0,
+    rm_ic: false,
+};
+
+/// A zeroed `funcdict_T`: no dictionary, no key, no item.
+pub(crate) const FUNCDICT_INIT: funcdict_T = funcdict_T {
+    fd_dict: ptr::null_mut(),
+    fd_newkey: ptr::null_mut(),
+    fd_di: ptr::null_mut(),
 };
 
 /// The name a `ufunc_T` carries in the flexible member at its end -- C's

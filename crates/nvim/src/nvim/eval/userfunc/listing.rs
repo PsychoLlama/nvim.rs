@@ -8,44 +8,39 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{c_char, c_int, c_void};
+use core::mem::offset_of;
+use core::ptr;
+
 #[allow(unused_imports)]
 use super::*;
 
-pub(crate) unsafe extern "C" fn list_functions(mut regmatch: *mut regmatch_T) {
+/// Print the head of every function, or of the ones `regmatch` matches.
+///
+/// # Safety
+/// `regmatch` is null or a compiled pattern.
+pub(crate) unsafe fn list_functions(regmatch: *mut regmatch_T) {
     unsafe {
-        let prev_ht_changed: ::core::ffi::c_int = (*func_hashtab.ptr()).ht_changed;
-        let mut todo: size_t = (*func_hashtab.ptr()).ht_used;
-        let ht_array: *const hashitem_T = (*func_hashtab.ptr()).ht_array;
-        msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
-        let mut hi: *const hashitem_T = ht_array;
-        while todo > 0 as size_t && !got_int.get() {
-            if !((*hi).hi_key.is_null()
-                || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
-            {
-                let mut fp: *mut ufunc_T =
-                    (*hi).hi_key.offset(-(240 as ::core::ffi::c_ulong as isize)) as *mut ufunc_T;
-                todo = todo.wrapping_sub(1);
-                if if regmatch.is_null() {
-                    (!message_filtered(&raw mut (*fp).uf_name as *mut ::core::ffi::c_char)
-                        && !func_name_refcount(&raw mut (*fp).uf_name as *mut ::core::ffi::c_char))
-                        as ::core::ffi::c_int
+        let prev_ht_changed = (*func_hashtab.ptr()).ht_changed;
+        let mut todo = (*func_hashtab.ptr()).ht_used;
+        let mut hi: *const hashitem_T = (*func_hashtab.ptr()).ht_array;
+
+        msg_ext_set_kind(c"list_cmd".as_ptr());
+        while todo > 0 && !got_int.get() {
+            if (*hi).is_kept() {
+                let fp = (*hi).hi_key.sub(offset_of!(ufunc_T, uf_name)) as *mut ufunc_T;
+                todo -= 1;
+                // Without a pattern, skip what the user filtered out and the
+                // numbered/lambda functions; with one, skip the numbered
+                // functions and ask the pattern.
+                let show = if regmatch.is_null() {
+                    !message_filtered(uf_name_ptr(fp)) && !func_name_refcount(uf_name_ptr(fp))
                 } else {
-                    (*(*__ctype_b_loc()).offset(
-                        *(&raw mut (*fp).uf_name as *mut ::core::ffi::c_char) as uint8_t
-                            as ::core::ffi::c_int as isize,
-                    ) as ::core::ffi::c_int
-                        & _ISdigit as ::core::ffi::c_int as ::core::ffi::c_ushort
-                            as ::core::ffi::c_int
-                        == 0
-                        && vim_regexec(
-                            regmatch,
-                            &raw mut (*fp).uf_name as *mut ::core::ffi::c_char,
-                            0 as colnr_T,
-                        ) as ::core::ffi::c_int
-                            != 0) as ::core::ffi::c_int
-                } != 0
-                {
-                    if list_func_head(fp, false_0 != 0, false_0 != 0) == FAIL {
+                    !(*uf_name_ptr(fp) as u8).is_ascii_digit()
+                        && vim_regexec(regmatch, uf_name_ptr(fp), 0)
+                };
+                if show {
+                    if list_func_head(fp, false, false) == FAIL {
                         return;
                     }
                     if function_list_modified(prev_ht_changed) != 0 {
@@ -53,34 +48,25 @@ pub(crate) unsafe extern "C" fn list_functions(mut regmatch: *mut regmatch_T) {
                     }
                 }
             }
-            hi = hi.offset(1);
+            hi = hi.add(1);
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn list_functions_matching_pat(
-    mut eap: *mut exarg_T,
-) -> *mut ::core::ffi::c_char {
+/// `:function /pattern/`: compile the pattern, list what it matches, and
+/// answer the end of it.
+///
+/// # Safety
+/// `eap` is a live `:function` command whose argument starts with `/`.
+pub(crate) unsafe fn list_functions_matching_pat(eap: *mut exarg_T) -> *mut c_char {
     unsafe {
-        let mut p: *mut ::core::ffi::c_char = skip_regexp(
-            (*eap).arg.offset(1 as ::core::ffi::c_int as isize),
-            '/' as ::core::ffi::c_int,
-            true_0,
-        );
+        let mut p = skip_regexp((*eap).arg.add(1), b'/' as c_int, 1);
         if (*eap).skip == 0 {
-            let mut regmatch: regmatch_T = regmatch_T {
-                regprog: ::core::ptr::null_mut::<regprog_T>(),
-                startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-                endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-                rm_matchcol: 0,
-                rm_ic: false,
-            };
-            let mut c: ::core::ffi::c_char = *p;
-            *p = NUL as ::core::ffi::c_char;
-            regmatch.regprog = vim_regcomp(
-                (*eap).arg.offset(1 as ::core::ffi::c_int as isize),
-                RE_MAGIC,
-            );
+            let mut regmatch = REGMATCH_INIT;
+            // Terminate the pattern for `vim_regcomp`, then put the byte back.
+            let c = *p;
+            *p = NUL as c_char;
+            regmatch.regprog = vim_regcomp((*eap).arg.add(1), RE_MAGIC);
             *p = c;
             if !regmatch.regprog.is_null() {
                 regmatch.rm_ic = p_ic.get() != 0;
@@ -88,306 +74,297 @@ pub(crate) unsafe extern "C" fn list_functions_matching_pat(
                 vim_regfree(regmatch.regprog);
             }
         }
-        if *p as ::core::ffi::c_int == '/' as ::core::ffi::c_int {
-            p = p.offset(1);
+        if *p == b'/' as c_char {
+            p = p.add(1);
         }
-        return p;
+        p
     }
 }
 
-pub(crate) unsafe extern "C" fn list_one_function(
-    mut eap: *mut exarg_T,
-    mut name: *mut ::core::ffi::c_char,
-    mut p: *mut ::core::ffi::c_char,
+/// `:function Name`: print one function with its numbered body lines.
+/// Answers the function, so that the caller can go on to redefine it.
+///
+/// # Safety
+/// `eap` is a live `:function` command, `name` the translated name and `p`
+/// the rest of the command line.
+pub(crate) unsafe fn list_one_function(
+    eap: *mut exarg_T,
+    name: *mut c_char,
+    p: *mut c_char,
 ) -> *mut ufunc_T {
     unsafe {
-        if ends_excmd(*skipwhite(p) as ::core::ffi::c_int) == 0 {
-            semsg(
-                gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
-                p,
-            );
-            return ::core::ptr::null_mut::<ufunc_T>();
+        if ends_excmd(*skipwhite(p) as c_int) == 0 {
+            semsg(gettext(&raw const e_trailing_arg as *const c_char), p);
+            return ptr::null_mut();
         }
         (*eap).nextcmd = check_nextcmd(p);
         if !(*eap).nextcmd.is_null() {
-            *p = NUL as ::core::ffi::c_char;
+            *p = NUL as c_char;
         }
-        if (*eap).skip != 0 || got_int.get() as ::core::ffi::c_int != 0 {
-            return ::core::ptr::null_mut::<ufunc_T>();
+        if (*eap).skip != 0 || got_int.get() {
+            return ptr::null_mut();
         }
-        let mut fp: *mut ufunc_T = find_func(name);
+
+        let fp = find_func(name);
         if fp.is_null() {
-            emsg_funcname(
-                b"E123: Undefined function: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                name,
-            );
-            return ::core::ptr::null_mut::<ufunc_T>();
+            emsg_funcname(c"E123: Undefined function: %s".as_ptr(), name);
+            return ptr::null_mut();
         }
-        let prev_ht_changed: ::core::ffi::c_int = (*func_hashtab.ptr()).ht_changed;
-        msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
+
+        // Check no function was added or removed from a callback, and
+        // therefore that `fp` is still the function this started on.
+        let prev_ht_changed = (*func_hashtab.ptr()).ht_changed;
+        msg_ext_set_kind(c"list_cmd".as_ptr());
         if list_func_head(fp, (*eap).forceit == 0, (*eap).forceit != 0) != OK {
             return fp;
         }
-        let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while j < (*fp).uf_lines.ga_len && !got_int.get() {
-            if !(*((*fp).uf_lines.ga_data as *mut *mut ::core::ffi::c_char).offset(j as isize))
-                .is_null()
-            {
-                msg_putchar('\n' as ::core::ffi::c_int);
-                if (*eap).forceit == 0 {
-                    msg_outnum(j + 1 as ::core::ffi::c_int);
-                    if j < 9 as ::core::ffi::c_int {
-                        msg_putchar(' ' as ::core::ffi::c_int);
-                    }
-                    if j < 99 as ::core::ffi::c_int {
-                        msg_putchar(' ' as ::core::ffi::c_int);
-                    }
-                    if function_list_modified(prev_ht_changed) != 0 {
-                        break;
-                    }
-                }
-                msg_prt_line(
-                    *((*fp).uf_lines.ga_data as *mut *mut ::core::ffi::c_char).offset(j as isize),
-                    false_0 != 0,
-                );
-                line_breakcheck();
+        let lines = ga_strings(&(*fp).uf_lines);
+        for (j, &line) in lines.iter().enumerate() {
+            if got_int.get() {
+                break;
             }
-            j += 1;
+            if line.is_null() {
+                continue;
+            }
+            msg_putchar(b'\n' as c_int);
+            if (*eap).forceit == 0 {
+                // The line number, right-aligned in three columns.
+                msg_outnum(j as c_int + 1);
+                if j < 9 {
+                    msg_putchar(b' ' as c_int);
+                }
+                if j < 99 {
+                    msg_putchar(b' ' as c_int);
+                }
+                if function_list_modified(prev_ht_changed) != 0 {
+                    break;
+                }
+            }
+            msg_prt_line(line, false);
+            line_breakcheck();
         }
         if !got_int.get() {
-            msg_putchar('\n' as ::core::ffi::c_int);
+            msg_putchar(b'\n' as c_int);
             if function_list_modified(prev_ht_changed) == 0 {
                 msg_puts(if (*eap).forceit != 0 {
-                    b"endfunction\0".as_ptr() as *const ::core::ffi::c_char
+                    c"endfunction".as_ptr()
                 } else {
-                    b"   endfunction\0".as_ptr() as *const ::core::ffi::c_char
+                    c"   endfunction".as_ptr()
                 });
             }
         }
-        return fp;
+        fp
     }
 }
 
-pub unsafe extern "C" fn translated_function_exists(mut name: *const ::core::ffi::c_char) -> bool {
+/// Whether a function of this *already translated* name exists, builtin or
+/// user-defined.
+///
+/// # Safety
+/// `name` is NUL-terminated.
+pub unsafe fn translated_function_exists(name: *const c_char) -> bool {
     unsafe {
-        if builtin_function(name, -1 as ::core::ffi::c_int) {
+        if builtin_function(name, -1) {
             return !find_internal_func(name).is_null();
         }
-        return !find_func(name).is_null();
+        !find_func(name).is_null()
     }
 }
 
-pub unsafe extern "C" fn function_exists(
-    name: *const ::core::ffi::c_char,
-    mut no_deref: bool,
-) -> bool {
+/// `exists('*name')`: whether `name` names a function, without autoloading
+/// one to find out.
+///
+/// # Safety
+/// `name` is NUL-terminated.
+pub unsafe fn function_exists(name: *const c_char, no_deref: bool) -> bool {
     unsafe {
-        let mut nm: *const ::core::ffi::c_char = name;
-        let mut n: bool = false_0 != 0;
-        let mut flag: ::core::ffi::c_int = TFN_INT as ::core::ffi::c_int
-            | TFN_QUIET as ::core::ffi::c_int
-            | TFN_NO_AUTOLOAD as ::core::ffi::c_int;
+        let mut nm = name;
+        let mut n = false;
+        let mut flag = TFN_INT | TFN_QUIET | TFN_NO_AUTOLOAD;
         if no_deref {
-            flag |= TFN_NO_DEREF as ::core::ffi::c_int;
+            flag |= TFN_NO_DEREF;
         }
-        let p: *mut ::core::ffi::c_char = trans_function_name(
-            &raw mut nm as *mut *mut ::core::ffi::c_char,
-            false_0 != 0,
+        let p = trans_function_name(
+            &raw mut nm as *mut *mut c_char,
+            false,
             flag,
-            ::core::ptr::null_mut::<funcdict_T>(),
-            ::core::ptr::null_mut::<*mut partial_T>(),
+            ptr::null_mut(),
+            ptr::null_mut(),
         );
         nm = skipwhite(nm);
-        if !p.is_null()
-            && (*nm as ::core::ffi::c_int == NUL
-                || *nm as ::core::ffi::c_int == '(' as ::core::ffi::c_int)
-        {
+
+        // Only accept "funcname", "funcname ", "funcname (..." and
+        // "funcname(...", not "funcname!...".
+        if !p.is_null() && (*nm == NUL as c_char || *nm == b'(' as c_char) {
             n = translated_function_exists(p);
         }
-        xfree(p as *mut ::core::ffi::c_void);
-        return n;
+        xfree(p as *mut c_void);
+        n
     }
 }
 
-pub unsafe extern "C" fn get_user_func_name(
-    mut xp: *mut expand_T,
-    mut idx: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+/// Completion over the user functions: answers the `idx`th name, resuming
+/// from where the last call stopped.
+///
+/// Stays `extern "C"` because a completion table holds a pointer to it.
+///
+/// # Safety
+/// Called with `idx` 0 first, then increasing, with no change to the
+/// function table in between.
+pub unsafe extern "C" fn get_user_func_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     unsafe {
         static done: GlobalCell<size_t> = GlobalCell::new(0);
-        static changed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-        static hi: GlobalCell<*mut hashitem_T> =
-            GlobalCell::new(::core::ptr::null_mut::<hashitem_T>());
-        if idx == 0 as ::core::ffi::c_int {
-            done.set(0 as size_t);
+        static changed: GlobalCell<c_int> = GlobalCell::new(0);
+        static hi: GlobalCell<*mut hashitem_T> = GlobalCell::new(ptr::null_mut());
+
+        if idx == 0 {
+            done.set(0);
             hi.set((*func_hashtab.ptr()).ht_array);
             changed.set((*func_hashtab.ptr()).ht_changed);
         }
-        '_c2rust_label: {
-            if !(*hi.ptr()).is_null() {
-            } else {
-                __assert_fail(
-                    b"hi\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/eval/userfunc.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    3083 as ::core::ffi::c_uint,
-                    b"char *get_user_func_name(expand_T *, int)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        if changed.get() == (*func_hashtab.ptr()).ht_changed
-            && done.get() < (*func_hashtab.ptr()).ht_used
+        debug_assert!(!hi.get().is_null());
+        if changed.get() != (*func_hashtab.ptr()).ht_changed
+            || done.get() >= (*func_hashtab.ptr()).ht_used
         {
-            let c2rust_fresh16 = done.get();
-            done.set((*done.ptr()).wrapping_add(1));
-            if c2rust_fresh16 > 0 as size_t {
-                hi.set((*hi.ptr()).offset(1));
-            }
-            while (*hi.get()).hi_key.is_null()
-                || (*hi.get()).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
-            {
-                hi.set((*hi.ptr()).offset(1));
-            }
-            let mut fp: *mut ufunc_T = (*hi.get())
-                .hi_key
-                .offset(-(240 as ::core::ffi::c_ulong as isize))
-                as *mut ufunc_T;
-            if (*fp).uf_flags & FC_DICT != 0
-                || strncmp(
-                    &raw mut (*fp).uf_name as *mut ::core::ffi::c_char,
-                    b"<lambda>\0".as_ptr() as *const ::core::ffi::c_char,
-                    8 as size_t,
-                ) == 0 as ::core::ffi::c_int
-            {
-                return b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-            }
-            if (*fp).uf_namelen.wrapping_add(4 as size_t) >= IOSIZE as size_t {
-                return &raw mut (*fp).uf_name as *mut ::core::ffi::c_char;
-            }
-            let mut len: ::core::ffi::c_int = cat_func_name(
-                IObuff.ptr() as *mut ::core::ffi::c_char,
-                IOSIZE as size_t,
-                fp,
-            );
-            if (*xp).xp_context != EXPAND_USER_FUNC as ::core::ffi::c_int {
-                xstrlcpy(
-                    (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
-                    b"(\0".as_ptr() as *const ::core::ffi::c_char,
-                    (IOSIZE as size_t).wrapping_sub(len as size_t),
-                );
-                if (*fp).uf_varargs == 0 && (*fp).uf_args.ga_len <= 0 as ::core::ffi::c_int {
-                    len += 1;
-                    xstrlcpy(
-                        (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
-                        b")\0".as_ptr() as *const ::core::ffi::c_char,
-                        (IOSIZE as size_t).wrapping_sub(len as size_t),
-                    );
-                }
-            }
-            return IObuff.ptr() as *mut ::core::ffi::c_char;
+            return ptr::null_mut();
         }
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+
+        if done.get() > 0 {
+            hi.set(hi.get().add(1));
+        }
+        done.set(done.get() + 1);
+        while !(*hi.get()).is_kept() {
+            hi.set(hi.get().add(1));
+        }
+        let fp = (*hi.get()).hi_key.sub(offset_of!(ufunc_T, uf_name)) as *mut ufunc_T;
+
+        if (*fp).uf_flags & FC_DICT != 0 || strncmp(uf_name_ptr(fp), c"<lambda>".as_ptr(), 8) == 0 {
+            // Don't show dict and lambda functions.
+            return c"".as_ptr() as *mut c_char;
+        }
+        if (*fp).uf_namelen + 4 >= IOSIZE as size_t {
+            // Prevent overflow.
+            return uf_name_ptr(fp);
+        }
+
+        let buf = IObuff.ptr() as *mut c_char;
+        let mut len = cat_func_name(buf, IOSIZE as size_t, fp);
+        if (*xp).xp_context != EXPAND_USER_FUNC {
+            xstrlcpy(
+                buf.offset(len as isize),
+                c"(".as_ptr(),
+                IOSIZE as size_t - len as size_t,
+            );
+            if (*fp).uf_varargs == 0 && (*fp).uf_args.ga_len <= 0 {
+                len += 1;
+                xstrlcpy(
+                    buf.offset(len as isize),
+                    c")".as_ptr(),
+                    IOSIZE as size_t - len as size_t,
+                );
+            }
+        }
+        buf
     }
 }
 
-pub unsafe fn ex_delfunction(mut eap: *mut exarg_T) {
+/// `:delfunction`.
+///
+/// # Safety
+/// `eap` is a live `:delfunction` command.
+pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
     unsafe {
-        let mut fp: *mut ufunc_T = ::core::ptr::null_mut::<ufunc_T>();
-        let mut fudi: funcdict_T = funcdict_T {
-            fd_dict: ::core::ptr::null_mut::<dict_T>(),
-            fd_newkey: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            fd_di: ::core::ptr::null_mut::<dictitem_T>(),
-        };
-        let mut p: *mut ::core::ffi::c_char = (*eap).arg;
-        let mut name: *mut ::core::ffi::c_char = trans_function_name(
+        let mut fudi = FUNCDICT_INIT;
+        let mut p = (*eap).arg;
+        let name = trans_function_name(
             &raw mut p,
             (*eap).skip != 0,
-            0 as ::core::ffi::c_int,
+            0,
             &raw mut fudi,
-            ::core::ptr::null_mut::<*mut partial_T>(),
+            ptr::null_mut(),
         );
-        xfree(fudi.fd_newkey as *mut ::core::ffi::c_void);
+        xfree(fudi.fd_newkey as *mut c_void);
         if name.is_null() {
             if !fudi.fd_dict.is_null() && (*eap).skip == 0 {
                 emsg(gettext(E_FUNCREF.as_ptr()));
             }
             return;
         }
-        if ends_excmd(*skipwhite(p) as ::core::ffi::c_int) == 0 {
-            xfree(name as *mut ::core::ffi::c_void);
-            semsg(
-                gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
-                p,
-            );
+        if ends_excmd(*skipwhite(p) as c_int) == 0 {
+            xfree(name as *mut c_void);
+            semsg(gettext(&raw const e_trailing_arg as *const c_char), p);
             return;
         }
         (*eap).nextcmd = check_nextcmd(p);
         if !(*eap).nextcmd.is_null() {
-            *p = NUL as ::core::ffi::c_char;
+            *p = NUL as c_char;
         }
-        if *(*__ctype_b_loc()).offset(*name as uint8_t as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int
-            & _ISdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-            != 0
-            && fudi.fd_dict.is_null()
-        {
+
+        if (*name as u8).is_ascii_digit() && fudi.fd_dict.is_null() {
+            // Numbered function.
             if (*eap).skip == 0 {
-                semsg(
-                    gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                    (*eap).arg,
-                );
+                semsg(gettext(&raw const e_invarg2 as *const c_char), (*eap).arg);
             }
-            xfree(name as *mut ::core::ffi::c_void);
+            xfree(name as *mut c_void);
             return;
         }
-        if (*eap).skip == 0 {
-            fp = find_func(name);
+        let fp = if (*eap).skip == 0 {
+            find_func(name)
+        } else {
+            ptr::null_mut()
+        };
+        xfree(name as *mut c_void);
+        if (*eap).skip != 0 {
+            return;
         }
-        xfree(name as *mut ::core::ffi::c_void);
-        if (*eap).skip == 0 {
-            if fp.is_null() {
-                if (*eap).forceit == 0 {
-                    semsg(gettext(E_NOFUNC.as_ptr()), (*eap).arg);
-                }
-                return;
+
+        if fp.is_null() {
+            if (*eap).forceit == 0 {
+                semsg(gettext(E_NOFUNC.as_ptr()), (*eap).arg);
             }
-            if (*fp).uf_calls > 0 as ::core::ffi::c_int {
-                semsg(
-                    gettext(b"E131: Cannot delete function %s: It is in use\0".as_ptr()
-                        as *const ::core::ffi::c_char),
-                    (*eap).arg,
-                );
-                return;
+            return;
+        }
+        if (*fp).uf_calls > 0 {
+            semsg(
+                gettext(c"E131: Cannot delete function %s: It is in use".as_ptr()),
+                (*eap).arg,
+            );
+            return;
+        }
+        // `> 2` because deleting a function should also drop a reference, and
+        // 1 is the initial refcount.  A funccall that outlived its call --
+        // one that returned `a:000`, or that a closure captured -- holds one
+        // of its own until the garbage collector frees it, which is why this
+        // arm is reachable at all (see the docket's O-B14-13).
+        if (*fp).uf_refcount > 2 {
+            semsg(
+                gettext(c"Cannot delete function %s: It is being used internally".as_ptr()),
+                (*eap).arg,
+            );
+            return;
+        }
+
+        if !fudi.fd_dict.is_null() {
+            // Delete the dict item that refers to the function; that invokes
+            // `func_unref` and possibly deletes the function.
+            tv_dict_item_remove(fudi.fd_dict, fudi.fd_di);
+            return;
+        }
+        // A normal function has a refcount of 1 for its entry in the
+        // hashtable; a numbered function or a lambda has none.  Above that,
+        // something else still holds it, so unlink it but keep it.
+        let held = if func_name_refcount(uf_name_ptr(fp)) {
+            0
+        } else {
+            1
+        };
+        if (*fp).uf_refcount > held {
+            if func_remove(fp) {
+                (*fp).uf_refcount -= 1;
             }
-            if (*fp).uf_refcount > 2 as ::core::ffi::c_int {
-                semsg(
-                    gettext(
-                        b"Cannot delete function %s: It is being used internally\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
-                    (*eap).arg,
-                );
-                return;
-            }
-            if !fudi.fd_dict.is_null() {
-                tv_dict_item_remove(fudi.fd_dict, fudi.fd_di);
-            } else if (*fp).uf_refcount
-                > (if func_name_refcount(&raw mut (*fp).uf_name as *mut ::core::ffi::c_char)
-                    as ::core::ffi::c_int
-                    != 0
-                {
-                    0 as ::core::ffi::c_int
-                } else {
-                    1 as ::core::ffi::c_int
-                })
-            {
-                if func_remove(fp) {
-                    (*fp).uf_refcount -= 1;
-                }
-                (*fp).uf_flags |= FC_DELETED;
-            } else {
-                func_clear_free(fp, false_0 != 0);
-            }
+            (*fp).uf_flags |= FC_DELETED;
+        } else {
+            func_clear_free(fp, false);
         }
     }
 }

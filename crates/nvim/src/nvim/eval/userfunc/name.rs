@@ -9,744 +9,650 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{c_char, c_int, c_void};
+use core::mem::{offset_of, size_of_val};
+use core::ptr;
+use core::slice;
+
 #[allow(unused_imports)]
 use super::*;
 
-pub unsafe extern "C" fn deref_func_name(
-    mut name: *const ::core::ffi::c_char,
-    mut lenp: *mut ::core::ffi::c_int,
+/// The name of the function `name` refers to.
+///
+/// When `name` is a variable holding a funcref or a partial, that is the
+/// function's own name and `*lenp` is updated to match; otherwise `name` is
+/// handed straight back.  `*partialp` is the partial it came out of, when the
+/// caller asked for it.
+///
+/// # Safety
+/// `name` has `*lenp` readable bytes and the out-parameters are null or
+/// writable.
+pub unsafe fn deref_func_name(
+    name: *const c_char,
+    lenp: *mut c_int,
     partialp: *mut *mut partial_T,
-    mut no_autoload: bool,
-    mut found_var: *mut bool,
-) -> *mut ::core::ffi::c_char {
+    no_autoload: bool,
+    found_var: *mut bool,
+) -> *mut c_char {
     unsafe {
         if !partialp.is_null() {
-            *partialp = ::core::ptr::null_mut::<partial_T>();
+            *partialp = ptr::null_mut();
         }
-        let v: *mut dictitem_T = find_var(
-            name,
-            *lenp as size_t,
-            ::core::ptr::null_mut::<*mut hashtab_T>(),
-            no_autoload,
-        );
+
+        // Looking the *variable* up is also what autoloads `pkg#name`'s
+        // package: `find_var` -> `check_vars` sources it on the way.
+        let v = find_var(name, *lenp as size_t, ptr::null_mut(), no_autoload);
         if v.is_null() {
-            return name as *mut ::core::ffi::c_char;
+            return name as *mut c_char;
         }
-        let tv: *mut typval_T = &raw mut (*v).di_tv;
+        let tv = &raw mut (*v).di_tv;
         if !found_var.is_null() {
-            *found_var = true_0 != 0;
+            *found_var = true;
         }
-        if (*tv).v_type as ::core::ffi::c_uint
-            == VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+
+        if (*tv).v_type == VAR_FUNC {
             if (*tv).vval.v_string.is_null() {
-                *lenp = 0 as ::core::ffi::c_int;
-                return b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                // Just in case.
+                *lenp = 0;
+                return c"".as_ptr() as *mut c_char;
             }
-            *lenp = strlen((*tv).vval.v_string) as ::core::ffi::c_int;
+            *lenp = strlen((*tv).vval.v_string) as c_int;
             return (*tv).vval.v_string;
         }
-        if (*tv).v_type as ::core::ffi::c_uint
-            == VAR_PARTIAL as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let pt: *mut partial_T = (*tv).vval.v_partial;
+
+        if (*tv).v_type == VAR_PARTIAL {
+            let pt = (*tv).vval.v_partial;
             if pt.is_null() {
-                *lenp = 0 as ::core::ffi::c_int;
-                return b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                // Just in case.
+                *lenp = 0;
+                return c"".as_ptr() as *mut c_char;
             }
             if !partialp.is_null() {
                 *partialp = pt;
             }
-            let mut s: *mut ::core::ffi::c_char = partial_name(pt);
-            *lenp = strlen(s) as ::core::ffi::c_int;
+            let s = partial_name(pt);
+            *lenp = strlen(s) as c_int;
             return s;
         }
-        return name as *mut ::core::ffi::c_char;
+
+        name as *mut c_char
     }
 }
 
-pub unsafe extern "C" fn emsg_funcname(
-    mut errmsg: *const ::core::ffi::c_char,
-    mut name: *const ::core::ffi::c_char,
-) {
+/// Report `errmsg` about `name`, rendering the `<SNR>` mangling back into
+/// something a user can read.
+///
+/// # Safety
+/// `errmsg` is an untranslated format with one `%s`, and `name` is
+/// NUL-terminated.
+pub unsafe fn emsg_funcname(errmsg: *const c_char, name: *const c_char) {
     unsafe {
-        let mut p: *mut ::core::ffi::c_char = name as *mut ::core::ffi::c_char;
-        if *name.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
-            == K_SPECIAL
-            && *name.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-            && *name.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-        {
-            p = concat_str(
-                b"<SNR>\0".as_ptr() as *const ::core::ffi::c_char,
-                name.offset(3 as ::core::ffi::c_int as isize),
-            );
+        let mut p = name as *mut c_char;
+        if *name as u8 as c_int == K_SPECIAL && *name.add(1) != 0 && *name.add(2) != 0 {
+            p = concat_str(c"<SNR>".as_ptr(), name.add(3));
         }
         semsg(gettext(errmsg), p);
-        if p != name as *mut ::core::ffi::c_char {
-            xfree(p as *mut ::core::ffi::c_void);
+        if p != name as *mut c_char {
+            xfree(p as *mut c_void);
         }
     }
 }
 
-pub const FLEN_FIXED: ::core::ffi::c_int = 40 as ::core::ffi::c_int;
+/// How long a mangled name may be before `fname_trans_sid` has to allocate.
+pub const FLEN_FIXED: c_int = 40;
 
-#[inline(always)]
-unsafe extern "C" fn eval_fname_sid(name: *const ::core::ffi::c_char) -> bool {
-    unsafe {
-        return *name as ::core::ffi::c_int == 's' as ::core::ffi::c_int
-            || (if (*name.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                < 'a' as ::core::ffi::c_int
-                || *name.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    > 'z' as ::core::ffi::c_int
-            {
-                *name.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            } else {
-                *name.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    - ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-            }) == 'I' as ::core::ffi::c_int;
-    }
+/// Whether a script-local prefix was written `s:` rather than `<SNR>` --
+/// which decides whether the *current* script id has to be substituted in.
+///
+/// # Safety
+/// `name` is a prefix `eval_fname_script` already accepted, so it has at
+/// least three readable bytes.
+unsafe fn eval_fname_sid(name: *const c_char) -> bool {
+    unsafe { *name == b's' as c_char || (*name.add(2) as u8).eq_ignore_ascii_case(&b'I') }
 }
 
-pub(crate) unsafe extern "C" fn fname_trans_sid(
-    name: *const ::core::ffi::c_char,
-    fname_buf: *mut ::core::ffi::c_char,
-    tofree: *mut *mut ::core::ffi::c_char,
-    error: *mut ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+/// Rewrite `s:`/`<SID>` at the front of `name` into the `<SNR>N_` byte
+/// sequence, using `fname_buf` when the result fits and an allocation
+/// (handed back through `tofree`) when it does not.
+///
+/// # Safety
+/// `name` is NUL-terminated, `fname_buf` has `FLEN_FIXED + 1` bytes, and
+/// `tofree`/`error` are writable.
+pub(crate) unsafe fn fname_trans_sid(
+    name: *const c_char,
+    fname_buf: *mut c_char,
+    tofree: *mut *mut c_char,
+    error: *mut c_int,
+) -> *mut c_char {
     unsafe {
-        let mut script_name: *const ::core::ffi::c_char =
-            name.offset(eval_fname_script(name) as isize);
+        let script_name = name.offset(eval_fname_script(name) as isize);
         if script_name == name {
-            return name as *mut ::core::ffi::c_char;
+            // "name" doesn't start with "s:" or "<SID>".
+            return name as *mut c_char;
         }
-        *fname_buf.offset(0 as ::core::ffi::c_int as isize) = K_SPECIAL as ::core::ffi::c_char;
-        *fname_buf.offset(1 as ::core::ffi::c_int as isize) = KS_EXTRA as ::core::ffi::c_char;
-        *fname_buf.offset(2 as ::core::ffi::c_int as isize) =
-            KE_SNR as ::core::ffi::c_int as ::core::ffi::c_char;
-        let mut fname_buflen: size_t = 3 as size_t;
+
+        *fname_buf = K_SPECIAL as c_char;
+        *fname_buf.add(1) = KS_EXTRA as c_char;
+        *fname_buf.add(2) = KE_SNR as c_char;
+        let mut fname_buflen: size_t = 3;
         if !eval_fname_sid(name) {
-            *fname_buf.offset(fname_buflen as isize) = NUL as ::core::ffi::c_char;
-        } else if (*current_sctx.ptr()).sc_sid <= 0 as ::core::ffi::c_int {
-            *error = FCERR_SCRIPT as ::core::ffi::c_int;
+            // "<SID>" or "<SNR>"
+            *fname_buf.add(fname_buflen) = NUL as c_char;
+        } else if (*current_sctx.ptr()).sc_sid <= 0 {
+            *error = FCERR_SCRIPT;
         } else {
-            fname_buflen = fname_buflen.wrapping_add(snprintf(
-                fname_buf.offset(fname_buflen as isize),
-                ((FLEN_FIXED + 1 as ::core::ffi::c_int) as size_t).wrapping_sub(fname_buflen),
-                b"%d_\0".as_ptr() as *const ::core::ffi::c_char,
+            fname_buflen += snprintf(
+                fname_buf.add(fname_buflen),
+                (FLEN_FIXED as size_t + 1) - fname_buflen,
+                c"%d_".as_ptr(),
                 (*current_sctx.ptr()).sc_sid,
-            ) as size_t);
+            ) as size_t;
         }
-        let mut fnamelen: size_t = fname_buflen.wrapping_add(strlen(script_name));
-        let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        let fnamelen = fname_buflen + strlen(script_name);
         if fnamelen < FLEN_FIXED as size_t {
-            strcpy(
-                fname_buf.offset(fname_buflen as isize),
-                script_name as *mut ::core::ffi::c_char,
-            );
-            fname = fname_buf;
+            strcpy(fname_buf.add(fname_buflen), script_name);
+            fname_buf
         } else {
-            fname = xmalloc(fnamelen.wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
+            let fname = xmalloc(fnamelen + 1) as *mut c_char;
             *tofree = fname;
             snprintf(
                 fname,
-                fnamelen.wrapping_add(1 as size_t),
-                b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
+                fnamelen + 1,
+                c"%s%s".as_ptr(),
                 fname_buf,
                 script_name,
             );
+            fname
         }
-        return fname;
     }
 }
 
-pub unsafe extern "C" fn find_func(mut name: *const ::core::ffi::c_char) -> *mut ufunc_T {
+/// The function stored under `name`, or null.
+///
+/// # Safety
+/// `name` is NUL-terminated.
+pub unsafe fn find_func(name: *const c_char) -> *mut ufunc_T {
     unsafe {
-        let mut hi: *mut hashitem_T = hash_find(func_hashtab.ptr(), name);
-        if !((*hi).hi_key.is_null()
-            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
-        {
-            return (*hi).hi_key.offset(-(240 as ::core::ffi::c_ulong as isize)) as *mut ufunc_T;
-        }
-        return ::core::ptr::null_mut::<ufunc_T>();
-    }
-}
-
-unsafe extern "C" fn func_is_global(mut ufunc: *const ufunc_T) -> bool {
-    unsafe {
-        return *(&raw const (*ufunc).uf_name as *const ::core::ffi::c_char)
-            .offset(0 as ::core::ffi::c_int as isize) as uint8_t
-            as ::core::ffi::c_int
-            != K_SPECIAL;
-    }
-}
-
-pub(crate) unsafe extern "C" fn cat_func_name(
-    mut buf: *mut ::core::ffi::c_char,
-    mut bufsize: size_t,
-    mut fp: *const ufunc_T,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut len: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-        let mut uflen: size_t = (*fp).uf_namelen;
-        '_c2rust_label: {
-            if uflen > 0 as size_t {
-            } else {
-                __assert_fail(
-                    b"uflen > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/eval/userfunc.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    736 as ::core::ffi::c_uint,
-                    b"int cat_func_name(char *, size_t, const ufunc_T *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        if !func_is_global(fp) && uflen > 3 as size_t {
-            len = snprintf(
-                buf,
-                bufsize,
-                b"<SNR>%s\0".as_ptr() as *const ::core::ffi::c_char,
-                (&raw const (*fp).uf_name as *const ::core::ffi::c_char)
-                    .offset(3 as ::core::ffi::c_int as isize),
-            );
+        let hi = hash_find(func_hashtab.ptr(), name);
+        if (*hi).is_kept() {
+            // The key *is* the function's trailing name member, so the
+            // function is that many bytes before it.
+            (*hi).hi_key.sub(offset_of!(ufunc_T, uf_name)) as *mut ufunc_T
         } else {
-            len = snprintf(
-                buf,
-                bufsize,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                &raw const (*fp).uf_name as *const ::core::ffi::c_char,
-            );
+            ptr::null_mut()
         }
-        '_c2rust_label_0: {
-            if len > 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"len > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/eval/userfunc.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    744 as ::core::ffi::c_uint,
-                    b"int cat_func_name(char *, size_t, const ufunc_T *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        return if len >= bufsize as ::core::ffi::c_int {
-            bufsize as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+    }
+}
+
+/// Whether `ufunc` is a global function rather than a script-local one --
+/// which is exactly whether its stored name carries the `<SNR>` mangling.
+///
+/// # Safety
+/// `ufunc` is a live function.
+unsafe fn func_is_global(ufunc: *const ufunc_T) -> bool {
+    unsafe { *((&raw const (*ufunc).uf_name) as *const c_char) as u8 as c_int != K_SPECIAL }
+}
+
+/// Write `fp`'s printable name into `buf`, answering how much was written
+/// (capped at `bufsize - 1`).
+///
+/// # Safety
+/// `fp` is a live function and `buf` has `bufsize` writable bytes.
+pub(crate) unsafe fn cat_func_name(buf: *mut c_char, bufsize: size_t, fp: *const ufunc_T) -> c_int {
+    unsafe {
+        let uflen = (*fp).uf_namelen;
+        debug_assert!(uflen > 0);
+        let name = (&raw const (*fp).uf_name) as *const c_char;
+        let len = if !func_is_global(fp) && uflen > 3 {
+            snprintf(buf, bufsize, c"<SNR>%s".as_ptr(), name.add(3))
         } else {
-            len
+            snprintf(buf, bufsize, c"%s".as_ptr(), name)
         };
+        debug_assert!(len > 0);
+        len.min(bufsize as c_int - 1)
     }
 }
 
-pub(crate) unsafe extern "C" fn func_name_refcount(mut name: *const ::core::ffi::c_char) -> bool {
+/// Whether a function of this name is reference-counted: the numbered
+/// dictionary functions and the lambdas, and nothing else.
+///
+/// # Safety
+/// `name` is NUL-terminated.
+pub(crate) unsafe fn func_name_refcount(name: *const c_char) -> bool {
     unsafe {
-        return *(*__ctype_b_loc()).offset(*name as uint8_t as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int
-            & _ISdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-            != 0
-            || *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '<' as ::core::ffi::c_int
-                && *name.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == 'l' as ::core::ffi::c_int;
+        (*name as u8).is_ascii_digit()
+            || (*name == b'<' as c_char && *name.add(1) == b'l' as c_char)
     }
 }
 
-pub(crate) unsafe extern "C" fn builtin_function(
-    mut name: *const ::core::ffi::c_char,
-    mut len: ::core::ffi::c_int,
-) -> bool {
+/// Whether `name` names a builtin function: it starts lowercase, is not a
+/// scoped name, and carries no `#` (which would make it an autoload name).
+///
+/// `len` is the name's length, or -1 for "NUL-terminated".
+///
+/// # Safety
+/// `name` has `len` readable bytes, or is NUL-terminated when `len` is -1.
+pub(crate) unsafe fn builtin_function(name: *const c_char, len: c_int) -> bool {
     unsafe {
-        if !(*name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-            >= 'a' as ::core::ffi::c_uint
-            && *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                <= 'z' as ::core::ffi::c_uint)
-            || *name.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == ':' as ::core::ffi::c_int
-        {
-            return false_0 != 0;
+        if !(*name as u8).is_ascii_lowercase() || *name.add(1) == b':' as c_char {
+            return false;
         }
-        let mut p: *const ::core::ffi::c_char = (if len == -1 as ::core::ffi::c_int {
-            strchr(name, AUTOLOAD_CHAR) as *mut ::core::ffi::c_void
+        // The two spellings upstream uses -- `strchr` when the length is
+        // unknown, `memchr` when it is -- are one search over the same bytes.
+        let n = if len == -1 {
+            strlen(name)
         } else {
-            memchr(
-                name as *const ::core::ffi::c_void,
-                AUTOLOAD_CHAR,
-                len as size_t,
-            )
-        }) as *const ::core::ffi::c_char;
-        return p.is_null();
+            len as size_t
+        };
+        !slice::from_raw_parts(name as *const u8, n).contains(&(AUTOLOAD_CHAR as u8))
     }
 }
 
-pub unsafe extern "C" fn printable_func_name(mut fp: *mut ufunc_T) -> *mut ::core::ffi::c_char {
+/// The name to show a user: the unmangled `<SNR>123_name` when there is one.
+///
+/// # Safety
+/// `fp` is a live function.
+pub unsafe fn printable_func_name(fp: *mut ufunc_T) -> *mut c_char {
     unsafe {
-        return if !(*fp).uf_name_exp.is_null() {
+        if !(*fp).uf_name_exp.is_null() {
             (*fp).uf_name_exp
         } else {
-            &raw mut (*fp).uf_name as *mut ::core::ffi::c_char
-        };
+            uf_name_ptr(fp)
+        }
     }
 }
 
-pub unsafe extern "C" fn trans_function_name(
-    mut pp: *mut *mut ::core::ffi::c_char,
-    mut skip: bool,
-    mut flags: ::core::ffi::c_int,
-    mut fdp: *mut funcdict_T,
-    mut partial: *mut *mut partial_T,
-) -> *mut ::core::ffi::c_char {
+/// Build the stored name out of a resolved lvalue: strip the scope prefix,
+/// prepend the `<SNR>` mangling when the name is script-local, and reject
+/// the two spellings that cannot be function names.
+///
+/// `lead` comes in as `eval_fname_script`'s answer (0, 2 or 5) and is
+/// reworked here into the *number of bytes* to prepend: 0 for a global name,
+/// 3 for `<SNR>` alone, or 3 plus the script id for `s:`/`<SID>`.
+///
+/// # Safety
+/// `lv` is a resolved lvalue with a non-null `ll_name`, and `start`/`end`
+/// bracket the name in the command line.
+unsafe fn mangle_function_name(
+    pp: *mut *mut c_char,
+    lv: &mut lval_T,
+    start: *const c_char,
+    end: *const c_char,
+    mut lead: c_int,
+    skip: bool,
+    flags: c_int,
+) -> *mut c_char {
     unsafe {
+        let mut len;
+        if !lv.ll_exp_name.is_null() {
+            len = strlen(lv.ll_exp_name) as c_int;
+            if lead <= 2
+                && lv.ll_name == lv.ll_exp_name as *const c_char
+                && lv.ll_name_len >= 2
+                && memcmp(
+                    lv.ll_name as *const c_void,
+                    c"s:".as_ptr() as *const c_void,
+                    2,
+                ) == 0
+            {
+                // When there was "s:" already, or the name expanded to get a
+                // leading "s:", remove it.
+                lv.ll_name = lv.ll_name.add(2);
+                lv.ll_name_len -= 2;
+                len -= 2;
+                lead = 2;
+            }
+        } else {
+            // Skip over "s:" and "g:".
+            if lead == 2 || (*lv.ll_name == b'g' as c_char && *lv.ll_name.add(1) == b':' as c_char)
+            {
+                lv.ll_name = lv.ll_name.add(2);
+                lv.ll_name_len -= 2;
+            }
+            len = end.offset_from(lv.ll_name) as c_int;
+        }
+        let mut sid_buf: [c_char; 20] = [0; 20];
         let mut sid_buflen: size_t = 0;
-        let mut sid_buf: [::core::ffi::c_char; 20] = [0; 20];
-        let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut len: ::core::ffi::c_int = 0;
-        let mut lv: lval_T = lval_T {
-            ll_name: ::core::ptr::null::<::core::ffi::c_char>(),
-            ll_name_len: 0,
-            ll_exp_name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ll_tv: ::core::ptr::null_mut::<typval_T>(),
-            ll_li: ::core::ptr::null_mut::<listitem_T>(),
-            ll_list: ::core::ptr::null_mut::<list_T>(),
-            ll_range: false,
-            ll_empty2: false,
-            ll_n1: 0,
-            ll_n2: 0,
-            ll_dict: ::core::ptr::null_mut::<dict_T>(),
-            ll_di: ::core::ptr::null_mut::<dictitem_T>(),
-            ll_newkey: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ll_blob: ::core::ptr::null_mut::<blob_T>(),
-        };
-        if !fdp.is_null() {
-            memset(
-                fdp as *mut ::core::ffi::c_void,
-                0 as ::core::ffi::c_int,
-                ::core::mem::size_of::<funcdict_T>(),
+
+        // Accept <SID>name() inside a script, translated into <SNR>123_name();
+        // accept <SNR>123_name() outside one.
+        if skip {
+            lead = 0; // do nothing
+        } else if lead > 0 {
+            lead = 3;
+            if (!lv.ll_exp_name.is_null() && eval_fname_sid(lv.ll_exp_name)) || eval_fname_sid(*pp)
+            {
+                // It's "s:" or "<SID>".
+                if (*current_sctx.ptr()).sc_sid <= 0 {
+                    emsg(gettext(&raw const e_usingsid as *const c_char));
+                    return ptr::null_mut();
+                }
+                sid_buflen = snprintf(
+                    sid_buf.as_mut_ptr(),
+                    size_of_val(&sid_buf),
+                    c"%d_".as_ptr(),
+                    (*current_sctx.ptr()).sc_sid,
+                ) as size_t;
+                lead += sid_buflen as c_int;
+            }
+        } else if flags & TFN_INT == 0 && builtin_function(lv.ll_name, lv.ll_name_len as c_int) {
+            semsg(
+                gettext(c"E128: Function name must start with a capital or \"s:\": %s".as_ptr()),
+                start,
             );
+            return ptr::null_mut();
         }
-        let mut start: *const ::core::ffi::c_char = *pp;
-        if *(*pp).offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
-            == K_SPECIAL
-            && *(*pp).offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
-                == KS_EXTRA
-            && *(*pp).offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == KE_SNR as ::core::ffi::c_int
-        {
-            *pp = (*pp).offset(3 as ::core::ffi::c_int as isize);
-            len = get_id_len(pp as *mut *const ::core::ffi::c_char) + 3 as ::core::ffi::c_int;
-            return xmemdupz(start as *const ::core::ffi::c_void, len as size_t)
-                as *mut ::core::ffi::c_char;
+
+        if !skip && flags & TFN_QUIET == 0 && flags & TFN_NO_DEREF == 0 {
+            // Upstream also asks `cp < end`.  `cp` points into `lv.ll_name`,
+            // which for a curly-brace name is a fresh allocation while `end`
+            // points into the command line: that compares two unrelated
+            // objects and answers whatever the allocator happened to do.
+            // `xmemrchr` is already bounded by `ll_name_len`, so every colon
+            // it finds is inside the name and the extra test adds nothing but
+            // the coin flip (O-B14-12).
+            let cp = xmemrchr(lv.ll_name as *const c_void, b':', lv.ll_name_len);
+            if !cp.is_null() {
+                semsg(
+                    gettext(c"E884: Function name cannot contain a colon: %s".as_ptr()),
+                    start,
+                );
+                return ptr::null_mut();
+            }
         }
-        let mut lead: ::core::ffi::c_int = eval_fname_script(start);
-        if lead > 2 as ::core::ffi::c_int {
-            start = start.offset(lead as isize);
+
+        let name = xmalloc(len as size_t + lead as size_t + 1) as *mut c_char;
+        if !skip && lead > 0 {
+            *name = K_SPECIAL as c_char;
+            *name.add(1) = KS_EXTRA as c_char;
+            *name.add(2) = KE_SNR as c_char;
+            if sid_buflen > 0 {
+                // It's "<SID>", so the script id goes in as well.
+                memcpy(
+                    name.add(3) as *mut c_void,
+                    sid_buf.as_ptr() as *const c_void,
+                    sid_buflen,
+                );
+            }
         }
-        let mut end: *const ::core::ffi::c_char = get_lval(
-            start as *mut ::core::ffi::c_char,
-            ::core::ptr::null_mut::<typval_T>(),
-            &raw mut lv,
-            false_0 != 0,
-            skip,
-            flags | GLV_READ_ONLY as ::core::ffi::c_int,
-            if lead > 2 as ::core::ffi::c_int {
-                0 as ::core::ffi::c_int
-            } else {
-                FNE_CHECK_START
-            },
+        memmove(
+            name.offset(lead as isize) as *mut c_void,
+            lv.ll_name as *const c_void,
+            len as size_t,
         );
-        '_theend: {
+        *name.offset((lead + len) as isize) = NUL as c_char;
+        *pp = end as *mut c_char;
+        name
+    }
+}
+
+/// Read a function name at `*pp` and answer it in allocated memory, or null
+/// when there is not one there.
+///
+/// # Safety
+/// `*pp` is a NUL-terminated command line; `fdp` and `partial` are null or
+/// writable.
+pub unsafe fn trans_function_name(
+    pp: *mut *mut c_char,
+    skip: bool,
+    flags: c_int,
+    fdp: *mut funcdict_T,
+    partial: *mut *mut partial_T,
+) -> *mut c_char {
+    unsafe {
+        let mut name: *mut c_char = ptr::null_mut();
+        let mut len;
+        let mut lv = LVAL_INITIAL_VALUE;
+
+        if !fdp.is_null() {
+            memset(fdp as *mut c_void, 0, size_of::<funcdict_T>());
+        }
+        let mut start: *const c_char = *pp;
+
+        // A hard-coded <SNR> is an already translated function id, from a
+        // user command.
+        if *(*pp) as u8 as c_int == K_SPECIAL
+            && *(*pp).add(1) as u8 as c_int == KS_EXTRA
+            && *(*pp).add(2) as c_int == KE_SNR as c_int
+        {
+            *pp = (*pp).add(3);
+            len = get_id_len(pp as *mut *const c_char) + 3;
+            return xmemdupz(start as *const c_void, len as size_t) as *mut c_char;
+        }
+
+        // A name starting with "<SID>" or "<SNR>" is local to a script.  But
+        // don't skip over "s:", `get_lval` needs it for "s:dict.func".
+        let lead = eval_fname_script(start);
+        if lead > 2 {
+            start = start.add(lead as usize);
+        }
+
+        // The TFN_ flags use the same values as the GLV_ ones.
+        let end: *const c_char = get_lval(
+            start as *mut c_char,
+            ptr::null_mut(),
+            &raw mut lv,
+            false,
+            skip,
+            flags | GLV_READ_ONLY,
+            if lead > 2 { 0 } else { FNE_CHECK_START },
+        );
+
+        'theend: {
             if end == start {
                 if !skip {
-                    emsg(gettext(
-                        b"E129: Function name required\0".as_ptr() as *const ::core::ffi::c_char
-                    ));
+                    emsg(gettext(c"E129: Function name required".as_ptr()));
                 }
-            } else if end.is_null()
-                || !lv.ll_tv.is_null()
-                    && (lead > 2 as ::core::ffi::c_int || lv.ll_range as ::core::ffi::c_int != 0)
-            {
+                break 'theend;
+            }
+            if end.is_null() || (!lv.ll_tv.is_null() && (lead > 2 || lv.ll_range)) {
+                // Report an invalid expression in braces, unless the
+                // evaluation was cancelled by an aborting error, an interrupt
+                // or an exception.
                 if !aborting() {
                     if !end.is_null() {
-                        semsg(
-                            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                            start,
-                        );
+                        semsg(gettext(&raw const e_invarg2 as *const c_char), start);
                     }
                 } else {
-                    *pp = find_name_end(
-                        start,
-                        ::core::ptr::null_mut::<*const ::core::ffi::c_char>(),
-                        ::core::ptr::null_mut::<*const ::core::ffi::c_char>(),
-                        FNE_INCL_BR,
-                    ) as *mut ::core::ffi::c_char;
+                    *pp = find_name_end(start, ptr::null_mut(), ptr::null_mut(), FNE_INCL_BR)
+                        as *mut c_char;
                 }
-            } else if !lv.ll_tv.is_null() {
+                break 'theend;
+            }
+
+            if !lv.ll_tv.is_null() {
                 if !fdp.is_null() {
                     (*fdp).fd_dict = lv.ll_dict;
                     (*fdp).fd_newkey = lv.ll_newkey;
-                    lv.ll_newkey = ::core::ptr::null_mut::<::core::ffi::c_char>();
+                    lv.ll_newkey = ptr::null_mut();
                     (*fdp).fd_di = lv.ll_di;
                 }
-                if (*lv.ll_tv).v_type as ::core::ffi::c_uint
-                    == VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-                    && !(*lv.ll_tv).vval.v_string.is_null()
-                {
+                if (*lv.ll_tv).v_type == VAR_FUNC && !(*lv.ll_tv).vval.v_string.is_null() {
                     name = xstrdup((*lv.ll_tv).vval.v_string);
-                    *pp = end as *mut ::core::ffi::c_char;
-                } else if (*lv.ll_tv).v_type as ::core::ffi::c_uint
-                    == VAR_PARTIAL as ::core::ffi::c_int as ::core::ffi::c_uint
-                    && !(*lv.ll_tv).vval.v_partial.is_null()
+                    *pp = end as *mut c_char;
+                } else if (*lv.ll_tv).v_type == VAR_PARTIAL && !(*lv.ll_tv).vval.v_partial.is_null()
                 {
-                    if is_luafunc((*lv.ll_tv).vval.v_partial) as ::core::ffi::c_int != 0
-                        && *end as ::core::ffi::c_int == '.' as ::core::ffi::c_int
-                    {
-                        len = check_luafunc_name(
-                            end.offset(1 as ::core::ffi::c_int as isize),
-                            true_0 != 0,
-                        );
-                        if len == 0 as ::core::ffi::c_int {
-                            semsg(
-                                &raw const e_invexpr2 as *const ::core::ffi::c_char,
-                                b"v:lua\0".as_ptr() as *const ::core::ffi::c_char,
-                            );
-                            break '_theend;
-                        } else {
-                            name = xmallocz(len as size_t) as *mut ::core::ffi::c_char;
-                            memcpy(
-                                name as *mut ::core::ffi::c_void,
-                                end.offset(1 as ::core::ffi::c_int as isize)
-                                    as *const ::core::ffi::c_void,
-                                len as size_t,
-                            );
-                            *pp = (end as *mut ::core::ffi::c_char)
-                                .offset(1 as ::core::ffi::c_int as isize)
-                                .offset(len as isize);
+                    if is_luafunc((*lv.ll_tv).vval.v_partial) && *end == b'.' as c_char {
+                        len = check_luafunc_name(end.add(1), true);
+                        if len == 0 {
+                            semsg(&raw const e_invexpr2 as *const c_char, c"v:lua".as_ptr());
+                            break 'theend;
                         }
+                        name = xmallocz(len as size_t) as *mut c_char;
+                        memcpy(
+                            name as *mut c_void,
+                            end.add(1) as *const c_void,
+                            len as size_t,
+                        );
+                        *pp = (end as *mut c_char).add(1).offset(len as isize);
                     } else {
                         name = xstrdup(partial_name((*lv.ll_tv).vval.v_partial));
-                        *pp = end as *mut ::core::ffi::c_char;
+                        *pp = end as *mut c_char;
                     }
                     if !partial.is_null() {
                         *partial = (*lv.ll_tv).vval.v_partial;
                     }
                 } else {
                     if !skip
-                        && flags & TFN_QUIET as ::core::ffi::c_int == 0
+                        && flags & TFN_QUIET == 0
                         && (fdp.is_null() || lv.ll_dict.is_null() || (*fdp).fd_newkey.is_null())
                     {
                         emsg(gettext(E_FUNCREF.as_ptr()));
                     } else {
-                        *pp = end as *mut ::core::ffi::c_char;
+                        *pp = end as *mut c_char;
                     }
-                    name = ::core::ptr::null_mut::<::core::ffi::c_char>();
+                    name = ptr::null_mut();
                 }
-            } else if lv.ll_name.is_null() {
-                *pp = end as *mut ::core::ffi::c_char;
-            } else {
-                if !lv.ll_exp_name.is_null() {
-                    len = strlen(lv.ll_exp_name) as ::core::ffi::c_int;
-                    name = deref_func_name(
-                        lv.ll_exp_name,
-                        &raw mut len,
-                        partial,
-                        flags & TFN_NO_AUTOLOAD as ::core::ffi::c_int != 0,
-                        ::core::ptr::null_mut::<bool>(),
-                    );
-                    if name == lv.ll_exp_name {
-                        name = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                    }
-                } else if flags & TFN_NO_DEREF as ::core::ffi::c_int == 0 {
-                    len = end.offset_from(*pp) as ::core::ffi::c_int;
-                    name = deref_func_name(
-                        *pp,
-                        &raw mut len,
-                        partial,
-                        flags & TFN_NO_AUTOLOAD as ::core::ffi::c_int != 0,
-                        ::core::ptr::null_mut::<bool>(),
-                    );
-                    if name == *pp {
-                        name = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                    }
+                break 'theend;
+            }
+
+            if lv.ll_name.is_null() {
+                // Error found, but carry on after the function name.
+                *pp = end as *mut c_char;
+                break 'theend;
+            }
+
+            // Check whether the name is a funcref; if so, use its value.
+            if !lv.ll_exp_name.is_null() {
+                len = strlen(lv.ll_exp_name) as c_int;
+                name = deref_func_name(
+                    lv.ll_exp_name,
+                    &raw mut len,
+                    partial,
+                    flags & TFN_NO_AUTOLOAD != 0,
+                    ptr::null_mut(),
+                );
+                if name == lv.ll_exp_name {
+                    name = ptr::null_mut();
                 }
-                if !name.is_null() {
-                    name = xstrdup(name);
-                    *pp = end as *mut ::core::ffi::c_char;
-                    if strncmp(
-                        name,
-                        b"<SNR>\0".as_ptr() as *const ::core::ffi::c_char,
-                        5 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        *name.offset(0 as ::core::ffi::c_int as isize) =
-                            K_SPECIAL as ::core::ffi::c_char;
-                        *name.offset(1 as ::core::ffi::c_int as isize) =
-                            KS_EXTRA as ::core::ffi::c_char;
-                        *name.offset(2 as ::core::ffi::c_int as isize) =
-                            KE_SNR as ::core::ffi::c_int as ::core::ffi::c_char;
-                        memmove(
-                            name.offset(3 as ::core::ffi::c_int as isize)
-                                as *mut ::core::ffi::c_void,
-                            name.offset(5 as ::core::ffi::c_int as isize)
-                                as *const ::core::ffi::c_void,
-                            strlen(name.offset(5 as ::core::ffi::c_int as isize))
-                                .wrapping_add(1 as size_t),
-                        );
-                    }
-                } else {
-                    if !lv.ll_exp_name.is_null() {
-                        len = strlen(lv.ll_exp_name) as ::core::ffi::c_int;
-                        if lead <= 2 as ::core::ffi::c_int
-                            && lv.ll_name == lv.ll_exp_name as *const ::core::ffi::c_char
-                            && lv.ll_name_len >= 2 as size_t
-                            && memcmp(
-                                lv.ll_name as *const ::core::ffi::c_void,
-                                b"s:\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *const ::core::ffi::c_void,
-                                2 as size_t,
-                            ) == 0 as ::core::ffi::c_int
-                        {
-                            lv.ll_name = lv.ll_name.offset(2 as ::core::ffi::c_int as isize);
-                            lv.ll_name_len = lv.ll_name_len.wrapping_sub(2 as size_t);
-                            len -= 2 as ::core::ffi::c_int;
-                            lead = 2 as ::core::ffi::c_int;
-                        }
-                    } else {
-                        if lead == 2 as ::core::ffi::c_int
-                            || *lv.ll_name.offset(0 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int
-                                == 'g' as ::core::ffi::c_int
-                                && *lv.ll_name.offset(1 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int
-                                    == ':' as ::core::ffi::c_int
-                        {
-                            lv.ll_name = lv.ll_name.offset(2 as ::core::ffi::c_int as isize);
-                            lv.ll_name_len = lv.ll_name_len.wrapping_sub(2 as size_t);
-                        }
-                        len = end.offset_from(lv.ll_name) as ::core::ffi::c_int;
-                    }
-                    sid_buflen = 0 as size_t;
-                    sid_buf = [0; 20];
-                    if skip {
-                        lead = 0 as ::core::ffi::c_int;
-                    } else if lead > 0 as ::core::ffi::c_int {
-                        lead = 3 as ::core::ffi::c_int;
-                        if !lv.ll_exp_name.is_null()
-                            && eval_fname_sid(lv.ll_exp_name) as ::core::ffi::c_int != 0
-                            || eval_fname_sid(*pp) as ::core::ffi::c_int != 0
-                        {
-                            if (*current_sctx.ptr()).sc_sid <= 0 as ::core::ffi::c_int {
-                                emsg(gettext(&raw const e_usingsid as *const ::core::ffi::c_char));
-                                break '_theend;
-                            } else {
-                                sid_buflen = snprintf(
-                                    &raw mut sid_buf as *mut ::core::ffi::c_char,
-                                    ::core::mem::size_of::<[::core::ffi::c_char; 20]>(),
-                                    b"%d_\0".as_ptr() as *const ::core::ffi::c_char,
-                                    (*current_sctx.ptr()).sc_sid,
-                                ) as size_t;
-                                lead += sid_buflen as ::core::ffi::c_int;
-                            }
-                        }
-                    } else if flags & TFN_INT as ::core::ffi::c_int == 0
-                        && builtin_function(lv.ll_name, lv.ll_name_len as ::core::ffi::c_int)
-                            as ::core::ffi::c_int
-                            != 0
-                    {
-                        semsg(
-                            gettext(
-                                b"E128: Function name must start with a capital or \"s:\": %s\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
-                            start,
-                        );
-                        break '_theend;
-                    }
-                    if !skip
-                        && flags & TFN_QUIET as ::core::ffi::c_int == 0
-                        && flags & TFN_NO_DEREF as ::core::ffi::c_int == 0
-                    {
-                        let mut cp: *mut ::core::ffi::c_char = xmemrchr(
-                            lv.ll_name as *const ::core::ffi::c_void,
-                            ':' as uint8_t,
-                            lv.ll_name_len,
-                        )
-                            as *mut ::core::ffi::c_char;
-                        // Upstream also asks `cp < end`.  `cp` points into
-                        // `lv.ll_name`, which for a curly-brace name is a
-                        // fresh allocation while `end` points into the
-                        // command line: that compares two unrelated objects
-                        // and answers whatever the allocator happened to do.
-                        // `xmemrchr` is already bounded by `ll_name_len`, so
-                        // every colon it finds is inside the name and the
-                        // extra test adds nothing but the coin flip
-                        // (O-B14-12).
-                        if !cp.is_null() {
-                            semsg(
-                                gettext(
-                                    b"E884: Function name cannot contain a colon: %s\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                ),
-                                start,
-                            );
-                            break '_theend;
-                        }
-                    }
-                    name = xmalloc(
-                        (len as size_t)
-                            .wrapping_add(lead as size_t)
-                            .wrapping_add(1 as size_t),
-                    ) as *mut ::core::ffi::c_char;
-                    if !skip && lead > 0 as ::core::ffi::c_int {
-                        *name.offset(0 as ::core::ffi::c_int as isize) =
-                            K_SPECIAL as ::core::ffi::c_char;
-                        *name.offset(1 as ::core::ffi::c_int as isize) =
-                            KS_EXTRA as ::core::ffi::c_char;
-                        *name.offset(2 as ::core::ffi::c_int as isize) =
-                            KE_SNR as ::core::ffi::c_int as ::core::ffi::c_char;
-                        if sid_buflen > 0 as size_t {
-                            memcpy(
-                                name.offset(3 as ::core::ffi::c_int as isize)
-                                    as *mut ::core::ffi::c_void,
-                                &raw mut sid_buf as *mut ::core::ffi::c_char
-                                    as *const ::core::ffi::c_void,
-                                sid_buflen,
-                            );
-                        }
-                    }
-                    memmove(
-                        name.offset(lead as isize) as *mut ::core::ffi::c_void,
-                        lv.ll_name as *const ::core::ffi::c_void,
-                        len as size_t,
-                    );
-                    *name.offset((lead + len) as isize) = NUL as ::core::ffi::c_char;
-                    *pp = end as *mut ::core::ffi::c_char;
+            } else if flags & TFN_NO_DEREF == 0 {
+                len = end.offset_from(*pp) as c_int;
+                name = deref_func_name(
+                    *pp,
+                    &raw mut len,
+                    partial,
+                    flags & TFN_NO_AUTOLOAD != 0,
+                    ptr::null_mut(),
+                );
+                if name == *pp {
+                    name = ptr::null_mut();
                 }
             }
+            if !name.is_null() {
+                name = xstrdup(name);
+                *pp = end as *mut c_char;
+                if strncmp(name, c"<SNR>".as_ptr(), 5) == 0 {
+                    // Change "<SNR>" to the byte sequence.
+                    *name = K_SPECIAL as c_char;
+                    *name.add(1) = KS_EXTRA as c_char;
+                    *name.add(2) = KE_SNR as c_char;
+                    memmove(
+                        name.add(3) as *mut c_void,
+                        name.add(5) as *const c_void,
+                        strlen(name.add(5)) + 1,
+                    );
+                }
+                break 'theend;
+            }
+
+            name = mangle_function_name(pp, &mut lv, start, end, lead, skip, flags);
         }
+
         clear_lval(&raw mut lv);
-        return name;
+        name
     }
 }
 
-pub unsafe extern "C" fn get_scriptlocal_funcname(
-    mut funcname: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+/// Expand `s:`/`<SID>` at the front of `funcname` into `<SNR>N_`, in
+/// allocated memory.  Answers null when there is no such prefix, or when
+/// there is no script to take the id from.
+///
+/// # Safety
+/// `funcname` is null or NUL-terminated.
+pub unsafe fn get_scriptlocal_funcname(funcname: *mut c_char) -> *mut c_char {
     unsafe {
         if funcname.is_null() {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+            return ptr::null_mut();
         }
-        if strncmp(
-            funcname,
-            b"s:\0".as_ptr() as *const ::core::ffi::c_char,
-            2 as size_t,
-        ) != 0 as ::core::ffi::c_int
-            && strncmp(
-                funcname,
-                b"<SID>\0".as_ptr() as *const ::core::ffi::c_char,
-                5 as size_t,
-            ) != 0 as ::core::ffi::c_int
+        if strncmp(funcname, c"s:".as_ptr(), 2) != 0 && strncmp(funcname, c"<SID>".as_ptr(), 5) != 0
         {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+            // The function name does not have a script-local prefix.
+            return ptr::null_mut();
         }
-        if !((*current_sctx.ptr()).sc_sid > 0 as ::core::ffi::c_int
-            && (*current_sctx.ptr()).sc_sid <= (*script_items.ptr()).ga_len)
-        {
-            emsg(gettext(&raw const e_usingsid as *const ::core::ffi::c_char));
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        let sid = (*current_sctx.ptr()).sc_sid;
+        if !(sid > 0 && sid <= (*script_items.ptr()).ga_len) {
+            emsg(gettext(&raw const e_usingsid as *const c_char));
+            return ptr::null_mut();
         }
-        let mut sid_buf: [::core::ffi::c_char; 25] = [0; 25];
-        let mut sid_buflen: size_t = snprintf(
-            &raw mut sid_buf as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 25]>(),
-            b"<SNR>%d_\0".as_ptr() as *const ::core::ffi::c_char,
-            (*current_sctx.ptr()).sc_sid,
+
+        let mut sid_buf: [c_char; 25] = [0; 25];
+        let sid_buflen = snprintf(
+            sid_buf.as_mut_ptr(),
+            size_of_val(&sid_buf),
+            c"<SNR>%d_".as_ptr(),
+            sid,
         ) as size_t;
-        let off: ::core::ffi::c_int =
-            if *funcname as ::core::ffi::c_int == 's' as ::core::ffi::c_int {
-                2 as ::core::ffi::c_int
-            } else {
-                5 as ::core::ffi::c_int
-            };
-        let mut newnamesize: size_t = sid_buflen
-            .wrapping_add(strlen(funcname.offset(off as isize)))
-            .wrapping_add(1 as size_t);
-        let mut newname: *mut ::core::ffi::c_char =
-            xmalloc(newnamesize) as *mut ::core::ffi::c_char;
+        let off = if *funcname == b's' as c_char { 2 } else { 5 };
+        let newnamesize = sid_buflen + strlen(funcname.add(off)) + 1;
+        let newname = xmalloc(newnamesize) as *mut c_char;
         snprintf(
             newname,
             newnamesize,
-            b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-            &raw mut sid_buf as *mut ::core::ffi::c_char,
-            funcname.offset(off as isize),
+            c"%s%s".as_ptr(),
+            sid_buf.as_ptr(),
+            funcname.add(off),
         );
-        return newname;
+        newname
     }
 }
 
-pub unsafe extern "C" fn save_function_name(
-    mut name: *mut *mut ::core::ffi::c_char,
-    mut skip: bool,
-    mut flags: ::core::ffi::c_int,
-    mut fudi: *mut funcdict_T,
-) -> *mut ::core::ffi::c_char {
+/// [`trans_function_name`], except that a `<lambda>N` is taken as-is.
+/// Answers the name in allocated memory.
+///
+/// # Safety
+/// `*name` is a NUL-terminated command line; `fudi` is null or writable.
+pub unsafe fn save_function_name(
+    name: *mut *mut c_char,
+    skip: bool,
+    flags: c_int,
+    fudi: *mut funcdict_T,
+) -> *mut c_char {
     unsafe {
-        let mut p: *mut ::core::ffi::c_char = *name;
-        let mut saved: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if strncmp(
-            p,
-            b"<lambda>\0".as_ptr() as *const ::core::ffi::c_char,
-            8 as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            p = p.offset(8 as ::core::ffi::c_int as isize);
-            getdigits(&raw mut p, false_0 != 0, 0 as intmax_t);
-            saved = xmemdupz(
-                *name as *const ::core::ffi::c_void,
-                p.offset_from(*name) as size_t,
-            ) as *mut ::core::ffi::c_char;
+        let mut p = *name;
+        let saved;
+        if strncmp(p, c"<lambda>".as_ptr(), 8) == 0 {
+            p = p.add(8);
+            getdigits(&raw mut p, false, 0);
+            saved = xmemdupz(*name as *const c_void, p.offset_from(*name) as size_t) as *mut c_char;
             if !fudi.is_null() {
-                memset(
-                    fudi as *mut ::core::ffi::c_void,
-                    0 as ::core::ffi::c_int,
-                    ::core::mem::size_of::<funcdict_T>(),
-                );
+                memset(fudi as *mut c_void, 0, size_of::<funcdict_T>());
             }
         } else {
-            saved = trans_function_name(
-                &raw mut p,
-                skip,
-                flags,
-                fudi,
-                ::core::ptr::null_mut::<*mut partial_T>(),
-            );
+            saved = trans_function_name(&raw mut p, skip, flags, fudi, ptr::null_mut());
         }
         *name = p;
-        return saved;
+        saved
     }
 }
 
-pub unsafe extern "C" fn eval_fname_script(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
+/// How long the script-local prefix at `p` is: 5 for `<SID>`/`<SNR>`, 2 for
+/// `s:`, 0 for neither.
+///
+/// # Safety
+/// `p` is NUL-terminated.
+pub unsafe fn eval_fname_script(p: *const c_char) -> c_int {
     unsafe {
-        if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '<' as ::core::ffi::c_int
-            && (mb_strnicmp(
-                p.offset(1 as ::core::ffi::c_int as isize),
-                b"SID>\0".as_ptr() as *const ::core::ffi::c_char,
-                4 as size_t,
-            ) == 0 as ::core::ffi::c_int
-                || mb_strnicmp(
-                    p.offset(1 as ::core::ffi::c_int as isize),
-                    b"SNR>\0".as_ptr() as *const ::core::ffi::c_char,
-                    4 as size_t,
-                ) == 0 as ::core::ffi::c_int)
+        // Writing `s:` instead of `<SID>` is allowed, and `<SNR>` is what a
+        // name that has already been translated looks like.
+        if *p == b'<' as c_char
+            && (mb_strnicmp(p.add(1), c"SID>".as_ptr(), 4) == 0
+                || mb_strnicmp(p.add(1), c"SNR>".as_ptr(), 4) == 0)
         {
-            return 5 as ::core::ffi::c_int;
+            return 5;
         }
-        if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == 's' as ::core::ffi::c_int
-            && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == ':' as ::core::ffi::c_int
-        {
-            return 2 as ::core::ffi::c_int;
+        if *p == b's' as c_char && *p.add(1) == b':' as c_char {
+            return 2;
         }
-        return 0 as ::core::ffi::c_int;
+        0
     }
 }
