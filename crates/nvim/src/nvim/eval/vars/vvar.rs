@@ -2,181 +2,227 @@
 //!
 //! Two families: the `get_vim_var_*` readers, which are how the rest of the
 //! editor asks what a `v:` variable holds, and the `set_vim_var_*` writers,
-//! which are how it publishes one.  `before_set_vvar` is the Vimscript side
-//! of the same thing: the type enforcement `:let v:x = …` goes through.
+//! which are how it publishes one.  [`before_set_vvar`] is the Vimscript
+//! side of the same thing: the type enforcement `:let v:x = …` goes through.
+//!
+//! Every one of them indexes the `vimvars` table by [`VimVarIndex`], so none
+//! of them can fail; the table's entries are `dictitem_T`-shaped and are the
+//! same items `v:` the dictionary holds.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
 #[allow(unused_imports)]
 use super::*;
 
-pub unsafe extern "C" fn prepare_vimvar(mut idx: ::core::ffi::c_int, mut save_tv: *mut typval_T) {
+/// Save `v:` variable `idx` into `save_tv` and blank it, adding it to the
+/// `v:` dictionary if it is one of the two that are not normally there.
+///
+/// Pairs with [`restore_vimvar`].
+///
+/// # Safety
+/// `idx` names a `v:` variable and `save_tv` is writable.
+pub unsafe fn prepare_vimvar(idx: c_int, save_tv: *mut typval_T) {
     unsafe {
-        *save_tv = (*vimvars.ptr())[idx as usize].vv_di.di_tv;
-        (*vimvars.ptr())[idx as usize].vv_di.di_tv.vval.v_string =
-            ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if (*vimvars.ptr())[idx as usize].vv_di.di_tv.v_type as ::core::ffi::c_uint
-            == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        let vv = (vimvars.ptr() as *mut VimVar).offset(idx as isize);
+        *save_tv = (*vv).vv_di.di_tv;
+        (*vv).vv_di.di_tv.vval.v_string = ptr::null_mut();
+        if (*vv).vv_di.di_tv.v_type == VAR_UNKNOWN {
+            // `v:val` and `v:key` have no type until something sets one, and
+            // are absent from the dictionary until then.
             hash_add(
                 &raw mut (*vimvardict.ptr()).dv_hashtab,
-                &raw mut (*(vimvars.ptr() as *mut VimVar).offset(idx as isize))
-                    .vv_di
-                    .di_key as *mut ::core::ffi::c_char,
+                (&raw mut (*vv).vv_di.di_key).cast(),
             );
         }
     }
 }
 
-pub unsafe extern "C" fn restore_vimvar(mut idx: ::core::ffi::c_int, mut save_tv: *mut typval_T) {
+/// Put back what [`prepare_vimvar`] saved.
+///
+/// # Safety
+/// As [`prepare_vimvar`], with the `save_tv` it filled.
+pub unsafe fn restore_vimvar(idx: c_int, save_tv: *mut typval_T) {
     unsafe {
-        (*vimvars.ptr())[idx as usize].vv_di.di_tv = *save_tv;
-        if (*vimvars.ptr())[idx as usize].vv_di.di_tv.v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        let vv = (vimvars.ptr() as *mut VimVar).offset(idx as isize);
+        (*vv).vv_di.di_tv = *save_tv;
+        if (*vv).vv_di.di_tv.v_type != VAR_UNKNOWN {
             return;
         }
-        let mut hi: *mut hashitem_T = hash_find(
+        let hi = hash_find(
             &raw mut (*vimvardict.ptr()).dv_hashtab,
-            &raw mut (*(vimvars.ptr() as *mut VimVar).offset(idx as isize))
-                .vv_di
-                .di_key as *mut ::core::ffi::c_char,
+            (&raw mut (*vv).vv_di.di_key).cast(),
         );
-        if (*hi).hi_key.is_null()
-            || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
-        {
-            internal_error(b"restore_vimvar()\0".as_ptr() as *const ::core::ffi::c_char);
-        } else {
+        if (*hi).is_kept() {
             hash_remove(&raw mut (*vimvardict.ptr()).dv_hashtab, hi);
-        };
+        } else {
+            internal_error(c"restore_vimvar()".as_ptr());
+        }
     }
 }
 
-pub unsafe extern "C" fn set_vim_var_tv(idx: VimVarIndex, tv: *mut typval_T) {
+/// Copy `tv` into `v:` variable `idx`.
+///
+/// # Safety
+/// `idx` names a `v:` variable and `tv` is a live value.
+pub unsafe fn set_vim_var_tv(idx: VimVarIndex, tv: *mut typval_T) {
     unsafe {
-        let mut tv_out: *mut typval_T = get_vim_var_tv(idx);
+        let tv_out = get_vim_var_tv(idx);
         tv_clear(tv_out);
         tv_copy(tv, tv_out);
     }
 }
 
-pub unsafe extern "C" fn get_vim_var_name(idx: VimVarIndex) -> *mut ::core::ffi::c_char {
-    unsafe {
-        return (*vimvars.ptr())[idx as usize].vv_name;
-    }
+/// The name of `v:` variable `idx`, without the `v:`.
+///
+/// # Safety
+/// `idx` names a `v:` variable.
+pub unsafe fn get_vim_var_name(idx: VimVarIndex) -> *mut c_char {
+    unsafe { (*vimvars.ptr())[idx as usize].vv_name }
 }
 
-pub unsafe extern "C" fn get_vim_var_tv(idx: VimVarIndex) -> *mut typval_T {
+/// The value of `v:` variable `idx`, which the caller may write through.
+///
+/// # Safety
+/// `idx` names a `v:` variable.
+pub unsafe fn get_vim_var_tv(idx: VimVarIndex) -> *mut typval_T {
     unsafe {
-        return &raw mut (*(vimvars.ptr() as *mut VimVar).offset(idx as isize))
+        &raw mut (*(vimvars.ptr() as *mut VimVar).offset(idx as isize))
             .vv_di
-            .di_tv;
+            .di_tv
     }
 }
 
-pub unsafe extern "C" fn get_vim_var_nr(idx: VimVarIndex) -> varnumber_T {
-    unsafe {
-        let mut tv: *mut typval_T = get_vim_var_tv(idx);
-        return (*tv).vval.v_number;
-    }
+/// `v:` variable `idx` as a Number.  The caller knows its declared type.
+///
+/// # Safety
+/// As [`get_vim_var_tv`].
+pub unsafe fn get_vim_var_nr(idx: VimVarIndex) -> varnumber_T {
+    unsafe { (*get_vim_var_tv(idx)).vval.v_number }
 }
 
-pub unsafe extern "C" fn get_vim_var_list(idx: VimVarIndex) -> *mut list_T {
-    unsafe {
-        let mut tv: *mut typval_T = get_vim_var_tv(idx);
-        return (*tv).vval.v_list;
-    }
+/// `v:` variable `idx` as a List.
+///
+/// # Safety
+/// As [`get_vim_var_tv`].
+pub unsafe fn get_vim_var_list(idx: VimVarIndex) -> *mut list_T {
+    unsafe { (*get_vim_var_tv(idx)).vval.v_list }
 }
 
-pub unsafe extern "C" fn get_vim_var_dict(idx: VimVarIndex) -> *mut dict_T {
-    unsafe {
-        let mut tv: *mut typval_T = get_vim_var_tv(idx);
-        return (*tv).vval.v_dict;
-    }
+/// `v:` variable `idx` as a Dict.
+///
+/// # Safety
+/// As [`get_vim_var_tv`].
+pub unsafe fn get_vim_var_dict(idx: VimVarIndex) -> *mut dict_T {
+    unsafe { (*get_vim_var_tv(idx)).vval.v_dict }
 }
 
-pub unsafe extern "C" fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char {
-    unsafe {
-        return tv_get_string(get_vim_var_tv(idx)) as *mut ::core::ffi::c_char;
-    }
+/// `v:` variable `idx` as a string, converting whatever it holds.
+///
+/// # Safety
+/// As [`get_vim_var_tv`].
+pub unsafe fn get_vim_var_str(idx: VimVarIndex) -> *mut c_char {
+    unsafe { tv_get_string(get_vim_var_tv(idx)) as *mut c_char }
 }
 
-pub unsafe extern "C" fn get_vim_var_partial(idx: VimVarIndex) -> *mut partial_T {
-    unsafe {
-        let mut tv: *mut typval_T = get_vim_var_tv(idx);
-        return (*tv).vval.v_partial;
-    }
+/// `v:` variable `idx` as a Partial.
+///
+/// # Safety
+/// As [`get_vim_var_tv`].
+pub unsafe fn get_vim_var_partial(idx: VimVarIndex) -> *mut partial_T {
+    unsafe { (*get_vim_var_tv(idx)).vval.v_partial }
 }
 
-pub unsafe extern "C" fn set_vim_var_type(idx: VimVarIndex, type_0: VarType) {
-    unsafe {
-        let mut tv: *mut typval_T = get_vim_var_tv(idx);
-        (*tv).v_type = type_0;
-    }
+/// Declare `v:` variable `idx` to be of type `type_0`, without touching its
+/// value.
+///
+/// # Safety
+/// As [`get_vim_var_tv`].
+pub unsafe fn set_vim_var_type(idx: VimVarIndex, type_0: VarType) {
+    unsafe { (*get_vim_var_tv(idx)).v_type = type_0 }
 }
 
-pub unsafe extern "C" fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T) {
+/// Set `v:` variable `idx` to the Number `val`.
+///
+/// # Safety
+/// As [`get_vim_var_tv`].
+pub unsafe fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T) {
     unsafe {
-        let mut tv: *mut typval_T = get_vim_var_tv(idx);
+        let tv = get_vim_var_tv(idx);
         tv_clear(tv);
         (*tv).vval.v_number = val;
     }
 }
 
-pub unsafe extern "C" fn set_vim_var_bool(idx: VimVarIndex, val: BoolVarValue) {
+/// Set `v:` variable `idx` to `v:true` or `v:false`.
+///
+/// # Safety
+/// As [`get_vim_var_tv`].
+pub unsafe fn set_vim_var_bool(idx: VimVarIndex, val: BoolVarValue) {
     unsafe {
-        let mut tv: *mut typval_T = get_vim_var_tv(idx);
+        let tv = get_vim_var_tv(idx);
         tv_clear(tv);
         (*tv).v_type = VAR_BOOL;
         (*tv).vval.v_bool = val;
     }
 }
 
-pub unsafe extern "C" fn set_vim_var_special(idx: VimVarIndex, val: SpecialVarValue) {
+/// Set `v:` variable `idx` to `v:null`.
+///
+/// # Safety
+/// As [`get_vim_var_tv`].
+pub unsafe fn set_vim_var_special(idx: VimVarIndex, val: SpecialVarValue) {
     unsafe {
-        let mut tv: *mut typval_T = get_vim_var_tv(idx);
+        let tv = get_vim_var_tv(idx);
         tv_clear(tv);
         (*tv).v_type = VAR_SPECIAL;
         (*tv).vval.v_special = val;
     }
 }
 
-pub unsafe extern "C" fn set_vim_var_char(mut c: ::core::ffi::c_int) {
+/// Set `v:char` to the character `c`.
+///
+/// # Safety
+/// Nothing; `utf_char2bytes` writes at most six bytes, so the NUL lands
+/// inside `buf`.
+pub unsafe fn set_vim_var_char(c: c_int) {
     unsafe {
-        let mut buf: [::core::ffi::c_char; 7] = [0; 7];
-        let mut buflen: ::core::ffi::c_int =
-            utf_char2bytes(c, &raw mut buf as *mut ::core::ffi::c_char);
+        let mut buf = [0 as c_char; 7];
+        let buflen = utf_char2bytes(c, buf.as_mut_ptr());
         buf[buflen as usize] = NUL;
-        set_vim_var_string(
-            VV_CHAR,
-            &raw mut buf as *mut ::core::ffi::c_char,
-            buflen as ptrdiff_t,
-        );
+        set_vim_var_string(VV_CHAR, buf.as_ptr(), buflen as ptrdiff_t);
     }
 }
 
-pub unsafe extern "C" fn set_vim_var_string(
-    idx: VimVarIndex,
-    val: *const ::core::ffi::c_char,
-    len: ptrdiff_t,
-) {
+/// Set `v:` variable `idx` to a copy of `val`, which is `len` bytes long or
+/// NUL-terminated when `len` is -1.  A NULL `val` is the null string.
+///
+/// # Safety
+/// As [`get_vim_var_tv`]; `val` is NULL or readable for `len`.
+pub unsafe fn set_vim_var_string(idx: VimVarIndex, val: *const c_char, len: ptrdiff_t) {
     unsafe {
-        let mut tv: *mut typval_T = get_vim_var_tv(idx);
+        let tv = get_vim_var_tv(idx);
         tv_clear(tv);
         (*tv).v_type = VAR_STRING;
-        if val.is_null() {
-            (*tv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        } else if len == -1 as ptrdiff_t {
-            (*tv).vval.v_string = xstrdup(val);
+        (*tv).vval.v_string = if val.is_null() {
+            ptr::null_mut()
+        } else if len == -1 {
+            xstrdup(val)
         } else {
-            (*tv).vval.v_string = xstrndup(val, len as size_t);
+            xstrndup(val, len as size_t)
         };
     }
 }
 
-pub unsafe extern "C" fn set_vim_var_list(idx: VimVarIndex, val: *mut list_T) {
+/// Set `v:` variable `idx` to `val`, taking a reference to it.
+///
+/// # Safety
+/// As [`get_vim_var_tv`]; `val` is NULL or a live list.
+pub unsafe fn set_vim_var_list(idx: VimVarIndex, val: *mut list_T) {
     unsafe {
-        let mut tv: *mut typval_T = get_vim_var_tv(idx);
+        let tv = get_vim_var_tv(idx);
         tv_clear(tv);
         (*tv).v_type = VAR_LIST;
         (*tv).vval.v_list = val;
@@ -186,9 +232,14 @@ pub unsafe extern "C" fn set_vim_var_list(idx: VimVarIndex, val: *mut list_T) {
     }
 }
 
-pub unsafe extern "C" fn set_vim_var_dict(idx: VimVarIndex, val: *mut dict_T) {
+/// Set `v:` variable `idx` to `val`, taking a reference to it and making its
+/// keys read-only.
+///
+/// # Safety
+/// As [`get_vim_var_tv`]; `val` is NULL or a live dictionary.
+pub unsafe fn set_vim_var_dict(idx: VimVarIndex, val: *mut dict_T) {
     unsafe {
-        let mut tv: *mut typval_T = get_vim_var_tv(idx);
+        let tv = get_vim_var_tv(idx);
         tv_clear(tv);
         (*tv).v_type = VAR_DICT;
         (*tv).vval.v_dict = val;
@@ -200,242 +251,189 @@ pub unsafe extern "C" fn set_vim_var_dict(idx: VimVarIndex, val: *mut dict_T) {
     }
 }
 
-pub unsafe extern "C" fn set_vim_var_partial(idx: VimVarIndex, mut val: *mut partial_T) {
-    unsafe {
-        let mut tv: *mut typval_T = get_vim_var_tv(idx);
-        (*tv).vval.v_partial = val;
-    }
+/// Set `v:lua`'s partial.
+///
+/// Upstream writes the union member without setting `v_type`, because the
+/// table already declares `v:lua` a `VAR_PARTIAL` and nothing ever replaces
+/// it; this runs once, from `evalvars_init`.
+///
+/// # Safety
+/// As [`get_vim_var_tv`]; `val` is a live partial whose reference the caller
+/// hands over.
+pub unsafe fn set_vim_var_partial(idx: VimVarIndex, val: *mut partial_T) {
+    unsafe { (*get_vim_var_tv(idx)).vval.v_partial = val }
 }
 
-pub unsafe extern "C" fn set_reg_var(mut c: ::core::ffi::c_int) {
+/// Set `v:register` to `c`, or to `"` for the unnamed register.
+///
+/// # Safety
+/// Nothing; `c` is a register name or 0.
+pub unsafe fn set_reg_var(c: c_int) {
     unsafe {
-        let mut regname: [::core::ffi::c_char; 2] = [0; 2];
-        if c == 0 as ::core::ffi::c_int || c == ' ' as ::core::ffi::c_int {
-            regname[0 as ::core::ffi::c_int as usize] = '"' as ::core::ffi::c_char;
+        let regname = if c == 0 || c == b' ' as c_int {
+            b'"' as c_char
         } else {
-            regname[0 as ::core::ffi::c_int as usize] = c as ::core::ffi::c_char;
-        }
-        regname[1 as ::core::ffi::c_int as usize] = NUL;
-        let mut tv: *mut typval_T = get_vim_var_tv(VV_REG);
-        if (*tv).vval.v_string.is_null()
-            || *(*tv).vval.v_string.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                != c
-        {
-            set_vim_var_string(
-                VV_REG,
-                &raw mut regname as *mut ::core::ffi::c_char,
-                1 as ptrdiff_t,
-            );
+            c as c_char
+        };
+        // Only write when it changed, to avoid the reallocation. The test
+        // is against `c`, not against the name that would be stored, so
+        // `set_reg_var(0)` always rewrites -- upstream's.
+        let tv = get_vim_var_tv(VV_REG);
+        if (*tv).vval.v_string.is_null() || *(*tv).vval.v_string != c as c_char {
+            let buf = [regname, NUL];
+            set_vim_var_string(VV_REG, buf.as_ptr(), 1);
         }
     }
 }
 
-pub unsafe extern "C" fn v_exception(
-    mut oldval: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+/// Get or restore `v:exception`: a NULL `oldval` reads it, anything else
+/// puts that value back and answers NULL.
+///
+/// Always called in pairs, and neither half allocates or frees.
+///
+/// # Safety
+/// `oldval` is NULL or a string this took out earlier.
+pub unsafe fn v_exception(oldval: *mut c_char) -> *mut c_char {
     unsafe {
-        let mut tv: *mut typval_T = get_vim_var_tv(VV_EXCEPTION);
+        let tv = get_vim_var_tv(VV_EXCEPTION);
         if oldval.is_null() {
             return (*tv).vval.v_string;
         }
         (*tv).vval.v_string = oldval;
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        ptr::null_mut()
     }
 }
 
-pub unsafe extern "C" fn set_cmdarg(
-    mut eap: *mut exarg_T,
-    mut oldarg: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+/// [`v_exception`] for `v:throwpoint`.
+///
+/// # Safety
+/// As [`v_exception`].
+pub unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
     unsafe {
-        let mut len: size_t = 0;
-        let mut newval_len: size_t = 0;
-        let mut newval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut xlen: size_t = 0;
-        let mut rc: ::core::ffi::c_int = 0;
-        let mut tv: *mut typval_T = get_vim_var_tv(VV_CMDARG);
-        let mut oldval: *mut ::core::ffi::c_char = (*tv).vval.v_string;
-        '_error: {
-            if !eap.is_null() {
-                len = 0 as size_t;
-                if (*eap).force_bin == FORCE_BIN {
-                    len = len.wrapping_add(6 as size_t);
-                } else if (*eap).force_bin == FORCE_NOBIN {
-                    len = len.wrapping_add(8 as size_t);
-                }
-                if (*eap).read_edit != 0 {
-                    len = len.wrapping_add(7 as size_t);
-                }
-                if (*eap).force_ff != 0 as ::core::ffi::c_int {
-                    len = len.wrapping_add(10 as size_t);
-                }
-                if (*eap).force_enc != 0 as ::core::ffi::c_int {
-                    len = len.wrapping_add(
-                        strlen((*eap).cmd.offset((*eap).force_enc as isize))
-                            .wrapping_add(7 as size_t),
-                    );
-                }
-                if (*eap).bad_char != 0 as ::core::ffi::c_int {
-                    len = len.wrapping_add(
-                        (7 as ::core::ffi::c_int + 4 as ::core::ffi::c_int) as size_t,
-                    );
-                }
-                if (*eap).mkdir_p != 0 as ::core::ffi::c_int {
-                    len = len.wrapping_add(4 as size_t);
-                }
-                newval_len = len.wrapping_add(1 as size_t);
-                newval = xmalloc(newval_len) as *mut ::core::ffi::c_char;
-                xlen = 0 as size_t;
-                rc = 0 as ::core::ffi::c_int;
-                if (*eap).force_bin == FORCE_BIN {
-                    rc = snprintf(
-                        newval,
-                        newval_len,
-                        b" ++bin\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                } else if (*eap).force_bin == FORCE_NOBIN {
-                    rc = snprintf(
-                        newval,
-                        newval_len,
-                        b" ++nobin\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                } else {
-                    *newval = NUL;
-                }
-                if rc >= 0 as ::core::ffi::c_int {
-                    xlen = xlen.wrapping_add(rc as size_t);
-                    if (*eap).read_edit != 0 {
-                        rc = snprintf(
-                            newval.offset(xlen as isize),
-                            newval_len.wrapping_sub(xlen),
-                            b" ++edit\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
-                        if rc < 0 as ::core::ffi::c_int {
-                            break '_error;
-                        } else {
-                            xlen = xlen.wrapping_add(rc as size_t);
-                        }
-                    }
-                    if (*eap).force_ff != 0 as ::core::ffi::c_int {
-                        rc = snprintf(
-                            newval.offset(xlen as isize),
-                            newval_len.wrapping_sub(xlen),
-                            b" ++ff=%s\0".as_ptr() as *const ::core::ffi::c_char,
-                            if (*eap).force_ff == 'u' as ::core::ffi::c_int {
-                                b"unix\0".as_ptr() as *const ::core::ffi::c_char
-                            } else if (*eap).force_ff == 'd' as ::core::ffi::c_int {
-                                b"dos\0".as_ptr() as *const ::core::ffi::c_char
-                            } else {
-                                b"mac\0".as_ptr() as *const ::core::ffi::c_char
-                            },
-                        );
-                        if rc < 0 as ::core::ffi::c_int {
-                            break '_error;
-                        } else {
-                            xlen = xlen.wrapping_add(rc as size_t);
-                        }
-                    }
-                    if (*eap).force_enc != 0 as ::core::ffi::c_int {
-                        rc = snprintf(
-                            newval.offset(xlen as isize),
-                            newval_len.wrapping_sub(xlen),
-                            b" ++enc=%s\0".as_ptr() as *const ::core::ffi::c_char,
-                            (*eap).cmd.offset((*eap).force_enc as isize),
-                        );
-                        if rc < 0 as ::core::ffi::c_int {
-                            break '_error;
-                        } else {
-                            xlen = xlen.wrapping_add(rc as size_t);
-                        }
-                    }
-                    if (*eap).bad_char == BAD_KEEP {
-                        rc = snprintf(
-                            newval.offset(xlen as isize),
-                            newval_len.wrapping_sub(xlen),
-                            b" ++bad=keep\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
-                        if rc < 0 as ::core::ffi::c_int {
-                            break '_error;
-                        } else {
-                            xlen = xlen.wrapping_add(rc as size_t);
-                        }
-                    } else if (*eap).bad_char == BAD_DROP {
-                        rc = snprintf(
-                            newval.offset(xlen as isize),
-                            newval_len.wrapping_sub(xlen),
-                            b" ++bad=drop\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
-                        if rc < 0 as ::core::ffi::c_int {
-                            break '_error;
-                        } else {
-                            xlen = xlen.wrapping_add(rc as size_t);
-                        }
-                    } else if (*eap).bad_char != 0 as ::core::ffi::c_int {
-                        rc = snprintf(
-                            newval.offset(xlen as isize),
-                            newval_len.wrapping_sub(xlen),
-                            b" ++bad=%c\0".as_ptr() as *const ::core::ffi::c_char,
-                            (*eap).bad_char,
-                        );
-                        if rc < 0 as ::core::ffi::c_int {
-                            break '_error;
-                        } else {
-                            xlen = xlen.wrapping_add(rc as size_t);
-                        }
-                    }
-                    if (*eap).mkdir_p != 0 as ::core::ffi::c_int {
-                        rc = snprintf(
-                            newval.offset(xlen as isize),
-                            newval_len.wrapping_sub(xlen),
-                            b" ++p\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
-                        if rc < 0 as ::core::ffi::c_int {
-                            break '_error;
-                        } else {
-                            xlen = xlen.wrapping_add(rc as size_t);
-                        }
-                    }
-                    '_c2rust_label: {
-                        if xlen <= newval_len {
-                        } else {
-                            __assert_fail(
-                                b"xlen <= newval_len\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"src/nvim/eval/vars.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                2297 as ::core::ffi::c_uint,
-                                b"char *set_cmdarg(exarg_T *, char *)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
-                    (*tv).vval.v_string = newval;
-                    return oldval;
-                }
+        let tv = get_vim_var_tv(VV_THROWPOINT);
+        if oldval.is_null() {
+            return (*tv).vval.v_string;
+        }
+        (*tv).vval.v_string = oldval;
+        ptr::null_mut()
+    }
+}
+
+/// Set `v:cmdarg` to the `++opt` arguments of `eap`, answering the old value
+/// for the caller to restore.
+///
+/// A NULL `eap` is the restore half: `oldarg` goes back and the value that
+/// was there is freed.  The same happens if any of the pieces fails to
+/// format, which is why the answer is NULL on that path -- there is nothing
+/// left for the caller to put back.
+///
+/// The size is worked out in full first, so the writes below cannot
+/// truncate; `xlen` accumulates what each one *would* have written, which is
+/// what makes the closing bound check meaningful.
+///
+/// # Safety
+/// `eap` is NULL or a live command; `oldarg` is NULL or an owned string.
+pub unsafe fn set_cmdarg(eap: *mut exarg_T, oldarg: *mut c_char) -> *mut c_char {
+    unsafe {
+        let tv = get_vim_var_tv(VV_CMDARG);
+        let oldval = (*tv).vval.v_string;
+
+        'error: {
+            if eap.is_null() {
+                break 'error;
             }
+            let mut len: size_t = 0;
+            if (*eap).force_bin == FORCE_BIN {
+                len += 6; // " ++bin"
+            } else if (*eap).force_bin == FORCE_NOBIN {
+                len += 8; // " ++nobin"
+            }
+            if (*eap).read_edit != 0 {
+                len += 7; // " ++edit"
+            }
+            if (*eap).force_ff != 0 {
+                len += 10; // " ++ff=unix"
+            }
+            if (*eap).force_enc != 0 {
+                len += strlen((*eap).cmd.offset((*eap).force_enc as isize)) + 7;
+            }
+            if (*eap).bad_char != 0 {
+                len += 7 + 4; // " ++bad=" + "keep" or "drop"
+            }
+            if (*eap).mkdir_p != 0 {
+                len += 4; // " ++p"
+            }
+
+            let newval_len = len + 1;
+            let newval = xmalloc(newval_len) as *mut c_char;
+            let mut xlen: size_t = 0;
+
+            // Append one piece. A macro rather than a closure because
+            // `snprintf` is variadic; it bails to `'error` exactly where
+            // upstream's `goto error` does, and `mechdiff` cannot see
+            // through it, so this file's `snprintf` count reads as 1.
+            macro_rules! put {
+                ($($arg:tt)*) => {{
+                    let rc = snprintf(newval.add(xlen), newval_len - xlen, $($arg)*);
+                    if rc < 0 {
+                        break 'error;
+                    }
+                    xlen += rc as size_t;
+                }};
+            }
+
+            if (*eap).force_bin == FORCE_BIN {
+                put!(c" ++bin".as_ptr());
+            } else if (*eap).force_bin == FORCE_NOBIN {
+                put!(c" ++nobin".as_ptr());
+            } else {
+                *newval = NUL;
+            }
+            if (*eap).read_edit != 0 {
+                put!(c" ++edit".as_ptr());
+            }
+            if (*eap).force_ff != 0 {
+                let ff = match (*eap).force_ff as u8 {
+                    b'u' => c"unix",
+                    b'd' => c"dos",
+                    _ => c"mac",
+                };
+                put!(c" ++ff=%s".as_ptr(), ff.as_ptr());
+            }
+            if (*eap).force_enc != 0 {
+                put!(
+                    c" ++enc=%s".as_ptr(),
+                    (*eap).cmd.offset((*eap).force_enc as isize)
+                );
+            }
+            if (*eap).bad_char == BAD_KEEP {
+                put!(c" ++bad=keep".as_ptr());
+            } else if (*eap).bad_char == BAD_DROP {
+                put!(c" ++bad=drop".as_ptr());
+            } else if (*eap).bad_char != 0 {
+                put!(c" ++bad=%c".as_ptr(), (*eap).bad_char);
+            }
+            if (*eap).mkdir_p != 0 {
+                put!(c" ++p".as_ptr());
+            }
+            debug_assert!(xlen <= newval_len);
+
+            (*tv).vval.v_string = newval;
+            return oldval;
         }
-        xfree(oldval as *mut ::core::ffi::c_void);
+
+        xfree(oldval.cast());
         (*tv).vval.v_string = oldarg;
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        ptr::null_mut()
     }
 }
 
-pub unsafe extern "C" fn v_throwpoint(
-    mut oldval: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        let mut tv: *mut typval_T = get_vim_var_tv(VV_THROWPOINT);
-        if oldval.is_null() {
-            return (*tv).vval.v_string;
-        }
-        (*tv).vval.v_string = oldval;
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
-    }
-}
-
-pub unsafe extern "C" fn set_vcount(
-    mut count: int64_t,
-    mut count1: int64_t,
-    mut set_prevcount: bool,
-) {
+/// Set `v:count` and `v:count1`, and `v:prevcount` from the old `v:count`
+/// first when asked.
+///
+/// # Safety
+/// Nothing.
+pub unsafe fn set_vcount(count: int64_t, count1: int64_t, set_prevcount: bool) {
     unsafe {
         if set_prevcount {
             (*get_vim_var_tv(VV_PREVCOUNT)).vval.v_number = get_vim_var_nr(VV_COUNT);
@@ -445,8 +443,22 @@ pub unsafe extern "C" fn set_vcount(
     }
 }
 
-pub unsafe extern "C" fn before_set_vvar(
-    varname: *const ::core::ffi::c_char,
+/// The type enforcement a write to a `v:` variable passes.
+///
+/// A `v:` variable keeps the type the table declares for it, so a String or
+/// a Number one converts what it is given rather than replacing it -- and
+/// two of them, `v:searchforward` and `v:hlsearch`, have a side effect on
+/// the editor when they change.  Both of those cases do the store
+/// themselves, notify the watchers and answer **false**: there is nothing
+/// left for the caller to do.  Any other declared type accepts only a value
+/// of the same type; a mismatch sets `type_error` (E963) and also answers
+/// false.  True means "type checked out, store it the ordinary way".
+///
+/// # Safety
+/// `varname` is the name without the `v:`, `di` its item in the `v:` table,
+/// `tv` the value being stored and `type_error` writable.
+pub unsafe fn before_set_vvar(
+    varname: *const c_char,
     di: *mut dictitem_T,
     tv: *mut typval_T,
     copy: bool,
@@ -454,33 +466,26 @@ pub unsafe extern "C" fn before_set_vvar(
     type_error: *mut bool,
 ) -> bool {
     unsafe {
-        if (*di).di_tv.v_type as ::core::ffi::c_uint
-            == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut oldtv: typval_T = typval_T {
-                v_type: VAR_UNKNOWN,
-                v_lock: VAR_UNLOCKED,
-                vval: typval_vval_union { v_number: 0 },
-            };
+        if (*di).di_tv.v_type == VAR_STRING {
+            let mut oldtv = TV_INITIAL_VALUE;
             if watched {
                 tv_copy(&raw mut (*di).di_tv, &raw mut oldtv);
             }
-            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                &raw mut (*di).di_tv.vval.v_string as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr_);
-            *ptr_ = NULL;
-            let _ = *ptr_;
-            if copy as ::core::ffi::c_int != 0
-                || (*tv).v_type as ::core::ffi::c_uint
-                    != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                let val: *const ::core::ffi::c_char = tv_get_string(tv);
+            xfree((*di).di_tv.vval.v_string.cast());
+            (*di).di_tv.vval.v_string = ptr::null_mut();
+
+            if copy || (*tv).v_type != VAR_STRING {
+                let val = tv_get_string(tv);
+                // Careful: assigning to v:errmsg, `tv_get_string()` may
+                // itself raise an error, which sets the variable -- so only
+                // store when it is still empty.
                 if (*di).di_tv.vval.v_string.is_null() {
                     (*di).di_tv.vval.v_string = xstrdup(val);
                 }
             } else {
+                // Take the string over, rather than copy and free.
                 (*di).di_tv.vval.v_string = (*tv).vval.v_string;
-                (*tv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
+                (*tv).vval.v_string = ptr::null_mut();
             }
             if watched {
                 tv_dict_watcher_notify(
@@ -491,35 +496,18 @@ pub unsafe extern "C" fn before_set_vvar(
                 );
                 tv_clear(&raw mut oldtv);
             }
-            return false_0 != 0;
-        } else if (*di).di_tv.v_type as ::core::ffi::c_uint
-            == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut oldtv_0: typval_T = typval_T {
-                v_type: VAR_UNKNOWN,
-                v_lock: VAR_UNLOCKED,
-                vval: typval_vval_union { v_number: 0 },
-            };
+            return false;
+        } else if (*di).di_tv.v_type == VAR_NUMBER {
+            let mut oldtv = TV_INITIAL_VALUE;
             if watched {
-                tv_copy(&raw mut (*di).di_tv, &raw mut oldtv_0);
+                tv_copy(&raw mut (*di).di_tv, &raw mut oldtv);
             }
             (*di).di_tv.vval.v_number = tv_get_number(tv);
-            if strcmp(
-                varname,
-                b"searchforward\0".as_ptr() as *const ::core::ffi::c_char,
-            ) == 0 as ::core::ffi::c_int
-            {
-                set_search_direction(if (*di).di_tv.vval.v_number != 0 {
-                    '/' as ::core::ffi::c_int
-                } else {
-                    '?' as ::core::ffi::c_int
-                });
-            } else if strcmp(
-                varname,
-                b"hlsearch\0".as_ptr() as *const ::core::ffi::c_char,
-            ) == 0 as ::core::ffi::c_int
-            {
-                no_hlsearch.set((*di).di_tv.vval.v_number == 0);
+            let n = (*di).di_tv.vval.v_number;
+            if strcmp(varname, c"searchforward".as_ptr()) == 0 {
+                set_search_direction(if n != 0 { b'/' as c_int } else { b'?' as c_int });
+            } else if strcmp(varname, c"hlsearch".as_ptr()) == 0 {
+                no_hlsearch.set(n == 0);
                 redraw_all_later(UPD_SOME_VALID);
             }
             if watched {
@@ -527,50 +515,34 @@ pub unsafe extern "C" fn before_set_vvar(
                     vimvardict.ptr(),
                     varname,
                     &raw mut (*di).di_tv,
-                    &raw mut oldtv_0,
+                    &raw mut oldtv,
                 );
-                tv_clear(&raw mut oldtv_0);
+                tv_clear(&raw mut oldtv);
             }
-            return false_0 != 0;
-        } else if (*di).di_tv.v_type as ::core::ffi::c_uint != (*tv).v_type as ::core::ffi::c_uint {
-            *type_error = true_0 != 0;
-            return false_0 != 0;
+            return false;
+        } else if (*di).di_tv.v_type != (*tv).v_type {
+            *type_error = true;
+            return false;
         }
-        return true_0 != 0;
+        true
     }
 }
 
-pub unsafe extern "C" fn reset_v_option_vars() {
+/// Blank the six `v:option_*` variables the `OptionSet` autocommand reads.
+///
+/// # Safety
+/// Nothing.
+pub unsafe fn reset_v_option_vars() {
     unsafe {
-        set_vim_var_string(
+        for idx in [
             VV_OPTION_NEW,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            -1 as ptrdiff_t,
-        );
-        set_vim_var_string(
             VV_OPTION_OLD,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            -1 as ptrdiff_t,
-        );
-        set_vim_var_string(
             VV_OPTION_OLDLOCAL,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            -1 as ptrdiff_t,
-        );
-        set_vim_var_string(
             VV_OPTION_OLDGLOBAL,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            -1 as ptrdiff_t,
-        );
-        set_vim_var_string(
             VV_OPTION_COMMAND,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            -1 as ptrdiff_t,
-        );
-        set_vim_var_string(
             VV_OPTION_TYPE,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            -1 as ptrdiff_t,
-        );
+        ] {
+            set_vim_var_string(idx, ptr::null(), -1);
+        }
     }
 }
