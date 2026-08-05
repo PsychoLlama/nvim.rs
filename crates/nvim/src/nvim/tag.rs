@@ -60,7 +60,7 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::quickfix::set_errorlist;
-use crate::src::nvim::regexp::skip_regexp;
+use crate::src::nvim::regexp::{skip_regexp, vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::runtime::do_in_runtimepath;
 use crate::src::nvim::search::{do_search, ignorecase, ignorecase_opt};
 use crate::src::nvim::state::MODE_INSERT;
@@ -70,8 +70,8 @@ use crate::src::nvim::types::{
     AdditionalData, Callback, Callback_data as C2Rust_Unnamed_5, FILE, OptInt, Timestamp, buf_T,
     colnr_T, dict_T, dictitem_T, exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T,
     getf_retvalues, getf_values, int64_t, linenr_T, list_T, off_T, optmagic_T, optset_T, pos_T,
-    ptrdiff_t, regmatch_T, regprog_T, size_t, taggy_T, typval_T, typval_vval_union, varnumber_T,
-    vimconv_T, win_T,
+    ptrdiff_t, regmatch_T, size_t, taggy_T, typval_T, typval_vval_union, varnumber_T, vimconv_T,
+    win_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::window::{
@@ -100,14 +100,6 @@ mod stack;
 pub use self::stack::*;
 mod command;
 pub use self::command::*;
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-}
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
 pub const EXPAND_FILES: C2Rust_Unnamed_16 = 2;

@@ -25,7 +25,7 @@ use crate::src::nvim::memory::{arena_alloc, arena_memdupz, xcalloc, xfree, xreal
 use crate::src::nvim::os::libc::{
     __assert_fail, memcpy, memmove, memset, snprintf, strcmp, strlen, strncmp, strtol,
 };
-use crate::src::nvim::regexp::RE_MAGIC;
+use crate::src::nvim::regexp::{RE_MAGIC, vim_regcomp};
 use crate::src::nvim::register::valid_yank_reg;
 use crate::src::nvim::strings::kv_do_printf;
 use crate::src::nvim::types::{
@@ -48,12 +48,6 @@ use crate::src::nvim::usercmd::{
     uc_add_command, uc_nargs_upper_bound, uc_split_args_iter, uc_validate_name, ucmds,
 };
 use crate::src::nvim::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-}
 pub const ADDR_NONE: cmd_addr_T = 11;
 pub const ADDR_OTHER: cmd_addr_T = 10;
 pub const ADDR_LINES: cmd_addr_T = 0;

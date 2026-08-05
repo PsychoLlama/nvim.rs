@@ -69,7 +69,7 @@ use crate::src::nvim::profile::{
     profile_self, profile_start, profile_sub_wait, profile_zero, script_prof_restore,
     script_prof_save,
 };
-use crate::src::nvim::regexp::{RE_MAGIC, skip_regexp};
+use crate::src::nvim::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::runtime::{
     autoload_name, estack_pop, estack_push_ufunc, exestack, get_sourced_lnum, script_autoload,
     script_items,
@@ -88,14 +88,6 @@ use crate::src::nvim::types::{
     sctx_T, size_t, typval_T, typval_vval_union, ufunc_T, uint8_t, varnumber_T,
 };
 use crate::src::nvim::ui::ui_has;
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISdigit: C2Rust_Unnamed = 2048;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;

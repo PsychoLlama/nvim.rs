@@ -15,8 +15,8 @@ use crate::src::nvim::spell::{did_set_spelltab, spell_enc, spelltab};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
     CMD_spellrare, CMD_spellundo, CMD_spellwrong, OptInt, OptValType, SpellAddType, XDGVarType,
-    buf_T, colnr_T, etype_T, exarg_T, file_comparison, fromto_T, garray_T, hashitem_T, hashtab_T,
-    regprog_T, size_t, spelltab_T, time_t, uint8_t, vimconv_T,
+    buf_T, etype_T, exarg_T, file_comparison, fromto_T, garray_T, hashitem_T, hashtab_T, regprog_T,
+    size_t, spelltab_T, time_t, uint8_t, vimconv_T,
 };
 use crate::src::nvim::ui::ui_flush;
 mod add;
@@ -31,6 +31,7 @@ mod tables;
 mod wordfile;
 mod wordtree;
 mod write;
+use crate::src::nvim::regexp::{vim_regcomp, vim_regexec_prog, vim_regfree};
 pub use add::spell_add_word;
 use aff::spell_read_aff;
 use dic::spell_read_dic;
@@ -44,19 +45,6 @@ use wordtree::{
     wordtree_compress,
 };
 use write::write_vim_spell;
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec_prog(
-        prog: *mut *mut regprog_T,
-        ignore_case: bool,
-        line: *const ::core::ffi::c_char,
-        col: colnr_T,
-    ) -> bool;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISdigit: C2Rust_Unnamed = 2048;
 pub const kOptValTypeString: OptValType = 2;

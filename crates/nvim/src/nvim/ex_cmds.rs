@@ -124,7 +124,8 @@ use crate::src::nvim::plines::{getvcol, plines_m_win_fill};
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM, equalpos};
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit, profile_zero};
 use crate::src::nvim::regexp::{
-    RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST, vim_regexec_multi,
+    RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST, vim_regcomp, vim_regexec, vim_regexec_multi,
+    vim_regfree,
 };
 use crate::src::nvim::regexp::{
     regtilde, skip_regexp, skip_regexp_err, skip_regexp_ex, vim_regsub_multi,
@@ -162,12 +163,6 @@ use crate::src::nvim::window::{
 };
 unsafe extern "C" {
     fn re_multiline(prog: *const regprog_T) -> ::core::ffi::c_int;
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalpha: C2Rust_Unnamed = 1024;

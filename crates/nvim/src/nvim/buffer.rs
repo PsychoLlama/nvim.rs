@@ -101,7 +101,7 @@ use crate::src::nvim::path::{FullName_save, fix_fname, path_fnamecmp, path_tail}
 use crate::src::nvim::plines::win_get_fill;
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::quickfix::qf_stack_get_bufnr;
-use crate::src::nvim::regexp::RE_MAGIC;
+use crate::src::nvim::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::runtime::{estack_pop, estack_push};
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::spell::parse_spelllang;
@@ -137,14 +137,6 @@ use crate::src::nvim::window::{
     win_valid_any_tab, window_layout_lock, window_layout_unlock,
 };
 use crate::src::nvim::winfloat::win_set_minimal_style;
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISdigit: C2Rust_Unnamed = 2048;
 pub const kExtmarkMove: UndoObjectType = 1;

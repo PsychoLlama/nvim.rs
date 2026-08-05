@@ -45,10 +45,10 @@ use crate::src::nvim::os::fs::{
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::{qsort, strcasecmp, strchr, strcmp, strcpy, strlen, strncmp};
 use crate::src::nvim::os::shell::{get_cmd_output, os_expand_wildcards};
+use crate::src::nvim::regexp::{vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
-    Directory, FileComparison, FileID, FileInfo, colnr_T, file_comparison, garray_T, regmatch_T,
-    regprog_T, size_t,
+    Directory, FileComparison, FileID, FileInfo, file_comparison, garray_T, regmatch_T, size_t,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -62,12 +62,6 @@ mod glob;
 pub use self::glob::*;
 mod expand;
 pub use self::expand::*;
-
-unsafe extern "C" {
-    fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const c_char, col: colnr_T) -> bool;
-}
 
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const WILD_ICASE: C2Rust_Unnamed_18 = 256;

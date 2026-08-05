@@ -46,7 +46,7 @@ use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{gettext, strlen, strncasecmp};
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit};
 use crate::src::nvim::regexp::vim_regexec_multi;
-use crate::src::nvim::regexp::{RE_MAGIC, skip_regexp};
+use crate::src::nvim::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regfree};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
     EvalFuncData, VAR_LIST, VAR_NUMBER, colnr_T, dict_T, dictitem_T, exarg_T, int64_t, linenr_T,
@@ -61,8 +61,6 @@ pub use self::vimscript::*;
 
 unsafe extern "C" {
     fn re_multiline(prog: *const regprog_T) -> c_int;
-    fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
 }
 
 pub const NUL: c_int = '\0' as c_int;

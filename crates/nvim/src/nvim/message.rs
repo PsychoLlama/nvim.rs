@@ -84,6 +84,7 @@ use crate::src::nvim::os::libc::{
     strcmp, strlen, strnlen,
 };
 use crate::src::nvim::os::time::os_delay;
+use crate::src::nvim::regexp::vim_regexec;
 use crate::src::nvim::register::write_reg_contents;
 use crate::src::nvim::runtime::{estack_sfile, exestack};
 use crate::src::nvim::state::{
@@ -96,7 +97,7 @@ use crate::src::nvim::types::{
     MessageData, Object, OptInt, String_0, VV_ERRMSG, VV_SCROLLSTART, VV_STATUSMSG, VV_WARNINGMSG,
     colnr_T, estack_T, estack_arg_T, exarg_T, flush_buffers_T, garray_T, int64_t,
     kObjectTypeInteger, kObjectTypeNil, object, object_data as C2Rust_Unnamed_11, ptrdiff_t,
-    regmatch_T, sattr_T, schar_T, size_t, ssize_t, typval_T, typval_vval_union, uint64_t,
+    sattr_T, schar_T, size_t, ssize_t, typval_T, typval_vval_union, uint64_t,
 };
 use crate::src::nvim::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
@@ -132,9 +133,6 @@ mod progress;
 pub use self::progress::*;
 mod errors;
 pub use self::errors::*;
-unsafe extern "C" {
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-}
 /// The compositor layer messages float on.
 pub const kZIndexMessages: c_uint = 200;
 /// One entry of the message history. See [`self::history`].

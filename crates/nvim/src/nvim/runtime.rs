@@ -79,7 +79,7 @@ use crate::src::nvim::profile::{
     profile_start, profile_sub_wait, profile_zero, script_line_end, script_line_start, time_msg,
     time_pop, time_push,
 };
-use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING};
+use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, Arena, Array, Dict,
@@ -95,14 +95,6 @@ use crate::src::nvim::types::{
     varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::usercmd::add_win_cmd_modifiers;
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-}
 pub const kMHExisting: MHPutStatus = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
 pub const EXPAND_RUNTIME: C2Rust_Unnamed_13 = 51;

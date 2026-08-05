@@ -27,7 +27,9 @@ use crate::src::nvim::option::p_vfile;
 use crate::src::nvim::os::libc::{
     __assert_fail, gettext, snprintf, strcat, strcpy, strlen, strncmp,
 };
-use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING, skip_regexp_err};
+use crate::src::nvim::regexp::{
+    RE_MAGIC, RE_STRING, skip_regexp_err, vim_regcomp, vim_regexec_nl, vim_regfree,
+};
 use crate::src::nvim::runtime::{do_finish, estack_sfile, exestack, stacktrace_create};
 use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 use crate::src::nvim::types::{
@@ -36,15 +38,6 @@ use crate::src::nvim::types::{
     evalarg_T, exarg_T, except_T, except_type_T, exception_state_T, int64_t, linenr_T, list_T,
     msglist_T, ptrdiff_t, regmatch_T, regprog_T, size_t, typval_T, typval_vval_union,
 };
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T)
-    -> bool;
-}
 pub type C2Rust_Unnamed_1 = ::core::ffi::c_uint;
 pub const CSTACK_LEN: C2Rust_Unnamed_1 = 50;
 pub type C2Rust_Unnamed_3 = ::core::ffi::c_uint;

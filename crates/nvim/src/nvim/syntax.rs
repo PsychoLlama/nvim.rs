@@ -68,7 +68,10 @@ use crate::src::nvim::profile::{
     profile_add, profile_cmp, profile_divide, profile_end, profile_msg, profile_start, profile_zero,
 };
 use crate::src::nvim::regexp::vim_regexec_multi;
-use crate::src::nvim::regexp::{ref_extmatch, skip_regexp, unref_extmatch, vim_regcomp_had_eol};
+use crate::src::nvim::regexp::{
+    ref_extmatch, skip_regexp, unref_extmatch, vim_regcomp, vim_regcomp_had_eol, vim_regexec,
+    vim_regfree,
+};
 use crate::src::nvim::runtime::{do_source, source_runtime};
 use crate::src::nvim::strings::{
     vim_snprintf, vim_strchr, vim_strnsave_up, vim_strsave_up, xstrnsave,
@@ -114,14 +117,6 @@ pub use self::query::*;
 mod syntime;
 pub use self::syntime::*;
 
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-}
 /// How many `\(..\)` submatches a pattern can have.
 pub const NSUBEXP: ::core::ffi::c_uint = 10;
 /// Size of `expand_T::xp_buf`, the scratch buffer a completion callback may

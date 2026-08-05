@@ -17,14 +17,6 @@ use crate::src::nvim::types::*;
 
 // `regexp.rs` keeps its own copy of `regprog_T`, so these stay declarations
 // rather than imports. `breakindent.rs` reaches them through `use super::*`.
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-}
 use crate::src::nvim::undo::u_savesub;
 
 pub mod breakindent;
@@ -34,7 +26,7 @@ pub mod tabstop;
 
 // Split out for size. The names below are what the rest of the tree calls,
 // and it calls them as `indent::*`.
-use crate::src::nvim::regexp::RE_MAGIC;
+use crate::src::nvim::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::state::MODE_INSERT;
 pub use breakindent::{briopt_check, get_breakindent_win};
 pub use edit::{

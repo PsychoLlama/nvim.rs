@@ -22,10 +22,9 @@
 
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::types::{
-    AlignTextPos, CharsOption, OptValType, WinSplit, WinStyle, colnr_T, fcs_chars_T, lcs_chars_T,
-    regmatch_T, schar_T,
+    AlignTextPos, CharsOption, OptValType, WinSplit, WinStyle, fcs_chars_T, lcs_chars_T, schar_T,
 };
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 
 mod check;
 mod frame;
@@ -44,10 +43,8 @@ mod complete;
 pub use self::complete::*;
 mod statusline;
 pub use self::statusline::*;
+use crate::src::nvim::regexp::vim_regexec;
 use crate::src::nvim::terminal::terminal_notify_theme;
-unsafe extern "C" {
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const c_char, col: colnr_T) -> bool;
-}
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;

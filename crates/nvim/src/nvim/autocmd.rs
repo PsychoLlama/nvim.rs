@@ -60,7 +60,7 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::time::os_now;
 use crate::src::nvim::path::{FullName_save, path_fnamecmp, path_tail};
 use crate::src::nvim::profile::{prof_child_enter, prof_child_exit};
-use crate::src::nvim::regexp::RE_MAGIC;
+use crate::src::nvim::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::src::nvim::runtime::{estack_pop, estack_push, exestack};
 use crate::src::nvim::search::{restore_search_patterns, save_search_patterns};
 use crate::src::nvim::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
@@ -87,13 +87,6 @@ use crate::src::nvim::window::{
     win_init_empty, win_remove,
 };
 use crate::src::nvim::winfloat::win_config_float;
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-}
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_int;
 pub const EXPAND_EVENTS: C2Rust_Unnamed_28 = 10;
 pub const EXPAND_FILES: C2Rust_Unnamed_28 = 2;

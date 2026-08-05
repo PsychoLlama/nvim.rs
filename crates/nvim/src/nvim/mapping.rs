@@ -62,6 +62,7 @@ use crate::src::nvim::os::libc::{
     abort, fprintf, fputc, fputs, gettext, putc, snprintf, strcasecmp, strchr, strcmp, strlen,
     strncmp, strpbrk, strstr,
 };
+use crate::src::nvim::regexp::vim_regexec;
 use crate::src::nvim::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_OP_PENDING, MODE_SELECT,
     MODE_TERMINAL, MODE_VISUAL,
@@ -69,10 +70,10 @@ use crate::src::nvim::state::{
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
     Arena, Array, ArrayBuilder, Buffer, Dict, Error, EvalFuncData, FILE, Integer, KeyDict_keymap,
-    LuaRef, LuaRetMode, Object, RemapValues, String_0, buf_T, cmdidx_T, colnr_T, dict_T, exarg_T,
-    expand_T, fuzmatch_str_T, garray_T, kObjectTypeLuaRef, kObjectTypeString, key_extra,
-    key_value_pair, linenr_T, mapblock_T, object_data as C2Rust_Unnamed, optset_T, ptrdiff_t,
-    regmatch_T, scid_T, size_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
+    LuaRef, LuaRetMode, Object, RemapValues, String_0, buf_T, cmdidx_T, dict_T, exarg_T, expand_T,
+    fuzmatch_str_T, garray_T, kObjectTypeLuaRef, kObjectTypeString, key_extra, key_value_pair,
+    linenr_T, mapblock_T, object_data as C2Rust_Unnamed, optset_T, ptrdiff_t, regmatch_T, scid_T,
+    size_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -94,9 +95,6 @@ mod abbrev;
 pub use self::abbrev::*;
 mod langmap;
 pub use self::langmap::*;
-unsafe extern "C" {
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-}
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const MAXMAPLEN: C2Rust_Unnamed_13 = 50;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_int;

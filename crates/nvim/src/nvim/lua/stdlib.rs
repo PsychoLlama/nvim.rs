@@ -36,6 +36,7 @@ use crate::src::nvim::mbyte::{
 use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{strequal, xfree};
 use crate::src::nvim::os::libc::{__assert_fail, memchr, memset, strcasecmp};
+use crate::src::nvim::regexp::{vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::runtime::script_autoload;
 use crate::src::nvim::types::{
     Buffer, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS,
@@ -47,14 +48,6 @@ use crate::src::nvim::types::{
     typval_vval_union, uint32_t, vimconv_T, win_T, win_execute_T,
 };
 use crate::src::nvim::window::win_find_tabpage;
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-}
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const CONV_NONE: C2Rust_Unnamed_13 = 0;

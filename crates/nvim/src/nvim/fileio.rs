@@ -78,6 +78,7 @@ use crate::src::nvim::path::{
     path_shorten_fname, path_tail, path_with_url, vim_FullName,
 };
 use crate::src::nvim::pos::MAXLNUM;
+use crate::src::nvim::regexp::{vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::sha256::Sha256;
 use crate::src::nvim::shada::check_marks_read;
 use crate::src::nvim::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
@@ -124,12 +125,6 @@ unsafe extern "C" {
     fn closedir(__dirp: *mut DIR) -> ::core::ffi::c_int;
     fn opendir(__name: *const ::core::ffi::c_char) -> *mut DIR;
     fn dirfd(__dirp: *mut DIR) -> ::core::ffi::c_int;
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
 pub type DIR = __dirstream;
 pub type C2Rust_Unnamed_5 = ::core::ffi::c_int;

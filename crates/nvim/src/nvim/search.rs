@@ -77,16 +77,16 @@ use crate::src::nvim::path::path_full_compare;
 use crate::src::nvim::plines::getvcol;
 use crate::src::nvim::pos::{clearpos, equalpos, lt, ltoreq};
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit};
-use crate::src::nvim::regexp::skip_regexp_ex;
 use crate::src::nvim::regexp::vim_regexec_multi;
+use crate::src::nvim::regexp::{skip_regexp_ex, vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::state::MODE_SHOWMATCH;
 use crate::src::nvim::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsave};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     Direction, EvalFuncData, FILE, MotionType, OptInt, SearchOffset, SearchPattern, TriState,
     buf_T, cmdarg_T, colnr_T, dict_T, file_comparison, int64_t, linenr_T, list_T, lpos_T, magic_T,
-    oparg_T, pos_T, proftime_T, ptrdiff_t, regmatch_T, regmmatch_T, regprog_T, searchit_arg_T,
-    size_t, typval_T, varnumber_T, win_T,
+    oparg_T, pos_T, proftime_T, ptrdiff_t, regmatch_T, regmmatch_T, searchit_arg_T, size_t,
+    typval_T, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep,
@@ -117,14 +117,6 @@ mod matchpair;
 pub use self::matchpair::*;
 mod stat;
 pub use self::stat::*;
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-}
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const BACKWARD_FILE: Direction = -3;

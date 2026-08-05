@@ -91,7 +91,10 @@ use crate::src::nvim::popupmenu::{
 };
 use crate::src::nvim::pos::ltoreq;
 use crate::src::nvim::profile::{get_profile_name, set_context_in_profile_cmd};
-use crate::src::nvim::regexp::{RE_LAST, RE_MAGIC, RE_STRING, skip_regexp};
+use crate::src::nvim::regexp::{
+    RE_LAST, RE_MAGIC, RE_STRING, skip_regexp, vim_regcomp, vim_regexec, vim_regexec_nl,
+    vim_regfree,
+};
 use crate::src::nvim::runtime::{
     DIP_OPT, DIP_START, ExpandPackAddDir, ExpandRTDir, expand_runtime_cmd, script_items,
     set_context_in_runtime_cmd,
@@ -115,8 +118,8 @@ use crate::src::nvim::types::{
     Arena, Array, CmdlineInfo, CompleteListItemGetter, Direction, Error, EvalFuncData, LuaRetMode,
     Object, OptInt, buf_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T,
     fuzmatch_str_T, garray_T, hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, list_T,
-    listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, regprog_T, scriptitem_T, size_t, ssize_t,
-    typval_T, typval_vval_union, uint32_t, varnumber_T, xp_prefix_T,
+    listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, scriptitem_T, size_t, ssize_t, typval_T,
+    typval_vval_union, uint32_t, varnumber_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has, vim_beep};
 use crate::src::nvim::usercmd::{
@@ -152,16 +155,6 @@ mod eval;
 pub use self::eval::*;
 mod bufpat;
 pub(crate) use self::bufpat::*;
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-    fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T)
-    -> bool;
-}
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;

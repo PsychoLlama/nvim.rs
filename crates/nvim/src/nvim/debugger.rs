@@ -22,7 +22,7 @@ use crate::src::nvim::message::{emsg, msg, msg_starthere, semsg, smsg};
 use crate::src::nvim::os::env::{expand_env_save, home_replace};
 use crate::src::nvim::os::libc::{atoi, gettext, memmove, strcmp, strcpy, strlen, strncmp, strstr};
 use crate::src::nvim::path::fix_fname;
-use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING};
+use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_prog, vim_regfree};
 use crate::src::nvim::runtime::{estack_sfile, exestack};
 use crate::src::nvim::state::MODE_NORMAL;
 use crate::src::nvim::types::{
@@ -31,19 +31,6 @@ use crate::src::nvim::types::{
     exprtype_T, garray_T, int32_t, int64_t, key_extra, linenr_T, regprog_T, size_t, tasave_T,
     typebuf_T, typval_T, uint8_t, varnumber_T,
 };
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec_prog(
-        prog: *mut *mut regprog_T,
-        ignore_case: bool,
-        line: *const ::core::ffi::c_char,
-        col: colnr_T,
-    ) -> bool;
-}
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_13 = 0;
 pub const DOCMD_EXCRESET: C2Rust_Unnamed_17 = 16;

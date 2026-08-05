@@ -80,6 +80,7 @@ use crate::src::nvim::plines::{
 use crate::src::nvim::popupmenu::{pum_check_clear, pum_drawn, pum_invalidate, pum_redraw};
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::profile::profile_setlimit;
+use crate::src::nvim::regexp::vim_regfree;
 use crate::src::nvim::search::last_pat_prog;
 use crate::src::nvim::spell::spell_check_window;
 use crate::src::nvim::state::{
@@ -129,7 +130,6 @@ mod winlines;
 pub use self::winlines::*;
 unsafe extern "C" {
     fn re_multiline(prog: *const regprog_T) -> ::core::ffi::c_int;
-    fn vim_regfree(prog: *mut regprog_T);
 }
 /// `'shortmess'` flags this module tests.
 pub const SHM_RECORDING: ::core::ffi::c_int = b'q' as ::core::ffi::c_int;
