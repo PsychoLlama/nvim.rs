@@ -175,7 +175,7 @@
     "crates/nvim/src/nvim/eval/system.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/eval/timer.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/eval/typval.rs": {"unsafe": 19},
-    "crates/nvim/src/nvim/eval/typval/access.rs": {"unsafe": 25},
+    "crates/nvim/src/nvim/eval/typval/access.rs": {"unsafe": 26},
     "crates/nvim/src/nvim/eval/typval/blob.rs": {"unsafe": 16},
     "crates/nvim/src/nvim/eval/typval/check.rs": {"no_mangle": 3, "unsafe": 24},
     "crates/nvim/src/nvim/eval/typval/dict.rs": {"no_mangle": 20, "unsafe": 30},

@@ -130,6 +130,44 @@ pub unsafe fn tv_list_last(l: *const list_T) -> *mut listitem_T {
     unsafe { l.as_ref() }.map_or(::core::ptr::null_mut(), |l| l.lv_last)
 }
 
+/// A walk over a list's items.  See [`tv_list_iter`].
+pub(crate) struct ListIter {
+    li: *mut listitem_T,
+}
+
+impl Iterator for ListIter {
+    type Item = *mut listitem_T;
+
+    #[inline]
+    fn next(&mut self) -> Option<*mut listitem_T> {
+        let li = self.li;
+        if li.is_null() {
+            return None;
+        }
+        self.li = unsafe { (*li).li_next };
+        Some(li)
+    }
+}
+
+/// Walk `l`'s items: upstream's `TV_LIST_ITER_CONST`.
+///
+/// It is **not** `TV_LIST_ITER`.  That macro re-reads `li_next` *after* the
+/// body has run, so a body that frees or relinks the item it is standing on
+/// still advances correctly; this reads the link first.  The two agree only
+/// where the body leaves the walked list alone — which is every use in this
+/// family, but check before reaching for it.
+///
+/// Takes an `Option` rather than a pointer because the macro's NULL handling is
+/// half of what it does, and because that makes this one safe: `l.as_ref()` at
+/// the call site costs the caller nothing, its `unsafe` block being already
+/// open.
+#[inline]
+pub(crate) fn tv_list_iter(l: Option<&list_T>) -> ListIter {
+    ListIter {
+        li: l.map_or(::core::ptr::null_mut(), |l| l.lv_first),
+    }
+}
+
 /// Store `d` in `tv` as the return value, taking a reference to it.
 #[inline(always)]
 pub unsafe fn tv_dict_set_ret(tv: *mut typval_T, d: *mut dict_T) {
