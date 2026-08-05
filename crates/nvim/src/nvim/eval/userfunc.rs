@@ -1,6 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
 use crate::src::nvim::ascii::{ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul};
@@ -12,8 +12,8 @@ use crate::src::nvim::eval::funcs::{
     call_internal_func, call_internal_method, check_internal_func, find_internal_func,
 };
 use crate::src::nvim::eval::typval::{
-    GARRAY_EMPTY, TV_INITIAL_VALUE, tv_dict_hi2di, tv_dict_iter, tv_is_func, tv_list_iter,
-    tv_list_set_lock,
+    GARRAY_EMPTY, TV_INITIAL_VALUE, tv_dict_hi2di, tv_dict_item_key, tv_dict_iter, tv_is_func,
+    tv_list_iter, tv_list_set_lock,
 };
 use crate::src::nvim::eval::typval::{
     tv_clear, tv_copy, tv_dict_add, tv_dict_item_alloc, tv_dict_item_alloc_len,
@@ -67,8 +67,8 @@ use crate::src::nvim::message::{
 };
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, gettext, memcmp, memcpy, memmove, memset, snprintf, strcmp, strcpy,
-    strlen, strncmp, strstr,
+    abort, gettext, memcmp, memcpy, memmove, memset, snprintf, strcmp, strcpy, strlen, strncmp,
+    strstr,
 };
 use crate::src::nvim::path::path_fnamecmp;
 use crate::src::nvim::profile::{
@@ -85,14 +85,12 @@ use crate::src::nvim::search::{restore_search_patterns, save_search_patterns};
 use crate::src::nvim::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::src::nvim::types::ui::kUICmdline;
 use crate::src::nvim::types::{
-    CMD_defer, Callback, EvalFuncDef, LuaRef, OptInt, String_0, VAR_DEF_SCOPE, VAR_DICT, VAR_FIXED,
-    VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN,
-    VAR_UNLOCKED, VV_TESTING, buf_T, buffblock, buffblock_T, buffheader_T, colnr_T, cstack_T,
-    dict_T, dictitem_T, estack_T, evalarg_T, exarg_T, except_T, exception_state_T, expand_T,
-    funccal_entry_T, funccall_S_fc_fixvar as C2Rust_Unnamed_7, funccall_T, funcdict_T, funcexe_T,
-    garray_T, hashitem_T, hashtab_T, key_extra, linenr_T, list_T, listitem_T, lval_T, partial_T,
-    proftime_T, regmatch_T, save_redo_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_T,
-    uint8_t, varnumber_T,
+    CMD_defer, Callback, LuaRef, OptInt, String_0, VAR_DEF_SCOPE, VAR_DICT, VAR_FIXED, VAR_FUNC,
+    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN,
+    VAR_UNLOCKED, VV_TESTING, dict_T, dictitem_T, estack_T, evalarg_T, exarg_T, exception_state_T,
+    expand_T, funccal_entry_T, funccall_S_fc_fixvar as C2Rust_Unnamed_7, funccall_T, funcdict_T,
+    funcexe_T, garray_T, hashitem_T, hashtab_T, key_extra, linenr_T, listitem_T, lval_T, partial_T,
+    regmatch_T, save_redo_T, size_t, typval_T, ufunc_T, varnumber_T,
 };
 use crate::src::nvim::ui::ui_has;
 
@@ -145,7 +143,9 @@ pub const GLV_READ_ONLY: c_int = 16;
 pub const EVAL_EVALUATE: c_int = 1;
 
 /// Why a call could not be made; `user_func_error` turns one into a message.
+pub const FCERR_NOTMETHOD: c_int = 8;
 pub const FCERR_DELETED: c_int = 7;
+pub const FCERR_OTHER: c_int = 6;
 pub const FCERR_NONE: c_int = 5;
 pub const FCERR_DICT: c_int = 4;
 pub const FCERR_SCRIPT: c_int = 3;
@@ -171,15 +171,6 @@ pub const IOSIZE: c_int = 1024 + 1;
 pub const MSG_BUF_LEN: c_int = 480;
 pub const MSG_BUF_CLEN: c_int = MSG_BUF_LEN / 6;
 pub const PROF_YES: c_int = 1;
-
-// Transitional: the transpile's spellings of `true`, `false`, `NULL`,
-// `isdigit()`'s ctype bit and an empty `garray_T`.  Each child drops its uses
-// as it is rewritten; the last one to go deletes this block.
-pub const true_0: c_int = 1;
-pub const false_0: c_int = 0;
-pub const NULL: *mut c_void = ptr::null_mut();
-pub const _ISdigit: c_uint = 2048;
-pub const GA_EMPTY_INIT_VALUE: garray_T = GARRAY_EMPTY;
 
 /// The error texts this file owns, which upstream keeps as file statics.
 pub const E_FUNCEXTS: &CStr = c"E122: Function %s already exists, add ! to replace it";

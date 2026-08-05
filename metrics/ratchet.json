@@ -200,7 +200,7 @@
     "crates/nvim/src/nvim/eval/userfunc.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/eval/userfunc/args.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/eval/userfunc/body.rs": {"unsafe": 1},
-    "crates/nvim/src/nvim/eval/userfunc/call.rs": {"unsafe": 6},
+    "crates/nvim/src/nvim/eval/userfunc/call.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/eval/userfunc/define.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/eval/userfunc/dispatch.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/eval/userfunc/funccall.rs": {"unsafe": 40},
