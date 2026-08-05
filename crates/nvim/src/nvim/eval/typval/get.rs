@@ -11,298 +11,246 @@
 #[allow(unused_imports)]
 use super::*;
 
+/// `tv` as a number, raising an error and answering 0 for a value that has no
+/// numeric form.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_get_number(tv: *const typval_T) -> varnumber_T {
     unsafe {
-        let mut error: bool = false_0 != 0;
-        return tv_get_number_chk(tv, &raw mut error);
+        let mut error = false;
+        tv_get_number_chk(tv, &raw mut error)
     }
 }
 
+/// `tv` as a number, setting `*ret_error` for a value that has no numeric
+/// form.
+///
+/// With a NULL `ret_error` the failure answer is -1 rather than 0, which is
+/// what makes `tv_get_bool` usable as a tri-state.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_get_number_chk(
     tv: *const typval_T,
     ret_error: *mut bool,
 ) -> varnumber_T {
     unsafe {
-        match (*tv).v_type as ::core::ffi::c_uint {
-            3 | 9 | 4 | 5 | 10 | 6 => {
-                emsg(gettext((*num_errors.ptr())[(*tv).v_type as usize]));
-            }
-            1 => return (*tv).vval.v_number,
-            2 => {
-                let mut n: varnumber_T = 0 as varnumber_T;
+        match (*tv).v_type {
+            VAR_NUMBER => return (*tv).vval.v_number,
+            VAR_STRING => {
+                let mut n = 0;
                 if !(*tv).vval.v_string.is_null() {
                     vim_str2nr(
                         (*tv).vval.v_string,
-                        ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                        ::core::ptr::null_mut::<::core::ffi::c_int>(),
+                        ::core::ptr::null_mut(),
+                        ::core::ptr::null_mut(),
                         STR2NR_ALL as ::core::ffi::c_int,
                         &raw mut n,
-                        ::core::ptr::null_mut::<uvarnumber_T>(),
-                        0 as ::core::ffi::c_int,
-                        false_0 != 0,
-                        ::core::ptr::null_mut::<bool>(),
+                        ::core::ptr::null_mut(),
+                        0,
+                        false,
+                        ::core::ptr::null_mut(),
                     );
                 }
                 return n;
             }
-            7 => {
-                return (if (*tv).vval.v_bool as ::core::ffi::c_uint
-                    == kBoolVarTrue as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    1 as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                }) as varnumber_T;
+            VAR_BOOL => return varnumber_T::from((*tv).vval.v_bool == kBoolVarTrue),
+            VAR_SPECIAL => return 0,
+            VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_FLOAT => {
+                emsg(gettext((*num_errors.ptr())[(*tv).v_type as usize]));
             }
-            8 => return 0 as varnumber_T,
-            0 => {
+            VAR_UNKNOWN => {
                 semsg(
                     gettext(&raw const e_intern2 as *const ::core::ffi::c_char),
-                    b"tv_get_number(UNKNOWN)\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"tv_get_number(UNKNOWN)".as_ptr(),
                 );
             }
             _ => {}
         }
-        if !ret_error.is_null() {
-            *ret_error = true_0 != 0;
-        }
-        return (if ret_error.is_null() {
-            -1 as ::core::ffi::c_int
+
+        if let Some(ret_error) = ret_error.as_mut() {
+            *ret_error = true;
+            0
         } else {
-            0 as ::core::ffi::c_int
-        }) as varnumber_T;
+            -1
+        }
     }
 }
 
+/// `tv` as a boolean number: -1 when it has no numeric form.
 pub unsafe extern "C" fn tv_get_bool(tv: *const typval_T) -> varnumber_T {
-    unsafe {
-        return tv_get_number_chk(tv, ::core::ptr::null_mut::<bool>());
-    }
+    unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) }
 }
 
+/// `tv` as a boolean number, setting `*ret_error` when it has no numeric form.
 pub unsafe extern "C" fn tv_get_bool_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T {
-    unsafe {
-        return tv_get_number_chk(tv, ret_error);
-    }
+    unsafe { tv_get_number_chk(tv, ret_error) }
 }
 
+/// `tv` as a line number, resolving a non-Number such as `"$"` or `"."`
+/// through `var2fpos`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_get_lnum(tv: *const typval_T) -> linenr_T {
     unsafe {
-        let did_emsg_before: ::core::ffi::c_int = did_emsg.get();
-        let mut lnum: linenr_T = tv_get_number_chk(tv, ::core::ptr::null_mut::<bool>()) as linenr_T;
-        if lnum <= 0 as linenr_T
-            && did_emsg_before == did_emsg.get()
-            && (*tv).v_type as ::core::ffi::c_uint
-                != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut fnum: ::core::ffi::c_int = 0;
-            let fp: *mut pos_T =
-                var2fpos(tv, true_0 != 0, &raw mut fnum, false_0 != 0, curwin.get());
-            if !fp.is_null() {
-                lnum = (*fp).lnum;
+        let did_emsg_before = did_emsg.get();
+        let mut lnum = tv_get_number_chk(tv, ::core::ptr::null_mut()) as linenr_T;
+        if lnum <= 0 && did_emsg_before == did_emsg.get() && (*tv).v_type != VAR_NUMBER {
+            // No valid number, try using same function as line() does.
+            let mut fnum = 0;
+            let fp = var2fpos(tv, true, &raw mut fnum, false, curwin.get());
+            if let Some(fp) = fp.as_ref() {
+                lnum = fp.lnum;
             }
         }
-        return lnum;
+        lnum
     }
 }
 
+/// [`tv_get_lnum`] against a given buffer: `"$"` is that buffer's last line.
 pub unsafe extern "C" fn tv_get_lnum_buf(tv: *const typval_T, buf: *const buf_T) -> linenr_T {
     unsafe {
-        if (*tv).v_type as ::core::ffi::c_uint
-            == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
+        if (*tv).v_type == VAR_STRING
             && !(*tv).vval.v_string.is_null()
-            && *(*tv).vval.v_string.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '$' as ::core::ffi::c_int
-            && *(*tv).vval.v_string.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == NUL
+            && *(*tv).vval.v_string as ::core::ffi::c_int == '$' as ::core::ffi::c_int
+            && *(*tv).vval.v_string.add(1) as ::core::ffi::c_int == NUL
             && !buf.is_null()
         {
             return (*buf).b_ml.ml_line_count;
         }
-        return tv_get_number_chk(tv, ::core::ptr::null_mut::<bool>()) as linenr_T;
+        tv_get_number_chk(tv, ::core::ptr::null_mut()) as linenr_T
     }
 }
 
+/// `tv` as a float, raising an error and answering 0.0 for a value that has no
+/// float form.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_get_float(tv: *const typval_T) -> float_T {
     unsafe {
-        match (*tv).v_type as ::core::ffi::c_uint {
-            1 => return (*tv).vval.v_number as float_T,
-            6 => return (*tv).vval.v_float,
-            9 | 3 => {
-                emsg(gettext(
-                    b"E891: Using a Funcref as a Float\0".as_ptr() as *const ::core::ffi::c_char
-                ));
-            }
-            2 => {
-                emsg(gettext(
-                    b"E892: Using a String as a Float\0".as_ptr() as *const ::core::ffi::c_char
-                ));
-            }
-            4 => {
-                emsg(gettext(
-                    b"E893: Using a List as a Float\0".as_ptr() as *const ::core::ffi::c_char
-                ));
-            }
-            5 => {
-                emsg(gettext(
-                    b"E894: Using a Dictionary as a Float\0".as_ptr() as *const ::core::ffi::c_char
-                ));
-            }
-            7 => {
-                emsg(gettext(
-                    b"E362: Using a boolean value as a Float\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ));
-            }
-            8 => {
-                emsg(gettext(
-                    b"E907: Using a special value as a Float\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ));
-            }
-            10 => {
-                emsg(gettext(
-                    b"E975: Using a Blob as a Float\0".as_ptr() as *const ::core::ffi::c_char
-                ));
-            }
-            0 => {
+        let message = match (*tv).v_type {
+            VAR_NUMBER => return (*tv).vval.v_number as float_T,
+            VAR_FLOAT => return (*tv).vval.v_float,
+            VAR_PARTIAL | VAR_FUNC => c"E891: Using a Funcref as a Float",
+            VAR_STRING => c"E892: Using a String as a Float",
+            VAR_LIST => c"E893: Using a List as a Float",
+            VAR_DICT => c"E894: Using a Dictionary as a Float",
+            VAR_BOOL => c"E362: Using a boolean value as a Float",
+            VAR_SPECIAL => c"E907: Using a special value as a Float",
+            VAR_BLOB => c"E975: Using a Blob as a Float",
+            VAR_UNKNOWN => {
                 semsg(
                     gettext(&raw const e_intern2 as *const ::core::ffi::c_char),
-                    b"tv_get_float(UNKNOWN)\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"tv_get_float(UNKNOWN)".as_ptr(),
                 );
+                return 0.0;
             }
-            _ => {}
-        }
-        return 0 as ::core::ffi::c_int as float_T;
+            _ => return 0.0,
+        };
+        emsg(gettext(message.as_ptr()));
+        0.0
     }
 }
 
+/// `tv` as a string, formatting a number into `buf` (`NUMBUFLEN` bytes).
+///
+/// Answers NULL with an error raised for a value that has no string form.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_get_string_buf_chk(
     tv: *const typval_T,
     buf: *mut ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
     unsafe {
-        match (*tv).v_type as ::core::ffi::c_uint {
-            1 => {
+        match (*tv).v_type {
+            VAR_NUMBER => {
                 snprintf(
                     buf,
-                    NUMBUFLEN as ::core::ffi::c_int as size_t,
-                    b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
+                    NUMBUFLEN as size_t,
+                    c"%ld".as_ptr(),
                     (*tv).vval.v_number,
                 );
-                return buf;
+                buf
             }
-            6 => {
-                vim_snprintf(
-                    buf,
-                    NUMBUFLEN as ::core::ffi::c_int as size_t,
-                    b"%g\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*tv).vval.v_float,
-                );
-                return buf;
+            VAR_FLOAT => {
+                vim_snprintf(buf, NUMBUFLEN as size_t, c"%g".as_ptr(), (*tv).vval.v_float);
+                buf
             }
-            2 => {
-                if !(*tv).vval.v_string.is_null() {
-                    return (*tv).vval.v_string;
+            VAR_STRING => {
+                if (*tv).vval.v_string.is_null() {
+                    c"".as_ptr()
+                } else {
+                    (*tv).vval.v_string
                 }
-                return b"\0".as_ptr() as *const ::core::ffi::c_char;
             }
-            7 => {
+            VAR_BOOL => {
                 strcpy(
                     buf,
                     *(&raw const encode_bool_var_names as *const *const ::core::ffi::c_char)
-                        .offset((*tv).vval.v_bool as isize)
-                        as *mut ::core::ffi::c_char,
+                        .offset((*tv).vval.v_bool as isize),
                 );
-                return buf;
+                buf
             }
-            8 => {
+            VAR_SPECIAL => {
                 strcpy(
                     buf,
                     *(&raw const encode_special_var_names as *const *const ::core::ffi::c_char)
-                        .offset((*tv).vval.v_special as isize)
-                        as *mut ::core::ffi::c_char,
+                        .offset((*tv).vval.v_special as isize),
                 );
-                return buf;
+                buf
             }
-            9 | 3 | 4 | 5 | 10 | 0 => {
+            VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
                 emsg(gettext((*str_errors.ptr())[(*tv).v_type as usize]));
-                return ::core::ptr::null::<::core::ffi::c_char>();
+                ::core::ptr::null()
             }
-            _ => {}
+            _ => abort(),
         }
-        abort();
     }
 }
 
+/// [`tv_get_string_buf_chk`] using a shared scratch buffer.
+///
+/// The answer may point into that buffer and only lasts until the next call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char {
     unsafe {
         static mybuf: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new([0; 65]);
-        return tv_get_string_buf_chk(tv, mybuf.ptr() as *mut ::core::ffi::c_char);
+        tv_get_string_buf_chk(tv, mybuf.ptr() as *mut ::core::ffi::c_char)
     }
 }
 
+/// [`tv_get_string_buf`] using a shared scratch buffer of its own — a
+/// different one from [`tv_get_string_chk`]'s.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char {
     unsafe {
         static mybuf: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new([0; 65]);
-        return tv_get_string_buf(tv as *mut typval_T, mybuf.ptr() as *mut ::core::ffi::c_char);
+        tv_get_string_buf(tv, mybuf.ptr() as *mut ::core::ffi::c_char)
     }
 }
 
+/// [`tv_get_string_buf_chk`] answering the empty string rather than NULL.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_get_string_buf(
     tv: *const typval_T,
     buf: *mut ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
     unsafe {
-        let res: *const ::core::ffi::c_char = tv_get_string_buf_chk(tv, buf);
-        return if !res.is_null() {
-            res
-        } else {
-            b"\0".as_ptr() as *const ::core::ffi::c_char
-        };
+        let res = tv_get_string_buf_chk(tv, buf);
+        if res.is_null() { c"".as_ptr() } else { res }
     }
 }
 
+/// Truthiness of `tv`, as `if` and `while` ask for it.
 pub unsafe extern "C" fn tv2bool(tv: *const typval_T) -> bool {
     unsafe {
-        match (*tv).v_type as ::core::ffi::c_uint {
-            1 => return (*tv).vval.v_number != 0 as varnumber_T,
-            6 => return (*tv).vval.v_float != 0.0f64,
-            9 => return !(*tv).vval.v_partial.is_null(),
-            3 | 2 => {
-                return !(*tv).vval.v_string.is_null()
-                    && *(*tv).vval.v_string as ::core::ffi::c_int != NUL;
+        match (*tv).v_type {
+            VAR_NUMBER => (*tv).vval.v_number != 0,
+            VAR_FLOAT => (*tv).vval.v_float != 0.0,
+            VAR_PARTIAL => !(*tv).vval.v_partial.is_null(),
+            VAR_FUNC | VAR_STRING => {
+                !(*tv).vval.v_string.is_null() && *(*tv).vval.v_string as ::core::ffi::c_int != NUL
             }
-            4 => {
-                return !(*tv).vval.v_list.is_null()
-                    && (*(*tv).vval.v_list).lv_len > 0 as ::core::ffi::c_int;
-            }
-            5 => {
-                return !(*tv).vval.v_dict.is_null()
-                    && (*(*tv).vval.v_dict).dv_hashtab.ht_used > 0 as size_t;
-            }
-            7 => {
-                return (*tv).vval.v_bool as ::core::ffi::c_uint
-                    == kBoolVarTrue as ::core::ffi::c_int as ::core::ffi::c_uint;
-            }
-            8 => {
-                return (*tv).vval.v_special as ::core::ffi::c_uint
-                    != kSpecialVarNull as ::core::ffi::c_int as ::core::ffi::c_uint;
-            }
-            10 => {
-                return !(*tv).vval.v_blob.is_null()
-                    && (*(*tv).vval.v_blob).bv_ga.ga_len > 0 as ::core::ffi::c_int;
-            }
-            0 | _ => {}
+            VAR_LIST => !(*tv).vval.v_list.is_null() && (*(*tv).vval.v_list).lv_len > 0,
+            VAR_DICT => !(*tv).vval.v_dict.is_null() && (*(*tv).vval.v_dict).dv_hashtab.ht_used > 0,
+            VAR_BOOL => (*tv).vval.v_bool == kBoolVarTrue,
+            VAR_SPECIAL => (*tv).vval.v_special != kSpecialVarNull,
+            VAR_BLOB => !(*tv).vval.v_blob.is_null() && (*(*tv).vval.v_blob).bv_ga.ga_len > 0,
+            _ => false,
         }
-        return false_0 != 0;
     }
 }

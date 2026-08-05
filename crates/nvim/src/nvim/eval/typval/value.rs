@@ -12,121 +12,128 @@
 #[allow(unused_imports)]
 use super::*;
 
+/// Release whatever `tv` holds and leave `VAR_UNKNOWN` behind.
+///
+/// The work is done by the `nothing` sink, the seventh instantiation of
+/// `typval_encode.c.h`: it walks the value iteratively, so a container that
+/// refers to itself is deep-freed without recursing.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_clear(tv: *mut typval_T) {
     unsafe {
-        if tv.is_null()
-            || (*tv).v_type as ::core::ffi::c_uint
-                == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if tv.is_null() || (*tv).v_type == VAR_UNKNOWN {
             return;
         }
-        let evn_ret: ::core::ffi::c_int = encode_vim_to_nothing(
-            ::core::ptr::null::<::core::ffi::c_void>(),
-            tv,
-            b"tv_clear() argument\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        '_c2rust_label: {
-            if evn_ret == 1 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"evn_ret == OK\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    3663 as ::core::ffi::c_uint,
-                    b"void tv_clear(typval_T *const)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+
+        // WARNING: do not translate the string here, gettext is slow and this
+        // function is used *very* often. At the current state
+        // `encode_vim_to_nothing` does not error out and does not use the
+        // argument anywhere.
+        //
+        // If that changes and the argument starts being used, translate it
+        // where it is used.
+        let evn_ret =
+            encode_vim_to_nothing(::core::ptr::null(), tv, c"tv_clear() argument".as_ptr());
+        debug_assert!(evn_ret == OK);
     }
 }
 
-pub unsafe extern "C" fn tv_free(mut tv: *mut typval_T) {
+/// Release what `tv` holds and free the `typval_T` itself.
+///
+/// Unlike [`tv_clear`] this does not recurse into a container: it drops one
+/// reference and frees the box.
+pub unsafe extern "C" fn tv_free(tv: *mut typval_T) {
     unsafe {
         if tv.is_null() {
             return;
         }
-        's_68: {
-            match (*tv).v_type as ::core::ffi::c_uint {
-                9 => {
-                    partial_unref((*tv).vval.v_partial);
-                    break 's_68;
-                }
-                3 => {
+
+        match (*tv).v_type {
+            VAR_PARTIAL => partial_unref((*tv).vval.v_partial),
+            // FALLTHROUGH from VAR_FUNC into VAR_STRING: a funcref owns both a
+            // reference to the function and the name string.
+            VAR_FUNC | VAR_STRING => {
+                if (*tv).v_type == VAR_FUNC {
                     func_unref((*tv).vval.v_string);
                 }
-                2 => {}
-                10 => {
-                    tv_blob_unref((*tv).vval.v_blob);
-                    break 's_68;
-                }
-                4 => {
-                    tv_list_unref((*tv).vval.v_list);
-                    break 's_68;
-                }
-                5 => {
-                    tv_dict_unref((*tv).vval.v_dict);
-                    break 's_68;
-                }
-                7 | 8 | 1 | 6 | 0 | _ => {
-                    break 's_68;
-                }
+                xfree((*tv).vval.v_string.cast());
             }
-            xfree((*tv).vval.v_string as *mut ::core::ffi::c_void);
+            VAR_BLOB => tv_blob_unref((*tv).vval.v_blob),
+            VAR_LIST => tv_list_unref((*tv).vval.v_list),
+            VAR_DICT => tv_dict_unref((*tv).vval.v_dict),
+            _ => {}
         }
-        xfree(tv as *mut ::core::ffi::c_void);
+        xfree(tv.cast());
     }
 }
 
+/// Copy `from` into `to`, taking a reference to whatever it holds.
+///
+/// The copy is shallow and always unlocked; `deepcopy()` goes through
+/// `var_item_copy`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_copy(from: *const typval_T, to: *mut typval_T) {
     unsafe {
         (*to).v_type = (*from).v_type;
         (*to).v_lock = VAR_UNLOCKED;
-        memmove(
-            &raw mut (*to).vval as *mut ::core::ffi::c_void,
-            &raw const (*from).vval as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<typval_vval_union>(),
-        );
-        match (*from).v_type as ::core::ffi::c_uint {
-            2 | 3 => {
+        (*to).vval = (*from).vval;
+
+        match (*from).v_type {
+            VAR_STRING | VAR_FUNC => {
                 if !(*from).vval.v_string.is_null() {
                     (*to).vval.v_string = xstrdup((*from).vval.v_string);
-                    if (*from).v_type as ::core::ffi::c_uint
-                        == VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
+                    if (*from).v_type == VAR_FUNC {
                         func_ref((*to).vval.v_string);
                     }
                 }
             }
-            9 => {
-                if !(*to).vval.v_partial.is_null() {
-                    (*(*to).vval.v_partial).pt_refcount += 1;
+            VAR_PARTIAL => {
+                if let Some(pt) = (*to).vval.v_partial.as_mut() {
+                    pt.pt_refcount += 1;
                 }
             }
-            10 => {
+            VAR_BLOB => {
                 if !(*from).vval.v_blob.is_null() {
                     (*(*to).vval.v_blob).bv_refcount += 1;
                 }
             }
-            4 => {
-                tv_list_ref((*to).vval.v_list);
-            }
-            5 => {
+            VAR_LIST => tv_list_ref((*to).vval.v_list),
+            VAR_DICT => {
                 if !(*from).vval.v_dict.is_null() {
                     (*(*to).vval.v_dict).dv_refcount += 1;
                 }
             }
-            0 => {
+            VAR_UNKNOWN => {
                 semsg(
                     gettext(&raw const e_intern2 as *const ::core::ffi::c_char),
-                    b"tv_copy(UNKNOWN)\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"tv_copy(UNKNOWN)".as_ptr(),
                 );
             }
-            1 | 6 | 7 | 8 | _ => {}
-        };
+            _ => {}
+        }
     }
 }
 
+/// Upstream's `CHANGE_LOCK`: what a lock status becomes under `:lockvar` /
+/// `:unlockvar`.
+///
+/// `VAR_FIXED` never changes — that is a slot that cannot be unlocked at all,
+/// not merely one that is locked.  c2rust renders the macro's designated-index
+/// array literal at each of its four use sites.
+#[inline]
+fn change_lock(lock: bool, var: VarLockStatus) -> VarLockStatus {
+    match var {
+        VAR_FIXED => VAR_FIXED,
+        _ if lock => VAR_LOCKED,
+        _ => VAR_UNLOCKED,
+    }
+}
+
+/// `:lockvar` / `:unlockvar` over `tv`, descending `deep` levels into
+/// containers (negative meaning all the way down).
+///
+/// With `check_refcount`, a container held by more than one reference is left
+/// alone — that is what keeps `:lockvar` on a function argument from locking
+/// the caller's value.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_item_lock(
     tv: *mut typval_T,
@@ -135,7 +142,9 @@ pub unsafe extern "C" fn tv_item_lock(
     check_refcount: bool,
 ) {
     unsafe {
-        static recurse: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+        // TODO(ZyX-I): Make this not recursive
+        static recurse: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+
         if recurse.get() >= DICT_MAXNEST {
             emsg(gettext(
                 (e_variable_nested_too_deep_for_unlock.ptr() as *const _)
@@ -143,224 +152,119 @@ pub unsafe extern "C" fn tv_item_lock(
             ));
             return;
         }
-        if deep == 0 as ::core::ffi::c_int {
+        if deep == 0 {
             return;
         }
         (*recurse.ptr()) += 1;
-        (*tv).v_lock = [
-            (if lock as ::core::ffi::c_int != 0 {
-                VAR_LOCKED as ::core::ffi::c_int
-            } else {
-                VAR_UNLOCKED as ::core::ffi::c_int
-            }) as VarLockStatus,
-            (if lock as ::core::ffi::c_int != 0 {
-                VAR_LOCKED as ::core::ffi::c_int
-            } else {
-                VAR_UNLOCKED as ::core::ffi::c_int
-            }) as VarLockStatus,
-            VAR_FIXED,
-        ][(*tv).v_lock as usize];
-        match (*tv).v_type as ::core::ffi::c_uint {
-            10 => {
-                let b: *mut blob_T = (*tv).vval.v_blob;
-                if !b.is_null()
-                    && !(check_refcount as ::core::ffi::c_int != 0
-                        && (*b).bv_refcount > 1 as ::core::ffi::c_int)
-                {
-                    (*b).bv_lock = [
-                        (if lock as ::core::ffi::c_int != 0 {
-                            VAR_LOCKED as ::core::ffi::c_int
-                        } else {
-                            VAR_UNLOCKED as ::core::ffi::c_int
-                        }) as VarLockStatus,
-                        (if lock as ::core::ffi::c_int != 0 {
-                            VAR_LOCKED as ::core::ffi::c_int
-                        } else {
-                            VAR_UNLOCKED as ::core::ffi::c_int
-                        }) as VarLockStatus,
-                        VAR_FIXED,
-                    ][(*b).bv_lock as usize];
+
+        // lock/unlock the item itself
+        (*tv).v_lock = change_lock(lock, (*tv).v_lock);
+
+        match (*tv).v_type {
+            VAR_BLOB => {
+                let b = (*tv).vval.v_blob;
+                if !b.is_null() && !(check_refcount && (*b).bv_refcount > 1) {
+                    (*b).bv_lock = change_lock(lock, (*b).bv_lock);
                 }
             }
-            4 => {
-                let l: *mut list_T = (*tv).vval.v_list;
-                if !l.is_null()
-                    && !(check_refcount as ::core::ffi::c_int != 0
-                        && (*l).lv_refcount > 1 as ::core::ffi::c_int)
-                {
-                    (*l).lv_lock = [
-                        (if lock as ::core::ffi::c_int != 0 {
-                            VAR_LOCKED as ::core::ffi::c_int
-                        } else {
-                            VAR_UNLOCKED as ::core::ffi::c_int
-                        }) as VarLockStatus,
-                        (if lock as ::core::ffi::c_int != 0 {
-                            VAR_LOCKED as ::core::ffi::c_int
-                        } else {
-                            VAR_UNLOCKED as ::core::ffi::c_int
-                        }) as VarLockStatus,
-                        VAR_FIXED,
-                    ][(*l).lv_lock as usize];
-                    if deep < 0 as ::core::ffi::c_int || deep > 1 as ::core::ffi::c_int {
-                        let l_: *mut list_T = l;
-                        if !l_.is_null() {
-                            let mut li: *mut listitem_T = (*l_).lv_first;
-                            while !li.is_null() {
-                                tv_item_lock(
-                                    &raw mut (*li).li_tv,
-                                    deep - 1 as ::core::ffi::c_int,
-                                    lock,
-                                    check_refcount,
-                                );
-                                li = (*li).li_next;
-                            }
+            VAR_LIST => {
+                let l = (*tv).vval.v_list;
+                if !l.is_null() && !(check_refcount && (*l).lv_refcount > 1) {
+                    (*l).lv_lock = change_lock(lock, (*l).lv_lock);
+                    if deep < 0 || deep > 1 {
+                        // Recursive: lock/unlock the items the List contains.
+                        for li in tv_list_iter(l.as_ref()) {
+                            tv_item_lock(&raw mut (*li).li_tv, deep - 1, lock, check_refcount);
                         }
                     }
                 }
             }
-            5 => {
-                let d: *mut dict_T = (*tv).vval.v_dict;
-                if !d.is_null()
-                    && !(check_refcount as ::core::ffi::c_int != 0
-                        && (*d).dv_refcount > 1 as ::core::ffi::c_int)
-                {
-                    (*d).dv_lock = [
-                        (if lock as ::core::ffi::c_int != 0 {
-                            VAR_LOCKED as ::core::ffi::c_int
-                        } else {
-                            VAR_UNLOCKED as ::core::ffi::c_int
-                        }) as VarLockStatus,
-                        (if lock as ::core::ffi::c_int != 0 {
-                            VAR_LOCKED as ::core::ffi::c_int
-                        } else {
-                            VAR_UNLOCKED as ::core::ffi::c_int
-                        }) as VarLockStatus,
-                        VAR_FIXED,
-                    ][(*d).dv_lock as usize];
-                    if deep < 0 as ::core::ffi::c_int || deep > 1 as ::core::ffi::c_int {
-                        let dihi_ht_: *mut hashtab_T = &raw mut (*d).dv_hashtab;
-                        let mut dihi_todo_: size_t = (*dihi_ht_).ht_used;
-                        let mut dihi_: *mut hashitem_T = (*dihi_ht_).ht_array;
-                        while dihi_todo_ != 0 {
-                            if !((*dihi_).hi_key.is_null()
-                                || (*dihi_).hi_key
-                                    == &raw const hash_removed as *mut ::core::ffi::c_char)
-                            {
-                                dihi_todo_ = dihi_todo_.wrapping_sub(1);
-                                let di: *mut dictitem_T = (*dihi_)
-                                    .hi_key
-                                    .offset(-(17 as ::core::ffi::c_ulong as isize))
-                                    as *mut dictitem_T;
-                                tv_item_lock(
-                                    &raw mut (*di).di_tv,
-                                    deep - 1 as ::core::ffi::c_int,
-                                    lock,
-                                    check_refcount,
-                                );
-                            }
-                            dihi_ = dihi_.offset(1);
+            VAR_DICT => {
+                let d = (*tv).vval.v_dict;
+                if !d.is_null() && !(check_refcount && (*d).dv_refcount > 1) {
+                    (*d).dv_lock = change_lock(lock, (*d).dv_lock);
+                    if deep < 0 || deep > 1 {
+                        // recursive: lock/unlock the items the Dict contains
+                        for hi in tv_dict_iter(&*d) {
+                            let di = tv_dict_hi2di(hi);
+                            tv_item_lock(&raw mut (*di).di_tv, deep - 1, lock, check_refcount);
                         }
                     }
                 }
             }
-            0 => {
-                abort();
-            }
-            1 | 6 | 2 | 3 | 9 | 7 | 8 | _ => {}
+            VAR_UNKNOWN => abort(),
+            _ => {}
         }
+
         (*recurse.ptr()) -= 1;
     }
 }
 
+/// Whether `tv` is locked, either itself or as the container it names.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_islocked(tv: *const typval_T) -> bool {
     unsafe {
-        return (*tv).v_lock as ::core::ffi::c_uint
-            == VAR_LOCKED as ::core::ffi::c_int as ::core::ffi::c_uint
-            || (*tv).v_type as ::core::ffi::c_uint
-                == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-                && tv_list_locked((*tv).vval.v_list) as ::core::ffi::c_uint
-                    == VAR_LOCKED as ::core::ffi::c_int as ::core::ffi::c_uint
-            || (*tv).v_type as ::core::ffi::c_uint
-                == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
+        (*tv).v_lock == VAR_LOCKED
+            || ((*tv).v_type == VAR_LIST && tv_list_locked((*tv).vval.v_list) == VAR_LOCKED)
+            || ((*tv).v_type == VAR_DICT
                 && !(*tv).vval.v_dict.is_null()
-                && (*(*tv).vval.v_dict).dv_lock as ::core::ffi::c_uint
-                    == VAR_LOCKED as ::core::ffi::c_int as ::core::ffi::c_uint;
+                && (*(*tv).vval.v_dict).dv_lock == VAR_LOCKED)
     }
 }
 
+/// Whether `tv` may not be changed, raising the matching error if so.
+///
+/// `name` is what the error names; `name_len` may be `TV_TRANSLATE` or
+/// `TV_CSTRING` instead of a real length.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_check_lock(
-    mut tv: *const typval_T,
-    mut name: *const ::core::ffi::c_char,
-    mut name_len: size_t,
+    tv: *const typval_T,
+    name: *const ::core::ffi::c_char,
+    name_len: size_t,
 ) -> bool {
     unsafe {
-        let mut lock: VarLockStatus = VAR_UNLOCKED;
-        match (*tv).v_type as ::core::ffi::c_uint {
-            10 => {
-                if !(*tv).vval.v_blob.is_null() {
-                    lock = (*(*tv).vval.v_blob).bv_lock;
-                }
-            }
-            4 => {
-                if !(*tv).vval.v_list.is_null() {
-                    lock = (*(*tv).vval.v_list).lv_lock;
-                }
-            }
-            5 => {
-                if !(*tv).vval.v_dict.is_null() {
-                    lock = (*(*tv).vval.v_dict).dv_lock;
-                }
-            }
-            _ => {}
-        }
-        return value_check_lock((*tv).v_lock, name, name_len) as ::core::ffi::c_int != 0
-            || lock as ::core::ffi::c_uint
-                != VAR_UNLOCKED as ::core::ffi::c_int as ::core::ffi::c_uint
-                && value_check_lock(lock, name, name_len) as ::core::ffi::c_int != 0;
+        let lock = match (*tv).v_type {
+            VAR_BLOB => (*tv)
+                .vval
+                .v_blob
+                .as_ref()
+                .map_or(VAR_UNLOCKED, |b| b.bv_lock),
+            VAR_LIST => (*tv)
+                .vval
+                .v_list
+                .as_ref()
+                .map_or(VAR_UNLOCKED, |l| l.lv_lock),
+            VAR_DICT => (*tv)
+                .vval
+                .v_dict
+                .as_ref()
+                .map_or(VAR_UNLOCKED, |d| d.dv_lock),
+            _ => VAR_UNLOCKED,
+        };
+        value_check_lock((*tv).v_lock, name, name_len)
+            || (lock != VAR_UNLOCKED && value_check_lock(lock, name, name_len))
     }
 }
 
+/// Whether `lock` forbids a change, raising the matching error if so.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn value_check_lock(
-    mut lock: VarLockStatus,
+    lock: VarLockStatus,
     mut name: *const ::core::ffi::c_char,
     mut name_len: size_t,
 ) -> bool {
     unsafe {
-        let mut error_message: *const ::core::ffi::c_char =
-            ::core::ptr::null::<::core::ffi::c_char>();
-        match lock as ::core::ffi::c_uint {
-            0 => return false_0 != 0,
-            1 => {
-                error_message = if name.is_null() {
-                    &raw const e_value_is_locked as *const ::core::ffi::c_char
-                } else {
-                    &raw const e_value_is_locked_str as *const ::core::ffi::c_char
-                };
-            }
-            2 => {
-                error_message = if name.is_null() {
-                    &raw const e_cannot_change_value as *const ::core::ffi::c_char
-                } else {
-                    &raw const e_cannot_change_value_of_str as *const ::core::ffi::c_char
-                };
-            }
-            _ => {}
-        }
-        '_c2rust_label: {
-            if !error_message.is_null() {
-            } else {
-                __assert_fail(
-                    b"error_message != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/eval/typval.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    3926 as ::core::ffi::c_uint,
-                    b"_Bool value_check_lock(VarLockStatus, const char *, size_t)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
+        // The two `_` arms are `VAR_FIXED`, the only status left. Upstream
+        // asserts the message was set, which is vacuous once the arms are
+        // exhaustive.
+        let error_message = match (lock, name.is_null()) {
+            (VAR_UNLOCKED, _) => return false,
+            (VAR_LOCKED, true) => &raw const e_value_is_locked as *const ::core::ffi::c_char,
+            (VAR_LOCKED, false) => &raw const e_value_is_locked_str as *const ::core::ffi::c_char,
+            (_, true) => &raw const e_cannot_change_value as *const ::core::ffi::c_char,
+            (_, false) => &raw const e_cannot_change_value_of_str as *const ::core::ffi::c_char,
         };
+
         if name.is_null() {
             emsg(gettext(error_message));
         } else {
@@ -372,79 +276,83 @@ pub unsafe extern "C" fn value_check_lock(
             }
             semsg(gettext(error_message), name_len as ::core::ffi::c_int, name);
         }
-        return true_0 != 0;
+
+        true
     }
 }
 
+/// Whether `tv1` and `tv2` are equal, `ic` ignoring case in strings.
+///
+/// Containers are compared structurally.  Two values of different types are
+/// never equal, except that a funcref and a partial may be.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool {
     unsafe {
-        static recursive_cnt: GlobalCell<::core::ffi::c_int> =
-            GlobalCell::new(0 as ::core::ffi::c_int);
-        if !(tv_is_func(*tv1) as ::core::ffi::c_int != 0
-            && tv_is_func(*tv2) as ::core::ffi::c_int != 0)
-            && (*tv1).v_type as ::core::ffi::c_uint != (*tv2).v_type as ::core::ffi::c_uint
-        {
-            return false_0 != 0;
+        // TODO(ZyX-I): Make this not recursive
+        static recursive_cnt: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+
+        if !(tv_is_func(*tv1) && tv_is_func(*tv2)) && (*tv1).v_type != (*tv2).v_type {
+            return false;
         }
-        if recursive_cnt.get() == 0 as ::core::ffi::c_int {
-            tv_equal_recurse_limit.set(1000 as ::core::ffi::c_int);
+
+        // Catch lists and dicts that have an endless loop by limiting
+        // recursiveness to a limit.  We guess they are equal then.
+        // A fixed limit has the problem of still taking an awful long time.
+        // Reduce the limit every time running into it. That should work fine for
+        // deeply linked structures that are not recursively linked and catch
+        // recursiveness quickly.
+        if recursive_cnt.get() == 0 {
+            tv_equal_recurse_limit.set(1000);
         }
         if recursive_cnt.get() >= tv_equal_recurse_limit.get() {
             (*tv_equal_recurse_limit.ptr()) -= 1;
-            return true_0 != 0;
+            return true;
         }
-        match (*tv1).v_type as ::core::ffi::c_uint {
-            4 => {
+
+        // The three container arms bracket their call with the depth counter.
+        // Written out rather than folded into a helper taking a closure: this
+        // runs once per item of a list or dict comparison, and a `dyn FnMut`
+        // there would be an indirect call on a measured phase.
+        match (*tv1).v_type {
+            VAR_LIST => {
                 (*recursive_cnt.ptr()) += 1;
-                let r: bool = tv_list_equal((*tv1).vval.v_list, (*tv2).vval.v_list, ic);
+                let r = tv_list_equal((*tv1).vval.v_list, (*tv2).vval.v_list, ic);
                 (*recursive_cnt.ptr()) -= 1;
-                return r;
+                r
             }
-            5 => {
+            VAR_DICT => {
                 (*recursive_cnt.ptr()) += 1;
-                let r_0: bool = tv_dict_equal((*tv1).vval.v_dict, (*tv2).vval.v_dict, ic);
+                let r = tv_dict_equal((*tv1).vval.v_dict, (*tv2).vval.v_dict, ic);
                 (*recursive_cnt.ptr()) -= 1;
-                return r_0;
+                r
             }
-            9 | 3 => {
-                if (*tv1).v_type as ::core::ffi::c_uint
-                    == VAR_PARTIAL as ::core::ffi::c_int as ::core::ffi::c_uint
-                    && (*tv1).vval.v_partial.is_null()
-                    || (*tv2).v_type as ::core::ffi::c_uint
-                        == VAR_PARTIAL as ::core::ffi::c_int as ::core::ffi::c_uint
-                        && (*tv2).vval.v_partial.is_null()
+            VAR_PARTIAL | VAR_FUNC => {
+                if ((*tv1).v_type == VAR_PARTIAL && (*tv1).vval.v_partial.is_null())
+                    || ((*tv2).v_type == VAR_PARTIAL && (*tv2).vval.v_partial.is_null())
                 {
-                    return false_0 != 0;
+                    return false;
                 }
                 (*recursive_cnt.ptr()) += 1;
-                let r_1: bool = func_equal(tv1, tv2, ic);
+                let r = func_equal(tv1, tv2, ic);
                 (*recursive_cnt.ptr()) -= 1;
-                return r_1;
+                r
             }
-            10 => return tv_blob_equal((*tv1).vval.v_blob, (*tv2).vval.v_blob),
-            1 => return (*tv1).vval.v_number == (*tv2).vval.v_number,
-            6 => return (*tv1).vval.v_float == (*tv2).vval.v_float,
-            2 => {
+            VAR_BLOB => tv_blob_equal((*tv1).vval.v_blob, (*tv2).vval.v_blob),
+            VAR_NUMBER => (*tv1).vval.v_number == (*tv2).vval.v_number,
+            VAR_FLOAT => (*tv1).vval.v_float == (*tv2).vval.v_float,
+            VAR_STRING => {
                 let mut buf1: [::core::ffi::c_char; 65] = [0; 65];
                 let mut buf2: [::core::ffi::c_char; 65] = [0; 65];
-                let mut s1: *const ::core::ffi::c_char =
-                    tv_get_string_buf(tv1, &raw mut buf1 as *mut ::core::ffi::c_char);
-                let mut s2: *const ::core::ffi::c_char =
-                    tv_get_string_buf(tv2, &raw mut buf2 as *mut ::core::ffi::c_char);
-                return mb_strcmp_ic(ic, s1, s2) == 0 as ::core::ffi::c_int;
+                let s1 = tv_get_string_buf(tv1, buf1.as_mut_ptr());
+                let s2 = tv_get_string_buf(tv2, buf2.as_mut_ptr());
+                mb_strcmp_ic(ic, s1, s2) == 0
             }
-            7 => {
-                return (*tv1).vval.v_bool as ::core::ffi::c_uint
-                    == (*tv2).vval.v_bool as ::core::ffi::c_uint;
-            }
-            8 => {
-                return (*tv1).vval.v_special as ::core::ffi::c_uint
-                    == (*tv2).vval.v_special as ::core::ffi::c_uint;
-            }
-            0 => return false_0 != 0,
-            _ => {}
+            VAR_BOOL => (*tv1).vval.v_bool == (*tv2).vval.v_bool,
+            VAR_SPECIAL => (*tv1).vval.v_special == (*tv2).vval.v_special,
+            // VAR_UNKNOWN can be the result of an invalid expression, let's say
+            // it does not equal anything, not even self.
+            VAR_UNKNOWN => false,
+            _ => abort(),
         }
-        abort();
     }
 }

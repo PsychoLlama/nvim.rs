@@ -10,122 +10,97 @@
 #[allow(unused_imports)]
 use super::*;
 
+/// The tail every `tv_check_for_*_arg` shares: answer `OK`, or raise `errmsg`
+/// naming the argument's one-based position and answer `FAIL`.
+#[inline]
+unsafe fn arg_check(
+    ok: bool,
+    errmsg: *const ::core::ffi::c_char,
+    idx: ::core::ffi::c_int,
+) -> ::core::ffi::c_int {
+    if ok {
+        return OK;
+    }
+    unsafe {
+        semsg(gettext(errmsg), idx + 1);
+    }
+    FAIL
+}
+
+/// Whether `tv` is a Number or a String, raising the type-specific error if
+/// not.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_check_str_or_nr(tv: *const typval_T) -> bool {
     unsafe {
-        match (*tv).v_type as ::core::ffi::c_uint {
-            1 | 2 => return true_0 != 0,
-            6 => {
-                emsg(gettext(
-                    b"E805: Expected a Number or a String, Float found\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ));
-                return false_0 != 0;
-            }
-            9 | 3 => {
-                emsg(gettext(
-                    b"E703: Expected a Number or a String, Funcref found\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ));
-                return false_0 != 0;
-            }
-            4 => {
-                emsg(gettext(
-                    b"E745: Expected a Number or a String, List found\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ));
-                return false_0 != 0;
-            }
-            5 => {
-                emsg(gettext(
-                    b"E728: Expected a Number or a String, Dictionary found\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ));
-                return false_0 != 0;
-            }
-            10 => {
-                emsg(gettext(
-                    b"E974: Expected a Number or a String, Blob found\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ));
-                return false_0 != 0;
-            }
-            7 => {
-                emsg(gettext(
-                    b"E5299: Expected a Number or a String, Boolean found\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ));
-                return false_0 != 0;
-            }
-            8 => {
-                emsg(gettext(b"E5300: Expected a Number or a String\0".as_ptr()
-                    as *const ::core::ffi::c_char));
-                return false_0 != 0;
-            }
-            0 => {
+        let message = match (*tv).v_type {
+            VAR_NUMBER | VAR_STRING => return true,
+            VAR_FLOAT => c"E805: Expected a Number or a String, Float found",
+            VAR_PARTIAL | VAR_FUNC => c"E703: Expected a Number or a String, Funcref found",
+            VAR_LIST => c"E745: Expected a Number or a String, List found",
+            VAR_DICT => c"E728: Expected a Number or a String, Dictionary found",
+            VAR_BLOB => c"E974: Expected a Number or a String, Blob found",
+            VAR_BOOL => c"E5299: Expected a Number or a String, Boolean found",
+            VAR_SPECIAL => c"E5300: Expected a Number or a String",
+            VAR_UNKNOWN => {
                 semsg(
                     gettext(&raw const e_intern2 as *const ::core::ffi::c_char),
-                    b"tv_check_str_or_nr(UNKNOWN)\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"tv_check_str_or_nr(UNKNOWN)".as_ptr(),
                 );
-                return false_0 != 0;
+                return false;
             }
-            _ => {}
-        }
-        abort();
+            _ => abort(),
+        };
+        emsg(gettext(message.as_ptr()));
+        false
     }
 }
 
+/// Whether `tv` has a Number value, raising the type-specific error if not.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_check_num(tv: *const typval_T) -> bool {
     unsafe {
-        match (*tv).v_type as ::core::ffi::c_uint {
-            1 | 7 | 8 | 2 => return true_0 != 0,
-            3 | 9 | 4 | 5 | 6 | 10 | 0 => {
+        match (*tv).v_type {
+            VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING => true,
+            VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_FLOAT | VAR_BLOB | VAR_UNKNOWN => {
                 emsg(gettext((*num_errors.ptr())[(*tv).v_type as usize]));
-                return false_0 != 0;
+                false
             }
-            _ => {}
+            _ => abort(),
         }
-        abort();
     }
 }
 
+/// Whether `tv` has a String value, raising the type-specific error if not.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_check_str(tv: *const typval_T) -> bool {
     unsafe {
-        match (*tv).v_type as ::core::ffi::c_uint {
-            1 | 7 | 8 | 2 | 6 => return true_0 != 0,
-            9 | 3 | 4 | 5 | 10 | 0 => {
+        match (*tv).v_type {
+            VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING | VAR_FLOAT => true,
+            VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
                 emsg(gettext((*str_errors.ptr())[(*tv).v_type as usize]));
-                return false_0 != 0;
+                false
             }
-            _ => {}
+            _ => abort(),
         }
-        abort();
     }
 }
 
+/// `E1174`: argument `idx` must be a String.
 pub unsafe extern "C" fn tv_check_for_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            semsg(
-                gettext(
-                    (e_string_required_for_argument_nr.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ),
-                idx + 1 as ::core::ffi::c_int,
-            );
-            return FAIL;
-        }
-        return OK;
+        let arg = &*args.offset(idx as isize);
+        arg_check(
+            arg.v_type == VAR_STRING,
+            e_string_required_for_argument_nr.ptr().cast(),
+            idx,
+        )
     }
 }
 
+/// `E1175`: argument `idx` must be a String that is not empty.
 pub unsafe extern "C" fn tv_check_for_nonempty_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -134,200 +109,147 @@ pub unsafe extern "C" fn tv_check_for_nonempty_string_arg(
         if tv_check_for_string_arg(args, idx) == FAIL {
             return FAIL;
         }
-        if (*args.offset(idx as isize)).vval.v_string.is_null()
-            || *(*args.offset(idx as isize)).vval.v_string as ::core::ffi::c_int == NUL
-        {
-            semsg(
-                gettext(
-                    (e_non_empty_string_required_for_argument_nr.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ),
-                idx + 1 as ::core::ffi::c_int,
-            );
-            return FAIL;
-        }
-        return OK;
+        let s = (*args.offset(idx as isize)).vval.v_string;
+        arg_check(
+            !s.is_null() && *s as ::core::ffi::c_int != NUL,
+            e_non_empty_string_required_for_argument_nr.ptr().cast(),
+            idx,
+        )
     }
 }
 
+/// [`tv_check_for_string_arg`], accepting a missing argument.
 pub unsafe extern "C" fn tv_check_for_opt_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        return if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            || tv_check_for_string_arg(args, idx) != FAIL
-        {
-            OK
-        } else {
-            FAIL
-        };
+        if (*args.offset(idx as isize)).v_type == VAR_UNKNOWN {
+            return OK;
+        }
+        tv_check_for_string_arg(args, idx)
     }
 }
 
+/// `E1210`: argument `idx` must be a Number.
 pub unsafe extern "C" fn tv_check_for_number_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            semsg(
-                gettext(
-                    (e_number_required_for_argument_nr.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ),
-                idx + 1 as ::core::ffi::c_int,
-            );
-            return FAIL;
-        }
-        return OK;
+        let arg = &*args.offset(idx as isize);
+        arg_check(
+            arg.v_type == VAR_NUMBER,
+            e_number_required_for_argument_nr.ptr().cast(),
+            idx,
+        )
     }
 }
 
+/// [`tv_check_for_number_arg`], accepting a missing argument.
 pub unsafe extern "C" fn tv_check_for_opt_number_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        return if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            || tv_check_for_number_arg(args, idx) != FAIL
-        {
-            OK
-        } else {
-            FAIL
-        };
+        if (*args.offset(idx as isize)).v_type == VAR_UNKNOWN {
+            return OK;
+        }
+        tv_check_for_number_arg(args, idx)
     }
 }
 
+/// `E1219`: argument `idx` must be a Float or a Number.
 pub unsafe extern "C" fn tv_check_for_float_or_nr_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            != VAR_FLOAT as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-                != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            semsg(
-                gettext(
-                    (e_float_or_number_required_for_argument_nr.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ),
-                idx + 1 as ::core::ffi::c_int,
-            );
-            return FAIL;
-        }
-        return OK;
+        let arg = &*args.offset(idx as isize);
+        arg_check(
+            arg.v_type == VAR_FLOAT || arg.v_type == VAR_NUMBER,
+            e_float_or_number_required_for_argument_nr.ptr().cast(),
+            idx,
+        )
     }
 }
 
+/// `E1212`: argument `idx` must be a Bool, or the Number 0 or 1.
 pub unsafe extern "C" fn tv_check_for_bool_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            != VAR_BOOL as ::core::ffi::c_int as ::core::ffi::c_uint
-            && !((*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-                == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-                && ((*args.offset(idx as isize)).vval.v_number == 0 as varnumber_T
-                    || (*args.offset(idx as isize)).vval.v_number == 1 as varnumber_T))
-        {
-            semsg(
-                gettext(
-                    (e_bool_required_for_argument_nr.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ),
-                idx + 1 as ::core::ffi::c_int,
-            );
-            return FAIL;
-        }
-        return OK;
+        let arg = &*args.offset(idx as isize);
+        let numeric_bool =
+            arg.v_type == VAR_NUMBER && (arg.vval.v_number == 0 || arg.vval.v_number == 1);
+        arg_check(
+            arg.v_type == VAR_BOOL || numeric_bool,
+            e_bool_required_for_argument_nr.ptr().cast(),
+            idx,
+        )
     }
 }
 
+/// [`tv_check_for_bool_arg`], accepting a missing argument.
 pub unsafe extern "C" fn tv_check_for_opt_bool_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if (*args.offset(idx as isize)).v_type == VAR_UNKNOWN {
             return OK;
         }
-        return tv_check_for_bool_arg(args, idx);
+        tv_check_for_bool_arg(args, idx)
     }
 }
 
+/// `E1238`: argument `idx` must be a Blob.
 pub unsafe extern "C" fn tv_check_for_blob_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            != VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            semsg(
-                gettext(
-                    (e_blob_required_for_argument_nr.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ),
-                idx + 1 as ::core::ffi::c_int,
-            );
-            return FAIL;
-        }
-        return OK;
+        let arg = &*args.offset(idx as isize);
+        arg_check(
+            arg.v_type == VAR_BLOB,
+            e_blob_required_for_argument_nr.ptr().cast(),
+            idx,
+        )
     }
 }
 
+/// `E1211`: argument `idx` must be a List.
 pub unsafe extern "C" fn tv_check_for_list_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            semsg(
-                gettext(
-                    (e_list_required_for_argument_nr.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ),
-                idx + 1 as ::core::ffi::c_int,
-            );
-            return FAIL;
-        }
-        return OK;
+        let arg = &*args.offset(idx as isize);
+        arg_check(
+            arg.v_type == VAR_LIST,
+            e_list_required_for_argument_nr.ptr().cast(),
+            idx,
+        )
     }
 }
 
+/// `E1206`: argument `idx` must be a Dictionary.
 pub unsafe extern "C" fn tv_check_for_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            semsg(
-                gettext(
-                    (e_dict_required_for_argument_nr.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ),
-                idx + 1 as ::core::ffi::c_int,
-            );
-            return FAIL;
-        }
-        return OK;
+        let arg = &*args.offset(idx as isize);
+        arg_check(
+            arg.v_type == VAR_DICT,
+            e_dict_required_for_argument_nr.ptr().cast(),
+            idx,
+        )
     }
 }
 
+/// `E1297`: argument `idx` must be a Dictionary that is not the NULL one.
 pub unsafe extern "C" fn tv_check_for_nonnull_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
@@ -336,185 +258,127 @@ pub unsafe extern "C" fn tv_check_for_nonnull_dict_arg(
         if tv_check_for_dict_arg(args, idx) == FAIL {
             return FAIL;
         }
-        if (*args.offset(idx as isize)).vval.v_dict.is_null() {
-            semsg(
-                gettext(
-                    (e_non_null_dict_required_for_argument_nr.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ),
-                idx + 1 as ::core::ffi::c_int,
-            );
-            return FAIL;
-        }
-        return OK;
+        arg_check(
+            !(*args.offset(idx as isize)).vval.v_dict.is_null(),
+            e_non_null_dict_required_for_argument_nr.ptr().cast(),
+            idx,
+        )
     }
 }
 
+/// [`tv_check_for_dict_arg`], accepting a missing argument.
 pub unsafe extern "C" fn tv_check_for_opt_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        return if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            || tv_check_for_dict_arg(args, idx) != FAIL
-        {
-            OK
-        } else {
-            FAIL
-        };
+        if (*args.offset(idx as isize)).v_type == VAR_UNKNOWN {
+            return OK;
+        }
+        tv_check_for_dict_arg(args, idx)
     }
 }
 
+/// `E1220`: argument `idx` must be a String or a Number.
 pub unsafe extern "C" fn tv_check_for_string_or_number_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-                != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            semsg(
-                gettext(
-                    (e_string_or_number_required_for_argument_nr.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ),
-                idx + 1 as ::core::ffi::c_int,
-            );
-            return FAIL;
-        }
-        return OK;
+        let arg = &*args.offset(idx as isize);
+        arg_check(
+            arg.v_type == VAR_STRING || arg.v_type == VAR_NUMBER,
+            e_string_or_number_required_for_argument_nr.ptr().cast(),
+            idx,
+        )
     }
 }
 
+/// Argument `idx` must name a buffer: a String or a Number.
 pub unsafe extern "C" fn tv_check_for_buffer_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        return tv_check_for_string_or_number_arg(args, idx);
-    }
+    unsafe { tv_check_for_string_or_number_arg(args, idx) }
 }
 
+/// Argument `idx` must name a line: a String or a Number.
 pub unsafe extern "C" fn tv_check_for_lnum_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        return tv_check_for_string_or_number_arg(args, idx);
-    }
+    unsafe { tv_check_for_string_or_number_arg(args, idx) }
 }
 
+/// `E1222`: argument `idx` must be a String or a List.
 pub unsafe extern "C" fn tv_check_for_string_or_list_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-                != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            semsg(
-                gettext(
-                    (e_string_or_list_required_for_argument_nr.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ),
-                idx + 1 as ::core::ffi::c_int,
-            );
-            return FAIL;
-        }
-        return OK;
+        let arg = &*args.offset(idx as isize);
+        arg_check(
+            arg.v_type == VAR_STRING || arg.v_type == VAR_LIST,
+            e_string_or_list_required_for_argument_nr.ptr().cast(),
+            idx,
+        )
     }
 }
 
+/// `E1252`: argument `idx` must be a String, a List or a Blob.
 pub unsafe extern "C" fn tv_check_for_string_or_list_or_blob_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-                != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-                != VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            semsg(
-                gettext(
-                    (e_string_list_or_blob_required_for_argument_nr.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ),
-                idx + 1 as ::core::ffi::c_int,
-            );
-            return FAIL;
-        }
-        return OK;
+        let arg = &*args.offset(idx as isize);
+        arg_check(
+            arg.v_type == VAR_STRING || arg.v_type == VAR_LIST || arg.v_type == VAR_BLOB,
+            e_string_list_or_blob_required_for_argument_nr.ptr().cast(),
+            idx,
+        )
     }
 }
 
+/// [`tv_check_for_string_or_list_arg`], accepting a missing argument.
 pub unsafe extern "C" fn tv_check_for_opt_string_or_list_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        return if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            || tv_check_for_string_or_list_arg(args, idx) != FAIL
-        {
-            OK
-        } else {
-            FAIL
-        };
+        if (*args.offset(idx as isize)).v_type == VAR_UNKNOWN {
+            return OK;
+        }
+        tv_check_for_string_or_list_arg(args, idx)
     }
 }
 
+/// `E1256`: argument `idx` must be a String, a Funcref or a partial.
 pub unsafe extern "C" fn tv_check_for_string_or_func_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            != VAR_PARTIAL as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-                != VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-                != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            semsg(
-                gettext(
-                    (e_string_or_function_required_for_argument_nr.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ),
-                idx + 1 as ::core::ffi::c_int,
-            );
-            return FAIL;
-        }
-        return OK;
+        let arg = &*args.offset(idx as isize);
+        arg_check(
+            arg.v_type == VAR_PARTIAL || arg.v_type == VAR_FUNC || arg.v_type == VAR_STRING,
+            e_string_or_function_required_for_argument_nr.ptr().cast(),
+            idx,
+        )
     }
 }
 
+/// `E1226`: argument `idx` must be a List or a Blob.
 pub unsafe extern "C" fn tv_check_for_list_or_blob_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-            != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*args.offset(idx as isize)).v_type as ::core::ffi::c_uint
-                != VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            semsg(
-                gettext(
-                    (e_list_or_blob_required_for_argument_nr.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ),
-                idx + 1 as ::core::ffi::c_int,
-            );
-            return FAIL;
-        }
-        return OK;
+        let arg = &*args.offset(idx as isize);
+        arg_check(
+            arg.v_type == VAR_LIST || arg.v_type == VAR_BLOB,
+            e_list_or_blob_required_for_argument_nr.ptr().cast(),
+            idx,
+        )
     }
 }
