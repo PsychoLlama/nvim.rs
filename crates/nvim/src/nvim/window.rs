@@ -147,7 +147,6 @@ pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleMinimal: WinStyle = 1;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const kZIndexMessages: C2Rust_Unnamed_14 = 200;
 pub const kZIndexFloatDefault: C2Rust_Unnamed_14 = 50;
@@ -162,7 +161,6 @@ pub const kWinOptFoldtext: C2Rust_Unnamed_16 = 22;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeBoolean: OptValType = 0;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const ADDR_NONE: cmd_addr_T = 11;
 pub const ADDR_OTHER: cmd_addr_T = 10;
 pub const ADDR_UNSIGNED: cmd_addr_T = 9;
@@ -175,7 +173,6 @@ pub const ADDR_LOADED_BUFFERS: cmd_addr_T = 3;
 pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
 pub const ADDR_WINDOWS: cmd_addr_T = 1;
 pub const ADDR_LINES: cmd_addr_T = 0;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_20 {
@@ -232,7 +229,6 @@ pub const ACTION_SHOW_ALL: C2Rust_Unnamed_31 = 4;
 pub const ACTION_SPLIT: C2Rust_Unnamed_31 = 3;
 pub const ACTION_GOTO: C2Rust_Unnamed_31 = 2;
 pub const ACTION_SHOW: C2Rust_Unnamed_31 = 1;
-pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
 pub const WSP_QUICKFIX: ::core::ffi::c_uint = 1024;
 pub const WSP_NOENTER: ::core::ffi::c_uint = 512;
 pub const WSP_NEWLOC: ::core::ffi::c_uint = 256;

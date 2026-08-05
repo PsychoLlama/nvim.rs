@@ -226,7 +226,6 @@ pub const MAGIC_ALL: magic_T = 4;
 pub const MAGIC_ON: magic_T = 3;
 pub const kOptValTypeString: OptValType = 2;
 pub const ADDR_LINES: cmd_addr_T = 0;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_int;
 pub const DOBUF_WIPE: dobuf_action_values = 4;
 pub const DOBUF_DEL: dobuf_action_values = 3;
 pub const DOBUF_UNLOAD: dobuf_action_values = 2;

@@ -39,13 +39,11 @@ use crate::src::nvim::types::{
 use crate::src::nvim::window::{
     WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split,
 };
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_int;
 pub const EXPAND_DIRECTORIES: C2Rust_Unnamed_15 = 3;
 pub const kOptValTypeString: OptValType = 2;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const WILD_EXPAND_FREE: C2Rust_Unnamed_18 = 2;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
@@ -76,10 +74,8 @@ pub const EW_SILENT: C2Rust_Unnamed_23 = 32;
 pub const EW_FILE: C2Rust_Unnamed_23 = 2;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;

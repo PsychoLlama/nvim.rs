@@ -80,14 +80,12 @@ use crate::src::nvim::window::{
 use crate::src::xdiff::xdiffi::xdl_diff;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISdigit: C2Rust_Unnamed = 2048;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeBoolean: OptValType = 0;
 pub const kOptScopeWin: OptScope = 1;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub const ADDR_LINES: cmd_addr_T = 0;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct diffio_T {
@@ -134,7 +132,6 @@ pub struct linemap_entry_T {
 }
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;

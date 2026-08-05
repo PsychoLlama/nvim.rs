@@ -43,7 +43,6 @@ use crate::src::nvim::types::{
 };
 use crate::src::nvim::window::win_fdccol_count;
 use crate::src::nvim::winfloat::win_check_anchored_floats;
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const BL_FIX: C2Rust_Unnamed_15 = 4;
 pub const BL_SOL: C2Rust_Unnamed_15 = 2;

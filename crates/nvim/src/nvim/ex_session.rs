@@ -41,7 +41,6 @@ use crate::src::nvim::types::{
     frame_T, garray_T, hashitem_T, hashtab_T, int64_t, ptrdiff_t, size_t, tabpage_T, win_T,
 };
 use crate::src::nvim::window::tabpage_index;
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const kCdCauseOther: CdCause = -1;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const VSE_NONE: C2Rust_Unnamed_14 = 0;

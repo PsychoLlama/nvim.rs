@@ -25,7 +25,6 @@ use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
     Direction, MotionType, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t, typval_T, uint8_t,
 };
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;

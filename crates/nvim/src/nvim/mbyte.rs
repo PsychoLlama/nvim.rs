@@ -68,7 +68,6 @@ pub const _IScntrl: C2Rust_Unnamed = 2;
 pub const _ISgraph: C2Rust_Unnamed = 32768;
 pub const _ISalpha: C2Rust_Unnamed = 1024;
 pub type wint_t = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_2 = ::core::ffi::c_uint;
 pub type WorkingStatus = ::core::ffi::c_uint;
 pub const kBroken: WorkingStatus = 2;
 pub const kWorking: WorkingStatus = 1;

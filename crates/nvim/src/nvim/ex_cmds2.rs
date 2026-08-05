@@ -52,7 +52,6 @@ use crate::src::nvim::window::{
     goto_tabpage_tp, goto_tabpage_win, valid_tabpage, win_goto, win_split, win_valid,
 };
 pub const ADDR_LINES: cmd_addr_T = 0;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const DOBUF_WIPE: dobuf_action_values = 4;
 pub const DOBUF_DEL: dobuf_action_values = 3;
 pub const DOBUF_UNLOAD: dobuf_action_values = 2;
@@ -74,7 +73,6 @@ pub const CCGD_AW: C2Rust_Unnamed_19 = 1;
 pub const DOCMD_NOWAIT: C2Rust_Unnamed_20 = 2;
 pub const DOCMD_VERBOSE: C2Rust_Unnamed_20 = 1;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const BF_SYN_SET: ::core::ffi::c_int = 0x200 as ::core::ffi::c_int;

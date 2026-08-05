@@ -48,7 +48,6 @@ use crate::src::nvim::types::{
     typval_vval_union, uint32_t, vimconv_T, win_T, win_execute_T,
 };
 use crate::src::nvim::window::win_find_tabpage;
-pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const CONV_NONE: C2Rust_Unnamed_13 = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

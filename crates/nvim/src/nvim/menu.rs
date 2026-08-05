@@ -51,7 +51,6 @@ use crate::src::nvim::ui::ui_call_update_menu;
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
-pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
 pub const EXPAND_MENUNAMES: C2Rust_Unnamed_14 = 21;
 pub const EXPAND_MENUS: C2Rust_Unnamed_14 = 11;

@@ -56,7 +56,6 @@ use crate::src::nvim::types::{
 };
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const kSHConcealLines: C2Rust_Unnamed_18 = 128;
 pub const kSHConceal: C2Rust_Unnamed_18 = 64;

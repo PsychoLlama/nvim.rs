@@ -71,7 +71,6 @@ mod lines;
 pub(crate) use self::lines::*;
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const UV_ENOTSUP: C2Rust_Unnamed = -95;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 /// A write error, held until the cleanup path can report it.
 ///
 /// `buf_write` has a single exit that emits the message, because the file

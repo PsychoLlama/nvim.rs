@@ -125,7 +125,6 @@ pub use self::filetype::*;
 use crate::src::nvim::eval::typval::kCallbackNone;
 mod childproc;
 pub(crate) use self::childproc::*;
-pub type C2Rust_Unnamed_31 = c_uint;
 pub const kDirectionNotSet: Direction = 0;
 pub const kCdCauseManual: CdCause = 0;
 pub type C2Rust_Unnamed_33 = c_int;
@@ -180,7 +179,6 @@ pub struct CommandDefinition {
     pub cmd_argt: uint32_t,
     pub cmd_addr_type: cmd_addr_T,
 }
-pub type C2Rust_Unnamed_38 = c_uint;
 pub const DOBUF_WIPE: dobuf_action_values = 4;
 pub const DOBUF_DEL: dobuf_action_values = 3;
 pub const DOBUF_UNLOAD: dobuf_action_values = 2;
@@ -305,11 +303,9 @@ pub const OPT_GLOBAL: C2Rust_Unnamed_59 = 1;
 pub type C2Rust_Unnamed_56 = c_uint;
 pub type C2Rust_Unnamed_58 = c_uint;
 pub type C2Rust_Unnamed_59 = c_uint;
-pub type C2Rust_Unnamed_60 = c_uint;
 pub type C2Rust_Unnamed_61 = c_uint;
 pub type C2Rust_Unnamed_62 = c_uint;
 pub type C2Rust_Unnamed_65 = c_uint;
-pub type C2Rust_Unnamed_66 = c_uint;
 pub type C2Rust_Unnamed_67 = c_uint;
 pub const INT32_MAX: c_int = 2147483647 as c_int;
 pub const NULL_1: *mut c_void = ::core::ptr::null_mut::<c_void>();

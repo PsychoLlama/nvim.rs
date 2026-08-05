@@ -42,7 +42,6 @@ use crate::src::nvim::types::{
     lua_State, object, object_data as C2Rust_Unnamed, schar_T, sctx_T, size_t, tabpage_T, uint8_t,
     uint16_t, uint32_t, uint64_t, win_T,
 };
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const kRetObject: LuaRetMode = 0;
 pub const OPT_GLOBAL: C2Rust_Unnamed_17 = 1;
 pub const kOptScopeBuf: OptScope = 2;

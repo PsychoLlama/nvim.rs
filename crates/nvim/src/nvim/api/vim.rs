@@ -184,7 +184,6 @@ pub type C2Rust_Unnamed_37 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_38 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_39 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_40 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_41 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;

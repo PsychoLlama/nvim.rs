@@ -51,7 +51,6 @@ use crate::src::nvim::types::{
 use crate::src::nvim::ui::ui_cursor_shape;
 use crate::src::nvim::undo::{u_save, u_save_cursor};
 use crate::src::nvim::window::win_fdccol_count;
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
 pub const kBufOptFormatexpr: C2Rust_Unnamed_14 = 36;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
@@ -61,7 +60,6 @@ pub const OPENLINE_MARKFIX: C2Rust_Unnamed_15 = 8;
 pub const OPENLINE_KEEPTRAIL: C2Rust_Unnamed_15 = 4;
 pub const OPENLINE_DO_COM: C2Rust_Unnamed_15 = 2;
 pub const OPENLINE_DELSPACES: C2Rust_Unnamed_15 = 1;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const INDENT_SET: C2Rust_Unnamed_18 = 1;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;

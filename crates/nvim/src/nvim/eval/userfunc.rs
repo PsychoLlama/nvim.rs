@@ -98,7 +98,6 @@ pub const DI_FLAGS_RO_SBX: C2Rust_Unnamed_15 = 2;
 pub const DI_FLAGS_RO: C2Rust_Unnamed_15 = 1;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const MAX_FUNC_ARGS: C2Rust_Unnamed_16 = 20;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const FIXVAR_CNT: C2Rust_Unnamed_18 = 12;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_int;

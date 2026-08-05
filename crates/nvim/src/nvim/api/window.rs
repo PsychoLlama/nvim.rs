@@ -32,7 +32,6 @@ use crate::src::nvim::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
     win_set_buf, win_setheight_win, win_setwidth_win,
 };
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const kRetLuaref: LuaRetMode = 2;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;

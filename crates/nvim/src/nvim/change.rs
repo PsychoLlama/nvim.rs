@@ -78,10 +78,8 @@ use crate::src::nvim::types::{
 };
 use crate::src::nvim::ui::{ui_active, ui_has};
 use crate::src::nvim::undo::{curbufIsChanged, u_clearline, u_save_cursor, u_savedel};
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const OPENLINE_FORCE_INDENT: C2Rust_Unnamed_18 = 64;
 pub const OPENLINE_FORMAT: C2Rust_Unnamed_18 = 32;

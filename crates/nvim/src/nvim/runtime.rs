@@ -144,7 +144,6 @@ pub const EW_DIR: C2Rust_Unnamed_20 = 1;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const DOSO_VIMRC: C2Rust_Unnamed_21 = 1;
 pub const DOSO_NONE: C2Rust_Unnamed_21 = 0;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const DIP_DIRFILE: ::core::ffi::c_uint = 512;
 /// `do_in_path` flags: which runtime directories to visit and what to match.
 pub const DIP_AFTER: ::core::ffi::c_uint = 128;
