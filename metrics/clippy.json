@@ -52,7 +52,6 @@
     "crates/nvim/src/nvim/eval/lval.rs": 1,
     "crates/nvim/src/nvim/eval/system.rs": 1,
     "crates/nvim/src/nvim/eval/userfunc.rs": 158,
-    "crates/nvim/src/nvim/eval/vars/assign.rs": 19,
     "crates/nvim/src/nvim/eval/vars/external.rs": 1,
     "crates/nvim/src/nvim/eval/vars/heredoc.rs": 5,
     "crates/nvim/src/nvim/eval/vars/lifecycle.rs": 6,

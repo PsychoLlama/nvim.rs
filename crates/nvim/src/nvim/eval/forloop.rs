@@ -197,10 +197,10 @@ unsafe fn assign(fi: *mut forinfo_T, arg: *mut c_char, tv: *mut typval_T) -> boo
         ex_let_vars(
             arg,
             tv,
-            1,
+            true,
             (*fi).fi_semicolon,
             (*fi).fi_varcount,
-            0,
+            false,
             null_mut(),
         ) == OK
     }

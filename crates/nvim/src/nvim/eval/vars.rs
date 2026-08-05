@@ -205,6 +205,30 @@ pub const AUTOLOAD_CHAR: c_char = b'#' as c_char;
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
 pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX - 1;
 
+/// The `OptVal` that names no value: upstream's `NIL_OPTVAL`.
+pub(crate) const NIL_OPTVAL: OptVal = OptVal {
+    type_0: kOptValTypeNil,
+    data: OptValData { boolean: kFalse },
+};
+
+/// A zeroed `lval_T`, which is what `get_lval` expects to be handed.
+pub(crate) const LVAL_INITIAL_VALUE: lval_T = lval_T {
+    ll_name: ::core::ptr::null(),
+    ll_name_len: 0,
+    ll_exp_name: ::core::ptr::null_mut(),
+    ll_tv: ::core::ptr::null_mut(),
+    ll_li: ::core::ptr::null_mut(),
+    ll_list: ::core::ptr::null_mut(),
+    ll_range: false,
+    ll_empty2: false,
+    ll_n1: 0,
+    ll_n2: 0,
+    ll_dict: ::core::ptr::null_mut(),
+    ll_di: ::core::ptr::null_mut(),
+    ll_newkey: ::core::ptr::null_mut(),
+    ll_blob: ::core::ptr::null_mut(),
+};
+
 /// How deep `:const` locks the value it stores.
 pub const DICT_MAXNEST: c_int = 100;
 
