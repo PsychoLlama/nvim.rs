@@ -31,6 +31,11 @@ and this project adheres to [CalVer](https://calver.org/).
   `preinsert`, `'completefunc'`/`'omnifunc'`/`'thesaurusfunc'`, the completion
   popup menu, and the `complete()`, `complete_info()` and `CompleteDone`
   interfaces.
+- Collapsed the value encoders. One C header spelled the same container walk
+  out seven times, once per destination — msgpack, JSON, `string()`, `:echo`,
+  Lua values, API objects, and the deep free every discarded value goes
+  through. It is now one walk those seven hang off, and it no longer keeps a
+  pointer into its own stack across a reallocation of it.
 
 ## [2026.08.02-af6bcec290]
 
