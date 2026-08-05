@@ -143,7 +143,7 @@ pub unsafe extern "C" fn tv_dict_free_contents(d: *mut dict_T) {
             }
             hi = hi.offset(1);
         }
-        while QUEUE_EMPTY(&raw mut (*d).watchers) == 0 {
+        while !QUEUE_EMPTY(&raw mut (*d).watchers) {
             let mut w: *mut QUEUE = (*d).watchers.next as *mut QUEUE;
             QUEUE_REMOVE(w);
             let mut watcher: *mut DictWatcher = tv_dict_watcher_node_data(w);
