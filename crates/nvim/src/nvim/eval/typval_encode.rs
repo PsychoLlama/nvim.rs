@@ -22,7 +22,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::mem::MaybeUninit;
 
 use crate::src::nvim::types::{
     blob_T, dict_T, float_T, hashitem_T, int64_t, list_T, listitem_T, partial_T, ptrdiff_t, size_t,
@@ -138,21 +138,20 @@ impl ConvFrame {
 /// frees, so a malloc per walk would be a malloc per free.
 const INLINE_FRAMES: usize = 8;
 
-const EMPTY_FRAME: ConvFrame = ConvFrame {
-    tv: ptr::null_mut(),
-    saved_copyid: 0,
-    frame: Frame::List {
-        list: ptr::null_mut(),
-        li: ptr::null_mut(),
-    },
-};
-
 /// The walk's explicit stack of suspended containers.
 ///
 /// Indexable from the bottom, because that is the order the error path names
 /// them in and the position a `@N` self-reference marker counts to.
 pub(crate) struct ConvStack {
-    inline: [ConvFrame; INLINE_FRAMES],
+    /// **Deliberately uninitialised**, exactly as upstream's `kvi_init` leaves
+    /// `init_array`.  `tv_clear` runs this walk on every value the interpreter
+    /// drops -- scalars included, which never push a frame at all -- so
+    /// zeroing eight 56-byte frames on entry is ~5% of the interpreter and 26%
+    /// of `evalbench`'s `tvclear` phase.  Measured, not guessed.
+    ///
+    /// `len` is the invariant: slots below it are initialised, slots at and
+    /// above it are not.
+    inline: [MaybeUninit<ConvFrame>; INLINE_FRAMES],
     spilled: Vec<ConvFrame>,
     len: usize,
 }
@@ -160,7 +159,7 @@ pub(crate) struct ConvStack {
 impl ConvStack {
     fn new() -> Self {
         ConvStack {
-            inline: [EMPTY_FRAME; INLINE_FRAMES],
+            inline: [MaybeUninit::uninit(); INLINE_FRAMES],
             spilled: Vec::new(),
             len: 0,
         }
@@ -168,7 +167,7 @@ impl ConvStack {
 
     fn push(&mut self, frame: ConvFrame) {
         if self.len < INLINE_FRAMES {
-            self.inline[self.len] = frame;
+            self.inline[self.len].write(frame);
         } else {
             self.spilled.push(frame);
         }
@@ -176,7 +175,7 @@ impl ConvStack {
     }
 
     /// Drop the top frame.  The caller has already read whatever it needs out
-    /// of it — upstream's `kv_pop` only decrements the count and its callers
+    /// of it -- upstream's `kv_pop` only decrements the count and its callers
     /// keep reading the popped slot.
     fn pop(&mut self) {
         self.len -= 1;
@@ -186,8 +185,10 @@ impl ConvStack {
     }
 
     fn get_mut(&mut self, i: usize) -> &mut ConvFrame {
+        debug_assert!(i < self.len);
         if i < INLINE_FRAMES {
-            &mut self.inline[i]
+            // SAFETY: `i < len`, so this slot has been written.
+            unsafe { self.inline[i].assume_init_mut() }
         } else {
             &mut self.spilled[i - INLINE_FRAMES]
         }
@@ -196,7 +197,8 @@ impl ConvStack {
     fn last(&self) -> ConvFrame {
         let last = self.len - 1;
         if last < INLINE_FRAMES {
-            self.inline[last]
+            // SAFETY: as `get_mut`; `ConvFrame` is `Copy`.
+            unsafe { self.inline[last].assume_init() }
         } else {
             self.spilled[last - INLINE_FRAMES]
         }
@@ -219,6 +221,8 @@ impl ConvStack {
     pub(crate) fn iter(&self) -> impl Iterator<Item = &ConvFrame> {
         self.inline[..self.len.min(INLINE_FRAMES)]
             .iter()
+            // SAFETY: every slot below `len` has been written.
+            .map(|slot| unsafe { slot.assume_init_ref() })
             .chain(self.spilled.iter())
     }
 }
