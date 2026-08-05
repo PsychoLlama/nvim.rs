@@ -46,7 +46,6 @@
     "crates/nvim/src/nvim/eval/decode/json.rs": 46,
     "crates/nvim/src/nvim/eval/decode/json/scan.rs": 21,
     "crates/nvim/src/nvim/eval/decode/json/stack.rs": 17,
-    "crates/nvim/src/nvim/eval/decode/msgpack.rs": 14,
     "crates/nvim/src/nvim/eval/deprecated.rs": 3,
     "crates/nvim/src/nvim/eval/encode.rs": 58,
     "crates/nvim/src/nvim/eval/expr/index.rs": 1,

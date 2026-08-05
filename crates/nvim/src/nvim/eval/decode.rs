@@ -1,34 +1,25 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::src::mpack::conv::{
-    mpack_unpack_boolean, mpack_unpack_float_fast, mpack_unpack_sint, mpack_unpack_uint,
-};
-use crate::src::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::src::nvim::charset::vim_str2nr;
-use crate::src::nvim::eval::encode::encode_list_write;
 use crate::src::nvim::eval::string2float;
 use crate::src::nvim::eval::typval::{
     tv_blob_alloc_ret, tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_item_alloc,
-    tv_dict_item_alloc_len, tv_list_alloc, tv_list_append_list, tv_list_append_number,
-    tv_list_append_owned_tv,
+    tv_dict_item_alloc_len, tv_list_alloc, tv_list_append_list, tv_list_append_owned_tv,
 };
 use crate::src::nvim::eval::typval::{tv_list_len, tv_list_ref};
 use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
 use crate::src::nvim::garray::ga_concat_len;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::mbyte::{utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len};
-use crate::src::nvim::memory::{xfree, xmalloc, xmallocz, xmemdupz, xrealloc};
+use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xrealloc};
 use crate::src::nvim::message::{emsg, semsg};
-use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memchr, memcpy, strlen, strncmp};
+use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memchr, strncmp};
 use crate::src::nvim::types::{
-    BoolVarValue, MessagePackType, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dict_T, dictitem_T, hashitem_T,
-    hashtab_T, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, list_T, mpack_data_t,
-    mpack_node_t, mpack_parser_t, mpack_tokbuf_t, mpack_token_s_data as C2Rust_Unnamed_0,
-    mpack_token_t, mpack_token_type_t, mpack_uint32_t, mpack_value_t, ptrdiff_t, size_t, typval_T,
-    typval_vval_union, uint8_t, uint32_t, uint64_t, uvarnumber_T, varnumber_T,
+    MessagePackType, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VAR_STRING,
+    VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dict_T, dictitem_T, kBoolVarFalse, kBoolVarTrue,
+    kListLenMayKnow, kSpecialVarNull, list_T, mpack_token_type_t, ptrdiff_t, size_t, typval_T,
+    typval_vval_union, uint8_t, uvarnumber_T, varnumber_T,
 };
 
 // The carve of the transpiled module; see each child's docs.

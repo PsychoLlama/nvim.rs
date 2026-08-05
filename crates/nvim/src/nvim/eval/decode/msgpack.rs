@@ -1,21 +1,67 @@
-//! msgpack to `typval_T`: the two parser callbacks and their entry points.
+//! msgpack bytes into a `typval_T`: the two `mpack_parse` callbacks.
 //!
-//! `mpack_parse()` drives the byte stream and calls `typval_parse_enter` as
-//! each node opens and `typval_parse_exit` as it closes; strings, maps and ext
-//! values are the ones that need the exit hook, because they are only complete
-//! once their data chunks have arrived.
+//! `mpack_parse()` walks the byte stream with an explicit node stack and
+//! calls [`typval_parse_enter`] as each node opens and [`typval_parse_exit`]
+//! as it closes.  Most values are finished on the way in; the three that are
+//! not are `str`/`bin` and `ext` (their bytes arrive afterwards, as `chunk`
+//! nodes) and `map` (whether it can be a `dict_T` is only knowable once every
+//! key has been decoded).  Those three park a buffer in `node.data[1]`, which
+//! is the one thing [`typval_parser_error_free`] has to clean up when a parse
+//! fails part-way.
+//!
+//! `node.data[0]` is where the value goes — a slot in the parent's list, in
+//! the parent map's scratch array, or the caller's `rettv` at the root.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{c_char, c_int, c_void};
+use core::mem::MaybeUninit;
+use core::ptr;
 
-unsafe extern "C" fn positive_integer_to_special_typval(
-    mut rettv: *mut typval_T,
-    mut val: uint64_t,
-) {
+use super::{
+    FAIL, create_special_dict, decode_create_map_special_dict, decode_string, kMPExt, kMPInteger,
+};
+use crate::src::mpack::conv::{
+    mpack_unpack_boolean, mpack_unpack_float_fast, mpack_unpack_sint, mpack_unpack_uint,
+};
+use crate::src::mpack::mpack_core::{
+    MPACK_TOKEN_ARRAY, MPACK_TOKEN_BIN, MPACK_TOKEN_BOOLEAN, MPACK_TOKEN_CHUNK, MPACK_TOKEN_EXT,
+    MPACK_TOKEN_FLOAT, MPACK_TOKEN_MAP, MPACK_TOKEN_NIL, MPACK_TOKEN_SINT, MPACK_TOKEN_STR,
+    MPACK_TOKEN_UINT,
+};
+use crate::src::mpack::object::{mpack_parse, mpack_parser_init};
+use crate::src::nvim::eval::encode::encode_list_write;
+use crate::src::nvim::eval::typval::{
+    TV_INITIAL_VALUE, tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_hi2di, tv_dict_item_alloc_len,
+    tv_dict_iter, tv_list_alloc, tv_list_append_list, tv_list_append_number,
+    tv_list_append_owned_tv, tv_list_ref,
+};
+use crate::src::nvim::memory::{xfree, xmallocz};
+use crate::src::nvim::os::libc::{abort, memcpy, strlen};
+use crate::src::nvim::types::{
+    VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
+    VAR_UNLOCKED, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, list_T,
+    mpack_node_t, mpack_parser_t, ptrdiff_t, size_t, typval_T, typval_vval_union, varnumber_T,
+};
+
+const MPACK_OK: c_int = 0;
+
+/// The largest `varnumber_T`, past which a msgpack unsigned integer needs a
+/// special dictionary to survive the trip into Vimscript.
+const VARNUMBER_MAX: u64 = i64::MAX as u64;
+
+/// A msgpack unsigned integer as a `typval_T`.
+///
+/// Anything a `varnumber_T` can hold is a plain number.  What it cannot is
+/// split across a four-element `{_TYPE: integer, _VAL: [sign, hi, mid, lo]}`
+/// list — one sign, then 2 + 31 + 31 bits — which is the same shape the
+/// msgpack encoder reads back.
+///
+/// # Safety
+/// `rettv` is writable and holds no value that needs clearing.
+unsafe fn positive_integer_to_special_typval(rettv: *mut typval_T, val: u64) {
     unsafe {
-        if val <= VARNUMBER_MAX as uint64_t {
+        if val <= VARNUMBER_MAX {
             *rettv = typval_T {
                 v_type: VAR_NUMBER,
                 v_lock: VAR_UNLOCKED,
@@ -23,95 +69,77 @@ unsafe extern "C" fn positive_integer_to_special_typval(
                     v_number: val as varnumber_T,
                 },
             };
-        } else {
-            let list: *mut list_T = tv_list_alloc(4 as ptrdiff_t);
-            tv_list_ref(list);
-            create_special_dict(
-                rettv,
-                kMPInteger,
-                typval_T {
-                    v_type: VAR_LIST,
-                    v_lock: VAR_UNLOCKED,
-                    vval: typval_vval_union { v_list: list },
-                },
-            );
-            tv_list_append_number(list, 1 as varnumber_T);
-            tv_list_append_number(
-                list,
-                (val >> 62 as ::core::ffi::c_int & 0x3 as uint64_t) as varnumber_T,
-            );
-            tv_list_append_number(
-                list,
-                (val >> 31 as ::core::ffi::c_int & 0x7fffffff as uint64_t) as varnumber_T,
-            );
-            tv_list_append_number(list, (val & 0x7fffffff as uint64_t) as varnumber_T);
-        };
+            return;
+        }
+        let list = tv_list_alloc(4);
+        tv_list_ref(list);
+        create_special_dict(
+            rettv,
+            kMPInteger,
+            typval_T {
+                v_type: VAR_LIST,
+                v_lock: VAR_UNLOCKED,
+                vval: typval_vval_union { v_list: list },
+            },
+        );
+        tv_list_append_number(list, 1);
+        tv_list_append_number(list, ((val >> 62) & 0x3) as varnumber_T);
+        tv_list_append_number(list, ((val >> 31) & 0x7fff_ffff) as varnumber_T);
+        tv_list_append_number(list, (val & 0x7fff_ffff) as varnumber_T);
     }
 }
 
+/// A node has opened: work out where its value belongs, and decode it if the
+/// token already carries the whole value.
 unsafe extern "C-unwind" fn typval_parse_enter(
-    mut parser: *mut mpack_parser_t,
-    mut node: *mut mpack_node_t,
+    parser: *mut mpack_parser_t,
+    node: *mut mpack_node_t,
 ) {
     unsafe {
-        let mut result: *mut typval_T = ::core::ptr::null_mut::<typval_T>();
-        let mut parent: *mut mpack_node_t = if (*node.offset(-(1 as ::core::ffi::c_int as isize)))
-            .pos
-            == -1 as ::core::ffi::c_int as size_t
-        {
-            ::core::ptr::null_mut::<mpack_node_t>()
+        // `MPACK_PARENT_NODE`: the node one level up, or none at the root.
+        // `mpack_parser_init` writes `(size_t)-1` into `items[0].pos`, so the
+        // sentinel below the first real node is what says "no parent".
+        let below = node.sub(1);
+        let parent = if (*below).pos == !0 {
+            ptr::null_mut()
         } else {
-            node.offset(-(1 as ::core::ffi::c_int as isize))
+            below
         };
-        if !parent.is_null() {
-            match (*parent).tok.type_0 as ::core::ffi::c_uint {
-                7 => {
-                    let mut list: *mut list_T =
-                        (*parent).data[1 as ::core::ffi::c_int as usize].p as *mut list_T;
-                    result = tv_list_append_owned_tv(
-                        list,
-                        typval_T {
-                            v_type: VAR_UNKNOWN,
-                            v_lock: VAR_UNLOCKED,
-                            vval: typval_vval_union { v_number: 0 },
-                        },
-                    );
-                }
-                8 => {
-                    let mut items: *mut [typval_T; 2] =
-                        (*parent).data[1 as ::core::ffi::c_int as usize].p as *mut [typval_T; 2];
-                    result = (&raw mut *items.offset((*parent).pos as isize) as *mut typval_T)
-                        .offset((*parent).key_visited as isize);
-                }
-                10 | 9 | 11 => {
-                    '_c2rust_label: {
-                        if (*node).tok.type_0 as ::core::ffi::c_uint
-                            == MPACK_TOKEN_CHUNK as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                        } else {
-                            __assert_fail(
-                                b"node->tok.type == MPACK_TOKEN_CHUNK\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                b"src/nvim/eval/decode.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                932 as ::core::ffi::c_uint,
-                                b"void typval_parse_enter(mpack_parser_t *, mpack_node_t *)\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
-                }
-                _ => {
-                    abort();
-                }
-            }
+
+        let result: *mut typval_T = if parent.is_null() {
+            (*parser).data.p.cast()
         } else {
-            result = (*parser).data.p as *mut typval_T;
-        }
-        (*node).data[0 as ::core::ffi::c_int as usize].p = result as *mut ::core::ffi::c_void;
-        (*node).data[1 as ::core::ffi::c_int as usize].p = NULL;
-        match (*node).tok.type_0 as ::core::ffi::c_uint {
-            1 => {
+            match (*parent).tok.type_0 {
+                // An array element is appended empty and filled in place.
+                MPACK_TOKEN_ARRAY => {
+                    let list: *mut list_T = (*parent).data[1].p.cast();
+                    tv_list_append_owned_tv(list, TV_INITIAL_VALUE)
+                }
+                // A map's pairs go to the scratch array the exit hook reads;
+                // `key_visited` picks the key or the value of the pair.
+                MPACK_TOKEN_MAP => {
+                    let pairs: *mut typval_T = (*parent).data[1].p.cast();
+                    pairs
+                        .add((*parent).pos * 2)
+                        .add((*parent).key_visited as usize)
+                }
+                // The only child of a byte-carrying token is its data, which
+                // is copied straight into the parent's buffer below.
+                MPACK_TOKEN_STR | MPACK_TOKEN_BIN | MPACK_TOKEN_EXT => {
+                    debug_assert!((*node).tok.type_0 == MPACK_TOKEN_CHUNK);
+                    ptr::null_mut()
+                }
+                _ => abort(),
+            }
+        };
+
+        (*node).data[0].p = result.cast();
+        // Anything parked here is freed on error; see typval_parser_error_free.
+        (*node).data[1].p = ptr::null_mut();
+
+        let len = (*node).tok.length as size_t;
+        match (*node).tok.type_0 {
+            MPACK_TOKEN_NIL => {
                 *result = typval_T {
                     v_type: VAR_SPECIAL,
                     v_lock: VAR_UNLOCKED,
@@ -120,35 +148,32 @@ unsafe extern "C-unwind" fn typval_parse_enter(
                     },
                 };
             }
-            2 => {
+            MPACK_TOKEN_BOOLEAN => {
                 *result = typval_T {
                     v_type: VAR_BOOL,
                     v_lock: VAR_UNLOCKED,
                     vval: typval_vval_union {
-                        v_bool: (if mpack_unpack_boolean((*node).tok) as ::core::ffi::c_int != 0 {
-                            kBoolVarTrue as ::core::ffi::c_int
+                        v_bool: if mpack_unpack_boolean((*node).tok) {
+                            kBoolVarTrue
                         } else {
-                            kBoolVarFalse as ::core::ffi::c_int
-                        }) as BoolVarValue,
+                            kBoolVarFalse
+                        },
                     },
                 };
             }
-            4 => {
+            MPACK_TOKEN_SINT => {
                 *result = typval_T {
                     v_type: VAR_NUMBER,
                     v_lock: VAR_UNLOCKED,
                     vval: typval_vval_union {
-                        v_number: mpack_unpack_sint((*node).tok) as varnumber_T,
+                        v_number: mpack_unpack_sint((*node).tok),
                     },
                 };
             }
-            3 => {
-                positive_integer_to_special_typval(
-                    result,
-                    mpack_unpack_uint((*node).tok) as uint64_t,
-                );
+            MPACK_TOKEN_UINT => {
+                positive_integer_to_special_typval(result, mpack_unpack_uint((*node).tok));
             }
-            5 => {
+            MPACK_TOKEN_FLOAT => {
                 *result = typval_T {
                     v_type: VAR_FLOAT,
                     v_lock: VAR_UNLOCKED,
@@ -157,310 +182,221 @@ unsafe extern "C-unwind" fn typval_parse_enter(
                     },
                 };
             }
-            9 | 10 | 11 => {
-                (*node).data[1 as ::core::ffi::c_int as usize].p =
-                    xmallocz((*node).tok.length as size_t);
+            // Converted in typval_parse_exit, once the chunks have landed.
+            MPACK_TOKEN_BIN | MPACK_TOKEN_STR | MPACK_TOKEN_EXT => {
+                (*node).data[1].p = xmallocz(len);
             }
-            6 => {
-                let mut data: *mut ::core::ffi::c_char =
-                    (*parent).data[1 as ::core::ffi::c_int as usize].p as *mut ::core::ffi::c_char;
+            MPACK_TOKEN_CHUNK => {
+                let data: *mut c_char = (*parent).data[1].p.cast();
                 memcpy(
-                    data.offset((*parent).pos as isize) as *mut ::core::ffi::c_void,
-                    (*node).tok.data.chunk_ptr as *const ::core::ffi::c_void,
-                    (*node).tok.length as size_t,
+                    data.add((*parent).pos).cast(),
+                    (*node).tok.data.chunk_ptr.cast::<c_void>(),
+                    len,
                 );
             }
-            7 => {
-                let list_0: *mut list_T = tv_list_alloc((*node).tok.length as ptrdiff_t);
-                tv_list_ref(list_0);
+            MPACK_TOKEN_ARRAY => {
+                let list = tv_list_alloc(len as ptrdiff_t);
+                tv_list_ref(list);
                 *result = typval_T {
                     v_type: VAR_LIST,
                     v_lock: VAR_UNLOCKED,
-                    vval: typval_vval_union { v_list: list_0 },
+                    vval: typval_vval_union { v_list: list },
                 };
-                (*node).data[1 as ::core::ffi::c_int as usize].p =
-                    list_0 as *mut ::core::ffi::c_void;
+                (*node).data[1].p = list.cast();
             }
-            8 => {
-                (*node).data[1 as ::core::ffi::c_int as usize].p = xmallocz(
-                    ((*node).tok.length.wrapping_mul(2 as mpack_uint32_t) as size_t)
-                        .wrapping_mul(::core::mem::size_of::<typval_T>()),
-                );
+            // Whether this can be a dict_T is not knowable yet, so the pairs
+            // are decoded into a flat `[key, value] * length` scratch array.
+            MPACK_TOKEN_MAP => {
+                (*node).data[1].p = xmallocz(len * 2 * ::core::mem::size_of::<typval_T>());
             }
             _ => {}
-        };
-    }
-}
-
-pub unsafe extern "C" fn typval_parser_error_free(mut parser: *mut mpack_parser_t) {
-    unsafe {
-        let mut i: uint32_t = 0 as uint32_t;
-        while i < (*parser).size as uint32_t {
-            let mut node: *mut mpack_node_t =
-                (&raw mut (*parser).items as *mut mpack_node_t).offset(i as isize);
-            match (*node).tok.type_0 as ::core::ffi::c_uint {
-                9 | 10 | 11 | 8 => {
-                    let mut ptr_: *mut *mut ::core::ffi::c_void =
-                        &raw mut (*(&raw mut (*node).data as *mut mpack_data_t)
-                            .offset(1 as ::core::ffi::c_int as isize))
-                        .p;
-                    xfree(*ptr_);
-                    *ptr_ = NULL;
-                    let _ = *ptr_;
-                }
-                _ => {}
-            }
-            i = i.wrapping_add(1);
         }
     }
 }
 
-unsafe extern "C-unwind" fn typval_parse_exit(
-    mut _parser: *mut mpack_parser_t,
-    mut node: *mut mpack_node_t,
-) {
+/// Free what a node parked in `data[1]` but never got to consume.
+///
+/// Called when a parse fails part-way through, for every node still on the
+/// parser's stack.  The typvals themselves are left to the garbage collector.
+///
+/// # Safety
+/// `parser` is a live parser whose `size` bounds its `items`.
+pub unsafe fn typval_parser_error_free(parser: *mut mpack_parser_t) {
     unsafe {
-        let mut dict: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
-        let mut result: *mut typval_T =
-            (*node).data[0 as ::core::ffi::c_int as usize].p as *mut typval_T;
-        's_308: {
-            match (*node).tok.type_0 as ::core::ffi::c_uint {
-                9 | 10 => {
-                    *result = decode_string(
-                        (*node).data[1 as ::core::ffi::c_int as usize].p
-                            as *const ::core::ffi::c_char,
-                        (*node).tok.length as size_t,
-                        false_0 != 0,
-                        true_0 != 0,
-                    );
-                    (*node).data[1 as ::core::ffi::c_int as usize].p = NULL;
-                }
-                11 => {
-                    let list: *mut list_T = tv_list_alloc(2 as ptrdiff_t);
-                    tv_list_ref(list);
-                    tv_list_append_number(list, (*node).tok.data.ext_type as varnumber_T);
-                    let ext_val_list: *mut list_T =
-                        tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
-                    tv_list_append_list(list, ext_val_list);
-                    create_special_dict(
-                        result,
-                        kMPExt,
-                        typval_T {
-                            v_type: VAR_LIST,
-                            v_lock: VAR_UNLOCKED,
-                            vval: typval_vval_union { v_list: list },
-                        },
-                    );
-                    encode_list_write(
-                        ext_val_list as *mut ::core::ffi::c_void,
-                        (*node).data[1 as ::core::ffi::c_int as usize].p
-                            as *const ::core::ffi::c_char,
-                        (*node).tok.length as size_t,
-                    );
-                    let mut ptr_: *mut *mut ::core::ffi::c_void =
-                        &raw mut (*(&raw mut (*node).data as *mut mpack_data_t)
-                            .offset(1 as ::core::ffi::c_int as isize))
-                        .p;
-                    xfree(*ptr_);
-                    *ptr_ = NULL;
-                    let _ = *ptr_;
-                }
-                8 => {
-                    let mut items: *mut [typval_T; 2] =
-                        (*node).data[1 as ::core::ffi::c_int as usize].p as *mut [typval_T; 2];
-                    let mut i: size_t = 0 as size_t;
-                    's_251: {
-                        while i < (*node).tok.length as size_t {
-                            let mut key: *mut typval_T = (&raw mut *items.offset(i as isize)
-                                as *mut typval_T)
-                                .offset(0 as ::core::ffi::c_int as isize);
-                            if (*key).v_type as ::core::ffi::c_uint
-                                != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                                || (*key).vval.v_string.is_null()
-                                || *(*key)
-                                    .vval
-                                    .v_string
-                                    .offset(0 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int
-                                    == NUL
-                            {
-                                break 's_251;
-                            }
-                            i = i.wrapping_add(1);
-                        }
-                        dict = tv_dict_alloc();
-                        (*dict).dv_refcount += 1;
-                        *result = typval_T {
-                            v_type: VAR_DICT,
-                            v_lock: VAR_UNLOCKED,
-                            vval: typval_vval_union { v_dict: dict },
-                        };
-                        let mut i_0: size_t = 0 as size_t;
-                        while i_0 < (*node).tok.length as size_t {
-                            let mut key_0: *mut ::core::ffi::c_char = (*items.offset(i_0 as isize))
-                                [0 as ::core::ffi::c_int as usize]
-                                .vval
-                                .v_string;
-                            let mut keylen: size_t = strlen(key_0);
-                            let di: *mut dictitem_T =
-                                xmallocz((17 as size_t).wrapping_add(keylen)) as *mut dictitem_T;
-                            memcpy(
-                                (&raw mut (*di).di_key as *mut ::core::ffi::c_char)
-                                    .offset(0 as ::core::ffi::c_int as isize)
-                                    as *mut ::core::ffi::c_void,
-                                key_0 as *const ::core::ffi::c_void,
-                                keylen,
-                            );
-                            (*di).di_tv.v_type = VAR_UNKNOWN;
-                            if tv_dict_add(dict, di) == FAIL {
-                                let dhi_ht_: *mut hashtab_T = &raw mut (*dict).dv_hashtab;
-                                let mut dhi_todo_: size_t = (*dhi_ht_).ht_used;
-                                let mut dhi_: *mut hashitem_T = (*dhi_ht_).ht_array;
-                                while dhi_todo_ != 0 {
-                                    if !((*dhi_).hi_key.is_null()
-                                        || (*dhi_).hi_key
-                                            == &raw const hash_removed as *mut ::core::ffi::c_char)
-                                    {
-                                        dhi_todo_ = dhi_todo_.wrapping_sub(1);
-                                        let d: *mut dictitem_T = (*dhi_)
-                                            .hi_key
-                                            .offset(-(17 as ::core::ffi::c_ulong as isize))
-                                            as *mut dictitem_T;
-                                        (*d).di_tv.v_type = VAR_SPECIAL;
-                                        (*d).di_tv.vval.v_special = kSpecialVarNull;
-                                    }
-                                    dhi_ = dhi_.offset(1);
-                                }
-                                tv_clear(result);
-                                xfree(di as *mut ::core::ffi::c_void);
-                                break 's_251;
-                            } else {
-                                (*di).di_tv =
-                                    (*items.offset(i_0 as isize))[1 as ::core::ffi::c_int as usize];
-                                i_0 = i_0.wrapping_add(1);
-                            }
-                        }
-                        let mut i_1: size_t = 0 as size_t;
-                        while i_1 < (*node).tok.length as size_t {
-                            xfree(
-                                (*items.offset(i_1 as isize))[0 as ::core::ffi::c_int as usize]
-                                    .vval
-                                    .v_string
-                                    as *mut ::core::ffi::c_void,
-                            );
-                            i_1 = i_1.wrapping_add(1);
-                        }
-                        let mut ptr__0: *mut *mut ::core::ffi::c_void =
-                            &raw mut (*(&raw mut (*node).data as *mut mpack_data_t)
-                                .offset(1 as ::core::ffi::c_int as isize))
-                            .p;
-                        xfree(*ptr__0);
-                        *ptr__0 = NULL;
-                        let _ = *ptr__0;
-                        break 's_308;
-                    }
-                    let list_0: *mut list_T =
-                        decode_create_map_special_dict(result, (*node).tok.length as ptrdiff_t);
-                    let mut i_2: size_t = 0 as size_t;
-                    while i_2 < (*node).tok.length as size_t {
-                        let kv_pair: *mut list_T = tv_list_alloc(2 as ptrdiff_t);
-                        tv_list_append_list(list_0, kv_pair);
-                        tv_list_append_owned_tv(
-                            kv_pair,
-                            (*items.offset(i_2 as isize))[0 as ::core::ffi::c_int as usize],
-                        );
-                        tv_list_append_owned_tv(
-                            kv_pair,
-                            (*items.offset(i_2 as isize))[1 as ::core::ffi::c_int as usize],
-                        );
-                        i_2 = i_2.wrapping_add(1);
-                    }
-                    let mut ptr__1: *mut *mut ::core::ffi::c_void =
-                        &raw mut (*(&raw mut (*node).data as *mut mpack_data_t)
-                            .offset(1 as ::core::ffi::c_int as isize))
-                        .p;
-                    xfree(*ptr__1);
-                    *ptr__1 = NULL;
-                    let _ = *ptr__1;
+        for i in 0..(*parser).size as usize {
+            let node = &raw mut (*parser).items[i];
+            match (*node).tok.type_0 {
+                MPACK_TOKEN_BIN | MPACK_TOKEN_STR | MPACK_TOKEN_EXT | MPACK_TOKEN_MAP => {
+                    xfree((*node).data[1].p);
+                    (*node).data[1].p = ptr::null_mut();
                 }
                 _ => {}
             }
-        };
+        }
     }
 }
 
-pub unsafe extern "C" fn mpack_parse_typval(
-    mut parser: *mut mpack_parser_t,
-    mut data: *mut *const ::core::ffi::c_char,
-    mut size: *mut size_t,
-) -> ::core::ffi::c_int {
+/// Build a `dict_T` out of `len` decoded key/value pairs.
+///
+/// Answers `false` when the map cannot be one — a key that is not a non-empty
+/// string, or a duplicate — leaving every pair in `pairs` untouched and ready
+/// for the special-map path.  The partially built dictionary is torn down
+/// first, with its values disowned so that they survive it.
+///
+/// # Safety
+/// `pairs` points at `len * 2` decoded typvals and `result` is writable.
+unsafe fn map_to_dict(result: *mut typval_T, pairs: *mut typval_T, len: usize) -> bool {
     unsafe {
-        return mpack_parse(
+        for i in 0..len {
+            let key = *pairs.add(i * 2);
+            if key.v_type != VAR_STRING || key.vval.v_string.is_null() || *key.vval.v_string == 0 {
+                return false;
+            }
+        }
+
+        let dict = tv_dict_alloc();
+        (*dict).dv_refcount += 1;
+        *result = typval_T {
+            v_type: VAR_DICT,
+            v_lock: VAR_UNLOCKED,
+            vval: typval_vval_union { v_dict: dict },
+        };
+
+        for i in 0..len {
+            let key = (*pairs.add(i * 2)).vval.v_string;
+            let di = tv_dict_item_alloc_len(key, strlen(key));
+            if tv_dict_add(dict, di) == FAIL {
+                // Duplicate key.  Disown the values already handed to the
+                // dictionary — the special-map path is about to re-use every
+                // one of them — then free the dictionary and give up.
+                for hi in tv_dict_iter(&*dict) {
+                    let d = tv_dict_hi2di(hi);
+                    (*d).di_tv.v_type = VAR_SPECIAL;
+                    (*d).di_tv.vval.v_special = kSpecialVarNull;
+                }
+                tv_clear(result);
+                xfree(di.cast());
+                return false;
+            }
+            (*di).di_tv = *pairs.add(i * 2 + 1);
+        }
+
+        // The keys were copied into the items; the originals are ours to free.
+        for i in 0..len {
+            xfree((*pairs.add(i * 2)).vval.v_string.cast());
+        }
+        true
+    }
+}
+
+/// A node has closed: finish the values whose bytes only arrive now.
+unsafe extern "C-unwind" fn typval_parse_exit(
+    _parser: *mut mpack_parser_t,
+    node: *mut mpack_node_t,
+) {
+    unsafe {
+        let result: *mut typval_T = (*node).data[0].p.cast();
+        let len = (*node).tok.length as size_t;
+        match (*node).tok.type_0 {
+            // The chunk buffer is handed straight to the string or blob.
+            MPACK_TOKEN_BIN | MPACK_TOKEN_STR => {
+                *result = decode_string((*node).data[1].p.cast(), len, false, true);
+                (*node).data[1].p = ptr::null_mut();
+            }
+            // `{_TYPE: ext, _VAL: [type, [bytes…]]}`.  The payload goes into a
+            // list of strings rather than a blob, as upstream's TODO notes.
+            MPACK_TOKEN_EXT => {
+                let list = tv_list_alloc(2);
+                tv_list_ref(list);
+                tv_list_append_number(list, (*node).tok.data.ext_type as varnumber_T);
+                let ext_val_list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+                tv_list_append_list(list, ext_val_list);
+                create_special_dict(
+                    result,
+                    kMPExt,
+                    typval_T {
+                        v_type: VAR_LIST,
+                        v_lock: VAR_UNLOCKED,
+                        vval: typval_vval_union { v_list: list },
+                    },
+                );
+                encode_list_write(ext_val_list.cast(), (*node).data[1].p.cast(), len);
+                xfree((*node).data[1].p);
+                (*node).data[1].p = ptr::null_mut();
+            }
+            MPACK_TOKEN_MAP => {
+                let pairs: *mut typval_T = (*node).data[1].p.cast();
+                if !map_to_dict(result, pairs, len) {
+                    let list = decode_create_map_special_dict(result, len as ptrdiff_t);
+                    for i in 0..len {
+                        let kv_pair = tv_list_alloc(2);
+                        tv_list_append_list(list, kv_pair);
+                        tv_list_append_owned_tv(kv_pair, *pairs.add(i * 2));
+                        tv_list_append_owned_tv(kv_pair, *pairs.add(i * 2 + 1));
+                    }
+                }
+                xfree((*node).data[1].p);
+                (*node).data[1].p = ptr::null_mut();
+            }
+            // Everything else was finished in typval_parse_enter.
+            _ => {}
+        }
+    }
+}
+
+/// One step of `mpack_parse()` with the typval callbacks bound in.
+///
+/// `data`/`size` are advanced past whatever was consumed; the answer is
+/// `MPACK_OK` when a whole object came out, `MPACK_EOF` when the bytes ran
+/// out mid-object, or an error status.
+///
+/// # Safety
+/// `parser` was initialised with its `data.p` pointing at the destination
+/// typval, and `data`/`size` describe a live buffer.
+pub unsafe fn mpack_parse_typval(
+    parser: *mut mpack_parser_t,
+    data: *mut *const c_char,
+    size: *mut size_t,
+) -> c_int {
+    unsafe {
+        mpack_parse(
             parser,
             data,
             size,
-            Some(
-                typval_parse_enter
-                    as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
-            ),
-            Some(
-                typval_parse_exit
-                    as unsafe extern "C-unwind" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
-            ),
-        );
+            Some(typval_parse_enter),
+            Some(typval_parse_exit),
+        )
     }
 }
 
-pub unsafe extern "C" fn unpack_typval(
-    mut data: *mut *const ::core::ffi::c_char,
-    mut size: *mut size_t,
-    mut ret: *mut typval_T,
-) -> ::core::ffi::c_int {
+/// Decode one complete msgpack object from `data` into `ret`.
+///
+/// `data` and `size` are advanced past the object.  On any status but
+/// `MPACK_OK` the half-built value is released and `ret` is left cleared.
+///
+/// # Safety
+/// `data`/`size` describe a live buffer and `ret` is writable.
+pub unsafe fn unpack_typval(
+    data: *mut *const c_char,
+    size: *mut size_t,
+    ret: *mut typval_T,
+) -> c_int {
     unsafe {
         (*ret).v_type = VAR_UNKNOWN;
-        let mut parser: mpack_parser_t = mpack_parser_t {
-            data: mpack_data_t {
-                p: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            },
-            size: 0,
-            capacity: 0,
-            status: 0,
-            exiting: 0,
-            tokbuf: mpack_tokbuf_t {
-                pending: [0; 9],
-                pending_tok: mpack_token_t {
-                    type_0: 0 as mpack_token_type_t,
-                    length: 0,
-                    data: C2Rust_Unnamed_0 {
-                        value: mpack_value_t { lo: 0, hi: 0 },
-                    },
-                },
-                ppos: 0,
-                plen: 0,
-                passthrough: 0,
-            },
-            items: [mpack_node_t {
-                tok: mpack_token_t {
-                    type_0: 0 as mpack_token_type_t,
-                    length: 0,
-                    data: C2Rust_Unnamed_0 {
-                        value: mpack_value_t { lo: 0, hi: 0 },
-                    },
-                },
-                pos: 0,
-                key_visited: 0,
-                data: [mpack_data_t {
-                    p: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                }; 2],
-            }; 33],
-        };
-        mpack_parser_init(&raw mut parser, 0 as mpack_uint32_t);
-        parser.data.p = ret as *mut ::core::ffi::c_void;
-        let mut status: ::core::ffi::c_int = mpack_parse_typval(&raw mut parser, data, size);
-        if status != MPACK_OK as ::core::ffi::c_int {
-            typval_parser_error_free(&raw mut parser);
+        // `mpack_parser_init` writes every field this parser will be read
+        // through, `items` included, so the C leaves the declaration
+        // uninitialised too — and it is 2.5 KB, once per decoded object.
+        // Nothing here ever forms a reference to it, so it stays a raw
+        // pointer rather than being `assume_init`ed.
+        let mut storage = MaybeUninit::<mpack_parser_t>::uninit();
+        let parser = storage.as_mut_ptr();
+        mpack_parser_init(parser, 0);
+        (*parser).data.p = ret.cast();
+        let status = mpack_parse_typval(parser, data, size);
+        if status != MPACK_OK {
+            typval_parser_error_free(parser);
             tv_clear(ret);
         }
-        return status;
+        status
     }
 }
