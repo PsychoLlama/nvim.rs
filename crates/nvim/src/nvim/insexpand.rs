@@ -61,7 +61,8 @@ use crate::src::nvim::main::{
     edit_submode_highl, edit_submode_pre, emsg_off, emsg_silent, ex_normal_busy, firstbuf,
     firstwin, g_tag_at_cursor, global_busy, got_int, in_assert_fails, msg_hist_off, msg_silent,
     p_ac, p_acl, p_act, p_cto, p_dict, p_fic, p_ic, p_inf, p_js, p_paste, p_scs, p_smd, p_tsr,
-    p_tsrfu, p_wic, p_ws, redraw_cmdline, redraw_mode, sc_col, test_disable_char_avail, textlock,
+    p_tsrfu, p_wic, p_ws, pum_want, redraw_cmdline, redraw_mode, sc_col, test_disable_char_avail,
+    textlock,
 };
 use crate::src::nvim::mbyte::{
     mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_ptr2char_adv, mb_tolower, mb_toupper,
@@ -69,7 +70,10 @@ use crate::src::nvim::mbyte::{
     utfc_ptr2len,
 };
 use crate::src::nvim::memline::{dec, ml_delete, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
-use crate::src::nvim::memory::{strequal, xcalloc, xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy};
+use crate::src::nvim::memory::{
+    MergeSortCompareFunc, mergesort_list, strequal, xcalloc, xfree, xmalloc, xmemdupz, xstrdup,
+    xstrlcpy,
+};
 use crate::src::nvim::message::{
     emsg, internal_error, msg, msg_clr_cmdline, msg_delay, msg_ext_set_kind, msg_progress, semsg,
 };
@@ -147,15 +151,6 @@ pub use self::session::*;
 mod keys;
 pub use self::keys::*;
 unsafe extern "C" {
-    fn mergesort_list(
-        head: *mut ::core::ffi::c_void,
-        get_next: MergeSortGetFunc,
-        set_next: MergeSortSetFunc,
-        get_prev: MergeSortGetFunc,
-        set_prev: MergeSortSetFunc,
-        compare: MergeSortCompareFunc,
-    ) -> *mut ::core::ffi::c_void;
-    static pum_want: GlobalCell<C2Rust_Unnamed_25>;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
@@ -163,16 +158,6 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub type MergeSortGetFunc =
-    Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void>;
-pub type MergeSortSetFunc =
-    Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> ()>;
-pub type MergeSortCompareFunc = Option<
-    unsafe extern "C" fn(
-        *const ::core::ffi::c_void,
-        *const ::core::ffi::c_void,
-    ) -> ::core::ffi::c_int,
->;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_FIXED: VarLockStatus = 2;
@@ -270,14 +255,6 @@ pub struct cpt_source_T {
     pub cs_flag: ::core::ffi::c_char,
 }
 pub const CP_EQUAL: C2Rust_Unnamed_37 = 8;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_25 {
-    pub active: bool,
-    pub item: ::core::ffi::c_int,
-    pub insert: bool,
-    pub finish: bool,
-}
 pub const KE_LUA: key_extra = 103;
 pub const KE_COMMAND: key_extra = 104;
 pub const KE_EVENT: key_extra = 102;
