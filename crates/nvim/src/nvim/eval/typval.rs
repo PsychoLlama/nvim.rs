@@ -38,8 +38,8 @@ use crate::src::nvim::memory::{
 use crate::src::nvim::message::{emsg, internal_error, semsg};
 use crate::src::nvim::os::input::{fast_breakcheck, line_breakcheck};
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, gettext, memcmp, memcpy, memmove, memset, qsort, snprintf, strcasecmp,
-    strcmp, strcoll, strcpy, strlen, strncmp, strtod,
+    __assert_fail, abort, gettext, memcmp, memcpy, memmove, qsort, snprintf, strcasecmp, strcmp,
+    strcoll, strcpy, strlen, strncmp, strtod,
 };
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
@@ -268,13 +268,10 @@ pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false_0 !=
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub static tv_empty_string: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(b"\0".as_ptr() as *const ::core::ffi::c_char);
-pub const SL_SIZE: usize = ::core::mem::size_of::<[listitem_T; 10]>()
-    .wrapping_div(::core::mem::size_of::<listitem_T>())
-    .wrapping_div(
-        (::core::mem::size_of::<[listitem_T; 10]>()
-            .wrapping_rem(::core::mem::size_of::<listitem_T>())
-            == 0) as ::core::ffi::c_int as usize,
-    );
+/// `ARRAY_SIZE(sl->sl_items)`: how many `listitem_T`s a `staticList10_T`
+/// embeds.  c2rust renders `ARRAY_SIZE` as a division by the macro's own
+/// `== 0` static assertion; the value it computes is just the length.
+pub const SL_SIZE: usize = 10;
 static sortinfo: GlobalCell<*mut sortinfo_T> =
     GlobalCell::new(::core::ptr::null_mut::<sortinfo_T>());
 pub const ITEM_COMPARE_FAIL: ::core::ffi::c_int = 999 as ::core::ffi::c_int;

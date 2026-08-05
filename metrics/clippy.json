@@ -58,7 +58,6 @@
     "crates/nvim/src/nvim/eval/typval/dict.rs": 11,
     "crates/nvim/src/nvim/eval/typval/dictget.rs": 9,
     "crates/nvim/src/nvim/eval/typval/get.rs": 14,
-    "crates/nvim/src/nvim/eval/typval/list.rs": 13,
     "crates/nvim/src/nvim/eval/typval/listops.rs": 6,
     "crates/nvim/src/nvim/eval/typval/listrange.rs": 6,
     "crates/nvim/src/nvim/eval/typval/nothing.rs": 28,
