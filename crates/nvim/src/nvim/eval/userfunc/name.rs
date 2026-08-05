@@ -143,7 +143,7 @@ pub(crate) unsafe fn fname_trans_sid(
         } else {
             fname_buflen += snprintf(
                 fname_buf.add(fname_buflen),
-                (FLEN_FIXED as size_t + 1) - fname_buflen,
+                (FLEN_FIXED as size_t + 1).wrapping_sub(fname_buflen),
                 c"%d_".as_ptr(),
                 (*current_sctx.ptr()).sc_sid,
             ) as size_t;
@@ -298,16 +298,21 @@ unsafe fn mangle_function_name(
                 // When there was "s:" already, or the name expanded to get a
                 // leading "s:", remove it.
                 lv.ll_name = lv.ll_name.add(2);
-                lv.ll_name_len -= 2;
+                lv.ll_name_len = lv.ll_name_len.wrapping_sub(2);
                 len -= 2;
                 lead = 2;
             }
         } else {
-            // Skip over "s:" and "g:".
+            // Skip over "s:" and "g:".  The length subtraction wraps, and
+            // upstream's does too: `get_lval` in *skip* mode leaves
+            // `ll_name_len` 0, which `:function s:Name()` inside a false
+            // `:if` reaches.  Nothing reads the wrapped length on that path
+            // (`skip` forces `lead` to 0 and gates the E884 check), but a
+            // plain `-=` aborts a debug build there.
             if lead == 2 || (*lv.ll_name == b'g' as c_char && *lv.ll_name.add(1) == b':' as c_char)
             {
                 lv.ll_name = lv.ll_name.add(2);
-                lv.ll_name_len -= 2;
+                lv.ll_name_len = lv.ll_name_len.wrapping_sub(2);
             }
             len = end.offset_from(lv.ll_name) as c_int;
         }

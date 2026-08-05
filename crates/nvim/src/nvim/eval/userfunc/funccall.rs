@@ -631,7 +631,11 @@ pub unsafe fn find_hi_in_scoped_ht(
             let mut varname: *const c_char = ptr::null();
             let ht = find_var_ht(name, namelen, &raw mut varname);
             if !ht.is_null() && *varname != NUL as c_char {
-                let hi = hash_find_len(ht, varname, namelen - varname.offset_from(name) as size_t);
+                let hi = hash_find_len(
+                    ht,
+                    varname,
+                    namelen.wrapping_sub(varname.offset_from(name) as size_t),
+                );
                 last = hi;
                 if (*hi).is_kept() {
                     *pht = ht;
@@ -667,7 +671,7 @@ pub unsafe fn find_var_in_scoped_ht(
                     ht,
                     *name as c_int,
                     varname,
-                    namelen - varname.offset_from(name) as size_t,
+                    namelen.wrapping_sub(varname.offset_from(name) as size_t),
                     no_autoload != 0,
                 );
                 if !v.is_null() {

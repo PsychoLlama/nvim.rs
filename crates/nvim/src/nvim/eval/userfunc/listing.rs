@@ -253,14 +253,14 @@ pub unsafe extern "C" fn get_user_func_name(xp: *mut expand_T, idx: c_int) -> *m
             xstrlcpy(
                 buf.offset(len as isize),
                 c"(".as_ptr(),
-                IOSIZE as size_t - len as size_t,
+                (IOSIZE as size_t).wrapping_sub(len as size_t),
             );
             if (*fp).uf_varargs == 0 && (*fp).uf_args.ga_len <= 0 {
                 len += 1;
                 xstrlcpy(
                     buf.offset(len as isize),
                     c")".as_ptr(),
-                    IOSIZE as size_t - len as size_t,
+                    (IOSIZE as size_t).wrapping_sub(len as size_t),
                 );
             }
         }
