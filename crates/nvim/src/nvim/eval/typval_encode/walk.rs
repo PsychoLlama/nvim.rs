@@ -517,15 +517,22 @@ unsafe fn walk<S: TypvalSink>(
         convert_one_value(sink, &mut stack, top_tv, copyid, objname)?;
 
         while !stack.is_empty() {
-            // The top frame, by value.  Upstream keeps a pointer into the
-            // stack across the hooks and the nested key conversion below,
-            // which a `kvi_push` may have reallocated out from under it; this
-            // reads the frame once and writes any advance back by index.
+            // Upstream keeps a `MPConvStackVal *` into the stack across the
+            // hooks and the nested key conversion below, which a `kvi_push`
+            // may have reallocated out from under it (O-B14-5).  Here every
+            // read and every advance goes through `stack` by index instead,
+            // so the borrow checker is what guarantees no reference outlives
+            // a push -- and each one touches only the fields it needs,
+            // because a whole `ConvFrame` is 56 bytes and this loop runs once
+            // per item of every container the interpreter builds, walks or
+            // frees.  Holding one raw pointer for the pass instead was
+            // measured and dropped: it saves two predicted branches an item
+            // and nothing a CGU-1 A/B can see.
             let idx = stack.len() - 1;
-            let cur = stack.last();
+            let cur_tv = stack.get_mut(idx).tv;
             // The value this pass hands to `convert_one_value`.
             let tv: *mut typval_T;
-            match cur.frame {
+            match stack.get_mut(idx).frame {
                 Frame::Dict {
                     dict,
                     dictp,
@@ -533,13 +540,14 @@ unsafe fn walk<S: TypvalSink>(
                     mut todo,
                 } => {
                     if todo == 0 {
+                        let saved_copyid = stack.get_mut(idx).saved_copyid;
                         stack.pop();
-                        (*dict).dv_copyID = cur.saved_copyid;
-                        sink.conv_dict_end(cur.tv, Some(dictp));
+                        (*dict).dv_copyID = saved_copyid;
+                        sink.conv_dict_end(cur_tv, Some(dictp));
                         continue;
                     }
                     if todo != (*dict).dv_hashtab.ht_used {
-                        sink.conv_dict_between_items(cur.tv, Some(dictp));
+                        sink.conv_dict_between_items(cur_tv, Some(dictp));
                     }
                     while !(*hi).is_kept() {
                         hi = hi.add(1);
@@ -547,42 +555,46 @@ unsafe fn walk<S: TypvalSink>(
                     let di = tv_dict_hi2di(hi);
                     todo -= 1;
                     hi = hi.add(1);
-                    stack.get_mut(idx).frame = Frame::Dict {
-                        dict,
-                        dictp,
-                        hi,
-                        todo,
-                    };
+                    if let Frame::Dict {
+                        hi: hi_slot,
+                        todo: todo_slot,
+                        ..
+                    } = &mut stack.get_mut(idx).frame
+                    {
+                        *hi_slot = hi;
+                        *todo_slot = todo;
+                    }
                     let key = tv_dict_item_key(di);
                     walk_hook!(sink.conv_str_string(ptr::null_mut(), key, strlen(key)));
-                    sink.conv_dict_after_key(cur.tv, Some(dictp));
+                    sink.conv_dict_after_key(cur_tv, Some(dictp));
                     tv = &raw mut (*di).di_tv;
                 }
                 Frame::List { list, li } => {
                     if li.is_null() {
+                        let saved_copyid = stack.get_mut(idx).saved_copyid;
                         stack.pop();
-                        tv_list_set_copyid(list, cur.saved_copyid);
-                        sink.conv_list_end(cur.tv);
+                        tv_list_set_copyid(list, saved_copyid);
+                        sink.conv_list_end(cur_tv);
                         continue;
                     }
                     if li != tv_list_first(list) {
-                        sink.conv_list_between_items(cur.tv);
+                        sink.conv_list_between_items(cur_tv);
                     }
                     tv = &raw mut (*li).li_tv;
-                    stack.get_mut(idx).frame = Frame::List {
-                        list,
-                        li: (*li).li_next,
-                    };
+                    if let Frame::List { li: li_slot, .. } = &mut stack.get_mut(idx).frame {
+                        *li_slot = (*li).li_next;
+                    }
                 }
                 Frame::Pairs { list, li } => {
                     if li.is_null() {
+                        let saved_copyid = stack.get_mut(idx).saved_copyid;
                         stack.pop();
-                        tv_list_set_copyid(list, cur.saved_copyid);
-                        sink.conv_dict_end(cur.tv, None);
+                        tv_list_set_copyid(list, saved_copyid);
+                        sink.conv_dict_end(cur_tv, None);
                         continue;
                     }
                     if li != tv_list_first(list) {
-                        sink.conv_dict_between_items(cur.tv, None);
+                        sink.conv_dict_between_items(cur_tv, None);
                     }
                     let kv_pair = (*li).li_tv.vval.v_list;
                     let key = &raw mut (*tv_list_first(kv_pair)).li_tv;
@@ -593,22 +605,22 @@ unsafe fn walk<S: TypvalSink>(
                     // by index.  It also stays *un*advanced across the key, so
                     // that an error raised there names this pair's index.
                     convert_one_value(sink, &mut stack, key, copyid, objname)?;
-                    sink.conv_dict_after_key(cur.tv, None);
+                    sink.conv_dict_after_key(cur_tv, None);
                     tv = &raw mut (*tv_list_last(kv_pair)).li_tv;
-                    stack.get_mut(idx).frame = Frame::Pairs {
-                        list,
-                        li: (*li).li_next,
-                    };
+                    if let Frame::Pairs { li: li_slot, .. } = &mut stack.get_mut(idx).frame {
+                        *li_slot = (*li).li_next;
+                    }
                 }
                 Frame::Partial { stage, pt } => {
                     match stage {
                         PartialStage::Args => {
                             let argc = if pt.is_null() { 0 } else { (*pt).pt_argc };
-                            sink.conv_func_before_args(cur.tv, argc as ptrdiff_t);
-                            stack.get_mut(idx).frame = Frame::Partial {
-                                stage: PartialStage::Self_,
-                                pt,
-                            };
+                            sink.conv_func_before_args(cur_tv, argc as ptrdiff_t);
+                            if let Frame::Partial { stage: slot, .. } =
+                                &mut stack.get_mut(idx).frame
+                            {
+                                *slot = PartialStage::Self_;
+                            }
                             if !pt.is_null() && (*pt).pt_argc > 0 {
                                 walk_hook!(sink.conv_list_start(ptr::null_mut(), (*pt).pt_argc));
                                 stack.push(ConvFrame {
@@ -623,20 +635,21 @@ unsafe fn walk<S: TypvalSink>(
                             }
                         }
                         PartialStage::Self_ => {
-                            stack.get_mut(idx).frame = Frame::Partial {
-                                stage: PartialStage::End,
-                                pt,
-                            };
+                            if let Frame::Partial { stage: slot, .. } =
+                                &mut stack.get_mut(idx).frame
+                            {
+                                *slot = PartialStage::End;
+                            }
                             let dict = if pt.is_null() {
                                 ptr::null_mut()
                             } else {
                                 (*pt).pt_dict
                             };
                             if dict.is_null() {
-                                sink.conv_func_before_self(cur.tv, -1);
+                                sink.conv_func_before_self(cur_tv, -1);
                             } else {
                                 let used = (*dict).dv_hashtab.ht_used;
-                                sink.conv_func_before_self(cur.tv, used as ptrdiff_t);
+                                sink.conv_func_before_self(cur_tv, used as ptrdiff_t);
                                 let dictp = &raw mut (*pt).pt_dict;
                                 if used == 0 {
                                     sink.conv_empty_dict(ptr::null_mut(), Some(dictp));
@@ -677,7 +690,7 @@ unsafe fn walk<S: TypvalSink>(
                             }
                         }
                         PartialStage::End => {
-                            sink.conv_func_end(cur.tv, copyid);
+                            sink.conv_func_end(cur_tv, copyid);
                             stack.pop();
                         }
                     }
@@ -693,11 +706,15 @@ unsafe fn walk<S: TypvalSink>(
                         sink.conv_list_between_items(ptr::null_mut());
                     }
                     tv = arg;
-                    stack.get_mut(idx).frame = Frame::PartialArgs {
-                        arg: arg.add(1),
-                        argv,
-                        todo: todo - 1,
-                    };
+                    if let Frame::PartialArgs {
+                        arg: arg_slot,
+                        todo: todo_slot,
+                        ..
+                    } = &mut stack.get_mut(idx).frame
+                    {
+                        *arg_slot = arg.add(1);
+                        *todo_slot = todo - 1;
+                    }
                 }
             }
             convert_one_value(sink, &mut stack, tv, copyid, objname)?;

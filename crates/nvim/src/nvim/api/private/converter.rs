@@ -58,10 +58,14 @@ const NIL: Object = object {
 /// upstream writes it rather than assert, so it is here too.
 const INVALID_KEY: &CStr = c"__INVALID_KEY__";
 
-/// How many half-built objects fit without allocating: upstream's
-/// `kvec_withinit_t(Object, 2)`, which is enough for a scalar or a flat
-/// container.
-const INLINE_OBJECTS: usize = 2;
+/// How many half-built objects fit without allocating.
+///
+/// Upstream says two, which covers a scalar and a flat container and nothing
+/// else: a list of dictionaries -- the shape most of the API deals in -- is
+/// already deeper than that, so *every* conversion of one spills to the heap.
+/// Eight is 256 bytes of stack for a function that does not recurse, and it
+/// keeps the whole walk of an ordinary value inline.
+const INLINE_OBJECTS: usize = 8;
 
 /// The `vim_to_object()` sink: upstream's `EncodedData`.
 struct ObjectSink {
