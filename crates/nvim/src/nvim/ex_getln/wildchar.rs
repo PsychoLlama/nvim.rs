@@ -21,9 +21,7 @@ pub(crate) fn wim_has(idx: ::core::ffi::c_int, flag: OptWimFlags) -> bool {
 }
 
 /// One `'wildchar'` press: run the current `'wildmode'` stage.
-pub(crate) unsafe fn command_line_wildchar_complete(
-    s: *mut CommandLineState,
-) -> ::core::ffi::c_int {
+pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) -> KeyOutcome {
     unsafe {
         let cc = ccline.ptr();
         let res;
@@ -102,7 +100,7 @@ pub(crate) unsafe fn command_line_wildchar_complete(
                     WILD_FREE,
                 );
                 (*s).xpc.xp_context = EXPAND_NOTHING;
-                return CMDLINE_CHANGED;
+                return KeyOutcome::Changed;
             }
 
             // Display the matches.
@@ -159,9 +157,9 @@ pub(crate) unsafe fn command_line_wildchar_complete(
         }
 
         if res == OK {
-            CMDLINE_CHANGED
+            KeyOutcome::Changed
         } else {
-            CMDLINE_NOT_CHANGED
+            KeyOutcome::NotChanged
         }
     }
 }

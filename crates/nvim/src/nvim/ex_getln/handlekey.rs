@@ -13,9 +13,9 @@ use crate::src::nvim::keycodes::is_special;
 
 /// Handle the erase keys: backspace, delete and CTRL-W.
 ///
-/// Answers `GOTO_NORMAL_MODE` when erasing emptied a bare `:` line, which
-/// leaves the command line altogether.
-pub(crate) unsafe fn command_line_erase_chars(s: *mut CommandLineState) -> ::core::ffi::c_int {
+/// Answers [`KeyOutcome::GotoNormalMode`] when erasing emptied a bare `:`
+/// line, which leaves the command line altogether.
+pub(crate) unsafe fn command_line_erase_chars(s: *mut CommandLineState) -> KeyOutcome {
     unsafe {
         let cc = ccline.ptr();
         if (*s).c == K_KDEL {
@@ -73,7 +73,7 @@ pub(crate) unsafe fn command_line_erase_chars(s: *mut CommandLineState) -> ::cor
         {
             // In ex and debug mode it doesn't make sense to return.
             if exmode_active.get() || (*cc).cmdfirstc == '>' as ::core::ffi::c_int {
-                return CMDLINE_NOT_CHANGED;
+                return KeyOutcome::NotChanged;
             }
 
             dealloc_cmdbuff(); // no command line to return
@@ -84,9 +84,9 @@ pub(crate) unsafe fn command_line_erase_chars(s: *mut CommandLineState) -> ::cor
             }
             (*s).is_state.search_start = (*s).is_state.save_cursor;
             redraw_cmdline.set(true);
-            return GOTO_NORMAL_MODE;
+            return KeyOutcome::GotoNormalMode;
         }
-        CMDLINE_CHANGED
+        KeyOutcome::Changed
     }
 }
 
@@ -125,7 +125,7 @@ pub(crate) unsafe fn command_line_toggle_langmap(s: *mut CommandLineState) {
 }
 
 /// Handle CTRL-R: insert the contents of a numbered or named register.
-pub(crate) unsafe fn command_line_insert_reg(s: *mut CommandLineState) -> ::core::ffi::c_int {
+pub(crate) unsafe fn command_line_insert_reg(s: *mut CommandLineState) -> KeyOutcome {
     unsafe {
         let cc = ccline.ptr();
         let save_new_cmdpos = new_cmdpos.get();
@@ -168,7 +168,7 @@ pub(crate) unsafe fn command_line_insert_reg(s: *mut CommandLineState) -> ::core
             if aborting() {
                 // Will free ccline.cmdbuff after putting it in the history.
                 (*s).gotesc = true;
-                return GOTO_NORMAL_MODE;
+                return KeyOutcome::GotoNormalMode;
             }
             KeyTyped.set(false); // don't do 'wildchar' completion
             if new_cmdpos.get() >= 0 {
@@ -184,9 +184,9 @@ pub(crate) unsafe fn command_line_insert_reg(s: *mut CommandLineState) -> ::core
         // With "literally" the command line has already changed; otherwise the
         // text has been stuffed but the command line has not changed yet.
         if literally {
-            CMDLINE_CHANGED
+            KeyOutcome::Changed
         } else {
-            CMDLINE_NOT_CHANGED
+            KeyOutcome::NotChanged
         }
     }
 }
@@ -227,9 +227,9 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
         let cc = ccline.ptr();
         match (*s).c {
             K_BS | Ctrl_H | K_DEL | K_KDEL | Ctrl_W => Some(match command_line_erase_chars(s) {
-                CMDLINE_NOT_CHANGED => command_line_not_changed(s),
-                GOTO_NORMAL_MODE => 0, // back to cmd mode
-                _ => command_line_changed(s),
+                KeyOutcome::NotChanged => command_line_not_changed(s),
+                KeyOutcome::GotoNormalMode => 0, // back to cmd mode
+                KeyOutcome::Changed => command_line_changed(s),
             }),
 
             K_INS | K_KINS => {
@@ -286,9 +286,9 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
             }
 
             Ctrl_R => Some(match command_line_insert_reg(s) {
-                GOTO_NORMAL_MODE => 0, // back to cmd mode
-                CMDLINE_CHANGED => command_line_changed(s),
-                _ => command_line_not_changed(s),
+                KeyOutcome::GotoNormalMode => 0, // back to cmd mode
+                KeyOutcome::Changed => command_line_changed(s),
+                KeyOutcome::NotChanged => command_line_not_changed(s),
             }),
 
             Ctrl_D => {
@@ -504,12 +504,12 @@ unsafe fn command_line_dispatch_key(s: *mut CommandLineState) -> Option<::core::
                     Some(command_line_changed(s))
                 } else {
                     Some(match command_line_browse_history(s) {
-                        CMDLINE_CHANGED => {
+                        KeyOutcome::Changed => {
                             (*s).did_hist_navigate = true;
                             command_line_changed(s)
                         }
-                        GOTO_NORMAL_MODE => 0,
-                        _ => command_line_not_changed(s),
+                        KeyOutcome::GotoNormalMode => 0,
+                        KeyOutcome::NotChanged => command_line_not_changed(s),
                     })
                 }
             }

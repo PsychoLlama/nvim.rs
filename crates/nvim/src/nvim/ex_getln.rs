@@ -472,9 +472,23 @@ pub struct CpWinInfo {
     pub save_w_p_cul: ::core::ffi::c_int,
     pub save_w_p_cuc: ::core::ffi::c_int,
 }
-pub const GOTO_NORMAL_MODE: C2Rust_Unnamed_57 = 3;
-pub const CMDLINE_CHANGED: C2Rust_Unnamed_57 = 2;
-pub const CMDLINE_NOT_CHANGED: C2Rust_Unnamed_57 = 1;
+/// What handling one command-line key did — C's anonymous
+/// `CMDLINE_NOT_CHANGED` / `CMDLINE_CHANGED` / `GOTO_NORMAL_MODE` enum.
+///
+/// Four handlers answer with it and three `match`es in
+/// [`self::handlekey::command_line_dispatch_key`] read it, which is why it
+/// lives on the parent rather than in any one child.  C's fourth value,
+/// `PROCESS_NEXT_KEY`, belongs to `CTRL-\` alone and is
+/// [`self::execute::CtrlBsl`]'s variant instead.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) enum KeyOutcome {
+    /// The key was handled and the command line is unchanged.
+    NotChanged,
+    /// The command line changed.
+    Changed,
+    /// Leave the command line for Normal mode.
+    GotoNormalMode,
+}
 pub const KE_S_DOWN: key_extra = 5;
 pub const KE_S_UP: key_extra = 4;
 pub const KE_RIGHTRELEASE: key_extra = 52;
@@ -489,7 +503,6 @@ pub const KE_XF1: key_extra = 57;
 pub const KE_NOP: key_extra = 97;
 pub const OPT_LOCAL: C2Rust_Unnamed_53 = 2;
 pub const KE_CMDWIN: key_extra = 84;
-pub const PROCESS_NEXT_KEY: C2Rust_Unnamed_57 = 4;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_51 {

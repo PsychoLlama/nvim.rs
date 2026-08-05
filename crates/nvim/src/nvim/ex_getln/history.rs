@@ -57,11 +57,11 @@ pub(crate) unsafe fn command_line_next_histidx(s: *mut CommandLineState, next_ma
 }
 
 /// Handle Up, Down, PageUp, PageDown, CTRL-N and CTRL-P on the command line.
-pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> ::core::ffi::c_int {
+pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> KeyOutcome {
     unsafe {
         let cc = ccline.ptr();
         if (*s).histype == HIST_INVALID || get_hislen() == 0 || (*s).firstc == NUL {
-            return CMDLINE_NOT_CHANGED; // no history
+            return KeyOutcome::NotChanged; // no history
         }
 
         (*s).save_hiscnt = (*s).hiscnt;
@@ -82,7 +82,7 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> ::
 
         if (*s).hiscnt == (*s).save_hiscnt {
             beep_flush();
-            return CMDLINE_NOT_CHANGED;
+            return KeyOutcome::NotChanged;
         }
 
         // Jumped to another entry.
@@ -159,7 +159,7 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> ::
         }
 
         redrawcmd();
-        CMDLINE_CHANGED
+        KeyOutcome::Changed
     }
 }
 

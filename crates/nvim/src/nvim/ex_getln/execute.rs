@@ -418,7 +418,7 @@ pub(crate) unsafe extern "C" fn command_line_execute(
             if (*s).c == K_WILD {
                 (*emsg_silent.ptr()) -= 1;
             }
-            if res == CMDLINE_CHANGED {
+            if res == KeyOutcome::Changed {
                 return command_line_changed(s);
             }
             if (*s).c == K_WILD {
