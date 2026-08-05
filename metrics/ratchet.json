@@ -198,7 +198,7 @@
     "crates/nvim/src/nvim/eval/typval_encode.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/eval/typval_encode/walk.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/eval/userfunc.rs": {"lines": 5490, "unsafe": 115},
-    "crates/nvim/src/nvim/eval/vars.rs": {"lines": 7694, "unsafe": 119},
+    "crates/nvim/src/nvim/eval/vars.rs": {"lines": 4521, "unsafe": 119},
     "crates/nvim/src/nvim/eval/window.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/eval/window/info.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/eval/window/resolve.rs": {"unsafe": 15},
