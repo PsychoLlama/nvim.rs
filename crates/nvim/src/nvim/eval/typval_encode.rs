@@ -139,10 +139,15 @@ impl ConvFrame {
 const INLINE_FRAMES: usize = 8;
 
 /// The walk's explicit stack of suspended containers.
+pub(crate) type ConvStack = InlineStack<ConvFrame, INLINE_FRAMES>;
+
+/// A stack of `N` items held inline, spilling to the heap beyond that:
+/// klib's `kvec_withinit_t`, which upstream uses both for the walk's own
+/// frames and for the half-built values two of the sinks assemble.
 ///
 /// Indexable from the bottom, because that is the order the error path names
-/// them in and the position a `@N` self-reference marker counts to.
-pub(crate) struct ConvStack {
+/// the frames in and the position a `@N` self-reference marker counts to.
+pub(crate) struct InlineStack<T: Copy, const N: usize> {
     /// **Deliberately uninitialised**, exactly as upstream's `kvi_init` leaves
     /// `init_array`.  `tv_clear` runs this walk on every value the interpreter
     /// drops -- scalars included, which never push a frame at all -- so
@@ -151,60 +156,60 @@ pub(crate) struct ConvStack {
     ///
     /// `len` is the invariant: slots below it are initialised, slots at and
     /// above it are not.
-    inline: [MaybeUninit<ConvFrame>; INLINE_FRAMES],
-    spilled: Vec<ConvFrame>,
+    inline: [MaybeUninit<T>; N],
+    spilled: Vec<T>,
     len: usize,
 }
 
-impl ConvStack {
-    fn new() -> Self {
-        ConvStack {
-            inline: [MaybeUninit::uninit(); INLINE_FRAMES],
+impl<T: Copy, const N: usize> InlineStack<T, N> {
+    pub(crate) fn new() -> Self {
+        InlineStack {
+            inline: [MaybeUninit::uninit(); N],
             spilled: Vec::new(),
             len: 0,
         }
     }
 
-    fn push(&mut self, frame: ConvFrame) {
-        if self.len < INLINE_FRAMES {
-            self.inline[self.len].write(frame);
+    pub(crate) fn push(&mut self, item: T) {
+        if self.len < N {
+            self.inline[self.len].write(item);
         } else {
-            self.spilled.push(frame);
+            self.spilled.push(item);
         }
         self.len += 1;
     }
 
-    /// Drop the top frame.  The caller has already read whatever it needs out
+    /// Drop the top item.  The caller has already read whatever it needs out
     /// of it -- upstream's `kv_pop` only decrements the count and its callers
     /// keep reading the popped slot.
-    fn pop(&mut self) {
+    pub(crate) fn pop(&mut self) {
         self.len -= 1;
-        if self.len >= INLINE_FRAMES {
+        if self.len >= N {
             self.spilled.pop();
         }
     }
 
-    fn get_mut(&mut self, i: usize) -> &mut ConvFrame {
+    pub(crate) fn get_mut(&mut self, i: usize) -> &mut T {
         debug_assert!(i < self.len);
-        if i < INLINE_FRAMES {
+        if i < N {
             // SAFETY: `i < len`, so this slot has been written.
             unsafe { self.inline[i].assume_init_mut() }
         } else {
-            &mut self.spilled[i - INLINE_FRAMES]
+            &mut self.spilled[i - N]
         }
     }
 
-    fn last(&self) -> ConvFrame {
+    pub(crate) fn last(&self) -> T {
         let last = self.len - 1;
-        if last < INLINE_FRAMES {
-            // SAFETY: as `get_mut`; `ConvFrame` is `Copy`.
+        if last < N {
+            // SAFETY: as `get_mut`; `T` is `Copy`.
             unsafe { self.inline[last].assume_init() }
         } else {
-            self.spilled[last - INLINE_FRAMES]
+            self.spilled[last - N]
         }
     }
 
-    fn last_mut(&mut self) -> &mut ConvFrame {
+    pub(crate) fn last_mut(&mut self) -> &mut T {
         let last = self.len - 1;
         self.get_mut(last)
     }
@@ -217,9 +222,9 @@ impl ConvStack {
         self.len == 0
     }
 
-    /// The frames from the outermost inwards.
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &ConvFrame> {
-        self.inline[..self.len.min(INLINE_FRAMES)]
+    /// The items from the bottom of the stack upwards.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &T> {
+        self.inline[..self.len.min(N)]
             .iter()
             // SAFETY: every slot below `len` has been written.
             .map(|slot| unsafe { slot.assume_init_ref() })

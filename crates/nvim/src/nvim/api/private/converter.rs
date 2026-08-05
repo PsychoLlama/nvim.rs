@@ -1,4355 +1,518 @@
+//! Between a Vimscript `typval_T` and an API `Object`, in both directions.
+//!
+//! Out is [`vim_to_object`], one [`TypvalSink`] replacing the
+//! `TYPVAL_ENCODE_NAME object` instantiation of `typval_encode.c.h` — the
+//! seventh and last of them.  Back in is [`object_to_vim`], which needs no
+//! walk at all: an `Object` tree is finite and shallow enough to recurse over.
+//!
+//! The sink assembles its answer on a stack of half-built `Object`s, one entry
+//! per open container plus the value being converted.  Sizing is decided *up
+//! front*: `conv_list_start` takes an array of exactly the list's length out of
+//! the arena, and every item is written into a slot that already exists.  That
+//! is why the hooks assert `size < capacity` on the way in and `size ==
+//! capacity` on the way out — a mismatch means the walk and the arena disagree
+//! about how many items a container has, which the type system cannot catch.
+//!
+//! It does **not** read `{_TYPE, _VAL}` special dictionaries: an API client
+//! gets the two-key dictionary as it stands.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{CStr, c_char, c_int, c_void};
+
 use crate::src::nvim::api::private::helpers::{arena_array, arena_dict, arena_string};
 use crate::src::nvim::eval::decode::decode_string;
-use crate::src::nvim::eval::encode::encode_vim_list_to_buf;
 use crate::src::nvim::eval::typval::{
-    tv_blob_len, tv_list_copyid, tv_list_first, tv_list_last, tv_list_len, tv_list_ref,
-    tv_list_set_copyid,
+    tv_dict_add, tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc, tv_list_append_owned_tv,
+    tv_list_ref,
 };
-use crate::src::nvim::eval::typval::{
-    tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_item_alloc, tv_list_alloc,
-    tv_list_append_owned_tv,
+use crate::src::nvim::eval::typval_encode::{
+    ConvPath, ConvType, Flow, InlineStack, TypvalSink, encode_typval,
 };
 use crate::src::nvim::eval::userfunc::{find_func, register_luafunc};
-use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
-use crate::src::nvim::eval::{get_copyID, partial_name};
-use crate::src::nvim::hashtab::hash_removed;
-use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::api_new_luaref;
-use crate::src::nvim::memory::{xfree, xmalloc, xrealloc, xstrdup};
-use crate::src::nvim::message::internal_error;
-use crate::src::nvim::os::libc::{__assert_fail, memcpy, strlen};
+use crate::src::nvim::memory::xstrdup;
 use crate::src::nvim::types::{
-    Arena, Array, BoolVarValue, Dict, Error, Integer, KeyValuePair, LuaRef, MPConvPartialStage,
-    MPConvStack, MPConvStackVal, MPConvStackVal_data as C2Rust_Unnamed_2,
-    MPConvStackVal_data_a as C2Rust_Unnamed_3, MPConvStackVal_data_d as C2Rust_Unnamed_6,
-    MPConvStackVal_data_l as C2Rust_Unnamed_5, MPConvStackValType, MessagePackType, Object,
+    Arena, Array, BoolVarValue, Dict, Error, Float, Integer, KeyValuePair, LuaRef, Object,
     String_0, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
-    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dict_T, dictitem_T, float_T, hashitem_T,
-    kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
-    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
-    kSpecialVarNull, list_T, listitem_T, object, object_data as C2Rust_Unnamed, partial_T,
-    ptrdiff_t, size_t, typval_T, typval_vval_union, ufunc_T, uint32_t, uint64_t, varnumber_T,
+    VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dict_T, dictitem_T, float_T, int64_t, kBoolVarFalse,
+    kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeFloat,
+    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kSpecialVarNull,
+    list_T, object, object_data, ptrdiff_t, size_t, typval_T, typval_vval_union, uint32_t,
 };
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_1 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut Object,
-    pub init_array: [Object; 2],
+
+/// `FC_LUAREF`: the `ufunc_T` flag that marks a funcref which is really a Lua
+/// function, and so can go back to the API as a `LuaRef`.
+const FC_LUAREF: c_int = 0x800;
+
+/// `LUA_NOREF`.
+const LUA_NOREF: LuaRef = -2;
+
+const NIL: Object = object {
+    type_0: kObjectTypeNil,
+    data: object_data { boolean: false },
+};
+
+/// The key a dictionary entry gets when its key did not convert to a string.
+/// Unreachable through the walk, whose dictionary keys are always strings, but
+/// upstream writes it rather than assert, so it is here too.
+const INVALID_KEY: &CStr = c"__INVALID_KEY__";
+
+/// How many half-built objects fit without allocating: upstream's
+/// `kvec_withinit_t(Object, 2)`, which is enough for a scalar or a flat
+/// container.
+const INLINE_OBJECTS: usize = 2;
+
+/// The `vim_to_object()` sink: upstream's `EncodedData`.
+struct ObjectSink {
+    /// Containers already opened, innermost last, with the value most recently
+    /// converted on top of them.
+    stack: InlineStack<Object, INLINE_OBJECTS>,
+    /// Where strings and item arrays come from.  May be null, in which case
+    /// the allocations are plain `xmalloc`.
+    arena: *mut Arena,
+    /// Point the answer's strings straight at the typval's own bytes instead
+    /// of copying them into the arena.  Only safe where the answer does not
+    /// outlive the value it came from.
+    reuse_strdata: bool,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct EncodedData {
-    pub stack: C2Rust_Unnamed_1,
-    pub arena: *mut Arena,
-    pub reuse_strdata: bool,
-}
-pub const kMPConvPartialEnd: MPConvPartialStage = 2;
-pub const kMPConvPartialSelf: MPConvPartialStage = 1;
-pub const kMPConvPartialList: MPConvStackValType = 4;
-pub const kMPConvPairs: MPConvStackValType = 2;
-pub const kMPConvList: MPConvStackValType = 1;
-pub const kMPConvDict: MPConvStackValType = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const INT8_MIN: ::core::ffi::c_int = -128 as ::core::ffi::c_int;
-pub const INT8_MAX: ::core::ffi::c_int = 127 as ::core::ffi::c_int;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const FC_LUAREF: ::core::ffi::c_int = 0x800 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn tv_strlen(tv: *const typval_T) -> size_t {
-    '_c2rust_label: {
-        if (*tv).v_type as ::core::ffi::c_uint
-            == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+
+impl ObjectSink {
+    /// A string object over `len` bytes at `data`.
+    ///
+    /// # Safety
+    /// `data` must point at `len` readable bytes.
+    unsafe fn cbuf_to_obj(&mut self, data: *const c_char, len: size_t) -> Object {
+        let string = if self.reuse_strdata {
+            String_0 {
+                data: if len != 0 { data } else { c"".as_ptr() }.cast_mut(),
+                size: len,
+            }
         } else {
-            __assert_fail(
-                b"tv->v_type == VAR_STRING\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                77 as ::core::ffi::c_uint,
-                b"size_t tv_strlen(const typval_T *const)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    return if (*tv).vval.v_string.is_null() {
-        0 as size_t
-    } else {
-        strlen((*tv).vval.v_string)
-    };
-}
-pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = false_0;
-unsafe extern "C" fn typval_cbuf_to_obj(
-    mut edata: *mut EncodedData,
-    mut data: *const ::core::ffi::c_char,
-    mut len: size_t,
-) -> Object {
-    if (*edata).reuse_strdata {
-        return object {
-            type_0: kObjectTypeString,
-            data: C2Rust_Unnamed {
-                string: String_0 {
-                    data: (if len != 0 {
-                        data
-                    } else {
-                        b"\0".as_ptr() as *const ::core::ffi::c_char
-                    }) as *mut ::core::ffi::c_char,
-                    size: len,
-                },
-            },
-        };
-    } else {
-        return object {
-            type_0: kObjectTypeString,
-            data: C2Rust_Unnamed {
-                string: arena_string(
-                    (*edata).arena,
+            unsafe {
+                arena_string(
+                    self.arena,
                     String_0 {
-                        data: data as *mut ::core::ffi::c_char,
+                        data: data.cast_mut(),
                         size: len,
                     },
-                ),
+                )
+            }
+        };
+        object {
+            type_0: kObjectTypeString,
+            data: object_data { string },
+        }
+    }
+
+    /// Take the value on top of the stack, leaving the container it belongs to
+    /// exposed: upstream's `kv_pop(edata->stack)`.
+    fn take_top(&mut self) -> Object {
+        let top = self.stack.last();
+        self.stack.pop();
+        top
+    }
+
+    /// Move the value on top of the stack into the next free slot of the array
+    /// below it.
+    fn close_list_item(&mut self) {
+        let item = self.take_top();
+        let list = self.stack.last_mut();
+        debug_assert!(list.type_0 == kObjectTypeArray);
+        // SAFETY: the tag says this is an array, and `conv_list_start` sized
+        // it for every item the walk will hand over.
+        unsafe {
+            let array = &mut list.data.array;
+            debug_assert!(array.size < array.capacity);
+            *array.items.add(array.size) = item;
+            array.size += 1;
+        }
+    }
+
+    /// The dictionary the walk is currently filling.
+    ///
+    /// # Safety
+    /// The caller must be inside a dictionary, which every use here is.
+    unsafe fn open_dict(&mut self) -> &mut Dict {
+        let dict = self.stack.last_mut();
+        debug_assert!(dict.type_0 == kObjectTypeDict);
+        // SAFETY: as `close_list_item`.
+        let dict = unsafe { &mut dict.data.dict };
+        debug_assert!(dict.size < dict.capacity);
+        dict
+    }
+}
+
+impl TypvalSink for ObjectSink {
+    const ALLOW_SPECIALS: bool = false;
+    const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_object_convert_one_value()";
+
+    unsafe fn conv_nil(&mut self, _tv: *mut typval_T) {
+        self.stack.push(NIL);
+    }
+
+    unsafe fn conv_bool(&mut self, _tv: *mut typval_T, num: bool) {
+        self.stack.push(object {
+            type_0: kObjectTypeBoolean,
+            data: object_data { boolean: num },
+        });
+    }
+
+    unsafe fn conv_number(&mut self, _tv: *mut typval_T, num: int64_t) {
+        self.stack.push(object {
+            type_0: kObjectTypeInteger,
+            data: object_data {
+                integer: num as Integer,
             },
-        };
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn typval_encode_list_start(edata: *mut EncodedData, len: size_t) {
-    if (*edata).stack.size == (*edata).stack.capacity {
-        (*edata).stack.capacity = if (*edata).stack.capacity << 1 as ::core::ffi::c_int
-            > ::core::mem::size_of::<[Object; 2]>()
-                .wrapping_div(::core::mem::size_of::<Object>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[Object; 2]>()
-                        .wrapping_rem(::core::mem::size_of::<Object>())
-                        == 0) as ::core::ffi::c_int as usize,
-                ) {
-            (*edata).stack.capacity << 1 as ::core::ffi::c_int
-        } else {
-            ::core::mem::size_of::<[Object; 2]>()
-                .wrapping_div(::core::mem::size_of::<Object>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[Object; 2]>()
-                        .wrapping_rem(::core::mem::size_of::<Object>())
-                        == 0) as ::core::ffi::c_int as size_t,
-                )
-        };
-        (*edata).stack.items = (if (*edata).stack.capacity
-            == ::core::mem::size_of::<[Object; 2]>()
-                .wrapping_div(::core::mem::size_of::<Object>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[Object; 2]>()
-                        .wrapping_rem(::core::mem::size_of::<Object>())
-                        == 0) as ::core::ffi::c_int as usize,
-                ) {
-            if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
-                (*edata).stack.items as *mut ::core::ffi::c_void
+        });
+    }
+
+    unsafe fn conv_unsigned_number(&mut self, _tv: *mut typval_T, num: u64) {
+        self.stack.push(object {
+            type_0: kObjectTypeInteger,
+            data: object_data {
+                integer: num as Integer,
+            },
+        });
+    }
+
+    unsafe fn conv_float(&mut self, _tv: *mut typval_T, flt: float_T) -> Flow {
+        self.stack.push(object {
+            type_0: kObjectTypeFloat,
+            data: object_data {
+                floating: flt as Float,
+            },
+        });
+        Flow::Go
+    }
+
+    unsafe fn conv_string(&mut self, _tv: *mut typval_T, buf: *mut c_char, len: size_t) -> Flow {
+        debug_assert!(len == 0 || !buf.is_null());
+        // SAFETY: the walk hands over `len` readable bytes.
+        let obj = unsafe { self.cbuf_to_obj(buf, len) };
+        self.stack.push(obj);
+        Flow::Go
+    }
+
+    /// An `ext` value has no API image, so it comes out as nil — and falling
+    /// through leaves its buffer for the walk to free.
+    unsafe fn conv_ext_string(
+        &mut self,
+        _tv: *mut typval_T,
+        _buf: *mut c_char,
+        _len: size_t,
+        _ext_type: i8,
+    ) -> Flow {
+        self.stack.push(NIL);
+        Flow::Go
+    }
+
+    /// A blob is bytes, and so is a `String` object.
+    unsafe fn conv_blob(&mut self, _tv: *mut typval_T, blob: *const blob_T, len: c_int) {
+        let len = len as size_t;
+        // SAFETY: a non-empty blob has a `bv_ga` holding `len` bytes.
+        let obj = unsafe {
+            let data = if len != 0 {
+                (*blob).bv_ga.ga_data.cast::<c_char>()
             } else {
-                _memcpy_free(
-                    &raw mut (*edata).stack.init_array as *mut Object as *mut ::core::ffi::c_void,
-                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                    (*edata)
-                        .stack
-                        .size
-                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                )
-            }
-        } else {
-            if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
-                memcpy(
-                    xmalloc(
-                        (*edata)
-                            .stack
-                            .capacity
-                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                    ),
-                    (*edata).stack.items as *const ::core::ffi::c_void,
-                    (*edata)
-                        .stack
-                        .size
-                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                )
-            } else {
-                xrealloc(
-                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                    (*edata)
-                        .stack
-                        .capacity
-                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                )
-            }
-        }) as *mut Object;
-    } else {
-    };
-    let c2rust_fresh32 = (*edata).stack.size;
-    (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-    *(*edata).stack.items.offset(c2rust_fresh32 as isize) = object {
-        type_0: kObjectTypeArray,
-        data: C2Rust_Unnamed {
-            array: arena_array((*edata).arena, len),
-        },
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn typval_encode_between_list_items(edata: *mut EncodedData) {
-    (*edata).stack.size = (*edata).stack.size.wrapping_sub(1);
-    let mut item: Object = *(*edata).stack.items.offset((*edata).stack.size as isize);
-    let list: *mut Object = (*edata).stack.items.offset(
-        (*edata)
-            .stack
-            .size
-            .wrapping_sub(0 as size_t)
-            .wrapping_sub(1 as size_t) as isize,
-    );
-    '_c2rust_label: {
-        if (*list).type_0 as ::core::ffi::c_uint
-            == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-        } else {
-            __assert_fail(
-                b"list->type == kObjectTypeArray\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                115 as ::core::ffi::c_uint,
-                b"void typval_encode_between_list_items(EncodedData *const)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    '_c2rust_label_0: {
-        if (*list).data.array.size < (*list).data.array.capacity {
-        } else {
-            __assert_fail(
-                b"list->data.array.size < list->data.array.capacity\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                116 as ::core::ffi::c_uint,
-                b"void typval_encode_between_list_items(EncodedData *const)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let c2rust_fresh33 = (*list).data.array.size;
-    (*list).data.array.size = (*list).data.array.size.wrapping_add(1);
-    *(*list).data.array.items.offset(c2rust_fresh33 as isize) = item;
-}
-#[inline(always)]
-unsafe extern "C" fn typval_encode_list_end(edata: *mut EncodedData) {
-    typval_encode_between_list_items(edata);
-    let list: *const Object = (*edata).stack.items.offset(
-        (*edata)
-            .stack
-            .size
-            .wrapping_sub(0 as size_t)
-            .wrapping_sub(1 as size_t) as isize,
-    );
-    '_c2rust_label: {
-        if (*list).data.array.size == (*list).data.array.capacity {
-        } else {
-            __assert_fail(
-                b"list->data.array.size == list->data.array.capacity\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                129 as ::core::ffi::c_uint,
-                b"void typval_encode_list_end(EncodedData *const)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn typval_encode_dict_start(edata: *mut EncodedData, len: size_t) {
-    if (*edata).stack.size == (*edata).stack.capacity {
-        (*edata).stack.capacity = if (*edata).stack.capacity << 1 as ::core::ffi::c_int
-            > ::core::mem::size_of::<[Object; 2]>()
-                .wrapping_div(::core::mem::size_of::<Object>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[Object; 2]>()
-                        .wrapping_rem(::core::mem::size_of::<Object>())
-                        == 0) as ::core::ffi::c_int as usize,
-                ) {
-            (*edata).stack.capacity << 1 as ::core::ffi::c_int
-        } else {
-            ::core::mem::size_of::<[Object; 2]>()
-                .wrapping_div(::core::mem::size_of::<Object>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[Object; 2]>()
-                        .wrapping_rem(::core::mem::size_of::<Object>())
-                        == 0) as ::core::ffi::c_int as size_t,
-                )
-        };
-        (*edata).stack.items = (if (*edata).stack.capacity
-            == ::core::mem::size_of::<[Object; 2]>()
-                .wrapping_div(::core::mem::size_of::<Object>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[Object; 2]>()
-                        .wrapping_rem(::core::mem::size_of::<Object>())
-                        == 0) as ::core::ffi::c_int as usize,
-                ) {
-            if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
-                (*edata).stack.items as *mut ::core::ffi::c_void
-            } else {
-                _memcpy_free(
-                    &raw mut (*edata).stack.init_array as *mut Object as *mut ::core::ffi::c_void,
-                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                    (*edata)
-                        .stack
-                        .size
-                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                )
-            }
-        } else {
-            if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
-                memcpy(
-                    xmalloc(
-                        (*edata)
-                            .stack
-                            .capacity
-                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                    ),
-                    (*edata).stack.items as *const ::core::ffi::c_void,
-                    (*edata)
-                        .stack
-                        .size
-                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                )
-            } else {
-                xrealloc(
-                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                    (*edata)
-                        .stack
-                        .capacity
-                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                )
-            }
-        }) as *mut Object;
-    } else {
-    };
-    let c2rust_fresh30 = (*edata).stack.size;
-    (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-    *(*edata).stack.items.offset(c2rust_fresh30 as isize) = object {
-        type_0: kObjectTypeDict,
-        data: C2Rust_Unnamed {
-            dict: arena_dict((*edata).arena, len),
-        },
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn typval_encode_after_key(edata: *mut EncodedData) {
-    (*edata).stack.size = (*edata).stack.size.wrapping_sub(1);
-    let mut key: Object = *(*edata).stack.items.offset((*edata).stack.size as isize);
-    let dict: *mut Object = (*edata).stack.items.offset(
-        (*edata)
-            .stack
-            .size
-            .wrapping_sub(0 as size_t)
-            .wrapping_sub(1 as size_t) as isize,
-    );
-    '_c2rust_label: {
-        if (*dict).type_0 as ::core::ffi::c_uint
-            == kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-        } else {
-            __assert_fail(
-                b"dict->type == kObjectTypeDict\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                154 as ::core::ffi::c_uint,
-                b"void typval_encode_after_key(EncodedData *const)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    '_c2rust_label_0: {
-        if (*dict).data.dict.size < (*dict).data.dict.capacity {
-        } else {
-            __assert_fail(
-                b"dict->data.dict.size < dict->data.dict.capacity\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                155 as ::core::ffi::c_uint,
-                b"void typval_encode_after_key(EncodedData *const)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    if key.type_0 as ::core::ffi::c_uint
-        == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        (*(*dict)
-            .data
-            .dict
-            .items
-            .offset((*dict).data.dict.size as isize))
-        .key = key.data.string;
-    } else {
-        (*(*dict)
-            .data
-            .dict
-            .items
-            .offset((*dict).data.dict.size as isize))
-        .key = String_0 {
-            data: b"__INVALID_KEY__\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            size: ::core::mem::size_of::<[::core::ffi::c_char; 16]>().wrapping_sub(1 as size_t),
-        };
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn typval_encode_between_dict_items(edata: *mut EncodedData) {
-    (*edata).stack.size = (*edata).stack.size.wrapping_sub(1);
-    let mut val: Object = *(*edata).stack.items.offset((*edata).stack.size as isize);
-    let dict: *mut Object = (*edata).stack.items.offset(
-        (*edata)
-            .stack
-            .size
-            .wrapping_sub(0 as size_t)
-            .wrapping_sub(1 as size_t) as isize,
-    );
-    '_c2rust_label: {
-        if (*dict).type_0 as ::core::ffi::c_uint
-            == kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-        } else {
-            __assert_fail(
-                b"dict->type == kObjectTypeDict\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                173 as ::core::ffi::c_uint,
-                b"void typval_encode_between_dict_items(EncodedData *const)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    '_c2rust_label_0: {
-        if (*dict).data.dict.size < (*dict).data.dict.capacity {
-        } else {
-            __assert_fail(
-                b"dict->data.dict.size < dict->data.dict.capacity\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                174 as ::core::ffi::c_uint,
-                b"void typval_encode_between_dict_items(EncodedData *const)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let c2rust_fresh34 = (*dict).data.dict.size;
-    (*dict).data.dict.size = (*dict).data.dict.size.wrapping_add(1);
-    (*(*dict).data.dict.items.offset(c2rust_fresh34 as isize)).value = val;
-}
-#[inline(always)]
-unsafe extern "C" fn typval_encode_dict_end(edata: *mut EncodedData) {
-    typval_encode_between_dict_items(edata);
-    let dict: *const Object = (*edata).stack.items.offset(
-        (*edata)
-            .stack
-            .size
-            .wrapping_sub(0 as size_t)
-            .wrapping_sub(1 as size_t) as isize,
-    );
-    '_c2rust_label: {
-        if (*dict).data.dict.size == (*dict).data.dict.capacity {
-        } else {
-            __assert_fail(
-                b"dict->data.dict.size == dict->data.dict.capacity\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                187 as ::core::ffi::c_uint,
-                b"void typval_encode_dict_end(EncodedData *const)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn _typval_encode_object_check_self_reference(
-    edata: *mut EncodedData,
-    _val: *mut ::core::ffi::c_void,
-    val_copyID: *mut ::core::ffi::c_int,
-    _mpstack: *const MPConvStack,
-    copyID: ::core::ffi::c_int,
-    _conv_type: MPConvStackValType,
-    _objname: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    if *val_copyID == copyID {
-        if (*edata).stack.size == (*edata).stack.capacity {
-            (*edata).stack.capacity = if (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                > ::core::mem::size_of::<[Object; 2]>()
-                    .wrapping_div(::core::mem::size_of::<Object>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[Object; 2]>()
-                            .wrapping_rem(::core::mem::size_of::<Object>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                (*edata).stack.capacity << 1 as ::core::ffi::c_int
-            } else {
-                ::core::mem::size_of::<[Object; 2]>()
-                    .wrapping_div(::core::mem::size_of::<Object>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[Object; 2]>()
-                            .wrapping_rem(::core::mem::size_of::<Object>())
-                            == 0) as ::core::ffi::c_int as size_t,
-                    )
+                c"".as_ptr()
             };
-            (*edata).stack.items = (if (*edata).stack.capacity
-                == ::core::mem::size_of::<[Object; 2]>()
-                    .wrapping_div(::core::mem::size_of::<Object>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[Object; 2]>()
-                            .wrapping_rem(::core::mem::size_of::<Object>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
-                    (*edata).stack.items as *mut ::core::ffi::c_void
-                } else {
-                    _memcpy_free(
-                        &raw mut (*edata).stack.init_array as *mut Object
-                            as *mut ::core::ffi::c_void,
-                        (*edata).stack.items as *mut ::core::ffi::c_void,
-                        (*edata)
-                            .stack
-                            .size
-                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                    )
-                }
+            self.cbuf_to_obj(data, len)
+        };
+        self.stack.push(obj);
+    }
+
+    /// A funcref that is really a Lua function goes back as a `LuaRef`;
+    /// anything else is nil.  Either way the walk stops here, so a partial's
+    /// arguments and self dictionary are never visited.
+    unsafe fn conv_func_start(
+        &mut self,
+        _tv: *mut typval_T,
+        fun: *mut c_char,
+        _prefix: &'static CStr,
+        _path: &ConvPath,
+    ) -> Flow {
+        // SAFETY: `fun` is NULL or a NUL-terminated function name.
+        let luaref = unsafe {
+            let fp = if fun.is_null() {
+                ::core::ptr::null_mut()
             } else {
-                if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
-                    memcpy(
-                        xmalloc(
-                            (*edata)
-                                .stack
-                                .capacity
-                                .wrapping_mul(::core::mem::size_of::<Object>()),
-                        ),
-                        (*edata).stack.items as *const ::core::ffi::c_void,
-                        (*edata)
-                            .stack
-                            .size
-                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                    )
-                } else {
-                    xrealloc(
-                        (*edata).stack.items as *mut ::core::ffi::c_void,
-                        (*edata)
-                            .stack
-                            .capacity
-                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                    )
-                }
-            }) as *mut Object;
-        } else {
+                find_func(fun)
+            };
+            if fp.is_null() || (*fp).uf_flags & FC_LUAREF == 0 {
+                None
+            } else {
+                Some(api_new_luaref((*fp).uf_luaref))
+            }
         };
-        let c2rust_fresh31 = (*edata).stack.size;
-        (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-        *(*edata).stack.items.offset(c2rust_fresh31 as isize) = object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        };
-        return OK;
-    }
-    *val_copyID = copyID;
-    return NOTDONE;
-}
-unsafe extern "C" fn _typval_encode_object_convert_one_value(
-    edata: *mut EncodedData,
-    mpstack: *mut MPConvStack,
-    _cur_mpsv: *mut MPConvStackVal,
-    tv: *mut typval_T,
-    copyID: ::core::ffi::c_int,
-    objname: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    '_typval_encode_stop_converting_one_item: {
-        match (*tv).v_type as ::core::ffi::c_uint {
-            2 => {
-                let len_: size_t = tv_strlen(tv);
-                let str_: *const ::core::ffi::c_char = (*tv).vval.v_string;
-                '_c2rust_label: {
-                    if len_ == 0 as size_t || !str_.is_null() {
-                    } else {
-                        __assert_fail(
-                            b"len_ == 0 || str_ != NULL\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                            b"src/nvim/api/private/converter.rs\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                            335 as ::core::ffi::c_uint,
-                            b"int _typval_encode_object_convert_one_value(EncodedData *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                        );
-                    }
-                };
-                if (*edata).stack.size == (*edata).stack.capacity {
-                    (*edata).stack.capacity = if (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                        > ::core::mem::size_of::<[Object; 2]>()
-                            .wrapping_div(::core::mem::size_of::<Object>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[Object; 2]>()
-                                    .wrapping_rem(::core::mem::size_of::<Object>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        ::core::mem::size_of::<[Object; 2]>()
-                            .wrapping_div(::core::mem::size_of::<Object>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[Object; 2]>()
-                                    .wrapping_rem(::core::mem::size_of::<Object>())
-                                    == 0) as ::core::ffi::c_int
-                                    as size_t,
-                            )
-                    };
-                    (*edata).stack.items = (if (*edata).stack.capacity
-                        == ::core::mem::size_of::<[Object; 2]>()
-                            .wrapping_div(::core::mem::size_of::<Object>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[Object; 2]>()
-                                    .wrapping_rem(::core::mem::size_of::<Object>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
-                        {
-                            (*edata).stack.items as *mut ::core::ffi::c_void
-                        } else {
-                            _memcpy_free(
-                                &raw mut (*edata).stack.init_array as *mut Object
-                                    as *mut ::core::ffi::c_void,
-                                (*edata).stack.items as *mut ::core::ffi::c_void,
-                                (*edata)
-                                    .stack
-                                    .size
-                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                            )
-                        }
-                    } else {
-                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
-                        {
-                            memcpy(
-                                xmalloc(
-                                    (*edata)
-                                        .stack
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                ),
-                                (*edata).stack.items as *const ::core::ffi::c_void,
-                                (*edata)
-                                    .stack
-                                    .size
-                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                            )
-                        } else {
-                            xrealloc(
-                                (*edata).stack.items as *mut ::core::ffi::c_void,
-                                (*edata)
-                                    .stack
-                                    .capacity
-                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                            )
-                        }
-                    }) as *mut Object;
-                } else {
-                };
-                let c2rust_fresh5 = (*edata).stack.size;
-                (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-                *(*edata).stack.items.offset(c2rust_fresh5 as isize) =
-                    typval_cbuf_to_obj(edata, str_, len_);
-            }
-            1 => {
-                if (*edata).stack.size == (*edata).stack.capacity {
-                    (*edata).stack.capacity = if (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                        > ::core::mem::size_of::<[Object; 2]>()
-                            .wrapping_div(::core::mem::size_of::<Object>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[Object; 2]>()
-                                    .wrapping_rem(::core::mem::size_of::<Object>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        ::core::mem::size_of::<[Object; 2]>()
-                            .wrapping_div(::core::mem::size_of::<Object>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[Object; 2]>()
-                                    .wrapping_rem(::core::mem::size_of::<Object>())
-                                    == 0) as ::core::ffi::c_int
-                                    as size_t,
-                            )
-                    };
-                    (*edata).stack.items = (if (*edata).stack.capacity
-                        == ::core::mem::size_of::<[Object; 2]>()
-                            .wrapping_div(::core::mem::size_of::<Object>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[Object; 2]>()
-                                    .wrapping_rem(::core::mem::size_of::<Object>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
-                        {
-                            (*edata).stack.items as *mut ::core::ffi::c_void
-                        } else {
-                            _memcpy_free(
-                                &raw mut (*edata).stack.init_array as *mut Object
-                                    as *mut ::core::ffi::c_void,
-                                (*edata).stack.items as *mut ::core::ffi::c_void,
-                                (*edata)
-                                    .stack
-                                    .size
-                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                            )
-                        }
-                    } else {
-                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
-                        {
-                            memcpy(
-                                xmalloc(
-                                    (*edata)
-                                        .stack
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                ),
-                                (*edata).stack.items as *const ::core::ffi::c_void,
-                                (*edata)
-                                    .stack
-                                    .size
-                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                            )
-                        } else {
-                            xrealloc(
-                                (*edata).stack.items as *mut ::core::ffi::c_void,
-                                (*edata)
-                                    .stack
-                                    .capacity
-                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                            )
-                        }
-                    }) as *mut Object;
-                } else {
-                };
-                let c2rust_fresh6 = (*edata).stack.size;
-                (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-                *(*edata).stack.items.offset(c2rust_fresh6 as isize) = object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed {
-                        integer: (*tv).vval.v_number,
-                    },
-                };
-            }
-            6 => {
-                if (*edata).stack.size == (*edata).stack.capacity {
-                    (*edata).stack.capacity = if (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                        > ::core::mem::size_of::<[Object; 2]>()
-                            .wrapping_div(::core::mem::size_of::<Object>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[Object; 2]>()
-                                    .wrapping_rem(::core::mem::size_of::<Object>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        ::core::mem::size_of::<[Object; 2]>()
-                            .wrapping_div(::core::mem::size_of::<Object>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[Object; 2]>()
-                                    .wrapping_rem(::core::mem::size_of::<Object>())
-                                    == 0) as ::core::ffi::c_int
-                                    as size_t,
-                            )
-                    };
-                    (*edata).stack.items = (if (*edata).stack.capacity
-                        == ::core::mem::size_of::<[Object; 2]>()
-                            .wrapping_div(::core::mem::size_of::<Object>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[Object; 2]>()
-                                    .wrapping_rem(::core::mem::size_of::<Object>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
-                        {
-                            (*edata).stack.items as *mut ::core::ffi::c_void
-                        } else {
-                            _memcpy_free(
-                                &raw mut (*edata).stack.init_array as *mut Object
-                                    as *mut ::core::ffi::c_void,
-                                (*edata).stack.items as *mut ::core::ffi::c_void,
-                                (*edata)
-                                    .stack
-                                    .size
-                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                            )
-                        }
-                    } else {
-                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
-                        {
-                            memcpy(
-                                xmalloc(
-                                    (*edata)
-                                        .stack
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                ),
-                                (*edata).stack.items as *const ::core::ffi::c_void,
-                                (*edata)
-                                    .stack
-                                    .size
-                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                            )
-                        } else {
-                            xrealloc(
-                                (*edata).stack.items as *mut ::core::ffi::c_void,
-                                (*edata)
-                                    .stack
-                                    .capacity
-                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                            )
-                        }
-                    }) as *mut Object;
-                } else {
-                };
-                let c2rust_fresh7 = (*edata).stack.size;
-                (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-                *(*edata).stack.items.offset(c2rust_fresh7 as isize) = object {
-                    type_0: kObjectTypeFloat,
-                    data: C2Rust_Unnamed {
-                        floating: (*tv).vval.v_float,
-                    },
-                };
-            }
-            10 => {
-                let len__0: size_t = tv_blob_len((*tv).vval.v_blob) as size_t;
-                let blob_: *const blob_T = (*tv).vval.v_blob;
-                if (*edata).stack.size == (*edata).stack.capacity {
-                    (*edata).stack.capacity = if (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                        > ::core::mem::size_of::<[Object; 2]>()
-                            .wrapping_div(::core::mem::size_of::<Object>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[Object; 2]>()
-                                    .wrapping_rem(::core::mem::size_of::<Object>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        ::core::mem::size_of::<[Object; 2]>()
-                            .wrapping_div(::core::mem::size_of::<Object>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[Object; 2]>()
-                                    .wrapping_rem(::core::mem::size_of::<Object>())
-                                    == 0) as ::core::ffi::c_int
-                                    as size_t,
-                            )
-                    };
-                    (*edata).stack.items = (if (*edata).stack.capacity
-                        == ::core::mem::size_of::<[Object; 2]>()
-                            .wrapping_div(::core::mem::size_of::<Object>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[Object; 2]>()
-                                    .wrapping_rem(::core::mem::size_of::<Object>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
-                        {
-                            (*edata).stack.items as *mut ::core::ffi::c_void
-                        } else {
-                            _memcpy_free(
-                                &raw mut (*edata).stack.init_array as *mut Object
-                                    as *mut ::core::ffi::c_void,
-                                (*edata).stack.items as *mut ::core::ffi::c_void,
-                                (*edata)
-                                    .stack
-                                    .size
-                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                            )
-                        }
-                    } else {
-                        if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object
-                        {
-                            memcpy(
-                                xmalloc(
-                                    (*edata)
-                                        .stack
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                ),
-                                (*edata).stack.items as *const ::core::ffi::c_void,
-                                (*edata)
-                                    .stack
-                                    .size
-                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                            )
-                        } else {
-                            xrealloc(
-                                (*edata).stack.items as *mut ::core::ffi::c_void,
-                                (*edata)
-                                    .stack
-                                    .capacity
-                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                            )
-                        }
-                    }) as *mut Object;
-                } else {
-                };
-                let c2rust_fresh8 = (*edata).stack.size;
-                (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-                *(*edata).stack.items.offset(c2rust_fresh8 as isize) = typval_cbuf_to_obj(
-                    edata,
-                    (if len__0 != 0 {
-                        (*blob_).bv_ga.ga_data
-                    } else {
-                        b"\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void
-                    }) as *const ::core::ffi::c_char,
-                    len__0,
-                );
-            }
-            3 => {
-                let fun_: *const ::core::ffi::c_char = (*tv).vval.v_string;
-                let mut fp: *mut ufunc_T = ::core::ptr::null_mut::<ufunc_T>();
-                if !fun_.is_null()
-                    && {
-                        fp = find_func(fun_);
-                        !fp.is_null()
-                    }
-                    && (*fp).uf_flags & FC_LUAREF != 0
-                {
-                    if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = if (*edata).stack.capacity
-                            << 1 as ::core::ffi::c_int
-                            > ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as size_t,
-                                )
-                        };
-                        (*edata).stack.items = (if (*edata).stack.capacity
-                            == ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                (*edata).stack.items as *mut ::core::ffi::c_void
-                            } else {
-                                _memcpy_free(
-                                    &raw mut (*edata).stack.init_array as *mut Object
-                                        as *mut ::core::ffi::c_void,
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        } else {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                memcpy(
-                                    xmalloc(
-                                        (*edata)
-                                            .stack
-                                            .capacity
-                                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                                    ),
-                                    (*edata).stack.items as *const ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            } else {
-                                xrealloc(
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        }) as *mut Object;
-                    } else {
-                    };
-                    let c2rust_fresh9 = (*edata).stack.size;
-                    (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-                    *(*edata).stack.items.offset(c2rust_fresh9 as isize) = object {
-                        type_0: kObjectTypeLuaRef,
-                        data: C2Rust_Unnamed {
-                            luaref: api_new_luaref((*fp).uf_luaref),
-                        },
-                    };
-                } else {
-                    if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = if (*edata).stack.capacity
-                            << 1 as ::core::ffi::c_int
-                            > ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as size_t,
-                                )
-                        };
-                        (*edata).stack.items = (if (*edata).stack.capacity
-                            == ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                (*edata).stack.items as *mut ::core::ffi::c_void
-                            } else {
-                                _memcpy_free(
-                                    &raw mut (*edata).stack.init_array as *mut Object
-                                        as *mut ::core::ffi::c_void,
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        } else {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                memcpy(
-                                    xmalloc(
-                                        (*edata)
-                                            .stack
-                                            .capacity
-                                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                                    ),
-                                    (*edata).stack.items as *const ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            } else {
-                                xrealloc(
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        }) as *mut Object;
-                    } else {
-                    };
-                    let c2rust_fresh10 = (*edata).stack.size;
-                    (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-                    *(*edata).stack.items.offset(c2rust_fresh10 as isize) = object {
-                        type_0: kObjectTypeNil,
-                        data: C2Rust_Unnamed { boolean: false },
-                    };
-                }
-            }
-            9 => {
-                let pt: *mut partial_T = (*tv).vval.v_partial;
-                let fun: *mut ::core::ffi::c_char = if pt.is_null() {
-                    ::core::ptr::null_mut::<::core::ffi::c_char>()
-                } else {
-                    partial_name(pt)
-                };
-                let _prefix: *const ::core::ffi::c_char = if !fun.is_null()
-                    && !pt.is_null()
-                    && (*pt).pt_name.is_null()
-                    && (*fun.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                        >= 'A' as ::core::ffi::c_uint
-                        && *fun.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                            <= 'Z' as ::core::ffi::c_uint)
-                {
-                    b"g:\0".as_ptr() as *const ::core::ffi::c_char
-                } else {
-                    b"\0".as_ptr() as *const ::core::ffi::c_char
-                };
-                let fun__0: *const ::core::ffi::c_char = fun;
-                let mut fp_0: *mut ufunc_T = ::core::ptr::null_mut::<ufunc_T>();
-                if !fun__0.is_null()
-                    && {
-                        fp_0 = find_func(fun__0);
-                        !fp_0.is_null()
-                    }
-                    && (*fp_0).uf_flags & FC_LUAREF != 0
-                {
-                    if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = if (*edata).stack.capacity
-                            << 1 as ::core::ffi::c_int
-                            > ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as size_t,
-                                )
-                        };
-                        (*edata).stack.items = (if (*edata).stack.capacity
-                            == ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                (*edata).stack.items as *mut ::core::ffi::c_void
-                            } else {
-                                _memcpy_free(
-                                    &raw mut (*edata).stack.init_array as *mut Object
-                                        as *mut ::core::ffi::c_void,
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        } else {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                memcpy(
-                                    xmalloc(
-                                        (*edata)
-                                            .stack
-                                            .capacity
-                                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                                    ),
-                                    (*edata).stack.items as *const ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            } else {
-                                xrealloc(
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        }) as *mut Object;
-                    } else {
-                    };
-                    let c2rust_fresh11 = (*edata).stack.size;
-                    (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-                    *(*edata).stack.items.offset(c2rust_fresh11 as isize) = object {
-                        type_0: kObjectTypeLuaRef,
-                        data: C2Rust_Unnamed {
-                            luaref: api_new_luaref((*fp_0).uf_luaref),
-                        },
-                    };
-                } else {
-                    if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = if (*edata).stack.capacity
-                            << 1 as ::core::ffi::c_int
-                            > ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as size_t,
-                                )
-                        };
-                        (*edata).stack.items = (if (*edata).stack.capacity
-                            == ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                (*edata).stack.items as *mut ::core::ffi::c_void
-                            } else {
-                                _memcpy_free(
-                                    &raw mut (*edata).stack.init_array as *mut Object
-                                        as *mut ::core::ffi::c_void,
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        } else {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                memcpy(
-                                    xmalloc(
-                                        (*edata)
-                                            .stack
-                                            .capacity
-                                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                                    ),
-                                    (*edata).stack.items as *const ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            } else {
-                                xrealloc(
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        }) as *mut Object;
-                    } else {
-                    };
-                    let c2rust_fresh12 = (*edata).stack.size;
-                    (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-                    *(*edata).stack.items.offset(c2rust_fresh12 as isize) = object {
-                        type_0: kObjectTypeNil,
-                        data: C2Rust_Unnamed { boolean: false },
-                    };
-                }
-            }
-            4 => {
-                if (*tv).vval.v_list.is_null()
-                    || tv_list_len((*tv).vval.v_list) == 0 as ::core::ffi::c_int
-                {
-                    if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = if (*edata).stack.capacity
-                            << 1 as ::core::ffi::c_int
-                            > ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as size_t,
-                                )
-                        };
-                        (*edata).stack.items = (if (*edata).stack.capacity
-                            == ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                (*edata).stack.items as *mut ::core::ffi::c_void
-                            } else {
-                                _memcpy_free(
-                                    &raw mut (*edata).stack.init_array as *mut Object
-                                        as *mut ::core::ffi::c_void,
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        } else {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                memcpy(
-                                    xmalloc(
-                                        (*edata)
-                                            .stack
-                                            .capacity
-                                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                                    ),
-                                    (*edata).stack.items as *const ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            } else {
-                                xrealloc(
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        }) as *mut Object;
-                    } else {
-                    };
-                    let c2rust_fresh14 = (*edata).stack.size;
-                    (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-                    *(*edata).stack.items.offset(c2rust_fresh14 as isize) = object {
-                        type_0: kObjectTypeArray,
-                        data: C2Rust_Unnamed {
-                            array: Array {
-                                size: 0 as size_t,
-                                capacity: 0 as size_t,
-                                items: ::core::ptr::null_mut::<Object>(),
-                            },
-                        },
-                    };
-                } else {
-                    let saved_copyID: ::core::ffi::c_int = tv_list_copyid((*tv).vval.v_list);
-                    let te_csr_ret: ::core::ffi::c_int = _typval_encode_object_check_self_reference(
-                        edata,
-                        (*tv).vval.v_list as *mut ::core::ffi::c_void,
-                        &raw mut (*(*tv).vval.v_list).lv_copyID,
-                        mpstack,
-                        copyID,
-                        kMPConvList,
-                        objname,
-                    );
-                    if te_csr_ret != NOTDONE {
-                        return te_csr_ret;
-                    }
-                    typval_encode_list_start(edata, tv_list_len((*tv).vval.v_list) as size_t);
-                    '_c2rust_label_0: {
-                        if saved_copyID != copyID {
-                        } else {
-                            __assert_fail(
-                                b"saved_copyID != copyID\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                b"src/nvim/api/private/converter.rs\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                                383 as ::core::ffi::c_uint,
-                                b"int _typval_encode_object_convert_one_value(EncodedData *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
-                    if (*mpstack).size == (*mpstack).capacity {
-                        (*mpstack).capacity = if (*mpstack).capacity << 1 as ::core::ffi::c_int
-                            > ::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                        .wrapping_rem(::core::mem::size_of::<MPConvStackVal>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            (*mpstack).capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            ::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                        .wrapping_rem(::core::mem::size_of::<MPConvStackVal>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as size_t,
-                                )
-                        };
-                        (*mpstack).items = (if (*mpstack).capacity
-                            == ::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                        .wrapping_rem(::core::mem::size_of::<MPConvStackVal>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            if (*mpstack).items
-                                == &raw mut (*mpstack).init_array as *mut MPConvStackVal
-                            {
-                                (*mpstack).items as *mut ::core::ffi::c_void
-                            } else {
-                                _memcpy_free(
-                                    &raw mut (*mpstack).init_array as *mut MPConvStackVal
-                                        as *mut ::core::ffi::c_void,
-                                    (*mpstack).items as *mut ::core::ffi::c_void,
-                                    (*mpstack)
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
-                                )
-                            }
-                        } else {
-                            if (*mpstack).items
-                                == &raw mut (*mpstack).init_array as *mut MPConvStackVal
-                            {
-                                memcpy(
-                                    xmalloc(
-                                        (*mpstack)
-                                            .capacity
-                                            .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
-                                    ),
-                                    (*mpstack).items as *const ::core::ffi::c_void,
-                                    (*mpstack)
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
-                                )
-                            } else {
-                                xrealloc(
-                                    (*mpstack).items as *mut ::core::ffi::c_void,
-                                    (*mpstack)
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
-                                )
-                            }
-                        }) as *mut MPConvStackVal;
-                    } else {
-                    };
-                    let c2rust_fresh15 = (*mpstack).size;
-                    (*mpstack).size = (*mpstack).size.wrapping_add(1);
-                    *(*mpstack).items.offset(c2rust_fresh15 as isize) = MPConvStackVal {
-                        type_0: kMPConvList,
-                        tv: tv,
-                        saved_copyID: saved_copyID,
-                        data: C2Rust_Unnamed_2 {
-                            l: C2Rust_Unnamed_5 {
-                                list: (*tv).vval.v_list,
-                                li: tv_list_first((*tv).vval.v_list),
-                            },
-                        },
-                    };
-                }
-            }
-            7 => match (*tv).vval.v_bool as ::core::ffi::c_uint {
-                1 | 0 => {
-                    if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = if (*edata).stack.capacity
-                            << 1 as ::core::ffi::c_int
-                            > ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as size_t,
-                                )
-                        };
-                        (*edata).stack.items = (if (*edata).stack.capacity
-                            == ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                (*edata).stack.items as *mut ::core::ffi::c_void
-                            } else {
-                                _memcpy_free(
-                                    &raw mut (*edata).stack.init_array as *mut Object
-                                        as *mut ::core::ffi::c_void,
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        } else {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                memcpy(
-                                    xmalloc(
-                                        (*edata)
-                                            .stack
-                                            .capacity
-                                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                                    ),
-                                    (*edata).stack.items as *const ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            } else {
-                                xrealloc(
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        }) as *mut Object;
-                    } else {
-                    };
-                    let c2rust_fresh16 = (*edata).stack.size;
-                    (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-                    *(*edata).stack.items.offset(c2rust_fresh16 as isize) = object {
-                        type_0: kObjectTypeBoolean,
-                        data: C2Rust_Unnamed {
-                            boolean: (*tv).vval.v_bool as ::core::ffi::c_uint
-                                == kBoolVarTrue as ::core::ffi::c_int as ::core::ffi::c_uint,
-                        },
-                    };
-                }
-                _ => {}
+        self.stack.push(match luaref {
+            Some(luaref) => object {
+                type_0: kObjectTypeLuaRef,
+                data: object_data { luaref },
             },
-            8 => match (*tv).vval.v_special as ::core::ffi::c_uint {
-                0 => {
-                    if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = if (*edata).stack.capacity
-                            << 1 as ::core::ffi::c_int
-                            > ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as size_t,
-                                )
-                        };
-                        (*edata).stack.items = (if (*edata).stack.capacity
-                            == ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                (*edata).stack.items as *mut ::core::ffi::c_void
-                            } else {
-                                _memcpy_free(
-                                    &raw mut (*edata).stack.init_array as *mut Object
-                                        as *mut ::core::ffi::c_void,
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        } else {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                memcpy(
-                                    xmalloc(
-                                        (*edata)
-                                            .stack
-                                            .capacity
-                                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                                    ),
-                                    (*edata).stack.items as *const ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            } else {
-                                xrealloc(
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        }) as *mut Object;
-                    } else {
-                    };
-                    let c2rust_fresh17 = (*edata).stack.size;
-                    (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-                    *(*edata).stack.items.offset(c2rust_fresh17 as isize) = object {
-                        type_0: kObjectTypeNil,
-                        data: C2Rust_Unnamed { boolean: false },
-                    };
-                }
-                _ => {}
-            },
-            5 => {
-                if (*tv).vval.v_dict.is_null()
-                    || (*(*tv).vval.v_dict).dv_hashtab.ht_used == 0 as size_t
-                {
-                    if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = if (*edata).stack.capacity
-                            << 1 as ::core::ffi::c_int
-                            > ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as size_t,
-                                )
-                        };
-                        (*edata).stack.items = (if (*edata).stack.capacity
-                            == ::core::mem::size_of::<[Object; 2]>()
-                                .wrapping_div(::core::mem::size_of::<Object>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                (*edata).stack.items as *mut ::core::ffi::c_void
-                            } else {
-                                _memcpy_free(
-                                    &raw mut (*edata).stack.init_array as *mut Object
-                                        as *mut ::core::ffi::c_void,
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        } else {
-                            if (*edata).stack.items
-                                == &raw mut (*edata).stack.init_array as *mut Object
-                            {
-                                memcpy(
-                                    xmalloc(
-                                        (*edata)
-                                            .stack
-                                            .capacity
-                                            .wrapping_mul(::core::mem::size_of::<Object>()),
-                                    ),
-                                    (*edata).stack.items as *const ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            } else {
-                                xrealloc(
-                                    (*edata).stack.items as *mut ::core::ffi::c_void,
-                                    (*edata)
-                                        .stack
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                )
-                            }
-                        }) as *mut Object;
-                    } else {
-                    };
-                    let c2rust_fresh18 = (*edata).stack.size;
-                    (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-                    *(*edata).stack.items.offset(c2rust_fresh18 as isize) = object {
-                        type_0: kObjectTypeDict,
-                        data: C2Rust_Unnamed {
-                            dict: Dict {
-                                size: 0 as size_t,
-                                capacity: 0 as size_t,
-                                items: ::core::ptr::null_mut::<KeyValuePair>(),
-                            },
-                        },
-                    };
-                } else {
-                    let mut type_di: *const dictitem_T = ::core::ptr::null::<dictitem_T>();
-                    let mut val_di: *const dictitem_T = ::core::ptr::null::<dictitem_T>();
-                    's_647: {
-                        if TYPVAL_ENCODE_ALLOW_SPECIALS != 0
-                            && (*(*tv).vval.v_dict).dv_hashtab.ht_used == 2 as size_t
-                            && {
-                                type_di = tv_dict_find(
-                                    (*tv).vval.v_dict,
-                                    b"_TYPE\0".as_ptr() as *const ::core::ffi::c_char,
-                                    ::core::mem::size_of::<[::core::ffi::c_char; 6]>()
-                                        .wrapping_sub(1 as usize)
-                                        as ptrdiff_t,
-                                );
-                                !type_di.is_null()
-                            }
-                            && (*type_di).di_tv.v_type as ::core::ffi::c_uint
-                                == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-                            && {
-                                val_di = tv_dict_find(
-                                    (*tv).vval.v_dict,
-                                    b"_VAL\0".as_ptr() as *const ::core::ffi::c_char,
-                                    ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                                        .wrapping_sub(1 as usize)
-                                        as ptrdiff_t,
-                                );
-                                !val_di.is_null()
-                            }
-                        {
-                            let mut i: size_t = 0;
-                            i = 0 as size_t;
-                            while i < ::core::mem::size_of::<[*const list_T; 8]>()
-                                .wrapping_div(::core::mem::size_of::<*const list_T>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[*const list_T; 8]>()
-                                        .wrapping_rem(::core::mem::size_of::<*const list_T>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                )
-                            {
-                                if (*type_di).di_tv.vval.v_list
-                                    == (*eval_msgpack_type_lists.ptr())[i as usize] as *mut list_T
-                                {
-                                    break;
-                                }
-                                i = i.wrapping_add(1);
-                            }
-                            if i != ::core::mem::size_of::<[*const list_T; 8]>()
-                                .wrapping_div(::core::mem::size_of::<*const list_T>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[*const list_T; 8]>()
-                                        .wrapping_rem(::core::mem::size_of::<*const list_T>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                )
-                            {
-                                match i as MessagePackType as ::core::ffi::c_uint {
-                                    0 => {
-                                        if (*edata).stack.size == (*edata).stack.capacity {
-                                            (*edata).stack.capacity = if (*edata).stack.capacity
-                                                << 1 as ::core::ffi::c_int
-                                                > ::core::mem::size_of::<[Object; 2]>()
-                                                    .wrapping_div(::core::mem::size_of::<Object>())
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[Object; 2]>()
-                                                            .wrapping_rem(::core::mem::size_of::<
-                                                                Object,
-                                                            >(
-                                                            ))
-                                                            == 0)
-                                                            as ::core::ffi::c_int
-                                                            as usize,
-                                                    ) {
-                                                (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                                            } else {
-                                                ::core::mem::size_of::<[Object; 2]>()
-                                                    .wrapping_div(::core::mem::size_of::<Object>())
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[Object; 2]>()
-                                                            .wrapping_rem(::core::mem::size_of::<
-                                                                Object,
-                                                            >(
-                                                            ))
-                                                            == 0)
-                                                            as ::core::ffi::c_int
-                                                            as size_t,
-                                                    )
-                                            };
-                                            (*edata).stack.items = (if (*edata).stack.capacity
-                                                == ::core::mem::size_of::<[Object; 2]>()
-                                                    .wrapping_div(::core::mem::size_of::<Object>())
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[Object; 2]>()
-                                                            .wrapping_rem(::core::mem::size_of::<
-                                                                Object,
-                                                            >(
-                                                            ))
-                                                            == 0)
-                                                            as ::core::ffi::c_int
-                                                            as usize,
-                                                    ) {
-                                                if (*edata).stack.items
-                                                    == &raw mut (*edata).stack.init_array
-                                                        as *mut Object
-                                                {
-                                                    (*edata).stack.items as *mut ::core::ffi::c_void
-                                                } else {
-                                                    _memcpy_free(
-                                                        &raw mut (*edata).stack.init_array
-                                                            as *mut Object
-                                                            as *mut ::core::ffi::c_void,
-                                                        (*edata).stack.items
-                                                            as *mut ::core::ffi::c_void,
-                                                        (*edata).stack.size.wrapping_mul(
-                                                            ::core::mem::size_of::<Object>(),
-                                                        ),
-                                                    )
-                                                }
-                                            } else {
-                                                if (*edata).stack.items
-                                                    == &raw mut (*edata).stack.init_array
-                                                        as *mut Object
-                                                {
-                                                    memcpy(
-                                                        xmalloc(
-                                                            (*edata).stack.capacity.wrapping_mul(
-                                                                ::core::mem::size_of::<Object>(),
-                                                            ),
-                                                        ),
-                                                        (*edata).stack.items
-                                                            as *const ::core::ffi::c_void,
-                                                        (*edata).stack.size.wrapping_mul(
-                                                            ::core::mem::size_of::<Object>(),
-                                                        ),
-                                                    )
-                                                } else {
-                                                    xrealloc(
-                                                        (*edata).stack.items
-                                                            as *mut ::core::ffi::c_void,
-                                                        (*edata).stack.capacity.wrapping_mul(
-                                                            ::core::mem::size_of::<Object>(),
-                                                        ),
-                                                    )
-                                                }
-                                            })
-                                                as *mut Object;
-                                        } else {
-                                        };
-                                        let c2rust_fresh19 = (*edata).stack.size;
-                                        (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-                                        *(*edata).stack.items.offset(c2rust_fresh19 as isize) =
-                                            object {
-                                                type_0: kObjectTypeNil,
-                                                data: C2Rust_Unnamed { boolean: false },
-                                            };
-                                        break '_typval_encode_stop_converting_one_item;
-                                    }
-                                    1 => {
-                                        if (*val_di).di_tv.v_type as ::core::ffi::c_uint
-                                            == VAR_NUMBER as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
-                                            if (*edata).stack.size == (*edata).stack.capacity {
-                                                (*edata).stack.capacity = if (*edata).stack.capacity
-                                                    << 1 as ::core::ffi::c_int
-                                                    > ::core::mem::size_of::<[Object; 2]>()
-                                                        .wrapping_div(
-                                                            ::core::mem::size_of::<Object>(),
-                                                        )
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[Object; 2]>()
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                == 0)
-                                                                as ::core::ffi::c_int
-                                                                as usize,
-                                                        ) {
-                                                    (*edata).stack.capacity
-                                                        << 1 as ::core::ffi::c_int
-                                                } else {
-                                                    ::core::mem::size_of::<[Object; 2]>()
-                                                        .wrapping_div(
-                                                            ::core::mem::size_of::<Object>(),
-                                                        )
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[Object; 2]>()
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                == 0)
-                                                                as ::core::ffi::c_int
-                                                                as size_t,
-                                                        )
-                                                };
-                                                (*edata).stack.items = (if (*edata).stack.capacity
-                                                    == ::core::mem::size_of::<[Object; 2]>()
-                                                        .wrapping_div(
-                                                            ::core::mem::size_of::<Object>(),
-                                                        )
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[Object; 2]>()
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                == 0)
-                                                                as ::core::ffi::c_int
-                                                                as usize,
-                                                        ) {
-                                                    if (*edata).stack.items
-                                                        == &raw mut (*edata).stack.init_array
-                                                            as *mut Object
-                                                    {
-                                                        (*edata).stack.items
-                                                            as *mut ::core::ffi::c_void
-                                                    } else {
-                                                        _memcpy_free(
-                                                            &raw mut (*edata).stack.init_array
-                                                                as *mut Object
-                                                                as *mut ::core::ffi::c_void,
-                                                            (*edata).stack.items
-                                                                as *mut ::core::ffi::c_void,
-                                                            (*edata).stack.size.wrapping_mul(
-                                                                ::core::mem::size_of::<Object>(),
-                                                            ),
-                                                        )
-                                                    }
-                                                } else {
-                                                    if (*edata).stack.items
-                                                        == &raw mut (*edata).stack.init_array
-                                                            as *mut Object
-                                                    {
-                                                        memcpy(
-                                                            xmalloc(
-                                                                (*edata)
-                                                                    .stack
-                                                                    .capacity
-                                                                    .wrapping_mul(
-                                                                        ::core::mem::size_of::<
-                                                                            Object,
-                                                                        >(
-                                                                        ),
-                                                                    ),
-                                                            ),
-                                                            (*edata).stack.items
-                                                                as *const ::core::ffi::c_void,
-                                                            (*edata).stack.size.wrapping_mul(
-                                                                ::core::mem::size_of::<Object>(),
-                                                            ),
-                                                        )
-                                                    } else {
-                                                        xrealloc(
-                                                            (*edata).stack.items
-                                                                as *mut ::core::ffi::c_void,
-                                                            (*edata).stack.capacity.wrapping_mul(
-                                                                ::core::mem::size_of::<Object>(),
-                                                            ),
-                                                        )
-                                                    }
-                                                })
-                                                    as *mut Object;
-                                            } else {
-                                            };
-                                            let c2rust_fresh20 = (*edata).stack.size;
-                                            (*edata).stack.size =
-                                                (*edata).stack.size.wrapping_add(1);
-                                            *(*edata).stack.items.offset(c2rust_fresh20 as isize) =
-                                                object {
-                                                    type_0: kObjectTypeBoolean,
-                                                    data: C2Rust_Unnamed {
-                                                        boolean: (*val_di).di_tv.vval.v_number != 0,
-                                                    },
-                                                };
-                                            break '_typval_encode_stop_converting_one_item;
-                                        }
-                                    }
-                                    2 => {
-                                        let mut val_list: *const list_T =
-                                            ::core::ptr::null::<list_T>();
-                                        let mut sign: varnumber_T = 0;
-                                        let mut highest_bits: varnumber_T = 0;
-                                        let mut high_bits: varnumber_T = 0;
-                                        let mut low_bits: varnumber_T = 0;
-                                        if !((*val_di).di_tv.v_type as ::core::ffi::c_uint
-                                            != VAR_LIST as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                            || {
-                                                val_list = (*val_di).di_tv.vval.v_list;
-                                                tv_list_len(val_list) != 4 as ::core::ffi::c_int
-                                            })
-                                        {
-                                            let sign_li: *const listitem_T =
-                                                tv_list_first(val_list);
-                                            if !((*sign_li).li_tv.v_type as ::core::ffi::c_uint
-                                                != VAR_NUMBER as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                                || {
-                                                    sign = (*sign_li).li_tv.vval.v_number;
-                                                    sign == 0 as varnumber_T
-                                                })
-                                            {
-                                                let highest_bits_li: *const listitem_T =
-                                                    (*sign_li).li_next;
-                                                if !((*highest_bits_li).li_tv.v_type
-                                                    as ::core::ffi::c_uint
-                                                    != VAR_NUMBER as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                    || {
-                                                        highest_bits =
-                                                            (*highest_bits_li).li_tv.vval.v_number;
-                                                        highest_bits < 0 as varnumber_T
-                                                    })
-                                                {
-                                                    let high_bits_li: *const listitem_T =
-                                                        (*highest_bits_li).li_next;
-                                                    if !((*high_bits_li).li_tv.v_type
-                                                        as ::core::ffi::c_uint
-                                                        != VAR_NUMBER as ::core::ffi::c_int
-                                                            as ::core::ffi::c_uint
-                                                        || {
-                                                            high_bits =
-                                                                (*high_bits_li).li_tv.vval.v_number;
-                                                            high_bits < 0 as varnumber_T
-                                                        })
-                                                    {
-                                                        let low_bits_li: *const listitem_T =
-                                                            tv_list_last(val_list);
-                                                        if !((*low_bits_li).li_tv.v_type
-                                                            as ::core::ffi::c_uint
-                                                            != VAR_NUMBER as ::core::ffi::c_int
-                                                                as ::core::ffi::c_uint
-                                                            || {
-                                                                low_bits = (*low_bits_li)
-                                                                    .li_tv
-                                                                    .vval
-                                                                    .v_number;
-                                                                low_bits < 0 as varnumber_T
-                                                            })
-                                                        {
-                                                            let number: uint64_t = (highest_bits
-                                                                as uint64_t)
-                                                                << 62 as ::core::ffi::c_int
-                                                                | (high_bits as uint64_t)
-                                                                    << 31 as ::core::ffi::c_int
-                                                                | low_bits as uint64_t;
-                                                            if sign > 0 as varnumber_T {
-                                                                if (*edata).stack.size
-                                                                    == (*edata).stack.capacity
-                                                                {
-                                                                    (*edata).stack.capacity = if (*edata).stack.capacity
-                                                                        << 1 as ::core::ffi::c_int
-                                                                        > ::core::mem::size_of::<[Object; 2]>()
-                                                                            .wrapping_div(::core::mem::size_of::<Object>())
-                                                                            .wrapping_div(
-                                                                                (::core::mem::size_of::<[Object; 2]>()
-                                                                                    .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                                                                    as ::core::ffi::c_int as usize,
-                                                                            )
-                                                                    {
-                                                                        (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                                                                    } else {
-                                                                        ::core::mem::size_of::<[Object; 2]>()
-                                                                            .wrapping_div(::core::mem::size_of::<Object>())
-                                                                            .wrapping_div(
-                                                                                (::core::mem::size_of::<[Object; 2]>()
-                                                                                    .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                                                                    as ::core::ffi::c_int as size_t,
-                                                                            )
-                                                                    };
-                                                                    (*edata).stack.items = (if (*edata).stack.capacity
-                                                                        == ::core::mem::size_of::<[Object; 2]>()
-                                                                            .wrapping_div(::core::mem::size_of::<Object>())
-                                                                            .wrapping_div(
-                                                                                (::core::mem::size_of::<[Object; 2]>()
-                                                                                    .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                                                                    as ::core::ffi::c_int as usize,
-                                                                            )
-                                                                    {
-                                                                        if (*edata).stack.items
-                                                                            == &raw mut (*edata).stack.init_array as *mut Object
-                                                                        {
-                                                                            (*edata).stack.items as *mut ::core::ffi::c_void
-                                                                        } else {
-                                                                            _memcpy_free(
-                                                                                &raw mut (*edata).stack.init_array as *mut Object
-                                                                                    as *mut ::core::ffi::c_void,
-                                                                                (*edata).stack.items as *mut ::core::ffi::c_void,
-                                                                                (*edata)
-                                                                                    .stack
-                                                                                    .size
-                                                                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                                                                            )
-                                                                        }
-                                                                    } else {
-                                                                        if (*edata).stack.items
-                                                                            == &raw mut (*edata).stack.init_array as *mut Object
-                                                                        {
-                                                                            memcpy(
-                                                                                xmalloc(
-                                                                                    (*edata)
-                                                                                        .stack
-                                                                                        .capacity
-                                                                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                                                                ),
-                                                                                (*edata).stack.items as *const ::core::ffi::c_void,
-                                                                                (*edata)
-                                                                                    .stack
-                                                                                    .size
-                                                                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                                                                            )
-                                                                        } else {
-                                                                            xrealloc(
-                                                                                (*edata).stack.items as *mut ::core::ffi::c_void,
-                                                                                (*edata)
-                                                                                    .stack
-                                                                                    .capacity
-                                                                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                                                                            )
-                                                                        }
-                                                                    }) as *mut Object;
-                                                                } else {
-                                                                };
-                                                                let c2rust_fresh21 =
-                                                                    (*edata).stack.size;
-                                                                (*edata).stack.size = (*edata)
-                                                                    .stack
-                                                                    .size
-                                                                    .wrapping_add(1);
-                                                                *(*edata).stack.items.offset(
-                                                                    c2rust_fresh21 as isize,
-                                                                ) = object {
-                                                                    type_0: kObjectTypeInteger,
-                                                                    data: C2Rust_Unnamed {
-                                                                        integer: number as Integer,
-                                                                    },
-                                                                };
-                                                            } else {
-                                                                if (*edata).stack.size
-                                                                    == (*edata).stack.capacity
-                                                                {
-                                                                    (*edata).stack.capacity = if (*edata).stack.capacity
-                                                                        << 1 as ::core::ffi::c_int
-                                                                        > ::core::mem::size_of::<[Object; 2]>()
-                                                                            .wrapping_div(::core::mem::size_of::<Object>())
-                                                                            .wrapping_div(
-                                                                                (::core::mem::size_of::<[Object; 2]>()
-                                                                                    .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                                                                    as ::core::ffi::c_int as usize,
-                                                                            )
-                                                                    {
-                                                                        (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                                                                    } else {
-                                                                        ::core::mem::size_of::<[Object; 2]>()
-                                                                            .wrapping_div(::core::mem::size_of::<Object>())
-                                                                            .wrapping_div(
-                                                                                (::core::mem::size_of::<[Object; 2]>()
-                                                                                    .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                                                                    as ::core::ffi::c_int as size_t,
-                                                                            )
-                                                                    };
-                                                                    (*edata).stack.items = (if (*edata).stack.capacity
-                                                                        == ::core::mem::size_of::<[Object; 2]>()
-                                                                            .wrapping_div(::core::mem::size_of::<Object>())
-                                                                            .wrapping_div(
-                                                                                (::core::mem::size_of::<[Object; 2]>()
-                                                                                    .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                                                                    as ::core::ffi::c_int as usize,
-                                                                            )
-                                                                    {
-                                                                        if (*edata).stack.items
-                                                                            == &raw mut (*edata).stack.init_array as *mut Object
-                                                                        {
-                                                                            (*edata).stack.items as *mut ::core::ffi::c_void
-                                                                        } else {
-                                                                            _memcpy_free(
-                                                                                &raw mut (*edata).stack.init_array as *mut Object
-                                                                                    as *mut ::core::ffi::c_void,
-                                                                                (*edata).stack.items as *mut ::core::ffi::c_void,
-                                                                                (*edata)
-                                                                                    .stack
-                                                                                    .size
-                                                                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                                                                            )
-                                                                        }
-                                                                    } else {
-                                                                        if (*edata).stack.items
-                                                                            == &raw mut (*edata).stack.init_array as *mut Object
-                                                                        {
-                                                                            memcpy(
-                                                                                xmalloc(
-                                                                                    (*edata)
-                                                                                        .stack
-                                                                                        .capacity
-                                                                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                                                                ),
-                                                                                (*edata).stack.items as *const ::core::ffi::c_void,
-                                                                                (*edata)
-                                                                                    .stack
-                                                                                    .size
-                                                                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                                                                            )
-                                                                        } else {
-                                                                            xrealloc(
-                                                                                (*edata).stack.items as *mut ::core::ffi::c_void,
-                                                                                (*edata)
-                                                                                    .stack
-                                                                                    .capacity
-                                                                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                                                                            )
-                                                                        }
-                                                                    }) as *mut Object;
-                                                                } else {
-                                                                };
-                                                                let c2rust_fresh22 =
-                                                                    (*edata).stack.size;
-                                                                (*edata).stack.size = (*edata)
-                                                                    .stack
-                                                                    .size
-                                                                    .wrapping_add(1);
-                                                                *(*edata).stack.items.offset(
-                                                                    c2rust_fresh22 as isize,
-                                                                ) = object {
-                                                                    type_0: kObjectTypeInteger,
-                                                                    data: C2Rust_Unnamed {
-                                                                        integer: number
-                                                                            .wrapping_neg()
-                                                                            as Integer,
-                                                                    },
-                                                                };
-                                                            }
-                                                            break '_typval_encode_stop_converting_one_item;
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    3 => {
-                                        if (*val_di).di_tv.v_type as ::core::ffi::c_uint
-                                            == VAR_FLOAT as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
-                                            if (*edata).stack.size == (*edata).stack.capacity {
-                                                (*edata).stack.capacity = if (*edata).stack.capacity
-                                                    << 1 as ::core::ffi::c_int
-                                                    > ::core::mem::size_of::<[Object; 2]>()
-                                                        .wrapping_div(
-                                                            ::core::mem::size_of::<Object>(),
-                                                        )
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[Object; 2]>()
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                == 0)
-                                                                as ::core::ffi::c_int
-                                                                as usize,
-                                                        ) {
-                                                    (*edata).stack.capacity
-                                                        << 1 as ::core::ffi::c_int
-                                                } else {
-                                                    ::core::mem::size_of::<[Object; 2]>()
-                                                        .wrapping_div(
-                                                            ::core::mem::size_of::<Object>(),
-                                                        )
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[Object; 2]>()
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                == 0)
-                                                                as ::core::ffi::c_int
-                                                                as size_t,
-                                                        )
-                                                };
-                                                (*edata).stack.items = (if (*edata).stack.capacity
-                                                    == ::core::mem::size_of::<[Object; 2]>()
-                                                        .wrapping_div(
-                                                            ::core::mem::size_of::<Object>(),
-                                                        )
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[Object; 2]>()
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                == 0)
-                                                                as ::core::ffi::c_int
-                                                                as usize,
-                                                        ) {
-                                                    if (*edata).stack.items
-                                                        == &raw mut (*edata).stack.init_array
-                                                            as *mut Object
-                                                    {
-                                                        (*edata).stack.items
-                                                            as *mut ::core::ffi::c_void
-                                                    } else {
-                                                        _memcpy_free(
-                                                            &raw mut (*edata).stack.init_array
-                                                                as *mut Object
-                                                                as *mut ::core::ffi::c_void,
-                                                            (*edata).stack.items
-                                                                as *mut ::core::ffi::c_void,
-                                                            (*edata).stack.size.wrapping_mul(
-                                                                ::core::mem::size_of::<Object>(),
-                                                            ),
-                                                        )
-                                                    }
-                                                } else {
-                                                    if (*edata).stack.items
-                                                        == &raw mut (*edata).stack.init_array
-                                                            as *mut Object
-                                                    {
-                                                        memcpy(
-                                                            xmalloc(
-                                                                (*edata)
-                                                                    .stack
-                                                                    .capacity
-                                                                    .wrapping_mul(
-                                                                        ::core::mem::size_of::<
-                                                                            Object,
-                                                                        >(
-                                                                        ),
-                                                                    ),
-                                                            ),
-                                                            (*edata).stack.items
-                                                                as *const ::core::ffi::c_void,
-                                                            (*edata).stack.size.wrapping_mul(
-                                                                ::core::mem::size_of::<Object>(),
-                                                            ),
-                                                        )
-                                                    } else {
-                                                        xrealloc(
-                                                            (*edata).stack.items
-                                                                as *mut ::core::ffi::c_void,
-                                                            (*edata).stack.capacity.wrapping_mul(
-                                                                ::core::mem::size_of::<Object>(),
-                                                            ),
-                                                        )
-                                                    }
-                                                })
-                                                    as *mut Object;
-                                            } else {
-                                            };
-                                            let c2rust_fresh23 = (*edata).stack.size;
-                                            (*edata).stack.size =
-                                                (*edata).stack.size.wrapping_add(1);
-                                            *(*edata).stack.items.offset(c2rust_fresh23 as isize) =
-                                                object {
-                                                    type_0: kObjectTypeFloat,
-                                                    data: C2Rust_Unnamed {
-                                                        floating: (*val_di).di_tv.vval.v_float,
-                                                    },
-                                                };
-                                            break '_typval_encode_stop_converting_one_item;
-                                        }
-                                    }
-                                    4 => {
-                                        if (*val_di).di_tv.v_type as ::core::ffi::c_uint
-                                            == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-                                        {
-                                            let mut len: size_t = 0;
-                                            let mut buf: *mut ::core::ffi::c_char =
-                                                ::core::ptr::null_mut::<::core::ffi::c_char>();
-                                            if encode_vim_list_to_buf(
-                                                (*val_di).di_tv.vval.v_list,
-                                                &raw mut len,
-                                                &raw mut buf,
-                                            ) {
-                                                let len__1: size_t = len;
-                                                let str__0: *const ::core::ffi::c_char = buf;
-                                                '_c2rust_label_1: {
-                                                    if len__1 == 0 as size_t || !str__0.is_null() {
-                                                    } else {
-                                                        __assert_fail(
-                                                            b"len_ == 0 || str_ != NULL\0".as_ptr()
-                                                                as *const ::core::ffi::c_char,
-                                                            b"src/nvim/api/private/converter.rs\0"
-                                                                .as_ptr() as *const ::core::ffi::c_char,
-                                                            519 as ::core::ffi::c_uint,
-                                                            b"int _typval_encode_object_convert_one_value(EncodedData *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
-                                                                .as_ptr() as *const ::core::ffi::c_char,
-                                                        );
-                                                    }
-                                                };
-                                                if (*edata).stack.size == (*edata).stack.capacity {
-                                                    (*edata).stack.capacity =
-                                                        if (*edata).stack.capacity
-                                                            << 1 as ::core::ffi::c_int
-                                                            > ::core::mem::size_of::<[Object; 2]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<
-                                                                        [Object; 2],
-                                                                    >(
-                                                                    )
-                                                                    .wrapping_rem(
-                                                                        ::core::mem::size_of::<
-                                                                            Object,
-                                                                        >(
-                                                                        ),
-                                                                    ) == 0)
-                                                                        as ::core::ffi::c_int
-                                                                        as usize,
-                                                                )
-                                                        {
-                                                            (*edata).stack.capacity
-                                                                << 1 as ::core::ffi::c_int
-                                                        } else {
-                                                            ::core::mem::size_of::<[Object; 2]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<
-                                                                        [Object; 2],
-                                                                    >(
-                                                                    )
-                                                                    .wrapping_rem(
-                                                                        ::core::mem::size_of::<
-                                                                            Object,
-                                                                        >(
-                                                                        ),
-                                                                    ) == 0)
-                                                                        as ::core::ffi::c_int
-                                                                        as size_t,
-                                                                )
-                                                        };
-                                                    (*edata).stack.items =
-                                                        (if (*edata).stack.capacity
-                                                            == ::core::mem::size_of::<[Object; 2]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<
-                                                                        [Object; 2],
-                                                                    >(
-                                                                    )
-                                                                    .wrapping_rem(
-                                                                        ::core::mem::size_of::<
-                                                                            Object,
-                                                                        >(
-                                                                        ),
-                                                                    ) == 0)
-                                                                        as ::core::ffi::c_int
-                                                                        as usize,
-                                                                )
-                                                        {
-                                                            if (*edata).stack.items
-                                                                == &raw mut (*edata)
-                                                                    .stack
-                                                                    .init_array
-                                                                    as *mut Object
-                                                            {
-                                                                (*edata).stack.items
-                                                                    as *mut ::core::ffi::c_void
-                                                            } else {
-                                                                _memcpy_free(
-                                                                    &raw mut (*edata)
-                                                                        .stack
-                                                                        .init_array
-                                                                        as *mut Object
-                                                                        as *mut ::core::ffi::c_void,
-                                                                    (*edata).stack.items
-                                                                        as *mut ::core::ffi::c_void,
-                                                                    (*edata)
-                                                                        .stack
-                                                                        .size
-                                                                        .wrapping_mul(
-                                                                            ::core::mem::size_of::<
-                                                                                Object,
-                                                                            >(
-                                                                            ),
-                                                                        ),
-                                                                )
-                                                            }
-                                                        } else {
-                                                            if (*edata).stack.items
-                                                                == &raw mut (*edata)
-                                                                    .stack
-                                                                    .init_array
-                                                                    as *mut Object
-                                                            {
-                                                                memcpy(
-                                                                xmalloc(
-                                                                    (*edata)
-                                                                        .stack
-                                                                        .capacity
-                                                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                                                ),
-                                                                (*edata).stack.items as *const ::core::ffi::c_void,
-                                                                (*edata)
-                                                                    .stack
-                                                                    .size
-                                                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                                                            )
-                                                            } else {
-                                                                xrealloc(
-                                                                    (*edata).stack.items
-                                                                        as *mut ::core::ffi::c_void,
-                                                                    (*edata)
-                                                                        .stack
-                                                                        .capacity
-                                                                        .wrapping_mul(
-                                                                            ::core::mem::size_of::<
-                                                                                Object,
-                                                                            >(
-                                                                            ),
-                                                                        ),
-                                                                )
-                                                            }
-                                                        })
-                                                            as *mut Object;
-                                                } else {
-                                                };
-                                                let c2rust_fresh24 = (*edata).stack.size;
-                                                (*edata).stack.size =
-                                                    (*edata).stack.size.wrapping_add(1);
-                                                *(*edata)
-                                                    .stack
-                                                    .items
-                                                    .offset(c2rust_fresh24 as isize) =
-                                                    typval_cbuf_to_obj(edata, str__0, len__1);
-                                                xfree(buf as *mut ::core::ffi::c_void);
-                                                break '_typval_encode_stop_converting_one_item;
-                                            }
-                                        }
-                                    }
-                                    5 => {
-                                        if (*val_di).di_tv.v_type as ::core::ffi::c_uint
-                                            == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-                                        {
-                                            let saved_copyID_0: ::core::ffi::c_int =
-                                                tv_list_copyid((*val_di).di_tv.vval.v_list);
-                                            let te_csr_ret_0: ::core::ffi::c_int =
-                                                _typval_encode_object_check_self_reference(
-                                                    edata,
-                                                    (*val_di).di_tv.vval.v_list
-                                                        as *mut ::core::ffi::c_void,
-                                                    &raw mut (*(*val_di).di_tv.vval.v_list)
-                                                        .lv_copyID,
-                                                    mpstack,
-                                                    copyID,
-                                                    kMPConvList,
-                                                    objname,
-                                                );
-                                            if te_csr_ret_0 != NOTDONE {
-                                                return te_csr_ret_0;
-                                            }
-                                            typval_encode_list_start(
-                                                edata,
-                                                tv_list_len((*val_di).di_tv.vval.v_list) as size_t,
-                                            );
-                                            '_c2rust_label_2: {
-                                                if saved_copyID_0 != copyID
-                                                    && saved_copyID_0
-                                                        != copyID - 1 as ::core::ffi::c_int
-                                                {
-                                                } else {
-                                                    __assert_fail(
-                                                        b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
-                                                            .as_ptr() as *const ::core::ffi::c_char,
-                                                        b"src/nvim/api/private/converter.rs\0"
-                                                            .as_ptr() as *const ::core::ffi::c_char,
-                                                        532 as ::core::ffi::c_uint,
-                                                        b"int _typval_encode_object_convert_one_value(EncodedData *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
-                                                            .as_ptr() as *const ::core::ffi::c_char,
-                                                    );
-                                                }
-                                            };
-                                            if (*mpstack).size == (*mpstack).capacity {
-                                                (*mpstack).capacity = if (*mpstack).capacity
-                                                    << 1 as ::core::ffi::c_int
-                                                    > ::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                                        .wrapping_div(::core::mem::size_of::<
-                                                            MPConvStackVal,
-                                                        >(
-                                                        ))
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<
-                                                                [MPConvStackVal; 8],
-                                                            >(
-                                                            )
-                                                            .wrapping_rem(::core::mem::size_of::<
-                                                                MPConvStackVal,
-                                                            >(
-                                                            )) == 0)
-                                                                as ::core::ffi::c_int
-                                                                as usize,
-                                                        ) {
-                                                    (*mpstack).capacity << 1 as ::core::ffi::c_int
-                                                } else {
-                                                    ::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                                        .wrapping_div(::core::mem::size_of::<
-                                                            MPConvStackVal,
-                                                        >(
-                                                        ))
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<
-                                                                [MPConvStackVal; 8],
-                                                            >(
-                                                            )
-                                                            .wrapping_rem(::core::mem::size_of::<
-                                                                MPConvStackVal,
-                                                            >(
-                                                            )) == 0)
-                                                                as ::core::ffi::c_int
-                                                                as size_t,
-                                                        )
-                                                };
-                                                (*mpstack).items = (if (*mpstack).capacity
-                                                    == ::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                                        .wrapping_div(::core::mem::size_of::<
-                                                            MPConvStackVal,
-                                                        >(
-                                                        ))
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<
-                                                                [MPConvStackVal; 8],
-                                                            >(
-                                                            )
-                                                            .wrapping_rem(::core::mem::size_of::<
-                                                                MPConvStackVal,
-                                                            >(
-                                                            )) == 0)
-                                                                as ::core::ffi::c_int
-                                                                as usize,
-                                                        ) {
-                                                    if (*mpstack).items
-                                                        == &raw mut (*mpstack).init_array
-                                                            as *mut MPConvStackVal
-                                                    {
-                                                        (*mpstack).items as *mut ::core::ffi::c_void
-                                                    } else {
-                                                        _memcpy_free(
-                                                            &raw mut (*mpstack).init_array
-                                                                as *mut MPConvStackVal
-                                                                as *mut ::core::ffi::c_void,
-                                                            (*mpstack).items
-                                                                as *mut ::core::ffi::c_void,
-                                                            (*mpstack).size.wrapping_mul(
-                                                                ::core::mem::size_of::<
-                                                                    MPConvStackVal,
-                                                                >(
-                                                                ),
-                                                            ),
-                                                        )
-                                                    }
-                                                } else {
-                                                    if (*mpstack).items
-                                                        == &raw mut (*mpstack).init_array
-                                                            as *mut MPConvStackVal
-                                                    {
-                                                        memcpy(
-                                                            xmalloc(
-                                                                (*mpstack).capacity.wrapping_mul(
-                                                                    ::core::mem::size_of::<
-                                                                        MPConvStackVal,
-                                                                    >(
-                                                                    ),
-                                                                ),
-                                                            ),
-                                                            (*mpstack).items
-                                                                as *const ::core::ffi::c_void,
-                                                            (*mpstack).size.wrapping_mul(
-                                                                ::core::mem::size_of::<
-                                                                    MPConvStackVal,
-                                                                >(
-                                                                ),
-                                                            ),
-                                                        )
-                                                    } else {
-                                                        xrealloc(
-                                                            (*mpstack).items
-                                                                as *mut ::core::ffi::c_void,
-                                                            (*mpstack).capacity.wrapping_mul(
-                                                                ::core::mem::size_of::<
-                                                                    MPConvStackVal,
-                                                                >(
-                                                                ),
-                                                            ),
-                                                        )
-                                                    }
-                                                })
-                                                    as *mut MPConvStackVal;
-                                            } else {
-                                            };
-                                            let c2rust_fresh25 = (*mpstack).size;
-                                            (*mpstack).size = (*mpstack).size.wrapping_add(1);
-                                            *(*mpstack).items.offset(c2rust_fresh25 as isize) =
-                                                MPConvStackVal {
-                                                    type_0: kMPConvList,
-                                                    tv: tv,
-                                                    saved_copyID: saved_copyID_0,
-                                                    data: C2Rust_Unnamed_2 {
-                                                        l: C2Rust_Unnamed_5 {
-                                                            list: (*val_di).di_tv.vval.v_list,
-                                                            li: tv_list_first(
-                                                                (*val_di).di_tv.vval.v_list,
-                                                            ),
-                                                        },
-                                                    },
-                                                };
-                                            break '_typval_encode_stop_converting_one_item;
-                                        }
-                                    }
-                                    6 => {
-                                        if (*val_di).di_tv.v_type as ::core::ffi::c_uint
-                                            == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-                                        {
-                                            let val_list_0: *mut list_T =
-                                                (*val_di).di_tv.vval.v_list;
-                                            if val_list_0.is_null()
-                                                || tv_list_len(val_list_0)
-                                                    == 0 as ::core::ffi::c_int
-                                            {
-                                                if (*edata).stack.size == (*edata).stack.capacity {
-                                                    (*edata).stack.capacity =
-                                                        if (*edata).stack.capacity
-                                                            << 1 as ::core::ffi::c_int
-                                                            > ::core::mem::size_of::<[Object; 2]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<
-                                                                        [Object; 2],
-                                                                    >(
-                                                                    )
-                                                                    .wrapping_rem(
-                                                                        ::core::mem::size_of::<
-                                                                            Object,
-                                                                        >(
-                                                                        ),
-                                                                    ) == 0)
-                                                                        as ::core::ffi::c_int
-                                                                        as usize,
-                                                                )
-                                                        {
-                                                            (*edata).stack.capacity
-                                                                << 1 as ::core::ffi::c_int
-                                                        } else {
-                                                            ::core::mem::size_of::<[Object; 2]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<
-                                                                        [Object; 2],
-                                                                    >(
-                                                                    )
-                                                                    .wrapping_rem(
-                                                                        ::core::mem::size_of::<
-                                                                            Object,
-                                                                        >(
-                                                                        ),
-                                                                    ) == 0)
-                                                                        as ::core::ffi::c_int
-                                                                        as size_t,
-                                                                )
-                                                        };
-                                                    (*edata).stack.items =
-                                                        (if (*edata).stack.capacity
-                                                            == ::core::mem::size_of::<[Object; 2]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<
-                                                                        [Object; 2],
-                                                                    >(
-                                                                    )
-                                                                    .wrapping_rem(
-                                                                        ::core::mem::size_of::<
-                                                                            Object,
-                                                                        >(
-                                                                        ),
-                                                                    ) == 0)
-                                                                        as ::core::ffi::c_int
-                                                                        as usize,
-                                                                )
-                                                        {
-                                                            if (*edata).stack.items
-                                                                == &raw mut (*edata)
-                                                                    .stack
-                                                                    .init_array
-                                                                    as *mut Object
-                                                            {
-                                                                (*edata).stack.items
-                                                                    as *mut ::core::ffi::c_void
-                                                            } else {
-                                                                _memcpy_free(
-                                                                    &raw mut (*edata)
-                                                                        .stack
-                                                                        .init_array
-                                                                        as *mut Object
-                                                                        as *mut ::core::ffi::c_void,
-                                                                    (*edata).stack.items
-                                                                        as *mut ::core::ffi::c_void,
-                                                                    (*edata)
-                                                                        .stack
-                                                                        .size
-                                                                        .wrapping_mul(
-                                                                            ::core::mem::size_of::<
-                                                                                Object,
-                                                                            >(
-                                                                            ),
-                                                                        ),
-                                                                )
-                                                            }
-                                                        } else {
-                                                            if (*edata).stack.items
-                                                                == &raw mut (*edata)
-                                                                    .stack
-                                                                    .init_array
-                                                                    as *mut Object
-                                                            {
-                                                                memcpy(
-                                                                xmalloc(
-                                                                    (*edata)
-                                                                        .stack
-                                                                        .capacity
-                                                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                                                ),
-                                                                (*edata).stack.items as *const ::core::ffi::c_void,
-                                                                (*edata)
-                                                                    .stack
-                                                                    .size
-                                                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                                                            )
-                                                            } else {
-                                                                xrealloc(
-                                                                    (*edata).stack.items
-                                                                        as *mut ::core::ffi::c_void,
-                                                                    (*edata)
-                                                                        .stack
-                                                                        .capacity
-                                                                        .wrapping_mul(
-                                                                            ::core::mem::size_of::<
-                                                                                Object,
-                                                                            >(
-                                                                            ),
-                                                                        ),
-                                                                )
-                                                            }
-                                                        })
-                                                            as *mut Object;
-                                                } else {
-                                                };
-                                                let c2rust_fresh26 = (*edata).stack.size;
-                                                (*edata).stack.size =
-                                                    (*edata).stack.size.wrapping_add(1);
-                                                *(*edata)
-                                                    .stack
-                                                    .items
-                                                    .offset(c2rust_fresh26 as isize) = object {
-                                                    type_0: kObjectTypeDict,
-                                                    data: C2Rust_Unnamed {
-                                                        dict: Dict {
-                                                            size: 0 as size_t,
-                                                            capacity: 0 as size_t,
-                                                            items: ::core::ptr::null_mut::<
-                                                                KeyValuePair,
-                                                            >(
-                                                            ),
-                                                        },
-                                                    },
-                                                };
-                                                break '_typval_encode_stop_converting_one_item;
-                                            } else {
-                                                let l_: *const list_T = val_list_0;
-                                                's_565: {
-                                                    if !l_.is_null() {
-                                                        let mut li: *const listitem_T =
-                                                            (*l_).lv_first;
-                                                        loop {
-                                                            if li.is_null() {
-                                                                break 's_565;
-                                                            }
-                                                            if (*li).li_tv.v_type
-                                                                as ::core::ffi::c_uint
-                                                                != VAR_LIST as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint
-                                                                || tv_list_len(
-                                                                    (*li).li_tv.vval.v_list,
-                                                                ) != 2 as ::core::ffi::c_int
-                                                            {
-                                                                break 's_647;
-                                                            }
-                                                            li = (*li).li_next;
-                                                        }
-                                                    }
-                                                }
-                                                let saved_copyID_1: ::core::ffi::c_int =
-                                                    tv_list_copyid((*val_di).di_tv.vval.v_list);
-                                                let te_csr_ret_1: ::core::ffi::c_int =
-                                                    _typval_encode_object_check_self_reference(
-                                                        edata,
-                                                        val_list_0 as *mut ::core::ffi::c_void,
-                                                        &raw mut (*val_list_0).lv_copyID,
-                                                        mpstack,
-                                                        copyID,
-                                                        kMPConvPairs,
-                                                        objname,
-                                                    );
-                                                if te_csr_ret_1 != NOTDONE {
-                                                    return te_csr_ret_1;
-                                                }
-                                                typval_encode_dict_start(
-                                                    edata,
-                                                    tv_list_len(val_list_0) as size_t,
-                                                );
-                                                '_c2rust_label_3: {
-                                                    if saved_copyID_1 != copyID
-                                                        && saved_copyID_1
-                                                            != copyID - 1 as ::core::ffi::c_int
-                                                    {
-                                                    } else {
-                                                        __assert_fail(
-                                                            b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
-                                                                .as_ptr() as *const ::core::ffi::c_char,
-                                                            b"src/nvim/api/private/converter.rs\0"
-                                                                .as_ptr() as *const ::core::ffi::c_char,
-                                                            566 as ::core::ffi::c_uint,
-                                                            b"int _typval_encode_object_convert_one_value(EncodedData *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
-                                                                .as_ptr() as *const ::core::ffi::c_char,
-                                                        );
-                                                    }
-                                                };
-                                                if (*mpstack).size == (*mpstack).capacity {
-                                                    (*mpstack).capacity =
-                                                        if (*mpstack).capacity
-                                                            << 1 as ::core::ffi::c_int
-                                                            > ::core::mem::size_of::<
-                                                                [MPConvStackVal; 8],
-                                                            >(
-                                                            )
-                                                            .wrapping_div(::core::mem::size_of::<
-                                                                MPConvStackVal,
-                                                            >(
-                                                            ))
-                                                            .wrapping_div(
-                                                                (::core::mem::size_of::<
-                                                                    [MPConvStackVal; 8],
-                                                                >(
-                                                                )
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<
-                                                                        MPConvStackVal,
-                                                                    >(
-                                                                    ),
-                                                                ) == 0)
-                                                                    as ::core::ffi::c_int
-                                                                    as usize,
-                                                            )
-                                                        {
-                                                            (*mpstack).capacity
-                                                                << 1 as ::core::ffi::c_int
-                                                        } else {
-                                                            ::core::mem::size_of::<
-                                                                [MPConvStackVal; 8],
-                                                            >(
-                                                            )
-                                                            .wrapping_div(::core::mem::size_of::<
-                                                                MPConvStackVal,
-                                                            >(
-                                                            ))
-                                                            .wrapping_div(
-                                                                (::core::mem::size_of::<
-                                                                    [MPConvStackVal; 8],
-                                                                >(
-                                                                )
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<
-                                                                        MPConvStackVal,
-                                                                    >(
-                                                                    ),
-                                                                ) == 0)
-                                                                    as ::core::ffi::c_int
-                                                                    as size_t,
-                                                            )
-                                                        };
-                                                    (*mpstack).items =
-                                                        (if (*mpstack).capacity
-                                                            == ::core::mem::size_of::<
-                                                                [MPConvStackVal; 8],
-                                                            >(
-                                                            )
-                                                            .wrapping_div(::core::mem::size_of::<
-                                                                MPConvStackVal,
-                                                            >(
-                                                            ))
-                                                            .wrapping_div(
-                                                                (::core::mem::size_of::<
-                                                                    [MPConvStackVal; 8],
-                                                                >(
-                                                                )
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<
-                                                                        MPConvStackVal,
-                                                                    >(
-                                                                    ),
-                                                                ) == 0)
-                                                                    as ::core::ffi::c_int
-                                                                    as usize,
-                                                            )
-                                                        {
-                                                            if (*mpstack).items
-                                                                == &raw mut (*mpstack).init_array
-                                                                    as *mut MPConvStackVal
-                                                            {
-                                                                (*mpstack).items
-                                                                    as *mut ::core::ffi::c_void
-                                                            } else {
-                                                                _memcpy_free(
-                                                                    &raw mut (*mpstack).init_array
-                                                                        as *mut MPConvStackVal
-                                                                        as *mut ::core::ffi::c_void,
-                                                                    (*mpstack).items
-                                                                        as *mut ::core::ffi::c_void,
-                                                                    (*mpstack).size.wrapping_mul(
-                                                                        ::core::mem::size_of::<
-                                                                            MPConvStackVal,
-                                                                        >(
-                                                                        ),
-                                                                    ),
-                                                                )
-                                                            }
-                                                        } else {
-                                                            if (*mpstack).items
-                                                                == &raw mut (*mpstack).init_array
-                                                                    as *mut MPConvStackVal
-                                                            {
-                                                                memcpy(
-                                                                xmalloc(
-                                                                    (*mpstack)
-                                                                        .capacity
-                                                                        .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
-                                                                ),
-                                                                (*mpstack).items as *const ::core::ffi::c_void,
-                                                                (*mpstack)
-                                                                    .size
-                                                                    .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
-                                                            )
-                                                            } else {
-                                                                xrealloc(
-                                                                    (*mpstack).items
-                                                                        as *mut ::core::ffi::c_void,
-                                                                    (*mpstack)
-                                                                        .capacity
-                                                                        .wrapping_mul(
-                                                                            ::core::mem::size_of::<
-                                                                                MPConvStackVal,
-                                                                            >(
-                                                                            ),
-                                                                        ),
-                                                                )
-                                                            }
-                                                        })
-                                                            as *mut MPConvStackVal;
-                                                } else {
-                                                };
-                                                let c2rust_fresh27 = (*mpstack).size;
-                                                (*mpstack).size = (*mpstack).size.wrapping_add(1);
-                                                *(*mpstack).items.offset(c2rust_fresh27 as isize) =
-                                                    MPConvStackVal {
-                                                        type_0: kMPConvPairs,
-                                                        tv: tv,
-                                                        saved_copyID: saved_copyID_1,
-                                                        data: C2Rust_Unnamed_2 {
-                                                            l: C2Rust_Unnamed_5 {
-                                                                list: val_list_0,
-                                                                li: tv_list_first(val_list_0),
-                                                            },
-                                                        },
-                                                    };
-                                                break '_typval_encode_stop_converting_one_item;
-                                            }
-                                        }
-                                    }
-                                    7 => {
-                                        let mut val_list_1: *const list_T =
-                                            ::core::ptr::null::<list_T>();
-                                        let mut type_0: varnumber_T = 0;
-                                        if !((*val_di).di_tv.v_type as ::core::ffi::c_uint
-                                            != VAR_LIST as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                            || {
-                                                val_list_1 = (*val_di).di_tv.vval.v_list;
-                                                tv_list_len(val_list_1) != 2 as ::core::ffi::c_int
-                                            }
-                                            || (*tv_list_first(val_list_1)).li_tv.v_type
-                                                as ::core::ffi::c_uint
-                                                != VAR_NUMBER as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            || {
-                                                type_0 = (*tv_list_first(val_list_1))
-                                                    .li_tv
-                                                    .vval
-                                                    .v_number;
-                                                type_0 > INT8_MAX as varnumber_T
-                                            }
-                                            || type_0 < INT8_MIN as varnumber_T
-                                            || (*tv_list_last(val_list_1)).li_tv.v_type
-                                                as ::core::ffi::c_uint
-                                                != VAR_LIST as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint)
-                                        {
-                                            let mut len_0: size_t = 0;
-                                            let mut buf_0: *mut ::core::ffi::c_char =
-                                                ::core::ptr::null_mut::<::core::ffi::c_char>();
-                                            if encode_vim_list_to_buf(
-                                                (*tv_list_last(val_list_1)).li_tv.vval.v_list,
-                                                &raw mut len_0,
-                                                &raw mut buf_0,
-                                            ) {
-                                                if (*edata).stack.size == (*edata).stack.capacity {
-                                                    (*edata).stack.capacity =
-                                                        if (*edata).stack.capacity
-                                                            << 1 as ::core::ffi::c_int
-                                                            > ::core::mem::size_of::<[Object; 2]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<
-                                                                        [Object; 2],
-                                                                    >(
-                                                                    )
-                                                                    .wrapping_rem(
-                                                                        ::core::mem::size_of::<
-                                                                            Object,
-                                                                        >(
-                                                                        ),
-                                                                    ) == 0)
-                                                                        as ::core::ffi::c_int
-                                                                        as usize,
-                                                                )
-                                                        {
-                                                            (*edata).stack.capacity
-                                                                << 1 as ::core::ffi::c_int
-                                                        } else {
-                                                            ::core::mem::size_of::<[Object; 2]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<
-                                                                        [Object; 2],
-                                                                    >(
-                                                                    )
-                                                                    .wrapping_rem(
-                                                                        ::core::mem::size_of::<
-                                                                            Object,
-                                                                        >(
-                                                                        ),
-                                                                    ) == 0)
-                                                                        as ::core::ffi::c_int
-                                                                        as size_t,
-                                                                )
-                                                        };
-                                                    (*edata).stack.items =
-                                                        (if (*edata).stack.capacity
-                                                            == ::core::mem::size_of::<[Object; 2]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<
-                                                                        [Object; 2],
-                                                                    >(
-                                                                    )
-                                                                    .wrapping_rem(
-                                                                        ::core::mem::size_of::<
-                                                                            Object,
-                                                                        >(
-                                                                        ),
-                                                                    ) == 0)
-                                                                        as ::core::ffi::c_int
-                                                                        as usize,
-                                                                )
-                                                        {
-                                                            if (*edata).stack.items
-                                                                == &raw mut (*edata)
-                                                                    .stack
-                                                                    .init_array
-                                                                    as *mut Object
-                                                            {
-                                                                (*edata).stack.items
-                                                                    as *mut ::core::ffi::c_void
-                                                            } else {
-                                                                _memcpy_free(
-                                                                    &raw mut (*edata)
-                                                                        .stack
-                                                                        .init_array
-                                                                        as *mut Object
-                                                                        as *mut ::core::ffi::c_void,
-                                                                    (*edata).stack.items
-                                                                        as *mut ::core::ffi::c_void,
-                                                                    (*edata)
-                                                                        .stack
-                                                                        .size
-                                                                        .wrapping_mul(
-                                                                            ::core::mem::size_of::<
-                                                                                Object,
-                                                                            >(
-                                                                            ),
-                                                                        ),
-                                                                )
-                                                            }
-                                                        } else {
-                                                            if (*edata).stack.items
-                                                                == &raw mut (*edata)
-                                                                    .stack
-                                                                    .init_array
-                                                                    as *mut Object
-                                                            {
-                                                                memcpy(
-                                                                xmalloc(
-                                                                    (*edata)
-                                                                        .stack
-                                                                        .capacity
-                                                                        .wrapping_mul(::core::mem::size_of::<Object>()),
-                                                                ),
-                                                                (*edata).stack.items as *const ::core::ffi::c_void,
-                                                                (*edata)
-                                                                    .stack
-                                                                    .size
-                                                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                                                            )
-                                                            } else {
-                                                                xrealloc(
-                                                                    (*edata).stack.items
-                                                                        as *mut ::core::ffi::c_void,
-                                                                    (*edata)
-                                                                        .stack
-                                                                        .capacity
-                                                                        .wrapping_mul(
-                                                                            ::core::mem::size_of::<
-                                                                                Object,
-                                                                            >(
-                                                                            ),
-                                                                        ),
-                                                                )
-                                                            }
-                                                        })
-                                                            as *mut Object;
-                                                } else {
-                                                };
-                                                let c2rust_fresh28 = (*edata).stack.size;
-                                                (*edata).stack.size =
-                                                    (*edata).stack.size.wrapping_add(1);
-                                                *(*edata)
-                                                    .stack
-                                                    .items
-                                                    .offset(c2rust_fresh28 as isize) = object {
-                                                    type_0: kObjectTypeNil,
-                                                    data: C2Rust_Unnamed { boolean: false },
-                                                };
-                                                xfree(buf_0 as *mut ::core::ffi::c_void);
-                                                break '_typval_encode_stop_converting_one_item;
-                                            }
-                                        }
-                                    }
-                                    _ => {
-                                        break '_typval_encode_stop_converting_one_item;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    let saved_copyID_2: ::core::ffi::c_int = (*(*tv).vval.v_dict).dv_copyID;
-                    let te_csr_ret_2: ::core::ffi::c_int =
-                        _typval_encode_object_check_self_reference(
-                            edata,
-                            (*tv).vval.v_dict as *mut ::core::ffi::c_void,
-                            &raw mut (*(*tv).vval.v_dict).dv_copyID,
-                            mpstack,
-                            copyID,
-                            kMPConvDict,
-                            objname,
-                        );
-                    if te_csr_ret_2 != NOTDONE {
-                        return te_csr_ret_2;
-                    }
-                    typval_encode_dict_start(edata, (*(*tv).vval.v_dict).dv_hashtab.ht_used);
-                    '_c2rust_label_4: {
-                        if saved_copyID_2 != copyID {
-                        } else {
-                            __assert_fail(
-                                b"saved_copyID != copyID\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                b"src/nvim/api/private/converter.rs\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                                614 as ::core::ffi::c_uint,
-                                b"int _typval_encode_object_convert_one_value(EncodedData *const, MPConvStack *const, MPConvStackVal *const, typval_T *const, const int, const char *const)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
-                    if (*mpstack).size == (*mpstack).capacity {
-                        (*mpstack).capacity = if (*mpstack).capacity << 1 as ::core::ffi::c_int
-                            > ::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                        .wrapping_rem(::core::mem::size_of::<MPConvStackVal>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            (*mpstack).capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            ::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                        .wrapping_rem(::core::mem::size_of::<MPConvStackVal>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as size_t,
-                                )
-                        };
-                        (*mpstack).items = (if (*mpstack).capacity
-                            == ::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                        .wrapping_rem(::core::mem::size_of::<MPConvStackVal>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            if (*mpstack).items
-                                == &raw mut (*mpstack).init_array as *mut MPConvStackVal
-                            {
-                                (*mpstack).items as *mut ::core::ffi::c_void
-                            } else {
-                                _memcpy_free(
-                                    &raw mut (*mpstack).init_array as *mut MPConvStackVal
-                                        as *mut ::core::ffi::c_void,
-                                    (*mpstack).items as *mut ::core::ffi::c_void,
-                                    (*mpstack)
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
-                                )
-                            }
-                        } else {
-                            if (*mpstack).items
-                                == &raw mut (*mpstack).init_array as *mut MPConvStackVal
-                            {
-                                memcpy(
-                                    xmalloc(
-                                        (*mpstack)
-                                            .capacity
-                                            .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
-                                    ),
-                                    (*mpstack).items as *const ::core::ffi::c_void,
-                                    (*mpstack)
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
-                                )
-                            } else {
-                                xrealloc(
-                                    (*mpstack).items as *mut ::core::ffi::c_void,
-                                    (*mpstack)
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
-                                )
-                            }
-                        }) as *mut MPConvStackVal;
-                    } else {
-                    };
-                    let c2rust_fresh29 = (*mpstack).size;
-                    (*mpstack).size = (*mpstack).size.wrapping_add(1);
-                    *(*mpstack).items.offset(c2rust_fresh29 as isize) = MPConvStackVal {
-                        type_0: kMPConvDict,
-                        tv: tv,
-                        saved_copyID: saved_copyID_2,
-                        data: C2Rust_Unnamed_2 {
-                            d: C2Rust_Unnamed_6 {
-                                dict: (*tv).vval.v_dict,
-                                dictp: &raw mut (*tv).vval.v_dict,
-                                hi: (*(*tv).vval.v_dict).dv_hashtab.ht_array,
-                                todo: (*(*tv).vval.v_dict).dv_hashtab.ht_used,
-                            },
-                        },
-                    };
-                }
-            }
-            0 => {
-                internal_error(b"_typval_encode_object_convert_one_value()\0".as_ptr()
-                    as *const ::core::ffi::c_char);
-                return FAIL;
-            }
-            _ => {}
-        }
+            None => NIL,
+        });
+        Flow::Stop
     }
-    return OK;
-}
-unsafe extern "C" fn encode_vim_to_object(
-    edata: *mut EncodedData,
-    top_tv: *mut typval_T,
-    objname: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let copyID: ::core::ffi::c_int = get_copyID();
-    let mut mpstack: MPConvStack = MPConvStack {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<MPConvStackVal>(),
-        init_array: [MPConvStackVal {
-            type_0: kMPConvDict,
-            tv: ::core::ptr::null_mut::<typval_T>(),
-            saved_copyID: 0,
-            data: C2Rust_Unnamed_2 {
-                d: C2Rust_Unnamed_6 {
-                    dict: ::core::ptr::null_mut::<dict_T>(),
-                    dictp: ::core::ptr::null_mut::<*mut dict_T>(),
-                    hi: ::core::ptr::null_mut::<hashitem_T>(),
-                    todo: 0,
+
+    unsafe fn conv_empty_list(&mut self, _tv: *mut typval_T) {
+        self.stack.push(object {
+            type_0: kObjectTypeArray,
+            data: object_data {
+                array: Array {
+                    size: 0,
+                    capacity: 0,
+                    items: ::core::ptr::null_mut(),
                 },
             },
-        }; 8],
-    };
-    mpstack.capacity = ::core::mem::size_of::<[MPConvStackVal; 8]>()
-        .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
-        .wrapping_div(
-            (::core::mem::size_of::<[MPConvStackVal; 8]>()
-                .wrapping_rem(::core::mem::size_of::<MPConvStackVal>())
-                == 0) as ::core::ffi::c_int as usize,
-        ) as size_t;
-    mpstack.size = 0 as size_t;
-    mpstack.items = &raw mut mpstack.init_array as *mut MPConvStackVal;
-    '_encode_vim_to__error_ret: {
-        if _typval_encode_object_convert_one_value(
-            edata,
-            &raw mut mpstack,
-            ::core::ptr::null_mut::<MPConvStackVal>(),
-            top_tv,
-            copyID,
-            objname,
-        ) != FAIL
-        {
-            while mpstack.size != 0 {
-                let mut cur_mpsv: *mut MPConvStackVal = mpstack.items.offset(
-                    mpstack
-                        .size
-                        .wrapping_sub(0 as size_t)
-                        .wrapping_sub(1 as size_t) as isize,
-                );
-                let mut tv: *mut typval_T = ::core::ptr::null_mut::<typval_T>();
-                match (*cur_mpsv).type_0 as ::core::ffi::c_uint {
-                    0 => {
-                        if (*cur_mpsv).data.d.todo == 0 {
-                            mpstack.size = mpstack.size.wrapping_sub(1);
-                            (*(*cur_mpsv).data.d.dict).dv_copyID = (*cur_mpsv).saved_copyID;
-                            typval_encode_dict_end(edata);
-                            continue;
-                        } else {
-                            if (*cur_mpsv).data.d.todo
-                                != (*(*cur_mpsv).data.d.dict).dv_hashtab.ht_used
-                            {
-                                typval_encode_between_dict_items(edata);
-                            }
-                            while (*(*cur_mpsv).data.d.hi).hi_key.is_null()
-                                || (*(*cur_mpsv).data.d.hi).hi_key
-                                    == &raw const hash_removed as *mut ::core::ffi::c_char
-                            {
-                                (*cur_mpsv).data.d.hi = (*cur_mpsv).data.d.hi.offset(1);
-                            }
-                            let di: *mut dictitem_T = (*(*cur_mpsv).data.d.hi)
-                                .hi_key
-                                .offset(-(17 as ::core::ffi::c_ulong as isize))
-                                as *mut dictitem_T;
-                            (*cur_mpsv).data.d.todo = (*cur_mpsv).data.d.todo.wrapping_sub(1);
-                            (*cur_mpsv).data.d.hi = (*cur_mpsv).data.d.hi.offset(1);
-                            let len_: size_t = strlen(
-                                (&raw mut (*di).di_key as *mut ::core::ffi::c_char)
-                                    .offset(0 as ::core::ffi::c_int as isize),
-                            );
-                            let str_: *const ::core::ffi::c_char = (&raw mut (*di).di_key
-                                as *mut ::core::ffi::c_char)
-                                .offset(0 as ::core::ffi::c_int as isize);
-                            '_c2rust_label: {
-                                if len_ == 0 as size_t || !str_.is_null() {
-                                } else {
-                                    __assert_fail(
-                                        b"len_ == 0 || str_ != NULL\0".as_ptr()
-                                            as *const ::core::ffi::c_char,
-                                        b"src/nvim/api/private/converter.rs\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
-                                        694 as ::core::ffi::c_uint,
-                                        b"int encode_vim_to_object(EncodedData *const, typval_T *const, const char *const)\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
-                                    );
-                                }
-                            };
-                            if (*edata).stack.size == (*edata).stack.capacity {
-                                (*edata).stack.capacity = if (*edata).stack.capacity
-                                    << 1 as ::core::ffi::c_int
-                                    > ::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_div(::core::mem::size_of::<Object>())
-                                        .wrapping_div(
-                                            (::core::mem::size_of::<[Object; 2]>()
-                                                .wrapping_rem(::core::mem::size_of::<Object>())
-                                                == 0)
-                                                as ::core::ffi::c_int
-                                                as usize,
-                                        ) {
-                                    (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                                } else {
-                                    ::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_div(::core::mem::size_of::<Object>())
-                                        .wrapping_div(
-                                            (::core::mem::size_of::<[Object; 2]>()
-                                                .wrapping_rem(::core::mem::size_of::<Object>())
-                                                == 0)
-                                                as ::core::ffi::c_int
-                                                as size_t,
-                                        )
-                                };
-                                (*edata).stack.items = (if (*edata).stack.capacity
-                                    == ::core::mem::size_of::<[Object; 2]>()
-                                        .wrapping_div(::core::mem::size_of::<Object>())
-                                        .wrapping_div(
-                                            (::core::mem::size_of::<[Object; 2]>()
-                                                .wrapping_rem(::core::mem::size_of::<Object>())
-                                                == 0)
-                                                as ::core::ffi::c_int
-                                                as usize,
-                                        ) {
-                                    if (*edata).stack.items
-                                        == &raw mut (*edata).stack.init_array as *mut Object
-                                    {
-                                        (*edata).stack.items as *mut ::core::ffi::c_void
-                                    } else {
-                                        _memcpy_free(
-                                            &raw mut (*edata).stack.init_array as *mut Object
-                                                as *mut ::core::ffi::c_void,
-                                            (*edata).stack.items as *mut ::core::ffi::c_void,
-                                            (*edata)
-                                                .stack
-                                                .size
-                                                .wrapping_mul(::core::mem::size_of::<Object>()),
-                                        )
-                                    }
-                                } else {
-                                    if (*edata).stack.items
-                                        == &raw mut (*edata).stack.init_array as *mut Object
-                                    {
-                                        memcpy(
-                                            xmalloc(
-                                                (*edata)
-                                                    .stack
-                                                    .capacity
-                                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                                            ),
-                                            (*edata).stack.items as *const ::core::ffi::c_void,
-                                            (*edata)
-                                                .stack
-                                                .size
-                                                .wrapping_mul(::core::mem::size_of::<Object>()),
-                                        )
-                                    } else {
-                                        xrealloc(
-                                            (*edata).stack.items as *mut ::core::ffi::c_void,
-                                            (*edata)
-                                                .stack
-                                                .capacity
-                                                .wrapping_mul(::core::mem::size_of::<Object>()),
-                                        )
-                                    }
-                                })
-                                    as *mut Object;
-                            } else {
-                            };
-                            let c2rust_fresh0 = (*edata).stack.size;
-                            (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-                            *(*edata).stack.items.offset(c2rust_fresh0 as isize) =
-                                typval_cbuf_to_obj(edata, str_, len_);
-                            typval_encode_after_key(edata);
-                            tv = &raw mut (*di).di_tv;
-                        }
-                    }
-                    1 => {
-                        if (*cur_mpsv).data.l.li.is_null() {
-                            mpstack.size = mpstack.size.wrapping_sub(1);
-                            tv_list_set_copyid((*cur_mpsv).data.l.list, (*cur_mpsv).saved_copyID);
-                            typval_encode_list_end(edata);
-                            continue;
-                        } else {
-                            if (*cur_mpsv).data.l.li != tv_list_first((*cur_mpsv).data.l.list) {
-                                typval_encode_between_list_items(edata);
-                            }
-                            tv = &raw mut (*(*cur_mpsv).data.l.li).li_tv;
-                            (*cur_mpsv).data.l.li = (*(*cur_mpsv).data.l.li).li_next;
-                        }
-                    }
-                    2 => {
-                        if (*cur_mpsv).data.l.li.is_null() {
-                            mpstack.size = mpstack.size.wrapping_sub(1);
-                            tv_list_set_copyid((*cur_mpsv).data.l.list, (*cur_mpsv).saved_copyID);
-                            typval_encode_dict_end(edata);
-                            continue;
-                        } else {
-                            if (*cur_mpsv).data.l.li != tv_list_first((*cur_mpsv).data.l.list) {
-                                typval_encode_between_dict_items(edata);
-                            }
-                            let kv_pair: *const list_T = (*(*cur_mpsv).data.l.li).li_tv.vval.v_list;
-                            if _typval_encode_object_convert_one_value(
-                                edata,
-                                &raw mut mpstack,
-                                cur_mpsv,
-                                &raw mut (*tv_list_first(kv_pair)).li_tv,
-                                copyID,
-                                objname,
-                            ) == FAIL
-                            {
-                                break '_encode_vim_to__error_ret;
-                            }
-                            typval_encode_after_key(edata);
-                            tv = &raw mut (*tv_list_last(kv_pair)).li_tv;
-                            (*cur_mpsv).data.l.li = (*(*cur_mpsv).data.l.li).li_next;
-                        }
-                    }
-                    3 => {
-                        let pt: *mut partial_T = (*cur_mpsv).data.p.pt;
-                        tv = (*cur_mpsv).tv;
-                        match (*cur_mpsv).data.p.stage as ::core::ffi::c_uint {
-                            0 => {
-                                (*cur_mpsv).data.p.stage = kMPConvPartialSelf;
-                                if !pt.is_null() && (*pt).pt_argc > 0 as ::core::ffi::c_int {
-                                    typval_encode_list_start(edata, (*pt).pt_argc as size_t);
-                                    if mpstack.size == mpstack.capacity {
-                                        mpstack.capacity = if mpstack.capacity
-                                            << 1 as ::core::ffi::c_int
-                                            > ::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                                .wrapping_div(
-                                                    ::core::mem::size_of::<MPConvStackVal>(),
-                                                )
-                                                .wrapping_div(
-                                                    (::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                                        .wrapping_rem(::core::mem::size_of::<
-                                                            MPConvStackVal,
-                                                        >(
-                                                        ))
-                                                        == 0)
-                                                        as ::core::ffi::c_int
-                                                        as usize,
-                                                ) {
-                                            mpstack.capacity << 1 as ::core::ffi::c_int
-                                        } else {
-                                            ::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                                .wrapping_div(
-                                                    ::core::mem::size_of::<MPConvStackVal>(),
-                                                )
-                                                .wrapping_div(
-                                                    (::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                                        .wrapping_rem(::core::mem::size_of::<
-                                                            MPConvStackVal,
-                                                        >(
-                                                        ))
-                                                        == 0)
-                                                        as ::core::ffi::c_int
-                                                        as size_t,
-                                                )
-                                        };
-                                        mpstack.items = (if mpstack.capacity
-                                            == ::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                                .wrapping_div(
-                                                    ::core::mem::size_of::<MPConvStackVal>(),
-                                                )
-                                                .wrapping_div(
-                                                    (::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                                        .wrapping_rem(::core::mem::size_of::<
-                                                            MPConvStackVal,
-                                                        >(
-                                                        ))
-                                                        == 0)
-                                                        as ::core::ffi::c_int
-                                                        as usize,
-                                                ) {
-                                            if mpstack.items
-                                                == &raw mut mpstack.init_array
-                                                    as *mut MPConvStackVal
-                                            {
-                                                mpstack.items as *mut ::core::ffi::c_void
-                                            } else {
-                                                _memcpy_free(
-                                                    &raw mut mpstack.init_array
-                                                        as *mut MPConvStackVal
-                                                        as *mut ::core::ffi::c_void,
-                                                    mpstack.items as *mut ::core::ffi::c_void,
-                                                    mpstack.size.wrapping_mul(
-                                                        ::core::mem::size_of::<MPConvStackVal>(),
-                                                    ),
-                                                )
-                                            }
-                                        } else {
-                                            if mpstack.items
-                                                == &raw mut mpstack.init_array
-                                                    as *mut MPConvStackVal
-                                            {
-                                                memcpy(
-                                                    xmalloc(mpstack.capacity.wrapping_mul(
-                                                        ::core::mem::size_of::<MPConvStackVal>(),
-                                                    )),
-                                                    mpstack.items as *const ::core::ffi::c_void,
-                                                    mpstack.size.wrapping_mul(
-                                                        ::core::mem::size_of::<MPConvStackVal>(),
-                                                    ),
-                                                )
-                                            } else {
-                                                xrealloc(
-                                                    mpstack.items as *mut ::core::ffi::c_void,
-                                                    mpstack.capacity.wrapping_mul(
-                                                        ::core::mem::size_of::<MPConvStackVal>(),
-                                                    ),
-                                                )
-                                            }
-                                        })
-                                            as *mut MPConvStackVal;
-                                    } else {
-                                    };
-                                    let c2rust_fresh1 = mpstack.size;
-                                    mpstack.size = mpstack.size.wrapping_add(1);
-                                    *mpstack.items.offset(c2rust_fresh1 as isize) =
-                                        MPConvStackVal {
-                                            type_0: kMPConvPartialList,
-                                            tv: ::core::ptr::null_mut::<typval_T>(),
-                                            saved_copyID: copyID - 1 as ::core::ffi::c_int,
-                                            data: C2Rust_Unnamed_2 {
-                                                a: C2Rust_Unnamed_3 {
-                                                    arg: (*pt).pt_argv,
-                                                    argv: (*pt).pt_argv,
-                                                    todo: (*pt).pt_argc as size_t,
-                                                },
-                                            },
-                                        };
-                                }
-                                continue;
-                            }
-                            1 => {
-                                (*cur_mpsv).data.p.stage = kMPConvPartialEnd;
-                                let dict: *mut dict_T = if pt.is_null() {
-                                    ::core::ptr::null_mut::<dict_T>()
-                                } else {
-                                    (*pt).pt_dict
-                                };
-                                if dict.is_null() {
-                                    continue;
-                                }
-                                if (*dict).dv_hashtab.ht_used == 0 as size_t {
-                                    if (*edata).stack.size == (*edata).stack.capacity {
-                                        (*edata).stack.capacity = if (*edata).stack.capacity
-                                            << 1 as ::core::ffi::c_int
-                                            > ::core::mem::size_of::<[Object; 2]>()
-                                                .wrapping_div(::core::mem::size_of::<Object>())
-                                                .wrapping_div(
-                                                    (::core::mem::size_of::<[Object; 2]>()
-                                                        .wrapping_rem(
-                                                            ::core::mem::size_of::<Object>(),
-                                                        )
-                                                        == 0)
-                                                        as ::core::ffi::c_int
-                                                        as usize,
-                                                ) {
-                                            (*edata).stack.capacity << 1 as ::core::ffi::c_int
-                                        } else {
-                                            ::core::mem::size_of::<[Object; 2]>()
-                                                .wrapping_div(::core::mem::size_of::<Object>())
-                                                .wrapping_div(
-                                                    (::core::mem::size_of::<[Object; 2]>()
-                                                        .wrapping_rem(
-                                                            ::core::mem::size_of::<Object>(),
-                                                        )
-                                                        == 0)
-                                                        as ::core::ffi::c_int
-                                                        as size_t,
-                                                )
-                                        };
-                                        (*edata).stack.items = (if (*edata).stack.capacity
-                                            == ::core::mem::size_of::<[Object; 2]>()
-                                                .wrapping_div(::core::mem::size_of::<Object>())
-                                                .wrapping_div(
-                                                    (::core::mem::size_of::<[Object; 2]>()
-                                                        .wrapping_rem(
-                                                            ::core::mem::size_of::<Object>(),
-                                                        )
-                                                        == 0)
-                                                        as ::core::ffi::c_int
-                                                        as usize,
-                                                ) {
-                                            if (*edata).stack.items
-                                                == &raw mut (*edata).stack.init_array as *mut Object
-                                            {
-                                                (*edata).stack.items as *mut ::core::ffi::c_void
-                                            } else {
-                                                _memcpy_free(
-                                                    &raw mut (*edata).stack.init_array
-                                                        as *mut Object
-                                                        as *mut ::core::ffi::c_void,
-                                                    (*edata).stack.items
-                                                        as *mut ::core::ffi::c_void,
-                                                    (*edata).stack.size.wrapping_mul(
-                                                        ::core::mem::size_of::<Object>(),
-                                                    ),
-                                                )
-                                            }
-                                        } else {
-                                            if (*edata).stack.items
-                                                == &raw mut (*edata).stack.init_array as *mut Object
-                                            {
-                                                memcpy(
-                                                    xmalloc((*edata).stack.capacity.wrapping_mul(
-                                                        ::core::mem::size_of::<Object>(),
-                                                    )),
-                                                    (*edata).stack.items
-                                                        as *const ::core::ffi::c_void,
-                                                    (*edata).stack.size.wrapping_mul(
-                                                        ::core::mem::size_of::<Object>(),
-                                                    ),
-                                                )
-                                            } else {
-                                                xrealloc(
-                                                    (*edata).stack.items
-                                                        as *mut ::core::ffi::c_void,
-                                                    (*edata).stack.capacity.wrapping_mul(
-                                                        ::core::mem::size_of::<Object>(),
-                                                    ),
-                                                )
-                                            }
-                                        })
-                                            as *mut Object;
-                                    } else {
-                                    };
-                                    let c2rust_fresh2 = (*edata).stack.size;
-                                    (*edata).stack.size = (*edata).stack.size.wrapping_add(1);
-                                    *(*edata).stack.items.offset(c2rust_fresh2 as isize) = object {
-                                        type_0: kObjectTypeDict,
-                                        data: C2Rust_Unnamed {
-                                            dict: Dict {
-                                                size: 0 as size_t,
-                                                capacity: 0 as size_t,
-                                                items: ::core::ptr::null_mut::<KeyValuePair>(),
-                                            },
-                                        },
-                                    };
-                                    continue;
-                                } else {
-                                    let saved_copyID: ::core::ffi::c_int = (*dict).dv_copyID;
-                                    let te_csr_ret: ::core::ffi::c_int =
-                                        _typval_encode_object_check_self_reference(
-                                            edata,
-                                            dict as *mut ::core::ffi::c_void,
-                                            &raw mut (*dict).dv_copyID,
-                                            &raw mut mpstack,
-                                            copyID,
-                                            kMPConvDict,
-                                            objname,
-                                        );
-                                    if te_csr_ret != NOTDONE {
-                                        if te_csr_ret == FAIL {
-                                            break '_encode_vim_to__error_ret;
-                                        } else {
-                                            continue;
-                                        }
-                                    } else {
-                                        typval_encode_dict_start(edata, (*dict).dv_hashtab.ht_used);
-                                        '_c2rust_label_0: {
-                                            if saved_copyID != copyID
-                                                && saved_copyID != copyID - 1 as ::core::ffi::c_int
-                                            {
-                                            } else {
-                                                __assert_fail(
-                                                    b"saved_copyID != copyID && saved_copyID != copyID - 1\0"
-                                                        .as_ptr() as *const ::core::ffi::c_char,
-                                                    b"src/nvim/api/private/converter.rs\0"
-                                                        .as_ptr() as *const ::core::ffi::c_char,
-                                                    789 as ::core::ffi::c_uint,
-                                                    b"int encode_vim_to_object(EncodedData *const, typval_T *const, const char *const)\0"
-                                                        .as_ptr() as *const ::core::ffi::c_char,
-                                                );
-                                            }
-                                        };
-                                        if mpstack.size == mpstack.capacity {
-                                            mpstack.capacity =
-                                                if mpstack.capacity << 1 as ::core::ffi::c_int
-                                                    > ::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                                        .wrapping_div(::core::mem::size_of::<
-                                                            MPConvStackVal,
-                                                        >(
-                                                        ))
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<
-                                                                [MPConvStackVal; 8],
-                                                            >(
-                                                            )
-                                                            .wrapping_rem(::core::mem::size_of::<
-                                                                MPConvStackVal,
-                                                            >(
-                                                            )) == 0)
-                                                                as ::core::ffi::c_int
-                                                                as usize,
-                                                        )
-                                                {
-                                                    mpstack.capacity << 1 as ::core::ffi::c_int
-                                                } else {
-                                                    ::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                                        .wrapping_div(::core::mem::size_of::<
-                                                            MPConvStackVal,
-                                                        >(
-                                                        ))
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<
-                                                                [MPConvStackVal; 8],
-                                                            >(
-                                                            )
-                                                            .wrapping_rem(::core::mem::size_of::<
-                                                                MPConvStackVal,
-                                                            >(
-                                                            )) == 0)
-                                                                as ::core::ffi::c_int
-                                                                as size_t,
-                                                        )
-                                                };
-                                            mpstack.items =
-                                                (if mpstack.capacity
-                                                    == ::core::mem::size_of::<[MPConvStackVal; 8]>()
-                                                        .wrapping_div(::core::mem::size_of::<
-                                                            MPConvStackVal,
-                                                        >(
-                                                        ))
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<
-                                                                [MPConvStackVal; 8],
-                                                            >(
-                                                            )
-                                                            .wrapping_rem(::core::mem::size_of::<
-                                                                MPConvStackVal,
-                                                            >(
-                                                            )) == 0)
-                                                                as ::core::ffi::c_int
-                                                                as usize,
-                                                        )
-                                                {
-                                                    if mpstack.items
-                                                        == &raw mut mpstack.init_array
-                                                            as *mut MPConvStackVal
-                                                    {
-                                                        mpstack.items as *mut ::core::ffi::c_void
-                                                    } else {
-                                                        _memcpy_free(
-                                                            &raw mut mpstack.init_array
-                                                                as *mut MPConvStackVal
-                                                                as *mut ::core::ffi::c_void,
-                                                            mpstack.items
-                                                                as *mut ::core::ffi::c_void,
-                                                            mpstack.size.wrapping_mul(
-                                                                ::core::mem::size_of::<
-                                                                    MPConvStackVal,
-                                                                >(
-                                                                ),
-                                                            ),
-                                                        )
-                                                    }
-                                                } else {
-                                                    if mpstack.items
-                                                        == &raw mut mpstack.init_array
-                                                            as *mut MPConvStackVal
-                                                    {
-                                                        memcpy(
-                                                            xmalloc(mpstack.capacity.wrapping_mul(
-                                                                ::core::mem::size_of::<
-                                                                    MPConvStackVal,
-                                                                >(
-                                                                ),
-                                                            )),
-                                                            mpstack.items
-                                                                as *const ::core::ffi::c_void,
-                                                            mpstack.size.wrapping_mul(
-                                                                ::core::mem::size_of::<
-                                                                    MPConvStackVal,
-                                                                >(
-                                                                ),
-                                                            ),
-                                                        )
-                                                    } else {
-                                                        xrealloc(
-                                                            mpstack.items
-                                                                as *mut ::core::ffi::c_void,
-                                                            mpstack.capacity.wrapping_mul(
-                                                                ::core::mem::size_of::<
-                                                                    MPConvStackVal,
-                                                                >(
-                                                                ),
-                                                            ),
-                                                        )
-                                                    }
-                                                })
-                                                    as *mut MPConvStackVal;
-                                        } else {
-                                        };
-                                        let c2rust_fresh3 = mpstack.size;
-                                        mpstack.size = mpstack.size.wrapping_add(1);
-                                        *mpstack.items.offset(c2rust_fresh3 as isize) =
-                                            MPConvStackVal {
-                                                type_0: kMPConvDict,
-                                                tv: ::core::ptr::null_mut::<typval_T>(),
-                                                saved_copyID: saved_copyID,
-                                                data: C2Rust_Unnamed_2 {
-                                                    d: C2Rust_Unnamed_6 {
-                                                        dict: dict,
-                                                        dictp: &raw mut (*pt).pt_dict,
-                                                        hi: (*dict).dv_hashtab.ht_array,
-                                                        todo: (*dict).dv_hashtab.ht_used,
-                                                    },
-                                                },
-                                            };
-                                        continue;
-                                    }
-                                }
-                            }
-                            2 => {
-                                mpstack.size = mpstack.size.wrapping_sub(1);
-                                continue;
-                            }
-                            _ => {
-                                continue;
-                            }
-                        }
-                    }
-                    4 => {
-                        if (*cur_mpsv).data.a.todo == 0 {
-                            mpstack.size = mpstack.size.wrapping_sub(1);
-                            typval_encode_list_end(edata);
-                            continue;
-                        } else {
-                            if (*cur_mpsv).data.a.argv != (*cur_mpsv).data.a.arg {
-                                typval_encode_between_list_items(edata);
-                            }
-                            let c2rust_fresh4 = (*cur_mpsv).data.a.arg;
-                            (*cur_mpsv).data.a.arg = (*cur_mpsv).data.a.arg.offset(1);
-                            tv = c2rust_fresh4;
-                            (*cur_mpsv).data.a.todo = (*cur_mpsv).data.a.todo.wrapping_sub(1);
-                        }
-                    }
-                    _ => {}
+        });
+    }
+
+    unsafe fn conv_empty_dict(&mut self, _tv: *mut typval_T, _dictp: Option<*mut *mut dict_T>) {
+        self.stack.push(object {
+            type_0: kObjectTypeDict,
+            data: object_data {
+                dict: Dict {
+                    size: 0,
+                    capacity: 0,
+                    items: ::core::ptr::null_mut(),
+                },
+            },
+        });
+    }
+
+    /// Reserve the whole array now; the items fill it in place.
+    unsafe fn conv_list_start(&mut self, _tv: *mut typval_T, len: c_int) -> Flow {
+        self.stack.push(object {
+            type_0: kObjectTypeArray,
+            data: object_data {
+                array: arena_array(self.arena, len as size_t),
+            },
+        });
+        Flow::Go
+    }
+
+    unsafe fn conv_list_between_items(&mut self, _tv: *mut typval_T) {
+        self.close_list_item();
+    }
+
+    unsafe fn conv_list_end(&mut self, _tv: *mut typval_T) {
+        self.close_list_item();
+        debug_assert!({
+            let list = self.stack.last();
+            // SAFETY: the tag was checked by `close_list_item`.
+            let array = unsafe { list.data.array };
+            array.size == array.capacity
+        });
+    }
+
+    unsafe fn conv_dict_start(&mut self, _tv: *mut typval_T, len: size_t) -> Flow {
+        self.stack.push(object {
+            type_0: kObjectTypeDict,
+            data: object_data {
+                dict: arena_dict(self.arena, len),
+            },
+        });
+        Flow::Go
+    }
+
+    /// The key lands in the next free slot but does not claim it — the value
+    /// that follows is what advances `size`.
+    unsafe fn conv_dict_after_key(&mut self, _tv: *mut typval_T, _dictp: Option<*mut *mut dict_T>) {
+        let key = self.take_top();
+        // SAFETY: the walk is inside a dictionary; `key` is the object it just
+        // converted, and a `String` object owns its bytes.
+        unsafe {
+            let key = if key.type_0 == kObjectTypeString {
+                key.data.string
+            } else {
+                String_0 {
+                    data: INVALID_KEY.as_ptr().cast_mut(),
+                    size: INVALID_KEY.count_bytes(),
                 }
-                '_c2rust_label_1: {
-                    if !tv.is_null() {
-                    } else {
-                        __assert_fail(
-                            b"tv != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/api/private/converter.rs\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                            829 as ::core::ffi::c_uint,
-                            b"int encode_vim_to_object(EncodedData *const, typval_T *const, const char *const)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                        );
-                    }
-                };
-                if _typval_encode_object_convert_one_value(
-                    edata,
-                    &raw mut mpstack,
-                    cur_mpsv,
-                    tv,
-                    copyID,
-                    objname,
-                ) == FAIL
-                {
-                    break '_encode_vim_to__error_ret;
-                }
-            }
-            if mpstack.items != &raw mut mpstack.init_array as *mut MPConvStackVal {
-                let mut ptr_: *mut *mut ::core::ffi::c_void =
-                    &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
-                xfree(*ptr_);
-                *ptr_ = NULL_0;
-                let _ = *ptr_;
-            }
-            return OK;
+            };
+            let dict = self.open_dict();
+            (*dict.items.add(dict.size)).key = key;
         }
     }
-    if mpstack.items != &raw mut mpstack.init_array as *mut MPConvStackVal {
-        let mut ptr__0: *mut *mut ::core::ffi::c_void =
-            &raw mut mpstack.items as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr__0);
-        *ptr__0 = NULL_0;
-        let _ = *ptr__0;
+
+    unsafe fn conv_dict_between_items(
+        &mut self,
+        _tv: *mut typval_T,
+        _dictp: Option<*mut *mut dict_T>,
+    ) {
+        let value = self.take_top();
+        // SAFETY: as `conv_dict_after_key`, whose slot this completes.
+        unsafe {
+            let dict = self.open_dict();
+            (*dict.items.add(dict.size)).value = value;
+            dict.size += 1;
+        }
     }
-    return FAIL;
+
+    unsafe fn conv_dict_end(&mut self, tv: *mut typval_T, dictp: Option<*mut *mut dict_T>) {
+        // SAFETY: as `conv_dict_between_items`.
+        unsafe { self.conv_dict_between_items(tv, dictp) };
+        debug_assert!({
+            let obj = self.stack.last();
+            // SAFETY: the tag was checked by `open_dict`.
+            let dict = unsafe { obj.data.dict };
+            dict.size == dict.capacity
+        });
+    }
+
+    /// An `Object` tree is acyclic, so a container that references itself
+    /// cannot be represented: the second sighting becomes nil.
+    unsafe fn conv_recurse(
+        &mut self,
+        _val: *mut c_void,
+        _conv_type: ConvType,
+        _path: &ConvPath,
+    ) -> Flow {
+        self.stack.push(NIL);
+        Flow::Go
+    }
 }
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
+/// Convert a Vimscript value to an API `Object`, recursively.
+///
+/// `arena` may be null, in which case the tree is heap-allocated and
+/// `api_free_object` takes it apart.  `reuse_strdata` points the answer's
+/// strings at `obj`'s own bytes rather than copying them, and takes no effect
+/// without an arena.
+///
+/// # Safety
+/// `obj` must point at a live typval, and `arena` be null or a live arena.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_to_object(
-    mut obj: *mut typval_T,
-    mut arena: *mut Arena,
-    mut reuse_strdata: bool,
+    obj: *mut typval_T,
+    arena: *mut Arena,
+    reuse_strdata: bool,
 ) -> Object {
-    let mut edata: EncodedData = EncodedData {
-        stack: C2Rust_Unnamed_1 {
-            size: 0,
-            capacity: 0,
-            items: ::core::ptr::null_mut::<Object>(),
-            init_array: [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            }; 2],
-        },
-        arena: ::core::ptr::null_mut::<Arena>(),
-        reuse_strdata: false,
+    let mut sink = ObjectSink {
+        stack: InlineStack::new(),
+        arena,
+        reuse_strdata,
     };
-    edata.stack.capacity = ::core::mem::size_of::<[Object; 2]>()
-        .wrapping_div(::core::mem::size_of::<Object>())
-        .wrapping_div(
-            (::core::mem::size_of::<[Object; 2]>().wrapping_rem(::core::mem::size_of::<Object>())
-                == 0) as ::core::ffi::c_int as usize,
-        ) as size_t;
-    edata.stack.size = 0 as size_t;
-    edata.stack.items = &raw mut edata.stack.init_array as *mut Object;
-    edata.arena = arena;
-    edata.reuse_strdata = reuse_strdata;
-    let evo_ret: ::core::ffi::c_int = encode_vim_to_object(
-        &raw mut edata,
-        obj,
-        b"vim_to_object argument\0".as_ptr() as *const ::core::ffi::c_char,
-    );
-    '_c2rust_label: {
-        if evo_ret == 1 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"evo_ret == OK\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                254 as ::core::ffi::c_uint,
-                b"Object vim_to_object(typval_T *, Arena *, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let mut ret: Object = *edata.stack.items.offset(0 as ::core::ffi::c_int as isize);
-    '_c2rust_label_0: {
-        if edata.stack.size == 1 as size_t {
-        } else {
-            __assert_fail(
-                b"kv_size(edata.stack) == 1\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                256 as ::core::ffi::c_uint,
-                b"Object vim_to_object(typval_T *, Arena *, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    if edata.stack.items != &raw mut edata.stack.init_array as *mut Object {
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut edata.stack.items as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL_0;
-        let _ = *ptr_;
+    // SAFETY: the caller's typval, walked by a sink that cannot fail on any
+    // value a live one can hold.
+    let converted = unsafe { encode_typval(&mut sink, obj, c"vim_to_object argument".as_ptr()) };
+    debug_assert!(converted);
+    debug_assert!(sink.stack.len() == 1);
+    if sink.stack.is_empty() {
+        // Only a `VAR_UNKNOWN` gets here, which upstream calls impossible and
+        // then reads its stack's uninitialised first slot for.
+        return NIL;
     }
-    return ret;
+    sink.stack.last()
 }
-pub unsafe extern "C" fn object_to_vim(
-    mut obj: Object,
-    mut tv: *mut typval_T,
-    mut err: *mut Error,
-) {
-    object_to_vim_take_luaref(&raw mut obj, tv, false_0 != 0, err);
+
+/// Convert an API `Object` to a Vimscript value.
+///
+/// On failure `tv`'s `v_type` is left `VAR_UNKNOWN` and nothing was
+/// allocated for it.
+///
+/// # Safety
+/// `tv` must point at writable typval storage.
+pub unsafe extern "C" fn object_to_vim(obj: Object, tv: *mut typval_T, err: *mut Error) {
+    let mut obj = obj;
+    unsafe { object_to_vim_take_luaref(&raw mut obj, tv, false, err) };
 }
+/// As [`object_to_vim`], but consuming every `LuaRef` nested in `obj`.
+///
+/// Useful where `obj` sits on an arena, which cannot free the Lua registry
+/// references its objects hold.
+///
+/// # Safety
+/// As [`object_to_vim`]; `obj` must point at a live object tree.
 pub unsafe extern "C" fn object_to_vim_take_luaref(
-    mut obj: *mut Object,
-    mut tv: *mut typval_T,
-    mut take_luaref: bool,
-    mut err: *mut Error,
+    obj: *mut Object,
+    tv: *mut typval_T,
+    take_luaref: bool,
+    err: *mut Error,
 ) {
-    (*tv).v_type = VAR_UNKNOWN;
-    (*tv).v_lock = VAR_UNLOCKED;
-    match (*obj).type_0 as ::core::ffi::c_uint {
-        0 => {
-            (*tv).v_type = VAR_SPECIAL;
-            (*tv).vval.v_special = kSpecialVarNull;
-        }
-        1 => {
-            (*tv).v_type = VAR_BOOL;
-            (*tv).vval.v_bool = (if (*obj).data.boolean as ::core::ffi::c_int != 0 {
-                kBoolVarTrue as ::core::ffi::c_int
-            } else {
-                kBoolVarFalse as ::core::ffi::c_int
-            }) as BoolVarValue;
-        }
-        8 | 9 | 10 | 2 => {
-            (*tv).v_type = VAR_NUMBER;
-            (*tv).vval.v_number = (*obj).data.integer;
-        }
-        3 => {
-            (*tv).v_type = VAR_FLOAT;
-            (*tv).vval.v_float = (*obj).data.floating as float_T;
-        }
-        4 => {
-            let mut s: String_0 = (*obj).data.string;
-            *tv = decode_string(s.data, s.size, false_0 != 0, false_0 != 0);
-        }
-        5 => {
-            let list: *mut list_T = tv_list_alloc((*obj).data.array.size as ptrdiff_t);
-            let mut i: uint32_t = 0 as uint32_t;
-            while (i as size_t) < (*obj).data.array.size {
-                let mut li_tv: typval_T = typval_T {
-                    v_type: VAR_UNKNOWN,
-                    v_lock: VAR_UNLOCKED,
-                    vval: typval_vval_union { v_number: 0 },
-                };
-                object_to_vim_take_luaref(
-                    (*obj).data.array.items.offset(i as isize),
-                    &raw mut li_tv,
-                    take_luaref,
-                    err,
-                );
-                tv_list_append_owned_tv(list, li_tv);
-                i = i.wrapping_add(1);
+    unsafe {
+        (*tv).v_type = VAR_UNKNOWN;
+        (*tv).v_lock = VAR_UNLOCKED;
+        match (*obj).type_0 as ::core::ffi::c_uint {
+            0 => {
+                (*tv).v_type = VAR_SPECIAL;
+                (*tv).vval.v_special = kSpecialVarNull;
             }
-            tv_list_ref(list);
-            (*tv).v_type = VAR_LIST;
-            (*tv).vval.v_list = list;
-        }
-        6 => {
-            let dict: *mut dict_T = tv_dict_alloc();
-            let mut i_0: uint32_t = 0 as uint32_t;
-            while (i_0 as size_t) < (*obj).data.dict.size {
-                let mut item: *mut KeyValuePair = (*obj).data.dict.items.offset(i_0 as isize);
-                let mut key: String_0 = (*item).key;
-                let di: *mut dictitem_T = tv_dict_item_alloc(key.data);
-                object_to_vim_take_luaref(
-                    &raw mut (*item).value,
-                    &raw mut (*di).di_tv,
-                    take_luaref,
-                    err,
-                );
-                tv_dict_add(dict, di);
-                i_0 = i_0.wrapping_add(1);
+            1 => {
+                (*tv).v_type = VAR_BOOL;
+                (*tv).vval.v_bool = (if (*obj).data.boolean as ::core::ffi::c_int != 0 {
+                    kBoolVarTrue as ::core::ffi::c_int
+                } else {
+                    kBoolVarFalse as ::core::ffi::c_int
+                }) as BoolVarValue;
             }
-            (*dict).dv_refcount += 1;
-            (*tv).v_type = VAR_DICT;
-            (*tv).vval.v_dict = dict;
-        }
-        7 => {
-            let mut ref_0: LuaRef = (*obj).data.luaref;
-            if take_luaref {
-                (*obj).data.luaref = LUA_NOREF as LuaRef;
-            } else {
-                ref_0 = api_new_luaref(ref_0);
+            8 | 9 | 10 | 2 => {
+                (*tv).v_type = VAR_NUMBER;
+                (*tv).vval.v_number = (*obj).data.integer;
             }
-            let mut name: *mut ::core::ffi::c_char = register_luafunc(ref_0);
-            (*tv).v_type = VAR_FUNC;
-            (*tv).vval.v_string = xstrdup(name);
-        }
-        _ => {}
-    };
+            3 => {
+                (*tv).v_type = VAR_FLOAT;
+                (*tv).vval.v_float = (*obj).data.floating as float_T;
+            }
+            4 => {
+                let mut s: String_0 = (*obj).data.string;
+                *tv = decode_string(s.data, s.size, false, false);
+            }
+            5 => {
+                let list: *mut list_T = tv_list_alloc((*obj).data.array.size as ptrdiff_t);
+                let mut i: uint32_t = 0 as uint32_t;
+                while (i as size_t) < (*obj).data.array.size {
+                    let mut li_tv: typval_T = typval_T {
+                        v_type: VAR_UNKNOWN,
+                        v_lock: VAR_UNLOCKED,
+                        vval: typval_vval_union { v_number: 0 },
+                    };
+                    object_to_vim_take_luaref(
+                        (*obj).data.array.items.offset(i as isize),
+                        &raw mut li_tv,
+                        take_luaref,
+                        err,
+                    );
+                    tv_list_append_owned_tv(list, li_tv);
+                    i = i.wrapping_add(1);
+                }
+                tv_list_ref(list);
+                (*tv).v_type = VAR_LIST;
+                (*tv).vval.v_list = list;
+            }
+            6 => {
+                let dict: *mut dict_T = tv_dict_alloc();
+                let mut i_0: uint32_t = 0 as uint32_t;
+                while (i_0 as size_t) < (*obj).data.dict.size {
+                    let mut item: *mut KeyValuePair = (*obj).data.dict.items.offset(i_0 as isize);
+                    let mut key: String_0 = (*item).key;
+                    let di: *mut dictitem_T = tv_dict_item_alloc(key.data);
+                    object_to_vim_take_luaref(
+                        &raw mut (*item).value,
+                        &raw mut (*di).di_tv,
+                        take_luaref,
+                        err,
+                    );
+                    tv_dict_add(dict, di);
+                    i_0 = i_0.wrapping_add(1);
+                }
+                (*dict).dv_refcount += 1;
+                (*tv).v_type = VAR_DICT;
+                (*tv).vval.v_dict = dict;
+            }
+            7 => {
+                let mut ref_0: LuaRef = (*obj).data.luaref;
+                if take_luaref {
+                    (*obj).data.luaref = LUA_NOREF;
+                } else {
+                    ref_0 = api_new_luaref(ref_0);
+                }
+                let mut name: *mut ::core::ffi::c_char = register_luafunc(ref_0);
+                (*tv).v_type = VAR_FUNC;
+                (*tv).vval.v_string = xstrdup(name);
+            }
+            _ => {}
+        };
+    }
 }
