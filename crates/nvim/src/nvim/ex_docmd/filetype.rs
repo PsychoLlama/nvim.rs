@@ -22,10 +22,9 @@ use crate::src::nvim::options::kOptFiletype;
 use crate::src::nvim::os::env::os_getenv_noalloc;
 use crate::src::nvim::os::libc::{gettext, strcmp, strncmp, strstr};
 use crate::src::nvim::runtime::{DIP_ALL, source_runtime};
-use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::{
-    Array, Error, Object, OptVal, OptValData, String_0, exarg_T, kFalse, kNone, kObjectTypeString,
-    kTrue, size_t,
+    Array, Error, Object, OptVal, OptValData, String_0, exarg_T, kErrorTypeNone, kFalse, kNone,
+    kObjectTypeString, kTrue, size_t,
 };
 use crate::src::nvim::usercmd::add_win_cmd_modifiers;
 

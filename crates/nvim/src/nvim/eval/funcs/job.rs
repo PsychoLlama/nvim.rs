@@ -43,12 +43,11 @@ use crate::src::nvim::os::shell::shell_free_argv;
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::path::vim_FullName;
 use crate::src::nvim::terminal::{terminal_buf, terminal_open, terminal_running};
-use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::src::nvim::types::{
     Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, Integer,
     VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, VV_SEND_SERVER, buf_T,
-    dict_T, dictitem_T, kObjectTypeInteger, list_T, listitem_T, object, typval_T,
+    dict_T, dictitem_T, kErrorTypeNone, kObjectTypeInteger, list_T, listitem_T, object, typval_T,
     typval_vval_union, uint16_t, uint64_t, varnumber_T,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_flush};

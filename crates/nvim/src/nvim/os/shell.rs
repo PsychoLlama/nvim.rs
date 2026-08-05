@@ -51,14 +51,11 @@ use crate::src::nvim::tag::tag_freematch;
 use crate::src::nvim::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    BoolVarValue, Event, FILE, LibuvProc, MultiQueue, OptInt, Proc, RStream, SpecialVarValue,
-    Stream, String_0, StringBuilder, VV_SHELL_ERROR, WBuffer, colnr_T, int64_t, intptr_t, linenr_T,
-    proftime_T, size_t, stream_read_cb, uint8_t, uint64_t, varnumber_T,
+    Event, FILE, LibuvProc, MultiQueue, OptInt, Proc, RStream, Stream, String_0, StringBuilder,
+    VV_SHELL_ERROR, WBuffer, colnr_T, int64_t, intptr_t, linenr_T, proftime_T, size_t,
+    stream_read_cb, uint8_t, uint64_t, varnumber_T,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_flush, ui_has};
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_30 = ::core::ffi::c_uint;
 pub const kShellOptHideMess: C2Rust_Unnamed_30 = 64;
 pub const kShellOptWrite: C2Rust_Unnamed_30 = 32;

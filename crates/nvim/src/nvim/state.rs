@@ -22,13 +22,10 @@ use crate::src::nvim::os::input::{input_available, input_get, os_breakcheck};
 use crate::src::nvim::os::libc::{strcmp, strcpy};
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
-    BoolVarValue, Direction, Event, ProcType, SpecialVarValue, VimState, dict_T, hashitem_T,
-    hashtab_T, kNone, key_extra, save_v_event_T, size_t, uint8_t, win_T,
+    Direction, Event, ProcType, VimState, dict_T, hashitem_T, hashtab_T, kNone, key_extra,
+    save_v_event_T, size_t, uint8_t, win_T,
 };
 use crate::src::nvim::ui::ui_flush;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kProcTypePty: ProcType = 1;
 pub const kDirectionNotSet: Direction = 0;
 /// The editor-mode bitmask `State` carries, and the masks that read it.

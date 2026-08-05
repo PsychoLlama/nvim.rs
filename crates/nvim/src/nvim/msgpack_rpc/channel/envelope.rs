@@ -18,12 +18,12 @@ use crate::src::nvim::msgpack_rpc::packer::{
 };
 use crate::src::nvim::types::{
     Arena, Array, Channel, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object,
-    PackerBuffer, kObjectTypeInteger, kObjectTypeString, size_t, uint32_t, uint64_t,
+    PackerBuffer, kErrorTypeNone, kObjectTypeInteger, kObjectTypeString, size_t, uint32_t,
+    uint64_t,
 };
 
 use super::known::*;
 use super::{channel_write, trace};
-use crate::src::nvim::types::api::kErrorTypeNone;
 
 /// Packs a request (with an id) or a notification (without one) and sends it
 /// to each of `nchans` channels.

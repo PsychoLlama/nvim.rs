@@ -9,6 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::kErrorTypeNone;
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
 pub fn cmdpreview_get_bufnr() -> handle_T {

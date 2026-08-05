@@ -45,28 +45,26 @@ use crate::src::nvim::api::private::dispatch_wrappers::*;
 use crate::src::nvim::api::private::helpers::api_set_error;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::types::{
-    Arena, Array, Error, ErrorType, KeyDict__shada_buflist_item, KeyDict__shada_mark,
-    KeyDict__shada_register, KeyDict__shada_search_pat, KeyDict_buf_attach, KeyDict_buf_delete,
-    KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods,
-    KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_complete_set, KeyDict_context,
-    KeyDict_create_augroup, KeyDict_create_autocmd, KeyDict_echo_opts, KeyDict_empty,
-    KeyDict_eval_statusline, KeyDict_exec_autocmds, KeyDict_exec_opts, KeyDict_get_autocmds,
-    KeyDict_get_commands, KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_get_highlight,
-    KeyDict_get_ns, KeyDict_highlight, KeyDict_highlight_cterm, KeyDict_keymap, KeyDict_ns_opts,
-    KeyDict_open_term, KeyDict_option, KeyDict_redraw, KeyDict_runtime,
-    KeyDict_set_decoration_provider, KeyDict_set_extmark, KeyDict_tabpage_config,
-    KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height, KeyDict_xdl_diff,
-    KeySetLink, MsgpackRpcRequestHandler, Object, size_t, uint64_t,
+    Arena, Array, Error, KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
+    KeyDict__shada_search_pat, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds,
+    KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts,
+    KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup, KeyDict_create_autocmd,
+    KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline, KeyDict_exec_autocmds,
+    KeyDict_exec_opts, KeyDict_get_autocmds, KeyDict_get_commands, KeyDict_get_extmark,
+    KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
+    KeyDict_highlight_cterm, KeyDict_keymap, KeyDict_ns_opts, KeyDict_open_term, KeyDict_option,
+    KeyDict_redraw, KeyDict_runtime, KeyDict_set_decoration_provider, KeyDict_set_extmark,
+    KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height,
+    KeyDict_xdl_diff, KeySetLink, MsgpackRpcRequestHandler, Object, size_t, uint64_t,
 };
 use crate::src::nvim::ui_client::handle_ui_client_redraw;
 
 /// Values that belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
 mod known {
-    use super::ErrorType;
     use core::ffi::c_int;
 
-    pub const kErrorTypeException: ErrorType = 0;
+    pub use crate::src::nvim::types::kErrorTypeException;
 
     // `KeySetLink::type_0`: the `ObjectType` a key's value must arrive as, as
     // the `c_int` that field holds.

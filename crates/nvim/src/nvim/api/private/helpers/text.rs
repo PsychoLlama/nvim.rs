@@ -14,10 +14,9 @@ use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{memchrsub, xmemdupz, xstrndup};
 use crate::src::nvim::os::libc::{strlen, strnlen};
 use crate::src::nvim::pos::MAXLNUM;
-use crate::src::nvim::types::api::kErrorTypeValidation;
 use crate::src::nvim::types::{
-    Arena, Array, ArrayBuilder, Error, String_0, buf_T, garray_T, int64_t, kObjectTypeString,
-    linenr_T, object, object_data, size_t,
+    Arena, Array, ArrayBuilder, Error, String_0, buf_T, garray_T, int64_t, kErrorTypeValidation,
+    kObjectTypeString, linenr_T, object, object_data, size_t,
 };
 use core::ffi::c_char;
 use core::{mem, ptr};

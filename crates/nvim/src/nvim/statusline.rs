@@ -60,21 +60,18 @@ use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::ui::{kUIMessages, kUITabline, kUIWildmenu};
 use crate::src::nvim::types::{
-    AlignTextPos, Arena, Array, BoolVarValue, Buffer, Dict, FloatRelative, Integer, Object,
-    OptIndex, OptInt, OptValType, ScreenGrid, SignTextAttrs, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_13, StlClickRecord, StlFlag, String_0, Tabpage,
-    VAR_NUMBER, VAR_UNLOCKED, VV_LNUM, VV_RELNUM, VV_VIRTNUM, WinSplit, WinStyle, buf_T, colnr_T,
-    frame_T, hlf_T, int64_t, kObjectTypeArray, kObjectTypeBuffer, kObjectTypeDict,
-    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, key_value_pair,
-    linenr_T, object, object_data as C2Rust_Unnamed, ptrdiff_t, schar_T, size_t, ssize_t,
-    statuscol_T, stl_hlrec_t, tabpage_T, typval_T, typval_vval_union, uint8_t, varnumber_T, win_T,
+    AlignTextPos, Arena, Array, Buffer, Dict, Integer, Object, OptIndex, OptInt, OptValType,
+    ScreenGrid, SignTextAttrs, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_13,
+    StlClickRecord, StlFlag, String_0, Tabpage, VAR_NUMBER, VAR_UNLOCKED, VV_LNUM, VV_RELNUM,
+    VV_VIRTNUM, WinSplit, WinStyle, buf_T, colnr_T, frame_T, hlf_T, int64_t, kObjectTypeArray,
+    kObjectTypeBuffer, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
+    kObjectTypeTabpage, key_value_pair, linenr_T, object, object_data as C2Rust_Unnamed, ptrdiff_t,
+    schar_T, size_t, ssize_t, statuscol_T, stl_hlrec_t, tabpage_T, typval_T, typval_vval_union,
+    uint8_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{ui_call_msg_ruler, ui_call_tabline_update, ui_has};
 use crate::src::nvim::undo::bufIsChanged;
 use crate::src::nvim::window::{global_stl_height, lastwin_nofloating, tabline_height};
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kStlClickFuncRun: C2Rust_Unnamed_13 = 3;
 pub const kStlClickTabClose: C2Rust_Unnamed_13 = 2;
 pub const kStlClickTabSwitch: C2Rust_Unnamed_13 = 1;
@@ -82,7 +79,6 @@ pub const kStlClickDisabled: C2Rust_Unnamed_13 = 0;
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeEditor: FloatRelative = 0;
 pub const kOptValTypeString: OptValType = 2;
 /// Most sign columns `'signcolumn'` will ever ask for.
 pub const SIGN_SHOW_MAX: ::core::ffi::c_int = 9;

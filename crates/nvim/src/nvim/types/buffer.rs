@@ -18,7 +18,18 @@ pub struct BufUpdateCallbacks {
     pub preview: bool,
 }
 pub type FloatAnchor = ::core::ffi::c_int;
+/// `WinConfig::anchor` is a corner, spelled as two independent bits: the
+/// north-west corner is neither of them.
+pub const kFloatAnchorEast: FloatAnchor = 1;
+pub const kFloatAnchorSouth: FloatAnchor = 2;
 pub type FloatRelative = ::core::ffi::c_uint;
+/// What `WinConfig::row`/`col` are measured from.
+pub const kFloatRelativeEditor: FloatRelative = 0;
+pub const kFloatRelativeWindow: FloatRelative = 1;
+pub const kFloatRelativeCursor: FloatRelative = 2;
+pub const kFloatRelativeMouse: FloatRelative = 3;
+pub const kFloatRelativeTabline: FloatRelative = 4;
+pub const kFloatRelativeLaststatus: FloatRelative = 5;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct WinConfig {

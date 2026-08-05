@@ -22,18 +22,15 @@ use crate::src::nvim::msgpack_rpc::packer::{
 use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memcpy, strlen};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::src::nvim::types::{
-    BoolVarValue, Integer, ListReaderState, MPConvPartialStage, MPConvStack, MPConvStackVal,
+    Integer, ListReaderState, MPConvPartialStage, MPConvStack, MPConvStackVal,
     MPConvStackVal_data as C2Rust_Unnamed_0, MPConvStackVal_data_a as C2Rust_Unnamed_1,
     MPConvStackVal_data_d as C2Rust_Unnamed_4, MPConvStackVal_data_l as C2Rust_Unnamed_3,
     MPConvStackVal_data_p as C2Rust_Unnamed_2, MPConvStackValType, MessagePackType, PackerBuffer,
-    SpecialVarValue, String_0, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNLOCKED, blob_T, dict_T, dictitem_T, float_T, garray_T, hashitem_T, int8_t, int64_t,
+    String_0, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED,
+    blob_T, dict_T, dictitem_T, float_T, garray_T, hashitem_T, int8_t, int64_t, kBoolVarTrue,
     list_T, listitem_T, partial_T, ptrdiff_t, size_t, typval_T, typval_vval_union, uint8_t,
     uint32_t, uint64_t, varnumber_T,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kMPString: MessagePackType = 4;
 pub const kMPConvPartialEnd: MPConvPartialStage = 2;
 pub const kMPConvPartialSelf: MPConvPartialStage = 1;

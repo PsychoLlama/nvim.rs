@@ -90,15 +90,13 @@ use crate::src::nvim::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE,
 };
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, vim_vsnprintf};
-use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::ui::{kUIMessages, kUIMultigrid};
 use crate::src::nvim::types::{
-    Arena, Array, BoolVarValue, Dict, Error, Event, FILE, HlMessage, HlMessageChunk, Integer,
-    KeyDict_echo_opts, MessageData, Object, OptInt, SpecialVarValue, String_0, VV_ERRMSG,
-    VV_SCROLLSTART, VV_STATUSMSG, VV_WARNINGMSG, colnr_T, estack_T, estack_arg_T, exarg_T,
-    flush_buffers_T, garray_T, int64_t, kObjectTypeInteger, kObjectTypeNil, object,
-    object_data as C2Rust_Unnamed_11, ptrdiff_t, regmatch_T, sattr_T, schar_T, size_t, ssize_t,
-    typval_T, typval_vval_union, uint64_t,
+    Arena, Array, Dict, Error, Event, FILE, HlMessage, HlMessageChunk, Integer, KeyDict_echo_opts,
+    MessageData, Object, OptInt, String_0, VV_ERRMSG, VV_SCROLLSTART, VV_STATUSMSG, VV_WARNINGMSG,
+    colnr_T, estack_T, estack_arg_T, exarg_T, flush_buffers_T, garray_T, int64_t,
+    kObjectTypeInteger, kObjectTypeNil, object, object_data as C2Rust_Unnamed_11, ptrdiff_t,
+    regmatch_T, sattr_T, schar_T, size_t, ssize_t, typval_T, typval_vval_union, uint64_t,
 };
 use crate::src::nvim::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
@@ -137,9 +135,6 @@ pub use self::errors::*;
 unsafe extern "C" {
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 /// The compositor layer messages float on.
 pub const kZIndexMessages: c_uint = 200;
 /// One entry of the message history. See [`self::history`].

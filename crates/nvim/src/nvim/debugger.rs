@@ -26,10 +26,10 @@ use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING};
 use crate::src::nvim::runtime::{estack_sfile, exestack};
 use crate::src::nvim::state::MODE_NORMAL;
 use crate::src::nvim::types::{
-    BoolVarValue, CMD_index, Callback, Callback_data as C2Rust_Unnamed_5, SpecialVarValue,
-    String_0, buf_T, buffblock, buffblock_T, buffheader_T, colnr_T, estack_T, estack_arg_T,
-    exarg_T, exprtype_T, garray_T, int32_t, int64_t, key_extra, linenr_T, regprog_T, size_t,
-    tasave_T, typebuf_T, typval_T, uint8_t, varnumber_T,
+    CMD_index, Callback, Callback_data as C2Rust_Unnamed_5, String_0, buf_T, buffblock,
+    buffblock_T, buffheader_T, colnr_T, estack_T, estack_arg_T, exarg_T, exprtype_T, garray_T,
+    int32_t, int64_t, key_extra, linenr_T, regprog_T, size_t, tasave_T, typebuf_T, typval_T,
+    uint8_t, varnumber_T,
 };
 unsafe extern "C" {
     fn vim_regcomp(
@@ -44,9 +44,6 @@ unsafe extern "C" {
         col: colnr_T,
     ) -> bool;
 }
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_13 = 0;
 pub const CMD_profdel: CMD_index = 333;

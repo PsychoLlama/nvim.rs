@@ -14,9 +14,9 @@ use crate::src::nvim::highlight::dict::put;
 use crate::src::nvim::highlight::{
     HL_DEFAULT, HLATTRS_DICT_SIZE, hlattrs2dict, ns_get_hl, syn_attr2entry,
 };
-use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
-    Arena, Dict, Error, KeyDict_get_highlight, KeyValuePair, NS, Object, size_t,
+    Arena, Dict, Error, KeyDict_get_highlight, KeyValuePair, NS, Object, kErrorTypeNone,
+    kErrorTypeValidation, size_t,
 };
 use crate::src::nvim::ui::ui_rgb_attached;
 

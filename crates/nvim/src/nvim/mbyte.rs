@@ -30,10 +30,10 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    BoolVarValue, CharBoundsOff, CharInfo, EvalFuncData, GraphemeState, SpecialVarValue,
-    StrCharInfo, VAR_LIST, VAR_NUMBER, VAR_STRING, colnr_T, expand_T, iconv_t, int8_t, int32_t,
-    int64_t, list_T, listitem_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t, typval_T, uint8_t,
-    uint32_t, uint64_t, uintptr_t, utf8proc_int32_t, varnumber_T, vimconv_T, win_T,
+    CharBoundsOff, CharInfo, EvalFuncData, GraphemeState, StrCharInfo, VAR_LIST, VAR_NUMBER,
+    VAR_STRING, colnr_T, expand_T, iconv_t, int8_t, int32_t, int64_t, list_T, listitem_T, pos_T,
+    ptrdiff_t, schar_T, size_t, ssize_t, typval_T, uint8_t, uint32_t, uint64_t, uintptr_t,
+    utf8proc_int32_t, varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::utf8proc::{
     UTF8PROC_BOUNDCLASS_CONTROL, UTF8PROC_BOUNDCLASS_CR, UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC,
@@ -69,9 +69,6 @@ pub const _ISgraph: C2Rust_Unnamed = 32768;
 pub const _ISalpha: C2Rust_Unnamed = 1024;
 pub type wint_t = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_2 = ::core::ffi::c_uint;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type WorkingStatus = ::core::ffi::c_uint;
 pub const kBroken: WorkingStatus = 2;
 pub const kWorking: WorkingStatus = 1;

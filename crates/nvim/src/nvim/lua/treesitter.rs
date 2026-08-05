@@ -23,9 +23,9 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
-    BoolVarValue, LuaRef, Map_cstr_t_ptr_t, Map_int_ptr_t, MapHash, Set_cstr_t, SpecialVarValue,
-    buf_T, cstr_t, handle_T, int32_t, linenr_T, lua_Integer, lua_Number, lua_State, luaL_Reg,
-    ptr_t, size_t, uint8_t, uint16_t, uint32_t, uint64_t, uv_lib_t,
+    LuaRef, Map_cstr_t_ptr_t, Map_int_ptr_t, MapHash, Set_cstr_t, buf_T, cstr_t, handle_T, int32_t,
+    linenr_T, lua_Integer, lua_Number, lua_State, luaL_Reg, ptr_t, size_t, uint8_t, uint16_t,
+    uint32_t, uint64_t, uv_lib_t,
 };
 // Opaque C types: layout unknown here, only ever used behind a pointer.
 #[repr(C)]
@@ -323,9 +323,6 @@ pub struct TSLanguageMetadata {
     pub minor_version: uint8_t,
     pub patch_version: uint8_t,
 }
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSLuaTree {

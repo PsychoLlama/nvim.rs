@@ -145,23 +145,21 @@ use crate::src::nvim::state::{
     may_trigger_safestate, state_enter, state_handle_k_event,
 };
 use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
-use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::ui::{kUICmdline, kUIMessages};
 use crate::src::nvim::types::{
-    Arena, Array, BoolVarValue, Boolean, CMD_index, Callback, Callback_data as C2Rust_Unnamed_5,
-    CmdParseInfo, CmdParseInfo_magic as C2Rust_Unnamed_21, CmdRedraw, CmdlineColorChunk,
-    CmdlineColors, CmdlineInfo, ColoredCmdline, Direction, Error, EvalFuncData, ExprAST,
-    ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
-    ExprParserFlags, HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt,
-    OptVal, OptValData, OptValType, ParserHighlight, ParserHighlightChunk, ParserLine,
-    ParserPosition, ParserState, RemapValues, Set_ptr_t, SpecialVarValue, String_0, TryState,
-    UndoObjectType, VimState, aco_save_T, buf_T, bufref_T, cmd_addr_T, cmdmod_T, colnr_T, cstack_T,
-    dict_T, disptick_T, dobuf_action_values, dobuf_start_values, event_T, exarg_T, except_T,
-    expand_T, garray_T, handle_T, hashitem_T, hashtab_T, key_extra, linenr_T, list_T, listitem_T,
-    magic_T, msglist_T, oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t,
-    regmatch_T, regprog_T, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t,
-    typval_T, typval_vval_union, u_header_T, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T,
-    xp_prefix_T,
+    Arena, Array, Boolean, CMD_index, Callback, Callback_data as C2Rust_Unnamed_5, CmdParseInfo,
+    CmdParseInfo_magic as C2Rust_Unnamed_21, CmdRedraw, CmdlineColorChunk, CmdlineColors,
+    CmdlineInfo, ColoredCmdline, Direction, Error, EvalFuncData, ExprAST, ExprASTNodeType,
+    ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
+    HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt, OptVal, OptValData,
+    OptValType, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState,
+    RemapValues, Set_ptr_t, String_0, TryState, UndoObjectType, VimState, aco_save_T, buf_T,
+    bufref_T, cmd_addr_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T, dobuf_action_values,
+    dobuf_start_values, event_T, exarg_T, except_T, expand_T, garray_T, handle_T, hashitem_T,
+    hashtab_T, kErrorTypeNone, key_extra, linenr_T, list_T, listitem_T, magic_T, msglist_T,
+    oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, regmatch_T, regprog_T,
+    save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union,
+    u_header_T, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -211,9 +209,6 @@ pub use self::prompt::*;
 unsafe extern "C" {
     static pum_want: GlobalCell<C2Rust_Unnamed_51>;
 }
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub const kMHExisting: MHPutStatus = 0;

@@ -2,9 +2,8 @@ use crate::src::nvim::api::private::helpers::{api_set_error, api_typename};
 
 use crate::src::nvim::main::IObuff;
 use crate::src::nvim::os::libc::{memchr, snprintf, strchr};
-use crate::src::nvim::types::api::kErrorTypeValidation;
 use crate::src::nvim::types::{
-    Array, Error, ErrorType, String_0, int64_t, kObjectTypeString, size_t,
+    Array, Error, ErrorType, String_0, int64_t, kErrorTypeValidation, kObjectTypeString, size_t,
 };
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub unsafe extern "C" fn api_err_invalid(

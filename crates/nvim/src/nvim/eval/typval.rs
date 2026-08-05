@@ -45,21 +45,18 @@ use crate::src::nvim::types::{
     MPConvPartialStage, MPConvStack, MPConvStackVal, MPConvStackVal_data as C2Rust_Unnamed_18,
     MPConvStackVal_data_a as C2Rust_Unnamed_19, MPConvStackVal_data_d as C2Rust_Unnamed_22,
     MPConvStackVal_data_l as C2Rust_Unnamed_21, MPConvStackVal_data_p as C2Rust_Unnamed_20,
-    MPConvStackValType, MessagePackType, QUEUE, SpecialVarValue, String_0, VAR_BLOB, VAR_BOOL,
-    VAR_DICT, VAR_FIXED, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_LOCKED, VAR_NO_SCOPE, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VarLockStatus, blob_T, buf_T,
-    dict_T, dictitem_T, float_T, funcexe_T, garray_T, hashitem_T, hashtab_T, int64_t,
-    kListLenMayKnow, linenr_T, list_T, listitem_T, listwatch_T, partial_T, pos_T, ptrdiff_t, queue,
-    size_t, ssize_t, staticList10_T, typval_T, typval_vval_union, ufunc_T, uint8_t, uint64_t,
-    uvarnumber_T, varnumber_T, vimconv_T,
+    MPConvStackValType, MessagePackType, QUEUE, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FIXED,
+    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_LOCKED, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
+    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VarLockStatus, blob_T, buf_T, dict_T, dictitem_T,
+    float_T, funcexe_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue,
+    kListLenMayKnow, kSpecialVarNull, linenr_T, list_T, listitem_T, listwatch_T, partial_T, pos_T,
+    ptrdiff_t, queue, size_t, ssize_t, staticList10_T, typval_T, typval_vval_union, ufunc_T,
+    uint8_t, uint64_t, uvarnumber_T, varnumber_T, vimconv_T,
 };
 pub const kCallbackLua: CallbackType = 3;
 pub const kCallbackPartial: CallbackType = 2;
 pub const kCallbackFuncref: CallbackType = 1;
 pub const kCallbackNone: CallbackType = 0;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const DO_NOT_FREE_CNT: C2Rust_Unnamed_13 = 1073741823;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;

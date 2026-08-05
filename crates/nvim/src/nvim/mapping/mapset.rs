@@ -8,7 +8,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::types::{VAR_DICT, VAR_FUNC};
+use crate::src::nvim::types::{VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

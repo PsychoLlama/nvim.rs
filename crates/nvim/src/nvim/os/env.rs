@@ -27,8 +27,8 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::strings::{striequal, vim_strchr, vim_strsave_escaped};
 use crate::src::nvim::types::{
-    BoolVarValue, Direction, SpecialVarValue, VV_PROGPATH, buf_T, evalarg_T, expand_T, int64_t,
-    pos_T, ptrdiff_t, sctx_T, size_t, uint8_t, xp_prefix_T,
+    Direction, VV_PROGPATH, buf_T, evalarg_T, expand_T, int64_t, pos_T, ptrdiff_t, sctx_T, size_t,
+    uint8_t, xp_prefix_T,
 };
 unsafe extern "C" {
     fn uname(__name: *mut utsname) -> ::core::ffi::c_int;
@@ -43,9 +43,6 @@ pub const UV_EISDIR: C2Rust_Unnamed = -21;
 pub const UV_EINVAL: C2Rust_Unnamed = -22;
 pub const UV_EEXIST: C2Rust_Unnamed = -17;
 pub const UV_EBADF: C2Rust_Unnamed = -9;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;

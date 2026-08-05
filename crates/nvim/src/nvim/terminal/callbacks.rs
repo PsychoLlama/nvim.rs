@@ -29,7 +29,7 @@ use crate::src::nvim::types::builders::static_cstring;
 use crate::src::nvim::types::{
     Arena, Error, Event, Object, String_0, Terminal, VTermPos, VTermProp, VTermRect,
     VTermScreenCallbacks, VTermSelectionCallbacks, VTermSelectionMask, VTermStringFragment,
-    VTermValue, buf_T, list_T, ptrdiff_t, ssize_t,
+    VTermValue, buf_T, kErrorTypeNone, list_T, ptrdiff_t, ssize_t,
 };
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::vterm::vterm::{
@@ -41,7 +41,6 @@ use core::ffi::{c_char, c_int, c_void};
 
 use super::refresh::invalidate_terminal;
 use super::{buf_for_handle, scrollback};
-use crate::src::nvim::types::api::kErrorTypeNone;
 
 pub static SCREEN_CALLBACKS: VTermScreenCallbacks = VTermScreenCallbacks {
     damage: Some(term_damage),

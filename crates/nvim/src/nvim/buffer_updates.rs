@@ -9,14 +9,11 @@ use crate::src::nvim::memline::ml_flush_deleted_bytes;
 use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xrealloc};
 use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
 use crate::src::nvim::types::{
-    Arena, Array, BoolVarValue, BufUpdateCallbacks, Error, Integer, LuaRef, LuaRetMode, Object,
-    SpecialVarValue, bcount_t, buf_T, colnr_T, int64_t, kObjectTypeArray, kObjectTypeBoolean,
-    kObjectTypeBuffer, kObjectTypeInteger, kObjectTypeNil, linenr_T, lua_State, object,
-    object_data as C2Rust_Unnamed, pos_T, size_t, uint64_t,
+    Arena, Array, BufUpdateCallbacks, Error, Integer, LuaRef, LuaRetMode, Object, bcount_t, buf_T,
+    colnr_T, int64_t, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeInteger,
+    kObjectTypeNil, linenr_T, lua_State, object, object_data as C2Rust_Unnamed, pos_T, size_t,
+    uint64_t,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

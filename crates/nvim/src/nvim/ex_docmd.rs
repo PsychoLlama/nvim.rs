@@ -72,10 +72,10 @@ use crate::src::nvim::spellfile::{ex_mkspell, ex_spell};
 use crate::src::nvim::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::src::nvim::tag::do_tags;
 use crate::src::nvim::types::{
-    BoolVarValue, CMD_index, Callback, Callback_data as C2Rust_Unnamed_20, CdCause, ChannelPart,
-    Direction, LineGetter, LuaRetMode, MarkGet, MotionType, OptValType, RemapValues, TriState,
-    cmd_addr_T, dobuf_action_values, dobuf_start_values, estack_arg_T, etype_T, exarg_T, except_T,
-    garray_T, handle_T, kNone, key_extra, linenr_T, optmagic_T, uint8_t, uint16_t, uint32_t,
+    CMD_index, Callback, Callback_data as C2Rust_Unnamed_20, CdCause, ChannelPart, Direction,
+    LineGetter, LuaRetMode, MarkGet, MotionType, OptValType, RemapValues, TriState, cmd_addr_T,
+    dobuf_action_values, dobuf_start_values, estack_arg_T, etype_T, exarg_T, except_T, garray_T,
+    handle_T, kNone, key_extra, linenr_T, optmagic_T, uint8_t, uint16_t, uint32_t,
 };
 use crate::src::nvim::undo::{ex_undojoin, ex_undolist};
 use crate::src::nvim::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -125,8 +125,6 @@ pub use self::filetype::*;
 use crate::src::nvim::eval::typval::kCallbackNone;
 mod childproc;
 pub(crate) use self::childproc::*;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_31 = c_uint;
 pub const kDirectionNotSet: Direction = 0;
 pub const kCdCauseManual: CdCause = 0;

@@ -67,14 +67,12 @@ use crate::src::nvim::state::{
     MODE_TERMINAL, MODE_VISUAL,
 };
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
-    Arena, Array, ArrayBuilder, BoolVarValue, Buffer, CMD_index, Dict, Error, EvalFuncData, FILE,
-    Integer, KeyDict_keymap, LuaRef, LuaRetMode, Object, RemapValues, SpecialVarValue, String_0,
-    buf_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T, fuzmatch_str_T, garray_T,
-    kObjectTypeLuaRef, kObjectTypeString, key_extra, key_value_pair, linenr_T, mapblock_T,
-    object_data as C2Rust_Unnamed, optset_T, ptrdiff_t, regmatch_T, scid_T, size_t, typval_T,
-    typval_vval_union, uint64_t, varnumber_T,
+    Arena, Array, ArrayBuilder, Buffer, CMD_index, Dict, Error, EvalFuncData, FILE, Integer,
+    KeyDict_keymap, LuaRef, LuaRetMode, Object, RemapValues, String_0, buf_T, cmdidx_T, colnr_T,
+    dict_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, kObjectTypeLuaRef, kObjectTypeString,
+    key_extra, key_value_pair, linenr_T, mapblock_T, object_data as C2Rust_Unnamed, optset_T,
+    ptrdiff_t, regmatch_T, scid_T, size_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -99,9 +97,6 @@ pub use self::langmap::*;
 unsafe extern "C" {
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const MAXMAPLEN: C2Rust_Unnamed_13 = 50;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_int;

@@ -23,13 +23,9 @@ use crate::src::nvim::pos::{MAXCOL, clearpos, equalpos, lt, ltoreq};
 use crate::src::nvim::search::{BACKWARD, FORWARD, findmatch, findmatchlimit, linewhite};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    BoolVarValue, Direction, MotionType, SpecialVarValue, colnr_T, int64_t, linenr_T, oparg_T,
-    pos_T, size_t, typval_T, uint8_t,
+    Direction, MotionType, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t, typval_T, uint8_t,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;

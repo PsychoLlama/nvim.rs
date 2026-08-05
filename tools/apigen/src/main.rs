@@ -1356,7 +1356,7 @@ fn generate(
         if !referenced.contains(*name) {
             continue;
         }
-        if name.starts_with("kObjectType") {
+        if name.starts_with("kObjectType") || name.starts_with("kErrorType") {
             // These have one definition, in `types`. Re-export rather than
             // repeat it -- a `use` is not a constant, so it still stays out
             // of what the unit-test header generator collects.
@@ -1931,7 +1931,6 @@ fn generate_tables(
         "Arena",
         "Array",
         "Error",
-        "ErrorType",
         "KeySetLink",
         "MsgpackRpcRequestHandler",
         "Object",
@@ -1955,10 +1954,9 @@ fn generate_tables(
 /// Values that belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
 mod known {{
-    use super::ErrorType;
     use core::ffi::c_int;
 
-    pub const kErrorTypeException: ErrorType = 0;
+    pub use crate::src::nvim::types::kErrorTypeException;
 
     // `KeySetLink::type_0`: the `ObjectType` a key's value must arrive as, as
     // the `c_int` that field holds.
@@ -2656,18 +2654,8 @@ fn generate_lua(
         referenced_names(&["e_fast_api_disabled", "e_textlock", "textlock"]).join(", ")
     ));
     uses.push("use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};".into());
-    // `ErrorType` is unconditional: `mod known` names it, and that block is
-    // outside the text the reference scan covers.
-    let types: Vec<String> = ["ErrorType"]
-        .iter()
-        .map(|s| (*s).to_string())
-        .chain(referenced_names(&[
-            "Arena",
-            "Error",
-            "LuaRef",
-            "Object",
-            "lua_State",
-        ]))
+    let types: Vec<String> = referenced_names(&["Arena", "Error", "LuaRef", "Object", "lua_State"])
+        .into_iter()
         .chain(
             referenced
                 .iter()
@@ -2704,11 +2692,7 @@ fn generate_lua(
 /// Values that belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
 mod known {
-    use super::ErrorType;
-
-    pub const kErrorTypeNone: ErrorType = -1;
-    pub const kErrorTypeException: ErrorType = 0;
-    pub const kErrorTypeValidation: ErrorType = 1;
+    pub use crate::src::nvim::types::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 }
 
 use known::*;

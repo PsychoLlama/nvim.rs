@@ -10,6 +10,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::types::builders::{ArrayBuf, DictBuf, static_cstring};
+use crate::src::nvim::types::kErrorTypeNone;
 use core::ffi::{CStr, c_char, c_int, c_long};
 use core::ptr;
 

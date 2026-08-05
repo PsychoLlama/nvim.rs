@@ -6,8 +6,8 @@ use super::args::frame;
 use super::{
     ADDR_LINES, CMD_USER, ENV_SEPCHAR, EX_NOSPC, EXPAND_FILES, FAIL, NUL, OK, WILD_ALL,
     WILD_ALL_KEEP, WILD_ICASE, WILD_KEEP_ALL, WILD_LIST_NOTFOUND, WILD_SILENT, WILD_USE_NL,
-    kBoolVarFalse, kSpecialVarNull, kXDGCacheHome, kXDGConfigDirs, kXDGConfigHome, kXDGDataDirs,
-    kXDGDataHome, kXDGRuntimeDir, kXDGStateHome, tv_get_buf,
+    kXDGCacheHome, kXDGConfigDirs, kXDGConfigHome, kXDGDataDirs, kXDGDataHome, kXDGRuntimeDir,
+    kXDGStateHome, tv_get_buf,
 };
 use crate::src::nvim::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne};
 use crate::src::nvim::eval::typval::{
@@ -33,7 +33,8 @@ use crate::src::nvim::os::stdpaths::{get_appname, get_xdg_home, stdpaths_get_xdg
 use crate::src::nvim::path::concat_fnames_realloc;
 use crate::src::nvim::types::{
     EvalFuncData, OptInt, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_STRING, XDGVarType, exarg_T,
-    expand_T, kListLenShouldKnow, kListLenUnknown, list_T, typval_T, varnumber_T,
+    expand_T, kBoolVarFalse, kListLenShouldKnow, kListLenUnknown, kSpecialVarNull, list_T,
+    typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;

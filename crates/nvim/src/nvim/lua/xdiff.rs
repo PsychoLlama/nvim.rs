@@ -11,12 +11,12 @@ use crate::src::nvim::lua::ffi::{
 };
 use crate::src::nvim::memory::strequal;
 use crate::src::nvim::os::libc::{memcpy, memset};
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
     Arena, Error, KeyDict_xdl_diff, KeySetLink, Object, OptionalKeys, String_0, int64_t,
-    kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil, linenr_T, lua_Integer, lua_State,
-    luaL_Buffer, mmbuffer_t, mmfile_t, object_data as C2Rust_Unnamed, size_t, xdemitcb_t,
-    xdemitconf_t, xdl_emit_hunk_consume_func_t, xpparam_t,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeBoolean,
+    kObjectTypeInteger, kObjectTypeNil, linenr_T, lua_Integer, lua_State, luaL_Buffer, mmbuffer_t,
+    mmfile_t, object_data as C2Rust_Unnamed, size_t, xdemitcb_t, xdemitconf_t,
+    xdl_emit_hunk_consume_func_t, xpparam_t,
 };
 use crate::src::xdiff::xdiffi::xdl_diff;
 pub const kNluaXdiffModeLocations: NluaXdiffMode = 2;

@@ -32,20 +32,16 @@ use crate::src::nvim::option::{
 };
 use crate::src::nvim::options::kOptInvalid;
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
-use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
-    Arena, Array, BoolVarValue, Boolean, Buffer, DecorExt, DecorHighlightInline, DecorInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict,
-    Error, Integer, KeyDict_empty, KeyDict_exec_opts, KeyValuePair, LuaRetMode,
-    MsgpackRpcRequestHandler, Object, OptIndex, OptScope, OptVal, OptValData, OptValType,
-    SpecialVarValue, String_0, StringBuilder, Tabpage, VirtText, VirtTextChunk, Window, buf_T,
-    colnr_T, int64_t, kFalse, kObjectTypeArray, kObjectTypeDict, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, lua_State, object, object_data as C2Rust_Unnamed, schar_T,
-    sctx_T, size_t, tabpage_T, uint8_t, uint16_t, uint32_t, uint64_t, win_T,
+    Arena, Array, Boolean, Buffer, DecorExt, DecorHighlightInline, DecorInline, DecorInlineData,
+    DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, Integer,
+    KeyDict_empty, KeyDict_exec_opts, KeyValuePair, LuaRetMode, MsgpackRpcRequestHandler, Object,
+    OptIndex, OptScope, OptVal, OptValData, OptValType, String_0, StringBuilder, Tabpage, VirtText,
+    VirtTextChunk, Window, buf_T, colnr_T, int64_t, kErrorTypeNone, kErrorTypeValidation, kFalse,
+    kObjectTypeArray, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
+    lua_State, object, object_data as C2Rust_Unnamed, schar_T, sctx_T, size_t, tabpage_T, uint8_t,
+    uint16_t, uint32_t, uint64_t, win_T,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const kRetObject: LuaRetMode = 0;
 pub const OPT_GLOBAL: C2Rust_Unnamed_17 = 1;

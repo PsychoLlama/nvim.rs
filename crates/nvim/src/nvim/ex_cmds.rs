@@ -141,13 +141,13 @@ use crate::src::nvim::strings::{
 use crate::src::nvim::terminal::{terminal_check_size, terminal_running};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    AdditionalData, BoolVarValue, CMD_index, Callback, Callback_data as C2Rust_Unnamed_5,
-    ExtmarkOp, OptInt, OptVal, OptValData, OptValType, SpecialVarValue, String_0,
-    SubReplacementString, Timestamp, UndoObjectType, VV_OLDFILES, VV_SWAPCOMMAND, bcount_t,
-    bfa_values, bln_values, buf_T, bufref_T, colnr_T, dobuf_action_values, exarg_T, float_T,
-    fmark_T, getf_retvalues, handle_T, int32_t, int64_t, linenr_T, list_T, listitem_T, lpos_T,
-    magic_T, pos_T, proftime_T, ptrdiff_t, regmatch_T, regmmatch_T, regprog_T, size_t, tabpage_T,
-    time_t, uint8_t, uint64_t, uvarnumber_T, varnumber_T, win_T,
+    AdditionalData, CMD_index, Callback, Callback_data as C2Rust_Unnamed_5, ExtmarkOp, OptInt,
+    OptVal, OptValData, OptValType, String_0, SubReplacementString, Timestamp, UndoObjectType,
+    VV_OLDFILES, VV_SWAPCOMMAND, bcount_t, bfa_values, bln_values, buf_T, bufref_T, colnr_T,
+    dobuf_action_values, exarg_T, float_T, fmark_T, getf_retvalues, handle_T, int32_t, int64_t,
+    linenr_T, list_T, listitem_T, lpos_T, magic_T, pos_T, proftime_T, ptrdiff_t, regmatch_T,
+    regmmatch_T, regprog_T, size_t, tabpage_T, time_t, uint8_t, uint64_t, uvarnumber_T,
+    varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{ui_cursor_goto, ui_cursor_shape, ui_has};
 use crate::src::nvim::undo::{
@@ -169,9 +169,6 @@ unsafe extern "C" {
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalpha: C2Rust_Unnamed = 1024;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;

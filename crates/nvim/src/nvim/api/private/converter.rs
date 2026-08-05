@@ -23,16 +23,13 @@ use crate::src::nvim::types::{
     MPConvStack, MPConvStackVal, MPConvStackVal_data as C2Rust_Unnamed_2,
     MPConvStackVal_data_a as C2Rust_Unnamed_3, MPConvStackVal_data_d as C2Rust_Unnamed_6,
     MPConvStackVal_data_l as C2Rust_Unnamed_5, MPConvStackValType, MessagePackType, Object,
-    SpecialVarValue, String_0, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dict_T, dictitem_T, float_T,
-    hashitem_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, list_T, listitem_T,
-    object, object_data as C2Rust_Unnamed, partial_T, ptrdiff_t, size_t, typval_T,
-    typval_vval_union, ufunc_T, uint32_t, uint64_t, varnumber_T,
+    String_0, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
+    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dict_T, dictitem_T, float_T, hashitem_T,
+    kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
+    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
+    kSpecialVarNull, list_T, listitem_T, object, object_data as C2Rust_Unnamed, partial_T,
+    ptrdiff_t, size_t, typval_T, typval_vval_union, ufunc_T, uint32_t, uint64_t, varnumber_T,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_1 {

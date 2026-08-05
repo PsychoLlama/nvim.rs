@@ -26,12 +26,11 @@ use crate::src::nvim::api::private::helpers::{api_dict_to_keydict, api_set_error
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::src::nvim::highlight_group::{name_to_color, name_to_ctermcolor};
 use crate::src::nvim::os::libc::strcasecmp;
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::builders::static_cstring;
 use crate::src::nvim::types::{
     Arena, Boolean, Dict, Error, HlAttrs, Integer, KeyDict_highlight, KeyDict_highlight_cterm,
-    KeySetLink, KeyValuePair, Object, int16_t, int32_t, kObjectTypeInteger, kObjectTypeString,
-    size_t,
+    KeySetLink, KeyValuePair, Object, int16_t, int32_t, kErrorTypeException, kErrorTypeNone,
+    kErrorTypeValidation, kObjectTypeInteger, kObjectTypeString, size_t,
 };
 use ::core::ffi::{CStr, c_int};
 

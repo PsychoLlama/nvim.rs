@@ -11,6 +11,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::drawscreen::windows_in_curtab;
+use crate::src::nvim::types::{kBoolVarFalse, kBoolVarTrue, kErrorTypeNone};
 
 /// An all-zero [`CommandLineState`]: the fields C's designated initialiser
 /// leaves out, which the C zeroes for it.

@@ -16,13 +16,12 @@ use super::{
 use crate::src::nvim::api::private::validate::api_err_exp;
 use crate::src::nvim::lua::executor::api_free_luaref;
 use crate::src::nvim::os::libc::abort;
-use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
     Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Integer, KeySetLink, LuaRef, Object,
-    ObjectType, OptKeySet, OptionalKeys, String_0, handle_T, kObjectTypeArray, kObjectTypeBoolean,
-    kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
-    kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, key_value_pair,
-    object, object_data, size_t,
+    ObjectType, OptKeySet, OptionalKeys, String_0, handle_T, kErrorTypeNone, kErrorTypeValidation,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
+    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
+    kObjectTypeWindow, key_value_pair, object, object_data, size_t,
 };
 use core::ffi::{c_char, c_int, c_void};
 

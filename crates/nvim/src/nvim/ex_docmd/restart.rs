@@ -22,12 +22,12 @@ use crate::src::nvim::msgpack_rpc::channel::rpc_send_call;
 use crate::src::nvim::msgpack_rpc::server::{server_start, server_stop};
 use crate::src::nvim::os::libc::strstr;
 use crate::src::nvim::strings::concat_str;
-use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::channel::kChannelStdinPipe;
 use crate::src::nvim::types::{
     ArenaMem, Array, Callback, CallbackReader, Dict, Error, KeyValuePair, Object, VV_ARGV,
-    VV_EXITREASON, VV_PROGPATH, exarg_T, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeString,
-    key_value_pair, listitem_T, object_data, ptrdiff_t, size_t, uint16_t, varnumber_T,
+    VV_EXITREASON, VV_PROGPATH, exarg_T, kErrorTypeNone, kObjectTypeBoolean, kObjectTypeDict,
+    kObjectTypeString, key_value_pair, listitem_T, object_data, ptrdiff_t, size_t, uint16_t,
+    varnumber_T,
 };
 use crate::src::nvim::ui::{ui_active, ui_call_restart, ui_flush};
 

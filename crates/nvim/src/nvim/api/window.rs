@@ -21,21 +21,17 @@ use crate::src::nvim::r#move::{update_topline, validate_cursor};
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::plines::{win_get_fill, win_text_height};
 use crate::src::nvim::pos::MAXCOL;
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
-    Arena, Array, BoolVarValue, Boolean, Buffer, Dict, Error, Integer, KeyDict_win_text_height,
-    LuaRef, LuaRetMode, NS, Object, SpecialVarValue, String_0, Tabpage, TryState, Window, buf_T,
-    colnr_T, except_T, int64_t, kObjectTypeInteger, kObjectTypeNil, key_value_pair, linenr_T,
-    msglist_T, object, object_data as C2Rust_Unnamed, pos_T, size_t, switchwin_T, tabpage_T, win_T,
-    win_execute_T,
+    Arena, Array, Boolean, Buffer, Dict, Error, Integer, KeyDict_win_text_height, LuaRef,
+    LuaRetMode, NS, Object, String_0, Tabpage, TryState, Window, buf_T, colnr_T, except_T, int64_t,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeInteger, kObjectTypeNil,
+    key_value_pair, linenr_T, msglist_T, object, object_data as C2Rust_Unnamed, pos_T, size_t,
+    switchwin_T, tabpage_T, win_T, win_execute_T,
 };
 use crate::src::nvim::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
     win_set_buf, win_setheight_win, win_setwidth_win,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const kRetLuaref: LuaRetMode = 2;
 pub const kRetNilBool: LuaRetMode = 1;

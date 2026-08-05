@@ -9,6 +9,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::keycodes::{K_COMMAND, K_SNR, key_escape, key_unescape};
+use crate::src::nvim::types::kErrorTypeNone;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 

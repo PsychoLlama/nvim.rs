@@ -38,16 +38,12 @@ use crate::src::nvim::pos::{MAXCOL, equalpos};
 use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    BoolVarValue, Direction, EvalFuncData, MotionType, OptInt, SpecialVarValue, buf_T, cmdarg_T,
-    colnr_T, dict_T, int64_t, linenr_T, oparg_T, pos_T, size_t, tabpage_T, typval_T, varnumber_T,
-    win_T,
+    Direction, EvalFuncData, MotionType, OptInt, buf_T, cmdarg_T, colnr_T, dict_T, int64_t,
+    linenr_T, oparg_T, pos_T, size_t, tabpage_T, typval_T, varnumber_T, win_T,
 };
 use crate::src::nvim::window::win_fdccol_count;
 use crate::src::nvim::winfloat::win_check_anchored_floats;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const BL_FIX: C2Rust_Unnamed_15 = 4;
 pub const BL_SOL: C2Rust_Unnamed_15 = 2;

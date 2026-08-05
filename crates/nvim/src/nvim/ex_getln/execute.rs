@@ -9,6 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::kErrorTypeNone;
 
 /// What `CTRL-\` did with the key typed after it.
 enum CtrlBsl {

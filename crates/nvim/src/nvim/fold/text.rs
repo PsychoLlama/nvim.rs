@@ -11,15 +11,14 @@ use crate::src::nvim::memory::xfree;
 use crate::src::nvim::os::libc::{memmove, memset, ngettext, strlen, strncmp, strstr};
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
-    VV_FOLDDASHES, VV_FOLDEND, VV_FOLDLEVEL, VV_FOLDSTART, kObjectTypeArray, kObjectTypeNil,
-    kObjectTypeString,
+    VV_FOLDDASHES, VV_FOLDEND, VV_FOLDLEVEL, VV_FOLDSTART, kErrorTypeNone, kObjectTypeArray,
+    kObjectTypeNil, kObjectTypeString,
 };
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 use core::ptr;
 
 use super::marker::*;
 use super::*;
-use crate::src::nvim::types::api::kErrorTypeNone;
 
 /// Generates text to display
 ///

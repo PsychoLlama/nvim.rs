@@ -78,15 +78,14 @@ use crate::src::nvim::search::{restore_search_patterns, save_search_patterns};
 use crate::src::nvim::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::src::nvim::types::ui::kUICmdline;
 use crate::src::nvim::types::{
-    BoolVarValue, CMD_index, Callback, EvalFuncDef, LuaRef, OptInt, SpecialVarValue, String_0,
-    VAR_DEF_SCOPE, VAR_DICT, VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE,
-    VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_TESTING, blob_T, buf_T, buffblock,
-    buffblock_T, buffheader_T, colnr_T, cstack_T, dict_T, dictitem_T, estack_T, evalarg_T, exarg_T,
-    except_T, exception_state_T, expand_T, funccal_entry_T,
-    funccall_S_fc_fixvar as C2Rust_Unnamed_7, funccall_T, funcdict_T, funcexe_T, garray_T,
-    hashitem_T, hashtab_T, ht_stack_T, intmax_t, key_extra, linenr_T, list_T, list_stack_T,
-    listitem_T, lval_T, partial_T, proftime_T, regmatch_T, regprog_T, save_redo_T, sctx_T, size_t,
-    typval_T, typval_vval_union, ufunc_T, uint8_t, varnumber_T,
+    CMD_index, Callback, EvalFuncDef, LuaRef, OptInt, String_0, VAR_DEF_SCOPE, VAR_DICT, VAR_FIXED,
+    VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN,
+    VAR_UNLOCKED, VV_TESTING, blob_T, buf_T, buffblock, buffblock_T, buffheader_T, colnr_T,
+    cstack_T, dict_T, dictitem_T, estack_T, evalarg_T, exarg_T, except_T, exception_state_T,
+    expand_T, funccal_entry_T, funccall_S_fc_fixvar as C2Rust_Unnamed_7, funccall_T, funcdict_T,
+    funcexe_T, garray_T, hashitem_T, hashtab_T, ht_stack_T, intmax_t, key_extra, linenr_T, list_T,
+    list_stack_T, listitem_T, lval_T, partial_T, proftime_T, regmatch_T, regprog_T, save_redo_T,
+    sctx_T, size_t, typval_T, typval_vval_union, ufunc_T, uint8_t, varnumber_T,
 };
 use crate::src::nvim::ui::ui_has;
 unsafe extern "C" {
@@ -99,9 +98,6 @@ unsafe extern "C" {
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISdigit: C2Rust_Unnamed = 2048;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const DO_NOT_FREE_CNT: C2Rust_Unnamed_14 = 1073741823;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;

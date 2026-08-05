@@ -37,13 +37,12 @@ use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{strequal, xfree};
 use crate::src::nvim::os::libc::{__assert_fail, memchr, memset, strcasecmp};
 use crate::src::nvim::runtime::script_autoload;
-use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::{
-    BoolVarValue, Buffer, Error, Map_int_ptr_t, SpecialVarValue, String_0, Tabpage, TryState,
-    VAR_UNKNOWN, VAR_UNLOCKED, Window, aco_save_T, buf_T, cmdmod_T, colnr_T, dict_T, dictitem_T,
-    except_T, handle_T, intptr_t, linenr_T, lua_Integer, lua_Number, lua_State, luaL_Reg,
-    msglist_T, pos_T, ptr_t, ptrdiff_t, regmatch_T, regprog_T, size_t, ssize_t, switchwin_T,
-    tabpage_T, typval_T, typval_vval_union, uint32_t, vimconv_T, win_T, win_execute_T,
+    Buffer, Error, Map_int_ptr_t, String_0, Tabpage, TryState, VAR_UNKNOWN, VAR_UNLOCKED, Window,
+    aco_save_T, buf_T, cmdmod_T, colnr_T, dict_T, dictitem_T, except_T, handle_T, intptr_t,
+    kErrorTypeNone, linenr_T, lua_Integer, lua_Number, lua_State, luaL_Reg, msglist_T, pos_T,
+    ptr_t, ptrdiff_t, regmatch_T, regprog_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T,
+    typval_vval_union, uint32_t, vimconv_T, win_T, win_execute_T,
 };
 use crate::src::nvim::window::win_find_tabpage;
 unsafe extern "C" {
@@ -54,9 +53,6 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
 pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_12 = 4096;
 pub const CMOD_LOCKMARKS: C2Rust_Unnamed_12 = 2048;

@@ -35,7 +35,8 @@ use crate::src::nvim::options::{kOptAmbiwidth, opt_ve_values};
 use crate::src::nvim::os::libc::strcmp;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    Error, FloatAnchor, OptInt, VirtText, WinConfig, buf_T, colnr_T, linenr_T, lpos_T, optset_T,
+    Error, FloatAnchor, OptInt, VirtText, WinConfig, buf_T, colnr_T, kErrorTypeNone,
+    kFloatRelativeEditor, linenr_T, lpos_T, optset_T,
 };
 use crate::src::nvim::window::check_colorcolumn;
 
@@ -45,11 +46,9 @@ use super::{
     OPT_LOCAL, WW_ALL, check_chars_options, check_signcolumn, check_str_opt, check_string_option,
     did_set_option_listflag, did_set_statustabline_rulerformat, did_set_str_generic,
     e_showbreak_contains_unprintable_or_wide_character, free_string_option, kAlignLeft,
-    kFloatRelativeEditor, kWinSplitLeft, kWinStyleUnused, kZIndexFloatDefault, opt_strings_flags,
-    terminal_notify_theme,
+    kWinSplitLeft, kWinStyleUnused, kZIndexFloatDefault, opt_strings_flags, terminal_notify_theme,
 };
 use crate::src::nvim::decoration::SCL_NUM;
-use crate::src::nvim::types::api::kErrorTypeNone;
 
 /// 'ambiwidth' decides how wide an ambiguous-width character is drawn, so
 /// the two character options have to be re-checked against the new answer.

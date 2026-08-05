@@ -112,16 +112,16 @@ use crate::src::nvim::syntax::{reset_synblock, syntax_clear};
 use crate::src::nvim::terminal::{terminal_check_size, terminal_close, terminal_running};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, CdCause,
-    ChangedtickDictItem, ExtmarkOp, FileID, FloatRelative, Map_int_ptr_t, MarkAdjustMode, MarkTree,
-    MetaIndex, OptInt, OptVal, OptValData, OptValType, SpecialVarValue, StlClickRecord, String_0,
-    StringBuilder, Timestamp, UndoObjectType, VAR_FIXED, VAR_NUMBER, VAR_SCOPE, WinInfo, WinSplit,
-    WinStyle, aco_save_T, bfa_values, bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T, colnr_T,
-    cstack_T, dictitem_T, dobuf_action_values, dobuf_start_values, etype_T, exarg_T, except_T,
-    fmark_T, fmarkv_T, fuzmatch_str_T, garray_T, getf_values, handle_T, hashitem_T, int16_t,
-    int64_t, intmax_t, kFalse, linenr_T, memfile_T, pos_T, ptr_t, ptrdiff_t, regmatch_T, regprog_T,
-    schar_T, scid_T, sctx_T, size_t, statuscol_T, stl_hlrec_t, tabpage_T, time_t, typval_T,
-    typval_vval_union, uint8_t, uint32_t, uint64_t, varnumber_T, win_T,
+    AdditionalData, AlignTextPos, BufUpdateCallbacks, CMD_index, CdCause, ChangedtickDictItem,
+    ExtmarkOp, FileID, Map_int_ptr_t, MarkAdjustMode, MarkTree, MetaIndex, OptInt, OptVal,
+    OptValData, OptValType, StlClickRecord, String_0, StringBuilder, Timestamp, UndoObjectType,
+    VAR_FIXED, VAR_NUMBER, VAR_SCOPE, WinInfo, WinSplit, WinStyle, aco_save_T, bfa_values,
+    bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T, colnr_T, cstack_T, dictitem_T,
+    dobuf_action_values, dobuf_start_values, etype_T, exarg_T, except_T, fmark_T, fmarkv_T,
+    fuzmatch_str_T, garray_T, getf_values, handle_T, hashitem_T, int16_t, int64_t, intmax_t,
+    kFalse, linenr_T, memfile_T, pos_T, ptr_t, ptrdiff_t, regmatch_T, regprog_T, schar_T, scid_T,
+    sctx_T, size_t, statuscol_T, stl_hlrec_t, tabpage_T, time_t, typval_T, typval_vval_union,
+    uint8_t, uint32_t, uint64_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::src::nvim::undo::{
@@ -147,16 +147,12 @@ unsafe extern "C" {
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISdigit: C2Rust_Unnamed = 2048;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleMinimal: WinStyle = 1;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeEditor: FloatRelative = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const DO_NOT_FREE_CNT: C2Rust_Unnamed_16 = 1073741823;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;

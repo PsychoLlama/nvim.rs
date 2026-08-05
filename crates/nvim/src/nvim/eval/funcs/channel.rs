@@ -36,12 +36,11 @@ use crate::src::nvim::msgpack_rpc::server::{
 };
 use crate::src::nvim::os::libc::{gettext, strcmp};
 use crate::src::nvim::runtime::exestack;
-use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::{
     Arena, ArenaMem, Array, Callback, CallbackReader, ChannelPart, Error, EvalFuncData, Object,
     String_0, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, blob_T, dict_T, estack_T,
-    funccal_entry_T, funccall_T, kObjectTypeArray, kObjectTypeNil, kObjectTypeString, object,
-    sctx_T, typval_T, uint64_t, varnumber_T,
+    funccal_entry_T, funccall_T, kErrorTypeNone, kObjectTypeArray, kObjectTypeNil,
+    kObjectTypeString, object, sctx_T, typval_T, uint64_t, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;

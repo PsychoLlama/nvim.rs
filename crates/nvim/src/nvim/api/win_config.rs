@@ -30,15 +30,16 @@ use crate::src::nvim::option::{copy_option_part, didset_window_options};
 use crate::src::nvim::options::opt_winborder_values;
 use crate::src::nvim::os::libc::{__assert_fail, memcpy, memset, strchr};
 use crate::src::nvim::strings::striequal;
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::ui::kUIMultigrid;
 use crate::src::nvim::types::{
-    AlignTextPos, Arena, Array, BoolVarValue, Boolean, BorderTextType, Buffer, CMD_index, Error,
-    Float, FloatAnchor, FloatRelative, Integer, KeyDict_win_config, Object, OptionalKeys,
-    SpecialVarValue, String_0, TryState, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle,
-    Window, buf_T, bufref_T, colnr_T, except_T, frame_T, int64_t, kObjectTypeArray,
-    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, linenr_T, lpos_T, msglist_T, object,
-    object_data as C2Rust_Unnamed, size_t, switchwin_T, tabpage_T, win_T,
+    AlignTextPos, Arena, Array, Boolean, BorderTextType, Buffer, CMD_index, Error, Float,
+    FloatAnchor, FloatRelative, Integer, KeyDict_win_config, Object, OptionalKeys, String_0,
+    TryState, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, buf_T, bufref_T,
+    colnr_T, except_T, frame_T, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
+    kFloatAnchorEast, kFloatAnchorSouth, kFloatRelativeCursor, kFloatRelativeEditor,
+    kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeTabline, kFloatRelativeWindow,
+    kObjectTypeArray, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, linenr_T, lpos_T,
+    msglist_T, object, object_data as C2Rust_Unnamed, size_t, switchwin_T, tabpage_T, win_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::ui_compositor::ui_comp_remove_grid;
@@ -53,9 +54,6 @@ use crate::src::nvim::window::{
 use crate::src::nvim::winfloat::{
     win_config_float, win_float_find_altwin, win_new_float, win_set_minimal_style,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kAlignRight: AlignTextPos = 2;
 pub const kAlignCenter: AlignTextPos = 1;
 pub const kAlignLeft: AlignTextPos = 0;
@@ -65,17 +63,9 @@ pub const kWinSplitBelow: WinSplit = 3;
 pub const kWinSplitAbove: WinSplit = 2;
 pub const kWinSplitRight: WinSplit = 1;
 pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const kZIndexFloatDefault: C2Rust_Unnamed_13 = 50;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const kFloatAnchorSouth: C2Rust_Unnamed_14 = 2;
-pub const kFloatAnchorEast: C2Rust_Unnamed_14 = 1;
 pub const kBorderTextFooter: BorderTextType = 1;
 pub const kBorderTextTitle: BorderTextType = 0;
 #[derive(Copy, Clone)]

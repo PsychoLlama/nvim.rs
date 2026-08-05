@@ -13,14 +13,10 @@ use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::types::channel::kChannelStdinPipe;
 use crate::src::nvim::types::{
-    BoolVarValue, Callback, Callback_data as C2Rust_Unnamed_19, CallbackReader, Channel,
-    ChannelPart, EvalFuncData, SpecialVarValue, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, buf_T, dict_T, garray_T, list_T, listitem_T, size_t, typval_T, uint16_t, uint64_t,
-    varnumber_T,
+    Callback, Callback_data as C2Rust_Unnamed_19, CallbackReader, Channel, ChannelPart,
+    EvalFuncData, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, buf_T, dict_T, garray_T,
+    kBoolVarTrue, list_T, listitem_T, size_t, typval_T, uint16_t, uint64_t, varnumber_T,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kChannelPartRpc: ChannelPart = 3;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {

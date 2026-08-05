@@ -41,20 +41,16 @@ use crate::src::nvim::state::{
 };
 use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 use crate::src::nvim::types::{
-    AlignTextPos, BoolVarValue, CMD_index, EvalFuncData, FloatRelative, RemapValues,
-    SpecialVarValue, String_0, TriState, VAR_UNKNOWN, WinSplit, WinStyle, buffblock, buffblock_T,
-    buffheader_T, colnr_T, dict_T, exarg_T, expand_T, garray_T, kFalse, kListLenMayKnow, kNone,
-    kTrue, linenr_T, list_T, pos_T, ptrdiff_t, save_state_T, scid_T, size_t, ssize_t, tasave_T,
-    typebuf_T, typval_T, uint8_t, varnumber_T, vimmenu_T,
+    AlignTextPos, BoolVarValue, CMD_index, EvalFuncData, RemapValues, String_0, TriState,
+    VAR_UNKNOWN, WinSplit, WinStyle, buffblock, buffblock_T, buffheader_T, colnr_T, dict_T,
+    exarg_T, expand_T, garray_T, kFalse, kListLenMayKnow, kNone, kTrue, linenr_T, list_T, pos_T,
+    ptrdiff_t, save_state_T, scid_T, size_t, ssize_t, tasave_T, typebuf_T, typval_T, uint8_t,
+    varnumber_T, vimmenu_T,
 };
 use crate::src::nvim::ui::ui_call_update_menu;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeEditor: FloatRelative = 0;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
 pub const EXPAND_MENUNAMES: C2Rust_Unnamed_14 = 21;

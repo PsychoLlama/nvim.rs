@@ -79,16 +79,13 @@ use crate::src::nvim::terminal::terminal_paste;
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     AdditionalData, Arena, BoolVarValue, CMD_index, CharsizeArg, CharsizeKind, Direction,
-    ExtmarkOp, GRegFlags, MotionType, OptInt, RemapValues, SpecialVarValue, StrCharInfo, String_0,
-    Timestamp, UndoObjectType, VAR_FIXED, bcount_t, block_def, buf_T, cmd_addr_T, colnr_T, dict_T,
-    exarg_T, garray_T, hashitem_T, hashtab_T, int64_t, linenr_T, list_T, oparg_T, pos_T, ptrdiff_t,
-    save_v_event_T, size_t, ssize_t, uint8_t, yankreg_T,
+    ExtmarkOp, GRegFlags, MotionType, OptInt, RemapValues, StrCharInfo, String_0, Timestamp,
+    UndoObjectType, VAR_FIXED, bcount_t, block_def, buf_T, cmd_addr_T, colnr_T, dict_T, exarg_T,
+    garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, linenr_T, list_T,
+    oparg_T, pos_T, ptrdiff_t, save_v_event_T, size_t, ssize_t, uint8_t, yankreg_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::undo::{u_save, u_save_cursor};
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;

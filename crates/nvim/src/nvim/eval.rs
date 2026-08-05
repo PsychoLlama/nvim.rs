@@ -16,10 +16,10 @@ use crate::src::nvim::global_cell::GlobalCell;
 // path; it belongs to `main`.
 pub(crate) use crate::src::nvim::main::e_invalblob;
 use crate::src::nvim::types::{
-    Array, BoolVarValue, CMD_index, ChannelStreamType, GRegFlags, LuaRetMode, Map_uint64_t_ptr_t,
-    MapHash, MarkGet, MotionType, Object, OptValType, Set_uint64_t, blob_T, dict_T, exprtype_T,
-    funcexe_T, key_extra, linenr_T, list_T, listwatch_T, partial_T, ptr_t, size_t, typval_T,
-    uint32_t, uint64_t,
+    Array, CMD_index, ChannelStreamType, GRegFlags, LuaRetMode, Map_uint64_t_ptr_t, MapHash,
+    MarkGet, MotionType, Object, OptValType, Set_uint64_t, blob_T, dict_T, exprtype_T, funcexe_T,
+    key_extra, linenr_T, list_T, listwatch_T, partial_T, ptr_t, size_t, typval_T, uint32_t,
+    uint64_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
 
@@ -50,8 +50,6 @@ pub use self::pattern::*;
 mod expr;
 pub(crate) use self::expr::*;
 pub const _ISalnum: c_uint = 8;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const EXPAND_ENV_VARS: c_int = 26;
 pub const EXPAND_EXPRESSION: c_int = 20;
 pub const EXPAND_FUNCTIONS: c_int = 18;

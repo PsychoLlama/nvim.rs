@@ -81,14 +81,13 @@ use crate::src::nvim::profile::{
 };
 use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
-use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::{
-    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, Arena, Array, BoolVarValue,
-    CMD_index, Dict, DoInRuntimepathCB, Error, EvalFuncData, FILE, Integer, LineGetter, LuaRetMode,
-    MHPutStatus, Map_String_int, MapHash, Object, OptInt, OptVal, OptValData, OptValType,
-    Set_String, SpecialVarValue, String_0, TriState, VAR_DICT, VAR_FIXED, VAR_LOCKED, XDGVarType,
-    buf_T, cmd_addr_T, colnr_T, dict_T, dictitem_T, estack_T, estack_arg_T, etype_T, exarg_T,
-    expand_T, funccal_entry_T, garray_T, handle_T, hashitem_T, hashtab_T, int64_t, kFalse, kNone,
+    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, Arena, Array, CMD_index, Dict,
+    DoInRuntimepathCB, Error, EvalFuncData, FILE, Integer, LineGetter, LuaRetMode, MHPutStatus,
+    Map_String_int, MapHash, Object, OptInt, OptVal, OptValData, OptValType, Set_String, String_0,
+    TriState, VAR_DICT, VAR_FIXED, VAR_LOCKED, XDGVarType, buf_T, cmd_addr_T, colnr_T, dict_T,
+    dictitem_T, estack_T, estack_arg_T, etype_T, exarg_T, expand_T, funccal_entry_T, garray_T,
+    handle_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kErrorTypeNone, kFalse, kNone,
     kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
     kTrue, key_value_pair, linenr_T, list_T, object, object_data as C2Rust_Unnamed, optset_T,
     proftime_T, pthread_mutex_t, ptrdiff_t, regmatch_T, regprog_T, scid_T, scriptitem_T, sctx_T,
@@ -104,9 +103,6 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kMHExisting: MHPutStatus = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
 pub const EXPAND_RUNTIME: C2Rust_Unnamed_13 = 51;

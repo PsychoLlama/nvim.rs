@@ -21,13 +21,12 @@ use crate::src::nvim::memory::{
 use crate::src::nvim::message::hl_msg_free;
 use crate::src::nvim::msgpack_rpc::unpacker::unpack;
 use crate::src::nvim::os::libc::{abort, memcpy};
-use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
     Arena, ArenaMem, Array, ArrayBuilder, Dict, Error, HlMessage, HlMessageChunk, KeyValuePair,
-    Object, ObjectType, String_0, consumed_blk, kObjectTypeArray, kObjectTypeBoolean,
-    kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
-    kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, key_value_pair,
-    object, object_data, size_t,
+    Object, ObjectType, String_0, consumed_blk, kErrorTypeNone, kErrorTypeValidation,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
+    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
+    kObjectTypeWindow, key_value_pair, object, object_data, size_t,
 };
 use core::ffi::{c_char, c_int};
 use core::{mem, ptr};

@@ -18,17 +18,13 @@ use crate::src::nvim::message::{msg_ext_set_kind, msg_putchar, msg_puts};
 use crate::src::nvim::os::env::{default_vim_dir, default_vimruntime_dir};
 use crate::src::nvim::os::libc::{__assert_fail, atoi, gettext, memchr, snprintf, strchr, strstr};
 use crate::src::nvim::strings::vim_strchr;
-use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::ui::{kUIMessages, kUIMultigrid};
 use crate::src::nvim::types::{
-    Arena, Array, BoolVarValue, Error, LuaRetMode, Object, OptInt, SpecialVarValue, String_0,
-    exarg_T, kObjectTypeString, size_t, tabpage_T, uint8_t,
+    Arena, Array, Error, LuaRetMode, Object, OptInt, String_0, exarg_T, kErrorTypeNone,
+    kObjectTypeString, size_t, tabpage_T, uint8_t,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::window::one_window;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const SHM_INTRO: C2Rust_Unnamed_15 = 73;
 pub const kRetObject: LuaRetMode = 0;

@@ -169,8 +169,8 @@ use crate::src::nvim::lua::ffi::{
 use crate::src::nvim::main::{e_fast_api_disabled, e_textlock, textlock};
 use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::src::nvim::types::{
-    Arena, Error, ErrorType, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds,
-    KeyDict_cmd, KeyDict_cmd_opts, KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup,
+    Arena, Error, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd,
+    KeyDict_cmd_opts, KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup,
     KeyDict_create_autocmd, KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline,
     KeyDict_exec_autocmds, KeyDict_exec_opts, KeyDict_get_autocmds, KeyDict_get_commands,
     KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns,
@@ -185,11 +185,7 @@ use core::ptr;
 /// Values that belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
 mod known {
-    use super::ErrorType;
-
-    pub const kErrorTypeNone: ErrorType = -1;
-    pub const kErrorTypeException: ErrorType = 0;
-    pub const kErrorTypeValidation: ErrorType = 1;
+    pub use crate::src::nvim::types::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 }
 
 use known::*;

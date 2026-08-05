@@ -18,17 +18,13 @@ use crate::src::nvim::option::{
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
 };
 use crate::src::nvim::os::libc::{__assert_fail, strcmp};
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
-    Arena, BoolVarValue, Dict, Error, KeyDict_option, KeyValuePair, Object, OptIndex, OptScope,
-    OptVal, OptValData, OptValType, SpecialVarValue, String_0, TryState, aco_save_T, bln_values,
-    buf_T, bufref_T, except_T, int64_t, kObjectTypeNil, linenr_T, msglist_T, object,
-    object_data as C2Rust_Unnamed, sctx_T, size_t, uint64_t, win_T,
+    Arena, Dict, Error, KeyDict_option, KeyValuePair, Object, OptIndex, OptScope, OptVal,
+    OptValData, OptValType, String_0, TryState, aco_save_T, bln_values, buf_T, bufref_T, except_T,
+    int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeNil, linenr_T,
+    msglist_T, object, object_data as C2Rust_Unnamed, sctx_T, size_t, uint64_t, win_T,
 };
 use crate::src::nvim::window::close_windows;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeNil: OptValType = -1;

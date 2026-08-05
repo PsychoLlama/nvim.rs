@@ -18,16 +18,13 @@ use crate::src::nvim::shada::{
     shada_encode_buflist, shada_encode_gvars, shada_encode_jumps, shada_encode_regs,
     shada_read_string,
 };
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
 use crate::src::nvim::types::{
-    Arena, Array, BoolVarValue, Context, Dict, Error, KeyDict_exec_opts, KeyValuePair, Object,
-    OptVal, OptValData, OptValType, SpecialVarValue, String_0, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED,
-    hashitem_T, hashtab_T, kObjectTypeArray, kObjectTypeString, key_value_pair, object,
-    object_data as C2Rust_Unnamed_0, size_t, typval_T, typval_vval_union, uint8_t, uint64_t,
+    Arena, Array, Context, Dict, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
+    OptValData, OptValType, String_0, VAR_LIST, VAR_UNKNOWN, VAR_UNLOCKED, hashitem_T, hashtab_T,
+    kErrorTypeException, kErrorTypeNone, kObjectTypeArray, kObjectTypeString, key_value_pair,
+    object, object_data as C2Rust_Unnamed_0, size_t, typval_T, typval_vval_union, uint8_t,
+    uint64_t,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeBoolean: OptValType = 0;

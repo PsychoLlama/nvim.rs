@@ -54,11 +54,10 @@ use crate::src::nvim::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG, virtual_ac
 use crate::src::nvim::statusline::stl_connected;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    BoolVarValue, CharsizeArg, CharsizeKind, Direction, EvalFuncData, MotionType, OptInt,
-    ScreenGrid, SpecialVarValue, StlClickDefinition, StrCharInfo, VAR_FIXED, VAR_NUMBER,
-    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, cmdarg_T, colnr_T, dict_T, frame_T, handle_T, key_extra,
-    linenr_T, oparg_T, pos_T, size_t, tabpage_T, typval_T, typval_vval_union, uint8_t, varnumber_T,
-    win_T, yankreg_T,
+    CharsizeArg, CharsizeKind, Direction, EvalFuncData, MotionType, OptInt, ScreenGrid,
+    StlClickDefinition, StrCharInfo, VAR_FIXED, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
+    cmdarg_T, colnr_T, dict_T, frame_T, handle_T, key_extra, linenr_T, oparg_T, pos_T, size_t,
+    tabpage_T, typval_T, typval_vval_union, uint8_t, varnumber_T, win_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_check_mouse, ui_cursor_shape, ui_flush, ui_mouse_has};
 use crate::src::nvim::ui_compositor::ui_comp_mouse_focus;
@@ -66,9 +65,6 @@ use crate::src::nvim::window::{
     find_tabpage, global_stl_height, goto_tabpage, tabpage_index, tabpage_move,
     win_drag_status_line, win_drag_vsep_line, win_enter, win_fdccol_count, win_valid,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const KE_MOUSEMOVE: key_extra = 100;
 pub const KE_X2RELEASE: key_extra = 94;
 pub const KE_X2DRAG: key_extra = 93;

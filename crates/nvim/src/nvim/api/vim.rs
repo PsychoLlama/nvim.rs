@@ -106,31 +106,27 @@ use crate::src::nvim::terminal::{
     terminal_alloc, terminal_buf, terminal_check_size, terminal_destroy, terminal_open,
     terminal_running, terminal_set_streamed_paste,
 };
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
-    AdditionalData, Arena, Array, ArrayBuilder, BoolVarValue, Boolean, Buffer, Channel,
-    ChannelStreamType, Context, Dict, Error, Float, HlAttrs, HlMessage, Integer,
-    KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts, KeyDict_empty,
-    KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
-    KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, KeyValuePair, LuaRef,
-    LuaRetMode, MessageData, MessageType, MotionType, NS, Object, OptScope, OptVal, OptValData,
-    OptValType, RemapValues, ScreenGrid, SignTextAttrs, SpecialVarValue, StlClickRecord, String_0,
-    StringBuilder, Tabpage, TerminalOptions, TryState, VV_LNUM, VV_RELNUM, VV_VIRTNUM, Window,
-    bln_values, buf_T, bufref_T, dictitem_T, dobuf_action_values, dobuf_start_values, except_T,
-    foldinfo_T, handle_T, hlf_T, int64_t, kCdScopeGlobal, kFalse, kNone, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil,
-    kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kTrue, key_extra, key_value_pair,
-    linenr_T, mpack_token_type_t, msg_data, msglist_T, object, object_data as C2Rust_Unnamed,
-    pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T, stl_hlrec_t, tabpage_T,
-    uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
+    AdditionalData, Arena, Array, ArrayBuilder, Boolean, Buffer, Channel, ChannelStreamType,
+    Context, Dict, Error, Float, HlAttrs, HlMessage, Integer, KeyDict_complete_set,
+    KeyDict_context, KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline,
+    KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap, KeyDict_open_term,
+    KeyDict_redraw, KeyDict_runtime, KeyValuePair, LuaRef, LuaRetMode, MessageData, MessageType,
+    MotionType, NS, Object, OptScope, OptVal, OptValData, OptValType, RemapValues, ScreenGrid,
+    SignTextAttrs, StlClickRecord, String_0, StringBuilder, Tabpage, TerminalOptions, TryState,
+    VV_LNUM, VV_RELNUM, VV_VIRTNUM, Window, bln_values, buf_T, bufref_T, dictitem_T,
+    dobuf_action_values, dobuf_start_values, except_T, foldinfo_T, handle_T, hlf_T, int64_t,
+    kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kFalse, kNone,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeInteger,
+    kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kTrue, key_extra,
+    key_value_pair, linenr_T, mpack_token_type_t, msg_data, msglist_T, object,
+    object_data as C2Rust_Unnamed, pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T,
+    stl_hlrec_t, tabpage_T, uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::src::nvim::window::{
     global_stl_height, goto_tabpage_tp, goto_tabpage_win, win_find_tabpage,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kMessageTypeNotification: MessageType = 2;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptScopeBuf: OptScope = 2;

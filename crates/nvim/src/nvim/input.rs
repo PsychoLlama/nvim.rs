@@ -16,13 +16,9 @@ use crate::src::nvim::os::input::input_get;
 use crate::src::nvim::os::libc::{atoi, gettext, memmove, snprintf};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    BoolVarValue, Callback, Callback_data as C2Rust_Unnamed, MultiQueue, SpecialVarValue,
-    key_extra, size_t, uint8_t,
+    Callback, Callback_data as C2Rust_Unnamed, MultiQueue, key_extra, size_t, uint8_t,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has};
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_1 = ::core::ffi::c_int;
 pub const EXPAND_FILES: C2Rust_Unnamed_1 = 2;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_1 = 0;

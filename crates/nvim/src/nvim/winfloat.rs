@@ -19,13 +19,13 @@ use crate::src::nvim::option::{parse_winhl_opt, set_option_direct_for};
 use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::libc::{__assert_fail, memcmp, qsort, strlen};
 use crate::src::nvim::strings::concat_str;
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
 use crate::src::nvim::types::ui::kUIMultigrid;
 use crate::src::nvim::types::{
-    AlignTextPos, BoolVarValue, Buffer, Error, FloatAnchor, FloatRelative, OptInt, OptScope,
-    OptVal, OptValData, OptValType, SpecialVarValue, String_0, VirtText, VirtTextChunk, WinConfig,
-    WinSplit, WinStyle, Window, buf_T, colnr_T, frame_T, linenr_T, lpos_T, pos_T, schar_T, scid_T,
-    size_t, tabpage_T, win_T,
+    AlignTextPos, Buffer, Error, FloatAnchor, OptInt, OptScope, OptVal, OptValData, OptValType,
+    String_0, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, buf_T, colnr_T,
+    frame_T, kErrorTypeException, kErrorTypeNone, kFloatRelativeCursor, kFloatRelativeEditor,
+    kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeWindow, linenr_T, lpos_T, pos_T,
+    schar_T, scid_T, size_t, tabpage_T, win_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::window::{
@@ -33,18 +33,10 @@ use crate::src::nvim::window::{
     win_close, win_comp_pos, win_enter, win_find_tabpage, win_free, win_init, win_remove,
     win_remove_status_line, win_set_buf, win_set_inner_size, win_valid, winframe_remove,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleMinimal: WinStyle = 1;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
 pub const kZIndexMessages: C2Rust_Unnamed_12 = 200;
 pub const kZIndexFloatDefault: C2Rust_Unnamed_12 = 50;

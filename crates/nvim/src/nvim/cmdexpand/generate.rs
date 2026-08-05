@@ -13,7 +13,7 @@ use super::*;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
-use crate::src::nvim::types::{ArrayBuf, static_cstring};
+use crate::src::nvim::types::{ArrayBuf, kErrorTypeNone, static_cstring};
 
 /// Expand a file or directory pattern.
 ///

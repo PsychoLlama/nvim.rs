@@ -28,17 +28,13 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::plines::linetabsize_col;
 use crate::src::nvim::types::{
-    Arena, BoolVarValue, EvalFuncData, SpecialVarValue, String_0, StringBuilder, VAR_FLOAT,
-    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, float_T, garray_T, int16_t, int64_t, intmax_t,
-    kListLenUnknown, keyvalue_T, ptrdiff_t, size_t, typval_T, uint8_t, uint16_t, uintmax_t,
-    uvarnumber_T, varnumber_T,
+    Arena, EvalFuncData, String_0, StringBuilder, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
+    float_T, garray_T, int16_t, int64_t, intmax_t, kListLenUnknown, keyvalue_T, ptrdiff_t, size_t,
+    typval_T, uint8_t, uint16_t, uintmax_t, uvarnumber_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use core::slice;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const TYPE_FLOAT: C2Rust_Unnamed_1 = 12;
 pub const TYPE_SIZET: C2Rust_Unnamed_1 = 7;
 pub const TYPE_UNSIGNEDLONGLONGINT: C2Rust_Unnamed_1 = 6;

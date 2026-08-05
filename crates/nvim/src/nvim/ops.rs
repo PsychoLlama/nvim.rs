@@ -77,20 +77,17 @@ use crate::src::nvim::state::{MODE_INSERT, MODE_REPLACE, VREPLACE_FLAG, virtual_
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::textformat::{auto_format, has_format_option, op_format, op_formatexpr};
 use crate::src::nvim::types::{
-    BoolVarValue, Callback, Callback_data as C2Rust_Unnamed_5, CharsizeArg, CharsizeKind,
-    ExtmarkOp, MotionType, OptInt, SpecialVarValue, StrCharInfo, TriState, VAR_STRING, VAR_UNKNOWN,
-    VAR_UNLOCKED, bcount_t, block_def, buf_T, cmdarg_T, colnr_T, dict_T, ht_stack_T, int32_t,
-    int64_t, kNone, key_extra, linenr_T, list_stack_T, oparg_T, optset_T, pos_T, size_t, ssize_t,
-    typval_T, typval_vval_union, uint8_t, uvarnumber_T, varnumber_T, yankreg_T,
+    Callback, Callback_data as C2Rust_Unnamed_5, CharsizeArg, CharsizeKind, ExtmarkOp, MotionType,
+    OptInt, StrCharInfo, TriState, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, bcount_t, block_def,
+    buf_T, cmdarg_T, colnr_T, dict_T, ht_stack_T, int32_t, int64_t, kNone, key_extra, linenr_T,
+    list_stack_T, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t,
+    uvarnumber_T, varnumber_T, yankreg_T,
 };
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::undo::{u_clearline, u_save, u_save_cursor};
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalpha: C2Rust_Unnamed = 1024;
 pub const _ISupper: C2Rust_Unnamed = 256;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const NUMBUFLEN: C2Rust_Unnamed_16 = 65;

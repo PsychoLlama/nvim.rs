@@ -58,7 +58,6 @@ use crate::src::nvim::tui::paint::{
 use crate::src::nvim::tui::tui::{
     tui_is_stopped, tui_start, tui_stop, tui_suspend, tui_wait_ready,
 };
-use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::builders::{ArrayBuf, DictBuf};
 use crate::src::nvim::types::channel::kChannelStdinPipe;
 use crate::src::nvim::types::libc::{STDERR_FILENO, STDOUT_FILENO};
@@ -66,8 +65,8 @@ use crate::src::nvim::types::ui::kLineFlagWrap;
 use crate::src::nvim::types::{
     Arena, Array, Callback, CallbackReader, Dict, Error, Event, GridLineEvent, HlAttrs, Integer,
     KeyDict_highlight, KeySetLink, Object, ObjectType, TUIData, UIClientHandler, dict_T, garray_T,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
-    proftime_T, sattr_T, schar_T, uint16_t,
+    kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
+    kObjectTypeInteger, kObjectTypeString, proftime_T, sattr_T, schar_T, uint16_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 

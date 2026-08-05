@@ -70,8 +70,8 @@ use crate::src::nvim::types::{
     Arena, Buffer, Error, Event, ExtmarkOp, HlAttrs, Map_int_ptr_t, MarkAdjustMode, Object, OptVal,
     OptValData, OptValType, RgbValue, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
     VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, aco_save_T, buf_T, colnr_T,
-    exarg_T, handle_T, int16_t, kObjectTypeNil, kObjectTypeString, linenr_T, pos_T, ptr_t,
-    save_v_event_T, size_t, tabpage_T, uint8_t, varnumber_T, win_T,
+    exarg_T, handle_T, int16_t, kErrorTypeNone, kObjectTypeNil, kObjectTypeString, linenr_T, pos_T,
+    ptr_t, save_v_event_T, size_t, tabpage_T, uint8_t, varnumber_T, win_T,
 };
 use crate::src::nvim::vterm::parser::vterm_input_write;
 use crate::src::nvim::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -95,7 +95,6 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use scrollback::{fetch_cell, refresh_scrollback, term_may_alloc_scrollback};
 
 use crate::src::nvim::state::MODE_TERMINAL;
-use crate::src::nvim::types::api::kErrorTypeNone;
 pub use input::{terminal_paste, terminal_set_streamed_paste};
 pub use mode::terminal_enter;
 pub use refresh::{

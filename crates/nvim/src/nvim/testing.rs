@@ -28,14 +28,11 @@ use crate::src::nvim::os::libc::{fclose, fgetc, gettext, memmove, strcmp, strlen
 use crate::src::nvim::runtime::{estack_sfile, exestack};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::src::nvim::types::{
-    BoolVarValue, EvalFuncData, FILE, SpecialVarValue, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_LIST,
-    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_ERRMSG, VV_EXCEPTION, VV_TESTING, dict_T,
-    dictitem_T, estack_T, estack_arg_T, float_T, garray_T, hashitem_T, int64_t, linenr_T, list_T,
-    ptrdiff_t, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
+    BoolVarValue, EvalFuncData, FILE, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER,
+    VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_ERRMSG, VV_EXCEPTION, VV_TESTING, dict_T, dictitem_T,
+    estack_T, estack_arg_T, float_T, garray_T, hashitem_T, int64_t, kBoolVarFalse, kBoolVarTrue,
+    linenr_T, list_T, ptrdiff_t, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_1 = ::core::ffi::c_uint;
 pub const NUMBUFLEN: C2Rust_Unnamed_1 = 65;
 pub const ESTACK_NONE: estack_arg_T = 0;

@@ -65,12 +65,11 @@ use crate::src::nvim::plines::plines_m_win;
 use crate::src::nvim::plines::win_linetabsize;
 use crate::src::nvim::state::MODE_CMDLINE;
 use crate::src::nvim::strings::reverse_text;
-use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::src::nvim::types::{
-    AlignTextPos, Array, BoolVarValue, Buffer, Error, Float, FloatRelative, Integer, Object,
-    OptInt, OptVal, OptValData, OptValType, String_0, VirtText, VirtTextChunk, WinConfig, WinSplit,
-    WinStyle, Window, dict_T, exarg_T, float_T, handle_T, hlf_T, kObjectTypeArray,
+    AlignTextPos, Array, Buffer, Error, Float, Integer, Object, OptInt, OptVal, OptValData,
+    OptValType, String_0, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, dict_T,
+    exarg_T, float_T, handle_T, hlf_T, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray,
     kObjectTypeBoolean, kObjectTypeString, linenr_T, lpos_T, object_data as C2Rust_Unnamed_12,
     pumitem_T, sattr_T, schar_T, size_t, tabpage_T, uint32_t, varnumber_T, vimmenu_T, win_T,
 };
@@ -97,12 +96,9 @@ pub use self::preview::*;
 mod menu;
 pub use self::menu::*;
 
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeEditor: FloatRelative = 0;
 pub const kZIndexCmdlinePopupMenu: c_uint = 250;
 pub const kZIndexPopupMenu: c_uint = 100;
 pub const kZIndexFloatDefault: c_uint = 50;

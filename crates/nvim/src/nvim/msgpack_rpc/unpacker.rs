@@ -30,10 +30,10 @@ use crate::src::nvim::strings::arena_printf;
 use crate::src::nvim::types::{
     AdditionalData, AdditionalDataBuilder, Arena, Array, Boolean, Dict, Error, FieldHashfn,
     GridLineEvent, Integer, KeySetLink, KeyValuePair, MessageType, Object, ObjectType, OptKeySet,
-    String_0, StringArray, Unpacker, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer,
-    kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
-    kObjectTypeTabpage, mpack_node_t, mpack_parser_t, mpack_token_t, mpack_uint32_t, object_data,
-    schar_T, size_t, ssize_t, uint32_t,
+    String_0, StringArray, Unpacker, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
+    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, mpack_node_t,
+    mpack_parser_t, mpack_token_t, mpack_uint32_t, object_data, schar_T, size_t, ssize_t, uint32_t,
 };
 use crate::src::nvim::ui_client::{
     handle_ui_client_redraw, ui_client_event_grid_line, ui_client_get_redraw_handler,
@@ -41,7 +41,6 @@ use crate::src::nvim::ui_client::{
 
 pub mod protocol;
 
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use protocol::{
     ARRAY as TOKEN_ARRAY, BIN as TOKEN_BIN, BOOLEAN as TOKEN_BOOLEAN, CHUNK as TOKEN_CHUNK,
     EXT as TOKEN_EXT, FLOAT as TOKEN_FLOAT, MAP as TOKEN_MAP, NIL as TOKEN_NIL, SINT as TOKEN_SINT,

@@ -22,13 +22,10 @@ use crate::src::nvim::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    BoolVarValue, EvalFuncData, SpecialVarValue, buf_T, colnr_T, int64_t, intptr_t, linenr_T,
-    lpos_T, oparg_T, pos_T, ptrdiff_t, size_t, typval_T, uint8_t, uintmax_t, varnumber_T,
+    EvalFuncData, buf_T, colnr_T, int64_t, intptr_t, linenr_T, lpos_T, oparg_T, pos_T, ptrdiff_t,
+    size_t, typval_T, uint8_t, uintmax_t, varnumber_T,
 };
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const KEY_COMPLETE: C2Rust_Unnamed_14 = 259;
 pub const KEY_OPEN_BACK: C2Rust_Unnamed_14 = 258;

@@ -45,16 +45,13 @@ use crate::src::nvim::state::{MODE_INSERT, MODE_NORMAL, VREPLACE_FLAG};
 use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 use crate::src::nvim::textobject::startPS;
 use crate::src::nvim::types::{
-    BoolVarValue, SpecialVarValue, VV_CHAR, VV_COUNT, VV_LNUM, colnr_T, linenr_T, oparg_T, pos_T,
-    ptrdiff_t, sctx_T, size_t, uint8_t, varnumber_T, win_T,
+    VV_CHAR, VV_COUNT, VV_LNUM, colnr_T, linenr_T, oparg_T, pos_T, ptrdiff_t, sctx_T, size_t,
+    uint8_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::ui_cursor_shape;
 use crate::src::nvim::undo::{u_save, u_save_cursor};
 use crate::src::nvim::window::win_fdccol_count;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
 pub const kBufOptFormatexpr: C2Rust_Unnamed_14 = 36;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;

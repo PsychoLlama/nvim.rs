@@ -35,27 +35,23 @@ use crate::src::nvim::os::libc::{memcpy, strchr, strlen};
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::state::MODE_INSERT;
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
-    AlignTextPos, Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, Dict, Error,
-    ExtmarkOp, FloatRelative, Integer, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty,
-    KeyDict_keymap, KeyValuePair, LuaRef, LuaRetMode, MarkAdjustMode, MarkGet, Object,
-    SpecialVarValue, String_0, TryState, UndoObjectType, WinSplit, WinStyle, aco_save_T, bcount_t,
-    buf_T, colnr_T, dobuf_action_values, dobuf_start_values, except_T, fmark_T, int64_t,
-    kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, key_value_pair,
-    linenr_T, lua_State, msglist_T, object, object_data as C2Rust_Unnamed, pos_T, ptrdiff_t,
-    size_t, tabpage_T, u_header_T, uint64_t, win_T,
+    AlignTextPos, Arena, Array, Boolean, BufUpdateCallbacks, Buffer, Dict, Error, ExtmarkOp,
+    Integer, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, KeyValuePair,
+    LuaRef, LuaRetMode, MarkAdjustMode, MarkGet, Object, String_0, TryState, UndoObjectType,
+    WinSplit, WinStyle, aco_save_T, bcount_t, buf_T, colnr_T, dobuf_action_values,
+    dobuf_start_values, except_T, fmark_T, int64_t, kErrorTypeException, kErrorTypeNone,
+    kErrorTypeValidation, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil,
+    kObjectTypeString, key_value_pair, linenr_T, lua_State, msglist_T, object,
+    object_data as C2Rust_Unnamed, pos_T, ptrdiff_t, size_t, tabpage_T, u_header_T, uint64_t,
+    win_T,
 };
 use crate::src::nvim::undo::u_save_buf;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeEditor: FloatRelative = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const kExtmarkUndo: ExtmarkOp = 1;

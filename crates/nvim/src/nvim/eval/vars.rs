@@ -89,18 +89,15 @@ use crate::src::nvim::types::{
     VV_TYPE_BLOB, VV_TYPE_BOOL, VV_TYPE_DICT, VV_TYPE_FLOAT, VV_TYPE_FUNC, VV_TYPE_LIST,
     VV_TYPE_NUMBER, VV_TYPE_STRING, VV_VAL, VV_VERSION, VV_VERSIONLONG, VarType, VimVarIndex,
     aco_save_T, blob_T, buf_T, dict_T, dictitem_T, evalarg_T, exarg_T, expand_T, garray_T,
-    hashitem_T, hashtab_T, int64_t, kFalse, kListLenUnknown, kNone, kTrue, list_T, list_stack_T,
-    listitem_T, lval_T, partial_T, ptrdiff_t, queue, scid_T, scriptitem_T, scriptvar_T, sctx_T,
-    size_t, ssize_t, switchwin_T, tabpage_T, typval_T, typval_vval_union, uint8_t, uint32_t,
-    varnumber_T, win_T,
+    hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, kFalse, kListLenUnknown, kNone,
+    kSpecialVarNull, kTrue, list_T, list_stack_T, listitem_T, lval_T, partial_T, ptrdiff_t, queue,
+    scid_T, scriptitem_T, scriptvar_T, sctx_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T,
+    typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T,
 };
 use crate::src::nvim::version::{highest_patch, min_vim_version};
 use crate::src::nvim::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISlower: C2Rust_Unnamed = 512;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const DO_NOT_FREE_CNT: C2Rust_Unnamed_15 = 1073741823;

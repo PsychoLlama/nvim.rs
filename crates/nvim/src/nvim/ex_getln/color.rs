@@ -9,7 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::types::{VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED};
+use crate::src::nvim::types::{VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kErrorTypeNone};
 
 /// C's `kv_push` onto a `CmdlineColors`, doubling the heap array from 8.
 unsafe fn push_chunk(colors: *mut CmdlineColors, chunk: CmdlineColorChunk) {

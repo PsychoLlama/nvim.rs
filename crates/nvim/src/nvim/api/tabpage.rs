@@ -8,18 +8,15 @@ use crate::src::nvim::main::{
     autocmd_no_enter, autocmd_no_leave, cmdwin_buf, cmdwin_type, curtab, curwin, e_cmdwin, firstwin,
 };
 use crate::src::nvim::os::libc::abort;
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
 use crate::src::nvim::types::{
-    Arena, Array, BoolVarValue, Boolean, Buffer, Error, Integer, KeyDict_tabpage_config, Object,
-    SpecialVarValue, String_0, Tabpage, TryState, Window, buf_T, except_T, kObjectTypeNil,
-    kObjectTypeWindow, msglist_T, object, object_data as C2Rust_Unnamed, size_t, tabpage_T, win_T,
+    Arena, Array, Boolean, Buffer, Error, Integer, KeyDict_tabpage_config, Object, String_0,
+    Tabpage, TryState, Window, buf_T, except_T, kErrorTypeException, kErrorTypeNone,
+    kObjectTypeNil, kObjectTypeWindow, msglist_T, object, object_data as C2Rust_Unnamed, size_t,
+    tabpage_T, win_T,
 };
 use crate::src::nvim::window::{
     tabpage_index, tabpage_win_valid, valid_tabpage, win_goto, win_new_tabpage, win_set_buf,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,

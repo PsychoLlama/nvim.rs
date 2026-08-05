@@ -30,24 +30,21 @@ use crate::src::nvim::main::nlua_global_refs;
 use crate::src::nvim::memory::{arena_memdupz, xfree, xmalloc, xrealloc, xstrdup};
 use crate::src::nvim::message::{emsg, internal_error, semsg};
 use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memchr, memcpy, memset, strlen};
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Boolean, Dict, Error, FieldHashfn, Float, Integer, KeySetLink,
     KeyValuePair, LuaRef, MPConvPartialStage, MPConvStack, MPConvStackVal,
     MPConvStackVal_data as C2Rust_Unnamed_1, MPConvStackVal_data_a as C2Rust_Unnamed_2,
     MPConvStackVal_data_d as C2Rust_Unnamed_5, MPConvStackVal_data_l as C2Rust_Unnamed_4,
-    MPConvStackValType, MessagePackType, Object, ObjectType, OptKeySet, OptionalKeys,
-    SpecialVarValue, String_0, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dict_T, dictitem_T, handle_T,
-    hashitem_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
-    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
-    kObjectTypeTabpage, kObjectTypeWindow, key_value_pair, list_T, listitem_T, lua_Integer,
-    lua_Number, lua_State, object, object_data as C2Rust_Unnamed, partial_T, ptrdiff_t, size_t,
-    typval_T, typval_vval_union, ufunc_T, uint64_t, varnumber_T,
+    MPConvStackValType, MessagePackType, Object, ObjectType, OptKeySet, OptionalKeys, String_0,
+    VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VAR_STRING,
+    VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dict_T, dictitem_T, handle_T, hashitem_T, kBoolVarFalse,
+    kBoolVarTrue, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
+    kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
+    kSpecialVarNull, key_value_pair, list_T, listitem_T, lua_Integer, lua_Number, lua_State,
+    object, object_data as C2Rust_Unnamed, partial_T, ptrdiff_t, size_t, typval_T,
+    typval_vval_union, ufunc_T, uint64_t, varnumber_T,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kMPConvPartialList: MPConvStackValType = 4;
 pub const kMPConvPairs: MPConvStackValType = 2;
 pub const kMPConvList: MPConvStackValType = 1;

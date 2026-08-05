@@ -13,16 +13,13 @@ use crate::src::nvim::os::libc::{__assert_fail, abort, llabs, memcpy};
 use crate::src::nvim::os::time::os_sleep;
 use crate::src::nvim::types::ui::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
 use crate::src::nvim::types::{
-    BoolVarValue, Boolean, Integer, LineFlags, RemoteUI, ScreenGrid, SpecialVarValue, String_0,
-    handle_T, sattr_T, schar_T, size_t, ssize_t, uint64_t, win_T,
+    Boolean, Integer, LineFlags, RemoteUI, ScreenGrid, String_0, handle_T, sattr_T, schar_T,
+    size_t, ssize_t, uint64_t, win_T,
 };
 use crate::src::nvim::ui::{
     ui_call_flush, ui_composed_call_grid_cursor_goto, ui_composed_call_grid_resize,
     ui_composed_call_grid_scroll, ui_composed_call_raw_line, ui_has,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_15 {

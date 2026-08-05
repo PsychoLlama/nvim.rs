@@ -72,15 +72,12 @@ use crate::src::nvim::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::src::nvim::textformat::{comp_textwidth, has_format_option};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    AdditionalData, BoolVarValue, ExtmarkOp, GraphemeState, MarkTree, SpecialVarValue,
-    VV_WARNINGMSG, bcount_t, buf_T, colnr_T, fmark_T, fmarkv_T, foldinfo_T, int64_t, linenr_T,
-    oparg_T, pos_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, win_T,
+    AdditionalData, ExtmarkOp, GraphemeState, MarkTree, VV_WARNINGMSG, bcount_t, buf_T, colnr_T,
+    fmark_T, fmarkv_T, foldinfo_T, int64_t, linenr_T, oparg_T, pos_T, ptrdiff_t, size_t, ssize_t,
+    tabpage_T, uint64_t, win_T,
 };
 use crate::src::nvim::ui::{ui_active, ui_has};
 use crate::src::nvim::undo::{curbufIsChanged, u_clearline, u_save_cursor, u_savedel};
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;

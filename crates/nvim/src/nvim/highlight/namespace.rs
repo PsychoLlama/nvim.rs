@@ -42,11 +42,10 @@ use crate::src::nvim::main::{
 use crate::src::nvim::option::check_blending;
 use crate::src::nvim::os::libc::strlen;
 use crate::src::nvim::popupmenu::pum_drawn;
-use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::builders::ArrayBuf;
 use crate::src::nvim::types::{
     ColorItem, ColorKey, DecorProvider, Error, HlAttrs, HlEntry, KeyDict_highlight, KeySetLink,
-    LuaRetMode, NS, Object, kObjectTypeDict, size_t, win_T,
+    LuaRetMode, NS, Object, kErrorTypeNone, kObjectTypeDict, size_t, win_T,
 };
 use ::core::ffi::{c_char, c_int};
 use core::hash::BuildHasherDefault;

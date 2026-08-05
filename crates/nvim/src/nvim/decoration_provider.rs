@@ -33,11 +33,11 @@ use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref};
 use crate::src::nvim::main::{decor_state, display_tick, ns_hl_active, textlock};
 use crate::src::nvim::message::msg_schedule_semsg_multiline;
 use crate::src::nvim::r#move::validate_botline_win;
-use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::builders::ArrayBuf;
 use crate::src::nvim::types::{
     Array, DecorProvider, DecorProvider_state, Error, Integer, LuaRef, LuaRetMode, NS, Object,
-    buf_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeInteger, linenr_T, win_T,
+    buf_T, kErrorTypeNone, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeInteger, linenr_T,
+    win_T,
 };
 
 use ::core::ffi::{c_char, c_int};

@@ -42,17 +42,14 @@ use crate::src::nvim::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_s
 use crate::src::nvim::runtime::{DIP_ALL, source_runtime_vim_lua};
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::types::{
-    BoolVarValue, CMD_index, SpecialVarValue, VV_SWAPCOMMAND, aco_save_T, aentry_T, buf_T,
-    bufref_T, cmd_addr_T, cstack_T, dobuf_action_values, dobuf_start_values, exarg, exarg_T,
-    linenr_T, list_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint8_t, uint64_t, varnumber_T, win_T,
+    CMD_index, VV_SWAPCOMMAND, aco_save_T, aentry_T, buf_T, bufref_T, cmd_addr_T, cstack_T,
+    dobuf_action_values, dobuf_start_values, exarg, exarg_T, linenr_T, list_T, ptrdiff_t, size_t,
+    ssize_t, tabpage_T, uint8_t, uint64_t, varnumber_T, win_T,
 };
 use crate::src::nvim::undo::bufIsChanged;
 use crate::src::nvim::window::{
     goto_tabpage_tp, goto_tabpage_win, valid_tabpage, win_goto, win_split, win_valid,
 };
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const CMD_windo: CMD_index = 528;
 pub const CMD_tabdo: CMD_index = 455;
 pub const CMD_sfirst: CMD_index = 404;

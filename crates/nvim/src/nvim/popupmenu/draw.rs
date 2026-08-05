@@ -16,6 +16,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::{kErrorTypeNone, kFloatRelativeEditor};
 
 /// `WIN_CONFIG_INIT`: the float config a fresh `parse_winborder` writes into.
 ///

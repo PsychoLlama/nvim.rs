@@ -15,7 +15,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::pos::MAXCOL;
-use crate::src::nvim::types::{kFalse, kTrue};
+use crate::src::nvim::types::{kErrorTypeNone, kFalse, kTrue};
 
 /// How tall a preview split starts out.
 const PUM_PREVIEW_HEIGHT: c_int = 3;

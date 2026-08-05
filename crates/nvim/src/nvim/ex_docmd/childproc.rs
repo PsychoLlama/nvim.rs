@@ -15,8 +15,9 @@ use crate::src::nvim::message::{emsg, emsg_multiline};
 use crate::src::nvim::os::libc::{gettext, snprintf};
 use crate::src::nvim::os::shell::{shell_build_argv, shell_free_argv};
 use crate::src::nvim::strings::vim_strsave_escaped;
-use crate::src::nvim::types::api::kErrorTypeNone;
-use crate::src::nvim::types::{Array, Error, Object, String_0, exarg_T, kObjectTypeString, size_t};
+use crate::src::nvim::types::{
+    Array, Error, Object, String_0, exarg_T, kErrorTypeNone, kObjectTypeString, size_t,
+};
 use crate::src::nvim::usercmd::add_win_cmd_modifiers;
 
 /// `:terminal` — spelled as a command line, not as a call.

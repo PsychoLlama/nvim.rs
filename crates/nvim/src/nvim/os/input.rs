@@ -24,17 +24,13 @@ use crate::src::nvim::profile::{prof_input_end, prof_input_start};
 use crate::src::nvim::state::{MODE_INSERT, get_real_state};
 use crate::src::nvim::types::libc::STDIN_FILENO;
 use crate::src::nvim::types::{
-    BoolVarValue, Event, MultiQueue, ProcType, RStream, SpecialVarValue, String_0, TriState,
-    event_T, int64_t, kFalse, kNone, kTrue, key_extra, rstream, size_t, ssize_t, stream,
-    stream_uv as C2Rust_Unnamed_25, uint8_t, uint64_t, uv__io_t, uv__queue, uv_buf_t, uv_connect_t,
-    uv_file, uv_handle_t, uv_handle_type, uv_loop_t, uv_pipe_s_u as C2Rust_Unnamed_7, uv_pipe_t,
-    uv_shutdown_t, uv_stream_t,
+    Event, MultiQueue, ProcType, RStream, String_0, TriState, event_T, int64_t, kFalse, kNone,
+    kTrue, key_extra, rstream, size_t, ssize_t, stream, stream_uv as C2Rust_Unnamed_25, uint8_t,
+    uint64_t, uv__io_t, uv__queue, uv_buf_t, uv_connect_t, uv_file, uv_handle_t, uv_handle_type,
+    uv_loop_t, uv_pipe_s_u as C2Rust_Unnamed_7, uv_pipe_t, uv_shutdown_t, uv_stream_t,
 };
 pub const UV_TTY: uv_handle_type = 14;
 pub const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kProcTypePty: ProcType = 1;
 pub const KE_EVENT: key_extra = 102;
 pub const KE_MOUSEMOVE: key_extra = 100;

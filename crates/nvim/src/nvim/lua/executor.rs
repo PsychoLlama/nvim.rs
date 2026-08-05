@@ -69,19 +69,18 @@ use crate::src::nvim::runtime::{
     runtime_search_path_validate, script_is_lua,
 };
 use crate::src::nvim::strings::{arena_printf, vim_snprintf};
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::ui::{kUICmdline, kUILinegrid};
 use crate::src::nvim::types::{
-    Arena, ArenaMem, Array, BoolVarValue, CMD_index, Error, EvalFuncDef, Event, FileDescriptor,
-    HlMessage, HlMessageChunk, LuaRef, LuaRetMode, MessageData, MultiQueue, Object, OptInt,
-    SpecialVarValue, String_0, StringBuilder, TimeWatcher, TryState, VAR_DICT, VAR_FIXED, VAR_LIST,
-    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, buf_T, colnr_T, consumed_blk, dict_T,
-    exarg_T, except_T, expand_T, funcexe_T, garray_T, handle_T, int64_t, intptr_t,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
-    linenr_T, lua_CFunction, lua_Integer, lua_Number, lua_State, mod_entry_T, msglist_T,
-    nlua_ref_state_t, object, object_data as C2Rust_Unnamed_11, partial_T, proftime_T, ptrdiff_t,
-    scid_T, scriptitem_T, sctx_T, size_t, typval_T, typval_vval_union, ucmd_T, uint8_t, uint32_t,
-    uint64_t, varnumber_T,
+    Arena, ArenaMem, Array, CMD_index, Error, EvalFuncDef, Event, FileDescriptor, HlMessage,
+    HlMessageChunk, LuaRef, LuaRetMode, MessageData, MultiQueue, Object, OptInt, String_0,
+    StringBuilder, TimeWatcher, TryState, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VAR_UNLOCKED, buf_T, colnr_T, consumed_blk, dict_T, exarg_T, except_T, expand_T,
+    funcexe_T, garray_T, handle_T, int64_t, intptr_t, kErrorTypeException, kErrorTypeNone,
+    kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeLuaRef, kObjectTypeNil,
+    kObjectTypeString, linenr_T, lua_CFunction, lua_Integer, lua_Number, lua_State, mod_entry_T,
+    msglist_T, nlua_ref_state_t, object, object_data as C2Rust_Unnamed_11, partial_T, proftime_T,
+    ptrdiff_t, scid_T, scriptitem_T, sctx_T, size_t, typval_T, typval_vval_union, ucmd_T, uint8_t,
+    uint32_t, uint64_t, varnumber_T,
 };
 use crate::src::nvim::ui::{ui_add_cb, ui_flush, ui_has, ui_remove_cb};
 use crate::src::nvim::undo::u_save;
@@ -140,9 +139,6 @@ pub type luv_CFcpcall = Option<
 >;
 pub type luv_acquire_vm = Option<unsafe extern "C-unwind" fn() -> *mut lua_State>;
 pub type luv_release_vm = Option<unsafe extern "C-unwind" fn(*mut lua_State) -> ()>;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub const MAX_FUNC_ARGS: C2Rust_Unnamed_27 = 20;
 pub const CMD_equal: CMD_index = 552;

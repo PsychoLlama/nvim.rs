@@ -37,11 +37,10 @@ use crate::src::nvim::popupmenu::{pum_set_event_info, pum_visible};
 use crate::src::nvim::state::{MODE_CMDLINE, get_mode, get_was_safe_state};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::syntax::syntax_present;
-use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::{
     Arena, Array, Error, EvalFuncData, Object, String_0, TriState, VAR_STRING, VV_SHELL_ERROR,
-    colnr_T, garray_T, kFalse, kListLenMayKnow, kNone, kObjectTypeBoolean, kTrue, tabpage_T,
-    typval_T, uint8_t, varnumber_T, win_T,
+    colnr_T, garray_T, kErrorTypeNone, kFalse, kListLenMayKnow, kNone, kObjectTypeBoolean, kTrue,
+    tabpage_T, typval_T, uint8_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::ui_gui_attached;
 use crate::src::nvim::version::{has_nvim_version, has_vim_patch};

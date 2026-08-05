@@ -13,10 +13,10 @@ use crate::src::nvim::eval::typval::{
     tv_dict_item_remove, tv_dict_watcher_notify,
 };
 use crate::src::nvim::eval::vars::{before_set_vvar, get_vimvar_dict};
-use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
-    Arena, Error, Object, String_0, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T, ptrdiff_t,
-    size_t, typval_T, typval_vval_union,
+    Arena, Error, Object, String_0, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, ptrdiff_t, size_t, typval_T,
+    typval_vval_union,
 };
 use core::ffi::c_int;
 use core::ptr;

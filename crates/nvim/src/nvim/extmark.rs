@@ -24,17 +24,14 @@ use crate::src::nvim::memory::{xfree, xrealloc};
 use crate::src::nvim::os::libc::{__assert_fail, memset};
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::types::{
-    BoolVarValue, DecorHighlightInline, DecorInline, DecorInlineData, Error, ExtmarkInfoArray,
-    ExtmarkMove, ExtmarkOp, ExtmarkSavePos, ExtmarkSplice, ExtmarkType, ExtmarkUndoObject, MTKey,
-    MTNode, MTPair, MTPos, Map_uint32_t_uint32_t, MapHash, MarkTree, MarkTreeIter,
-    MarkTreeIter_s as C2Rust_Unnamed_14, Set_uint32_t, SpecialVarValue, UndoObjectType, bcount_t,
-    buf_T, colnr_T, extmark_undo_vec_t, int32_t, int64_t, kNone, kTrue, linenr_T, size_t,
-    u_header_T, uint16_t, uint32_t, uint64_t, undo_object, undo_object_data as C2Rust_Unnamed_6,
+    DecorHighlightInline, DecorInline, DecorInlineData, Error, ExtmarkInfoArray, ExtmarkMove,
+    ExtmarkOp, ExtmarkSavePos, ExtmarkSplice, ExtmarkType, ExtmarkUndoObject, MTKey, MTNode,
+    MTPair, MTPos, Map_uint32_t_uint32_t, MapHash, MarkTree, MarkTreeIter,
+    MarkTreeIter_s as C2Rust_Unnamed_14, Set_uint32_t, UndoObjectType, bcount_t, buf_T, colnr_T,
+    extmark_undo_vec_t, int32_t, int64_t, kNone, kTrue, linenr_T, size_t, u_header_T, uint16_t,
+    uint32_t, uint64_t, undo_object, undo_object_data as C2Rust_Unnamed_6,
 };
 use crate::src::nvim::undo::u_force_get_undo_header;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kExtmarkSavePos: UndoObjectType = 3;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
