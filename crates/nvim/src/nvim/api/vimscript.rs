@@ -150,7 +150,7 @@ pub unsafe extern "C" fn nvim_exec2(
         let c2rust_fresh0 = result.size;
         result.size = result.size.wrapping_add(1);
         *result.items.offset(c2rust_fresh0 as isize) = key_value_pair {
-            key: cstr_to_string(b"output\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_to_string(c"output".as_ptr()),
             value: object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed { string: output },
@@ -202,7 +202,7 @@ pub unsafe extern "C" fn exec_impl(
     let save_current_sctx: sctx_T = api_set_sctx(channel_id);
     do_source_str(
         src.data,
-        b"nvim_exec2()\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        c"nvim_exec2()".as_ptr() as *mut ::core::ffi::c_char,
     );
     if (*opts).output {
         capture_ga.set(save_capture_ga);
@@ -265,9 +265,9 @@ pub unsafe extern "C" fn nvim_eval(
         data: C2Rust_Unnamed { boolean: false },
     };
     if recursive.get() == 0 {
-        force_abort.set(false_0 != 0);
-        suppress_errthrow.set(false_0 != 0);
-        did_throw.set(false_0 != 0);
+        force_abort.set(false);
+        suppress_errthrow.set(false);
+        did_throw.set(false);
         did_emsg.set(false_0);
     }
     (*recursive.ptr()) += 1;
@@ -300,12 +300,12 @@ pub unsafe extern "C" fn nvim_eval(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"Failed to evaluate expression: '%.*s'\0".as_ptr() as *const ::core::ffi::c_char,
+                c"Failed to evaluate expression: '%.*s'".as_ptr(),
                 256 as ::core::ffi::c_int,
                 expr.data,
             );
         } else {
-            rv = vim_to_object(&raw mut rettv, arena, false_0 != 0);
+            rv = vim_to_object(&raw mut rettv, arena, false);
         }
     }
     tv_clear(&raw mut rettv);
@@ -328,7 +328,7 @@ unsafe extern "C" fn _call_function(
         api_set_error(
             err,
             kErrorTypeValidation,
-            b"Function called with too many arguments\0".as_ptr() as *const ::core::ffi::c_char,
+            c"Function called with too many arguments".as_ptr(),
         );
         return rv;
     }
@@ -347,9 +347,9 @@ unsafe extern "C" fn _call_function(
         i = i.wrapping_add(1);
     }
     if recursive.get() == 0 {
-        force_abort.set(false_0 != 0);
-        suppress_errthrow.set(false_0 != 0);
-        did_throw.set(false_0 != 0);
+        force_abort.set(false);
+        suppress_errthrow.set(false);
+        did_throw.set(false);
         did_emsg.set(false_0);
     }
     (*recursive.ptr()) += 1;
@@ -361,7 +361,7 @@ unsafe extern "C" fn _call_function(
     let mut funcexe: funcexe_T = FUNCEXE_INIT;
     funcexe.fe_firstline = (*curwin.get()).w_cursor.lnum;
     funcexe.fe_lastline = (*curwin.get()).w_cursor.lnum;
-    funcexe.fe_evaluate = true_0 != 0;
+    funcexe.fe_evaluate = true;
     funcexe.fe_selfdict = self_0;
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
@@ -383,7 +383,7 @@ unsafe extern "C" fn _call_function(
     );
     try_leave(&raw mut tstate, err);
     if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
-        rv = vim_to_object(&raw mut rettv, arena, false_0 != 0);
+        rv = vim_to_object(&raw mut rettv, arena, false);
     }
     tv_clear(&raw mut rettv);
     (*recursive.ptr()) -= 1;
@@ -417,7 +417,7 @@ pub unsafe extern "C" fn nvim_call_dict_function(
         v_lock: VAR_UNLOCKED,
         vval: typval_vval_union { v_number: 0 },
     };
-    let mut mustfree: bool = false_0 != 0;
+    let mut mustfree: bool = false;
     match dict.type_0 as ::core::ffi::c_uint {
         4 => {
             let mut eval_ret: ::core::ffi::c_int = 0;
@@ -445,7 +445,7 @@ pub unsafe extern "C" fn nvim_call_dict_function(
             if eval_ret != OK {
                 abort();
             }
-            mustfree = true_0 != 0;
+            mustfree = true;
         }
         6 => {
             object_to_vim(dict, &raw mut rettv, err);
@@ -454,8 +454,8 @@ pub unsafe extern "C" fn nvim_call_dict_function(
             if true {
                 api_err_exp(
                     err,
-                    b"dict argument\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"String or Dict\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"dict argument".as_ptr(),
+                    c"String or Dict".as_ptr(),
                     ::core::ptr::null::<::core::ffi::c_char>(),
                 );
                 return rv;
@@ -468,11 +468,7 @@ pub unsafe extern "C" fn nvim_call_dict_function(
             != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
             || self_dict.is_null()
         {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                b"dict not found\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            api_set_error(err, kErrorTypeValidation, c"dict not found".as_ptr());
         } else {
             if !fn_0.data.is_null()
                 && fn_0.size > 0 as size_t
@@ -485,7 +481,7 @@ pub unsafe extern "C" fn nvim_call_dict_function(
                     api_set_error(
                         err,
                         kErrorTypeValidation,
-                        b"Not found: %s\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"Not found: %s".as_ptr(),
                         fn_0.data,
                     );
                     break '_end;
@@ -495,7 +491,7 @@ pub unsafe extern "C" fn nvim_call_dict_function(
                     api_set_error(
                         err,
                         kErrorTypeValidation,
-                        b"partial function not supported\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"partial function not supported".as_ptr(),
                     );
                     break '_end;
                 } else if !((*di).di_tv.v_type as ::core::ffi::c_uint
@@ -504,23 +500,22 @@ pub unsafe extern "C" fn nvim_call_dict_function(
                     api_set_error(
                         err,
                         kErrorTypeValidation,
-                        b"Not a function: %s\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"Not a function: %s".as_ptr(),
                         fn_0.data,
                     );
                     break '_end;
-                } else {
-                    fn_0 = String_0 {
-                        data: (*di).di_tv.vval.v_string,
-                        size: strlen((*di).di_tv.vval.v_string),
-                    };
                 }
+                fn_0 = String_0 {
+                    data: (*di).di_tv.vval.v_string,
+                    size: strlen((*di).di_tv.vval.v_string),
+                };
             }
             if !(!fn_0.data.is_null() && fn_0.size >= 1 as size_t) {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"Invalid function name: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"(empty)\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"Invalid function name: %s".as_ptr(),
+                    c"(empty)".as_ptr(),
                 );
             } else {
                 rv = _call_function(fn_0, args, self_dict, arena, err);
@@ -565,7 +560,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"Invalid flag: '%c' (%u)\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"Invalid flag: '%c' (%u)".as_ptr(),
                     *flags.data.offset(i as isize) as ::core::ffi::c_int,
                     *flags.data.offset(i as isize) as ::core::ffi::c_uint,
                 );
@@ -578,12 +573,12 @@ pub unsafe extern "C" fn nvim_parse_expression(
         ParserLine {
             data: expr.data,
             size: expr.size,
-            allocated: false_0 != 0,
+            allocated: false,
         },
         ParserLine {
             data: ::core::ptr::null::<::core::ffi::c_char>(),
             size: 0 as size_t,
-            allocated: false_0 != 0,
+            allocated: false,
         },
     ];
     let mut plines_p: *mut ParserLine = &raw mut parser_lines as *mut ParserLine;
@@ -620,7 +615,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
     let c2rust_fresh1 = ret.size;
     ret.size = ret.size.wrapping_add(1);
     *ret.items.offset(c2rust_fresh1 as isize) = key_value_pair {
-        key: cstr_as_string(b"len\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(c"len".as_ptr()),
         value: object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
@@ -637,7 +632,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
         let c2rust_fresh2 = err_dict.size;
         err_dict.size = err_dict.size.wrapping_add(1);
         *err_dict.items.offset(c2rust_fresh2 as isize) = key_value_pair {
-            key: cstr_as_string(b"message\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"message".as_ptr()),
             value: object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed {
@@ -648,7 +643,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
         let c2rust_fresh3 = err_dict.size;
         err_dict.size = err_dict.size.wrapping_add(1);
         *err_dict.items.offset(c2rust_fresh3 as isize) = key_value_pair {
-            key: cstr_as_string(b"arg\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"arg".as_ptr()),
             value: object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed {
@@ -665,7 +660,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
         let c2rust_fresh4 = ret.size;
         ret.size = ret.size.wrapping_add(1);
         *ret.items.offset(c2rust_fresh4 as isize) = key_value_pair {
-            key: cstr_as_string(b"error\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"error".as_ptr()),
             value: object {
                 type_0: kObjectTypeDict,
                 data: C2Rust_Unnamed { dict: err_dict },
@@ -721,7 +716,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
         let c2rust_fresh10 = ret.size;
         ret.size = ret.size.wrapping_add(1);
         *ret.items.offset(c2rust_fresh10 as isize) = key_value_pair {
-            key: cstr_as_string(b"highlight\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"highlight".as_ptr()),
             value: object {
                 type_0: kObjectTypeArray,
                 data: C2Rust_Unnamed { array: hl_arr },
@@ -757,73 +752,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
     };
-    if ast_conv_stack.size == ast_conv_stack.capacity {
-        ast_conv_stack.capacity = if ast_conv_stack.capacity << 1 as ::core::ffi::c_int
-            > ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                        .wrapping_rem(::core::mem::size_of::<ExprASTConvStackItem>())
-                        == 0) as ::core::ffi::c_int as usize,
-                ) {
-            ast_conv_stack.capacity << 1 as ::core::ffi::c_int
-        } else {
-            ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                        .wrapping_rem(::core::mem::size_of::<ExprASTConvStackItem>())
-                        == 0) as ::core::ffi::c_int as size_t,
-                )
-        };
-        ast_conv_stack.items = (if ast_conv_stack.capacity
-            == ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                        .wrapping_rem(::core::mem::size_of::<ExprASTConvStackItem>())
-                        == 0) as ::core::ffi::c_int as usize,
-                ) {
-            if ast_conv_stack.items
-                == &raw mut ast_conv_stack.init_array as *mut ExprASTConvStackItem
-            {
-                ast_conv_stack.items as *mut ::core::ffi::c_void
-            } else {
-                _memcpy_free(
-                    &raw mut ast_conv_stack.init_array as *mut ExprASTConvStackItem
-                        as *mut ::core::ffi::c_void,
-                    ast_conv_stack.items as *mut ::core::ffi::c_void,
-                    ast_conv_stack
-                        .size
-                        .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
-                )
-            }
-        } else {
-            if ast_conv_stack.items
-                == &raw mut ast_conv_stack.init_array as *mut ExprASTConvStackItem
-            {
-                memcpy(
-                    xmalloc(
-                        ast_conv_stack
-                            .capacity
-                            .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
-                    ),
-                    ast_conv_stack.items as *const ::core::ffi::c_void,
-                    ast_conv_stack
-                        .size
-                        .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
-                )
-            } else {
-                xrealloc(
-                    ast_conv_stack.items as *mut ::core::ffi::c_void,
-                    ast_conv_stack
-                        .capacity
-                        .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
-                )
-            }
-        }) as *mut ExprASTConvStackItem;
-    } else {
-    };
+    ast_conv_stack_grow(&raw mut ast_conv_stack);
     let c2rust_fresh11 = ast_conv_stack.size;
     ast_conv_stack.size = ast_conv_stack.size.wrapping_add(1);
     *ast_conv_stack.items.offset(c2rust_fresh11 as isize) = ExprASTConvStackItem {
@@ -843,11 +772,11 @@ pub unsafe extern "C" fn nvim_parse_expression(
                 if ast_conv_stack.size == 1 as size_t {
                 } else {
                     __assert_fail(
-                        b"kv_size(ast_conv_stack) == 1\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/vimscript.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"kv_size(ast_conv_stack) == 1".as_ptr(),
+                        c"src/nvim/api/vimscript.rs".as_ptr(),
                         511 as ::core::ffi::c_uint,
-                        b"Dict nvim_parse_expression(String, String, Boolean, Arena *, Error *)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        c"Dict nvim_parse_expression(String, String, Boolean, Arena *, Error *)"
+                            .as_ptr(),
                     );
                 }
             };
@@ -921,7 +850,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                 let c2rust_fresh13 = (*ret_node_0).size;
                 (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                 *(*ret_node_0).items.offset(c2rust_fresh13 as isize) = key_value_pair {
-                    key: cstr_as_string(b"children\0".as_ptr() as *const ::core::ffi::c_char),
+                    key: cstr_as_string(c"children".as_ptr()),
                     value: object {
                         type_0: kObjectTypeArray,
                         data: C2Rust_Unnamed {
@@ -929,78 +858,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         },
                     },
                 };
-                if ast_conv_stack.size == ast_conv_stack.capacity {
-                    ast_conv_stack.capacity = if ast_conv_stack.capacity << 1 as ::core::ffi::c_int
-                        > ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                            .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                                    .wrapping_rem(::core::mem::size_of::<ExprASTConvStackItem>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        ast_conv_stack.capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                            .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                                    .wrapping_rem(::core::mem::size_of::<ExprASTConvStackItem>())
-                                    == 0) as ::core::ffi::c_int
-                                    as size_t,
-                            )
-                    };
-                    ast_conv_stack.items = (if ast_conv_stack.capacity
-                        == ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                            .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                                    .wrapping_rem(::core::mem::size_of::<ExprASTConvStackItem>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        if ast_conv_stack.items
-                            == &raw mut ast_conv_stack.init_array as *mut ExprASTConvStackItem
-                        {
-                            ast_conv_stack.items as *mut ::core::ffi::c_void
-                        } else {
-                            _memcpy_free(
-                                &raw mut ast_conv_stack.init_array as *mut ExprASTConvStackItem
-                                    as *mut ::core::ffi::c_void,
-                                ast_conv_stack.items as *mut ::core::ffi::c_void,
-                                ast_conv_stack
-                                    .size
-                                    .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
-                            )
-                        }
-                    } else {
-                        if ast_conv_stack.items
-                            == &raw mut ast_conv_stack.init_array as *mut ExprASTConvStackItem
-                        {
-                            memcpy(
-                                xmalloc(
-                                    ast_conv_stack
-                                        .capacity
-                                        .wrapping_mul(
-                                            ::core::mem::size_of::<ExprASTConvStackItem>(),
-                                        ),
-                                ),
-                                ast_conv_stack.items as *const ::core::ffi::c_void,
-                                ast_conv_stack
-                                    .size
-                                    .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
-                            )
-                        } else {
-                            xrealloc(
-                                ast_conv_stack.items as *mut ::core::ffi::c_void,
-                                ast_conv_stack
-                                    .capacity
-                                    .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
-                            )
-                        }
-                    }) as *mut ExprASTConvStackItem;
-                } else {
-                };
+                ast_conv_stack_grow(&raw mut ast_conv_stack);
                 let c2rust_fresh14 = ast_conv_stack.size;
                 ast_conv_stack.size = ast_conv_stack.size.wrapping_add(1);
                 *ast_conv_stack.items.offset(c2rust_fresh14 as isize) = ExprASTConvStackItem {
@@ -1010,78 +868,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         .offset(0 as ::core::ffi::c_int as isize),
                 };
             } else if !(*node).next.is_null() {
-                if ast_conv_stack.size == ast_conv_stack.capacity {
-                    ast_conv_stack.capacity = if ast_conv_stack.capacity << 1 as ::core::ffi::c_int
-                        > ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                            .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                                    .wrapping_rem(::core::mem::size_of::<ExprASTConvStackItem>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        ast_conv_stack.capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                            .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                                    .wrapping_rem(::core::mem::size_of::<ExprASTConvStackItem>())
-                                    == 0) as ::core::ffi::c_int
-                                    as size_t,
-                            )
-                    };
-                    ast_conv_stack.items = (if ast_conv_stack.capacity
-                        == ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                            .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
-                                    .wrapping_rem(::core::mem::size_of::<ExprASTConvStackItem>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        if ast_conv_stack.items
-                            == &raw mut ast_conv_stack.init_array as *mut ExprASTConvStackItem
-                        {
-                            ast_conv_stack.items as *mut ::core::ffi::c_void
-                        } else {
-                            _memcpy_free(
-                                &raw mut ast_conv_stack.init_array as *mut ExprASTConvStackItem
-                                    as *mut ::core::ffi::c_void,
-                                ast_conv_stack.items as *mut ::core::ffi::c_void,
-                                ast_conv_stack
-                                    .size
-                                    .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
-                            )
-                        }
-                    } else {
-                        if ast_conv_stack.items
-                            == &raw mut ast_conv_stack.init_array as *mut ExprASTConvStackItem
-                        {
-                            memcpy(
-                                xmalloc(
-                                    ast_conv_stack
-                                        .capacity
-                                        .wrapping_mul(
-                                            ::core::mem::size_of::<ExprASTConvStackItem>(),
-                                        ),
-                                ),
-                                ast_conv_stack.items as *const ::core::ffi::c_void,
-                                ast_conv_stack
-                                    .size
-                                    .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
-                            )
-                        } else {
-                            xrealloc(
-                                ast_conv_stack.items as *mut ::core::ffi::c_void,
-                                ast_conv_stack
-                                    .capacity
-                                    .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
-                            )
-                        }
-                    }) as *mut ExprASTConvStackItem;
-                } else {
-                };
+                ast_conv_stack_grow(&raw mut ast_conv_stack);
                 let c2rust_fresh15 = ast_conv_stack.size;
                 ast_conv_stack.size = ast_conv_stack.size.wrapping_add(1);
                 *ast_conv_stack.items.offset(c2rust_fresh15 as isize) = ExprASTConvStackItem {
@@ -1093,7 +880,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                 let c2rust_fresh16 = (*ret_node_0).size;
                 (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                 *(*ret_node_0).items.offset(c2rust_fresh16 as isize) = key_value_pair {
-                    key: cstr_as_string(b"type\0".as_ptr() as *const ::core::ffi::c_char),
+                    key: cstr_as_string(c"type".as_ptr()),
                     value: object {
                         type_0: kObjectTypeString,
                         data: C2Rust_Unnamed {
@@ -1125,7 +912,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                 let c2rust_fresh19 = (*ret_node_0).size;
                 (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                 *(*ret_node_0).items.offset(c2rust_fresh19 as isize) = key_value_pair {
-                    key: cstr_as_string(b"start\0".as_ptr() as *const ::core::ffi::c_char),
+                    key: cstr_as_string(c"start".as_ptr()),
                     value: object {
                         type_0: kObjectTypeArray,
                         data: C2Rust_Unnamed { array: start_array },
@@ -1134,7 +921,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                 let c2rust_fresh20 = (*ret_node_0).size;
                 (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                 *(*ret_node_0).items.offset(c2rust_fresh20 as isize) = key_value_pair {
-                    key: cstr_as_string(b"len\0".as_ptr() as *const ::core::ffi::c_char),
+                    key: cstr_as_string(c"len".as_ptr()),
                     value: object {
                         type_0: kObjectTypeInteger,
                         data: C2Rust_Unnamed {
@@ -1159,7 +946,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         let c2rust_fresh21 = (*ret_node_0).size;
                         (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                         *(*ret_node_0).items.offset(c2rust_fresh21 as isize) = key_value_pair {
-                            key: cstr_as_string(b"svalue\0".as_ptr() as *const ::core::ffi::c_char),
+                            key: cstr_as_string(c"svalue".as_ptr()),
                             value: str,
                         };
                         xfree((*node).data.str.value as *mut ::core::ffi::c_void);
@@ -1168,7 +955,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         let c2rust_fresh22 = (*ret_node_0).size;
                         (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                         *(*ret_node_0).items.offset(c2rust_fresh22 as isize) = key_value_pair {
-                            key: cstr_as_string(b"scope\0".as_ptr() as *const ::core::ffi::c_char),
+                            key: cstr_as_string(c"scope".as_ptr()),
                             value: object {
                                 type_0: kObjectTypeInteger,
                                 data: C2Rust_Unnamed {
@@ -1179,7 +966,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         let c2rust_fresh23 = (*ret_node_0).size;
                         (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                         *(*ret_node_0).items.offset(c2rust_fresh23 as isize) = key_value_pair {
-                            key: cstr_as_string(b"ident\0".as_ptr() as *const ::core::ffi::c_char),
+                            key: cstr_as_string(c"ident".as_ptr()),
                             value: object {
                                 type_0: kObjectTypeString,
                                 data: C2Rust_Unnamed {
@@ -1199,7 +986,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         let c2rust_fresh24 = (*ret_node_0).size;
                         (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                         *(*ret_node_0).items.offset(c2rust_fresh24 as isize) = key_value_pair {
-                            key: cstr_as_string(b"scope\0".as_ptr() as *const ::core::ffi::c_char),
+                            key: cstr_as_string(c"scope".as_ptr()),
                             value: object {
                                 type_0: kObjectTypeInteger,
                                 data: C2Rust_Unnamed {
@@ -1210,7 +997,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         let c2rust_fresh25 = (*ret_node_0).size;
                         (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                         *(*ret_node_0).items.offset(c2rust_fresh25 as isize) = key_value_pair {
-                            key: cstr_as_string(b"ident\0".as_ptr() as *const ::core::ffi::c_char),
+                            key: cstr_as_string(c"ident".as_ptr()),
                             value: object {
                                 type_0: kObjectTypeString,
                                 data: C2Rust_Unnamed {
@@ -1230,7 +1017,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         let c2rust_fresh26 = (*ret_node_0).size;
                         (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                         *(*ret_node_0).items.offset(c2rust_fresh26 as isize) = key_value_pair {
-                            key: cstr_as_string(b"ident\0".as_ptr() as *const ::core::ffi::c_char),
+                            key: cstr_as_string(c"ident".as_ptr()),
                             value: object {
                                 type_0: kObjectTypeString,
                                 data: C2Rust_Unnamed {
@@ -1250,7 +1037,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         let c2rust_fresh27 = (*ret_node_0).size;
                         (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                         *(*ret_node_0).items.offset(c2rust_fresh27 as isize) = key_value_pair {
-                            key: cstr_as_string(b"ident\0".as_ptr() as *const ::core::ffi::c_char),
+                            key: cstr_as_string(c"ident".as_ptr()),
                             value: object {
                                 type_0: kObjectTypeString,
                                 data: C2Rust_Unnamed {
@@ -1270,7 +1057,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         let c2rust_fresh28 = (*ret_node_0).size;
                         (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                         *(*ret_node_0).items.offset(c2rust_fresh28 as isize) = key_value_pair {
-                            key: cstr_as_string(b"name\0".as_ptr() as *const ::core::ffi::c_char),
+                            key: cstr_as_string(c"name".as_ptr()),
                             value: object {
                                 type_0: kObjectTypeInteger,
                                 data: C2Rust_Unnamed {
@@ -1283,9 +1070,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         let c2rust_fresh29 = (*ret_node_0).size;
                         (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                         *(*ret_node_0).items.offset(c2rust_fresh29 as isize) = key_value_pair {
-                            key: cstr_as_string(
-                                b"cmp_type\0".as_ptr() as *const ::core::ffi::c_char
-                            ),
+                            key: cstr_as_string(c"cmp_type".as_ptr()),
                             value: object {
                                 type_0: kObjectTypeString,
                                 data: C2Rust_Unnamed {
@@ -1300,9 +1085,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         let c2rust_fresh30 = (*ret_node_0).size;
                         (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                         *(*ret_node_0).items.offset(c2rust_fresh30 as isize) = key_value_pair {
-                            key: cstr_as_string(
-                                b"ccs_strategy\0".as_ptr() as *const ::core::ffi::c_char
-                            ),
+                            key: cstr_as_string(c"ccs_strategy".as_ptr()),
                             value: object {
                                 type_0: kObjectTypeString,
                                 data: C2Rust_Unnamed {
@@ -1316,7 +1099,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         let c2rust_fresh31 = (*ret_node_0).size;
                         (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                         *(*ret_node_0).items.offset(c2rust_fresh31 as isize) = key_value_pair {
-                            key: cstr_as_string(b"invert\0".as_ptr() as *const ::core::ffi::c_char),
+                            key: cstr_as_string(c"invert".as_ptr()),
                             value: object {
                                 type_0: kObjectTypeBoolean,
                                 data: C2Rust_Unnamed {
@@ -1329,7 +1112,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         let c2rust_fresh32 = (*ret_node_0).size;
                         (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                         *(*ret_node_0).items.offset(c2rust_fresh32 as isize) = key_value_pair {
-                            key: cstr_as_string(b"fvalue\0".as_ptr() as *const ::core::ffi::c_char),
+                            key: cstr_as_string(c"fvalue".as_ptr()),
                             value: object {
                                 type_0: kObjectTypeFloat,
                                 data: C2Rust_Unnamed {
@@ -1342,7 +1125,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         let c2rust_fresh33 = (*ret_node_0).size;
                         (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                         *(*ret_node_0).items.offset(c2rust_fresh33 as isize) = key_value_pair {
-                            key: cstr_as_string(b"ivalue\0".as_ptr() as *const ::core::ffi::c_char),
+                            key: cstr_as_string(c"ivalue".as_ptr()),
                             value: object {
                                 type_0: kObjectTypeInteger,
                                 data: C2Rust_Unnamed {
@@ -1373,9 +1156,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         let c2rust_fresh34 = (*ret_node_0).size;
                         (*ret_node_0).size = (*ret_node_0).size.wrapping_add(1);
                         *(*ret_node_0).items.offset(c2rust_fresh34 as isize) = key_value_pair {
-                            key: cstr_as_string(
-                                b"augmentation\0".as_ptr() as *const ::core::ffi::c_char
-                            ),
+                            key: cstr_as_string(c"augmentation".as_ptr()),
                             value: object {
                                 type_0: kObjectTypeString,
                                 data: C2Rust_Unnamed { string: str_0 },
@@ -1391,13 +1172,10 @@ pub unsafe extern "C" fn nvim_parse_expression(
                     {
                     } else {
                         __assert_fail(
-                            b"cur_item.ret_node_p->data.dict.size == cur_item.ret_node_p->data.dict.capacity\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/api/vimscript.rs\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            c"cur_item.ret_node_p->data.dict.size == cur_item.ret_node_p->data.dict.capacity".as_ptr(),
+                            c"src/nvim/api/vimscript.rs".as_ptr(),
                             640 as ::core::ffi::c_uint,
-                            b"Dict nvim_parse_expression(String, String, Boolean, Arena *, Error *)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            c"Dict nvim_parse_expression(String, String, Boolean, Arena *, Error *)".as_ptr(),
                         );
                     }
                 };
@@ -1416,18 +1194,17 @@ pub unsafe extern "C" fn nvim_parse_expression(
     let c2rust_fresh35 = ret.size;
     ret.size = ret.size.wrapping_add(1);
     *ret.items.offset(c2rust_fresh35 as isize) = key_value_pair {
-        key: cstr_as_string(b"ast\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(c"ast".as_ptr()),
         value: ast,
     };
     '_c2rust_label_1: {
         if ret.size == ret.capacity {
         } else {
             __assert_fail(
-                b"ret.size == ret.capacity\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/vimscript.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                c"ret.size == ret.capacity".as_ptr(),
+                c"src/nvim/api/vimscript.rs".as_ptr(),
                 649 as ::core::ffi::c_uint,
-                b"Dict nvim_parse_expression(String, String, Boolean, Arena *, Error *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"Dict nvim_parse_expression(String, String, Boolean, Arena *, Error *)".as_ptr(),
             );
         }
     };
@@ -1441,11 +1218,79 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_firstline: 0 as linenr_T,
     fe_lastline: 0 as linenr_T,
     fe_doesrange: ::core::ptr::null_mut::<bool>(),
-    fe_evaluate: false_0 != 0,
+    fe_evaluate: false,
     fe_partial: ::core::ptr::null_mut::<partial_T>(),
     fe_selfdict: ::core::ptr::null_mut::<dict_T>(),
     fe_basetv: ::core::ptr::null_mut::<typval_T>(),
-    fe_found_var: false_0 != 0,
+    fe_found_var: false,
 };
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
+/// One `kvi_push` growth step for a `ExprASTConvStack`, which c2rust expanded
+/// inline at each of its 3 call sites.
+unsafe fn ast_conv_stack_grow(kv: *mut ExprASTConvStack) {
+    if (*kv).size == (*kv).capacity {
+        (*kv).capacity = if (*kv).capacity << 1 as ::core::ffi::c_int
+            > ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
+                .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
+                .wrapping_div(
+                    (::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
+                        .wrapping_rem(::core::mem::size_of::<ExprASTConvStackItem>())
+                        == 0) as ::core::ffi::c_int as usize,
+                ) {
+            (*kv).capacity << 1 as ::core::ffi::c_int
+        } else {
+            ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
+                .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
+                .wrapping_div(
+                    (::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
+                        .wrapping_rem(::core::mem::size_of::<ExprASTConvStackItem>())
+                        == 0) as ::core::ffi::c_int as size_t,
+                )
+        };
+        (*kv).items = (if (*kv).capacity
+            == ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
+                .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
+                .wrapping_div(
+                    (::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
+                        .wrapping_rem(::core::mem::size_of::<ExprASTConvStackItem>())
+                        == 0) as ::core::ffi::c_int as usize,
+                ) {
+            if (*kv).items == &raw mut (*kv).init_array as *mut ExprASTConvStackItem {
+                (*kv).items as *mut ::core::ffi::c_void
+            } else {
+                _memcpy_free(
+                    &raw mut (*kv).init_array as *mut ExprASTConvStackItem
+                        as *mut ::core::ffi::c_void,
+                    (*kv).items as *mut ::core::ffi::c_void,
+                    (*kv)
+                        .size
+                        .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
+                )
+            }
+        } else {
+            if (*kv).items == &raw mut (*kv).init_array as *mut ExprASTConvStackItem {
+                memcpy(
+                    xmalloc(
+                        (*kv)
+                            .capacity
+                            .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
+                    ),
+                    (*kv).items as *const ::core::ffi::c_void,
+                    (*kv)
+                        .size
+                        .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
+                )
+            } else {
+                xrealloc(
+                    (*kv).items as *mut ::core::ffi::c_void,
+                    (*kv)
+                        .capacity
+                        .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
+                )
+            }
+        }) as *mut ExprASTConvStackItem;
+    } else {
+    };
+}

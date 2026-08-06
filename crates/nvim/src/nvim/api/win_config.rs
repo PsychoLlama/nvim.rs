@@ -181,7 +181,7 @@ pub unsafe extern "C" fn nvim_open_win(
         api_set_error(
             err,
             kErrorTypeException,
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%s".as_ptr(),
             &raw const e_cmdwin as *const ::core::ffi::c_char,
         );
         return 0 as Window;
@@ -198,9 +198,9 @@ pub unsafe extern "C" fn nvim_open_win(
         col: 0 as ::core::ffi::c_int as ::core::ffi::c_double,
         anchor: 0 as FloatAnchor,
         relative: kFloatRelativeEditor,
-        external: false_0 != 0,
-        focusable: true_0 != 0,
-        mouse: true_0 != 0,
+        external: false,
+        focusable: true,
+        mouse: true,
         split: kWinSplitLeft,
         zindex: kZIndexFloatDefault as ::core::ffi::c_int,
         style: kWinStyleUnused,
@@ -225,26 +225,27 @@ pub unsafe extern "C" fn nvim_open_win(
             items: ::core::ptr::null_mut::<VirtTextChunk>(),
         },
         footer_width: 0,
-        noautocmd: false_0 != 0,
-        fixed: false_0 != 0,
-        hide: false_0 != 0,
+        noautocmd: false,
+        fixed: false,
+        hide: false,
         _cmdline_offset: INT_MAX,
     };
     if !parse_win_config(
         ::core::ptr::null_mut::<win_T>(),
         config,
         &raw mut fconfig,
-        false_0 != 0,
+        false,
         err,
     ) {
         return 0 as Window;
     }
-    let mut is_split: bool = (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__split
-        != 0 as ::core::ffi::c_ulonglong
-        || (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__vertical
-            != 0 as ::core::ffi::c_ulonglong;
+    let mut is_split: bool = has_key(
+        (*config).is_set__win_config_,
+        KEYSET_OPTIDX_win_config__split,
+    ) || has_key(
+        (*config).is_set__win_config_,
+        KEYSET_OPTIDX_win_config__vertical,
+    );
     let mut rv: Window = 0 as Window;
     if fconfig.noautocmd {
         block_autocmds();
@@ -255,11 +256,10 @@ pub unsafe extern "C" fn nvim_open_win(
         if !(*curwin.ptr()).is_null() {
         } else {
             __assert_fail(
-                b"curwin != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/win_config.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                c"curwin != NULL".as_ptr(),
+                c"src/nvim/api/win_config.rs".as_ptr(),
                 229 as ::core::ffi::c_uint,
-                b"Window nvim_open_win(Buffer, Boolean, KeyDict_win_config *, Error *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"Window nvim_open_win(Buffer, Boolean, KeyDict_win_config *, Error *)".as_ptr(),
             );
         }
     };
@@ -279,12 +279,11 @@ pub unsafe extern "C" fn nvim_open_win(
                 api_set_error(
                     err,
                     kErrorTypeException,
-                    b"Cannot split a floating window\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"Cannot split a floating window".as_ptr(),
                 );
                 break '_cleanup;
-            } else {
-                tp = win_find_tabpage(parent);
             }
+            tp = win_find_tabpage(parent);
         }
         if is_split {
             if !check_split_disallowed_err(
@@ -296,96 +295,91 @@ pub unsafe extern "C" fn nvim_open_win(
                 err,
             ) {
                 break '_cleanup;
-            } else {
-                if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__vertical
-                    != 0 as ::core::ffi::c_ulonglong
-                    && !((*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__split
-                        != 0 as ::core::ffi::c_ulonglong)
-                {
-                    if (*config).vertical {
-                        fconfig.split = (if p_spr.get() != 0 {
-                            kWinSplitRight as ::core::ffi::c_int
-                        } else {
-                            kWinSplitLeft as ::core::ffi::c_int
-                        }) as WinSplit;
+            }
+            if has_key(
+                (*config).is_set__win_config_,
+                KEYSET_OPTIDX_win_config__vertical,
+            ) && !(has_key(
+                (*config).is_set__win_config_,
+                KEYSET_OPTIDX_win_config__split,
+            )) {
+                if (*config).vertical {
+                    fconfig.split = (if p_spr.get() != 0 {
+                        kWinSplitRight as ::core::ffi::c_int
                     } else {
-                        fconfig.split = (if p_sb.get() != 0 {
-                            kWinSplitBelow as ::core::ffi::c_int
-                        } else {
-                            kWinSplitAbove as ::core::ffi::c_int
-                        }) as WinSplit;
+                        kWinSplitLeft as ::core::ffi::c_int
+                    }) as WinSplit;
+                } else {
+                    fconfig.split = (if p_sb.get() != 0 {
+                        kWinSplitBelow as ::core::ffi::c_int
+                    } else {
+                        kWinSplitAbove as ::core::ffi::c_int
+                    }) as WinSplit;
+                }
+            }
+            let mut flags: ::core::ffi::c_int = win_split_flags(fconfig.split, parent.is_null())
+                | WSP_NOENTER as ::core::ffi::c_int;
+            let mut size: ::core::ffi::c_int = if flags & WSP_VERT as ::core::ffi::c_int != 0 {
+                fconfig.width
+            } else {
+                fconfig.height
+            };
+            let mut tstate: TryState = TryState {
+                current_exception: ::core::ptr::null_mut::<except_T>(),
+                private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
+                msg_list: ::core::ptr::null::<*const msglist_T>(),
+                got_int: 0,
+                did_throw: false,
+                need_rethrow: 0,
+                did_emsg: 0,
+            };
+            try_enter(&raw mut tstate);
+            if parent.is_null() || parent == curwin.get() {
+                wp = win_split_ins(
+                    size,
+                    flags,
+                    ::core::ptr::null_mut::<win_T>(),
+                    0 as ::core::ffi::c_int,
+                    ::core::ptr::null_mut::<frame_T>(),
+                );
+            } else {
+                let mut switchwin: switchwin_T = switchwin_T {
+                    sw_curwin: ::core::ptr::null_mut::<win_T>(),
+                    sw_curtab: ::core::ptr::null_mut::<tabpage_T>(),
+                    sw_same_win: false,
+                    sw_visual_active: false,
+                };
+                let result: ::core::ffi::c_int = switch_win(&raw mut switchwin, parent, tp, true);
+                '_c2rust_label_0: {
+                    if result == 1 as ::core::ffi::c_int {
+                    } else {
+                        __assert_fail(
+                            c"result == OK".as_ptr(),
+                            c"src/nvim/api/win_config.rs".as_ptr(),
+                            264 as ::core::ffi::c_uint,
+                            c"Window nvim_open_win(Buffer, Boolean, KeyDict_win_config *, Error *)"
+                                .as_ptr(),
+                        );
                     }
-                }
-                let mut flags: ::core::ffi::c_int =
-                    win_split_flags(fconfig.split, parent.is_null())
-                        | WSP_NOENTER as ::core::ffi::c_int;
-                let mut size: ::core::ffi::c_int = if flags & WSP_VERT as ::core::ffi::c_int != 0 {
-                    fconfig.width
-                } else {
-                    fconfig.height
                 };
-                let mut tstate: TryState = TryState {
-                    current_exception: ::core::ptr::null_mut::<except_T>(),
-                    private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
-                    msg_list: ::core::ptr::null::<*const msglist_T>(),
-                    got_int: 0,
-                    did_throw: false,
-                    need_rethrow: 0,
-                    did_emsg: 0,
-                };
-                try_enter(&raw mut tstate);
-                if parent.is_null() || parent == curwin.get() {
-                    wp = win_split_ins(
-                        size,
-                        flags,
-                        ::core::ptr::null_mut::<win_T>(),
-                        0 as ::core::ffi::c_int,
-                        ::core::ptr::null_mut::<frame_T>(),
-                    );
-                } else {
-                    let mut switchwin: switchwin_T = switchwin_T {
-                        sw_curwin: ::core::ptr::null_mut::<win_T>(),
-                        sw_curtab: ::core::ptr::null_mut::<tabpage_T>(),
-                        sw_same_win: false,
-                        sw_visual_active: false,
-                    };
-                    let result: ::core::ffi::c_int =
-                        switch_win(&raw mut switchwin, parent, tp, true);
-                    '_c2rust_label_0: {
-                        if result == 1 as ::core::ffi::c_int {
-                        } else {
-                            __assert_fail(
-                                b"result == OK\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"src/nvim/api/win_config.rs\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                                264 as ::core::ffi::c_uint,
-                                b"Window nvim_open_win(Buffer, Boolean, KeyDict_win_config *, Error *)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
-                    wp = win_split_ins(
-                        size,
-                        flags,
-                        ::core::ptr::null_mut::<win_T>(),
-                        0 as ::core::ffi::c_int,
-                        ::core::ptr::null_mut::<frame_T>(),
-                    );
-                    restore_win(&raw mut switchwin, true);
-                }
-                try_leave(&raw mut tstate, err);
-                if !wp.is_null() {
-                    (*wp).w_config = fconfig;
-                    if size > 0 as ::core::ffi::c_int {
-                        if flags & WSP_VERT as ::core::ffi::c_int != 0 && (*wp).w_width != size {
-                            win_setwidth_win(size, wp);
-                        } else if flags & WSP_VERT as ::core::ffi::c_int == 0
-                            && (*wp).w_height != size
-                        {
-                            win_setheight_win(size, wp);
-                        }
+                wp = win_split_ins(
+                    size,
+                    flags,
+                    ::core::ptr::null_mut::<win_T>(),
+                    0 as ::core::ffi::c_int,
+                    ::core::ptr::null_mut::<frame_T>(),
+                );
+                restore_win(&raw mut switchwin, true);
+            }
+            try_leave(&raw mut tstate, err);
+            if !wp.is_null() {
+                (*wp).w_config = fconfig;
+                if size > 0 as ::core::ffi::c_int {
+                    if flags & WSP_VERT as ::core::ffi::c_int != 0 && (*wp).w_width != size {
+                        win_setwidth_win(size, wp);
+                    } else if flags & WSP_VERT as ::core::ffi::c_int == 0 && (*wp).w_height != size
+                    {
+                        win_setheight_win(size, wp);
                     }
                 }
             }
@@ -393,19 +387,18 @@ pub unsafe extern "C" fn nvim_open_win(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"E1159: Cannot open a float when closing the buffer\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"E1159: Cannot open a float when closing the buffer".as_ptr(),
             );
             break '_cleanup;
         } else {
-            wp = win_new_float(::core::ptr::null_mut::<win_T>(), false_0 != 0, fconfig, err);
+            wp = win_new_float(::core::ptr::null_mut::<win_T>(), false, fconfig, err);
         }
         if wp.is_null() {
             if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
                 api_set_error(
                     err,
                     kErrorTypeException,
-                    b"Failed to create window\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"Failed to create window".as_ptr(),
                 );
             }
         } else {
@@ -422,17 +415,16 @@ pub unsafe extern "C" fn nvim_open_win(
                     sw_visual_active: false,
                 };
                 let result_0: ::core::ffi::c_int =
-                    switch_win_noblock(&raw mut switchwin_0, wp, tp, true_0 != 0);
+                    switch_win_noblock(&raw mut switchwin_0, wp, tp, true);
                 '_c2rust_label_1: {
                     if result_0 == 1 as ::core::ffi::c_int {
                     } else {
                         __assert_fail(
-                            b"result == OK\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/api/win_config.rs\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            c"result == OK".as_ptr(),
+                            c"src/nvim/api/win_config.rs".as_ptr(),
                             311 as ::core::ffi::c_uint,
-                            b"Window nvim_open_win(Buffer, Boolean, KeyDict_win_config *, Error *)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            c"Window nvim_open_win(Buffer, Boolean, KeyDict_win_config *, Error *)"
+                                .as_ptr(),
                         );
                     }
                 };
@@ -440,12 +432,12 @@ pub unsafe extern "C" fn nvim_open_win(
                     EVENT_WINNEW,
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    false_0 != 0,
+                    false,
                     curbuf.get(),
                 ) {
                     tp = win_find_tabpage(wp);
                 }
-                restore_win_noblock(&raw mut switchwin_0, true_0 != 0);
+                restore_win_noblock(&raw mut switchwin_0, true);
             }
             if !tp.is_null() && enter as ::core::ffi::c_int != 0 {
                 goto_tabpage_win(tp, wp);
@@ -474,14 +466,14 @@ pub unsafe extern "C" fn nvim_open_win(
                 api_set_error(
                     err,
                     kErrorTypeException,
-                    b"Window was closed immediately\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"Window was closed immediately".as_ptr(),
                 );
             } else {
                 if fconfig.style as ::core::ffi::c_uint
                     == kWinStyleMinimal as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     win_set_minimal_style(wp);
-                    didset_window_options(wp, true_0 != 0);
+                    didset_window_options(wp, true);
                     changed_window_setting(wp);
                 }
                 rv = (*wp).handle as Window;
@@ -559,50 +551,48 @@ unsafe extern "C" fn win_can_move_tp(
         api_set_error(
             err,
             kErrorTypeException,
-            b"Cannot move last non-floating window\0".as_ptr() as *const ::core::ffi::c_char,
+            c"Cannot move last non-floating window".as_ptr(),
         );
-        return false_0 != 0;
+        return false;
     }
     if win_locked(wp) != 0 {
         api_set_error(
             err,
             kErrorTypeException,
-            b"Cannot move window to another tabpage whilst in use\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"Cannot move window to another tabpage whilst in use".as_ptr(),
         );
-        return false_0 != 0;
+        return false;
     }
     if window_layout_locked_err(CMD_SIZE, err) {
-        return false_0 != 0;
+        return false;
     }
     if textlock.get() != 0 || expr_map_locked() as ::core::ffi::c_int != 0 {
         api_set_error(
             err,
             kErrorTypeException,
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%s".as_ptr(),
             &raw const e_textlock as *const ::core::ffi::c_char,
         );
-        return false_0 != 0;
+        return false;
     }
     if is_aucmd_win(wp) {
         api_set_error(
             err,
             kErrorTypeException,
-            b"Cannot move autocmd window to another tabpage\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"Cannot move autocmd window to another tabpage".as_ptr(),
         );
-        return false_0 != 0;
+        return false;
     }
     if wp == cmdwin_win.get() || wp == cmdwin_old_curwin.get() {
         api_set_error(
             err,
             kErrorTypeException,
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%s".as_ptr(),
             &raw const e_cmdwin as *const ::core::ffi::c_char,
         );
-        return false_0 != 0;
+        return false;
     }
-    return true_0 != 0;
+    return true;
 }
 unsafe extern "C" fn win_find_altwin(mut win: *mut win_T, mut tp: *mut tabpage_T) -> *mut win_T {
     if (*win).w_floating {
@@ -644,12 +634,14 @@ unsafe extern "C" fn win_config_split(
     let mut to_split_ok: bool = false;
     let mut curwin_moving_tp: bool = false;
     let mut was_split: bool = !(*win).w_floating;
-    let mut has_split: bool = (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__split
-        != 0 as ::core::ffi::c_ulonglong;
-    let mut has_vertical: bool = (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__vertical
-        != 0 as ::core::ffi::c_ulonglong;
+    let mut has_split: bool = has_key(
+        (*config).is_set__win_config_,
+        KEYSET_OPTIDX_win_config__split,
+    );
+    let mut has_vertical: bool = has_key(
+        (*config).is_set__win_config_,
+        KEYSET_OPTIDX_win_config__vertical,
+    );
     let mut old_split: WinSplit = win_split_dir(win);
     if has_vertical as ::core::ffi::c_int != 0 && !has_split {
         if (*config).vertical {
@@ -675,9 +667,7 @@ unsafe extern "C" fn win_config_split(
     '_resize: {
         if !(!has_vertical && !has_split
             || was_split as ::core::ffi::c_int != 0
-                && !((*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__win
-                    != 0 as ::core::ffi::c_ulonglong)
+                && !(has_key((*config).is_set__win_config_, KEYSET_OPTIDX_win_config__win))
                 && old_split as ::core::ffi::c_uint == (*fconfig).split as ::core::ffi::c_uint)
         {
             parent = ::core::ptr::null_mut::<win_T>();
@@ -688,7 +678,7 @@ unsafe extern "C" fn win_config_split(
             } else if (*config).win > 0 as ::core::ffi::c_int {
                 parent = find_window_by_handle((*fconfig).window, err);
                 if parent.is_null() {
-                    return false_0 != 0;
+                    return false;
                 }
                 parent_tp = win_find_tabpage(parent);
             }
@@ -698,18 +688,18 @@ unsafe extern "C" fn win_config_split(
                     api_set_error(
                         err,
                         kErrorTypeException,
-                        b"Cannot split a floating window\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"Cannot split a floating window".as_ptr(),
                     );
-                    return false_0 != 0;
+                    return false;
                 }
                 if win_tp != parent_tp && !win_can_move_tp(win, win_tp, err) {
-                    return false_0 != 0;
+                    return false;
                 }
             }
             if !check_split_disallowed_err(win, err) {
-                return false_0 != 0;
+                return false;
             }
-            to_split_ok = false_0 != 0;
+            to_split_ok = false;
             curwin_moving_tp = win == curwin.get() && !parent.is_null() && win_tp != parent_tp;
             '_restore_curwin: {
                 if curwin_moving_tp {
@@ -718,12 +708,10 @@ unsafe extern "C" fn win_config_split(
                         if !altwin.is_null() {
                         } else {
                             __assert_fail(
-                                b"altwin\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"src/nvim/api/win_config.rs\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                c"altwin".as_ptr(),
+                                c"src/nvim/api/win_config.rs".as_ptr(),
                                 492 as ::core::ffi::c_uint,
-                                b"_Bool win_config_split(win_T *, const KeyDict_win_config *, WinConfig *, Error *)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                c"_Bool win_config_split(win_T *, const KeyDict_win_config *, WinConfig *, Error *)".as_ptr(),
                             );
                         }
                     };
@@ -732,19 +720,17 @@ unsafe extern "C" fn win_config_split(
                         api_set_error(
                             err,
                             kErrorTypeException,
-                            b"Failed to switch away from window %d\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            c"Failed to switch away from window %d".as_ptr(),
                             (*win).handle,
                         );
-                        return false_0 != 0;
+                        return false;
                     }
                     win_tp = win_find_tabpage(win);
                     if win_tp.is_null() || !win_valid_any_tab(parent) {
                         api_set_error(
                             err,
                             kErrorTypeException,
-                            b"Windows to split were closed\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            c"Windows to split were closed".as_ptr(),
                         );
                         break '_restore_curwin;
                     } else if was_split as ::core::ffi::c_int
@@ -754,8 +740,7 @@ unsafe extern "C" fn win_config_split(
                         api_set_error(
                             err,
                             kErrorTypeException,
-                            b"Floating state of windows to split changed\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            c"Floating state of windows to split changed".as_ptr(),
                         );
                         break '_restore_curwin;
                     }
@@ -768,8 +753,7 @@ unsafe extern "C" fn win_config_split(
                         api_set_error(
                             err,
                             kErrorTypeException,
-                            b"Cannot move last non-floating window\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            c"Cannot move last non-floating window".as_ptr(),
                         );
                         break '_restore_curwin;
                     } else if !parent.is_null() && (*parent).handle == (*win).handle {
@@ -820,8 +804,7 @@ unsafe extern "C" fn win_config_split(
                             api_set_error(
                                 err,
                                 kErrorTypeException,
-                                b"Cannot split window into itself\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                c"Cannot split window into itself".as_ptr(),
                             );
                             break '_restore_curwin;
                         }
@@ -857,7 +840,7 @@ unsafe extern "C" fn win_config_split(
                     },
                 );
                 if win_tp == curtab.get() {
-                    last_status(false_0 != 0);
+                    last_status(false);
                     win_comp_pos();
                 }
                 flags = win_split_flags((*fconfig).split, parent.is_null())
@@ -891,12 +874,10 @@ unsafe extern "C" fn win_config_split(
                         if result == 1 as ::core::ffi::c_int {
                         } else {
                             __assert_fail(
-                                b"result == OK\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"src/nvim/api/win_config.rs\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                c"result == OK".as_ptr(),
+                                c"src/nvim/api/win_config.rs".as_ptr(),
                                 594 as ::core::ffi::c_uint,
-                                b"_Bool win_config_split(win_T *, const KeyDict_win_config *, WinConfig *, Error *)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                c"_Bool win_config_split(win_T *, const KeyDict_win_config *, WinConfig *, Error *)".as_ptr(),
                             );
                         }
                     };
@@ -934,8 +915,7 @@ unsafe extern "C" fn win_config_split(
                         api_set_error(
                             err,
                             kErrorTypeException,
-                            b"Failed to move window %d into split\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            c"Failed to move window %d into split".as_ptr(),
                             (*win).handle,
                         );
                     }
@@ -951,26 +931,26 @@ unsafe extern "C" fn win_config_split(
             {
                 win_goto(win);
             }
-            return false_0 != 0;
+            return false;
         }
     }
-    if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__width
-        != 0 as ::core::ffi::c_ulonglong
-    {
+    if has_key(
+        (*config).is_set__win_config_,
+        KEYSET_OPTIDX_win_config__width,
+    ) {
         win_setwidth_win((*fconfig).width, win);
     }
-    if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__height
-        != 0 as ::core::ffi::c_ulonglong
-    {
+    if has_key(
+        (*config).is_set__win_config_,
+        KEYSET_OPTIDX_win_config__height,
+    ) {
         win_setheight_win((*fconfig).height, win);
     }
     if !was_split {
-        clear_float_config(fconfig, false_0 != 0);
+        clear_float_config(fconfig, false);
     }
     merge_win_config(&raw mut (*win).w_config, *fconfig);
-    return true_0 != 0;
+    return true;
 }
 unsafe extern "C" fn win_config_float_tp(
     mut win: *mut win_T,
@@ -981,49 +961,43 @@ unsafe extern "C" fn win_config_float_tp(
     let mut win_tp: *mut tabpage_T = win_find_tabpage(win);
     let mut parent: *mut win_T = win;
     let mut parent_tp: *mut tabpage_T = win_tp;
-    if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__win
-        != 0 as ::core::ffi::c_ulonglong
-    {
+    if has_key((*config).is_set__win_config_, KEYSET_OPTIDX_win_config__win) {
         parent = find_window_by_handle((*fconfig).window, err);
         if parent.is_null() {
-            return false_0 != 0;
+            return false;
         }
         parent_tp = win_find_tabpage(parent);
     }
-    let mut curwin_moving_tp: bool = false_0 != 0;
+    let mut curwin_moving_tp: bool = false;
     let mut altwin: *mut win_T = ::core::ptr::null_mut::<win_T>();
     '_restore_curwin: {
         if win_tp != parent_tp {
             if !win_can_move_tp(win, win_tp, err) {
-                return false_0 != 0;
+                return false;
             }
             altwin = win_find_altwin(win, win_tp);
             '_c2rust_label: {
                 if !altwin.is_null() {
                 } else {
                     __assert_fail(
-                        b"altwin\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/win_config.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        c"altwin".as_ptr(),
+                        c"src/nvim/api/win_config.rs".as_ptr(),
                         671 as ::core::ffi::c_uint,
-                        b"_Bool win_config_float_tp(win_T *, const KeyDict_win_config *, const WinConfig *, Error *)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        c"_Bool win_config_float_tp(win_T *, const KeyDict_win_config *, const WinConfig *, Error *)".as_ptr(),
                     );
                 }
             };
             if curwin.get() == win {
-                curwin_moving_tp = true_0 != 0;
+                curwin_moving_tp = true;
                 win_goto(altwin);
                 if curwin.get() == win {
                     api_set_error(
                         err,
                         kErrorTypeException,
-                        b"Failed to switch away from window %d\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        c"Failed to switch away from window %d".as_ptr(),
                         (*win).handle,
                     );
-                    return false_0 != 0;
+                    return false;
                 }
                 win_tp = win_find_tabpage(win);
                 parent_tp = win_find_tabpage(parent);
@@ -1031,35 +1005,31 @@ unsafe extern "C" fn win_config_float_tp(
                     api_set_error(
                         err,
                         kErrorTypeException,
-                        b"Target windows were closed\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"Target windows were closed".as_ptr(),
                     );
                     break '_restore_curwin;
                 } else if win_tp != parent_tp && !win_can_move_tp(win, win_tp, err) {
                     break '_restore_curwin;
-                } else {
-                    altwin = win_find_altwin(win, win_tp);
-                    '_c2rust_label_0: {
-                        if !altwin.is_null() {
-                        } else {
-                            __assert_fail(
-                                b"altwin\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"src/nvim/api/win_config.rs\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                                696 as ::core::ffi::c_uint,
-                                b"_Bool win_config_float_tp(win_T *, const KeyDict_win_config *, const WinConfig *, Error *)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
                 }
+                altwin = win_find_altwin(win, win_tp);
+                '_c2rust_label_0: {
+                    if !altwin.is_null() {
+                    } else {
+                        __assert_fail(
+                            c"altwin".as_ptr(),
+                            c"src/nvim/api/win_config.rs".as_ptr(),
+                            696 as ::core::ffi::c_uint,
+                            c"_Bool win_config_float_tp(win_T *, const KeyDict_win_config *, const WinConfig *, Error *)".as_ptr(),
+                        );
+                    }
+                };
             }
         }
         if !(*win).w_floating {
-            if win_new_float(win, false_0 != 0, *fconfig, err).is_null() {
+            if win_new_float(win, false, *fconfig, err).is_null() {
                 break '_restore_curwin;
-            } else {
-                redraw_later(win, UPD_NOT_VALID);
             }
+            redraw_later(win, UPD_NOT_VALID);
         }
         if win_tp != parent_tp {
             win_remove(
@@ -1084,12 +1054,12 @@ unsafe extern "C" fn win_config_float_tp(
             set_must_redraw(UPD_NOT_VALID);
         }
         win_config_float(win, *fconfig);
-        return true_0 != 0;
+        return true;
     }
     if curwin_moving_tp as ::core::ffi::c_int != 0 && win_valid(win) as ::core::ffi::c_int != 0 {
         win_goto(win);
     }
-    return false_0 != 0;
+    return false;
 }
 pub unsafe extern "C" fn nvim_win_set_config(
     mut win: Window,
@@ -1101,19 +1071,21 @@ pub unsafe extern "C" fn nvim_win_set_config(
         return;
     }
     let mut was_split: bool = !(*w).w_floating;
-    let mut has_split: bool = (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__split
-        != 0 as ::core::ffi::c_ulonglong;
-    let mut has_vertical: bool = (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__vertical
-        != 0 as ::core::ffi::c_ulonglong;
+    let mut has_split: bool = has_key(
+        (*config).is_set__win_config_,
+        KEYSET_OPTIDX_win_config__split,
+    );
+    let mut has_vertical: bool = has_key(
+        (*config).is_set__win_config_,
+        KEYSET_OPTIDX_win_config__vertical,
+    );
     let mut old_style: WinStyle = (*w).w_config.style;
     let mut fconfig: WinConfig = (*w).w_config;
     let mut to_split: bool = (*config).relative.size == 0 as size_t
-        && !((*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__external
-            != 0 as ::core::ffi::c_ulonglong
-            && (*config).external as ::core::ffi::c_int != 0)
+        && !(has_key(
+            (*config).is_set__win_config_,
+            KEYSET_OPTIDX_win_config__external,
+        ) && (*config).external as ::core::ffi::c_int != 0)
         && (has_split as ::core::ffi::c_int != 0
             || has_vertical as ::core::ffi::c_int != 0
             || was_split as ::core::ffi::c_int != 0);
@@ -1138,7 +1110,7 @@ pub unsafe extern "C" fn nvim_win_set_config(
         && old_style as ::core::ffi::c_uint != fconfig.style as ::core::ffi::c_uint
     {
         win_set_minimal_style(w);
-        didset_window_options(w, true_0 != 0);
+        didset_window_options(w, true);
         changed_window_setting(w);
     }
     if fconfig._cmdline_offset < INT_MAX {
@@ -1170,17 +1142,17 @@ unsafe extern "C" fn config_put_bordertext(
         }
         _ => {}
     }
-    let mut bordertext: Array = virt_text_to_array(vt, true_0 != 0, arena);
+    let mut bordertext: Array = virt_text_to_array(vt, true, arena);
     let mut pos: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     match align as ::core::ffi::c_uint {
         0 => {
-            pos = b"left\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            pos = c"left".as_ptr() as *mut ::core::ffi::c_char;
         }
         1 => {
-            pos = b"center\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            pos = c"center".as_ptr() as *mut ::core::ffi::c_char;
         }
         2 => {
-            pos = b"right\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            pos = c"right".as_ptr() as *mut ::core::ffi::c_char;
         }
         _ => {}
     }
@@ -1224,23 +1196,21 @@ pub unsafe extern "C" fn nvim_win_get_config(
     mut err: *mut Error,
 ) -> KeyDict_win_config {
     static float_relative_str: GlobalCell<[*const ::core::ffi::c_char; 6]> = GlobalCell::new([
-        b"editor\0".as_ptr() as *const ::core::ffi::c_char,
-        b"win\0".as_ptr() as *const ::core::ffi::c_char,
-        b"cursor\0".as_ptr() as *const ::core::ffi::c_char,
-        b"mouse\0".as_ptr() as *const ::core::ffi::c_char,
-        b"tabline\0".as_ptr() as *const ::core::ffi::c_char,
-        b"laststatus\0".as_ptr() as *const ::core::ffi::c_char,
+        c"editor".as_ptr(),
+        c"win".as_ptr(),
+        c"cursor".as_ptr(),
+        c"mouse".as_ptr(),
+        c"tabline".as_ptr(),
+        c"laststatus".as_ptr(),
     ]);
     static win_split_str: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
-        b"left\0".as_ptr() as *const ::core::ffi::c_char,
-        b"right\0".as_ptr() as *const ::core::ffi::c_char,
-        b"above\0".as_ptr() as *const ::core::ffi::c_char,
-        b"below\0".as_ptr() as *const ::core::ffi::c_char,
+        c"left".as_ptr(),
+        c"right".as_ptr(),
+        c"above".as_ptr(),
+        c"below".as_ptr(),
     ]);
-    static win_style_str: GlobalCell<[*const ::core::ffi::c_char; 2]> = GlobalCell::new([
-        b"\0".as_ptr() as *const ::core::ffi::c_char,
-        b"minimal\0".as_ptr() as *const ::core::ffi::c_char,
-    ]);
+    static win_style_str: GlobalCell<[*const ::core::ffi::c_char; 2]> =
+        GlobalCell::new([c"".as_ptr(), c"minimal".as_ptr()]);
     let mut rv: KeyDict_win_config = KEYDICT_INIT;
     let mut wp: *mut win_T = find_window_by_handle(win, err);
     if wp.is_null() {
@@ -1391,7 +1361,7 @@ pub unsafe extern "C" fn nvim_win_get_config(
             rv.border = object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed {
-                    string: cstr_as_string(b"none\0".as_ptr() as *const ::core::ffi::c_char),
+                    string: cstr_as_string(c"none".as_ptr()),
                 },
             };
         }
@@ -1414,7 +1384,7 @@ pub unsafe extern "C" fn nvim_win_get_config(
         if (*wp).w_floating as ::core::ffi::c_int != 0 && !(*config).external {
             (*float_relative_str.ptr())[(*config).relative as usize]
         } else {
-            b"\0".as_ptr() as *const ::core::ffi::c_char
+            c"".as_ptr()
         };
     rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
         | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__relative)
@@ -1433,56 +1403,56 @@ unsafe extern "C" fn parse_float_anchor(mut anchor: String_0, mut out: *mut Floa
         *out = 0 as ::core::ffi::c_int;
     }
     let mut str: *mut ::core::ffi::c_char = anchor.data;
-    if striequal(str, b"NW\0".as_ptr() as *const ::core::ffi::c_char) {
+    if striequal(str, c"NW".as_ptr()) {
         *out = 0 as ::core::ffi::c_int as FloatAnchor;
-    } else if striequal(str, b"NE\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if striequal(str, c"NE".as_ptr()) {
         *out = kFloatAnchorEast as ::core::ffi::c_int as FloatAnchor;
-    } else if striequal(str, b"SW\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if striequal(str, c"SW".as_ptr()) {
         *out = kFloatAnchorSouth as ::core::ffi::c_int as FloatAnchor;
-    } else if striequal(str, b"SE\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if striequal(str, c"SE".as_ptr()) {
         *out = (kFloatAnchorSouth as ::core::ffi::c_int | kFloatAnchorEast as ::core::ffi::c_int)
             as FloatAnchor;
     } else {
-        return false_0 != 0;
+        return false;
     }
-    return true_0 != 0;
+    return true;
 }
 unsafe extern "C" fn parse_float_relative(
     mut relative: String_0,
     mut out: *mut FloatRelative,
 ) -> bool {
     let mut str: *mut ::core::ffi::c_char = relative.data;
-    if striequal(str, b"editor\0".as_ptr() as *const ::core::ffi::c_char) {
+    if striequal(str, c"editor".as_ptr()) {
         *out = kFloatRelativeEditor;
-    } else if striequal(str, b"win\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if striequal(str, c"win".as_ptr()) {
         *out = kFloatRelativeWindow;
-    } else if striequal(str, b"cursor\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if striequal(str, c"cursor".as_ptr()) {
         *out = kFloatRelativeCursor;
-    } else if striequal(str, b"mouse\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if striequal(str, c"mouse".as_ptr()) {
         *out = kFloatRelativeMouse;
-    } else if striequal(str, b"tabline\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if striequal(str, c"tabline".as_ptr()) {
         *out = kFloatRelativeTabline;
-    } else if striequal(str, b"laststatus\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if striequal(str, c"laststatus".as_ptr()) {
         *out = kFloatRelativeLaststatus;
     } else {
-        return false_0 != 0;
+        return false;
     }
-    return true_0 != 0;
+    return true;
 }
 unsafe extern "C" fn parse_config_split(mut split: String_0, mut out: *mut WinSplit) -> bool {
     let mut str: *mut ::core::ffi::c_char = split.data;
-    if striequal(str, b"left\0".as_ptr() as *const ::core::ffi::c_char) {
+    if striequal(str, c"left".as_ptr()) {
         *out = kWinSplitLeft;
-    } else if striequal(str, b"right\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if striequal(str, c"right".as_ptr()) {
         *out = kWinSplitRight;
-    } else if striequal(str, b"above\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if striequal(str, c"above".as_ptr()) {
         *out = kWinSplitAbove;
-    } else if striequal(str, b"below\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if striequal(str, c"below".as_ptr()) {
         *out = kWinSplitBelow;
     } else {
-        return false_0 != 0;
+        return false;
     }
-    return true_0 != 0;
+    return true;
 }
 unsafe extern "C" fn parse_float_bufpos(mut bufpos: Array, mut out: *mut lpos_T) -> bool {
     if bufpos.size != 2 as size_t
@@ -1491,7 +1461,7 @@ unsafe extern "C" fn parse_float_bufpos(mut bufpos: Array, mut out: *mut lpos_T)
         || (*bufpos.items.offset(1 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        return false_0 != 0;
+        return false;
     }
     (*out).lnum = (*bufpos.items.offset(0 as ::core::ffi::c_int as isize))
         .data
@@ -1499,7 +1469,7 @@ unsafe extern "C" fn parse_float_bufpos(mut bufpos: Array, mut out: *mut lpos_T)
     (*out).col = (*bufpos.items.offset(1 as ::core::ffi::c_int as isize))
         .data
         .integer as colnr_T;
-    return true_0 != 0;
+    return true;
 }
 unsafe extern "C" fn parse_bordertext(
     mut bordertext: Object,
@@ -1514,8 +1484,8 @@ unsafe extern "C" fn parse_bordertext(
     {
         api_err_exp(
             err,
-            b"title/footer\0".as_ptr() as *const ::core::ffi::c_char,
-            b"String or Array\0".as_ptr() as *const ::core::ffi::c_char,
+            c"title/footer".as_ptr(),
+            c"String or Array".as_ptr(),
             api_typename(bordertext.type_0),
         );
         return;
@@ -1526,8 +1496,8 @@ unsafe extern "C" fn parse_bordertext(
     {
         api_err_exp(
             err,
-            b"title/footer\0".as_ptr() as *const ::core::ffi::c_char,
-            b"non-empty Array\0".as_ptr() as *const ::core::ffi::c_char,
+            c"title/footer".as_ptr(),
+            c"non-empty Array".as_ptr(),
             ::core::ptr::null::<::core::ffi::c_char>(),
         );
         return;
@@ -1552,7 +1522,7 @@ unsafe extern "C" fn parse_bordertext(
         == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         if bordertext.data.string.size == 0 as size_t {
-            *is_present = false_0 != 0;
+            *is_present = false;
             return;
         }
         (*chunks).capacity = 0 as size_t;
@@ -1577,12 +1547,12 @@ unsafe extern "C" fn parse_bordertext(
             hl_id: -1 as ::core::ffi::c_int,
         };
         *width = mb_string2cells(bordertext.data.string.data) as ::core::ffi::c_int;
-        *is_present = true_0 != 0;
+        *is_present = true;
         return;
     }
     *width = 0 as ::core::ffi::c_int;
     *chunks = parse_virt_text(bordertext.data.array, err, width);
-    *is_present = true_0 != 0;
+    *is_present = true;
 }
 unsafe extern "C" fn parse_bordertext_pos(
     mut wp: *mut win_T,
@@ -1605,14 +1575,14 @@ unsafe extern "C" fn parse_bordertext_pos(
         if wp.is_null() {
             *align = kAlignLeft;
         }
-        return true_0 != 0;
+        return true;
     }
     let mut pos: *mut ::core::ffi::c_char = bordertext_pos.data;
-    if strequal(pos, b"left\0".as_ptr() as *const ::core::ffi::c_char) {
+    if strequal(pos, c"left".as_ptr()) {
         *align = kAlignLeft;
-    } else if strequal(pos, b"center\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if strequal(pos, c"center".as_ptr()) {
         *align = kAlignCenter;
-    } else if strequal(pos, b"right\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if strequal(pos, c"right".as_ptr()) {
         *align = kAlignRight;
     } else if true {
         api_err_invalid(
@@ -1620,17 +1590,17 @@ unsafe extern "C" fn parse_bordertext_pos(
             if bordertext_type as ::core::ffi::c_uint
                 == kBorderTextTitle as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                b"title_pos\0".as_ptr() as *const ::core::ffi::c_char
+                c"title_pos".as_ptr()
             } else {
-                b"footer_pos\0".as_ptr() as *const ::core::ffi::c_char
+                c"footer_pos".as_ptr()
             },
             pos,
             0 as int64_t,
-            true_0 != 0,
+            true,
         );
         return false;
     }
-    return true_0 != 0;
+    return true;
 }
 pub unsafe extern "C" fn parse_border_style(
     mut style: Object,
@@ -1667,7 +1637,7 @@ pub unsafe extern "C" fn parse_border_style(
                     *b"\xE2\x95\x91\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
             ],
-            shadow_color: false_0 != 0,
+            shadow_color: false,
         },
         C2Rust_Unnamed_15 {
             name: (*opt_winborder_values.ptr())[2 as ::core::ffi::c_int as usize]
@@ -1698,7 +1668,7 @@ pub unsafe extern "C" fn parse_border_style(
                     *b"\xE2\x94\x82\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
             ],
-            shadow_color: false_0 != 0,
+            shadow_color: false,
         },
         C2Rust_Unnamed_15 {
             name: (*opt_winborder_values.ptr())[3 as ::core::ffi::c_int as usize]
@@ -1729,7 +1699,7 @@ pub unsafe extern "C" fn parse_border_style(
                     *b"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
             ],
-            shadow_color: true_0 != 0,
+            shadow_color: true,
         },
         C2Rust_Unnamed_15 {
             name: (*opt_winborder_values.ptr())[4 as ::core::ffi::c_int as usize]
@@ -1760,7 +1730,7 @@ pub unsafe extern "C" fn parse_border_style(
                     *b"\xE2\x94\x82\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
             ],
-            shadow_color: false_0 != 0,
+            shadow_color: false,
         },
         C2Rust_Unnamed_15 {
             name: (*opt_winborder_values.ptr())[5 as ::core::ffi::c_int as usize]
@@ -1791,7 +1761,7 @@ pub unsafe extern "C" fn parse_border_style(
                     *b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
             ],
-            shadow_color: false_0 != 0,
+            shadow_color: false,
         },
         C2Rust_Unnamed_15 {
             name: (*opt_winborder_values.ptr())[6 as ::core::ffi::c_int as usize]
@@ -1822,7 +1792,7 @@ pub unsafe extern "C" fn parse_border_style(
                     *b"\xE2\x94\x83\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
             ],
-            shadow_color: false_0 != 0,
+            shadow_color: false,
         },
         C2Rust_Unnamed_15 {
             name: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -1869,14 +1839,14 @@ pub unsafe extern "C" fn parse_border_style(
                 [0; 32],
                 [0; 32],
             ],
-            shadow_color: false_0 != 0,
+            shadow_color: false,
         },
     ];
     let mut chars: *mut [::core::ffi::c_char; 32] =
         &raw mut (*fconfig).border_chars as *mut [::core::ffi::c_char; 32];
     let mut hl_ids: *mut ::core::ffi::c_int =
         &raw mut (*fconfig).border_hl_ids as *mut ::core::ffi::c_int;
-    (*fconfig).border = true_0 != 0;
+    (*fconfig).border = true;
     if style.type_0 as ::core::ffi::c_uint
         == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -1885,8 +1855,8 @@ pub unsafe extern "C" fn parse_border_style(
         if size == 0 || size > 8 as size_t || size & size.wrapping_sub(1 as size_t) != 0 {
             api_err_exp(
                 err,
-                b"border\0".as_ptr() as *const ::core::ffi::c_char,
-                b"1, 2, 4, or 8 chars\0".as_ptr() as *const ::core::ffi::c_char,
+                c"border".as_ptr(),
+                c"1, 2, 4, or 8 chars".as_ptr(),
                 ::core::ptr::null::<::core::ffi::c_char>(),
             );
             return;
@@ -1906,8 +1876,8 @@ pub unsafe extern "C" fn parse_border_style(
                 if iarr.size == 0 || iarr.size > 2 as size_t {
                     api_err_exp(
                         err,
-                        b"border\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"1 or 2-item Array\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"border".as_ptr(),
+                        c"1 or 2-item Array".as_ptr(),
                         ::core::ptr::null::<::core::ffi::c_char>(),
                     );
                     return;
@@ -1918,8 +1888,8 @@ pub unsafe extern "C" fn parse_border_style(
                 {
                     api_err_exp(
                         err,
-                        b"border\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"Array of Strings\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"border".as_ptr(),
+                        c"Array of Strings".as_ptr(),
                         ::core::ptr::null::<::core::ffi::c_char>(),
                     );
                     return;
@@ -1930,7 +1900,7 @@ pub unsafe extern "C" fn parse_border_style(
                 if iarr.size == 2 as size_t {
                     hl_id = object_to_hl_id(
                         *iarr.items.offset(1 as ::core::ffi::c_int as isize),
-                        b"border char highlight\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"border char highlight".as_ptr(),
                         err,
                     );
                     if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -1944,8 +1914,8 @@ pub unsafe extern "C" fn parse_border_style(
             } else if true {
                 api_err_exp(
                     err,
-                    b"border\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"String or Array\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"border".as_ptr(),
+                    c"String or Array".as_ptr(),
                     api_typename(iytem.type_0),
                 );
                 return;
@@ -1953,8 +1923,8 @@ pub unsafe extern "C" fn parse_border_style(
             if string.size != 0 && mb_string2cells_len(string.data, string.size) > 1 as size_t {
                 api_err_exp(
                     err,
-                    b"border\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"only one-cell chars\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"border".as_ptr(),
+                    c"only one-cell chars".as_ptr(),
                     ::core::ptr::null::<::core::ffi::c_char>(),
                 );
                 return;
@@ -2029,8 +1999,8 @@ pub unsafe extern "C" fn parse_border_style(
         {
             api_err_exp(
                 err,
-                b"border\0".as_ptr() as *const ::core::ffi::c_char,
-                b"corner char between edge chars\0".as_ptr() as *const ::core::ffi::c_char,
+                c"border".as_ptr(),
+                c"corner char between edge chars".as_ptr(),
                 ::core::ptr::null::<::core::ffi::c_char>(),
             );
             return;
@@ -2040,13 +2010,11 @@ pub unsafe extern "C" fn parse_border_style(
     {
         let mut str: String_0 = style.data.string;
         if str.size == 0 as size_t
-            || strequal(str.data, b"none\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int
-                != 0
+            || strequal(str.data, c"none".as_ptr()) as ::core::ffi::c_int != 0
         {
-            (*fconfig).border = false_0 != 0;
-            (*fconfig).title = false_0 != 0;
-            (*fconfig).footer = false_0 != 0;
+            (*fconfig).border = false;
+            (*fconfig).title = false;
+            (*fconfig).footer = false;
             return;
         }
         let mut i_0: size_t = 0 as size_t;
@@ -2066,12 +2034,12 @@ pub unsafe extern "C" fn parse_border_style(
                 );
                 if defaults[i_0 as usize].shadow_color {
                     let mut hl_blend: ::core::ffi::c_int = syn_check_group(
-                        b"FloatShadow\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"FloatShadow".as_ptr(),
                         ::core::mem::size_of::<[::core::ffi::c_char; 12]>()
                             .wrapping_sub(1 as size_t),
                     );
                     let mut hl_through: ::core::ffi::c_int = syn_check_group(
-                        b"FloatShadowThrough\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"FloatShadowThrough".as_ptr(),
                         ::core::mem::size_of::<[::core::ffi::c_char; 19]>()
                             .wrapping_sub(1 as size_t),
                     );
@@ -2086,13 +2054,7 @@ pub unsafe extern "C" fn parse_border_style(
             i_0 = i_0.wrapping_add(1);
         }
         if true {
-            api_err_invalid(
-                err,
-                b"border\0".as_ptr() as *const ::core::ffi::c_char,
-                str.data,
-                0 as int64_t,
-                true_0 != 0,
-            );
+            api_err_invalid(err, c"border".as_ptr(), str.data, 0 as int64_t, true);
             return;
         }
     }
@@ -2106,16 +2068,11 @@ unsafe extern "C" fn generate_api_error(
         api_set_error(
             err,
             kErrorTypeValidation,
-            b"Required: 'relative' when reconfiguring floating window %d\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"Required: 'relative' when reconfiguring floating window %d".as_ptr(),
             (*wp).handle,
         );
     } else if true {
-        api_err_conflict(
-            err,
-            attribute,
-            b"non-float window\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        api_err_conflict(err, attribute, c"non-float window".as_ptr());
     }
 }
 pub unsafe extern "C" fn parse_winborder(
@@ -2124,7 +2081,7 @@ pub unsafe extern "C" fn parse_winborder(
     mut err: *mut Error,
 ) -> bool {
     if fconfig.is_null() {
-        return false_0 != 0;
+        return false;
     }
     let mut style: Object = object {
         type_0: kObjectTypeNil,
@@ -2171,19 +2128,19 @@ pub unsafe extern "C" fn parse_winborder(
         while *p as ::core::ffi::c_int != NUL {
             if count >= 8 as ::core::ffi::c_int {
                 api_free_array(border_chars);
-                return false_0 != 0;
+                return false;
             }
             let mut part_len: size_t = copy_option_part(
                 &raw mut p,
                 &raw mut part as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 32]>(),
-                b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                c",".as_ptr() as *mut ::core::ffi::c_char,
             );
             if part_len == 0 as size_t
                 || part[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int == NUL
             {
                 api_free_array(border_chars);
-                return false_0 != 0;
+                return false;
             }
             let mut str: String_0 = cstr_to_string(&raw mut part as *mut ::core::ffi::c_char);
             if border_chars.size == border_chars.capacity {
@@ -2208,7 +2165,7 @@ pub unsafe extern "C" fn parse_winborder(
         }
         if count != 8 as ::core::ffi::c_int {
             api_free_array(border_chars);
-            return false_0 != 0;
+            return false;
         }
         style = object {
             type_0: kObjectTypeArray,
@@ -2239,266 +2196,204 @@ unsafe extern "C" fn parse_win_config(
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
     };
-    let mut has_relative: bool = false_0 != 0;
-    let mut relative_is_win: bool = false_0 != 0;
-    let mut is_split: bool = false_0 != 0;
+    let mut has_relative: bool = false;
+    let mut relative_is_win: bool = false;
+    let mut is_split: bool = false;
     '_fail: {
         if (*config).relative.size > 0 as size_t {
             if !parse_float_relative((*config).relative, &raw mut (*fconfig).relative) {
                 api_err_invalid(
                     err,
-                    b"relative\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"relative".as_ptr(),
                     (*config).relative.data,
                     0 as int64_t,
-                    true_0 != 0,
+                    true,
                 );
                 break '_fail;
             } else if (*config).relative.size > 0 as size_t
-                && !((*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << 2 as ::core::ffi::c_int
-                    != 0 as ::core::ffi::c_ulonglong
-                    && (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << 1 as ::core::ffi::c_int
-                        != 0 as ::core::ffi::c_ulonglong)
-                && !((*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << 12 as ::core::ffi::c_int
-                    != 0 as ::core::ffi::c_ulonglong)
+                && !(has_key((*config).is_set__win_config_, 2 as ::core::ffi::c_int)
+                    && has_key((*config).is_set__win_config_, 1 as ::core::ffi::c_int))
+                && !(has_key((*config).is_set__win_config_, 12 as ::core::ffi::c_int))
             {
-                api_err_required(
-                    err,
-                    b"'relative' requires 'row'/'col' or 'bufpos'\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
+                api_err_required(err, c"'relative' requires 'row'/'col' or 'bufpos'".as_ptr());
                 break '_fail;
-            } else {
-                has_relative = true_0 != 0;
-                (*fconfig).external = false_0 != 0;
-                if (*fconfig).relative as ::core::ffi::c_uint
-                    == kFloatRelativeWindow as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    relative_is_win = true_0 != 0;
-                    (*fconfig).bufpos.lnum = -1 as ::core::ffi::c_int as linenr_T;
-                }
+            }
+            has_relative = true;
+            (*fconfig).external = false;
+            if (*fconfig).relative as ::core::ffi::c_uint
+                == kFloatRelativeWindow as ::core::ffi::c_int as ::core::ffi::c_uint
+            {
+                relative_is_win = true;
+                (*fconfig).bufpos.lnum = -1 as ::core::ffi::c_int as linenr_T;
             }
         } else if !(*config).external {
-            if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__vertical
-                != 0 as ::core::ffi::c_ulonglong
-                || (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__split
-                    != 0 as ::core::ffi::c_ulonglong
-            {
-                is_split = true_0 != 0;
-                (*fconfig).external = false_0 != 0;
+            if has_key(
+                (*config).is_set__win_config_,
+                KEYSET_OPTIDX_win_config__vertical,
+            ) || has_key(
+                (*config).is_set__win_config_,
+                KEYSET_OPTIDX_win_config__split,
+            ) {
+                is_split = true;
+                (*fconfig).external = false;
             } else if wp.is_null() {
                 if true {
                     api_err_required(
                         err,
-                        b"'relative' or 'external' when creating a float\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        c"'relative' or 'external' when creating a float".as_ptr(),
                     );
                     break '_fail;
                 }
             }
         }
-        if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << 19 as ::core::ffi::c_int
-            != 0 as ::core::ffi::c_ulonglong
-            && !is_split
-        {
-            api_err_conflict(
-                err,
-                b"vertical\0".as_ptr() as *const ::core::ffi::c_char,
-                b"floating windows\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        } else if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << 6 as ::core::ffi::c_int
-            != 0 as ::core::ffi::c_ulonglong
-            && !is_split
-        {
-            api_err_conflict(
-                err,
-                b"split\0".as_ptr() as *const ::core::ffi::c_char,
-                b"floating windows\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+        if has_key((*config).is_set__win_config_, 19 as ::core::ffi::c_int) && !is_split {
+            api_err_conflict(err, c"vertical".as_ptr(), c"floating windows".as_ptr());
+        } else if has_key((*config).is_set__win_config_, 6 as ::core::ffi::c_int) && !is_split {
+            api_err_conflict(err, c"split".as_ptr(), c"floating windows".as_ptr());
         } else {
-            if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__split
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            if has_key(
+                (*config).is_set__win_config_,
+                KEYSET_OPTIDX_win_config__split,
+            ) {
                 if !is_split {
-                    api_err_conflict(
-                        err,
-                        b"split\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"floating windows\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    api_err_conflict(err, c"split".as_ptr(), c"floating windows".as_ptr());
                     break '_fail;
                 } else if !parse_config_split((*config).split, &raw mut (*fconfig).split) {
                     api_err_invalid(
                         err,
-                        b"split\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"split".as_ptr(),
                         (*config).split.data,
                         0 as int64_t,
-                        true_0 != 0,
+                        true,
                     );
                     break '_fail;
                 }
             }
-            if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__anchor
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            if has_key(
+                (*config).is_set__win_config_,
+                KEYSET_OPTIDX_win_config__anchor,
+            ) {
                 if !parse_float_anchor((*config).anchor, &raw mut (*fconfig).anchor) {
                     api_err_invalid(
                         err,
-                        b"anchor\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"anchor".as_ptr(),
                         (*config).anchor.data,
                         0 as int64_t,
-                        true_0 != 0,
+                        true,
                     );
                     break '_fail;
                 }
             }
-            if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__row
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            if has_key((*config).is_set__win_config_, KEYSET_OPTIDX_win_config__row) {
                 if !has_relative || is_split as ::core::ffi::c_int != 0 {
-                    generate_api_error(wp, b"row\0".as_ptr() as *const ::core::ffi::c_char, err);
+                    generate_api_error(wp, c"row".as_ptr(), err);
                     break '_fail;
-                } else {
-                    (*fconfig).row = (*config).row as ::core::ffi::c_double;
                 }
+                (*fconfig).row = (*config).row as ::core::ffi::c_double;
             }
-            if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__col
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            if has_key((*config).is_set__win_config_, KEYSET_OPTIDX_win_config__col) {
                 if !has_relative || is_split as ::core::ffi::c_int != 0 {
-                    generate_api_error(wp, b"col\0".as_ptr() as *const ::core::ffi::c_char, err);
+                    generate_api_error(wp, c"col".as_ptr(), err);
                     break '_fail;
-                } else {
-                    (*fconfig).col = (*config).col as ::core::ffi::c_double;
                 }
+                (*fconfig).col = (*config).col as ::core::ffi::c_double;
             }
-            if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__bufpos
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            if has_key(
+                (*config).is_set__win_config_,
+                KEYSET_OPTIDX_win_config__bufpos,
+            ) {
                 if !has_relative || is_split as ::core::ffi::c_int != 0 {
-                    generate_api_error(wp, b"bufpos\0".as_ptr() as *const ::core::ffi::c_char, err);
+                    generate_api_error(wp, c"bufpos".as_ptr(), err);
                     break '_fail;
                 } else if !parse_float_bufpos((*config).bufpos, &raw mut (*fconfig).bufpos) {
                     api_err_exp(
                         err,
-                        b"bufpos\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"[row, col] array\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"bufpos".as_ptr(),
+                        c"[row, col] array".as_ptr(),
                         ::core::ptr::null::<::core::ffi::c_char>(),
                     );
                     break '_fail;
-                } else {
-                    if !((*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__row
-                        != 0 as ::core::ffi::c_ulonglong)
+                }
+                if !(has_key((*config).is_set__win_config_, KEYSET_OPTIDX_win_config__row)) {
+                    (*fconfig).row = (if (*fconfig).anchor as ::core::ffi::c_int
+                        & kFloatAnchorSouth as ::core::ffi::c_int
+                        != 0
                     {
-                        (*fconfig).row = (if (*fconfig).anchor as ::core::ffi::c_int
-                            & kFloatAnchorSouth as ::core::ffi::c_int
-                            != 0
-                        {
-                            0 as ::core::ffi::c_int
-                        } else {
-                            1 as ::core::ffi::c_int
-                        }) as ::core::ffi::c_double;
-                    }
-                    if !((*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__col
-                        != 0 as ::core::ffi::c_ulonglong)
-                    {
-                        (*fconfig).col = 0 as ::core::ffi::c_int as ::core::ffi::c_double;
-                    }
+                        0 as ::core::ffi::c_int
+                    } else {
+                        1 as ::core::ffi::c_int
+                    }) as ::core::ffi::c_double;
+                }
+                if !(has_key((*config).is_set__win_config_, KEYSET_OPTIDX_win_config__col)) {
+                    (*fconfig).col = 0 as ::core::ffi::c_int as ::core::ffi::c_double;
                 }
             }
-            if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__width
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            if has_key(
+                (*config).is_set__win_config_,
+                KEYSET_OPTIDX_win_config__width,
+            ) {
                 if !((*config).width > 0 as Integer) {
                     api_err_exp(
                         err,
-                        b"width\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"positive Integer\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"width".as_ptr(),
+                        c"positive Integer".as_ptr(),
                         ::core::ptr::null::<::core::ffi::c_char>(),
                     );
                     break '_fail;
-                } else {
-                    (*fconfig).width = (*config).width as ::core::ffi::c_int;
                 }
+                (*fconfig).width = (*config).width as ::core::ffi::c_int;
             } else if !reconf && !is_split {
                 if true {
-                    api_err_required(err, b"width\0".as_ptr() as *const ::core::ffi::c_char);
+                    api_err_required(err, c"width".as_ptr());
                     break '_fail;
                 }
             }
-            if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__height
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            if has_key(
+                (*config).is_set__win_config_,
+                KEYSET_OPTIDX_win_config__height,
+            ) {
                 if !((*config).height > 0 as Integer) {
                     api_err_exp(
                         err,
-                        b"height\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"positive Integer\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"height".as_ptr(),
+                        c"positive Integer".as_ptr(),
                         ::core::ptr::null::<::core::ffi::c_char>(),
                     );
                     break '_fail;
-                } else {
-                    (*fconfig).height = (*config).height as ::core::ffi::c_int;
                 }
+                (*fconfig).height = (*config).height as ::core::ffi::c_int;
             } else if !reconf && !is_split {
                 if true {
-                    api_err_required(err, b"height\0".as_ptr() as *const ::core::ffi::c_char);
+                    api_err_required(err, c"height".as_ptr());
                     break '_fail;
                 }
             }
-            if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__external
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            if has_key(
+                (*config).is_set__win_config_,
+                KEYSET_OPTIDX_win_config__external,
+            ) {
                 (*fconfig).external = (*config).external as bool;
                 if has_relative as ::core::ffi::c_int != 0
                     && (*fconfig).external as ::core::ffi::c_int != 0
                 {
-                    api_err_conflict(
-                        err,
-                        b"relative\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"external\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    api_err_conflict(err, c"relative".as_ptr(), c"external".as_ptr());
                     break '_fail;
                 } else if (*fconfig).external as ::core::ffi::c_int != 0 && !ui_has(kUIMultigrid) {
                     api_set_error(
                         err,
                         kErrorTypeValidation,
-                        b"UI doesn't support external windows\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        c"UI doesn't support external windows".as_ptr(),
                     );
                     break '_fail;
                 }
             }
-            if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << 3 as ::core::ffi::c_int
-                != 0 as ::core::ffi::c_ulonglong
+            if has_key((*config).is_set__win_config_, 3 as ::core::ffi::c_int)
                 && (*fconfig).external as ::core::ffi::c_int != 0
             {
-                api_err_conflict(
-                    err,
-                    b"win\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"external window\0".as_ptr() as *const ::core::ffi::c_char,
-                );
+                api_err_conflict(err, c"win".as_ptr(), c"external window".as_ptr());
             } else {
                 if relative_is_win as ::core::ffi::c_int != 0
-                    || (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__win
-                        != 0 as ::core::ffi::c_ulonglong
+                    || has_key((*config).is_set__win_config_, KEYSET_OPTIDX_win_config__win)
                         && !is_split
                         && !wp.is_null()
                         && (*wp).w_floating as ::core::ffi::c_int != 0
@@ -2512,169 +2407,126 @@ unsafe extern "C" fn parse_win_config(
                         api_set_error(
                             err,
                             kErrorTypeException,
-                            b"floating window cannot be relative to itself\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            c"floating window cannot be relative to itself".as_ptr(),
                         );
                         break '_fail;
-                    } else {
-                        (*fconfig).window = (*target_win).handle as Window;
                     }
+                    (*fconfig).window = (*target_win).handle as Window;
                 } else {
-                    if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__win
-                        != 0 as ::core::ffi::c_ulonglong
-                    {
+                    if has_key((*config).is_set__win_config_, KEYSET_OPTIDX_win_config__win) {
                         if !is_split && !has_relative && (wp.is_null() || !(*wp).w_floating) {
                             api_err_required(
                                 err,
-                                b"non-float with 'win' requires 'split' or 'vertical'\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                c"non-float with 'win' requires 'split' or 'vertical'".as_ptr(),
                             );
                             break '_fail;
-                        } else {
-                            (*fconfig).window = (*config).win;
                         }
+                        (*fconfig).window = (*config).win;
                     }
                     if (*fconfig).window == 0 as ::core::ffi::c_int {
                         (*fconfig).window = (*curwin.get()).handle as Window;
                     }
                 }
-                if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__focusable
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*config).is_set__win_config_,
+                    KEYSET_OPTIDX_win_config__focusable,
+                ) {
                     (*fconfig).focusable = (*config).focusable as bool;
                     (*fconfig).mouse = (*config).focusable as bool;
                 }
-                if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__mouse
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*config).is_set__win_config_,
+                    KEYSET_OPTIDX_win_config__mouse,
+                ) {
                     (*fconfig).mouse = (*config).mouse as bool;
                 }
-                if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__zindex
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*config).is_set__win_config_,
+                    KEYSET_OPTIDX_win_config__zindex,
+                ) {
                     if is_split {
-                        api_err_conflict(
-                            err,
-                            b"zindex\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"non-float window\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
+                        api_err_conflict(err, c"zindex".as_ptr(), c"non-float window".as_ptr());
                         break '_fail;
                     } else if !((*config).zindex > 0 as Integer) {
                         api_err_exp(
                             err,
-                            b"zindex\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"positive Integer\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"zindex".as_ptr(),
+                            c"positive Integer".as_ptr(),
                             ::core::ptr::null::<::core::ffi::c_char>(),
                         );
                         break '_fail;
-                    } else {
-                        (*fconfig).zindex = (*config).zindex as ::core::ffi::c_int;
                     }
+                    (*fconfig).zindex = (*config).zindex as ::core::ffi::c_int;
                 }
-                if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__title
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*config).is_set__win_config_,
+                    KEYSET_OPTIDX_win_config__title,
+                ) {
                     if is_split {
-                        api_err_conflict(
-                            err,
-                            b"title\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"non-float window\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
+                        api_err_conflict(err, c"title".as_ptr(), c"non-float window".as_ptr());
                         break '_fail;
-                    } else {
-                        parse_bordertext((*config).title, kBorderTextTitle, fconfig, err);
-                        if (*err).type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
-                        {
-                            break '_fail;
-                        } else if !parse_bordertext_pos(
-                            wp,
-                            (*config).title_pos,
-                            kBorderTextTitle,
-                            fconfig,
-                            err,
-                        ) {
-                            break '_fail;
-                        }
                     }
-                } else if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << 22 as ::core::ffi::c_int
-                    != 0 as ::core::ffi::c_ulonglong
-                {
-                    api_err_required(
+                    parse_bordertext((*config).title, kBorderTextTitle, fconfig, err);
+                    if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                        break '_fail;
+                    } else if !parse_bordertext_pos(
+                        wp,
+                        (*config).title_pos,
+                        kBorderTextTitle,
+                        fconfig,
                         err,
-                        b"'title' requires 'title_pos'\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    ) {
+                        break '_fail;
+                    }
+                } else if has_key((*config).is_set__win_config_, 22 as ::core::ffi::c_int) {
+                    api_err_required(err, c"'title' requires 'title_pos'".as_ptr());
                     break '_fail;
                 }
-                if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__footer
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*config).is_set__win_config_,
+                    KEYSET_OPTIDX_win_config__footer,
+                ) {
                     if is_split {
-                        api_err_conflict(
-                            err,
-                            b"footer\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"non-float window\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
+                        api_err_conflict(err, c"footer".as_ptr(), c"non-float window".as_ptr());
                         break '_fail;
-                    } else {
-                        parse_bordertext((*config).footer, kBorderTextFooter, fconfig, err);
-                        if (*err).type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
-                        {
-                            break '_fail;
-                        } else if !parse_bordertext_pos(
-                            wp,
-                            (*config).footer_pos,
-                            kBorderTextFooter,
-                            fconfig,
-                            err,
-                        ) {
-                            break '_fail;
-                        }
                     }
-                } else if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << 23 as ::core::ffi::c_int
-                    != 0 as ::core::ffi::c_ulonglong
-                {
-                    api_err_required(
+                    parse_bordertext((*config).footer, kBorderTextFooter, fconfig, err);
+                    if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                        break '_fail;
+                    } else if !parse_bordertext_pos(
+                        wp,
+                        (*config).footer_pos,
+                        kBorderTextFooter,
+                        fconfig,
                         err,
-                        b"'footer' requires 'footer_pos'\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    ) {
+                        break '_fail;
+                    }
+                } else if has_key((*config).is_set__win_config_, 23 as ::core::ffi::c_int) {
+                    api_err_required(err, c"'footer' requires 'footer_pos'".as_ptr());
                     break '_fail;
                 }
                 border_style = object {
                     type_0: kObjectTypeNil,
                     data: C2Rust_Unnamed { boolean: false },
                 };
-                if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__border
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*config).is_set__win_config_,
+                    KEYSET_OPTIDX_win_config__border,
+                ) {
                     if is_split {
-                        api_err_conflict(
-                            err,
-                            b"border\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"non-float window\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
+                        api_err_conflict(err, c"border".as_ptr(), c"non-float window".as_ptr());
                         break '_fail;
-                    } else {
-                        border_style = (*config).border;
-                        if border_style.type_0 as ::core::ffi::c_uint
-                            != kObjectTypeNil as ::core::ffi::c_int as ::core::ffi::c_uint
+                    }
+                    border_style = (*config).border;
+                    if border_style.type_0 as ::core::ffi::c_uint
+                        != kObjectTypeNil as ::core::ffi::c_int as ::core::ffi::c_uint
+                    {
+                        parse_border_style(border_style, fconfig, err);
+                        if (*err).type_0 as ::core::ffi::c_int
+                            != kErrorTypeNone as ::core::ffi::c_int
                         {
-                            parse_border_style(border_style, fconfig, err);
-                            if (*err).type_0 as ::core::ffi::c_int
-                                != kErrorTypeNone as ::core::ffi::c_int
-                            {
-                                break '_fail;
-                            }
+                            break '_fail;
                         }
                     }
                 } else if *p_winborder.get() as ::core::ffi::c_int != NUL
@@ -2683,10 +2535,10 @@ unsafe extern "C" fn parse_win_config(
                 {
                     break '_fail;
                 }
-                if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__style
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*config).is_set__win_config_,
+                    KEYSET_OPTIDX_win_config__style,
+                ) {
                     if *(*config)
                         .style
                         .data
@@ -2695,26 +2547,23 @@ unsafe extern "C" fn parse_win_config(
                         == NUL
                     {
                         (*fconfig).style = kWinStyleUnused;
-                    } else if striequal(
-                        (*config).style.data,
-                        b"minimal\0".as_ptr() as *const ::core::ffi::c_char,
-                    ) {
+                    } else if striequal((*config).style.data, c"minimal".as_ptr()) {
                         (*fconfig).style = kWinStyleMinimal;
                     } else if true {
                         api_err_invalid(
                             err,
-                            b"style\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"style".as_ptr(),
                             (*config).style.data,
                             0 as int64_t,
-                            true_0 != 0,
+                            true,
                         );
                         break '_fail;
                     }
                 }
-                if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__noautocmd
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*config).is_set__win_config_,
+                    KEYSET_OPTIDX_win_config__noautocmd,
+                ) {
                     if !wp.is_null()
                         && (*config).noautocmd as ::core::ffi::c_int
                             != (*fconfig).noautocmd as ::core::ffi::c_int
@@ -2722,33 +2571,31 @@ unsafe extern "C" fn parse_win_config(
                         api_set_error(
                             err,
                             kErrorTypeValidation,
-                            b"'noautocmd' cannot be changed on existing window\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            c"'noautocmd' cannot be changed on existing window".as_ptr(),
                         );
                         break '_fail;
-                    } else {
-                        (*fconfig).noautocmd = (*config).noautocmd as bool;
                     }
+                    (*fconfig).noautocmd = (*config).noautocmd as bool;
                 }
-                if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__fixed
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*config).is_set__win_config_,
+                    KEYSET_OPTIDX_win_config__fixed,
+                ) {
                     (*fconfig).fixed = (*config).fixed as bool;
                 }
-                if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__hide
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*config).is_set__win_config_,
+                    KEYSET_OPTIDX_win_config__hide,
+                ) {
                     (*fconfig).hide = (*config).hide as bool;
                 }
-                if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config___cmdline_offset
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*config).is_set__win_config_,
+                    KEYSET_OPTIDX_win_config___cmdline_offset,
+                ) {
                     (*fconfig)._cmdline_offset = (*config)._cmdline_offset as ::core::ffi::c_int;
                 }
-                return true_0 != 0;
+                return true;
             }
         }
     }
@@ -2769,9 +2616,9 @@ unsafe extern "C" fn parse_win_config(
                 col: 0 as ::core::ffi::c_int as ::core::ffi::c_double,
                 anchor: 0 as FloatAnchor,
                 relative: kFloatRelativeEditor,
-                external: false_0 != 0,
-                focusable: true_0 != 0,
-                mouse: true_0 != 0,
+                external: false,
+                focusable: true,
+                mouse: true,
                 split: kWinSplitLeft,
                 zindex: kZIndexFloatDefault as ::core::ffi::c_int,
                 style: kWinStyleUnused,
@@ -2796,14 +2643,14 @@ unsafe extern "C" fn parse_win_config(
                     items: ::core::ptr::null_mut::<VirtTextChunk>(),
                 },
                 footer_width: 0,
-                noautocmd: false_0 != 0,
-                fixed: false_0 != 0,
-                hide: false_0 != 0,
+                noautocmd: false,
+                fixed: false,
+                hide: false,
                 _cmdline_offset: INT_MAX,
             }
         },
     );
-    return false_0 != 0;
+    return false;
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -2811,3 +2658,13 @@ pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
+
+/// `HAS_KEY(d, kind, key)`: is the keyset's "was this key given?" bit set?
+///
+/// The keysets carry one `is_set__<kind>_` mask whose bits are indexed by
+/// the generated `KEYSET_OPTIDX_<kind>__<key>` constants. c2rust expanded
+/// the macro at every use, which is three lines of shifting and casting per
+/// question asked.
+const fn has_key(set: OptionalKeys, idx: ::core::ffi::c_int) -> bool {
+    set & (1 as OptionalKeys) << idx != 0
+}

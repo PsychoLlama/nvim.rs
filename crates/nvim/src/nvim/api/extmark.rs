@@ -121,7 +121,7 @@ pub const DECOR_SIGN_HIGHLIGHT_INIT: DecorSignHighlight = DecorSignHighlight {
     url: ::core::ptr::null::<::core::ffi::c_char>(),
 };
 pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
-    ext: false_0 != 0,
+    ext: false,
     data: DecorInlineData {
         hl: DECOR_HIGHLIGHT_INLINE_INIT,
     },
@@ -264,7 +264,7 @@ pub unsafe extern "C" fn describe_ns(
 }
 pub unsafe extern "C" fn ns_initialized(mut ns: uint32_t) -> bool {
     if ns < 1 as uint32_t {
-        return false_0 != 0;
+        return false;
     }
     return ns < next_namespace_id.get() as uint32_t;
 }
@@ -387,7 +387,7 @@ unsafe extern "C" fn extmark_to_array(
         let c2rust_fresh11 = dict.size;
         dict.size = dict.size.wrapping_add(1);
         *dict.items.offset(c2rust_fresh11 as isize) = key_value_pair {
-            key: cstr_as_string(b"ns_id\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"ns_id".as_ptr()),
             value: object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
@@ -398,7 +398,7 @@ unsafe extern "C" fn extmark_to_array(
         let c2rust_fresh12 = dict.size;
         dict.size = dict.size.wrapping_add(1);
         *dict.items.offset(c2rust_fresh12 as isize) = key_value_pair {
-            key: cstr_as_string(b"right_gravity\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"right_gravity".as_ptr()),
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
@@ -410,7 +410,7 @@ unsafe extern "C" fn extmark_to_array(
             let c2rust_fresh13 = dict.size;
             dict.size = dict.size.wrapping_add(1);
             *dict.items.offset(c2rust_fresh13 as isize) = key_value_pair {
-                key: cstr_as_string(b"end_row\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"end_row".as_ptr()),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -421,7 +421,7 @@ unsafe extern "C" fn extmark_to_array(
             let c2rust_fresh14 = dict.size;
             dict.size = dict.size.wrapping_add(1);
             *dict.items.offset(c2rust_fresh14 as isize) = key_value_pair {
-                key: cstr_as_string(b"end_col\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"end_col".as_ptr()),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -432,7 +432,7 @@ unsafe extern "C" fn extmark_to_array(
             let c2rust_fresh15 = dict.size;
             dict.size = dict.size.wrapping_add(1);
             *dict.items.offset(c2rust_fresh15 as isize) = key_value_pair {
-                key: cstr_as_string(b"end_right_gravity\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"end_right_gravity".as_ptr()),
                 value: object {
                     type_0: kObjectTypeBoolean,
                     data: C2Rust_Unnamed {
@@ -445,7 +445,7 @@ unsafe extern "C" fn extmark_to_array(
             let c2rust_fresh16 = dict.size;
             dict.size = dict.size.wrapping_add(1);
             *dict.items.offset(c2rust_fresh16 as isize) = key_value_pair {
-                key: cstr_as_string(b"undo_restore\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"undo_restore".as_ptr()),
                 value: object {
                     type_0: kObjectTypeBoolean,
                     data: C2Rust_Unnamed { boolean: false },
@@ -456,7 +456,7 @@ unsafe extern "C" fn extmark_to_array(
             let c2rust_fresh17 = dict.size;
             dict.size = dict.size.wrapping_add(1);
             *dict.items.offset(c2rust_fresh17 as isize) = key_value_pair {
-                key: cstr_as_string(b"invalidate\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"invalidate".as_ptr()),
                 value: object {
                     type_0: kObjectTypeBoolean,
                     data: C2Rust_Unnamed { boolean: true },
@@ -467,7 +467,7 @@ unsafe extern "C" fn extmark_to_array(
             let c2rust_fresh18 = dict.size;
             dict.size = dict.size.wrapping_add(1);
             *dict.items.offset(c2rust_fresh18 as isize) = key_value_pair {
-                key: cstr_as_string(b"invalid\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"invalid".as_ptr()),
                 value: object {
                     type_0: kObjectTypeBoolean,
                     data: C2Rust_Unnamed { boolean: true },
@@ -500,18 +500,18 @@ pub unsafe extern "C" fn nvim_buf_get_extmark_by_id(
     if !ns_initialized(ns_id as uint32_t) {
         api_err_invalid(
             err,
-            b"ns_id\0".as_ptr() as *const ::core::ffi::c_char,
+            c"ns_id".as_ptr(),
             ::core::ptr::null::<::core::ffi::c_char>(),
             ns_id as int64_t,
-            false_0 != 0,
+            false,
         );
         return rv;
     }
     let mut details: bool = (*opts).details as bool;
-    let mut hl_name: bool = if (*opts).is_set__get_extmark_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_get_extmark__hl_name
-        != 0 as ::core::ffi::c_ulonglong
-    {
+    let mut hl_name: bool = if has_key(
+        (*opts).is_set__get_extmark_,
+        KEYSET_OPTIDX_get_extmark__hl_name,
+    ) {
         (*opts).hl_name as ::core::ffi::c_int
     } else {
         true_0
@@ -520,7 +520,7 @@ pub unsafe extern "C" fn nvim_buf_get_extmark_by_id(
     if extmark.start.pos.row < 0 as int32_t {
         return rv;
     }
-    return extmark_to_array(extmark, false_0 != 0, details, hl_name, arena);
+    return extmark_to_array(extmark, false, details, hl_name, arena);
 }
 pub unsafe extern "C" fn nvim_buf_get_extmarks(
     mut buf: Buffer,
@@ -539,62 +539,49 @@ pub unsafe extern "C" fn nvim_buf_get_extmarks(
     if !(ns_id == -1 as Integer || ns_initialized(ns_id as uint32_t) as ::core::ffi::c_int != 0) {
         api_err_invalid(
             err,
-            b"ns_id\0".as_ptr() as *const ::core::ffi::c_char,
+            c"ns_id".as_ptr(),
             ::core::ptr::null::<::core::ffi::c_char>(),
             ns_id as int64_t,
-            false_0 != 0,
+            false,
         );
         return rv;
     }
     let mut details: bool = (*opts).details as bool;
-    let mut hl_name: bool = if (*opts).is_set__get_extmarks_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_get_extmarks__hl_name
-        != 0 as ::core::ffi::c_ulonglong
-    {
+    let mut hl_name: bool = if has_key(
+        (*opts).is_set__get_extmarks_,
+        KEYSET_OPTIDX_get_extmarks__hl_name,
+    ) {
         (*opts).hl_name as ::core::ffi::c_int
     } else {
         true_0
     } != 0;
     let mut type_0: ExtmarkType = kExtmarkNone;
-    if (*opts).is_set__get_extmarks_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_get_extmarks__type
-        != 0 as ::core::ffi::c_ulonglong
-    {
-        if strequal(
-            (*opts).type_0.data,
-            b"sign\0".as_ptr() as *const ::core::ffi::c_char,
-        ) {
+    if has_key(
+        (*opts).is_set__get_extmarks_,
+        KEYSET_OPTIDX_get_extmarks__type,
+    ) {
+        if strequal((*opts).type_0.data, c"sign".as_ptr()) {
             type_0 = kExtmarkSign;
-        } else if strequal(
-            (*opts).type_0.data,
-            b"virt_text\0".as_ptr() as *const ::core::ffi::c_char,
-        ) {
+        } else if strequal((*opts).type_0.data, c"virt_text".as_ptr()) {
             type_0 = kExtmarkVirtText;
-        } else if strequal(
-            (*opts).type_0.data,
-            b"virt_lines\0".as_ptr() as *const ::core::ffi::c_char,
-        ) {
+        } else if strequal((*opts).type_0.data, c"virt_lines".as_ptr()) {
             type_0 = kExtmarkVirtLines;
-        } else if strequal(
-            (*opts).type_0.data,
-            b"highlight\0".as_ptr() as *const ::core::ffi::c_char,
-        ) {
+        } else if strequal((*opts).type_0.data, c"highlight".as_ptr()) {
             type_0 = kExtmarkHighlight;
         } else if true {
             api_err_exp(
                 err,
-                b"type\0".as_ptr() as *const ::core::ffi::c_char,
-                b"sign, virt_text, virt_lines or highlight\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"type".as_ptr(),
+                c"sign, virt_text, virt_lines or highlight".as_ptr(),
                 (*opts).type_0.data,
             );
             return rv;
         }
     }
-    let mut limit: Integer = if (*opts).is_set__get_extmarks_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_get_extmarks__limit
-        != 0 as ::core::ffi::c_ulonglong
-    {
+    let mut limit: Integer = if has_key(
+        (*opts).is_set__get_extmarks_,
+        KEYSET_OPTIDX_get_extmarks__limit,
+    ) {
         (*opts).limit
     } else {
         -1 as Integer
@@ -740,72 +727,63 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
         next: ::core::ptr::null_mut::<DecorVirtText>(),
     };
     let mut url: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut has_hl: bool = false_0 != 0;
-    let mut has_hl_multiple: bool = false_0 != 0;
+    let mut has_hl: bool = false;
+    let mut has_hl_multiple: bool = false;
     let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
     '_error: {
         if !b.is_null() {
             if !ns_initialized(ns_id as uint32_t) {
                 api_err_invalid(
                     err,
-                    b"ns_id\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"ns_id".as_ptr(),
                     ::core::ptr::null::<::core::ffi::c_char>(),
                     ns_id as int64_t,
-                    false_0 != 0,
+                    false,
                 );
             } else {
                 id = 0 as uint32_t;
-                if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__id
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key((*opts).is_set__set_extmark_, KEYSET_OPTIDX_set_extmark__id) {
                     if !((*opts).id > 0 as Integer) {
                         api_err_exp(
                             err,
-                            b"id\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"positive Integer\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"id".as_ptr(),
+                            c"positive Integer".as_ptr(),
                             ::core::ptr::null::<::core::ffi::c_char>(),
                         );
                         break '_error;
-                    } else {
-                        id = (*opts).id as uint32_t;
                     }
+                    id = (*opts).id as uint32_t;
                 }
                 line2 = -1 as ::core::ffi::c_int;
-                did_end_line = false_0 != 0;
-                if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__end_line
-                    != 0 as ::core::ffi::c_ulonglong
-                {
-                    if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << 10 as ::core::ffi::c_int
-                        != 0 as ::core::ffi::c_ulonglong
-                    {
+                did_end_line = false;
+                if has_key(
+                    (*opts).is_set__set_extmark_,
+                    KEYSET_OPTIDX_set_extmark__end_line,
+                ) {
+                    if has_key((*opts).is_set__set_extmark_, 10 as ::core::ffi::c_int) {
                         api_set_error(
                             err,
                             kErrorTypeValidation,
-                            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"cannot use both 'end_row' and 'end_line'\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            c"%s".as_ptr(),
+                            c"cannot use both 'end_row' and 'end_line'".as_ptr(),
                         );
                         break '_error;
-                    } else {
-                        (*opts).end_row = (*opts).end_line;
-                        did_end_line = true_0 != 0;
                     }
+                    (*opts).end_row = (*opts).end_line;
+                    did_end_line = true;
                 }
-                strict = if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__strict
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                strict = if has_key(
+                    (*opts).is_set__set_extmark_,
+                    KEYSET_OPTIDX_set_extmark__strict,
+                ) {
                     (*opts).strict as ::core::ffi::c_int
                 } else {
                     true_0
                 } != 0;
-                if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__end_row
-                    != 0 as ::core::ffi::c_ulonglong
-                    || did_end_line as ::core::ffi::c_int != 0
+                if has_key(
+                    (*opts).is_set__set_extmark_,
+                    KEYSET_OPTIDX_set_extmark__end_row,
+                ) || did_end_line as ::core::ffi::c_int != 0
                 {
                     let mut val: Integer = (*opts).end_row;
                     if !(val >= 0 as Integer
@@ -814,43 +792,41 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                     {
                         api_err_invalid(
                             err,
-                            b"end_row\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"end_row".as_ptr(),
+                            c"out of range".as_ptr(),
                             0 as int64_t,
-                            false_0 != 0,
+                            false,
                         );
                         break '_error;
-                    } else {
-                        line2 = val as ::core::ffi::c_int;
                     }
+                    line2 = val as ::core::ffi::c_int;
                 }
                 col2 = -1 as colnr_T;
-                if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__end_col
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*opts).is_set__set_extmark_,
+                    KEYSET_OPTIDX_set_extmark__end_col,
+                ) {
                     let mut val_0: Integer = (*opts).end_col;
                     if !(val_0 >= -1 as Integer && val_0 <= MAXCOL as ::core::ffi::c_int as Integer)
                     {
                         api_err_invalid(
                             err,
-                            b"end_col\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"end_col".as_ptr(),
+                            c"out of range".as_ptr(),
                             0 as int64_t,
-                            false_0 != 0,
+                            false,
                         );
                         break '_error;
-                    } else {
-                        if val_0 == -1 as Integer {
-                            val_0 = MAXCOL as ::core::ffi::c_int as Integer;
-                        }
-                        col2 = val_0 as ::core::ffi::c_int as colnr_T;
                     }
+                    if val_0 == -1 as Integer {
+                        val_0 = MAXCOL as ::core::ffi::c_int as Integer;
+                    }
+                    col2 = val_0 as ::core::ffi::c_int as colnr_T;
                 }
-                if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__hl_group
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*opts).is_set__set_extmark_,
+                    KEYSET_OPTIDX_set_extmark__hl_group,
+                ) {
                     's_293: {
                         if (*opts).hl_group.type_0 as ::core::ffi::c_uint
                             == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -859,7 +835,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                             if arr.size >= 1 as size_t {
                                 hl.hl_id = object_to_hl_id(
                                     *arr.items.offset(0 as ::core::ffi::c_int as isize),
-                                    b"hl_group item\0".as_ptr() as *const ::core::ffi::c_char,
+                                    c"hl_group item".as_ptr(),
                                     err,
                                 );
                                 if (*err).type_0 as ::core::ffi::c_int
@@ -875,7 +851,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                 }
                                 let mut hl_id: ::core::ffi::c_int = object_to_hl_id(
                                     *arr.items.offset(i as isize),
-                                    b"hl_group item\0".as_ptr() as *const ::core::ffi::c_char,
+                                    c"hl_group item".as_ptr(),
                                     err,
                                 );
                                 if (*err).type_0 as ::core::ffi::c_int
@@ -884,16 +860,12 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                     break '_error;
                                 }
                                 if hl_id != 0 {
-                                    has_hl_multiple = true_0 != 0;
+                                    has_hl_multiple = true;
                                 }
                                 i = i.wrapping_add(1);
                             }
                         } else {
-                            hl.hl_id = object_to_hl_id(
-                                (*opts).hl_group,
-                                b"hl_group\0".as_ptr() as *const ::core::ffi::c_char,
-                                err,
-                            );
+                            hl.hl_id = object_to_hl_id((*opts).hl_group, c"hl_group".as_ptr(), err);
                             if (*err).type_0 as ::core::ffi::c_int
                                 != kErrorTypeNone as ::core::ffi::c_int
                             {
@@ -916,13 +888,13 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                         | kSHIsSign as ::core::ffi::c_int)
                         as uint16_t;
                 }
-                if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__conceal
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*opts).is_set__set_extmark_,
+                    KEYSET_OPTIDX_set_extmark__conceal,
+                ) {
                     hl.flags = (hl.flags as ::core::ffi::c_int | kSHConceal as ::core::ffi::c_int)
                         as uint16_t;
-                    has_hl = true_0 != 0;
+                    has_hl = true;
                     if (*opts).conceal.size > 0 as size_t {
                         let mut ch: ::core::ffi::c_int = 0;
                         hl.conceal_char = utfc_ptr2schar((*opts).conceal.data, &raw mut ch);
@@ -930,22 +902,21 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                             api_set_error(
                                 err,
                                 kErrorTypeValidation,
-                                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"conceal char has to be printable\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                c"%s".as_ptr(),
+                                c"conceal char has to be printable".as_ptr(),
                             );
                             break '_error;
                         }
                     }
                 }
-                if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__conceal_lines
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*opts).is_set__set_extmark_,
+                    KEYSET_OPTIDX_set_extmark__conceal_lines,
+                ) {
                     hl.flags = (hl.flags as ::core::ffi::c_int
                         | kSHConcealLines as ::core::ffi::c_int)
                         as uint16_t;
-                    has_hl = true_0 != 0;
+                    has_hl = true;
                     if (*opts).conceal_lines.size > 0 as size_t {
                         if !(*(*opts).conceal_lines.data as ::core::ffi::c_int
                             == '\0' as ::core::ffi::c_int)
@@ -953,65 +924,53 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                             api_set_error(
                                 err,
                                 kErrorTypeValidation,
-                                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"conceal_lines has to be an empty string\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                c"%s".as_ptr(),
+                                c"conceal_lines has to be an empty string".as_ptr(),
                             );
                             break '_error;
                         }
                     }
                 }
-                if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__virt_text
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*opts).is_set__set_extmark_,
+                    KEYSET_OPTIDX_set_extmark__virt_text,
+                ) {
                     virt_text.data.virt_text =
                         parse_virt_text((*opts).virt_text, err, &raw mut virt_text.width);
                     if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         break '_error;
                     }
                 }
-                if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__virt_text_pos
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*opts).is_set__set_extmark_,
+                    KEYSET_OPTIDX_set_extmark__virt_text_pos,
+                ) {
                     let mut str: String_0 = (*opts).virt_text_pos;
-                    if strequal(b"eol\0".as_ptr() as *const ::core::ffi::c_char, str.data) {
+                    if strequal(c"eol".as_ptr(), str.data) {
                         virt_text.pos = kVPosEndOfLine;
-                    } else if strequal(
-                        b"overlay\0".as_ptr() as *const ::core::ffi::c_char,
-                        str.data,
-                    ) {
+                    } else if strequal(c"overlay".as_ptr(), str.data) {
                         virt_text.pos = kVPosOverlay;
-                    } else if strequal(
-                        b"right_align\0".as_ptr() as *const ::core::ffi::c_char,
-                        str.data,
-                    ) {
+                    } else if strequal(c"right_align".as_ptr(), str.data) {
                         virt_text.pos = kVPosRightAlign;
-                    } else if strequal(
-                        b"eol_right_align\0".as_ptr() as *const ::core::ffi::c_char,
-                        str.data,
-                    ) {
+                    } else if strequal(c"eol_right_align".as_ptr(), str.data) {
                         virt_text.pos = kVPosEndOfLineRightAlign;
-                    } else if strequal(b"inline\0".as_ptr() as *const ::core::ffi::c_char, str.data)
-                    {
+                    } else if strequal(c"inline".as_ptr(), str.data) {
                         virt_text.pos = kVPosInline;
                     } else if true {
                         api_err_invalid(
                             err,
-                            b"virt_text_pos\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"virt_text_pos".as_ptr(),
                             str.data,
                             0 as int64_t,
-                            true_0 != 0,
+                            true,
                         );
                         break '_error;
                     }
                 }
-                if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_set_extmark__virt_text_win_col
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*opts).is_set__set_extmark_,
+                    KEYSET_OPTIDX_set_extmark__virt_text_win_col,
+                ) {
                     virt_text.col = (*opts).virt_text_win_col as ::core::ffi::c_int;
                     virt_text.pos = kVPosWinCol;
                 }
@@ -1031,25 +990,16 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                     } else {
                         0 as ::core::ffi::c_int
                     }))) as uint8_t;
-                if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__hl_mode
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*opts).is_set__set_extmark_,
+                    KEYSET_OPTIDX_set_extmark__hl_mode,
+                ) {
                     let mut str_0: String_0 = (*opts).hl_mode;
-                    if strequal(
-                        b"replace\0".as_ptr() as *const ::core::ffi::c_char,
-                        str_0.data,
-                    ) {
+                    if strequal(c"replace".as_ptr(), str_0.data) {
                         virt_text.hl_mode = kHlModeReplace as ::core::ffi::c_int as uint8_t;
-                    } else if strequal(
-                        b"combine\0".as_ptr() as *const ::core::ffi::c_char,
-                        str_0.data,
-                    ) {
+                    } else if strequal(c"combine".as_ptr(), str_0.data) {
                         virt_text.hl_mode = kHlModeCombine as ::core::ffi::c_int as uint8_t;
-                    } else if strequal(
-                        b"blend\0".as_ptr() as *const ::core::ffi::c_char,
-                        str_0.data,
-                    ) {
+                    } else if strequal(c"blend".as_ptr(), str_0.data) {
                         if virt_text.pos as ::core::ffi::c_uint
                             == kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
@@ -1057,23 +1007,15 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                 api_set_error(
                                     err,
                                     kErrorTypeValidation,
-                                    b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"cannot use 'blend' hl_mode with inline virtual text\0"
-                                        .as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    c"%s".as_ptr(),
+                                    c"cannot use 'blend' hl_mode with inline virtual text".as_ptr(),
                                 );
                                 break '_error;
                             }
                         }
                         virt_text.hl_mode = kHlModeBlend as ::core::ffi::c_int as uint8_t;
                     } else if true {
-                        api_err_invalid(
-                            err,
-                            b"hl_mode\0".as_ptr() as *const ::core::ffi::c_char,
-                            str_0.data,
-                            0 as int64_t,
-                            true_0 != 0,
-                        );
+                        api_err_invalid(err, c"hl_mode".as_ptr(), str_0.data, 0 as int64_t, true);
                         break '_error;
                     }
                 }
@@ -1082,38 +1024,31 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                 } else {
                     0 as ::core::ffi::c_int
                 };
-                if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_set_extmark__virt_lines_overflow
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*opts).is_set__set_extmark_,
+                    KEYSET_OPTIDX_set_extmark__virt_lines_overflow,
+                ) {
                     let mut str_1: String_0 = (*opts).virt_lines_overflow;
-                    if strequal(
-                        b"scroll\0".as_ptr() as *const ::core::ffi::c_char,
-                        str_1.data,
-                    ) {
+                    if strequal(c"scroll".as_ptr(), str_1.data) {
                         virt_lines_flags |= kVLScroll as ::core::ffi::c_int;
-                    } else if !strequal(
-                        b"trunc\0".as_ptr() as *const ::core::ffi::c_char,
-                        str_1.data,
-                    ) {
+                    } else if !strequal(c"trunc".as_ptr(), str_1.data) {
                         if true {
                             api_err_invalid(
                                 err,
-                                b"virt_lines_overflow\0".as_ptr() as *const ::core::ffi::c_char,
+                                c"virt_lines_overflow".as_ptr(),
                                 str_1.data,
                                 0 as int64_t,
-                                true_0 != 0,
+                                true,
                             );
                             break '_error;
                         }
                     }
                 }
                 's_785: {
-                    if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__virt_lines
-                        != 0 as ::core::ffi::c_ulonglong
-                    {
+                    if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__virt_lines,
+                    ) {
                         let mut a: Array = (*opts).virt_lines;
                         let mut j: size_t = 0 as size_t;
                         loop {
@@ -1125,56 +1060,54 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                             {
                                 api_err_exp(
                                     err,
-                                    b"virt_text_line\0".as_ptr() as *const ::core::ffi::c_char,
+                                    c"virt_text_line".as_ptr(),
                                     api_typename(kObjectTypeArray),
                                     api_typename((*a.items.offset(j as isize)).type_0),
                                 );
                                 break '_error;
-                            } else {
-                                let mut dummig: ::core::ffi::c_int = 0;
-                                let mut jtem: VirtText = parse_virt_text(
-                                    (*a.items.offset(j as isize)).data.array,
-                                    err,
-                                    &raw mut dummig,
-                                );
-                                if virt_lines.data.virt_lines.size
-                                    == virt_lines.data.virt_lines.capacity
-                                {
-                                    virt_lines.data.virt_lines.capacity =
-                                        if virt_lines.data.virt_lines.capacity != 0 {
-                                            virt_lines.data.virt_lines.capacity
-                                                << 1 as ::core::ffi::c_int
-                                        } else {
-                                            8 as size_t
-                                        };
-                                    virt_lines.data.virt_lines.items = xrealloc(
-                                        virt_lines.data.virt_lines.items
-                                            as *mut ::core::ffi::c_void,
-                                        ::core::mem::size_of::<virt_line>()
-                                            .wrapping_mul(virt_lines.data.virt_lines.capacity),
-                                    )
-                                        as *mut virt_line;
-                                } else {
-                                };
-                                let c2rust_fresh22 = virt_lines.data.virt_lines.size;
-                                virt_lines.data.virt_lines.size =
-                                    virt_lines.data.virt_lines.size.wrapping_add(1);
-                                *virt_lines
-                                    .data
-                                    .virt_lines
-                                    .items
-                                    .offset(c2rust_fresh22 as isize) = virt_line {
-                                    line: jtem,
-                                    flags: virt_lines_flags,
-                                }
-                                    as virt_line;
-                                if (*err).type_0 as ::core::ffi::c_int
-                                    != kErrorTypeNone as ::core::ffi::c_int
-                                {
-                                    break '_error;
-                                }
-                                j = j.wrapping_add(1);
                             }
+                            let mut dummig: ::core::ffi::c_int = 0;
+                            let mut jtem: VirtText = parse_virt_text(
+                                (*a.items.offset(j as isize)).data.array,
+                                err,
+                                &raw mut dummig,
+                            );
+                            if virt_lines.data.virt_lines.size
+                                == virt_lines.data.virt_lines.capacity
+                            {
+                                virt_lines.data.virt_lines.capacity =
+                                    if virt_lines.data.virt_lines.capacity != 0 {
+                                        virt_lines.data.virt_lines.capacity
+                                            << 1 as ::core::ffi::c_int
+                                    } else {
+                                        8 as size_t
+                                    };
+                                virt_lines.data.virt_lines.items = xrealloc(
+                                    virt_lines.data.virt_lines.items as *mut ::core::ffi::c_void,
+                                    ::core::mem::size_of::<virt_line>()
+                                        .wrapping_mul(virt_lines.data.virt_lines.capacity),
+                                )
+                                    as *mut virt_line;
+                            } else {
+                            };
+                            let c2rust_fresh22 = virt_lines.data.virt_lines.size;
+                            virt_lines.data.virt_lines.size =
+                                virt_lines.data.virt_lines.size.wrapping_add(1);
+                            *virt_lines
+                                .data
+                                .virt_lines
+                                .items
+                                .offset(c2rust_fresh22 as isize) = virt_line {
+                                line: jtem,
+                                flags: virt_lines_flags,
+                            }
+                                as virt_line;
+                            if (*err).type_0 as ::core::ffi::c_int
+                                != kErrorTypeNone as ::core::ffi::c_int
+                            {
+                                break '_error;
+                            }
+                            j = j.wrapping_add(1);
                         }
                     }
                 }
@@ -1184,30 +1117,29 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                     } else {
                         0 as ::core::ffi::c_int
                     }) as uint8_t;
-                if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__priority
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*opts).is_set__set_extmark_,
+                    KEYSET_OPTIDX_set_extmark__priority,
+                ) {
                     if !((*opts).priority >= 0 as Integer && (*opts).priority <= 65535 as Integer) {
                         api_err_invalid(
                             err,
-                            b"priority\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"priority".as_ptr(),
+                            c"out of range".as_ptr(),
                             0 as int64_t,
-                            false_0 != 0,
+                            false,
                         );
                         break '_error;
-                    } else {
-                        hl.priority = (*opts).priority as DecorPriority;
-                        sign.priority = (*opts).priority as DecorPriority;
-                        virt_text.priority = (*opts).priority as DecorPriority;
-                        virt_lines.priority = (*opts).priority as DecorPriority;
                     }
+                    hl.priority = (*opts).priority as DecorPriority;
+                    sign.priority = (*opts).priority as DecorPriority;
+                    virt_text.priority = (*opts).priority as DecorPriority;
+                    virt_lines.priority = (*opts).priority as DecorPriority;
                 }
-                if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__sign_text
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                if has_key(
+                    (*opts).is_set__set_extmark_,
+                    KEYSET_OPTIDX_set_extmark__sign_text,
+                ) {
                     sign.text[0 as ::core::ffi::c_int as usize] = 0 as schar_T;
                     if init_sign_text(
                         (*opts).sign_text.data,
@@ -1217,59 +1149,52 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                     {
                         api_err_invalid(
                             err,
-                            b"sign_text\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"sign_text".as_ptr(),
+                            c"".as_ptr(),
                             0 as int64_t,
-                            true_0 != 0,
+                            true,
                         );
                         break '_error;
-                    } else {
-                        sign.flags = (sign.flags as ::core::ffi::c_int
-                            | kSHIsSign as ::core::ffi::c_int)
-                            as uint16_t;
                     }
+                    sign.flags = (sign.flags as ::core::ffi::c_int
+                        | kSHIsSign as ::core::ffi::c_int)
+                        as uint16_t;
                 }
-                right_gravity = if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__right_gravity
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                right_gravity = if has_key(
+                    (*opts).is_set__set_extmark_,
+                    KEYSET_OPTIDX_set_extmark__right_gravity,
+                ) {
                     (*opts).right_gravity as ::core::ffi::c_int
                 } else {
                     true_0
                 } != 0;
                 if line2 == -1 as ::core::ffi::c_int
                     && col2 == -1 as ::core::ffi::c_int
-                    && (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << 30 as ::core::ffi::c_int
-                        != 0 as ::core::ffi::c_ulonglong
+                    && has_key((*opts).is_set__set_extmark_, 30 as ::core::ffi::c_int)
                 {
                     api_set_error(
                         err,
                         kErrorTypeValidation,
-                        b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"cannot set end_right_gravity without end_row or end_col\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        c"%s".as_ptr(),
+                        c"cannot set end_right_gravity without end_row or end_col".as_ptr(),
                     );
                 } else {
                     len = 0 as colnr_T;
-                    if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__spell
-                        != 0 as ::core::ffi::c_ulonglong
-                    {
+                    if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__spell,
+                    ) {
                         hl.flags = (hl.flags as ::core::ffi::c_int
                             | if (*opts).spell as ::core::ffi::c_int != 0 {
                                 kSHSpellOn as ::core::ffi::c_int
                             } else {
                                 kSHSpellOff as ::core::ffi::c_int
                             }) as uint16_t;
-                        has_hl = true_0 != 0;
+                        has_hl = true;
                     }
-                    if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__url
-                        != 0 as ::core::ffi::c_ulonglong
-                    {
+                    if has_key((*opts).is_set__set_extmark_, KEYSET_OPTIDX_set_extmark__url) {
                         url = string_to_cstr((*opts).url);
-                        has_hl = true_0 != 0;
+                        has_hl = true;
                     }
                     if (*opts).ui_watched {
                         hl.flags = (hl.flags as ::core::ffi::c_int
@@ -1282,30 +1207,29 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                 | kSHUIWatchedOverlay as ::core::ffi::c_int)
                                 as uint16_t;
                         }
-                        has_hl = true_0 != 0;
+                        has_hl = true;
                     }
                     if !(line >= 0 as Integer) {
                         api_err_invalid(
                             err,
-                            b"line\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"line".as_ptr(),
+                            c"out of range".as_ptr(),
                             0 as int64_t,
-                            false_0 != 0,
+                            false,
                         );
                     } else {
                         if line > (*b).b_ml.ml_line_count as Integer {
                             if strict {
                                 api_err_invalid(
                                     err,
-                                    b"line\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                                    c"line".as_ptr(),
+                                    c"out of range".as_ptr(),
                                     0 as int64_t,
-                                    false_0 != 0,
+                                    false,
                                 );
                                 break '_error;
-                            } else {
-                                line = (*b).b_ml.ml_line_count as Integer;
                             }
+                            line = (*b).b_ml.ml_line_count as Integer;
                         } else if line < (*b).b_ml.ml_line_count as Integer {
                             len = (if (*opts).ephemeral as ::core::ffi::c_int != 0 {
                                 MAXCOL as ::core::ffi::c_int
@@ -1319,23 +1243,22 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                             if strict {
                                 api_err_invalid(
                                     err,
-                                    b"col\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                                    c"col".as_ptr(),
+                                    c"out of range".as_ptr(),
                                     0 as int64_t,
-                                    false_0 != 0,
+                                    false,
                                 );
                                 break '_error;
-                            } else {
-                                col = len as Integer;
                             }
+                            col = len as Integer;
                         } else if col < -1 as Integer {
                             if true {
                                 api_err_invalid(
                                     err,
-                                    b"col\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                                    c"col".as_ptr(),
+                                    c"out of range".as_ptr(),
                                     0 as int64_t,
-                                    false_0 != 0,
+                                    false,
                                 );
                                 break '_error;
                             }
@@ -1358,15 +1281,14 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                 if strict {
                                     api_err_invalid(
                                         err,
-                                        b"end_col\0".as_ptr() as *const ::core::ffi::c_char,
-                                        b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                                        c"end_col".as_ptr(),
+                                        c"out of range".as_ptr(),
                                         0 as int64_t,
-                                        false_0 != 0,
+                                        false,
                                     );
                                     break '_error;
-                                } else {
-                                    col2 = len;
                                 }
+                                col2 = len;
                             }
                         } else if line2 >= 0 as ::core::ffi::c_int {
                             col2 = 0 as ::core::ffi::c_int as colnr_T;
@@ -1382,25 +1304,23 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                 col2 = c as colnr_T;
                             }
                             let mut subpriority: DecorPriority = 0 as DecorPriority;
-                            if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                                & (1 as ::core::ffi::c_ulonglong)
-                                    << KEYSET_OPTIDX_set_extmark___subpriority
-                                != 0 as ::core::ffi::c_ulonglong
-                            {
+                            if has_key(
+                                (*opts).is_set__set_extmark_,
+                                KEYSET_OPTIDX_set_extmark___subpriority,
+                            ) {
                                 if !((*opts)._subpriority >= 0 as Integer
                                     && (*opts)._subpriority <= 65535 as Integer)
                                 {
                                     api_err_invalid(
                                         err,
-                                        b"_subpriority\0".as_ptr() as *const ::core::ffi::c_char,
-                                        b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                                        c"_subpriority".as_ptr(),
+                                        c"out of range".as_ptr(),
                                         0 as int64_t,
-                                        false_0 != 0,
+                                        false,
                                     );
                                     break '_error;
-                                } else {
-                                    subpriority = (*opts)._subpriority as DecorPriority;
                                 }
+                                subpriority = (*opts)._subpriority as DecorPriority;
                             }
                             if virt_text.data.virt_text.size != 0 {
                                 decor_range_add_virt(
@@ -1413,7 +1333,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                         virt_text,
                                         ::core::ptr::null_mut::<DecorVirtText>(),
                                     ),
-                                    true_0 != 0,
+                                    true,
                                 );
                             }
                             if virt_lines.data.virt_lines.size != 0 {
@@ -1427,7 +1347,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                         virt_lines,
                                         ::core::ptr::null_mut::<DecorVirtText>(),
                                     ),
-                                    true_0 != 0,
+                                    true,
                                 );
                             }
                             if has_hl {
@@ -1440,7 +1360,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                     line2,
                                     col2 as ::core::ffi::c_int,
                                     &raw mut sh,
-                                    true_0 != 0,
+                                    true,
                                     ns_id as uint32_t,
                                     id,
                                     subpriority,
@@ -1450,9 +1370,8 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                             api_set_error(
                                 err,
                                 kErrorTypeException,
-                                b"cannot set emphemeral mark outside of a decoration provider\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                c"cannot set emphemeral mark outside of a decoration provider"
+                                    .as_ptr(),
                             );
                             break '_error;
                         } else {
@@ -1501,7 +1420,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                 while i_0 > 0 as size_t {
                                     let mut hl_id_0: ::core::ffi::c_int = object_to_hl_id(
                                         *arr_0.items.offset(i_0 as isize),
-                                        b"hl_group item\0".as_ptr() as *const ::core::ffi::c_char,
+                                        c"hl_group item".as_ptr(),
                                         err,
                                     );
                                     if hl_id_0 > 0 as ::core::ffi::c_int {
@@ -1543,7 +1462,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                     sh_1.next = decor_indexed;
                                     decor_indexed = decor_put_sh(sh_1);
                                 }
-                                decor.ext = true_0 != 0;
+                                decor.ext = true;
                                 decor.data.ext = DecorExt {
                                     sh_idx: decor_indexed,
                                     vt: decor_alloc,
@@ -1567,11 +1486,10 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                 decor_flags,
                                 right_gravity,
                                 (*opts).end_right_gravity as bool,
-                                if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                                    & (1 as ::core::ffi::c_ulonglong)
-                                        << KEYSET_OPTIDX_set_extmark__undo_restore
-                                    != 0 as ::core::ffi::c_ulonglong
-                                {
+                                if has_key(
+                                    (*opts).is_set__set_extmark_,
+                                    KEYSET_OPTIDX_set_extmark__undo_restore,
+                                ) {
                                     (*opts).undo_restore as ::core::ffi::c_int
                                 } else {
                                     true_0
@@ -1607,15 +1525,15 @@ pub unsafe extern "C" fn nvim_buf_del_extmark(
 ) -> Boolean {
     let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
     if b.is_null() {
-        return false_0 != 0;
+        return false;
     }
     if !ns_initialized(ns_id as uint32_t) {
         api_err_invalid(
             err,
-            b"ns_id\0".as_ptr() as *const ::core::ffi::c_char,
+            c"ns_id".as_ptr(),
             ::core::ptr::null::<::core::ffi::c_char>(),
             ns_id as int64_t,
-            false_0 != 0,
+            false,
         );
         return false;
     }
@@ -1635,10 +1553,10 @@ pub unsafe extern "C" fn nvim_buf_clear_namespace(
     if !(line_start >= 0 as Integer && line_start < MAXLNUM as ::core::ffi::c_int as Integer) {
         api_err_invalid(
             err,
-            b"line number\0".as_ptr() as *const ::core::ffi::c_char,
-            b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+            c"line number".as_ptr(),
+            c"out of range".as_ptr(),
             0 as int64_t,
-            false_0 != 0,
+            false,
         );
         return;
     }
@@ -1663,13 +1581,13 @@ pub unsafe extern "C" fn nvim_set_decoration_provider(
     mut opts: *mut KeyDict_set_decoration_provider,
     mut _err: *mut Error,
 ) {
-    let mut p: *mut DecorProvider = get_decor_provider(ns_id as NS, true_0 != 0);
+    let mut p: *mut DecorProvider = get_decor_provider(ns_id as NS, true);
     '_c2rust_label: {
         if !p.is_null() {
         } else {
             __assert_fail(
-                b"p != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/extmark.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                c"p != NULL".as_ptr(),
+                c"src/nvim/api/extmark.rs".as_ptr(),
                 1083 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );
@@ -1679,47 +1597,47 @@ pub unsafe extern "C" fn nvim_set_decoration_provider(
     redraw_all_later(UPD_NOT_VALID);
     let mut cbs: [C2Rust_Unnamed_26; 10] = [
         C2Rust_Unnamed_26 {
-            name: b"on_start\0".as_ptr() as *const ::core::ffi::c_char,
+            name: c"on_start".as_ptr(),
             source: &raw mut (*opts).on_start,
             dest: &raw mut (*p).redraw_start,
         },
         C2Rust_Unnamed_26 {
-            name: b"on_buf\0".as_ptr() as *const ::core::ffi::c_char,
+            name: c"on_buf".as_ptr(),
             source: &raw mut (*opts).on_buf,
             dest: &raw mut (*p).redraw_buf,
         },
         C2Rust_Unnamed_26 {
-            name: b"on_win\0".as_ptr() as *const ::core::ffi::c_char,
+            name: c"on_win".as_ptr(),
             source: &raw mut (*opts).on_win,
             dest: &raw mut (*p).redraw_win,
         },
         C2Rust_Unnamed_26 {
-            name: b"on_line\0".as_ptr() as *const ::core::ffi::c_char,
+            name: c"on_line".as_ptr(),
             source: &raw mut (*opts).on_line,
             dest: &raw mut (*p).redraw_line,
         },
         C2Rust_Unnamed_26 {
-            name: b"on_range\0".as_ptr() as *const ::core::ffi::c_char,
+            name: c"on_range".as_ptr(),
             source: &raw mut (*opts).on_range,
             dest: &raw mut (*p).redraw_range,
         },
         C2Rust_Unnamed_26 {
-            name: b"on_end\0".as_ptr() as *const ::core::ffi::c_char,
+            name: c"on_end".as_ptr(),
             source: &raw mut (*opts).on_end,
             dest: &raw mut (*p).redraw_end,
         },
         C2Rust_Unnamed_26 {
-            name: b"_on_hl_def\0".as_ptr() as *const ::core::ffi::c_char,
+            name: c"_on_hl_def".as_ptr(),
             source: &raw mut (*opts)._on_hl_def,
             dest: &raw mut (*p).hl_def,
         },
         C2Rust_Unnamed_26 {
-            name: b"_on_spell_nav\0".as_ptr() as *const ::core::ffi::c_char,
+            name: c"_on_spell_nav".as_ptr(),
             source: &raw mut (*opts)._on_spell_nav,
             dest: &raw mut (*p).spell_nav,
         },
         C2Rust_Unnamed_26 {
-            name: b"_on_conceal_line\0".as_ptr() as *const ::core::ffi::c_char,
+            name: c"_on_conceal_line".as_ptr(),
             source: &raw mut (*opts)._on_conceal_line,
             dest: &raw mut (*p).conceal_line,
         },
@@ -1743,7 +1661,7 @@ pub unsafe extern "C" fn nvim_set_decoration_provider(
     }
     (*p).state = kDecorProviderActive;
     (*p).hl_valid += 1;
-    (*p).hl_cached = false_0 != 0;
+    (*p).hl_cached = false;
 }
 unsafe extern "C" fn extmark_get_index_from_obj(
     mut buf: *mut buf_T,
@@ -1760,19 +1678,19 @@ unsafe extern "C" fn extmark_get_index_from_obj(
         if id == 0 as Integer {
             *row = 0 as ::core::ffi::c_int;
             *col = 0 as ::core::ffi::c_int as colnr_T;
-            return true_0 != 0;
+            return true;
         } else if id == -1 as Integer {
             *row = MAXLNUM as ::core::ffi::c_int;
             *col = MAXCOL as ::core::ffi::c_int as colnr_T;
-            return true_0 != 0;
+            return true;
         } else if id < 0 as Integer {
             if true {
                 api_err_invalid(
                     err,
-                    b"mark id\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"mark id".as_ptr(),
                     ::core::ptr::null::<::core::ffi::c_char>(),
                     id as int64_t,
-                    false_0 != 0,
+                    false,
                 );
                 return false;
             }
@@ -1781,16 +1699,16 @@ unsafe extern "C" fn extmark_get_index_from_obj(
         if !(extmark.start.pos.row >= 0 as int32_t) {
             api_err_invalid(
                 err,
-                b"mark id (not found)\0".as_ptr() as *const ::core::ffi::c_char,
+                c"mark id (not found)".as_ptr(),
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 id as int64_t,
-                false_0 != 0,
+                false,
             );
             return false;
         }
         *row = extmark.start.pos.row as ::core::ffi::c_int;
         *col = extmark.start.pos.col as colnr_T;
-        return true_0 != 0;
+        return true;
     } else if obj.type_0 as ::core::ffi::c_uint
         == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -1803,8 +1721,8 @@ unsafe extern "C" fn extmark_get_index_from_obj(
         {
             api_err_exp(
                 err,
-                b"mark position\0".as_ptr() as *const ::core::ffi::c_char,
-                b"2 Integer items\0".as_ptr() as *const ::core::ffi::c_char,
+                c"mark position".as_ptr(),
+                c"2 Integer items".as_ptr(),
                 ::core::ptr::null::<::core::ffi::c_char>(),
             );
             return false;
@@ -1825,12 +1743,12 @@ unsafe extern "C" fn extmark_get_index_from_obj(
         } else {
             MAXCOL as ::core::ffi::c_int as Integer
         }) as colnr_T;
-        return true_0 != 0;
+        return true;
     } else if true {
         api_err_exp(
             err,
-            b"mark position\0".as_ptr() as *const ::core::ffi::c_char,
-            b"mark id Integer or 2-item Array\0".as_ptr() as *const ::core::ffi::c_char,
+            c"mark position".as_ptr(),
+            c"mark id Integer or 2-item Array".as_ptr(),
             ::core::ptr::null::<::core::ffi::c_char>(),
         );
         return false;
@@ -1856,127 +1774,115 @@ pub unsafe extern "C" fn parse_virt_text(
             {
                 api_err_exp(
                     err,
-                    b"chunk\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"chunk".as_ptr(),
                     api_typename(kObjectTypeArray),
                     api_typename((*chunks.items.offset(i as isize)).type_0),
                 );
                 break '_free_exit;
-            } else {
-                let mut chunk: Array = (*chunks.items.offset(i as isize)).data.array;
-                if !(chunk.size > 0 as size_t
-                    && chunk.size <= 2 as size_t
-                    && (*chunk.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-                        as ::core::ffi::c_uint
-                        == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint)
-                {
-                    api_set_error(
-                        err,
-                        kErrorTypeValidation,
-                        b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"Invalid chunk: expected Array with 1 or 2 Strings\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                    break '_free_exit;
-                } else {
-                    let mut str: String_0 = (*chunk.items.offset(0 as ::core::ffi::c_int as isize))
-                        .data
-                        .string;
-                    let mut hl_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-                    's_146: {
-                        if chunk.size == 2 as size_t {
-                            let mut hl: Object =
-                                *chunk.items.offset(1 as ::core::ffi::c_int as isize);
-                            if hl.type_0 as ::core::ffi::c_uint
-                                == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                            {
-                                let mut arr: Array = hl.data.array;
-                                let mut j: size_t = 0 as size_t;
-                                loop {
-                                    if j >= arr.size {
-                                        break 's_146;
-                                    }
-                                    hl_id = object_to_hl_id(
-                                        *arr.items.offset(j as isize),
-                                        b"virt_text highlight\0".as_ptr()
-                                            as *const ::core::ffi::c_char,
-                                        err,
-                                    );
-                                    if (*err).type_0 as ::core::ffi::c_int
-                                        != kErrorTypeNone as ::core::ffi::c_int
-                                    {
-                                        break '_free_exit;
-                                    }
-                                    if j < arr.size.wrapping_sub(1 as size_t) {
-                                        if virt_text.size == virt_text.capacity {
-                                            virt_text.capacity = if virt_text.capacity != 0 {
-                                                virt_text.capacity << 1 as ::core::ffi::c_int
-                                            } else {
-                                                8 as size_t
-                                            };
-                                            virt_text.items = xrealloc(
-                                                virt_text.items as *mut ::core::ffi::c_void,
-                                                ::core::mem::size_of::<VirtTextChunk>()
-                                                    .wrapping_mul(virt_text.capacity),
-                                            )
-                                                as *mut VirtTextChunk;
-                                        } else {
-                                        };
-                                        let c2rust_fresh23 = virt_text.size;
-                                        virt_text.size = virt_text.size.wrapping_add(1);
-                                        *virt_text.items.offset(c2rust_fresh23 as isize) =
-                                            VirtTextChunk {
-                                                text: ::core::ptr::null_mut::<::core::ffi::c_char>(
-                                                ),
-                                                hl_id: hl_id,
-                                            };
-                                    }
-                                    j = j.wrapping_add(1);
-                                }
-                            } else {
-                                hl_id = object_to_hl_id(
-                                    hl,
-                                    b"virt_text highlight\0".as_ptr() as *const ::core::ffi::c_char,
-                                    err,
-                                );
-                                if (*err).type_0 as ::core::ffi::c_int
-                                    != kErrorTypeNone as ::core::ffi::c_int
-                                {
-                                    break '_free_exit;
-                                }
+            }
+            let mut chunk: Array = (*chunks.items.offset(i as isize)).data.array;
+            if !(chunk.size > 0 as size_t
+                && chunk.size <= 2 as size_t
+                && (*chunk.items.offset(0 as ::core::ffi::c_int as isize)).type_0
+                    as ::core::ffi::c_uint
+                    == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint)
+            {
+                api_set_error(
+                    err,
+                    kErrorTypeValidation,
+                    c"%s".as_ptr(),
+                    c"Invalid chunk: expected Array with 1 or 2 Strings".as_ptr(),
+                );
+                break '_free_exit;
+            }
+            let mut str: String_0 = (*chunk.items.offset(0 as ::core::ffi::c_int as isize))
+                .data
+                .string;
+            let mut hl_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
+            's_146: {
+                if chunk.size == 2 as size_t {
+                    let mut hl: Object = *chunk.items.offset(1 as ::core::ffi::c_int as isize);
+                    if hl.type_0 as ::core::ffi::c_uint
+                        == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
+                    {
+                        let mut arr: Array = hl.data.array;
+                        let mut j: size_t = 0 as size_t;
+                        loop {
+                            if j >= arr.size {
+                                break 's_146;
                             }
+                            hl_id = object_to_hl_id(
+                                *arr.items.offset(j as isize),
+                                c"virt_text highlight".as_ptr(),
+                                err,
+                            );
+                            if (*err).type_0 as ::core::ffi::c_int
+                                != kErrorTypeNone as ::core::ffi::c_int
+                            {
+                                break '_free_exit;
+                            }
+                            if j < arr.size.wrapping_sub(1 as size_t) {
+                                if virt_text.size == virt_text.capacity {
+                                    virt_text.capacity = if virt_text.capacity != 0 {
+                                        virt_text.capacity << 1 as ::core::ffi::c_int
+                                    } else {
+                                        8 as size_t
+                                    };
+                                    virt_text.items = xrealloc(
+                                        virt_text.items as *mut ::core::ffi::c_void,
+                                        ::core::mem::size_of::<VirtTextChunk>()
+                                            .wrapping_mul(virt_text.capacity),
+                                    )
+                                        as *mut VirtTextChunk;
+                                } else {
+                                };
+                                let c2rust_fresh23 = virt_text.size;
+                                virt_text.size = virt_text.size.wrapping_add(1);
+                                *virt_text.items.offset(c2rust_fresh23 as isize) = VirtTextChunk {
+                                    text: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                                    hl_id: hl_id,
+                                };
+                            }
+                            j = j.wrapping_add(1);
+                        }
+                    } else {
+                        hl_id = object_to_hl_id(hl, c"virt_text highlight".as_ptr(), err);
+                        if (*err).type_0 as ::core::ffi::c_int
+                            != kErrorTypeNone as ::core::ffi::c_int
+                        {
+                            break '_free_exit;
                         }
                     }
-                    let mut text: *mut ::core::ffi::c_char = transstr(
-                        if str.size > 0 as size_t {
-                            str.data as *const ::core::ffi::c_char
-                        } else {
-                            b"\0".as_ptr() as *const ::core::ffi::c_char
-                        },
-                        false_0 != 0,
-                    );
-                    w += mb_string2cells(text) as ::core::ffi::c_int;
-                    if virt_text.size == virt_text.capacity {
-                        virt_text.capacity = if virt_text.capacity != 0 {
-                            virt_text.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            8 as size_t
-                        };
-                        virt_text.items = xrealloc(
-                            virt_text.items as *mut ::core::ffi::c_void,
-                            ::core::mem::size_of::<VirtTextChunk>()
-                                .wrapping_mul(virt_text.capacity),
-                        ) as *mut VirtTextChunk;
-                    } else {
-                    };
-                    let c2rust_fresh24 = virt_text.size;
-                    virt_text.size = virt_text.size.wrapping_add(1);
-                    *virt_text.items.offset(c2rust_fresh24 as isize) = VirtTextChunk {
-                        text: text,
-                        hl_id: hl_id,
-                    };
-                    i = i.wrapping_add(1);
                 }
             }
+            let mut text: *mut ::core::ffi::c_char = transstr(
+                if str.size > 0 as size_t {
+                    str.data as *const ::core::ffi::c_char
+                } else {
+                    c"".as_ptr()
+                },
+                false,
+            );
+            w += mb_string2cells(text) as ::core::ffi::c_int;
+            if virt_text.size == virt_text.capacity {
+                virt_text.capacity = if virt_text.capacity != 0 {
+                    virt_text.capacity << 1 as ::core::ffi::c_int
+                } else {
+                    8 as size_t
+                };
+                virt_text.items = xrealloc(
+                    virt_text.items as *mut ::core::ffi::c_void,
+                    ::core::mem::size_of::<VirtTextChunk>().wrapping_mul(virt_text.capacity),
+                ) as *mut VirtTextChunk;
+            } else {
+            };
+            let c2rust_fresh24 = virt_text.size;
+            virt_text.size = virt_text.size.wrapping_add(1);
+            *virt_text.items.offset(c2rust_fresh24 as isize) = VirtTextChunk {
+                text: text,
+                hl_id: hl_id,
+            };
+            i = i.wrapping_add(1);
         }
         if !width.is_null() {
             *width = w;
@@ -2010,20 +1916,17 @@ pub unsafe extern "C" fn nvim__ns_set(
     if !ns_initialized(ns_id as uint32_t) {
         api_err_invalid(
             err,
-            b"ns_id\0".as_ptr() as *const ::core::ffi::c_char,
+            c"ns_id".as_ptr(),
             ::core::ptr::null::<::core::ffi::c_char>(),
             ns_id as int64_t,
-            false_0 != 0,
+            false,
         );
         return;
     }
-    let mut set_scoped: bool = true_0 != 0;
-    if (*opts).is_set__ns_opts_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_ns_opts__wins
-        != 0 as ::core::ffi::c_ulonglong
-    {
+    let mut set_scoped: bool = true;
+    if has_key((*opts).is_set__ns_opts_, KEYSET_OPTIDX_ns_opts__wins) {
         if (*opts).wins.size == 0 as size_t {
-            set_scoped = false_0 != 0;
+            set_scoped = false;
         }
         let mut windows: Set_ptr_t = Set_ptr_t {
             h: MAPHASH_INIT,
@@ -2163,10 +2066,10 @@ pub unsafe extern "C" fn nvim__ns_get(
     if !ns_initialized(ns_id as uint32_t) {
         api_err_invalid(
             err,
-            b"ns_id\0".as_ptr() as *const ::core::ffi::c_char,
+            c"ns_id".as_ptr(),
             ::core::ptr::null::<::core::ffi::c_char>(),
             ns_id as int64_t,
-            false_0 != 0,
+            false,
         );
         return opts;
     }
@@ -2269,3 +2172,13 @@ pub const KEYDICT_INIT: KeyDict_ns_opts = KeyDict_ns_opts {
 };
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
+/// `HAS_KEY(d, kind, key)`: is the keyset's "was this key given?" bit set?
+///
+/// The keysets carry one `is_set__<kind>_` mask whose bits are indexed by
+/// the generated `KEYSET_OPTIDX_<kind>__<key>` constants. c2rust expanded
+/// the macro at every use, which is three lines of shifting and casting per
+/// question asked.
+const fn has_key(set: OptionalKeys, idx: ::core::ffi::c_int) -> bool {
+    set & (1 as OptionalKeys) << idx != 0
+}

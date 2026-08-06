@@ -68,9 +68,7 @@ pub unsafe extern "C" fn nvim_command_output(
     mut command: String_0,
     mut err: *mut Error,
 ) -> String_0 {
-    let mut opts: KeyDict_exec_opts = KeyDict_exec_opts {
-        output: true_0 != 0,
-    };
+    let mut opts: KeyDict_exec_opts = KeyDict_exec_opts { output: true };
     return exec_impl(channel_id, command, &raw mut opts, err);
 }
 pub unsafe extern "C" fn nvim_execute_lua(
@@ -133,20 +131,20 @@ pub unsafe extern "C" fn nvim_buf_add_highlight(
     if !(line >= 0 as Integer && line < MAXLNUM as ::core::ffi::c_int as Integer) {
         api_err_invalid(
             err,
-            b"line number\0".as_ptr() as *const ::core::ffi::c_char,
-            b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+            c"line number".as_ptr(),
+            c"out of range".as_ptr(),
             0 as int64_t,
-            false_0 != 0,
+            false,
         );
         return 0 as Integer;
     }
     if !(col_start >= 0 as Integer && col_start <= MAXCOL as ::core::ffi::c_int as Integer) {
         api_err_invalid(
             err,
-            b"column\0".as_ptr() as *const ::core::ffi::c_char,
-            b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+            c"column".as_ptr(),
+            c"out of range".as_ptr(),
             0 as int64_t,
-            false_0 != 0,
+            false,
         );
         return 0 as Integer;
     }
@@ -180,10 +178,10 @@ pub unsafe extern "C" fn nvim_buf_add_highlight(
         col_end as colnr_T,
         decor,
         MT_FLAG_DECOR_HL as uint16_t,
-        true_0 != 0,
-        false_0 != 0,
-        false_0 != 0,
-        false_0 != 0,
+        true,
+        false,
+        false,
+        false,
         ::core::ptr::null_mut::<Error>(),
     );
     return ns_id;
@@ -204,7 +202,7 @@ pub unsafe extern "C" fn nvim_buf_set_virtual_text(
         api_set_error(
             err,
             kErrorTypeValidation,
-            b"Line number outside range\0".as_ptr() as *const ::core::ffi::c_char,
+            c"Line number outside range".as_ptr(),
         );
         return 0 as Integer;
     }
@@ -244,7 +242,7 @@ pub unsafe extern "C" fn nvim_buf_set_virtual_text(
     (*vt).width = width;
     (*vt).priority = 0 as DecorPriority;
     let mut decor: DecorInline = DecorInline {
-        ext: true_0 != 0,
+        ext: true,
         data: DecorInlineData {
             ext: DecorExt {
                 sh_idx: DECOR_ID_INVALID as uint32_t,
@@ -262,10 +260,10 @@ pub unsafe extern "C" fn nvim_buf_set_virtual_text(
         -1 as colnr_T,
         decor,
         0 as uint16_t,
-        true_0 != 0,
-        false_0 != 0,
-        false_0 != 0,
-        false_0 != 0,
+        true,
+        false,
+        false,
+        false,
         ::core::ptr::null_mut::<Error>(),
     );
     return src_id;
@@ -284,10 +282,10 @@ pub unsafe extern "C" fn nvim_get_hl_by_id(
     if !(syn_get_final_id(hl_id as ::core::ffi::c_int) != 0 as ::core::ffi::c_int) {
         api_err_invalid(
             err,
-            b"highlight id\0".as_ptr() as *const ::core::ffi::c_char,
+            c"highlight id".as_ptr(),
             ::core::ptr::null::<::core::ffi::c_char>(),
             hl_id as int64_t,
-            false_0 != 0,
+            false,
         );
         return dic;
     }
@@ -309,10 +307,10 @@ pub unsafe extern "C" fn nvim_get_hl_by_name(
     if !(id != 0 as ::core::ffi::c_int) {
         api_err_invalid(
             err,
-            b"highlight name\0".as_ptr() as *const ::core::ffi::c_char,
+            c"highlight name".as_ptr(),
             name.data,
             0 as int64_t,
-            true_0 != 0,
+            true,
         );
         return result;
     }
@@ -325,16 +323,7 @@ pub unsafe extern "C" fn buffer_insert(
     mut arena: *mut Arena,
     mut err: *mut Error,
 ) {
-    nvim_buf_set_lines(
-        0 as uint64_t,
-        buffer,
-        lnum,
-        lnum,
-        true_0 != 0,
-        lines,
-        arena,
-        err,
-    );
+    nvim_buf_set_lines(0 as uint64_t, buffer, lnum, lnum, true, lines, arena, err);
 }
 pub unsafe extern "C" fn buffer_get_line(
     mut buffer: Buffer,
@@ -352,7 +341,7 @@ pub unsafe extern "C" fn buffer_get_line(
         buffer,
         index,
         index + 1 as Integer,
-        true_0 != 0,
+        true,
         arena,
         ::core::ptr::null_mut::<lua_State>(),
         err,
@@ -388,7 +377,7 @@ pub unsafe extern "C" fn buffer_set_line(
         buffer,
         index,
         index + 1 as Integer,
-        true_0 != 0,
+        true,
         array,
         arena,
         err,
@@ -411,7 +400,7 @@ pub unsafe extern "C" fn buffer_del_line(
         buffer,
         index,
         index + 1 as Integer,
-        true_0 != 0,
+        true,
         array,
         arena,
         err,
@@ -434,7 +423,7 @@ pub unsafe extern "C" fn buffer_get_line_slice(
         buffer,
         start,
         end,
-        false_0 != 0,
+        false,
         arena,
         ::core::ptr::null_mut::<lua_State>(),
         err,
@@ -458,7 +447,7 @@ pub unsafe extern "C" fn buffer_set_line_slice(
         buffer,
         start,
         end,
-        false_0 != 0,
+        false,
         replacement,
         arena,
         err,
@@ -478,15 +467,7 @@ pub unsafe extern "C" fn buffer_set_var(
             data: C2Rust_Unnamed { boolean: false },
         };
     }
-    return dict_set_var(
-        (*buf).b_vars,
-        name,
-        value,
-        false_0 != 0,
-        true_0 != 0,
-        arena,
-        err,
-    );
+    return dict_set_var((*buf).b_vars, name, value, false, true, arena, err);
 }
 pub unsafe extern "C" fn buffer_del_var(
     mut buffer: Buffer,
@@ -508,8 +489,8 @@ pub unsafe extern "C" fn buffer_del_var(
             type_0: kObjectTypeNil,
             data: C2Rust_Unnamed { boolean: false },
         },
-        true_0 != 0,
-        true_0 != 0,
+        true,
+        true,
         arena,
         err,
     );
@@ -528,15 +509,7 @@ pub unsafe extern "C" fn window_set_var(
             data: C2Rust_Unnamed { boolean: false },
         };
     }
-    return dict_set_var(
-        (*win).w_vars,
-        name,
-        value,
-        false_0 != 0,
-        true_0 != 0,
-        arena,
-        err,
-    );
+    return dict_set_var((*win).w_vars, name, value, false, true, arena, err);
 }
 pub unsafe extern "C" fn window_del_var(
     mut window: Window,
@@ -558,8 +531,8 @@ pub unsafe extern "C" fn window_del_var(
             type_0: kObjectTypeNil,
             data: C2Rust_Unnamed { boolean: false },
         },
-        true_0 != 0,
-        true_0 != 0,
+        true,
+        true,
         arena,
         err,
     );
@@ -578,15 +551,7 @@ pub unsafe extern "C" fn tabpage_set_var(
             data: C2Rust_Unnamed { boolean: false },
         };
     }
-    return dict_set_var(
-        (*tab).tp_vars,
-        name,
-        value,
-        false_0 != 0,
-        true_0 != 0,
-        arena,
-        err,
-    );
+    return dict_set_var((*tab).tp_vars, name, value, false, true, arena, err);
 }
 pub unsafe extern "C" fn tabpage_del_var(
     mut tabpage: Tabpage,
@@ -608,8 +573,8 @@ pub unsafe extern "C" fn tabpage_del_var(
             type_0: kObjectTypeNil,
             data: C2Rust_Unnamed { boolean: false },
         },
-        true_0 != 0,
-        true_0 != 0,
+        true,
+        true,
         arena,
         err,
     );
@@ -620,15 +585,7 @@ pub unsafe extern "C" fn vim_set_var(
     mut arena: *mut Arena,
     mut err: *mut Error,
 ) -> Object {
-    return dict_set_var(
-        get_globvar_dict(),
-        name,
-        value,
-        false_0 != 0,
-        true_0 != 0,
-        arena,
-        err,
-    );
+    return dict_set_var(get_globvar_dict(), name, value, false, true, arena, err);
 }
 pub unsafe extern "C" fn vim_del_var(
     mut name: String_0,
@@ -642,8 +599,8 @@ pub unsafe extern "C" fn vim_del_var(
             type_0: kObjectTypeNil,
             data: C2Rust_Unnamed { boolean: false },
         },
-        true_0 != 0,
-        true_0 != 0,
+        true,
+        true,
         arena,
         err,
     );
@@ -757,10 +714,10 @@ unsafe extern "C" fn get_option_from(
     if !(name.size > 0 as size_t) {
         api_err_invalid(
             err,
-            b"option name\0".as_ptr() as *const ::core::ffi::c_char,
-            b"<empty>\0".as_ptr() as *const ::core::ffi::c_char,
+            c"option name".as_ptr(),
+            c"<empty>".as_ptr(),
             0 as int64_t,
-            true_0 != 0,
+            true,
         );
         return object {
             type_0: kObjectTypeNil,
@@ -769,13 +726,7 @@ unsafe extern "C" fn get_option_from(
     }
     let mut opt_idx: OptIndex = find_option(name.data);
     if !(opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int) {
-        api_err_invalid(
-            err,
-            b"option name\0".as_ptr() as *const ::core::ffi::c_char,
-            name.data,
-            0 as int64_t,
-            true_0 != 0,
-        );
+        api_err_invalid(err, c"option name".as_ptr(), name.data, 0 as int64_t, true);
         return object {
             type_0: kObjectTypeNil,
             data: C2Rust_Unnamed { boolean: false },
@@ -807,13 +758,7 @@ unsafe extern "C" fn get_option_from(
         }
     }
     if !(value.type_0 as ::core::ffi::c_int != kOptValTypeNil as ::core::ffi::c_int) {
-        api_err_invalid(
-            err,
-            b"option name\0".as_ptr() as *const ::core::ffi::c_char,
-            name.data,
-            0 as int64_t,
-            true_0 != 0,
-        );
+        api_err_invalid(err, c"option name".as_ptr(), name.data, 0 as int64_t, true);
         return object {
             type_0: kObjectTypeNil,
             data: C2Rust_Unnamed { boolean: false },
@@ -832,29 +777,23 @@ unsafe extern "C" fn set_option_to(
     if !(name.size > 0 as size_t) {
         api_err_invalid(
             err,
-            b"option name\0".as_ptr() as *const ::core::ffi::c_char,
-            b"<empty>\0".as_ptr() as *const ::core::ffi::c_char,
+            c"option name".as_ptr(),
+            c"<empty>".as_ptr(),
             0 as int64_t,
-            true_0 != 0,
+            true,
         );
         return;
     }
     let mut opt_idx: OptIndex = find_option(name.data);
     if !(opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int) {
-        api_err_invalid(
-            err,
-            b"option name\0".as_ptr() as *const ::core::ffi::c_char,
-            name.data,
-            0 as int64_t,
-            true_0 != 0,
-        );
+        api_err_invalid(err, c"option name".as_ptr(), name.data, 0 as int64_t, true);
         return;
     }
     let Some(optval) = object_as_optval(value) else {
         api_err_exp(
             err,
-            b"value\0".as_ptr() as *const ::core::ffi::c_char,
-            b"valid option type\0".as_ptr() as *const ::core::ffi::c_char,
+            c"value".as_ptr(),
+            c"valid option type".as_ptr(),
             api_typename(value.type_0),
         );
         return;
@@ -896,85 +835,72 @@ pub unsafe extern "C" fn nvim_call_atomic(
             {
                 api_err_exp(
                     err,
-                    b"'calls' item\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"'calls' item".as_ptr(),
                     api_typename(kObjectTypeArray),
                     api_typename((*calls.items.offset(i as isize)).type_0),
                 );
                 break '_theend;
-            } else {
-                let mut call: Array = (*calls.items.offset(i as isize)).data.array;
-                if !(call.size == 2 as size_t) {
-                    api_err_exp(
-                        err,
-                        b"'calls' item\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"2-item Array\0".as_ptr() as *const ::core::ffi::c_char,
-                        ::core::ptr::null::<::core::ffi::c_char>(),
-                    );
-                    break '_theend;
-                } else if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-                    != (*call.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-                        as ::core::ffi::c_uint
-                {
-                    api_err_exp(
-                        err,
-                        b"name\0".as_ptr() as *const ::core::ffi::c_char,
-                        api_typename(kObjectTypeString),
-                        api_typename((*call.items.offset(0 as ::core::ffi::c_int as isize)).type_0),
-                    );
-                    break '_theend;
-                } else {
-                    let mut name: String_0 = (*call.items.offset(0 as ::core::ffi::c_int as isize))
-                        .data
-                        .string;
-                    if kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                        != (*call.items.offset(1 as ::core::ffi::c_int as isize)).type_0
-                            as ::core::ffi::c_uint
-                    {
-                        api_err_exp(
-                            err,
-                            b"call args\0".as_ptr() as *const ::core::ffi::c_char,
-                            api_typename(kObjectTypeArray),
-                            api_typename(
-                                (*call.items.offset(1 as ::core::ffi::c_int as isize)).type_0,
-                            ),
-                        );
-                        break '_theend;
-                    } else {
-                        let mut args: Array =
-                            (*call.items.offset(1 as ::core::ffi::c_int as isize))
-                                .data
-                                .array;
-                        let mut handler: MsgpackRpcRequestHandler = msgpack_rpc_get_handler_for(
-                            name.data,
-                            name.size,
-                            &raw mut nested_error,
-                        );
-                        if nested_error.type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
-                        {
-                            break;
-                        }
-                        let mut result: Object = handler.fn_0.expect("non-null function pointer")(
-                            channel_id,
-                            args,
-                            arena,
-                            &raw mut nested_error,
-                        );
-                        if nested_error.type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
-                        {
-                            break;
-                        }
-                        let c2rust_fresh0 = results.size;
-                        results.size = results.size.wrapping_add(1);
-                        *results.items.offset(c2rust_fresh0 as isize) = copy_object(result, arena);
-                        if handler.ret_alloc {
-                            api_free_object(result);
-                        }
-                        i = i.wrapping_add(1);
-                    }
-                }
             }
+            let mut call: Array = (*calls.items.offset(i as isize)).data.array;
+            if !(call.size == 2 as size_t) {
+                api_err_exp(
+                    err,
+                    c"'calls' item".as_ptr(),
+                    c"2-item Array".as_ptr(),
+                    ::core::ptr::null::<::core::ffi::c_char>(),
+                );
+                break '_theend;
+            } else if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
+                != (*call.items.offset(0 as ::core::ffi::c_int as isize)).type_0
+                    as ::core::ffi::c_uint
+            {
+                api_err_exp(
+                    err,
+                    c"name".as_ptr(),
+                    api_typename(kObjectTypeString),
+                    api_typename((*call.items.offset(0 as ::core::ffi::c_int as isize)).type_0),
+                );
+                break '_theend;
+            }
+            let mut name: String_0 = (*call.items.offset(0 as ::core::ffi::c_int as isize))
+                .data
+                .string;
+            if kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
+                != (*call.items.offset(1 as ::core::ffi::c_int as isize)).type_0
+                    as ::core::ffi::c_uint
+            {
+                api_err_exp(
+                    err,
+                    c"call args".as_ptr(),
+                    api_typename(kObjectTypeArray),
+                    api_typename((*call.items.offset(1 as ::core::ffi::c_int as isize)).type_0),
+                );
+                break '_theend;
+            }
+            let mut args: Array = (*call.items.offset(1 as ::core::ffi::c_int as isize))
+                .data
+                .array;
+            let mut handler: MsgpackRpcRequestHandler =
+                msgpack_rpc_get_handler_for(name.data, name.size, &raw mut nested_error);
+            if nested_error.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                break;
+            }
+            let mut result: Object = handler.fn_0.expect("non-null function pointer")(
+                channel_id,
+                args,
+                arena,
+                &raw mut nested_error,
+            );
+            if nested_error.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                break;
+            }
+            let c2rust_fresh0 = results.size;
+            results.size = results.size.wrapping_add(1);
+            *results.items.offset(c2rust_fresh0 as isize) = copy_object(result, arena);
+            if handler.ret_alloc {
+                api_free_object(result);
+            }
+            i = i.wrapping_add(1);
         }
         let c2rust_fresh1 = rv.size;
         rv.size = rv.size.wrapping_add(1);
@@ -1080,7 +1006,7 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
                 msg((*line_buf).items, 0 as ::core::ffi::c_int);
             }
             if msg_silent.get() == 0 as ::core::ffi::c_int {
-                msg_didout.set(true_0 != 0);
+                msg_didout.set(true);
             }
             (*line_buf).size = (*line_buf).size.wrapping_sub((*line_buf).size);
             (*line_buf).capacity = LINE_BUFFER_MIN_SIZE as ::core::ffi::c_int as size_t;
@@ -1156,7 +1082,7 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
                 msg((*line_buf).items, 0 as ::core::ffi::c_int);
             }
             if msg_silent.get() == 0 as ::core::ffi::c_int {
-                msg_didout.set(true_0 != 0);
+                msg_didout.set(true);
             }
             (*line_buf).size = (*line_buf).size.wrapping_sub((*line_buf).size);
             (*line_buf).capacity = LINE_BUFFER_MIN_SIZE as ::core::ffi::c_int as size_t;
@@ -1204,13 +1130,13 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
     msg_end();
 }
 pub unsafe extern "C" fn nvim_out_write(mut str: String_0) {
-    write_msg(str, false_0 != 0, false_0 != 0);
+    write_msg(str, false, false);
 }
 pub unsafe extern "C" fn nvim_err_write(mut str: String_0) {
-    write_msg(str, true_0 != 0, false_0 != 0);
+    write_msg(str, true, false);
 }
 pub unsafe extern "C" fn nvim_err_writeln(mut str: String_0) {
-    write_msg(str, true_0 != 0, true_0 != 0);
+    write_msg(str, true, true);
 }
 pub unsafe extern "C" fn nvim_notify(
     mut msg_0: String_0,
@@ -1250,8 +1176,7 @@ pub unsafe extern "C" fn nvim_notify(
     };
     return nlua_exec(
         String_0 {
-            data: b"return vim.notify(...)\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: c"return vim.notify(...)".as_ptr() as *mut ::core::ffi::c_char,
             size: ::core::mem::size_of::<[::core::ffi::c_char; 23]>().wrapping_sub(1 as size_t),
         },
         ::core::ptr::null::<::core::ffi::c_char>(),
@@ -1270,7 +1195,7 @@ pub const DECOR_HIGHLIGHT_INLINE_INIT: DecorHighlightInline = DecorHighlightInli
     conceal_char: 0 as schar_T,
 };
 pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
-    ext: false_0 != 0,
+    ext: false,
     data: DecorInlineData {
         hl: DECOR_HIGHLIGHT_INLINE_INIT,
     },
