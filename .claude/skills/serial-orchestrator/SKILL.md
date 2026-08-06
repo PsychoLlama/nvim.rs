@@ -15,8 +15,14 @@ arguments:
 - Read $migration_plan to understand your slice of work.
 - Don't implement changes yourself; delegate work to subagents (model=opus, not your default).
 - Don't try to multi-task subagents - one at a time, all on the current branch.
+
+## Scratchpad
+
 - Carry learnings from one subagent to the next using a scratchpad.
-- Instruct the subagent to compact learnings to keep it concise and relevant.
+- Each slice gets its own learnings section under a common directory.
+- Provide an index file linking to each learnings file, maintained by each serial agent.
+- Instruct each subagent to compact the index file at the end of its work to keep it concise and relevant.
+- Declare a maximum size for the index file. Have agents keep it below that size. Otherwise, it risks serious context bloat.
 
 ## Unplanned Work
 
