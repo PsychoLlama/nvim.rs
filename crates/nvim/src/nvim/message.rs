@@ -151,8 +151,6 @@ pub type MessageHistoryEntry = msg_hist;
 /// truncates a file message at the head.
 pub const SHM_TRUNCALL: c_uint = 84;
 pub const SHM_TRUNC: c_uint = 116;
-/// The longest UTF-8 sequence, including composing characters.
-pub const MB_MAXBYTES: c_uint = 21;
 /// [`do_dialog`] answers, as `confirm()` reports them.
 pub const VIM_DISCARDALL: c_uint = 6;
 pub const VIM_ALL: c_uint = 5;

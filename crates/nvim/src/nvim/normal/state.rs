@@ -47,7 +47,7 @@ use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::message::{may_clear_sb_text, msg, msg_delay, wait_return};
 use crate::src::nvim::normal::{
     CA_COMMAND_BUSY, MOD_MASK_SHIFT, NUL, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS, NV_STS,
-    NormalState, OP_NOP, SHM_FILEINFO, check_scrollbind, clearop, clearopbeep, current_oap,
+    NormalState, SHM_FILEINFO, check_scrollbind, clearop, clearopbeep, current_oap,
     end_visual_mode, false_0, find_command, normal_execute, nv_cmds, true_0, unshift_special,
 };
 use crate::src::nvim::option::shortmess;
@@ -60,7 +60,7 @@ use crate::src::nvim::state::{
     state_enter, state_no_longer_safe,
 };
 use crate::src::nvim::terminal::terminal_check_refresh;
-use crate::src::nvim::types::{VimState, cmdarg_T, int64_t, oparg_T};
+use crate::src::nvim::types::{OP_NOP, VimState, cmdarg_T, int64_t, oparg_T};
 use crate::src::nvim::ui::{ui_cursor_shape, ui_flush};
 use crate::src::nvim::window::{
     may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized,

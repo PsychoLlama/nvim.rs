@@ -35,7 +35,7 @@ use crate::src::nvim::memory::{xmalloc, xrealloc};
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{gettext, snprintf, strlen, strncasecmp, strncmp};
 use crate::src::nvim::strings::vim_strchr;
-use crate::src::nvim::types::{key_extra, scid_T, size_t, uvarnumber_T, varnumber_T};
+use crate::src::nvim::types::{MB_MAXBYTES, key_extra, scid_T, size_t, uvarnumber_T, varnumber_T};
 
 mod codes;
 pub use self::codes::*;
@@ -47,9 +47,6 @@ const CPO_BSLASH: c_int = 'B' as c_int;
 
 /// [`vim_str2nr`] flags: accept decimal, octal, hex and binary alike.
 const STR2NR_ALL: c_int = 15;
-
-/// The longest UTF-8 sequence [`utf_char2bytes`] can write.
-const MB_MAXBYTES: usize = 21;
 
 /// The key code of a `KS_EXTRA` key — everything with no termcap name of its
 /// own, which is most of what a modern terminal sends.

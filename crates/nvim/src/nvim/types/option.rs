@@ -76,3 +76,15 @@ pub struct vimoption_T {
     pub def_val: OptVal,
     pub script_ctx: sctx_T,
 }
+
+/// `'backspace'` flags, as the letters `can_bs` is asked about. `BS_NOSTOP`
+/// behaves exactly like `BS_START` except that it does not stop at the start
+/// of the insert point.
+pub const BS_INDENT: ::core::ffi::c_int = 'i' as ::core::ffi::c_int;
+pub const BS_EOL: ::core::ffi::c_int = 'l' as ::core::ffi::c_int;
+pub const BS_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
+pub const BS_NOSTOP: ::core::ffi::c_int = 'p' as ::core::ffi::c_int;
+
+/// The fixed value of `'maxcombine'`: the most composing characters that can
+/// follow a base character.
+pub const MAX_MCO: ::core::ffi::c_int = 6;

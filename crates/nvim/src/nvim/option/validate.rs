@@ -25,11 +25,11 @@ use crate::src::nvim::memory::xfree;
 use crate::src::nvim::options::*;
 use crate::src::nvim::os::libc::{gettext, snprintf};
 use crate::src::nvim::strings::vim_snprintf;
-use crate::src::nvim::types::{OptIndex, OptInt, OptVal, size_t, vimoption_T};
+use crate::src::nvim::types::{MAX_MCO, OptIndex, OptInt, OptVal, size_t, vimoption_T};
 use crate::src::nvim::window::{min_rows_for_all_tabpages, win_default_scroll};
 
 use super::{
-    INT_MAX, INT_MIN, IOSIZE, MAX_MCO, MAX_NUMBERWIDTH, MIN_COLUMNS, OPT_GLOBAL, OPT_LOCAL, SB_MAX,
+    INT_MAX, INT_MIN, IOSIZE, MAX_NUMBERWIDTH, MIN_COLUMNS, OPT_GLOBAL, OPT_LOCAL, SB_MAX,
     TABSTOP_MAX, get_option_unset_value, kOptValTypeNil, kOptValTypeNumber, option_has_type,
     option_is_global_local, optval_copy, optval_equal, optval_to_cstr, optval_type_name,
 };

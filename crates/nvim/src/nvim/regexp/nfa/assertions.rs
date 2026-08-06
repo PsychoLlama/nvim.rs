@@ -14,10 +14,10 @@ use crate::src::nvim::mark::mark_get;
 use crate::src::nvim::plines::win_linetabsize;
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::regexp::{
-    MB_MAXBYTES, NFA_COL, NFA_LNUM, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT, NFA_VCOL, kMarkBufLocal,
-    nfa_state_T, reg_getline, reg_getline_len, reg_match_visual, rex,
+    NFA_COL, NFA_LNUM, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT, NFA_VCOL, kMarkBufLocal, nfa_state_T,
+    reg_getline, reg_getline_len, reg_match_visual, rex,
 };
-use crate::src::nvim::types::{colnr_T, fmark_T, linenr_T, uint8_t, win_T};
+use crate::src::nvim::types::{MB_MAXBYTES, colnr_T, fmark_T, linenr_T, uint8_t, win_T};
 
 /// The column the match has reached, in bytes from the start of the line.
 fn col() -> colnr_T {

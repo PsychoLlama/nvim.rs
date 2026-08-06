@@ -30,6 +30,7 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
+    CONV_9_TO_UTF8, CONV_ICONV, CONV_NONE, CONV_TO_LATIN1, CONV_TO_LATIN9, CONV_TO_UTF8,
     CharBoundsOff, CharInfo, EvalFuncData, GraphemeState, StrCharInfo, VAR_LIST, VAR_NUMBER,
     VAR_STRING, colnr_T, expand_T, iconv_t, int8_t, int32_t, int64_t, list_T, listitem_T, pos_T,
     ptrdiff_t, schar_T, size_t, ssize_t, typval_T, uint8_t, uint32_t, uint64_t, uintptr_t,
@@ -74,7 +75,6 @@ pub const kWorking: WorkingStatus = 1;
 pub const kUnknown: WorkingStatus = 0;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const MB_MAXCHAR: C2Rust_Unnamed_18 = 6;
-pub const MB_MAXBYTES: C2Rust_Unnamed_18 = 21;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
 pub const ENC_MACROMAN: C2Rust_Unnamed_19 = 2048;
 pub const ENC_LATIN9: C2Rust_Unnamed_19 = 1024;
@@ -87,13 +87,6 @@ pub const ENC_ENDIAN_B: C2Rust_Unnamed_19 = 16;
 pub const ENC_UNICODE: C2Rust_Unnamed_19 = 4;
 pub const ENC_DBCS: C2Rust_Unnamed_19 = 2;
 pub const ENC_8BIT: C2Rust_Unnamed_19 = 1;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const CONV_ICONV: C2Rust_Unnamed_20 = 5;
-pub const CONV_TO_LATIN9: C2Rust_Unnamed_20 = 4;
-pub const CONV_TO_LATIN1: C2Rust_Unnamed_20 = 3;
-pub const CONV_9_TO_UTF8: C2Rust_Unnamed_20 = 2;
-pub const CONV_TO_UTF8: C2Rust_Unnamed_20 = 1;
-pub const CONV_NONE: C2Rust_Unnamed_20 = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_21 {

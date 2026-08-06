@@ -19,12 +19,12 @@ use crate::src::nvim::os::fs::os_fopen;
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{fclose, gettext, strcpy, strlen, strncmp};
 use crate::src::nvim::strings::{has_non_ascii, vim_snprintf, vim_strchr};
-use crate::src::nvim::types::{linenr_T, size_t, uint8_t};
+use crate::src::nvim::types::{CONV_NONE, linenr_T, size_t, uint8_t};
 
 use super::wordtree::store_word;
 use super::{
-    CONV_NONE, FAIL, IOSIZE, MAXLINELEN, MAXREGIONS, NUL, OK, WF_BANNED, WF_FIXCAP, WF_KEEPCAP,
-    WF_RARE, WF_REGION, spell_message, spellinfo_T,
+    FAIL, IOSIZE, MAXLINELEN, MAXREGIONS, NUL, OK, WF_BANNED, WF_FIXCAP, WF_KEEPCAP, WF_RARE,
+    WF_REGION, spell_message, spellinfo_T,
 };
 
 /// Read a plain word list: one word per line, with optional `/` flags, and

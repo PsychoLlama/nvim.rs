@@ -25,7 +25,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::memline::ml_get_len;
 use crate::src::nvim::message::{msg, msg_ext_set_trigger};
 use crate::src::nvim::normal::{
-    CA_COMMAND_BUSY, DOCMD_KEEPLINE, GETF_ALT, GETF_SETMARK, NUL, NULL, OP_NOP, checkclearop,
+    CA_COMMAND_BUSY, DOCMD_KEEPLINE, GETF_ALT, GETF_SETMARK, NUL, NULL, checkclearop,
     checkclearopq, clearop, clearopbeep, end_visual_mode, false_0, kMTCharWise, nv_left,
     nv_operator, nv_pcmark, true_0, v_visop,
 };
@@ -33,7 +33,7 @@ use crate::src::nvim::options::kOptBoFlagEsc;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::state::{may_trigger_modechanged, state_handle_k_event};
 use crate::src::nvim::syntax::syn_stack_free_all;
-use crate::src::nvim::types::{cmdarg_T, linenr_T};
+use crate::src::nvim::types::{OP_NOP, cmdarg_T, linenr_T};
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::undo::anyBufIsChanged;
 use crate::src::nvim::window::do_window;

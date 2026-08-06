@@ -14,9 +14,9 @@ use crate::src::nvim::path::{FreeWild, path_tail};
 use crate::src::nvim::spell::{did_set_spelltab, spell_enc, spelltab};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
-    CMD_spellrare, CMD_spellundo, CMD_spellwrong, OptInt, OptValType, SpellAddType, XDGVarType,
-    buf_T, etype_T, exarg_T, file_comparison, fromto_T, garray_T, hashitem_T, hashtab_T, regprog_T,
-    size_t, spelltab_T, time_t, uint8_t, vimconv_T,
+    CMD_spellrare, CMD_spellundo, CMD_spellwrong, CONV_NONE, OptInt, OptValType, SpellAddType,
+    XDGVarType, buf_T, etype_T, exarg_T, file_comparison, fromto_T, garray_T, hashitem_T,
+    hashtab_T, regprog_T, size_t, spelltab_T, time_t, uint8_t, vimconv_T,
 };
 use crate::src::nvim::ui::ui_flush;
 mod add;
@@ -49,8 +49,6 @@ pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISdigit: C2Rust_Unnamed = 2048;
 pub const kOptValTypeString: OptValType = 2;
 pub const ETYPE_SPELL: etype_T = 9;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const CONV_NONE: C2Rust_Unnamed_17 = 0;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const OPT_LOCAL: C2Rust_Unnamed_18 = 2;
 pub const kXDGDataHome: XDGVarType = 1;

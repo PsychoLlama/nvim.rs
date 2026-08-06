@@ -11,12 +11,9 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::keycodes::{Ctrl_H, Ctrl_RSB, Ctrl_V, key_escape};
-use crate::src::nvim::types::kErrorTypeNone;
+use crate::src::nvim::types::{MB_MAXBYTES, kErrorTypeNone};
 use core::ffi::{c_char, c_int};
 use core::ptr;
-
-/// Longest UTF-8 sequence a character can occupy.
-const MB_MAXBYTES: usize = 21;
 
 /// Whether `mp`'s LHS is exactly the `len` bytes at `word`, in a mode that is
 /// current.

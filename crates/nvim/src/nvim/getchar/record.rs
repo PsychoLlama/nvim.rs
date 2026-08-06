@@ -16,10 +16,8 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::keycodes::{KE_IGNORE, KS_EXTRA, key_unescape};
+use crate::src::nvim::types::MB_MAXBYTES;
 use core::ffi::{c_char, c_int, c_uint};
-
-/// Longest UTF-8 sequence a character can occupy.
-const MB_MAXBYTES: usize = 21;
 
 impl gotchars_state_T {
     /// A state machine with nothing pending.

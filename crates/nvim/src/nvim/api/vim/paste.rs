@@ -10,6 +10,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::api::private::helpers::array_add;
+use crate::src::nvim::types::PUT_CURSEND;
 
 pub unsafe extern "C" fn nvim_paste(
     mut channel_id: uint64_t,

@@ -11,6 +11,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::CONV_NONE;
 
 /// Allocate a `dictitem_T` sized for a `key_len`-byte key, and copy the key in.
 ///

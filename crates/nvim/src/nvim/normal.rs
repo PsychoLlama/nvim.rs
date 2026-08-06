@@ -115,37 +115,17 @@ pub(crate) struct nv_cmd {
 /// ABI ledger nor the unit-test cdefs name any of them -- so the handlers are
 /// ordinary Rust functions rather than `extern "C"` ones.
 pub(crate) type nv_func_T = Option<unsafe fn(*mut cmdarg_T)>;
-pub const OP_NOP: c_uint = 0;
-pub const OP_YANK: c_uint = 2;
-pub const OP_RSHIFT: c_uint = 5;
-pub const OP_LSHIFT: c_uint = 4;
-pub const OP_DELETE: c_uint = 1;
-pub const PUT_LINE_FORWARD: c_uint = 32;
-pub const PUT_LINE_SPLIT: c_uint = 16;
-pub const PUT_LINE: c_uint = 8;
-pub const PUT_BLOCK_INNER: c_uint = 64;
-pub const PUT_CURSEND: c_uint = 2;
-pub const PUT_FIXINDENT: c_uint = 1;
 pub const FM_FORWARD: c_uint = 2;
-pub const OP_CHANGE: c_uint = 3;
-pub const OP_NR_SUB: c_uint = 29;
-pub const OP_NR_ADD: c_uint = 28;
-pub const OP_TILDE: c_uint = 7;
 pub const SPELL_ADD_BAD: SpellAddType = 1;
 pub const SPELL_ADD_GOOD: SpellAddType = 0;
 pub const SMT_RARE: smt_T = 2;
 pub const SMT_BAD: smt_T = 1;
-pub const OP_FOLD: c_uint = 19;
-pub const OP_LOWER: c_uint = 12;
-pub const OP_FORMAT: c_uint = 9;
 pub const FM_BACKWARD: c_uint = 1;
 pub const ACTION_GOTO: c_uint = 2;
 pub const ACTION_SHOW: c_uint = 1;
 pub const ACTION_SHOW_ALL: c_uint = 4;
 pub const FIND_ANY: c_uint = 1;
 pub const FIND_DEFINE: c_uint = 2;
-pub const OP_UPPER: c_uint = 11;
-pub const OP_ROT13: c_uint = 15;
 pub const DT_POP: c_uint = 2;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -168,7 +148,6 @@ pub(crate) struct NormalState {
     pub old_col: c_int,
     pub old_pos: pos_T,
 }
-pub const OP_COLON: c_uint = 10;
 pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,

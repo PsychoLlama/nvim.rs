@@ -16,6 +16,7 @@ use crate::src::nvim::options::{
 };
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::regexp::RE_MAGIC;
+use crate::src::nvim::types::CONV_NONE;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::collections::HashSet;

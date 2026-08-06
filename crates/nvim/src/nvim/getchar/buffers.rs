@@ -17,15 +17,13 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::keycodes::{Ctrl_O, Ctrl_V, key_escape};
+use crate::src::nvim::types::MB_MAXBYTES;
 use core::ffi::{c_char, c_int, c_uint};
 use core::mem::offset_of;
 use core::ptr;
 
 /// Smallest block `add_buff` will allocate; upstream's `MINIMAL_SIZE`.
 const MINIMAL_SIZE: usize = 20;
-
-/// Longest UTF-8 sequence `utf_char2bytes` can write, plus its NUL.
-const MB_MAXBYTES: usize = 21;
 
 /// The bytes of one block, as a pointer over the whole allocation.
 ///

@@ -35,11 +35,9 @@ use crate::src::nvim::memory::xfree;
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::{
     BL_WHITE, CA_COMMAND_BUSY, CAR, DEL, ESC, FO_OPEN_COMS, ML_DEL_MESSAGE, ML_EMPTY, NL, NUL,
-    OP_DELETE, OP_NOP, OP_NR_ADD, OP_NR_SUB, OP_TILDE, OPENLINE_DO_COM, PUT_BLOCK_INNER,
-    PUT_CURSEND, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, REPLACE_CR_NCHAR,
-    REPLACE_NL_NCHAR, TAB, VALID_CROW, VIsual_mode_orig, checkclearop, checkclearopq, clearop,
-    clearopbeep, false_0, nv_object, nv_operator, prep_redo, prep_redo_cmd, true_0, v_swap_corners,
-    v_visop,
+    OPENLINE_DO_COM, REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB, VALID_CROW, VIsual_mode_orig,
+    checkclearop, checkclearopq, clearop, clearopbeep, false_0, nv_object, nv_operator, prep_redo,
+    prep_redo_cmd, true_0, v_swap_corners, v_visop,
 };
 use crate::src::nvim::ops::{do_join, do_pending_operator, op_addsub, swapchar};
 use crate::src::nvim::option::get_ve_flags;
@@ -51,7 +49,10 @@ use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::state::{MODE_INSERT, MODE_REPLACE, virtual_active};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::textformat::{auto_format, has_format_option};
-use crate::src::nvim::types::{cmdarg_T, colnr_T, linenr_T, size_t, yankreg_T};
+use crate::src::nvim::types::{
+    OP_DELETE, OP_NOP, OP_NR_ADD, OP_NR_SUB, OP_TILDE, PUT_BLOCK_INNER, PUT_CURSEND, PUT_FIXINDENT,
+    PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, cmdarg_T, colnr_T, linenr_T, size_t, yankreg_T,
+};
 use crate::src::nvim::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 

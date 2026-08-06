@@ -12,11 +12,9 @@ use super::*;
 use crate::src::nvim::keycodes::{
     K_C_END, K_C_HOME, K_COMMAND, K_IGNORE, K_LUA, K_MOUSEMOVE, key_unescape,
 };
+use crate::src::nvim::types::MB_MAXBYTES;
 use core::ffi::c_int;
 use core::ptr;
-
-/// Longest UTF-8 sequence a character can occupy.
-const MB_MAXBYTES: usize = 21;
 
 /// Fold `modifiers` into `c` where a single code stands for the combination.
 ///

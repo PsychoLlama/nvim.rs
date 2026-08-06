@@ -188,10 +188,6 @@ pub const DOBUF_FIRST: dobuf_start_values = 1;
 pub const DOBUF_CURRENT: dobuf_start_values = 0;
 pub const kChannelPartAll: ChannelPart = 4;
 pub const kMTLineWise: MotionType = 1;
-pub type C2Rust_Unnamed_42 = c_uint;
-pub const PUT_LINE: C2Rust_Unnamed_42 = 8;
-pub const PUT_CURSLINE: C2Rust_Unnamed_42 = 4;
-pub const PUT_FIXINDENT: C2Rust_Unnamed_42 = 1;
 pub type C2Rust_Unnamed_43 = c_uint;
 pub const WILD_EXPAND_FREE: C2Rust_Unnamed_43 = 2;
 pub type C2Rust_Unnamed_44 = c_uint;
@@ -266,10 +262,6 @@ pub struct wcmd_T {
     pub lnum: linenr_T,
 }
 pub const ETYPE_EXCEPT: etype_T = 5;
-pub const OP_LSHIFT: C2Rust_Unnamed_67 = 4;
-pub const OP_RSHIFT: C2Rust_Unnamed_67 = 5;
-pub const OP_YANK: C2Rust_Unnamed_67 = 2;
-pub const OP_DELETE: C2Rust_Unnamed_67 = 1;
 pub const FNAME_MESS: C2Rust_Unnamed_56 = 1;
 pub const DT_LTAG: C2Rust_Unnamed_65 = 11;
 pub const DT_TAG: C2Rust_Unnamed_65 = 1;
@@ -303,7 +295,6 @@ pub type C2Rust_Unnamed_59 = c_uint;
 pub type C2Rust_Unnamed_61 = c_uint;
 pub type C2Rust_Unnamed_62 = c_uint;
 pub type C2Rust_Unnamed_65 = c_uint;
-pub type C2Rust_Unnamed_67 = c_uint;
 pub const INT32_MAX: c_int = 2147483647 as c_int;
 pub const NULL_1: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const EXIT_FAILURE: c_int = 1 as c_int;

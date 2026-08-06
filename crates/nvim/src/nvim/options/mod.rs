@@ -75,24 +75,23 @@ use crate::src::nvim::ops::did_set_operatorfunc;
 use crate::src::nvim::option::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, CPO_VIM, CTRL_F_STR, DFLT_COLS, DFLT_EFM, DFLT_ERRORFILE,
     DFLT_FO_VIM, DFLT_GFN, DFLT_GREPFORMAT, DFLT_HELPFILE, DFLT_ROWS, ENC_DFLT, HIGHLIGHT_INIT,
-    LISPWORD_VALUE, MAX_MCO, TAB, did_set_arabic, did_set_autochdir, did_set_binary,
-    did_set_buflisted, did_set_cmdheight, did_set_diff, did_set_eof_eol_fixeol_bomb,
-    did_set_equalalways, did_set_foldlevel, did_set_foldminlines, did_set_foldnestmax,
-    did_set_helpheight, did_set_hlsearch, did_set_ignorecase, did_set_iminsert,
-    did_set_langnoremap, did_set_langremap, did_set_laststatus, did_set_lines_or_columns,
-    did_set_lisp, did_set_modifiable, did_set_modified, did_set_number_relativenumber,
-    did_set_numberwidth, did_set_paste, did_set_previewwindow, did_set_pumblend, did_set_readonly,
-    did_set_scrollback, did_set_scrollbind, did_set_shiftwidth_tabstop, did_set_showtabline,
-    did_set_smoothscroll, did_set_spell, did_set_swapfile, did_set_textwidth, did_set_title_icon,
-    did_set_titlelen, did_set_undofile, did_set_undolevels, did_set_updatecount, did_set_wildchar,
-    did_set_winblend, did_set_window, did_set_winheight, did_set_winwidth, did_set_wrap,
-    did_set_xhistory, kOptFlagColon, kOptFlagComma, kOptFlagCurswant, kOptFlagExpand,
-    kOptFlagFlagList, kOptFlagFunc, kOptFlagHLOnly, kOptFlagMLE, kOptFlagNDname, kOptFlagNFname,
-    kOptFlagNoDefExp, kOptFlagNoDefault, kOptFlagNoDup, kOptFlagNoGlob, kOptFlagNoMkrc,
-    kOptFlagOneComma, kOptFlagPriMkrc, kOptFlagRedrAll, kOptFlagRedrBuf, kOptFlagRedrStat,
-    kOptFlagRedrTabl, kOptFlagRedrWin, kOptFlagSecure, kOptFlagUIOption, kOptScopeBuf,
-    kOptScopeGlobal, kOptScopeWin, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString,
-    p_vfile,
+    LISPWORD_VALUE, TAB, did_set_arabic, did_set_autochdir, did_set_binary, did_set_buflisted,
+    did_set_cmdheight, did_set_diff, did_set_eof_eol_fixeol_bomb, did_set_equalalways,
+    did_set_foldlevel, did_set_foldminlines, did_set_foldnestmax, did_set_helpheight,
+    did_set_hlsearch, did_set_ignorecase, did_set_iminsert, did_set_langnoremap, did_set_langremap,
+    did_set_laststatus, did_set_lines_or_columns, did_set_lisp, did_set_modifiable,
+    did_set_modified, did_set_number_relativenumber, did_set_numberwidth, did_set_paste,
+    did_set_previewwindow, did_set_pumblend, did_set_readonly, did_set_scrollback,
+    did_set_scrollbind, did_set_shiftwidth_tabstop, did_set_showtabline, did_set_smoothscroll,
+    did_set_spell, did_set_swapfile, did_set_textwidth, did_set_title_icon, did_set_titlelen,
+    did_set_undofile, did_set_undolevels, did_set_updatecount, did_set_wildchar, did_set_winblend,
+    did_set_window, did_set_winheight, did_set_winwidth, did_set_wrap, did_set_xhistory,
+    kOptFlagColon, kOptFlagComma, kOptFlagCurswant, kOptFlagExpand, kOptFlagFlagList, kOptFlagFunc,
+    kOptFlagHLOnly, kOptFlagMLE, kOptFlagNDname, kOptFlagNFname, kOptFlagNoDefExp,
+    kOptFlagNoDefault, kOptFlagNoDup, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagOneComma,
+    kOptFlagPriMkrc, kOptFlagRedrAll, kOptFlagRedrBuf, kOptFlagRedrStat, kOptFlagRedrTabl,
+    kOptFlagRedrWin, kOptFlagSecure, kOptFlagUIOption, kOptScopeBuf, kOptScopeGlobal, kOptScopeWin,
+    kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, p_vfile,
 };
 use crate::src::nvim::optionstr::{
     did_set_ambiwidth, did_set_background, did_set_backspace, did_set_backupcopy,
@@ -121,6 +120,7 @@ use crate::src::nvim::optionstr::{
 use crate::src::nvim::quickfix::did_set_quickfixtextfunc;
 use crate::src::nvim::runtime::did_set_runtimepackpath;
 use crate::src::nvim::tag::did_set_tagfunc;
+use crate::src::nvim::types::option::MAX_MCO;
 use crate::src::nvim::types::types::{kFalse, kTrue};
 use crate::src::nvim::types::{
     OptIndex, OptInt, OptScopeFlags, OptVal, OptValData, String_0, sctx_T, ssize_t, vimoption_T,

@@ -147,11 +147,13 @@ use crate::src::nvim::textformat::{
 use crate::src::nvim::textobject::{bck_word, fwd_word};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    AdditionalData, CMOD_KEEPJUMPS, CharsizeArg, CharsizeKind, Direction, GraphemeState,
-    MotionType, OptInt, StrCharInfo, String_0, TriState, UndoObjectType, VV_CHAR, VV_INSERTMODE,
-    VimState, aco_save_T, buf_T, cmdarg_T, colnr_T, event_T, fmark_T, fmarkv_T, foldinfo_T,
-    int32_t, int64_t, kFalse, kNone, kTrue, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t,
-    state_check_callback, state_execute_callback, uint8_t, uint32_t, varnumber_T, win_T, yankreg_T,
+    AdditionalData, BS_EOL, BS_INDENT, BS_NOSTOP, BS_START, CMOD_KEEPJUMPS, CharsizeArg,
+    CharsizeKind, Direction, GraphemeState, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX,
+    MB_MAXBYTES, MotionType, OptInt, PUT_CURSEND, PUT_FIXINDENT, StrCharInfo, String_0, TriState,
+    UndoObjectType, VV_CHAR, VV_INSERTMODE, VimState, aco_save_T, buf_T, cmdarg_T, colnr_T,
+    event_T, fmark_T, fmarkv_T, foldinfo_T, int32_t, int64_t, kFalse, kNone, kTrue, linenr_T,
+    pos_T, ptrdiff_t, schar_T, size_t, ssize_t, state_check_callback, state_execute_callback,
+    uint8_t, uint32_t, varnumber_T, win_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::src::nvim::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -177,9 +179,6 @@ pub const BL_FIX: C2Rust_Unnamed_24 = 4;
 pub const BL_SOL: C2Rust_Unnamed_24 = 2;
 pub const BL_WHITE: C2Rust_Unnamed_24 = 1;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
-pub const INSCHAR_NO_FEX: C2Rust_Unnamed_25 = 8;
-pub const INSCHAR_CTRLV: C2Rust_Unnamed_25 = 4;
-pub const INSCHAR_FORMAT: C2Rust_Unnamed_25 = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct InsertState {
@@ -228,18 +227,9 @@ pub const BACKSPACE_LINE: C2Rust_Unnamed_34 = 4;
 pub const BACKSPACE_CHAR: C2Rust_Unnamed_34 = 1;
 pub const BACKSPACE_WORD_NOT_SPACE: C2Rust_Unnamed_34 = 3;
 pub const BACKSPACE_WORD: C2Rust_Unnamed_34 = 2;
-pub const PUT_CURSEND: C2Rust_Unnamed_31 = 2;
 pub const YREG_PASTE: C2Rust_Unnamed_32 = 0;
-pub const PUT_FIXINDENT: C2Rust_Unnamed_31 = 1;
-pub const MB_MAXBYTES: C2Rust_Unnamed_28 = 21;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_30 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
-pub const PUT_BLOCK_INNER: C2Rust_Unnamed_31 = 64;
-pub const PUT_LINE_FORWARD: C2Rust_Unnamed_31 = 32;
-pub const PUT_LINE_SPLIT: C2Rust_Unnamed_31 = 16;
-pub const PUT_LINE: C2Rust_Unnamed_31 = 8;
-pub const PUT_CURSLINE: C2Rust_Unnamed_31 = 4;
 pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
@@ -281,10 +271,6 @@ pub const CPO_BACKSPACE: ::core::ffi::c_int = 'v' as ::core::ffi::c_int;
 pub const CPO_REPLCNT: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
 pub const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
 pub const COM_MAX_LEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
-pub const BS_INDENT: ::core::ffi::c_int = 'i' as ::core::ffi::c_int;
-pub const BS_EOL: ::core::ffi::c_int = 'l' as ::core::ffi::c_int;
-pub const BS_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
-pub const BS_NOSTOP: ::core::ffi::c_int = 'p' as ::core::ffi::c_int;
 static compl_busy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static Insstart_textlen: GlobalCell<colnr_T> = GlobalCell::new(0);
 static Insstart_blank_vcol: GlobalCell<colnr_T> = GlobalCell::new(0);

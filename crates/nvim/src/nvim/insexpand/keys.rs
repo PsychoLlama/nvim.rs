@@ -12,6 +12,7 @@ use super::*;
 use crate::src::nvim::keycodes::{
     Ctrl_C, Ctrl_E, Ctrl_N, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z,
 };
+use crate::src::nvim::types::BS_START;
 
 /// Delete one character before the cursor and show the subset of the matches
 /// that match the word now before it.

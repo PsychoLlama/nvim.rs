@@ -25,11 +25,11 @@ use core::ffi::{c_char, c_int};
 
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::main::curwin;
-use crate::src::nvim::mbyte::{MB_MAXBYTES, mb_cptr2char_adv, utf_char2bytes, utf_class};
+use crate::src::nvim::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_class};
 use crate::src::nvim::memory::xstrdup;
 use crate::src::nvim::os::libc::{strlen, strstr};
 use crate::src::nvim::strings::vim_strchr;
-use crate::src::nvim::types::{langp_T, salitem_T, slang_T};
+use crate::src::nvim::types::{MB_MAXBYTES, langp_T, salitem_T, slang_T};
 
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
 use super::{MAXWLEN, NUL};

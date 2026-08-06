@@ -46,15 +46,15 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::spell::init_spell_chartab;
 use crate::src::nvim::strings::vim_snprintf;
-use crate::src::nvim::types::{size_t, uint8_t};
+use crate::src::nvim::types::{CONV_NONE, size_t, uint8_t};
 
 use super::affix::{handle_affix_entry, handle_affix_header};
 use super::flags::{affitem2flag, process_compflags};
 use super::tables::{add_comppat, add_rep_entry, append_info, handle_map, handle_sal};
 use super::{
     _ISdigit, AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, COMP_CHECKCASE, COMP_CHECKDUP,
-    COMP_CHECKREP, COMP_CHECKTRIPLE, CONV_NONE, FAIL, IOSIZE, MAXLINELEN, NUL, TAB, afffile_T,
-    affheader_T, spell_message, spellinfo_T,
+    COMP_CHECKREP, COMP_CHECKTRIPLE, FAIL, IOSIZE, MAXLINELEN, NUL, TAB, afffile_T, affheader_T,
+    spell_message, spellinfo_T,
 };
 
 /// The most items one `.aff` line is split into; the rest are ignored.

@@ -83,7 +83,7 @@ use crate::src::nvim::profile::{
 use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::{
-    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, Arena, Array, Dict,
+    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, Arena, Array, CONV_NONE, Dict,
     DoInRuntimepathCB, Error, EvalFuncData, FILE, Integer, LineGetter, LuaRetMode, MHPutStatus,
     Map_String_int, MapHash, Object, OptInt, OptVal, OptValData, OptValType, Set_String, String_0,
     TriState, VAR_DICT, VAR_FIXED, VAR_LOCKED, XDGVarType, buf_T, cmd_addr_T, colnr_T, dict_T,
@@ -111,8 +111,6 @@ pub const WILD_KEEP_ALL: C2Rust_Unnamed_16 = 32;
 pub const WILD_ADD_SLASH: C2Rust_Unnamed_16 = 16;
 pub const WILD_USE_NL: C2Rust_Unnamed_16 = 4;
 pub const WILD_LIST_NOTFOUND: C2Rust_Unnamed_16 = 1;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const CONV_NONE: C2Rust_Unnamed_17 = 0;
 pub const kXDGDataDirs: XDGVarType = 6;
 pub const kXDGConfigDirs: XDGVarType = 5;
 pub const kXDGRuntimeDir: XDGVarType = 4;

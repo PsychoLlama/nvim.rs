@@ -44,8 +44,8 @@ use crate::src::nvim::mbyte::{
 use crate::src::nvim::memory::xfree;
 use crate::src::nvim::normal::{
     B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, CPO_DIGRAPH, ESC, GRAPHEME_STATE_INIT, MOD_MASK_SHIFT, NL,
-    NUL, NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState, OP_COLON,
-    OP_NOP, add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd,
+    NUL, NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState,
+    add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd,
     do_check_scrollbind, normal_handle_special_visual_command, normal_need_additional_char,
     normal_need_redraw_mode_message, normal_redraw_mode_message, nv_cmd_idx, nv_cmds,
     nv_max_linear, set_vcount_ca, start_selection,
@@ -59,7 +59,7 @@ use crate::src::nvim::state::{
 };
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    GraphemeState, OptInt, VimState, cmdarg_T, int16_t, int64_t, oparg_T,
+    GraphemeState, OP_COLON, OP_NOP, OptInt, VimState, cmdarg_T, int16_t, int64_t, oparg_T,
 };
 use crate::src::nvim::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
 use core::ffi::{c_char, c_int, c_uint, c_void};

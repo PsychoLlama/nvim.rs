@@ -25,8 +25,8 @@ use crate::src::nvim::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::memline::ml_get;
 use crate::src::nvim::normal::{
     BL_FIX, BL_SOL, BL_WHITE, CA_NO_ADJ_OP_END, CAR, CPO_CHANGEW, FAIL, MOD_MASK_CTRL,
-    MOD_MASK_SHIFT, NUL, OP_CHANGE, OP_DELETE, OP_NOP, TAB, adjust_for_sel, clearopbeep, false_0,
-    kMTCharWise, kMTLineWise, may_fold_open, nv_page, true_0, unadjust_for_sel,
+    MOD_MASK_SHIFT, NUL, TAB, adjust_for_sel, clearopbeep, false_0, kMTCharWise, kMTLineWise,
+    may_fold_open, nv_page, true_0, unadjust_for_sel,
 };
 use crate::src::nvim::option::{get_showbreak_value, get_ve_flags};
 use crate::src::nvim::options::{
@@ -39,7 +39,9 @@ use crate::src::nvim::search::{BACKWARD, FORWARD, findmatch, searchc};
 use crate::src::nvim::state::virtual_active;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::textobject::{bck_word, end_word, findpar, findsent, fwd_word};
-use crate::src::nvim::types::{Direction, cmdarg_T, colnr_T, linenr_T, oparg_T};
+use crate::src::nvim::types::{
+    Direction, OP_CHANGE, OP_DELETE, OP_NOP, cmdarg_T, colnr_T, linenr_T, oparg_T,
+};
 use core::ffi::{c_int, c_uint};
 
 use crate::src::nvim::keycodes::{Ctrl_H, K_BS, K_LEFT, K_RIGHT};

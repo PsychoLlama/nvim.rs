@@ -20,8 +20,8 @@ use crate::semsg;
 use crate::src::nvim::main::rc_did_emsg;
 use crate::src::nvim::mbyte::utf_char2len;
 use crate::src::nvim::regexp::{
-    MB_MAXBYTES, NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BOL, NFA_COMPOSING, NFA_CONCAT,
-    NFA_CURSOR, NFA_DIGIT, NFA_EMPTY, NFA_END_COLL, NFA_END_COMPOSING, NFA_END_INVISIBLE,
+    NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BOL, NFA_COMPOSING, NFA_CONCAT, NFA_CURSOR,
+    NFA_DIGIT, NFA_EMPTY, NFA_END_COLL, NFA_END_COMPOSING, NFA_END_INVISIBLE,
     NFA_END_INVISIBLE_NEG, NFA_END_NEG_COLL, NFA_END_PATTERN, NFA_EOF, NFA_HEX, NFA_IDENT,
     NFA_LNUM, NFA_MARK_LT, NFA_MATCH, NFA_MOPEN, NFA_MOPEN9, NFA_NCLOSE, NFA_NEWL, NFA_NOPEN,
     NFA_NUPPER_IC, NFA_OCTAL, NFA_OPT_CHARS, NFA_OR, NFA_PREV_ATOM_JUST_BEFORE,
@@ -33,6 +33,7 @@ use crate::src::nvim::regexp::{
     NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZREF9, NFA_ZSTART, NSUBEXP,
     istate, nfa_regprog_T, nfa_state_T, nstate, state_ptr,
 };
+use crate::src::nvim::types::MB_MAXBYTES;
 
 /// How far the width walk follows a `NFA_SPLIT` before giving up.
 const MAX_DEPTH: c_int = 4;

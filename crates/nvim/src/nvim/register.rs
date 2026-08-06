@@ -82,10 +82,11 @@ use crate::src::nvim::terminal::terminal_paste;
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     AdditionalData, Arena, BoolVarValue, CMOD_LOCKMARKS, CharsizeArg, CharsizeKind, Direction,
-    ExtmarkOp, GRegFlags, MotionType, OptInt, RemapValues, StrCharInfo, String_0, Timestamp,
-    UndoObjectType, VAR_FIXED, bcount_t, block_def, buf_T, cmd_addr_T, colnr_T, dict_T, exarg_T,
-    garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, linenr_T, list_T,
-    oparg_T, pos_T, ptrdiff_t, save_v_event_T, size_t, ssize_t, uint8_t, yankreg_T,
+    ExtmarkOp, GRegFlags, MotionType, OptInt, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE,
+    PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, RemapValues, StrCharInfo, String_0,
+    Timestamp, UndoObjectType, VAR_FIXED, bcount_t, block_def, buf_T, cmd_addr_T, colnr_T, dict_T,
+    exarg_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, linenr_T,
+    list_T, oparg_T, pos_T, ptrdiff_t, save_v_event_T, size_t, ssize_t, uint8_t, yankreg_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::undo::{u_save, u_save_cursor};
@@ -99,14 +100,6 @@ pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const PUT_BLOCK_INNER: C2Rust_Unnamed_20 = 64;
-pub const PUT_LINE_FORWARD: C2Rust_Unnamed_20 = 32;
-pub const PUT_LINE_SPLIT: C2Rust_Unnamed_20 = 16;
-pub const PUT_LINE: C2Rust_Unnamed_20 = 8;
-pub const PUT_CURSLINE: C2Rust_Unnamed_20 = 4;
-pub const PUT_CURSEND: C2Rust_Unnamed_20 = 2;
-pub const PUT_FIXINDENT: C2Rust_Unnamed_20 = 1;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const NUM_REGISTERS: C2Rust_Unnamed_21 = 39;
 pub const PLUS_REGISTER: C2Rust_Unnamed_21 = 38;

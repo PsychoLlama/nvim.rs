@@ -19,7 +19,7 @@ use crate::src::nvim::memline::goto_byte;
 use crate::src::nvim::message::show_sb_text;
 use crate::src::nvim::mouse::do_mouse;
 use crate::src::nvim::normal::{
-    MOD_MASK_CTRL, NUL, OK, OP_NOP, VALID_WCOL, adjust_for_sel, check_text_locked, checkclearop,
+    MOD_MASK_CTRL, NUL, OK, VALID_WCOL, adjust_for_sel, check_text_locked, checkclearop,
     checkclearopq, clearopbeep, false_0, invoke_edit, kMTCharWise, kMTLineWise, nv_Replace,
     nv_addsub, nv_edit, nv_gd, nv_gomark, nv_goto, nv_gotofile, nv_gv_cmd, nv_ident, nv_join,
     nv_operator, nv_pcmark, nv_put, nv_screengo, nv_visual, nv_vreplace, true_0,
@@ -29,7 +29,7 @@ use crate::src::nvim::plines::{getvvcol, linetabsize};
 use crate::src::nvim::search::{BACKWARD, FORWARD, current_search};
 use crate::src::nvim::state::virtual_active;
 use crate::src::nvim::textobject::bckend_word;
-use crate::src::nvim::types::{cmdarg_T, colnr_T, int64_t, linenr_T};
+use crate::src::nvim::types::{OP_NOP, cmdarg_T, colnr_T, int64_t, linenr_T};
 use crate::src::nvim::undo::undo_time;
 use crate::src::nvim::window::{goto_tabpage, goto_tabpage_lastused};
 use core::ffi::c_int;

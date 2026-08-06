@@ -14,13 +14,13 @@ use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::main::{curwin, rc_did_emsg, reg_do_extmatch};
 use crate::src::nvim::plines::getvvcol;
 use crate::src::nvim::regexp::{
-    FAIL, INT32_MAX, MB_MAXBYTES, NFA_ANY_COMPOSING, NFA_BOF, NFA_COL, NFA_COL_GT, NFA_COL_LT,
-    NFA_CURSOR, NFA_EOF, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT,
-    NFA_NOPEN, NFA_OPT_CHARS, NFA_VCOL, NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL, NFA_ZEND, NFA_ZREF1,
-    NFA_ZSTART, NUL, OK, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, at_start, getchr, getdecchrs,
-    gethexchrs, getoctchrs, magic_prefix, pat_byte, peekchr, re_has_z, re_mult_next, rex, unmagic,
+    FAIL, INT32_MAX, NFA_ANY_COMPOSING, NFA_BOF, NFA_COL, NFA_COL_GT, NFA_COL_LT, NFA_CURSOR,
+    NFA_EOF, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT, NFA_NOPEN,
+    NFA_OPT_CHARS, NFA_VCOL, NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL, NFA_ZEND, NFA_ZREF1, NFA_ZSTART,
+    NUL, OK, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, at_start, getchr, getdecchrs, gethexchrs,
+    getoctchrs, magic_prefix, pat_byte, peekchr, re_has_z, re_mult_next, rex, unmagic,
 };
-use crate::src::nvim::types::colnr_T;
+use crate::src::nvim::types::{MB_MAXBYTES, colnr_T};
 
 /// `\z`: the highlighter's own captures, plus `\zs`/`\ze`.
 pub(crate) fn z_atom() -> c_int {

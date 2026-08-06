@@ -16,11 +16,9 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::MB_MAXBYTES;
 use core::ffi::{c_char, c_int};
 use core::ptr;
-
-/// Longest UTF-8 sequence a character can occupy.
-const MB_MAXBYTES: usize = 21;
 
 /// Size of the two static initial buffers, upstream's `TYPELEN_INIT`.
 ///

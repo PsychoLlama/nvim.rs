@@ -22,8 +22,8 @@ use crate::src::nvim::ex_docmd::modifier::expr_map_locked;
 use crate::src::nvim::ex_docmd::scan::{find_nextcmd, get_flags};
 use crate::src::nvim::ex_docmd::{
     BL_FIX, BL_SOL, BL_WHITE, CPO_EXECBUF, DOCMD_NOWAIT, DOCMD_VERBOSE, EXFLAG_LIST, EXFLAG_NR,
-    FAIL, KS_SPECIAL, ML_EMPTY, NUL, OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK, OPTION_MAGIC_OFF,
-    OPTION_MAGIC_ON, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, REMAP_NONE, REMAP_YES, kMTLineWise,
+    FAIL, KS_SPECIAL, ML_EMPTY, NUL, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, REMAP_NONE, REMAP_YES,
+    kMTLineWise,
 };
 use crate::src::nvim::ex_getln::getexline;
 use crate::src::nvim::fold::{foldCreate, foldManualAllowed, hasFolding, opFoldRange};
@@ -64,9 +64,10 @@ use crate::src::nvim::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
     CMD_delete, CMD_earlier, CMD_folddoclosed, CMD_foldopen, CMD_list, CMD_move, CMD_number,
-    CMD_pound, CMD_rshift, CMD_smagic, CMD_startinsert, CMD_startreplace, CMD_yank, colnr_T,
-    exarg_T, handle_T, int64_t, kFalse, kNone, linenr_T, oparg_T, optmagic_T, pos_T, save_state_T,
-    size_t, ssize_t, uint8_t,
+    CMD_pound, CMD_rshift, CMD_smagic, CMD_startinsert, CMD_startreplace, CMD_yank, OP_DELETE,
+    OP_LSHIFT, OP_RSHIFT, OP_YANK, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, colnr_T, exarg_T,
+    handle_T, int64_t, kFalse, kNone, linenr_T, oparg_T, optmagic_T, pos_T, save_state_T, size_t,
+    ssize_t, uint8_t,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::src::nvim::undo::u_clearline;

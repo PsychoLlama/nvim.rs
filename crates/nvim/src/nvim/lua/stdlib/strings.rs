@@ -22,10 +22,9 @@ use crate::src::nvim::mbyte::{
 };
 use crate::src::nvim::memory::xfree;
 use crate::src::nvim::os::libc::{memchr, strcasecmp};
-use crate::src::nvim::types::{intptr_t, lua_Integer, lua_Number, lua_State, size_t, vimconv_T};
-
-/// `vimconv_T::vc_type` for "no conversion needed".
-const CONV_NONE: c_int = 0;
+use crate::src::nvim::types::{
+    CONV_NONE, intptr_t, lua_Integer, lua_Number, lua_State, size_t, vimconv_T,
+};
 
 /// `vim.str_utfindex()`: the UTF-32 and UTF-16 lengths of the string at slot 1
 /// up to the byte index at slot 2, or of the whole string when it is absent.
@@ -227,7 +226,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_iconv(lstate: *mut lua_State) -> c_i
         let to = enc_canonize(enc_skip(lua_tostring(lstate, 3).cast_mut()));
 
         let mut vimconv = vimconv_T {
-            vc_type: CONV_NONE,
+            vc_type: CONV_NONE as c_int,
             vc_factor: 0,
             vc_fd: ptr::null_mut(),
             vc_fail: false,

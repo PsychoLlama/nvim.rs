@@ -16,7 +16,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::types::{VAR_LIST, VAR_STRING};
+use crate::src::nvim::types::{CONV_NONE, VAR_LIST, VAR_STRING};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

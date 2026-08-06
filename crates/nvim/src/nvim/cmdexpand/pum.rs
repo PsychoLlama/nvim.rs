@@ -10,6 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::MB_MAXBYTES;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::size_of;
 use core::ptr;
@@ -222,7 +223,7 @@ pub(crate) unsafe fn redraw_wildmenu(
         let mut i;
         let mut l;
 
-        let buf = xmalloc(Columns.get() as size_t * MB_MAXBYTES as size_t + 1) as *mut c_char;
+        let buf = xmalloc(Columns.get() as size_t * MB_MAXBYTES + 1) as *mut c_char;
 
         let mut match_idx = match_idx;
         if match_idx == -1 {

@@ -33,3 +33,24 @@ pub struct yankreg_T {
     pub timestamp: Timestamp,
     pub additional_data: *mut AdditionalData,
 }
+
+/// `do_put()` flags — upstream's anonymous enum in `register_defs.h`.
+///
+/// c2rust typed this `c_uint`, so every use site is `PUT_X as c_int`;
+/// retyping belongs to the slice that deletes those casts.
+pub type PutFlags = ::core::ffi::c_uint;
+
+/// make the indent look nice
+pub const PUT_FIXINDENT: PutFlags = 1;
+/// leave the cursor after the end of the new text
+pub const PUT_CURSEND: PutFlags = 2;
+/// leave the cursor on the last line of the new text
+pub const PUT_CURSLINE: PutFlags = 4;
+/// put the register as lines
+pub const PUT_LINE: PutFlags = 8;
+/// split the line for a linewise register
+pub const PUT_LINE_SPLIT: PutFlags = 16;
+/// put a linewise register below the Visual selection
+pub const PUT_LINE_FORWARD: PutFlags = 32;
+/// in block mode, do not add trailing spaces
+pub const PUT_BLOCK_INNER: PutFlags = 64;

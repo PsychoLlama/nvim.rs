@@ -31,14 +31,14 @@ use crate::src::nvim::os::libc::{strcmp, strlen, strncmp, strstr};
 use crate::src::nvim::path::{FullName_save, path_tail};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    Callback, Callback_data, OptIndex, OptVal, OptValData, VAR_STRING, buf_T, dict_T, exarg_T,
-    int64_t, scid_T, size_t, typval_T, uint8_t, vimoption_T, win_T,
+    BS_NOSTOP, BS_START, Callback, Callback_data, OptIndex, OptVal, OptValData, VAR_STRING, buf_T,
+    dict_T, exarg_T, int64_t, scid_T, size_t, typval_T, uint8_t, vimoption_T, win_T,
 };
 
 use super::{
-    BS_NOSTOP, BS_START, EOL_DOS, EOL_MAC, EOL_UNIX, FAIL, FORCE_BIN, NUL, OK, SHM_LINES, SHM_MOD,
-    SHM_RO, SHM_WRI, get_varp, kOptFlagWasSet, kOptScopeBuf, kOptScopeWin, kOptValTypeString,
-    option_has_scope, optval_from_varp, set_option_direct,
+    EOL_DOS, EOL_MAC, EOL_UNIX, FAIL, FORCE_BIN, NUL, OK, SHM_LINES, SHM_MOD, SHM_RO, SHM_WRI,
+    get_varp, kOptFlagWasSet, kOptScopeBuf, kOptScopeWin, kOptValTypeString, option_has_scope,
+    optval_from_varp, set_option_direct,
 };
 use crate::src::nvim::state::MODE_TERMINAL;
 

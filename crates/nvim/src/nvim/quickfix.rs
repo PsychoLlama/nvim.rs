@@ -192,7 +192,6 @@ pub const DOBUF_UNLOAD: dobuf_action_values = 2;
 pub const SHM_OVERALL: c_uint = 79;
 pub const BL_FIX: c_uint = 4;
 pub const BL_WHITE: c_uint = 1;
-pub const CONV_NONE: c_uint = 0;
 pub const ECMD_NOWINENTER: c_uint = 64;
 pub const ECMD_OLDBUF: c_uint = 4;
 pub const ECMD_SET_HELP: c_uint = 2;

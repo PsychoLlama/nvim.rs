@@ -29,8 +29,8 @@ use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memline::{ml_get_len, ml_get_pos};
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::normal::{
-    CA_NO_ADJ_OP_END, NUL, OP_NOP, TAB, VIsual_mode_orig, clearopbeep, false_0, may_clear_cmdline,
-    nv_down, nv_g_cmd, nv_operator, nv_right, true_0,
+    CA_NO_ADJ_OP_END, NUL, TAB, VIsual_mode_orig, clearopbeep, false_0, may_clear_cmdline, nv_down,
+    nv_g_cmd, nv_operator, nv_right, true_0,
 };
 use crate::src::nvim::ops::adjust_cursor_eol;
 use crate::src::nvim::option::get_ve_flags;
@@ -42,7 +42,7 @@ use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::textobject::{
     current_block, current_par, current_quote, current_sent, current_tagblock, current_word,
 };
-use crate::src::nvim::types::{cmdarg_T, colnr_T, linenr_T, pos_T, size_t};
+use crate::src::nvim::types::{OP_NOP, cmdarg_T, colnr_T, linenr_T, pos_T, size_t};
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::src::nvim::keycodes::{Ctrl_Q, Ctrl_V};

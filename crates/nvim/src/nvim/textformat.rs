@@ -45,8 +45,9 @@ use crate::src::nvim::state::{MODE_INSERT, MODE_NORMAL, VREPLACE_FLAG};
 use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 use crate::src::nvim::textobject::startPS;
 use crate::src::nvim::types::{
-    CMOD_LOCKMARKS, VV_CHAR, VV_COUNT, VV_LNUM, colnr_T, linenr_T, oparg_T, pos_T, ptrdiff_t,
-    sctx_T, size_t, uint8_t, varnumber_T, win_T,
+    CMOD_LOCKMARKS, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, VV_CHAR,
+    VV_COUNT, VV_LNUM, colnr_T, linenr_T, oparg_T, pos_T, ptrdiff_t, sctx_T, size_t, uint8_t,
+    varnumber_T, win_T,
 };
 use crate::src::nvim::ui::ui_cursor_shape;
 use crate::src::nvim::undo::{u_save, u_save_cursor};
@@ -65,11 +66,6 @@ pub const INDENT_SET: C2Rust_Unnamed_18 = 1;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
 pub const BL_FIX: C2Rust_Unnamed_19 = 4;
 pub const BL_WHITE: C2Rust_Unnamed_19 = 1;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const INSCHAR_COM_LIST: C2Rust_Unnamed_20 = 16;
-pub const INSCHAR_NO_FEX: C2Rust_Unnamed_20 = 8;
-pub const INSCHAR_DO_COM: C2Rust_Unnamed_20 = 2;
-pub const INSCHAR_FORMAT: C2Rust_Unnamed_20 = 1;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const SIN_CHANGED: C2Rust_Unnamed_22 = 1;
 pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;

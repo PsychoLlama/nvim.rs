@@ -25,13 +25,13 @@ use core::ffi::{c_char, c_int};
 
 use crate::src::nvim::main::curwin;
 use crate::src::nvim::mbyte::{
-    MB_MAXBYTES, mb_cptr2char_adv, mb_get_class, mb_islower, mb_isupper, mb_ptr2char_adv,
-    mb_toupper, utf_char2bytes, utf_class, utf_fold, utf_ptr2char, utfc_ptr2len,
+    mb_cptr2char_adv, mb_get_class, mb_islower, mb_isupper, mb_ptr2char_adv, mb_toupper,
+    utf_char2bytes, utf_class, utf_fold, utf_ptr2char, utfc_ptr2len,
 };
 use crate::src::nvim::memory::xstrlcpy;
 use crate::src::nvim::os::libc::strcpy;
 use crate::src::nvim::strings::vim_strchr;
-use crate::src::nvim::types::{spelltab_T, uint8_t, win_T};
+use crate::src::nvim::types::{MB_MAXBYTES, spelltab_T, uint8_t, win_T};
 
 use super::{FAIL, MAXWLEN, NUL, OK, WF_ALLCAP, WF_KEEPCAP, WF_ONECAP, did_set_spelltab, spelltab};
 

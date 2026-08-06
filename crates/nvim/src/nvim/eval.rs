@@ -65,7 +65,6 @@ pub const kOptValTypeNil: OptValType = -1;
 pub const kMarkAll: MarkGet = 1;
 pub const kChannelStreamProc: ChannelStreamType = 0;
 pub const STR2NR_ALL: c_uint = 15;
-pub const CONV_NONE: c_uint = 0;
 pub const GLV_READ_ONLY: c_uint = 16;
 pub const GLV_NO_AUTOLOAD: c_uint = 4;
 pub const GLV_QUIET: c_uint = 2;

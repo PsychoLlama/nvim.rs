@@ -19,9 +19,9 @@ use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::memline::ml_get_pos;
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::{
-    BL_FIX, BL_WHITE, CAR, FAIL, FIND_IDENT, INT_MAX, OK, OP_FOLD, OP_NOP, SPELL_ADD_BAD,
-    SPELL_ADD_GOOD, checkclearop, clearopbeep, false_0, find_ident_under_cursor, get_visual_text,
-    nv_operator, nv_put, read_command_char, true_0,
+    BL_FIX, BL_WHITE, CAR, FAIL, FIND_IDENT, INT_MAX, OK, SPELL_ADD_BAD, SPELL_ADD_GOOD,
+    checkclearop, clearopbeep, false_0, find_ident_under_cursor, get_visual_text, nv_operator,
+    nv_put, read_command_char, true_0,
 };
 use crate::src::nvim::option::get_sidescrolloff_value;
 use crate::src::nvim::os::libc::gettext;
@@ -30,7 +30,9 @@ use crate::src::nvim::spell::{SMT_ALL, spell_move_to};
 use crate::src::nvim::spellfile::spell_add_word;
 use crate::src::nvim::spellsuggest::spell_suggest;
 use crate::src::nvim::strings::vim_strchr;
-use crate::src::nvim::types::{OptInt, SpellAddType, cmdarg_T, colnr_T, int64_t, linenr_T, size_t};
+use crate::src::nvim::types::{
+    OP_FOLD, OP_NOP, OptInt, SpellAddType, cmdarg_T, colnr_T, int64_t, linenr_T, size_t,
+};
 use crate::src::nvim::window::{set_fraction, win_setheight};
 use core::ffi::{c_char, c_int};
 

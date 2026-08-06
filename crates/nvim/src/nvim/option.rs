@@ -227,11 +227,8 @@ pub const EOL_DOS: c_int = 1 as c_int;
 pub const EOL_MAC: c_int = 2 as c_int;
 pub const DFLT_FO_VIM: [c_char; 5] =
     unsafe { ::core::mem::transmute::<[u8; 5], [c_char; 5]>(*b"tcqj\0") };
-pub const MAX_MCO: c_int = 6 as c_int;
 pub const CPO_VIM: [c_char; 9] =
     unsafe { ::core::mem::transmute::<[u8; 9], [c_char; 9]>(*b"aABceFs_\0") };
-pub const BS_START: c_int = 's' as c_int;
-pub const BS_NOSTOP: c_int = 'p' as c_int;
 pub const LISPWORD_VALUE: [c_char; 746] = unsafe {
     ::core::mem::transmute::<
         [u8; 746],

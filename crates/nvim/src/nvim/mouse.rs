@@ -60,10 +60,10 @@ use crate::src::nvim::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG, virtual_ac
 use crate::src::nvim::statusline::stl_connected;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    CharsizeArg, CharsizeKind, Direction, EvalFuncData, MotionType, OptInt, ScreenGrid,
-    StlClickDefinition, StrCharInfo, VAR_FIXED, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
-    cmdarg_T, colnr_T, dict_T, frame_T, handle_T, linenr_T, oparg_T, pos_T, size_t, tabpage_T,
-    typval_T, typval_vval_union, uint8_t, varnumber_T, win_T, yankreg_T,
+    CharsizeArg, CharsizeKind, Direction, EvalFuncData, MotionType, OP_NOP, OptInt, PUT_CURSEND,
+    PUT_FIXINDENT, ScreenGrid, StlClickDefinition, StrCharInfo, VAR_FIXED, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VAR_UNLOCKED, cmdarg_T, colnr_T, dict_T, frame_T, handle_T, linenr_T, oparg_T,
+    pos_T, size_t, tabpage_T, typval_T, typval_vval_union, uint8_t, varnumber_T, win_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_check_mouse, ui_cursor_shape, ui_flush, ui_mouse_has};
 use crate::src::nvim::ui_compositor::ui_comp_mouse_focus;
@@ -101,11 +101,6 @@ pub type C2Rust_Unnamed_19 = ::core::ffi::c_int;
 pub const MSCR_RIGHT: C2Rust_Unnamed_19 = -2;
 pub const MSCR_UP: C2Rust_Unnamed_19 = 1;
 pub const MSCR_DOWN: C2Rust_Unnamed_19 = 0;
-pub const PUT_CURSEND: C2Rust_Unnamed_20 = 2;
-pub const PUT_FIXINDENT: C2Rust_Unnamed_20 = 1;
-pub const OP_NOP: C2Rust_Unnamed_21 = 0;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const VALID_WROW: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;

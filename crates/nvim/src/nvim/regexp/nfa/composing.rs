@@ -11,7 +11,8 @@
 use core::ffi::{c_char, c_int};
 
 use crate::src::nvim::mbyte::{utf_char2len, utf_iscomposing_legacy, utf_ptr2char};
-use crate::src::nvim::regexp::{MAX_MCO, NFA_END_COMPOSING, nfa_state_T, rex};
+use crate::src::nvim::regexp::{NFA_END_COMPOSING, nfa_state_T, rex};
+use crate::src::nvim::types::MAX_MCO;
 
 /// Does the grapheme at the input match the group whose first member state
 /// is `sta`? `clen` is the grapheme's encoded length.

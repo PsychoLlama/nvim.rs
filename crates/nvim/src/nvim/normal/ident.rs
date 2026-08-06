@@ -30,7 +30,7 @@ use crate::src::nvim::memory::{strequal, xfree, xmalloc, xrealloc};
 use crate::src::nvim::message::{emsg, messaging};
 use crate::src::nvim::normal::{
     BL_FIX, BL_SOL, DT_POP, ECMD_HIDE, ECMD_LAST, FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD,
-    HIST_SEARCH, NUL, OK, OP_NOP, POUND, SHM_SEARCHCOUNT, VSE_NONE, check_text_or_curbuf_locked,
+    HIST_SEARCH, NUL, OK, POUND, SHM_SEARCHCOUNT, VSE_NONE, check_text_or_curbuf_locked,
     checkclearopq, clearop, clearopbeep, false_0, get_visual_text, normal_search, true_0,
 };
 use crate::src::nvim::ops::clear_oparg;
@@ -46,7 +46,7 @@ use crate::src::nvim::state::MODE_TERMINAL;
 use crate::src::nvim::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::src::nvim::tag::do_tag;
 use crate::src::nvim::textobject::findpar;
-use crate::src::nvim::types::pos_T;
+use crate::src::nvim::types::{OP_NOP, pos_T};
 use crate::src::nvim::types::{
     cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, size_t, uint8_t, win_T,
 };

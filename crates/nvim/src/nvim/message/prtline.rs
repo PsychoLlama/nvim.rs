@@ -8,15 +8,12 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::types::MB_MAXBYTES;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
 /// The longest a `schar_T` renders to, matching upstream's `MAX_SCHAR_SIZE`.
 const MAX_SCHAR_SIZE: usize = 32;
-
-/// A character too long to be a single cell is shown as `?`, matching
-/// upstream's `MB_MAXBYTES` bound.
-const MB_MAXBYTES: c_int = 21;
 
 /// Show one line of buffer text, as `:print` and `:list` do.
 ///
@@ -95,8 +92,8 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
                 if len > 1 {
                     // A multi-byte character goes out whole, not as a cell.
                     col += utf_ptr2cells(s);
-                    let mut buf = [0 as c_char; MB_MAXBYTES as usize + 1];
-                    if len >= MB_MAXBYTES {
+                    let mut buf = [0 as c_char; MB_MAXBYTES + 1];
+                    if len >= MB_MAXBYTES as c_int {
                         xstrlcpy(buf.as_mut_ptr(), c"?".as_ptr(), buf.len());
                     } else if lcs().nbsp != 0
                         && list

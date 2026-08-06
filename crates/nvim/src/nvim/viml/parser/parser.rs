@@ -20,14 +20,11 @@ use crate::src::nvim::kvec::InitVec;
 use crate::src::nvim::mbyte::string_convert;
 use crate::src::nvim::memory::xfree;
 use crate::src::nvim::types::{
-    ParserHighlight, ParserHighlightChunk, ParserInputReader, ParserInputReader_lines, ParserLine,
-    ParserLineGetter, ParserPosition, ParserState, ParserState_stack, ParserStateItem,
+    CONV_NONE, ParserHighlight, ParserHighlightChunk, ParserInputReader, ParserInputReader_lines,
+    ParserLine, ParserLineGetter, ParserPosition, ParserState, ParserState_stack, ParserStateItem,
     ParserStateItem_data, ParserStateItem_data_expr, ParserStateItem_data_expr_type_0,
     ParserStateItem_type_0, vimconv_T,
 };
-
-/// `vimconv_T::vc_type` for "the input needs no conversion".
-const CONV_NONE: c_int = 0;
 
 pub const kExprUnknown: ParserStateItem_data_expr_type_0 = 0;
 pub const kPTopStateParsingCommand: ParserStateItem_type_0 = 0;
@@ -52,7 +49,7 @@ pub const PARSER_STATE_INIT: ParserState = ParserState {
             init_array: [EMPTY_LINE; 4],
         },
         conv: vimconv_T {
-            vc_type: CONV_NONE,
+            vc_type: CONV_NONE as c_int,
             vc_factor: 1,
             vc_fd: ptr::null_mut(),
             vc_fail: false,
@@ -149,7 +146,7 @@ pub unsafe fn viml_parser_get_remaining_line(pstate: *mut ParserState) -> Option
         let mut fresh = EMPTY_LINE;
         let get_line = (*reader).get_line.expect("parser has no line getter");
         get_line((*reader).cookie, &raw mut fresh);
-        if (*reader).conv.vc_type != CONV_NONE && fresh.size != 0 {
+        if (*reader).conv.vc_type != CONV_NONE as c_int && fresh.size != 0 {
             let mut converted = ParserLine {
                 data: ptr::null(),
                 size: fresh.size,

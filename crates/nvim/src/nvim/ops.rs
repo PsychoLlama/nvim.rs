@@ -79,10 +79,13 @@ use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::textformat::{auto_format, has_format_option, op_format, op_formatexpr};
 use crate::src::nvim::types::{
     CMOD_LOCKMARKS, Callback, Callback_data as C2Rust_Unnamed_5, CharsizeArg, CharsizeKind,
-    ExtmarkOp, MotionType, OptInt, StrCharInfo, TriState, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
-    bcount_t, block_def, buf_T, cmdarg_T, colnr_T, dict_T, ht_stack_T, int32_t, int64_t, kNone,
-    linenr_T, list_stack_T, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T, typval_vval_union,
-    uint8_t, uvarnumber_T, varnumber_T, yankreg_T,
+    ExtmarkOp, MotionType, OP_APPEND, OP_CHANGE, OP_COLON, OP_DELETE, OP_FILTER, OP_FOLD,
+    OP_FOLDCLOSE, OP_FOLDCLOSEREC, OP_FOLDDEL, OP_FOLDDELREC, OP_FOLDOPEN, OP_FOLDOPENREC,
+    OP_FORMAT, OP_FUNCTION, OP_INDENT, OP_INSERT, OP_JOIN, OP_LOWER, OP_LSHIFT, OP_NOP, OP_NR_ADD,
+    OP_NR_SUB, OP_REPLACE, OP_ROT13, OP_RSHIFT, OP_TILDE, OP_UPPER, OP_YANK, OptInt, StrCharInfo,
+    TriState, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, bcount_t, block_def, buf_T, cmdarg_T, colnr_T,
+    dict_T, ht_stack_T, int32_t, int64_t, kNone, linenr_T, list_stack_T, oparg_T, optset_T, pos_T,
+    size_t, ssize_t, typval_T, typval_vval_union, uint8_t, uvarnumber_T, varnumber_T, yankreg_T,
 };
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::undo::{u_clearline, u_save, u_save_cursor};
@@ -115,35 +118,6 @@ pub const BL_SOL: C2Rust_Unnamed_26 = 2;
 pub const BL_WHITE: C2Rust_Unnamed_26 = 1;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
 pub const SIN_CHANGED: C2Rust_Unnamed_28 = 1;
-pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
-pub const OP_NR_SUB: C2Rust_Unnamed_29 = 29;
-pub const OP_NR_ADD: C2Rust_Unnamed_29 = 28;
-pub const OP_FUNCTION: C2Rust_Unnamed_29 = 27;
-pub const OP_FOLDDELREC: C2Rust_Unnamed_29 = 25;
-pub const OP_FOLDDEL: C2Rust_Unnamed_29 = 24;
-pub const OP_FOLDCLOSEREC: C2Rust_Unnamed_29 = 23;
-pub const OP_FOLDCLOSE: C2Rust_Unnamed_29 = 22;
-pub const OP_FOLDOPENREC: C2Rust_Unnamed_29 = 21;
-pub const OP_FOLDOPEN: C2Rust_Unnamed_29 = 20;
-pub const OP_FOLD: C2Rust_Unnamed_29 = 19;
-pub const OP_APPEND: C2Rust_Unnamed_29 = 18;
-pub const OP_INSERT: C2Rust_Unnamed_29 = 17;
-pub const OP_REPLACE: C2Rust_Unnamed_29 = 16;
-pub const OP_ROT13: C2Rust_Unnamed_29 = 15;
-pub const OP_JOIN: C2Rust_Unnamed_29 = 13;
-pub const OP_LOWER: C2Rust_Unnamed_29 = 12;
-pub const OP_UPPER: C2Rust_Unnamed_29 = 11;
-pub const OP_COLON: C2Rust_Unnamed_29 = 10;
-pub const OP_FORMAT: C2Rust_Unnamed_29 = 9;
-pub const OP_INDENT: C2Rust_Unnamed_29 = 8;
-pub const OP_TILDE: C2Rust_Unnamed_29 = 7;
-pub const OP_FILTER: C2Rust_Unnamed_29 = 6;
-pub const OP_RSHIFT: C2Rust_Unnamed_29 = 5;
-pub const OP_LSHIFT: C2Rust_Unnamed_29 = 4;
-pub const OP_CHANGE: C2Rust_Unnamed_29 = 3;
-pub const OP_YANK: C2Rust_Unnamed_29 = 2;
-pub const OP_DELETE: C2Rust_Unnamed_29 = 1;
-pub const OP_NOP: C2Rust_Unnamed_29 = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct redo_VIsual_T {

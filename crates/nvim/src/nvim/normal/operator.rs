@@ -21,15 +21,17 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::{
-    BL_FIX, BL_SOL, BL_WHITE, FAIL, NUL, OP_DELETE, OP_FORMAT, OP_LOWER, OP_LSHIFT, OP_NOP,
-    OP_RSHIFT, OP_UPPER, OP_YANK, checkclearop, checkclearopq, clearopbeep,
+    BL_FIX, BL_SOL, BL_WHITE, FAIL, NUL, checkclearop, checkclearopq, clearopbeep,
     e_cmdline_window_already_open, false_0, kMTLineWise, langmap_adjust, true_0,
 };
 use crate::src::nvim::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::register::{do_execreg, do_record, get_expr_register, valid_yank_reg};
-use crate::src::nvim::types::{VV_OP, cmdarg_T};
+use crate::src::nvim::types::{
+    OP_DELETE, OP_FORMAT, OP_LOWER, OP_LSHIFT, OP_NOP, OP_RSHIFT, OP_UPPER, OP_YANK, VV_OP,
+    cmdarg_T,
+};
 use crate::src::nvim::undo::{u_redo, u_undo, u_undoline};
 use core::ffi::{c_char, c_int};
 

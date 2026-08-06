@@ -11,11 +11,9 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::keycodes::{Ctrl_V, key_unescape};
+use crate::src::nvim::types::MB_MAXBYTES;
 use core::ffi::{c_char, c_int};
 use core::ptr;
-
-/// Longest UTF-8 sequence `read_redo` can reassemble, plus its NUL.
-const MB_MAXBYTES: usize = 21;
 
 /// Where [`read_redo`] is up to: the block it is reading, and the byte within
 /// it. A pair of walk cursors rather than an index, because the blocks are
