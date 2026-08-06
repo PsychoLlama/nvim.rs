@@ -106,7 +106,11 @@ DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
 # denying unsafe_op_in_unsafe_fn. The trailing space is what separates a
 # declaration (a name follows) from a function-pointer type ("fn(" follows),
 # which is not a declaration and keeps costing its token.
-UNSAFE_FN_DECLS = ('unsafe extern "C" fn ', "unsafe fn ")
+UNSAFE_FN_DECLS = (
+    'unsafe extern "C" fn ',
+    'unsafe extern "C-unwind" fn ',
+    "unsafe fn ",
+)
 
 
 def measure():
