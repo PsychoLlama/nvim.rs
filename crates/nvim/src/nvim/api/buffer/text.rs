@@ -1,0 +1,553 @@
+//! `nvim_buf_set_text()`: replacing an arbitrary byte range.
+//!
+//! The one API call that can start and end mid-line, which is why it owns
+//! three cursor fixups of its own: `fix_cursor` for a whole-line change,
+//! `fix_pos_col` for a mark or cursor column inside the replaced span, and
+//! `fix_cursor_cols` for the columns of every window showing the buffer.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+#[allow(unused_imports)]
+use super::*;
+
+pub unsafe extern "C" fn nvim_buf_set_text(
+    mut channel_id: uint64_t,
+    mut buf: Buffer,
+    mut start_row: Integer,
+    mut start_col: Integer,
+    mut end_row: Integer,
+    mut end_col: Integer,
+    mut replacement: Array,
+    mut arena: *mut Arena,
+    mut err: *mut Error,
+) {
+    unsafe {
+        let mut scratch: Array = Array {
+            size: 0 as size_t,
+            capacity: 0 as size_t,
+            items: ::core::ptr::null_mut::<Object>(),
+        };
+        let mut scratch__items: [Object; 1] = [Object {
+            type_0: kObjectTypeNil,
+            data: C2Rust_Unnamed { boolean: false },
+        }; 1];
+        scratch.capacity = 1 as size_t;
+        scratch.items = &raw mut scratch__items as *mut Object;
+        if replacement.size == 0 as size_t {
+            let c2rust_fresh1 = scratch.size;
+            scratch.size = scratch.size.wrapping_add(1);
+            *scratch.items.offset(c2rust_fresh1 as isize) = object {
+                type_0: kObjectTypeString,
+                data: C2Rust_Unnamed {
+                    string: String_0 {
+                        data: b"\0".as_ptr() as *const ::core::ffi::c_char
+                            as *mut ::core::ffi::c_char,
+                        size: ::core::mem::size_of::<[::core::ffi::c_char; 1]>()
+                            .wrapping_sub(1 as size_t),
+                    },
+                },
+            };
+            replacement = scratch;
+        }
+        let mut b: *mut buf_T = api_buf_ensure_loaded(buf, err);
+        if b.is_null() {
+            return;
+        }
+        let mut oob: bool = false_0 != 0;
+        start_row = normalize_index(b, start_row as int64_t, false_0 != 0, &raw mut oob) as Integer;
+        if oob {
+            api_err_invalid(
+                err,
+                b"start_row\0".as_ptr() as *const ::core::ffi::c_char,
+                b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                0 as int64_t,
+                false_0 != 0,
+            );
+            return;
+        }
+        end_row = normalize_index(b, end_row as int64_t, false_0 != 0, &raw mut oob) as Integer;
+        if oob {
+            api_err_invalid(
+                err,
+                b"end_row\0".as_ptr() as *const ::core::ffi::c_char,
+                b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                0 as int64_t,
+                false_0 != 0,
+            );
+            return;
+        }
+        let mut str_at_start: *mut ::core::ffi::c_char = ml_get_buf(b, start_row as linenr_T);
+        let mut len_at_start: colnr_T = ml_get_buf_len(b, start_row as linenr_T);
+        str_at_start = arena_memdupz(arena, str_at_start, len_at_start as size_t);
+        start_col = if start_col < 0 as Integer {
+            len_at_start as Integer + start_col + 1 as Integer
+        } else {
+            start_col
+        };
+        if !(start_col >= 0 as Integer && start_col <= len_at_start as Integer) {
+            api_err_invalid(
+                err,
+                b"start_col\0".as_ptr() as *const ::core::ffi::c_char,
+                b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                0 as int64_t,
+                false_0 != 0,
+            );
+            return;
+        }
+        let mut str_at_end: *mut ::core::ffi::c_char = ml_get_buf(b, end_row as linenr_T);
+        let mut len_at_end: colnr_T = ml_get_buf_len(b, end_row as linenr_T);
+        str_at_end = arena_memdupz(arena, str_at_end, len_at_end as size_t);
+        end_col = if end_col < 0 as Integer {
+            len_at_end as Integer + end_col + 1 as Integer
+        } else {
+            end_col
+        };
+        if !(end_col >= 0 as Integer && end_col <= len_at_end as Integer) {
+            api_err_invalid(
+                err,
+                b"end_col\0".as_ptr() as *const ::core::ffi::c_char,
+                b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                0 as int64_t,
+                false_0 != 0,
+            );
+            return;
+        }
+        if !(start_row <= end_row && !(end_row == start_row && start_col > end_col)) {
+            api_set_error(
+                err,
+                kErrorTypeValidation,
+                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+                b"'start' is higher than 'end'\0".as_ptr() as *const ::core::ffi::c_char,
+            );
+            return;
+        }
+        let mut disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
+        if !check_string_array(
+            replacement,
+            b"replacement string\0".as_ptr() as *const ::core::ffi::c_char
+                as *mut ::core::ffi::c_char,
+            disallow_nl,
+            err,
+        ) {
+            return;
+        }
+        let mut new_len: size_t = replacement.size;
+        let mut new_byte: bcount_t = 0 as bcount_t;
+        let mut old_byte: bcount_t = 0 as bcount_t;
+        if start_row == end_row {
+            old_byte = end_col as bcount_t - start_col as bcount_t;
+        } else {
+            old_byte = (old_byte as ::core::ffi::c_long
+                + (len_at_start as Integer - start_col) as ::core::ffi::c_long)
+                as bcount_t;
+            let mut i: int64_t = 1 as int64_t;
+            while i < end_row - start_row {
+                let mut lnum: int64_t = start_row as int64_t + i;
+                old_byte +=
+                    (ml_get_buf_len(b, lnum as linenr_T) + 1 as ::core::ffi::c_int) as bcount_t;
+                i += 1;
+            }
+            old_byte += end_col as bcount_t + 1 as bcount_t;
+        }
+        let mut first_item: String_0 =
+            (*replacement.items.offset(0 as ::core::ffi::c_int as isize))
+                .data
+                .string;
+        let mut last_item: String_0 = (*replacement
+            .items
+            .offset(replacement.size.wrapping_sub(1 as size_t) as isize))
+        .data
+        .string;
+        let mut firstlen: size_t = (start_col as size_t).wrapping_add(first_item.size);
+        let mut last_part_len: size_t = (len_at_end as size_t).wrapping_sub(end_col as size_t);
+        if replacement.size == 1 as size_t {
+            firstlen = firstlen.wrapping_add(last_part_len);
+        }
+        let mut first: *mut ::core::ffi::c_char = arena_allocz(arena, firstlen);
+        let mut last: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        memcpy(
+            first as *mut ::core::ffi::c_void,
+            str_at_start as *const ::core::ffi::c_void,
+            start_col as size_t,
+        );
+        memcpy(
+            first.offset(start_col as isize) as *mut ::core::ffi::c_void,
+            first_item.data as *const ::core::ffi::c_void,
+            first_item.size,
+        );
+        memchrsub(
+            first.offset(start_col as isize) as *mut ::core::ffi::c_void,
+            NUL as ::core::ffi::c_char,
+            NL as ::core::ffi::c_char,
+            first_item.size,
+        );
+        if replacement.size == 1 as size_t {
+            memcpy(
+                first
+                    .offset(start_col as isize)
+                    .offset(first_item.size as isize) as *mut ::core::ffi::c_void,
+                str_at_end.offset(end_col as isize) as *const ::core::ffi::c_void,
+                last_part_len,
+            );
+        } else {
+            last = arena_allocz(arena, last_item.size.wrapping_add(last_part_len));
+            memcpy(
+                last as *mut ::core::ffi::c_void,
+                last_item.data as *const ::core::ffi::c_void,
+                last_item.size,
+            );
+            memchrsub(
+                last as *mut ::core::ffi::c_void,
+                NUL as ::core::ffi::c_char,
+                NL as ::core::ffi::c_char,
+                last_item.size,
+            );
+            memcpy(
+                last.offset(last_item.size as isize) as *mut ::core::ffi::c_void,
+                str_at_end.offset(end_col as isize) as *const ::core::ffi::c_void,
+                last_part_len,
+            );
+        }
+        let mut lines: *mut *mut ::core::ffi::c_char = arena_alloc(
+            arena,
+            new_len.wrapping_mul(::core::mem::size_of::<*mut ::core::ffi::c_char>()),
+            true_0 != 0,
+        ) as *mut *mut ::core::ffi::c_char;
+        *lines.offset(0 as ::core::ffi::c_int as isize) = first;
+        new_byte += first_item.size as bcount_t;
+        let mut i_0: size_t = 1 as size_t;
+        while i_0 < new_len.wrapping_sub(1 as size_t) {
+            let l: String_0 = (*replacement.items.offset(i_0 as isize)).data.string;
+            *lines.offset(i_0 as isize) = arena_memdupz(arena, l.data, l.size);
+            memchrsub(
+                *lines.offset(i_0 as isize) as *mut ::core::ffi::c_void,
+                NUL as ::core::ffi::c_char,
+                NL as ::core::ffi::c_char,
+                l.size,
+            );
+            new_byte += l.size as bcount_t + 1 as bcount_t;
+            i_0 = i_0.wrapping_add(1);
+        }
+        if replacement.size > 1 as size_t {
+            *lines.offset(replacement.size.wrapping_sub(1 as size_t) as isize) = last;
+            new_byte += last_item.size as bcount_t + 1 as bcount_t;
+        }
+        let mut tstate: TryState = TryState {
+            current_exception: ::core::ptr::null_mut::<except_T>(),
+            private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
+            msg_list: ::core::ptr::null::<*const msglist_T>(),
+            got_int: 0,
+            did_throw: false,
+            need_rethrow: 0,
+            did_emsg: 0,
+        };
+        try_enter(&raw mut tstate);
+        's_652: {
+            if (*b).b_p_ma == 0 {
+                api_set_error(
+                    err,
+                    kErrorTypeException,
+                    b"Buffer is not 'modifiable'\0".as_ptr() as *const ::core::ffi::c_char,
+                );
+            } else if u_save_buf(
+                b,
+                start_row as linenr_T - 1 as linenr_T,
+                end_row as linenr_T + 1 as linenr_T,
+            ) == 0 as ::core::ffi::c_int
+            {
+                api_set_error(
+                    err,
+                    kErrorTypeException,
+                    b"Failed to save undo information\0".as_ptr() as *const ::core::ffi::c_char,
+                );
+            } else {
+                let mut extra: ptrdiff_t = 0 as ptrdiff_t;
+                let mut old_len: size_t = (end_row - start_row + 1 as Integer) as size_t;
+                let mut to_delete: size_t = if new_len < old_len {
+                    old_len.wrapping_sub(new_len)
+                } else {
+                    0 as size_t
+                };
+                let mut i_1: size_t = 0 as size_t;
+                while i_1 < to_delete {
+                    if ml_delete_buf(b, start_row as linenr_T, false) == 0 as ::core::ffi::c_int {
+                        api_set_error(
+                            err,
+                            kErrorTypeException,
+                            b"Failed to delete line\0".as_ptr() as *const ::core::ffi::c_char,
+                        );
+                        break 's_652;
+                    } else {
+                        i_1 = i_1.wrapping_add(1);
+                    }
+                }
+                if to_delete > 0 as size_t {
+                    extra -= to_delete as ptrdiff_t;
+                }
+                let mut to_replace: size_t = if old_len < new_len { old_len } else { new_len };
+                let mut i_2: size_t = 0 as size_t;
+                while i_2 < to_replace {
+                    let mut lnum_0: int64_t = start_row as int64_t + i_2 as int64_t;
+                    if !(lnum_0 < MAXLNUM as ::core::ffi::c_int as int64_t) {
+                        api_set_error(
+                            err,
+                            kErrorTypeValidation,
+                            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+                            b"Index out of bounds\0".as_ptr() as *const ::core::ffi::c_char,
+                        );
+                        break 's_652;
+                    } else if ml_replace_buf(
+                        b,
+                        lnum_0 as linenr_T,
+                        *lines.offset(i_2 as isize),
+                        false,
+                        true,
+                    ) == 0 as ::core::ffi::c_int
+                    {
+                        api_set_error(
+                            err,
+                            kErrorTypeException,
+                            b"Failed to replace line\0".as_ptr() as *const ::core::ffi::c_char,
+                        );
+                        break 's_652;
+                    } else {
+                        i_2 = i_2.wrapping_add(1);
+                    }
+                }
+                let mut i_3: size_t = to_replace;
+                while i_3 < new_len {
+                    let mut lnum_1: int64_t = start_row as int64_t + i_3 as int64_t - 1 as int64_t;
+                    if !(lnum_1 < MAXLNUM as ::core::ffi::c_int as int64_t) {
+                        api_set_error(
+                            err,
+                            kErrorTypeValidation,
+                            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+                            b"Index out of bounds\0".as_ptr() as *const ::core::ffi::c_char,
+                        );
+                        break 's_652;
+                    } else if ml_append_buf(
+                        b,
+                        lnum_1 as linenr_T,
+                        *lines.offset(i_3 as isize),
+                        0 as colnr_T,
+                        false,
+                    ) == 0 as ::core::ffi::c_int
+                    {
+                        api_set_error(
+                            err,
+                            kErrorTypeException,
+                            b"Failed to insert line\0".as_ptr() as *const ::core::ffi::c_char,
+                        );
+                        break 's_652;
+                    } else {
+                        extra += 1;
+                        i_3 = i_3.wrapping_add(1);
+                    }
+                }
+                let mut col_extent: colnr_T = (end_col
+                    - (if end_row == start_row {
+                        start_col
+                    } else {
+                        0 as Integer
+                    })) as colnr_T;
+                let mut adjust: linenr_T = if end_row >= start_row {
+                    MAXLNUM as ::core::ffi::c_int as linenr_T
+                } else {
+                    0 as linenr_T
+                };
+                mark_adjust_buf(
+                    b,
+                    start_row as linenr_T,
+                    end_row as linenr_T - 1 as linenr_T,
+                    adjust,
+                    extra as linenr_T,
+                    true,
+                    kMarkAdjustApi,
+                    kExtmarkNOOP,
+                );
+                if VIsual_active.get() as ::core::ffi::c_int != 0
+                    && b == curbuf.get()
+                    && VIsual_mode.get() != 22 as ::core::ffi::c_int
+                {
+                    fix_pos_col(
+                        b,
+                        VIsual.ptr(),
+                        start_row as linenr_T,
+                        start_col as colnr_T,
+                        end_row as linenr_T,
+                        end_col as colnr_T,
+                        new_len as linenr_T,
+                        last_item.size as colnr_T,
+                        1 as colnr_T,
+                    );
+                    check_visual_pos();
+                }
+                extmark_splice(
+                    b,
+                    start_row as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+                    start_col as colnr_T,
+                    (end_row - start_row) as ::core::ffi::c_int,
+                    col_extent,
+                    old_byte,
+                    new_len as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+                    last_item.size as colnr_T,
+                    new_byte,
+                    kExtmarkUndo,
+                );
+                changed_lines(
+                    b,
+                    start_row as linenr_T,
+                    start_col as colnr_T,
+                    end_row as linenr_T + 1 as linenr_T,
+                    extra as linenr_T,
+                    true,
+                );
+                let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
+                while !tp.is_null() {
+                    let mut win: *mut win_T = if tp == curtab.get() {
+                        firstwin.get()
+                    } else {
+                        (*tp).tp_firstwin
+                    };
+                    while !win.is_null() {
+                        if (*win).w_buffer == b {
+                            if (*win).w_cursor.lnum as Integer >= start_row
+                                && (*win).w_cursor.lnum as Integer <= end_row
+                            {
+                                fix_cursor_cols(
+                                    win,
+                                    start_row as linenr_T,
+                                    start_col as colnr_T,
+                                    end_row as linenr_T,
+                                    end_col as colnr_T,
+                                    new_len as linenr_T,
+                                    last_item.size as colnr_T,
+                                );
+                            } else {
+                                fix_cursor(
+                                    win,
+                                    start_row as linenr_T,
+                                    end_row as linenr_T,
+                                    extra as linenr_T,
+                                );
+                            }
+                        }
+                        win = (*win).w_next;
+                    }
+                    tp = (*tp).tp_next as *mut tabpage_T;
+                }
+            }
+        }
+        try_leave(&raw mut tstate, err);
+    }
+}
+
+pub(crate) unsafe extern "C" fn fix_cursor(
+    mut win: *mut win_T,
+    mut lo: linenr_T,
+    mut hi: linenr_T,
+    mut extra: linenr_T,
+) {
+    unsafe {
+        if (*win).w_cursor.lnum >= lo {
+            if (*win).w_cursor.lnum >= hi {
+                (*win).w_cursor.lnum += extra;
+            } else if extra < 0 as linenr_T {
+                check_cursor_lnum(win);
+            }
+            check_cursor_col(win);
+            changed_cline_bef_curs(win);
+            (*win).w_valid &= !VALID_BOTLINE_AP;
+            update_topline(win);
+        } else {
+            invalidate_botline_win(win);
+        };
+    }
+}
+
+unsafe extern "C" fn fix_pos_col(
+    mut buf: *mut buf_T,
+    mut pos: *mut pos_T,
+    mut start_row: linenr_T,
+    mut start_col: colnr_T,
+    mut end_row: linenr_T,
+    mut end_col: colnr_T,
+    mut new_rows: linenr_T,
+    mut new_cols_at_end_row: colnr_T,
+    mut mode_col_adj: colnr_T,
+) {
+    unsafe {
+        if (*pos).lnum < start_row {
+            return;
+        }
+        let mut old_rows: linenr_T = end_row - start_row + 1 as linenr_T;
+        let mut lnum_shift: linenr_T = new_rows - old_rows;
+        if (*pos).lnum > end_row {
+            (*pos).lnum += lnum_shift;
+            return;
+        }
+        let mut end_row_change_start: colnr_T = if new_rows == 1 as linenr_T {
+            start_col
+        } else {
+            0 as colnr_T
+        };
+        let mut end_row_change_end: colnr_T = end_row_change_start + new_cols_at_end_row;
+        if (*pos).lnum == end_row && (*pos).col + mode_col_adj > end_col {
+            (*pos).lnum += lnum_shift;
+            (*pos).col += end_row_change_end - end_col;
+            return;
+        }
+        let mut old_coladd: colnr_T = (*pos).coladd;
+        (*pos).col += (*pos).coladd;
+        (*pos).coladd = 0 as ::core::ffi::c_int as colnr_T;
+        let mut new_end_row: linenr_T = start_row + new_rows - 1 as linenr_T;
+        if (*pos).lnum > new_end_row {
+            (*pos).lnum = new_end_row;
+            let mut len: colnr_T = ml_get_buf_len(buf, new_end_row);
+            if (*pos).col < len {
+                (*pos).col = len;
+            }
+        }
+        if (*pos).lnum == new_end_row
+            && (*pos).col > end_row_change_end
+            && old_coladd == 0 as ::core::ffi::c_int
+        {
+            (*pos).col = end_row_change_end;
+            if (*pos).col - mode_col_adj >= end_row_change_start {
+                (*pos).col -= mode_col_adj;
+            }
+        }
+    }
+}
+
+unsafe extern "C" fn fix_cursor_cols(
+    mut win: *mut win_T,
+    mut start_row: linenr_T,
+    mut start_col: colnr_T,
+    mut end_row: linenr_T,
+    mut end_col: colnr_T,
+    mut new_rows: linenr_T,
+    mut new_cols_at_end_row: colnr_T,
+) {
+    unsafe {
+        let mut mode_col_adj: colnr_T = if win == curwin.get() && State.get() & MODE_INSERT != 0 {
+            0 as colnr_T
+        } else {
+            1 as colnr_T
+        };
+        fix_pos_col(
+            (*win).w_buffer,
+            &raw mut (*win).w_cursor,
+            start_row,
+            start_col,
+            end_row,
+            end_col,
+            new_rows,
+            new_cols_at_end_row,
+            mode_col_adj,
+        );
+        check_cursor_col(win);
+        changed_cline_bef_curs(win);
+        invalidate_botline_win(win);
+    }
+}
