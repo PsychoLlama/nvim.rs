@@ -187,4 +187,3 @@ pub const KEYDICT_INIT: KeyDict_ns_opts = KeyDict_ns_opts {
     },
 };
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

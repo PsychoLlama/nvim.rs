@@ -44,7 +44,7 @@ pub unsafe extern "C" fn nvim_set_hl(
                 c"highlight name".as_ptr(),
                 name.data,
                 0 as int64_t,
-                true_0 != 0,
+                true,
             );
             return;
         }
@@ -73,7 +73,7 @@ pub unsafe extern "C" fn nvim_set_hl(
                 base = Some(&base_attrs);
             }
         }
-        let mut attrs: HlAttrs = dict2hlattrs(&*val, true_0 != 0, Some(&mut link_id), base, err);
+        let mut attrs: HlAttrs = dict2hlattrs(&*val, true, Some(&mut link_id), base, err);
         if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
             let save_current_sctx: sctx_T = api_set_sctx(channel_id);
             ns_hl_def(ns_id as NS, hl_id, attrs, link_id, Some(&*val));
@@ -107,7 +107,7 @@ pub unsafe extern "C" fn nvim_set_hl_ns(mut ns_id: Integer, mut err: *mut Error)
                 c"namespace".as_ptr(),
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 ns_id as int64_t,
-                false_0 != 0,
+                false,
             );
             return;
         }

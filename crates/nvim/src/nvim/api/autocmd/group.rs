@@ -94,8 +94,8 @@ pub(crate) unsafe extern "C" fn get_augroup_from_object(
         let mut au_group: ::core::ffi::c_int = AUGROUP_ERROR as ::core::ffi::c_int;
         let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         match group.type_0 as ::core::ffi::c_uint {
-            0 => return AUGROUP_DEFAULT as ::core::ffi::c_int,
-            4 => {
+            kObjectTypeNil => return AUGROUP_DEFAULT as ::core::ffi::c_int,
+            kObjectTypeString => {
                 au_group = augroup_find(group.data.string.data);
                 if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
                     api_err_invalid(
@@ -103,13 +103,13 @@ pub(crate) unsafe extern "C" fn get_augroup_from_object(
                         c"group".as_ptr(),
                         group.data.string.data,
                         0 as int64_t,
-                        true_0 != 0,
+                        true,
                     );
                     return AUGROUP_ERROR as ::core::ffi::c_int;
                 }
                 return au_group;
             }
-            2 => {
+            kObjectTypeInteger => {
                 au_group = group.data.integer as ::core::ffi::c_int;
                 name = if au_group == 0 as ::core::ffi::c_int {
                     ::core::ptr::null_mut::<::core::ffi::c_char>()
@@ -122,7 +122,7 @@ pub(crate) unsafe extern "C" fn get_augroup_from_object(
                         c"group".as_ptr(),
                         ::core::ptr::null::<::core::ffi::c_char>(),
                         au_group as int64_t,
-                        false_0 != 0,
+                        false,
                     );
                     return AUGROUP_ERROR as ::core::ffi::c_int;
                 }

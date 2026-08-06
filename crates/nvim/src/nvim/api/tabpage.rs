@@ -95,8 +95,8 @@ pub unsafe extern "C" fn nvim_tabpage_set_var(
         (*tab).tp_vars,
         name,
         value,
-        false_0 != 0,
-        false_0 != 0,
+        false,
+        false,
         ::core::ptr::null_mut::<Arena>(),
         err,
     );
@@ -117,8 +117,8 @@ pub unsafe extern "C" fn nvim_tabpage_del_var(
             type_0: kObjectTypeNil,
             data: C2Rust_Unnamed { boolean: false },
         },
-        true_0 != 0,
-        false_0 != 0,
+        true,
+        false,
         ::core::ptr::null_mut::<Arena>(),
         err,
     );
@@ -292,5 +292,3 @@ pub unsafe extern "C" fn nvim_open_tabpage(
     }
     return (*tp).handle as Tabpage;
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

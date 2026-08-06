@@ -82,7 +82,7 @@ pub unsafe extern "C" fn nvim_get_proc_children(
                 c"pid".as_ptr(),
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 pid as int64_t,
-                false_0 != 0,
+                false,
             );
         } else {
             match os_proc_children(pid as ::core::ffi::c_int) {
@@ -96,7 +96,7 @@ pub unsafe extern "C" fn nvim_get_proc_children(
                     ::core::ptr::null::<::core::ffi::c_char>(),
                     c"nvim_get_proc_children".as_ptr(),
                     1924 as ::core::ffi::c_int,
-                    true_0 != 0,
+                    true,
                     c"fallback to vim._os_proc_children()".as_ptr(),
                 );
                 let mut a: Array = Array {
@@ -166,7 +166,7 @@ pub unsafe extern "C" fn nvim_get_proc(
                 c"pid".as_ptr(),
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 pid as int64_t,
-                false_0 != 0,
+                false,
             );
             return object {
                 type_0: kObjectTypeNil,
@@ -256,7 +256,7 @@ pub unsafe extern "C" fn nvim__inspect_cell(
                     c"grid handle".as_ptr(),
                     ::core::ptr::null::<::core::ffi::c_char>(),
                     grid as int64_t,
-                    false_0 != 0,
+                    false,
                 );
                 return ret;
             }
@@ -272,7 +272,7 @@ pub unsafe extern "C" fn nvim__inspect_cell(
         ret = arena_array(arena, 3 as size_t);
         let mut off: size_t = (*(*g).line_offset.add(row as size_t)) + col as size_t;
         let mut sc_buf: *mut ::core::ffi::c_char =
-            arena_alloc(arena, MAX_SCHAR_SIZE as size_t, false_0 != 0) as *mut ::core::ffi::c_char;
+            arena_alloc(arena, MAX_SCHAR_SIZE as size_t, false) as *mut ::core::ffi::c_char;
         schar_get(sc_buf, *(*g).chars.add(off));
         array_add(&mut ret, Object::string(cstr_as_string(sc_buf)));
         let mut attr: ::core::ffi::c_int = *(*g).attrs.add(off) as ::core::ffi::c_int;

@@ -49,26 +49,26 @@ pub unsafe extern "C" fn nvim_buf_set_text(
         if b.is_null() {
             return;
         }
-        let mut oob: bool = false_0 != 0;
-        start_row = normalize_index(b, start_row as int64_t, false_0 != 0, &raw mut oob) as Integer;
+        let mut oob: bool = false;
+        start_row = normalize_index(b, start_row as int64_t, false, &raw mut oob) as Integer;
         if oob {
             api_err_invalid(
                 err,
                 c"start_row".as_ptr(),
                 c"out of range".as_ptr(),
                 0 as int64_t,
-                false_0 != 0,
+                false,
             );
             return;
         }
-        end_row = normalize_index(b, end_row as int64_t, false_0 != 0, &raw mut oob) as Integer;
+        end_row = normalize_index(b, end_row as int64_t, false, &raw mut oob) as Integer;
         if oob {
             api_err_invalid(
                 err,
                 c"end_row".as_ptr(),
                 c"out of range".as_ptr(),
                 0 as int64_t,
-                false_0 != 0,
+                false,
             );
             return;
         }
@@ -86,7 +86,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 c"start_col".as_ptr(),
                 c"out of range".as_ptr(),
                 0 as int64_t,
-                false_0 != 0,
+                false,
             );
             return;
         }
@@ -104,7 +104,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 c"end_col".as_ptr(),
                 c"out of range".as_ptr(),
                 0 as int64_t,
-                false_0 != 0,
+                false,
             );
             return;
         }
@@ -204,7 +204,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
         let mut lines: *mut *mut ::core::ffi::c_char = arena_alloc(
             arena,
             new_len.wrapping_mul(::core::mem::size_of::<*mut ::core::ffi::c_char>()),
-            true_0 != 0,
+            true,
         ) as *mut *mut ::core::ffi::c_char;
         *lines.offset(0 as ::core::ffi::c_int as isize) = first;
         new_byte += first_item.size as bcount_t;

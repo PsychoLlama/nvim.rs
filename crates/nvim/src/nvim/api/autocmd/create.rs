@@ -11,6 +11,7 @@
 use super::*;
 #[allow(unused_imports)]
 use crate::src::nvim::api::private::helpers::has_key;
+use crate::src::nvim::types::{kObjectTypeLuaRef, kObjectTypeString};
 
 pub unsafe extern "C" fn nvim_create_autocmd(
     mut channel_id: uint64_t,
@@ -41,7 +42,7 @@ pub unsafe extern "C" fn nvim_create_autocmd(
         let mut event_array: Array = unpack_string_or_array(
             event,
             c"event".as_ptr() as *mut ::core::ffi::c_char,
-            true_0 != 0,
+            true,
             arena,
             err,
         );
@@ -58,14 +59,14 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                     ) {
                         let mut callback: *mut Object = &raw mut (*opts).callback;
                         match (*callback).type_0 as ::core::ffi::c_uint {
-                            7 => {
+                            kObjectTypeLuaRef => {
                                 if !((*callback).data.luaref != -2 as ::core::ffi::c_int) {
                                     api_err_invalid(
                                         err,
                                         c"callback".as_ptr(),
                                         c"<no value>".as_ptr(),
                                         0 as int64_t,
-                                        true_0 != 0,
+                                        true,
                                     );
                                     break '_cleanup;
                                 } else if !nlua_ref_is_function((*callback).data.luaref) {
@@ -74,7 +75,7 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                                         c"callback".as_ptr(),
                                         c"<not a function>".as_ptr(),
                                         0 as int64_t,
-                                        true_0 != 0,
+                                        true,
                                     );
                                     break '_cleanup;
                                 } else {
@@ -83,7 +84,7 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                                     (*callback).data.luaref = LUA_NOREF as LuaRef;
                                 }
                             }
-                            4 => {
+                            kObjectTypeString => {
                                 handler_fn.type_0 = kCallbackFuncref;
                                 handler_fn.data.funcref = string_to_cstr((*callback).data.string);
                             }
@@ -242,7 +243,7 @@ pub unsafe extern "C" fn nvim_del_autocmd(mut id: Integer, mut err: *mut Error) 
                 c"autocmd id".as_ptr(),
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 id as int64_t,
-                false_0 != 0,
+                false,
             );
             return;
         }
@@ -265,7 +266,7 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
         let mut event_array: Array = unpack_string_or_array(
             (*opts).event,
             c"event".as_ptr() as *mut ::core::ffi::c_char,
-            false_0 != 0,
+            false,
             arena,
             err,
         );
@@ -366,23 +367,14 @@ unsafe extern "C" fn clear_autocmd(
     mut err: *mut Error,
 ) -> bool {
     unsafe {
-        if do_autocmd_event(
-            event,
-            pat,
-            false_0 != 0,
-            false_0,
-            c"".as_ptr(),
-            true_0 != 0,
-            au_group,
-        ) == FAIL
-        {
+        if do_autocmd_event(event, pat, false, false_0, c"".as_ptr(), true, au_group) == FAIL {
             api_set_error(
                 err,
                 kErrorTypeException,
                 c"Failed to clear autocmd".as_ptr(),
             );
-            return false_0 != 0;
+            return false;
         }
-        return true_0 != 0;
+        return true;
     }
 }

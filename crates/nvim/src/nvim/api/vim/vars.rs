@@ -61,7 +61,7 @@ pub unsafe extern "C" fn nvim_get_var(
             tv_dict_find(get_globvar_dict(), name.data, name.size as ptrdiff_t);
         if di.is_null() {
             let mut found: bool =
-                script_autoload(name.data, name.size, false_0 != 0) as ::core::ffi::c_int != 0
+                script_autoload(name.data, name.size, false) as ::core::ffi::c_int != 0
                     && !aborting();
             if !found {
                 api_set_error(
@@ -89,7 +89,7 @@ pub unsafe extern "C" fn nvim_get_var(
                 data: C2Rust_Unnamed { boolean: false },
             };
         }
-        return vim_to_object(&raw mut (*di).di_tv, arena, true_0 != 0);
+        return vim_to_object(&raw mut (*di).di_tv, arena, true);
     }
 }
 
@@ -99,8 +99,8 @@ pub unsafe extern "C" fn nvim_set_var(mut name: String_0, mut value: Object, mut
             get_globvar_dict(),
             name,
             value,
-            false_0 != 0,
-            false_0 != 0,
+            false,
+            false,
             ::core::ptr::null_mut::<Arena>(),
             err,
         );
@@ -116,8 +116,8 @@ pub unsafe extern "C" fn nvim_del_var(mut name: String_0, mut err: *mut Error) {
                 type_0: kObjectTypeNil,
                 data: C2Rust_Unnamed { boolean: false },
             },
-            true_0 != 0,
-            false_0 != 0,
+            true,
+            false,
             ::core::ptr::null_mut::<Arena>(),
             err,
         );
@@ -140,8 +140,8 @@ pub unsafe extern "C" fn nvim_set_vvar(mut name: String_0, mut value: Object, mu
             get_vimvar_dict(),
             name,
             value,
-            false_0 != 0,
-            false_0 != 0,
+            false,
+            false,
             ::core::ptr::null_mut::<Arena>(),
             err,
         );

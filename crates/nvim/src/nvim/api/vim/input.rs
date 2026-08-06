@@ -18,35 +18,35 @@ pub unsafe extern "C" fn nvim_feedkeys(
     mut escape_ks: Boolean,
 ) {
     unsafe {
-        let mut remap: bool = true_0 != 0;
-        let mut insert: bool = false_0 != 0;
-        let mut typed: bool = false_0 != 0;
-        let mut execute: bool = false_0 != 0;
-        let mut dangerous: bool = false_0 != 0;
-        let mut lowlevel: bool = false_0 != 0;
+        let mut remap: bool = true;
+        let mut insert: bool = false;
+        let mut typed: bool = false;
+        let mut execute: bool = false;
+        let mut dangerous: bool = false;
+        let mut lowlevel: bool = false;
         let mut i: size_t = 0 as size_t;
         while i < mode.size {
             match *mode.data.add(i) as ::core::ffi::c_int {
                 110 => {
-                    remap = false_0 != 0;
+                    remap = false;
                 }
                 109 => {
-                    remap = true_0 != 0;
+                    remap = true;
                 }
                 116 => {
-                    typed = true_0 != 0;
+                    typed = true;
                 }
                 105 => {
-                    insert = true_0 != 0;
+                    insert = true;
                 }
                 120 => {
-                    execute = true_0 != 0;
+                    execute = true;
                 }
                 33 => {
-                    dangerous = true_0 != 0;
+                    dangerous = true;
                 }
                 76 => {
-                    lowlevel = true_0 != 0;
+                    lowlevel = true;
                 }
                 _ => {}
             }
@@ -77,10 +77,10 @@ pub unsafe extern "C" fn nvim_feedkeys(
                     (*typebuf.ptr()).tb_len
                 },
                 !typed,
-                false_0 != 0,
+                false,
             );
             if vgetc_busy.get() != 0 {
-                typebuf_was_filled.set(true_0 != 0);
+                typebuf_was_filled.set(true);
             }
         }
         if escape_ks {
@@ -92,7 +92,7 @@ pub unsafe extern "C" fn nvim_feedkeys(
             if !dangerous {
                 (*ex_normal_busy.ptr()) += 1;
             }
-            exec_normal(true_0 != 0, lowlevel);
+            exec_normal(true, lowlevel);
             if !dangerous {
                 (*ex_normal_busy.ptr()) -= 1;
             }
@@ -103,7 +103,7 @@ pub unsafe extern "C" fn nvim_feedkeys(
 
 pub unsafe extern "C" fn nvim_input(mut channel_id: uint64_t, mut keys: String_0) -> Integer {
     unsafe {
-        may_trigger_vim_suspend_resume(false_0 != 0);
+        may_trigger_vim_suspend_resume(false);
         return input_enqueue(channel_id, keys) as Integer;
     }
 }
@@ -120,7 +120,7 @@ pub unsafe extern "C" fn nvim_input_mouse(
     unsafe {
         let mut code: ::core::ffi::c_int = 0;
         let mut modmask: ::core::ffi::c_int = 0;
-        may_trigger_vim_suspend_resume(false_0 != 0);
+        may_trigger_vim_suspend_resume(false);
         '_error: {
             if !(button.data.is_null() || action.data.is_null()) {
                 code = 0 as ::core::ffi::c_int;
@@ -256,16 +256,7 @@ pub unsafe extern "C" fn nvim_set_keymap(
     mut err: *mut Error,
 ) {
     unsafe {
-        modify_keymap(
-            channel_id,
-            -1 as Buffer,
-            false_0 != 0,
-            mode,
-            lhs,
-            rhs,
-            opts,
-            err,
-        );
+        modify_keymap(channel_id, -1 as Buffer, false, mode, lhs, rhs, opts, err);
     }
 }
 
@@ -288,7 +279,7 @@ pub unsafe extern "C" fn nvim_select_popupmenu_item(
     mut _err: *mut Error,
 ) {
     if finish {
-        insert = true_0 != 0;
+        insert = true;
     }
     pum_ext_select_item(item as ::core::ffi::c_int, insert, finish);
 }

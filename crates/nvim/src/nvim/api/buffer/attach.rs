@@ -36,7 +36,7 @@ pub unsafe extern "C" fn nvim_buf_attach(
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return false_0 != 0;
+            return false;
         }
         let mut cb: BufUpdateCallbacks = BUF_UPDATE_CALLBACKS_INIT;
         if channel_id == LUA_INTERNAL_CALL {
@@ -90,10 +90,10 @@ pub unsafe extern "C" fn nvim_buf_detach(
     unsafe {
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
-            return false_0 != 0;
+            return false;
         }
         buf_updates_unregister(b, channel_id);
-        return true_0 != 0;
+        return true;
     }
 }
 

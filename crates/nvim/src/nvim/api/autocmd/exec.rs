@@ -18,13 +18,13 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
 ) {
     unsafe {
         let mut au_group: ::core::ffi::c_int = AUGROUP_ALL as ::core::ffi::c_int;
-        let mut modeline: bool = true_0 != 0;
+        let mut modeline: bool = true;
         let mut b: *mut buf_T = curbuf.get();
         let mut data: *mut Object = ::core::ptr::null_mut::<Object>();
         let mut event_array: Array = unpack_string_or_array(
             event,
             c"event".as_ptr() as *mut ::core::ffi::c_char,
-            true_0 != 0,
+            true,
             arena,
             err,
         );
@@ -33,8 +33,8 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
         }
         let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         match (*opts).group.type_0 as ::core::ffi::c_uint {
-            0 => {}
-            4 => {
+            kObjectTypeNil => {}
+            kObjectTypeString => {
                 au_group = augroup_find((*opts).group.data.string.data);
                 if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
                     api_err_invalid(
@@ -42,12 +42,12 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
                         c"group".as_ptr(),
                         (*opts).group.data.string.data,
                         0 as int64_t,
-                        true_0 != 0,
+                        true,
                     );
                     return;
                 }
             }
-            2 => {
+            kObjectTypeInteger => {
                 au_group = (*opts).group.data.integer as ::core::ffi::c_int;
                 name = if au_group == 0 as ::core::ffi::c_int {
                     ::core::ptr::null_mut::<::core::ffi::c_char>()
@@ -60,7 +60,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
                         c"group".as_ptr(),
                         ::core::ptr::null::<::core::ffi::c_char>(),
                         au_group as int64_t,
-                        false_0 != 0,
+                        false,
                     );
                     return;
                 }
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
         } else {
             true_0
         } != 0;
-        let mut did_aucmd: bool = false_0 != 0;
+        let mut did_aucmd: bool = false;
         let mut event_str_index: size_t = 0 as size_t;
         while event_str_index < event_array.size {
             let mut event_str: Object = *event_array.items.add(event_str_index);

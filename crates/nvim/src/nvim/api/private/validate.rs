@@ -186,7 +186,6 @@ pub unsafe extern "C" fn check_string_array(
         }
         i = i.wrapping_add(1);
     }
-    return true_0 != 0;
+    return true;
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

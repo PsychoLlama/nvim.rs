@@ -88,7 +88,7 @@ pub unsafe extern "C" fn nvim_eval_statusline(
                     c"use_statuscol_lnum".as_ptr(),
                     c"out of range".as_ptr(),
                     0 as int64_t,
-                    false_0 != 0,
+                    false,
                 );
                 return result;
             }
@@ -238,7 +238,7 @@ pub unsafe extern "C" fn nvim_eval_statusline(
         }
         result = arena_dict(arena, 3 as size_t);
         let mut buf: *mut ::core::ffi::c_char =
-            arena_alloc(arena, MAXPATHL as size_t, false_0 != 0) as *mut ::core::ffi::c_char;
+            arena_alloc(arena, MAXPATHL as size_t, false) as *mut ::core::ffi::c_char;
         let mut hltab: *mut stl_hlrec_t = ::core::ptr::null_mut::<stl_hlrec_t>();
         let mut hltab_len: size_t = 0 as size_t;
         let mut p_crb_save: ::core::ffi::c_int = (*wp).w_onebuf_opt.wo_crb;

@@ -64,11 +64,11 @@ pub unsafe extern "C" fn nvim_set_client_info(
         info.capacity = 5 as size_t;
         info.items = &raw mut info__items as *mut KeyValuePair;
         dict_put(&mut info, c"name", Object::string(name));
-        let mut has_major: bool = false_0 != 0;
+        let mut has_major: bool = false;
         let mut i: size_t = 0 as size_t;
         while i < version.size {
             if strequal((*version.items.add(i)).key.data, c"major".as_ptr()) {
-                has_major = true_0 != 0;
+                has_major = true;
                 break;
             } else {
                 i = i.wrapping_add(1);

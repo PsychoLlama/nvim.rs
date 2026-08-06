@@ -183,7 +183,7 @@ unsafe extern "C" fn do_ft_buf(
     mut aco_used: *mut bool,
     mut err: *mut Error,
 ) -> *mut buf_T {
-    *aco_used = false_0 != 0;
+    *aco_used = false;
     if filetype.is_null() {
         return ::core::ptr::null_mut::<buf_T>();
     }
@@ -212,7 +212,7 @@ unsafe extern "C" fn do_ft_buf(
     let mut bufref: bufref_T = bufref_T::default();
     set_bufref(&raw mut bufref, ftbuf);
     aucmd_prepbuf(aco, ftbuf);
-    *aco_used = true_0 != 0;
+    *aco_used = true;
     set_option_direct(
         kOptBufhidden,
         OptVal {
@@ -260,7 +260,7 @@ unsafe extern "C" fn do_ft_buf(
     if !has_event(EVENT_FILETYPE) {
         return ftbuf;
     }
-    let mut did_au_ft: bool = false_0 != 0;
+    let mut did_au_ft: bool = false;
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
         private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
@@ -297,12 +297,12 @@ unsafe extern "C" fn wipe_ft_buf(mut buf: *mut buf_T) {
     block_autocmds();
     let mut bufref: bufref_T = bufref_T::default();
     set_bufref(&raw mut bufref, buf);
-    close_windows(buf, false_0 != 0);
+    close_windows(buf, false);
     if bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
         && buf != curbuf.get()
         && (*buf).b_nwindows == 0 as ::core::ffi::c_int
     {
-        wipe_buffer(buf, false_0 != 0);
+        wipe_buffer(buf, false);
     }
     if bufref_valid(&raw mut bufref) {
         (*buf).b_flags &= !BF_DUMMY;
@@ -373,13 +373,7 @@ pub unsafe extern "C" fn nvim_get_option_value(
     }
     if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
         if !(value.type_0 as ::core::ffi::c_int != kOptValTypeNil as ::core::ffi::c_int) {
-            api_err_invalid(
-                err,
-                c"option".as_ptr(),
-                name.data,
-                0 as int64_t,
-                true_0 != 0,
-            );
+            api_err_invalid(err, c"option".as_ptr(), name.data, 0 as int64_t, true);
         } else {
             return optval_as_object(value);
         }
@@ -485,5 +479,4 @@ pub const KEYSET_OPTIDX_option__scope: ::core::ffi::c_int = 3 as ::core::ffi::c_
 pub const KEYSET_OPTIDX_option__filetype: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const BF_DUMMY: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

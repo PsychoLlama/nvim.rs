@@ -51,7 +51,7 @@ pub unsafe extern "C" fn nvim_get_context(
                     } else if strequal(s, c"funcs".as_ptr()) {
                         int_types |= kCtxFuncs as ::core::ffi::c_int;
                     } else if true {
-                        api_err_invalid(err, c"type".as_ptr(), s, 0 as int64_t, true_0 != 0);
+                        api_err_invalid(err, c"type".as_ptr(), s, 0 as int64_t, true);
                         return Dict {
                             size: 0 as size_t,
                             capacity: 0 as size_t,
@@ -92,7 +92,7 @@ pub unsafe extern "C" fn nvim_get_mode(mut arena: *mut Arena) -> Dict {
     unsafe {
         let mut rv: Dict = arena_dict(arena, 2 as size_t);
         let mut modestr: *mut ::core::ffi::c_char =
-            arena_alloc(arena, MODE_MAX_LENGTH as size_t, false_0 != 0) as *mut ::core::ffi::c_char;
+            arena_alloc(arena, MODE_MAX_LENGTH as size_t, false) as *mut ::core::ffi::c_char;
         get_mode(modestr);
         let mut blocked: bool = input_blocking();
         dict_put(&mut rv, c"mode", Object::string(cstr_as_string(modestr)));

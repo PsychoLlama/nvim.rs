@@ -8,7 +8,6 @@ use crate::src::nvim::types::{
     Error, Integer, Object, String_0, VV_TERMRESPONSE, kObjectTypeString, ptrdiff_t, uint64_t,
 };
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub unsafe extern "C" fn nvim_error_event(
     mut channel_id: uint64_t,
     mut _type_0: Integer,
@@ -19,7 +18,7 @@ pub unsafe extern "C" fn nvim_error_event(
         ::core::ptr::null::<::core::ffi::c_char>(),
         c"nvim_error_event".as_ptr(),
         44 as ::core::ffi::c_int,
-        true_0 != 0,
+        true,
         c"async error on channel %ld: %s".as_ptr(),
         channel_id,
         if msg.size != 0 {

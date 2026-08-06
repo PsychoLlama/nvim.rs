@@ -67,7 +67,7 @@ pub unsafe extern "C" fn nvim_buf_set_keymap(
     mut err: *mut Error,
 ) {
     unsafe {
-        modify_keymap(channel_id, buf, false_0 != 0, mode, lhs, rhs, opts, err);
+        modify_keymap(channel_id, buf, false, mode, lhs, rhs, opts, err);
     }
 }
 
@@ -86,7 +86,7 @@ pub unsafe extern "C" fn nvim_buf_del_keymap(
         modify_keymap(
             channel_id,
             buf,
-            true_0 != 0,
+            true,
             mode,
             lhs,
             rhs,
@@ -111,8 +111,8 @@ pub unsafe extern "C" fn nvim_buf_set_var(
             (*b).b_vars,
             name,
             value,
-            false_0 != 0,
-            false_0 != 0,
+            false,
+            false,
             ::core::ptr::null_mut::<Arena>(),
             err,
         );
@@ -136,8 +136,8 @@ pub unsafe extern "C" fn nvim_buf_del_var(
                 type_0: kObjectTypeNil,
                 data: C2Rust_Unnamed { boolean: false },
             },
-            true_0 != 0,
-            false_0 != 0,
+            true,
+            false,
             ::core::ptr::null_mut::<Arena>(),
             err,
         );

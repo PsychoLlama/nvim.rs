@@ -123,13 +123,7 @@ pub unsafe extern "C" fn create_user_command(
         let mut preview_luaref: LuaRef = LUA_NOREF;
         '_err: {
             if uc_validate_name(name.data).is_null() {
-                api_err_invalid(
-                    err,
-                    c"command name".as_ptr(),
-                    name.data,
-                    0 as int64_t,
-                    true_0 != 0,
-                );
+                api_err_invalid(err, c"command name".as_ptr(), name.data, 0 as int64_t, true);
             } else if mb_islower(
                 *name.data.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             ) {
@@ -138,7 +132,7 @@ pub unsafe extern "C" fn create_user_command(
                     c"command name (must start with uppercase)".as_ptr(),
                     name.data,
                     0 as int64_t,
-                    true_0 != 0,
+                    true,
                 );
             } else if !(!(has_key((*opts).is_set__user_command_, 8 as ::core::ffi::c_int))
                 || !(has_key((*opts).is_set__user_command_, 5 as ::core::ffi::c_int)))
@@ -167,7 +161,7 @@ pub unsafe extern "C" fn create_user_command(
                                     c"nargs".as_ptr(),
                                     ::core::ptr::null::<::core::ffi::c_char>(),
                                     (*opts).nargs.data.integer,
-                                    false_0 != 0,
+                                    false,
                                 );
                                 break '_err;
                             }
@@ -182,7 +176,7 @@ pub unsafe extern "C" fn create_user_command(
                             c"nargs".as_ptr(),
                             (*opts).nargs.data.string.data,
                             0 as int64_t,
-                            true_0 != 0,
+                            true,
                         );
                         break '_err;
                     } else {
@@ -212,7 +206,7 @@ pub unsafe extern "C" fn create_user_command(
                                         c"nargs".as_ptr(),
                                         (*opts).nargs.data.string.data,
                                         0 as int64_t,
-                                        true_0 != 0,
+                                        true,
                                     );
                                     break '_err;
                                 }
@@ -224,13 +218,7 @@ pub unsafe extern "C" fn create_user_command(
                     KEYSET_OPTIDX_user_command__nargs,
                 ) {
                     if true {
-                        api_err_invalid(
-                            err,
-                            c"nargs".as_ptr(),
-                            c"".as_ptr(),
-                            0 as int64_t,
-                            true_0 != 0,
-                        );
+                        api_err_invalid(err, c"nargs".as_ptr(), c"".as_ptr(), 0 as int64_t, true);
                         break '_err;
                     }
                 }
@@ -269,7 +257,7 @@ pub unsafe extern "C" fn create_user_command(
                                 c"range".as_ptr(),
                                 c"".as_ptr(),
                                 0 as int64_t,
-                                true_0 != 0,
+                                true,
                             );
                             break '_err;
                         } else {
@@ -293,7 +281,7 @@ pub unsafe extern "C" fn create_user_command(
                                 c"range".as_ptr(),
                                 c"".as_ptr(),
                                 0 as int64_t,
-                                true_0 != 0,
+                                true,
                             );
                             break '_err;
                         }
@@ -324,7 +312,7 @@ pub unsafe extern "C" fn create_user_command(
                                 c"count".as_ptr(),
                                 c"".as_ptr(),
                                 0 as int64_t,
-                                true_0 != 0,
+                                true,
                             );
                             break '_err;
                         }
@@ -355,7 +343,7 @@ pub unsafe extern "C" fn create_user_command(
                                 c"addr".as_ptr(),
                                 (*opts).addr.data.string.data,
                                 0 as int64_t,
-                                true_0 != 0,
+                                true,
                             );
                             break '_err;
                         } else {
@@ -411,7 +399,7 @@ pub unsafe extern "C" fn create_user_command(
                                     c"complete".as_ptr(),
                                     (*opts).complete.data.string.data,
                                     0 as int64_t,
-                                    true_0 != 0,
+                                    true,
                                 );
                                 break '_err;
                             }
@@ -450,7 +438,7 @@ pub unsafe extern "C" fn create_user_command(
                             }
                         }
                         match cmd.type_0 as ::core::ffi::c_uint {
-                            7 => {
+                            kObjectTypeLuaRef => {
                                 luaref = api_new_luaref(cmd.data.luaref);
                                 if (*opts).desc.type_0 as ::core::ffi::c_uint
                                     == kObjectTypeString as ::core::ffi::c_int
@@ -461,7 +449,7 @@ pub unsafe extern "C" fn create_user_command(
                                     rep = c"".as_ptr();
                                 }
                             }
-                            4 => {
+                            kObjectTypeString => {
                                 rep = cmd.data.string.data;
                             }
                             _ => {

@@ -81,7 +81,7 @@ pub unsafe extern "C" fn nvim_cmd(
                         EVENT_CMDUNDEFINED,
                         p,
                         p,
-                        true_0 != 0,
+                        true,
                         ::core::ptr::null_mut::<buf_T>(),
                     ) as ::core::ffi::c_int;
                     p = if ret != 0 && !aborting() {
@@ -151,7 +151,7 @@ pub unsafe extern "C" fn nvim_cmd(
                         } else if !((ea.cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int) {
                             ea.argt = excmd_get_argt(ea.cmdidx);
                         }
-                        count_from_first_arg = false_0 != 0;
+                        count_from_first_arg = false;
                         if has_key((*cmd).is_set__cmd_, KEYSET_OPTIDX_cmd__args) {
                             if (*cmd).args.size == 1 as size_t
                                 && ea.argt & EX_COUNT as uint32_t != 0
@@ -159,13 +159,13 @@ pub unsafe extern "C" fn nvim_cmd(
                             {
                                 let mut first_arg: Object =
                                     *(*cmd).args.items.offset(0 as ::core::ffi::c_int as isize);
-                                let mut is_numeric: bool = false_0 != 0;
+                                let mut is_numeric: bool = false;
                                 let mut count_value: int64_t = 0 as int64_t;
                                 if first_arg.type_0 as ::core::ffi::c_uint
                                     == kObjectTypeInteger as ::core::ffi::c_int
                                         as ::core::ffi::c_uint
                                 {
-                                    is_numeric = true_0 != 0;
+                                    is_numeric = true;
                                     count_value = first_arg.data.integer as int64_t;
                                 } else if first_arg.type_0 as ::core::ffi::c_uint
                                     == kObjectTypeString as ::core::ffi::c_int
@@ -181,14 +181,14 @@ pub unsafe extern "C" fn nvim_cmd(
                                     if *endptr as ::core::ffi::c_int == '\0' as ::core::ffi::c_int
                                         && first_arg.data.string.size > 0 as size_t
                                     {
-                                        is_numeric = true_0 != 0;
+                                        is_numeric = true;
                                         count_value = val as int64_t;
                                     }
                                 }
                                 if is_numeric as ::core::ffi::c_int != 0
                                     && count_value >= 0 as int64_t
                                 {
-                                    count_from_first_arg = true_0 != 0;
+                                    count_from_first_arg = true;
                                     ea.addr_count = 1 as ::core::ffi::c_int;
                                     ea.line2 = count_value as linenr_T;
                                     ea.line1 = ea.line2;
@@ -271,7 +271,7 @@ pub unsafe extern "C" fn nvim_cmd(
                                         argc_valid = args.size >= 1 as size_t;
                                     }
                                     EX_EXTRA => {
-                                        argc_valid = true_0 != 0;
+                                        argc_valid = true;
                                     }
                                     _ => {
                                         argc_valid = args.size == 0 as size_t;
@@ -346,7 +346,7 @@ pub unsafe extern "C" fn nvim_cmd(
                                     c"range".as_ptr(),
                                     c"".as_ptr(),
                                     0 as int64_t,
-                                    true_0 != 0,
+                                    true,
                                 );
                                 break '_end;
                             }
@@ -391,7 +391,7 @@ pub unsafe extern "C" fn nvim_cmd(
                                 );
                                 break '_end;
                             }
-                            set_cmd_count(&raw mut ea, (*cmd).count as linenr_T, true_0 != 0);
+                            set_cmd_count(&raw mut ea, (*cmd).count as linenr_T, true);
                         }
                         if has_key((*cmd).is_set__cmd_, KEYSET_OPTIDX_cmd__reg) {
                             if ea.argt & 0x200 as uint32_t == 0 {
@@ -637,7 +637,7 @@ pub unsafe extern "C" fn nvim_cmd(
                                                 c"mods.split".as_ptr(),
                                                 c"".as_ptr(),
                                                 0 as int64_t,
-                                                true_0 != 0,
+                                                true,
                                             );
                                             break '_end;
                                         }
@@ -742,7 +742,7 @@ pub unsafe extern "C" fn nvim_cmd(
                                             c"argument ".as_ptr(),
                                             orig_arg,
                                             0 as int64_t,
-                                            true_0 != 0,
+                                            true,
                                         );
                                         break '_end;
                                     }

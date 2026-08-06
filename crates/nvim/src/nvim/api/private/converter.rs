@@ -36,9 +36,10 @@ use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Dict, Error, Float, Integer, KeyValuePair, LuaRef, Object,
     String_0, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
     VAR_UNKNOWN, VAR_UNLOCKED, blob_T, dict_T, dictitem_T, float_T, int64_t, kBoolVarFalse,
-    kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kSpecialVarNull,
-    list_T, object, object_data, ptrdiff_t, size_t, typval_T, typval_vval_union, uint32_t,
+    kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
+    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
+    kObjectTypeTabpage, kObjectTypeWindow, kSpecialVarNull, list_T, object, object_data, ptrdiff_t,
+    size_t, typval_T, typval_vval_union, uint32_t,
 };
 
 /// `FC_LUAREF`: the `ufunc_T` flag that marks a funcref which is really a Lua
@@ -443,11 +444,11 @@ pub unsafe extern "C" fn object_to_vim_take_luaref(
         (*tv).v_type = VAR_UNKNOWN;
         (*tv).v_lock = VAR_UNLOCKED;
         match (*obj).type_0 as ::core::ffi::c_uint {
-            0 => {
+            kObjectTypeNil => {
                 (*tv).v_type = VAR_SPECIAL;
                 (*tv).vval.v_special = kSpecialVarNull;
             }
-            1 => {
+            kObjectTypeBoolean => {
                 (*tv).v_type = VAR_BOOL;
                 (*tv).vval.v_bool = (if (*obj).data.boolean as ::core::ffi::c_int != 0 {
                     kBoolVarTrue as ::core::ffi::c_int
@@ -455,19 +456,19 @@ pub unsafe extern "C" fn object_to_vim_take_luaref(
                     kBoolVarFalse as ::core::ffi::c_int
                 }) as BoolVarValue;
             }
-            8 | 9 | 10 | 2 => {
+            kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage | kObjectTypeInteger => {
                 (*tv).v_type = VAR_NUMBER;
                 (*tv).vval.v_number = (*obj).data.integer;
             }
-            3 => {
+            kObjectTypeFloat => {
                 (*tv).v_type = VAR_FLOAT;
                 (*tv).vval.v_float = (*obj).data.floating as float_T;
             }
-            4 => {
+            kObjectTypeString => {
                 let mut s: String_0 = (*obj).data.string;
                 *tv = decode_string(s.data, s.size, false, false);
             }
-            5 => {
+            kObjectTypeArray => {
                 let list: *mut list_T = tv_list_alloc((*obj).data.array.size as ptrdiff_t);
                 let mut i: uint32_t = 0 as uint32_t;
                 while (i as size_t) < (*obj).data.array.size {
@@ -489,7 +490,7 @@ pub unsafe extern "C" fn object_to_vim_take_luaref(
                 (*tv).v_type = VAR_LIST;
                 (*tv).vval.v_list = list;
             }
-            6 => {
+            kObjectTypeDict => {
                 let dict: *mut dict_T = tv_dict_alloc();
                 let mut i_0: uint32_t = 0 as uint32_t;
                 while (i_0 as size_t) < (*obj).data.dict.size {
@@ -509,7 +510,7 @@ pub unsafe extern "C" fn object_to_vim_take_luaref(
                 (*tv).v_type = VAR_DICT;
                 (*tv).vval.v_dict = dict;
             }
-            7 => {
+            kObjectTypeLuaRef => {
                 let mut ref_0: LuaRef = (*obj).data.luaref;
                 if take_luaref {
                     (*obj).data.luaref = LUA_NOREF;

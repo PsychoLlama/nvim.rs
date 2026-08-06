@@ -28,13 +28,13 @@ unsafe extern "C" fn redraw_status(
         if (*wp).w_lines_valid == 0 as ::core::ffi::c_int
             || (*wp).w_grid.row_offset != old_row_offset
         {
-            *flush = true_0 != 0;
+            *flush = true;
         }
         if *flush as ::core::ffi::c_int != 0
             && ((*opts).statusline as ::core::ffi::c_int != 0
                 || (*opts).winbar as ::core::ffi::c_int != 0)
         {
-            (*wp).w_redr_status = true_0 != 0;
+            (*wp).w_redr_status = true;
         } else if (*opts).statusline as ::core::ffi::c_int != 0
             || (*opts).winbar as ::core::ffi::c_int != 0
         {
@@ -184,11 +184,11 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
             if redraw_tabline.get() as ::core::ffi::c_int != 0
                 && (*firstwin.get()).w_lines_valid == 0 as ::core::ffi::c_int
             {
-                (*opts).flush = true_0 != 0;
+                (*opts).flush = true;
             } else {
                 draw_tabline();
             }
-            flush_ui = true_0 != 0;
+            flush_ui = true;
         }
         let mut save_lz: bool = p_lz.get() != 0;
         let mut save_rd: ::core::ffi::c_int = RedrawingDisabled.get();
@@ -213,13 +213,13 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
             } else {
                 redraw_status(win, opts, &raw mut (*opts).flush);
             }
-            flush_ui = true_0 != 0;
+            flush_ui = true;
         }
         let mut cwin: *mut win_T = if !win.is_null() { win } else { curwin.get() };
         if (*opts).cursor as ::core::ffi::c_int != 0
             && ((*cwin).w_grid.target.is_null() || !(*(*cwin).w_grid.target).valid)
         {
-            (*opts).flush = true_0 != 0;
+            (*opts).flush = true;
         }
         if (*opts).flush as ::core::ffi::c_int != 0 && !cmdpreview.get() {
             validate_cursor(curwin.get());
@@ -227,8 +227,8 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
             update_screen();
         }
         if (*opts).cursor {
-            setcursor_mayforce(cwin, true_0 != 0);
-            flush_ui = true_0 != 0;
+            setcursor_mayforce(cwin, true);
+            flush_ui = true;
         }
         if flush_ui {
             ui_flush();

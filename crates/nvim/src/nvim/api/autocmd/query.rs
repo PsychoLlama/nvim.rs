@@ -10,6 +10,9 @@
 use super::*;
 #[allow(unused_imports)]
 use crate::src::nvim::api::private::helpers::{array_add, dict_put, dict_put_str, has_key};
+use crate::src::nvim::eval::typval::{
+    kCallbackFuncref, kCallbackLua, kCallbackNone, kCallbackPartial,
+};
 use crate::src::nvim::kvec::InitVec;
 
 pub unsafe extern "C" fn nvim_get_autocmds(
@@ -52,12 +55,12 @@ pub unsafe extern "C" fn nvim_get_autocmds(
             items: ::core::ptr::null_mut::<Object>(),
         };
         let mut event_set: [bool; 145] = [false; 145];
-        let mut check_event: bool = false_0 != 0;
+        let mut check_event: bool = false;
         let mut group: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         '_cleanup: {
             match (*opts).group.type_0 as ::core::ffi::c_uint {
-                0 => {}
-                4 => {
+                kObjectTypeNil => {}
+                kObjectTypeString => {
                     group = augroup_find((*opts).group.data.string.data);
                     if !(group >= 0 as ::core::ffi::c_int) {
                         api_err_invalid(
@@ -65,12 +68,12 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                             c"group".as_ptr(),
                             (*opts).group.data.string.data,
                             0 as int64_t,
-                            true_0 != 0,
+                            true,
                         );
                         break '_cleanup;
                     }
                 }
-                2 => {
+                kObjectTypeInteger => {
                     group = (*opts).group.data.integer as ::core::ffi::c_int;
                     name = if group == 0 as ::core::ffi::c_int {
                         ::core::ptr::null_mut::<::core::ffi::c_char>()
@@ -83,7 +86,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                             c"group".as_ptr(),
                             ::core::ptr::null::<::core::ffi::c_char>(),
                             (*opts).group.data.integer as int64_t,
-                            false_0 != 0,
+                            false,
                         );
                         break '_cleanup;
                     }
@@ -113,7 +116,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                     (*opts).is_set__get_autocmds_,
                     KEYSET_OPTIDX_get_autocmds__event,
                 ) {
-                    check_event = true_0 != 0;
+                    check_event = true;
                     let mut v: Object = (*opts).event;
                     if v.type_0 as ::core::ffi::c_uint
                         == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -127,11 +130,11 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                 c"event".as_ptr(),
                                 v.data.string.data,
                                 0 as int64_t,
-                                true_0 != 0,
+                                true,
                             );
                             break '_cleanup;
                         }
-                        event_set[event_nr as usize] = true_0 != 0;
+                        event_set[event_nr as usize] = true;
                     } else if v.type_0 as ::core::ffi::c_uint
                         == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
@@ -363,7 +366,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                             && (*ap).group != group)
                                         {
                                             if pattern_filter_count > 0 as ::core::ffi::c_int {
-                                                let mut passed: bool = false_0 != 0;
+                                                let mut passed: bool = false;
                                                 let mut j: ::core::ffi::c_int =
                                                     0 as ::core::ffi::c_int;
                                                 while j < pattern_filter_count {
@@ -407,7 +410,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                             as *mut ::core::ffi::c_char;
                                                     }
                                                     if strequal((*ap).pat, pat_0) {
-                                                        passed = true_0 != 0;
+                                                        passed = true;
                                                         break;
                                                     } else {
                                                         j += 1;
@@ -471,7 +474,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                 let mut cb: *mut Callback =
                                                     &raw mut (*ac).handler_fn;
                                                 match (*cb).type_0 as ::core::ffi::c_uint {
-                                                    3 => {
+                                                    kCallbackLua => {
                                                         if nlua_ref_is_function((*cb).data.luaref) {
                                                             dict_put_str(
                                                                 &mut autocmd_info,
@@ -484,7 +487,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                             );
                                                         }
                                                     }
-                                                    1 | 2 => {
+                                                    kCallbackFuncref | kCallbackPartial => {
                                                         dict_put_str(
                                                             &mut autocmd_info,
                                                             cstr_as_string(c"callback".as_ptr()),
@@ -493,7 +496,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                             )),
                                                         );
                                                     }
-                                                    0 => {
+                                                    kCallbackNone => {
                                                         abort();
                                                     }
                                                     _ => {}

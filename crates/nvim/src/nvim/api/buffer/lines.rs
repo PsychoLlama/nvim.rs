@@ -49,9 +49,9 @@ pub unsafe extern "C" fn nvim_buf_get_lines(
         if (*b).b_ml.ml_mfp.is_null() {
             return rv;
         }
-        let mut oob: bool = false_0 != 0;
-        start = normalize_index(b, start as int64_t, true_0 != 0, &raw mut oob) as Integer;
-        end = normalize_index(b, end as int64_t, true_0 != 0, &raw mut oob) as Integer;
+        let mut oob: bool = false;
+        start = normalize_index(b, start as int64_t, true, &raw mut oob) as Integer;
+        end = normalize_index(b, end as int64_t, true, &raw mut oob) as Integer;
         if !(!strict_indexing || !oob) {
             api_set_error(
                 err,
@@ -95,9 +95,9 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
         if b.is_null() {
             return;
         }
-        let mut oob: bool = false_0 != 0;
-        start = normalize_index(b, start as int64_t, true_0 != 0, &raw mut oob) as Integer;
-        end = normalize_index(b, end as int64_t, true_0 != 0, &raw mut oob) as Integer;
+        let mut oob: bool = false;
+        start = normalize_index(b, start as int64_t, true, &raw mut oob) as Integer;
+        end = normalize_index(b, end as int64_t, true, &raw mut oob) as Integer;
         if !(!strict_indexing || !oob) {
             api_set_error(
                 err,
@@ -132,7 +132,7 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
             arena_alloc(
                 arena,
                 new_len.wrapping_mul(::core::mem::size_of::<*mut ::core::ffi::c_char>()),
-                true_0 != 0,
+                true,
             )
         } else {
             NULL
@@ -343,9 +343,9 @@ pub unsafe extern "C" fn nvim_buf_get_text(
         if (*b).b_ml.ml_mfp.is_null() {
             return rv;
         }
-        let mut oob: bool = false_0 != 0;
-        start_row = normalize_index(b, start_row as int64_t, false_0 != 0, &raw mut oob) as Integer;
-        end_row = normalize_index(b, end_row as int64_t, false_0 != 0, &raw mut oob) as Integer;
+        let mut oob: bool = false;
+        start_row = normalize_index(b, start_row as int64_t, false, &raw mut oob) as Integer;
+        end_row = normalize_index(b, end_row as int64_t, false, &raw mut oob) as Integer;
         if oob {
             api_set_error(
                 err,
@@ -468,7 +468,7 @@ pub unsafe extern "C" fn nvim_buf_get_offset(
             b,
             index as linenr_T + 1 as linenr_T,
             ::core::ptr::null_mut::<::core::ffi::c_int>(),
-            true_0 != 0,
+            true,
         ) as Integer;
     }
 }

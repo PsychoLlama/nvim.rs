@@ -155,5 +155,3 @@ const TRY_STATE_INIT: TryState = TryState {
     need_rethrow: 0,
     did_emsg: 0,
 };
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

@@ -16,7 +16,7 @@ pub unsafe extern "C" fn nvim_buf_del_mark(
     mut err: *mut Error,
 ) -> Boolean {
     unsafe {
-        let mut res: bool = false_0 != 0;
+        let mut res: bool = false;
         let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
         if b.is_null() {
             return res as Boolean;
@@ -27,7 +27,7 @@ pub unsafe extern "C" fn nvim_buf_del_mark(
                 c"mark name (must be a single char)".as_ptr(),
                 name.data,
                 0 as int64_t,
-                true_0 != 0,
+                true,
             );
             return res as Boolean;
         }
@@ -39,13 +39,7 @@ pub unsafe extern "C" fn nvim_buf_del_mark(
             *name.data as ::core::ffi::c_int,
         );
         if fm.is_null() {
-            api_err_invalid(
-                err,
-                c"mark name".as_ptr(),
-                name.data,
-                0 as int64_t,
-                true_0 != 0,
-            );
+            api_err_invalid(err, c"mark name".as_ptr(), name.data, 0 as int64_t, true);
             return res as Boolean;
         }
         if (*fm).mark.lnum != 0 as linenr_T && (*fm).fnum == (*b).handle {
@@ -64,7 +58,7 @@ pub unsafe extern "C" fn nvim_buf_set_mark(
     mut err: *mut Error,
 ) -> Boolean {
     unsafe {
-        let mut res: bool = false_0 != 0;
+        let mut res: bool = false;
         let mut b: *mut buf_T = api_buf_ensure_loaded(buf, err);
         if b.is_null() {
             return res as Boolean;
@@ -75,7 +69,7 @@ pub unsafe extern "C" fn nvim_buf_set_mark(
                 c"mark name (must be a single char)".as_ptr(),
                 name.data,
                 0 as int64_t,
-                true_0 != 0,
+                true,
             );
             return res as Boolean;
         }
@@ -106,7 +100,7 @@ pub unsafe extern "C" fn nvim_buf_get_mark(
                 c"mark name (must be a single char)".as_ptr(),
                 name.data,
                 0 as int64_t,
-                true_0 != 0,
+                true,
             );
             return rv;
         }
@@ -125,13 +119,7 @@ pub unsafe extern "C" fn nvim_buf_get_mark(
             mark as ::core::ffi::c_int,
         );
         if fm.is_null() {
-            api_err_invalid(
-                err,
-                c"mark name".as_ptr(),
-                name.data,
-                0 as int64_t,
-                true_0 != 0,
-            );
+            api_err_invalid(err, c"mark name".as_ptr(), name.data, 0 as int64_t, true);
             return rv;
         }
         if (*fm).fnum != (*b).handle {

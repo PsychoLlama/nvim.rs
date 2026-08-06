@@ -12,14 +12,14 @@ use crate::src::nvim::api::private::helpers::array_add;
 
 pub unsafe extern "C" fn nvim_del_mark(mut name: String_0, mut err: *mut Error) -> Boolean {
     unsafe {
-        let mut res: bool = false_0 != 0;
+        let mut res: bool = false;
         if !(name.size == 1 as size_t) {
             api_err_invalid(
                 err,
                 c"mark name (must be a single char)".as_ptr(),
                 name.data,
                 0 as int64_t,
-                true_0 != 0,
+                true,
             );
             return res as Boolean;
         }
@@ -32,7 +32,7 @@ pub unsafe extern "C" fn nvim_del_mark(mut name: String_0, mut err: *mut Error) 
                 c"mark name (must be file/uppercase)".as_ptr(),
                 name.data,
                 0 as int64_t,
-                true_0 != 0,
+                true,
             );
             return res as Boolean;
         }
@@ -65,7 +65,7 @@ pub unsafe extern "C" fn nvim_get_mark(
                 c"mark name (must be a single char)".as_ptr(),
                 name.data,
                 0 as int64_t,
-                true_0 != 0,
+                true,
             );
             return rv;
         }
@@ -78,20 +78,19 @@ pub unsafe extern "C" fn nvim_get_mark(
                 c"mark name (must be file/uppercase)".as_ptr(),
                 name.data,
                 0 as int64_t,
-                true_0 != 0,
+                true,
             );
             return rv;
         }
-        let mut mark: *mut xfmark_T =
-            mark_get_global(false_0 != 0, *name.data as ::core::ffi::c_int);
+        let mut mark: *mut xfmark_T = mark_get_global(false, *name.data as ::core::ffi::c_int);
         let mut pos: pos_T = (*mark).fmark.mark;
-        let mut allocated: bool = false_0 != 0;
+        let mut allocated: bool = false;
         let mut bufnr: ::core::ffi::c_int = 0;
         let mut filename: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if (*mark).fmark.fnum != 0 as ::core::ffi::c_int {
             bufnr = (*mark).fmark.fnum;
             filename = buflist_nr2name(bufnr, true_0, true_0);
-            allocated = true_0 != 0;
+            allocated = true;
         } else {
             filename = (*mark).fname;
             bufnr = 0 as ::core::ffi::c_int;
@@ -102,7 +101,7 @@ pub unsafe extern "C" fn nvim_get_mark(
         if !exists || pos.lnum <= 0 as linenr_T {
             if allocated {
                 xfree(filename as *mut ::core::ffi::c_void);
-                allocated = false_0 != 0;
+                allocated = false;
             }
             filename = c"".as_ptr() as *mut ::core::ffi::c_char;
             bufnr = 0 as ::core::ffi::c_int;

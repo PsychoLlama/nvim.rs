@@ -99,7 +99,7 @@ pub unsafe extern "C" fn nvim_echo(
                     c"percent".as_ptr(),
                     c"out of range".as_ptr(),
                     0 as int64_t,
-                    false_0 != 0,
+                    false,
                 );
             } else if !(!is_progress || (*opts).source.size != 0 as size_t) {
                 api_err_required(err, c"opts.source".as_ptr());
@@ -127,8 +127,8 @@ pub unsafe extern "C" fn nvim_echo(
                 if (*opts)._truncate {
                     (*no_wait_return.ptr()) += 1;
                     lines_left.set(0 as ::core::ffi::c_int);
-                    msg_didany.set(true_0 != 0);
-                    msg_no_more.set(true_0 != 0);
+                    msg_didany.set(true);
+                    msg_no_more.set(true);
                 }
                 id = msg_multihl(
                     (*opts).id,
@@ -140,7 +140,7 @@ pub unsafe extern "C" fn nvim_echo(
                     &raw mut needs_clear,
                 );
                 if (*opts)._truncate {
-                    msg_no_more.set(false_0 != 0);
+                    msg_no_more.set(false);
                     msg_didany.set(save_msg_didany);
                     lines_left.set(save_lines_left);
                     (*no_wait_return.ptr()) -= 1;

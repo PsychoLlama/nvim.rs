@@ -38,22 +38,22 @@ pub unsafe extern "C" fn nvim_paste(
             type_0: kObjectTypeNil,
             data: C2Rust_Unnamed { boolean: false },
         };
-        static cancelled: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+        static cancelled: GlobalCell<bool> = GlobalCell::new(false);
         if !(phase >= -1 as Integer && phase <= 3 as Integer) {
             api_err_invalid(
                 err,
                 c"phase".as_ptr(),
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 phase as int64_t,
-                false_0 != 0,
+                false,
             );
             return false;
         }
         's_151: {
             if phase == -1 as Integer || phase == 1 as Integer {
-                cancelled.set(false_0 != 0);
+                cancelled.set(false);
                 if !(*curbuf.get()).terminal.is_null() {
-                    terminal_set_streamed_paste((*curbuf.get()).terminal, true_0 != 0);
+                    terminal_set_streamed_paste((*curbuf.get()).terminal, true);
                 }
             } else if cancelled.get() {
                 break 's_151;
@@ -89,14 +89,14 @@ pub unsafe extern "C" fn nvim_paste(
                     == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
                     && !rv.data.boolean
             {
-                cancelled.set(true_0 != 0);
+                cancelled.set(true);
             }
             if (phase == -1 as Integer
                 || phase == 3 as Integer
                 || cancelled.get() as ::core::ffi::c_int != 0)
                 && !(*curbuf.get()).terminal.is_null()
             {
-                terminal_set_streamed_paste((*curbuf.get()).terminal, false_0 != 0);
+                terminal_set_streamed_paste((*curbuf.get()).terminal, false);
             }
             if !cancelled.get() && (phase == -1 as Integer || phase == 1 as Integer) {
                 paste_store(channel_id, kFalse, NULL_STRING, crlf);
@@ -117,7 +117,7 @@ pub unsafe extern "C" fn nvim_paste(
         }
         let mut retval: bool = !cancelled.get();
         if phase == -1 as Integer || phase == 3 as Integer {
-            cancelled.set(false_0 != 0);
+            cancelled.set(false);
         }
         return retval as Boolean;
     }
@@ -141,13 +141,7 @@ pub unsafe extern "C" fn nvim_put(
             additional_data: ::core::ptr::null_mut::<AdditionalData>(),
         }];
         if !prepare_yankreg_from_object(&raw mut reg as *mut yankreg_T, type_0, lines.size) {
-            api_err_invalid(
-                err,
-                c"type".as_ptr(),
-                type_0.data,
-                0 as int64_t,
-                true_0 != 0,
-            );
+            api_err_invalid(err, c"type".as_ptr(), type_0.data, 0 as int64_t, true);
             return;
         }
         if lines.size == 0 as size_t {
@@ -156,7 +150,7 @@ pub unsafe extern "C" fn nvim_put(
         (*(&raw mut reg as *mut yankreg_T)).y_array = arena_alloc(
             arena,
             lines.size.wrapping_mul(::core::mem::size_of::<String_0>()),
-            true_0 != 0,
+            true,
         ) as *mut String_0;
         (*(&raw mut reg as *mut yankreg_T)).y_size = lines.size;
         let mut i: size_t = 0 as size_t;
@@ -183,7 +177,7 @@ pub unsafe extern "C" fn nvim_put(
             );
             i = i.wrapping_add(1);
         }
-        finish_yankreg_from_object(&raw mut reg as *mut yankreg_T, false_0 != 0);
+        finish_yankreg_from_object(&raw mut reg as *mut yankreg_T, false);
         let mut tstate: TryState = TryState {
             current_exception: ::core::ptr::null_mut::<except_T>(),
             private_msg_list: ::core::ptr::null_mut::<msglist_T>(),

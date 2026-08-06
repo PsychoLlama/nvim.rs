@@ -48,7 +48,7 @@ pub unsafe extern "C" fn nvim_strwidth(mut text: String_0, mut err: *mut Error) 
                 c"text length".as_ptr(),
                 c"(too long)".as_ptr(),
                 0 as int64_t,
-                true_0 != 0,
+                true,
             );
             return 0 as Integer;
         }
@@ -61,7 +61,7 @@ pub unsafe extern "C" fn nvim_list_runtime_paths(
     mut err: *mut Error,
 ) -> Array {
     unsafe {
-        return nvim_get_runtime_file(NULL_STRING, true_0 != 0, arena, err);
+        return nvim_get_runtime_file(NULL_STRING, true, arena, err);
     }
 }
 
@@ -160,7 +160,7 @@ unsafe extern "C" fn find_runtime_cb(
                 cstr_as_string(*fnames.offset(i as isize)),
             )));
             if !all {
-                return true_0 != 0;
+                return true;
             }
             i += 1;
         }
@@ -204,7 +204,7 @@ pub unsafe extern "C" fn nvim__get_runtime(
                 let mut name: String_0 = (*res.items.add(i)).data.string;
                 do_source(
                     name.data,
-                    false_0 != 0,
+                    false,
                     DOSO_NONE as ::core::ffi::c_int,
                     ::core::ptr::null_mut::<::core::ffi::c_int>(),
                 );
@@ -223,7 +223,7 @@ pub unsafe extern "C" fn nvim_set_current_dir(mut dir: String_0, mut err: *mut E
                 c"directory name".as_ptr(),
                 c"(too long)".as_ptr(),
                 0 as int64_t,
-                true_0 != 0,
+                true,
             );
             return;
         }

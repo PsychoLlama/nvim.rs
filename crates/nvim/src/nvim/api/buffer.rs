@@ -103,8 +103,6 @@ pub const BUF_UPDATE_CALLBACKS_INIT: BufUpdateCallbacks = BufUpdateCallbacks {
     on_changedtick: LUA_NOREF,
     on_detach: LUA_NOREF,
     on_reload: LUA_NOREF,
-    utf_sizes: false_0 != 0,
-    preview: false_0 != 0,
+    utf_sizes: false,
+    preview: false,
 };
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

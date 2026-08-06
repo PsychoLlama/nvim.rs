@@ -30,7 +30,7 @@ pub(crate) unsafe extern "C" fn unpack_string_or_array(
         } else if v.type_0 as ::core::ffi::c_uint
             == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            if !check_string_array(v.data.array, k, true_0 != 0, err) {
+            if !check_string_array(v.data.array, k, true, err) {
                 return Array {
                     size: 0 as size_t,
                     capacity: 0 as size_t,
@@ -115,7 +115,7 @@ pub(crate) unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                 if !check_string_array(
                     pattern.data.array,
                     c"pattern".as_ptr() as *mut ::core::ffi::c_char,
-                    true_0 != 0,
+                    true,
                     err,
                 ) {
                     return Array {

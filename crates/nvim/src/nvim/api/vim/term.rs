@@ -31,7 +31,7 @@ pub unsafe extern "C" fn nvim_open_term(
             );
             return 0 as Integer;
         }
-        let mut may_read_buffer: bool = true_0 != 0;
+        let mut may_read_buffer: bool = true;
         if !(*b).terminal.is_null() {
             if terminal_running((*b).terminal) {
                 api_set_error(
@@ -43,7 +43,7 @@ pub unsafe extern "C" fn nvim_open_term(
                 return 0 as Integer;
             }
             buf_close_terminal(b);
-            may_read_buffer = false_0 != 0;
+            may_read_buffer = false;
         }
         let mut cb: LuaRef = LUA_NOREF;
         if has_key(
@@ -55,7 +55,7 @@ pub unsafe extern "C" fn nvim_open_term(
         }
         let mut chan: *mut Channel = channel_alloc(kChannelStreamInternal);
         (*channel_internal(chan)).cb = cb;
-        (*channel_internal(chan)).closed = false_0 != 0;
+        (*channel_internal(chan)).closed = false;
         let mut topts: TerminalOptions = TerminalOptions {
             data: chan as *mut ::core::ffi::c_void,
             width: (if (*curwin.get()).w_view_width - win_col_off(curwin.get())
@@ -113,7 +113,7 @@ pub unsafe extern "C" fn nvim_open_term(
                 (*chan).id,
                 contents.items,
                 contents.size,
-                true_0 != 0,
+                true,
                 &raw mut error,
             );
             if !error.is_null() {
@@ -203,7 +203,7 @@ pub unsafe extern "C" fn nvim_chan_send(
             chan as uint64_t,
             data.data,
             data.size,
-            false_0 != 0,
+            false,
             &raw mut error,
         );
         if !error.is_null() {

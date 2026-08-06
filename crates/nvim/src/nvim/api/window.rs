@@ -116,7 +116,7 @@ pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mu
             c"cursor line".as_ptr(),
             c"out of range".as_ptr(),
             0 as int64_t,
-            false_0 != 0,
+            false,
         );
         return;
     }
@@ -126,7 +126,7 @@ pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mu
             c"cursor column".as_ptr(),
             c"out of range".as_ptr(),
             0 as int64_t,
-            false_0 != 0,
+            false,
         );
         return;
     }
@@ -145,13 +145,13 @@ pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mu
         &raw mut switchwin,
         w,
         ::core::ptr::null_mut::<tabpage_T>(),
-        true_0 != 0,
+        true,
     );
     update_topline(curwin.get());
     validate_cursor(curwin.get());
-    restore_win(&raw mut switchwin, true_0 != 0);
+    restore_win(&raw mut switchwin, true);
     redraw_later(w, UPD_VALID);
-    (*w).w_redr_status = true_0 != 0;
+    (*w).w_redr_status = true;
 }
 pub unsafe extern "C" fn nvim_win_get_height(mut win: Window, mut err: *mut Error) -> Integer {
     let mut w: *mut win_T = find_window_by_handle(win, err);
@@ -240,8 +240,8 @@ pub unsafe extern "C" fn nvim_win_set_var(
         (*w).w_vars,
         name,
         value,
-        false_0 != 0,
-        false_0 != 0,
+        false,
+        false,
         ::core::ptr::null_mut::<Arena>(),
         err,
     );
@@ -262,8 +262,8 @@ pub unsafe extern "C" fn nvim_win_del_var(
             type_0: kObjectTypeNil,
             data: C2Rust_Unnamed { boolean: false },
         },
-        true_0 != 0,
-        false_0 != 0,
+        true,
+        false,
         ::core::ptr::null_mut::<Arena>(),
         err,
     );
@@ -437,13 +437,7 @@ pub unsafe extern "C" fn nvim_win_set_hl_ns(
         return;
     }
     if !(ns_id >= -1 as Integer) {
-        api_err_invalid(
-            err,
-            c"namespace".as_ptr(),
-            c"".as_ptr(),
-            0 as int64_t,
-            true_0 != 0,
-        );
+        api_err_invalid(err, c"namespace".as_ptr(), c"".as_ptr(), 0 as int64_t, true);
         return;
     }
     (*w).w_ns_hl = ns_id as NS as ::core::ffi::c_int;
@@ -467,24 +461,20 @@ pub unsafe extern "C" fn nvim_win_text_height(
     let mut end_lnum: linenr_T = line_count;
     let mut start_vcol: int64_t = -1 as int64_t;
     let mut end_vcol: int64_t = -1 as int64_t;
-    let mut oob: bool = false_0 != 0;
+    let mut oob: bool = false;
     if has_key(
         (*opts).is_set__win_text_height_,
         KEYSET_OPTIDX_win_text_height__start_row,
     ) {
-        start_lnum = normalize_index(
-            buf,
-            (*opts).start_row as int64_t,
-            false_0 != 0,
-            &raw mut oob,
-        ) as linenr_T;
+        start_lnum =
+            normalize_index(buf, (*opts).start_row as int64_t, false, &raw mut oob) as linenr_T;
     }
     if has_key(
         (*opts).is_set__win_text_height_,
         KEYSET_OPTIDX_win_text_height__end_row,
     ) {
-        end_lnum = normalize_index(buf, (*opts).end_row as int64_t, false_0 != 0, &raw mut oob)
-            as linenr_T;
+        end_lnum =
+            normalize_index(buf, (*opts).end_row as int64_t, false, &raw mut oob) as linenr_T;
     }
     if oob {
         api_set_error(
@@ -524,7 +514,7 @@ pub unsafe extern "C" fn nvim_win_text_height(
                 c"start_vcol".as_ptr(),
                 c"out of range".as_ptr(),
                 0 as int64_t,
-                false_0 != 0,
+                false,
             );
             return rv;
         }
@@ -549,7 +539,7 @@ pub unsafe extern "C" fn nvim_win_text_height(
                 c"end_vcol".as_ptr(),
                 c"out of range".as_ptr(),
                 0 as int64_t,
-                false_0 != 0,
+                false,
             );
             return rv;
         }
@@ -565,7 +555,7 @@ pub unsafe extern "C" fn nvim_win_text_height(
                 c"max_height".as_ptr(),
                 c"out of range".as_ptr(),
                 0 as int64_t,
-                false_0 != 0,
+                false,
             );
             return rv;
         }
@@ -611,4 +601,3 @@ pub unsafe extern "C" fn nvim_win_text_height(
     return rv;
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
