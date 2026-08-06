@@ -52,6 +52,13 @@ and this project adheres to [CalVer](https://calver.org/).
   `++nested`, `'eventignore'` and `'eventignorewin'`, `exists('#…')`, the
   hidden window an autocommand runs a buffer in, and the
   `nvim_create_autocmd` family.
+- Rewrote the Lua runtime: the interpreter's state and the `vim` table on it,
+  `:lua`, `:luado` and `:luafile`, `vim.call()`, `luaeval()` and `v:lua`,
+  `vim.schedule()` and `vim.wait()`, `print()` and `require()`, the luv event
+  bridge, Lua-implemented user commands, `vim.regex()`, `vim.iconv()` and the
+  UTF-8 helpers, `vim.g`/`b`/`w`/`t`/`v`, `vim._with()`, `vim.ui_attach()`,
+  the tree-sitter bindings, and the value conversions in both directions
+  between Lua, Vimscript and the API.
 
 ### Fixed
 
