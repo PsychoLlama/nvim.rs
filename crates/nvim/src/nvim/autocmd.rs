@@ -78,7 +78,7 @@ use crate::src::nvim::types::{
     OptValType, Set_String, Set_int, String_0, Timestamp, TriState, VAR_UNKNOWN, VAR_UNLOCKED,
     VV_CMDBANG, VV_TERMRESPONSE, aco_save_T, aucmdwin_T, auto_event, buf_T, buffblock, buffblock_T,
     buffheader_T, bufref_T, dict_T, estack_T, etype_T, event_T, exarg_T, expand_T, funccal_entry_T,
-    handle_T, hashitem_T, hashtab_T, int64_t, kErrorTypeNone, kFalse, kNone, kObjectTypeBoolean,
+    hashitem_T, hashtab_T, int64_t, kErrorTypeNone, kFalse, kNone, kObjectTypeBoolean,
     kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kTrue, key_value_pair,
     linenr_T, object, object_data as C2Rust_Unnamed, proftime_T, ptr_t, ptrdiff_t, regprog_T,
     save_redo_T, save_v_event_T, sctx_T, size_t, tabpage_T, typval_T, typval_vval_union, uint32_t,
