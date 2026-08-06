@@ -62,7 +62,7 @@
     "crates/nvim/src/nvim/arglist/eval.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/autocmd.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/autocmd/aucmdwin.rs": {"unsafe": 3},
-    "crates/nvim/src/nvim/autocmd/cleanup.rs": {"unsafe": 8},
+    "crates/nvim/src/nvim/autocmd/cleanup.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/autocmd/define.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/autocmd/events.rs": {"unsafe": 13},
     "crates/nvim/src/nvim/autocmd/fire.rs": {"no_mangle": 2, "unsafe": 7},
