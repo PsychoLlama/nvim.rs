@@ -383,26 +383,8 @@ pub unsafe extern "C" fn nvim__complete_set(
         {
             let mut wp: *mut win_T = pum_set_info(index as ::core::ffi::c_int, (*opts).info.data);
             if !wp.is_null() {
-                dict_put(
-                    &mut rv,
-                    c"winid",
-                    object {
-                        type_0: kObjectTypeWindow,
-                        data: C2Rust_Unnamed {
-                            integer: (*wp).handle as Integer,
-                        },
-                    },
-                );
-                dict_put(
-                    &mut rv,
-                    c"bufnr",
-                    object {
-                        type_0: kObjectTypeBuffer,
-                        data: C2Rust_Unnamed {
-                            integer: (*(*wp).w_buffer).handle as Integer,
-                        },
-                    },
-                );
+                dict_put(&mut rv, c"winid", Object::window((*wp).handle));
+                dict_put(&mut rv, c"bufnr", Object::buffer((*(*wp).w_buffer).handle));
             }
         }
         return rv;

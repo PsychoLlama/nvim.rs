@@ -22,15 +22,7 @@ pub unsafe extern "C" fn nvim_list_bufs(mut arena: *mut Arena) -> Array {
         let mut rv: Array = arena_array(arena, n);
         let mut b_0: *mut buf_T = firstbuf.get();
         while !b_0.is_null() {
-            array_add(
-                &mut rv,
-                object {
-                    type_0: kObjectTypeBuffer,
-                    data: C2Rust_Unnamed {
-                        integer: (*b_0).handle as Integer,
-                    },
-                },
-            );
+            array_add(&mut rv, Object::buffer((*b_0).handle));
             b_0 = (*b_0).b_next;
         }
         return rv;
@@ -95,15 +87,7 @@ pub unsafe extern "C" fn nvim_list_wins(mut arena: *mut Arena) -> Array {
                 (*tp_0).tp_firstwin
             };
             while !wp_0.is_null() {
-                array_add(
-                    &mut rv,
-                    object {
-                        type_0: kObjectTypeWindow,
-                        data: C2Rust_Unnamed {
-                            integer: (*wp_0).handle as Integer,
-                        },
-                    },
-                );
+                array_add(&mut rv, Object::window((*wp_0).handle));
                 wp_0 = (*wp_0).w_next;
             }
             tp_0 = (*tp_0).tp_next as *mut tabpage_T;
@@ -286,15 +270,7 @@ pub unsafe extern "C" fn nvim_list_tabpages(mut arena: *mut Arena) -> Array {
         let mut rv: Array = arena_array(arena, n);
         let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
         while !tp_0.is_null() {
-            array_add(
-                &mut rv,
-                object {
-                    type_0: kObjectTypeTabpage,
-                    data: C2Rust_Unnamed {
-                        integer: (*tp_0).handle as Integer,
-                    },
-                },
-            );
+            array_add(&mut rv, Object::tabpage((*tp_0).handle));
             tp_0 = (*tp_0).tp_next as *mut tabpage_T;
         }
         return rv;

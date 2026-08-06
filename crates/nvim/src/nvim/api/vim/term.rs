@@ -149,15 +149,7 @@ unsafe extern "C" fn term_write(
         args.capacity = 3 as size_t;
         args.items = &raw mut args__items as *mut Object;
         array_add(&mut args, Object::integer((*chan).id as Integer));
-        array_add(
-            &mut args,
-            object {
-                type_0: kObjectTypeBuffer,
-                data: C2Rust_Unnamed {
-                    integer: terminal_buf((*chan).term) as Integer,
-                },
-            },
-        );
+        array_add(&mut args, Object::buffer(terminal_buf((*chan).term)));
         array_add(
             &mut args,
             Object::string(String_0 {

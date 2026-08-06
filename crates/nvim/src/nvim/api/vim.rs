@@ -116,11 +116,10 @@ use crate::src::nvim::types::{
     VV_LNUM, VV_RELNUM, VV_VIRTNUM, Window, bln_values, buf_T, bufref_T, dictitem_T,
     dobuf_action_values, dobuf_start_values, except_T, foldinfo_T, handle_T, hlf_T, int64_t,
     kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kFalse, kNone,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kTrue, key_extra,
-    linenr_T, mpack_token_type_t, msg_data, msglist_T, object, object_data as C2Rust_Unnamed,
-    pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T, stl_hlrec_t, tabpage_T,
-    uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil,
+    kObjectTypeString, kTrue, key_extra, linenr_T, mpack_token_type_t, msg_data, msglist_T, object,
+    object_data as C2Rust_Unnamed, pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T,
+    stl_hlrec_t, tabpage_T, uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::src::nvim::window::{
