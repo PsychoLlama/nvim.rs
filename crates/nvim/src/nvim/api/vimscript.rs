@@ -12,24 +12,21 @@ use crate::src::nvim::eval::{clear_evalarg, eval0};
 use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::garray::{ga_clear, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::main::{
     EVALARG_EVALUATE, capture_ga, current_sctx, curwin, did_emsg, did_throw, force_abort, msg_col,
     msg_silent, redir_off, suppress_errthrow,
 };
-use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
-use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, memmove, strlen};
+use crate::src::nvim::memory::xfree;
+use crate::src::nvim::os::libc::{abort, memmove, strlen};
 use crate::src::nvim::runtime::do_source_str;
 use crate::src::nvim::types::{
     Arena, Array, Boolean, Dict, Error, ExprAST, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Integer,
     KeyDict_exec_opts, KeyValuePair, Object, ParserHighlight, ParserHighlightChunk, ParserLine,
-    ParserPosition, ParserState, String_0, TryState, VAR_DICT, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN,
-    VAR_UNLOCKED, dict_T, dictitem_T, exarg_T, except_T, funcexe_T, garray_T, kErrorTypeException,
-    kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
-    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, key_value_pair,
-    linenr_T, msglist_T, object, object_data as C2Rust_Unnamed, partial_T, ptrdiff_t, sctx_T,
-    size_t, typval_T, typval_vval_union, uint64_t, uvarnumber_T,
+    ParserPosition, ParserState, String_0, TryState, VAR_DICT, VAR_FUNC, VAR_PARTIAL, dict_T,
+    dictitem_T, exarg_T, funcexe_T, garray_T, kErrorTypeException, kErrorTypeNone,
+    kErrorTypeValidation, kObjectTypeDict, kObjectTypeNil, kObjectTypeString, linenr_T, partial_T,
+    ptrdiff_t, sctx_T, size_t, typval_T, uint64_t, uvarnumber_T,
 };
 use crate::src::nvim::viml::parser::expressions::{
     ccs_tab, east_node_type_tab, eltkn_cmp_type_tab, expr_asgn_type_tab, viml_pexpr_free_ast,
@@ -145,6 +142,18 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_selfdict: ::core::ptr::null_mut::<dict_T>(),
     fe_basetv: ::core::ptr::null_mut::<typval_T>(),
     fe_found_var: false,
+};
+/// `TRY_STATE_INIT`: the saved-state block `try_enter` fills in.  Stays a
+/// per-module const -- sharing one across `api/` would put it in the crate's
+/// exported surface for no gain.
+const TRY_STATE_INIT: TryState = TryState {
+    current_exception: ::core::ptr::null_mut(),
+    private_msg_list: ::core::ptr::null_mut(),
+    msg_list: ::core::ptr::null(),
+    got_int: 0,
+    did_throw: false,
+    need_rethrow: 0,
+    did_emsg: 0,
 };
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

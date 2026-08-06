@@ -21,6 +21,7 @@ use crate::src::nvim::memory::{
 use crate::src::nvim::message::hl_msg_free;
 use crate::src::nvim::msgpack_rpc::unpacker::unpack;
 use crate::src::nvim::os::libc::{abort, memcpy};
+use crate::src::nvim::types::builders::static_cstring;
 use crate::src::nvim::types::{
     Arena, ArenaMem, Array, ArrayBuilder, Dict, Error, HlMessage, HlMessageChunk, KeyValuePair,
     Object, ObjectType, String_0, consumed_blk, kErrorTypeNone, kErrorTypeValidation,
@@ -28,7 +29,7 @@ use crate::src::nvim::types::{
     kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
     kObjectTypeWindow, key_value_pair, object, object_data, size_t,
 };
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 use core::{mem, ptr};
 
 // -- Arena allocation ------------------------------------------------------
@@ -54,6 +55,50 @@ pub(crate) fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict {
         capacity: max_size,
         items: items.cast(),
     }
+}
+
+/// C's `ADD_C(array, value)`: append to an array whose capacity was reserved
+/// up front, by [`arena_array`] or by an on-stack literal.
+///
+/// The transpile spells this as `let n = a.size; a.size += 1; *a.items.add(n)
+/// = value;` at every site — note the order, which is why the capacity check
+/// here is a `debug_assert!`: `size` is bumped before `value` is stored either
+/// way, and every caller sized the container from the same expression that
+/// decides how many times it pushes.
+///
+/// # Safety
+/// `array` must have room, and its `items` must be writable for `capacity`.
+pub(crate) unsafe fn array_add(array: &mut Array, value: Object) {
+    debug_assert!(array.size < array.capacity, "array_add past capacity");
+    // SAFETY: `size` is below `capacity`, so the slot is inside `items`.
+    unsafe { *array.items.add(array.size) = value };
+    array.size += 1;
+}
+
+/// C's `PUT_C(dict, key, value)`. See [`array_add`].
+///
+/// The key is a `&'static CStr` because these keys are all literals and the
+/// consumers (msgpack, the Lua converter, the editor's own hashtables) read
+/// one byte past `size`; `count_bytes` is const where the transpile's
+/// `cstr_as_string` was a `strlen` per call.
+///
+/// # Safety
+/// As [`array_add`].
+pub(crate) unsafe fn dict_put(dict: &mut Dict, key: &'static CStr, value: Object) {
+    // SAFETY: as `array_add`.
+    unsafe { dict_put_str(dict, static_cstring(key), value) };
+}
+
+/// [`dict_put`] where the key is not a literal — an option name, a buffer
+/// variable's name, anything the caller built.
+///
+/// # Safety
+/// As [`array_add`]; `key` must outlive the dictionary.
+pub(crate) unsafe fn dict_put_str(dict: &mut Dict, key: String_0, value: Object) {
+    debug_assert!(dict.size < dict.capacity, "dict_put past capacity");
+    // SAFETY: `size` is below `capacity`, so the slot is inside `items`.
+    unsafe { *dict.items.add(dict.size) = KeyValuePair { key, value } };
+    dict.size += 1;
 }
 
 /// A copy of `str` in `arena`, NUL-terminated. The empty string is a shared
