@@ -31,6 +31,10 @@ and this project adheres to [CalVer](https://calver.org/).
   `preinsert`, `'completefunc'`/`'omnifunc'`/`'thesaurusfunc'`, the completion
   popup menu, and the `complete()`, `complete_info()` and `CompleteDone`
   interfaces.
+- Rewrote the Vimscript value core: lists, dictionaries and blobs, the
+  reference counting, locking and deep copying behind them, `sort()` and
+  `uniq()`, dictionary watchers, and the type checks and conversions every
+  builtin argument and return value goes through.
 - Collapsed the value encoders. One C header spelled the same container walk
   out seven times, once per destination — msgpack, JSON, `string()`, `:echo`,
   Lua values, API objects, and the deep free every discarded value goes
@@ -67,6 +71,10 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Fixed
 
+- Internal consistency checks no longer abort a release build. Ninety-nine of
+  them descend from C `assert()`s, which a release build of the original
+  compiles out, so cases the original carries on past — `nvim_set_hl()` with a
+  negative namespace id, for one — killed this editor instead.
 - `nvim_parse_expression()` no longer kills the editor on an unfinished
   curly-braces name. `'a{b'` needed no flags and one call; `'a{b}'` with
   highlighting on was the second way in.
@@ -80,6 +88,9 @@ and this project adheres to [CalVer](https://calver.org/).
   type. It skipped the check the plain spelling passes, so a `v:` variable
   could be left holding a value of the wrong type permanently, and reading
   `v:oldfiles` after `let v:['oldfiles'] = 1` crashed.
+- `nvim_win_text_height()` no longer writes past the end of the reply it
+  allocates. It reserved room for two of the four keys it answers with, and
+  the other two landed in whatever memory came next.
 
 ## [2026.08.02-af6bcec290]
 
