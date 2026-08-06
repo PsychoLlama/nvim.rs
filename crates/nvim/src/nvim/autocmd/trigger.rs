@@ -1,100 +1,127 @@
 //! Everything that fires an event on purpose.
 //!
-//! `do_doautocmd` is `:doautocmd` and `ex_doautoall` is `:doautoall`, which
-//! runs the event in every loaded buffer.  Below them are the editor's own
-//! triggers: the deferred queue (`aucmd_defer`/`deferred_event`, for events
-//! that must not fire inside the code that noticed them),
-//! `do_termresponse_autocmd`, the UIEnter/UILeave pair, FocusGained/Lost,
-//! VimSuspend/VimResume and FileType.
+//! [`do_doautocmd`] is `:doautocmd` and [`ex_doautoall`] is `:doautoall`,
+//! which runs the event in every loaded buffer.  Below them are the
+//! editor's own triggers: the deferred queue
+//! ([`aucmd_defer`]/`deferred_event`, for events that must not fire inside
+//! the code that noticed them), [`do_termresponse_autocmd`], the
+//! UIEnter/UILeave pair, FocusGained/Lost, VimSuspend/VimResume and
+//! FileType.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
 
+/// A `multiqueue` event's argument vector with nothing in it.
+const NO_ARGV: [*mut ::core::ffi::c_void; 10] = [::core::ptr::null_mut(); 10];
+
+/// `:doautocmd [group] {event} [fname]`, for each of the comma-separated
+/// events named.
+///
+/// `OK` unless the argument was malformed or an autocommand aborted;
+/// `did_something` (when given) says whether any autocommand ran.
 pub unsafe extern "C" fn do_doautocmd(
-    mut arg_start: *mut ::core::ffi::c_char,
-    mut do_msg: bool,
-    mut did_something: *mut bool,
+    arg_start: *mut ::core::ffi::c_char,
+    do_msg: bool,
+    did_something: *mut bool,
 ) -> ::core::ffi::c_int {
     unsafe {
-        let mut arg: *mut ::core::ffi::c_char = arg_start;
-        let mut nothing_done: ::core::ffi::c_int = true_0;
+        let mut arg = arg_start;
+        let mut nothing_done = true;
+
         if !did_something.is_null() {
-            *did_something = false_0 != 0;
+            *did_something = false;
         }
-        let mut group: ::core::ffi::c_int = arg_augroup_get(&raw mut arg);
-        if *arg as ::core::ffi::c_int == '*' as ::core::ffi::c_int {
+
+        // A leading word that is not a group name stays part of the events.
+        let group = arg_augroup_get(&raw mut arg);
+
+        if *arg == b'*' as ::core::ffi::c_char {
             emsg(gettext(
-                b"E217: Can't execute autocommands for ALL events\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"E217: Can't execute autocommands for ALL events".as_ptr(),
             ));
             return FAIL;
         }
-        let mut fname: *mut ::core::ffi::c_char =
-            arg_event_skip(arg, group != AUGROUP_ALL as ::core::ffi::c_int);
+
+        // Validate every event name before running any of them.
+        let fname = arg_event_skip(arg, group != AUGROUP_ALL);
         if fname.is_null() {
             return FAIL;
         }
-        fname = skipwhite(fname);
-        while *arg as ::core::ffi::c_int != 0
+        let fname = skipwhite(fname);
+
+        while *arg != 0
             && ends_excmd(*arg as ::core::ffi::c_int) == 0
             && !ascii_iswhite(*arg as ::core::ffi::c_int)
         {
+            // `event_name2nr` is what advances `arg` to the next event.
             if apply_autocmds_group(
                 event_name2nr(arg, &raw mut arg),
                 fname,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                true_0 != 0,
+                ::core::ptr::null_mut(),
+                true,
                 group,
                 curbuf.get(),
-                ::core::ptr::null_mut::<exarg_T>(),
-                ::core::ptr::null_mut::<Object>(),
+                ::core::ptr::null_mut(),
+                ::core::ptr::null_mut(),
             ) {
-                nothing_done = false_0;
+                nothing_done = false;
             }
         }
-        if nothing_done != 0 && do_msg as ::core::ffi::c_int != 0 && !aborting() {
+
+        if nothing_done && do_msg && !aborting() {
             smsg(
-                0 as ::core::ffi::c_int,
-                gettext(b"No matching autocommands: %s\0".as_ptr() as *const ::core::ffi::c_char),
+                0,
+                gettext(c"No matching autocommands: %s".as_ptr()),
                 arg_start,
             );
         }
         if !did_something.is_null() {
-            *did_something = nothing_done == 0;
+            *did_something = !nothing_done;
         }
-        return if aborting() as ::core::ffi::c_int != 0 {
-            FAIL
-        } else {
-            OK
-        };
+
+        if aborting() { FAIL } else { OK }
     }
 }
 
-pub unsafe fn ex_doautoall(mut eap: *mut exarg_T) {
+/// `:doautoall`: run the event in every loaded buffer, the current one
+/// last.
+///
+/// Buffers without a window are given one for the duration
+/// ([`aucmd_prepbuf`]), because commands expect `curwin->w_buffer ==
+/// curbuf`.  An autocommand that deletes the buffer under us stops the
+/// sweep, which is what the `bufref` is for.
+pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
     unsafe {
-        let mut retval: ::core::ffi::c_int = OK;
-        let mut aco: aco_save_T = aco_save_T::default();
-        let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
-        let mut call_do_modelines: ::core::ffi::c_int =
-            check_nomodeline(&raw mut arg) as ::core::ffi::c_int;
-        let mut bufref: bufref_T = bufref_T::default();
-        let mut did_aucmd: bool = false;
-        let mut buf: *mut buf_T = firstbuf.get();
+        let mut aco = aco_save_T::default();
+        let mut arg = (*eap).arg;
+        let call_do_modelines = check_nomodeline(&raw mut arg);
+        let mut bufref = bufref_T::default();
+        let mut did_aucmd = false;
+
+        let mut retval = OK;
+        let mut buf = firstbuf.get();
         while !buf.is_null() {
-            if !((*buf).b_ml.ml_mfp.is_null() || buf == curbuf.get()) {
+            // Loaded buffers only, and the current one is done last.
+            if !(*buf).b_ml.ml_mfp.is_null() && buf != curbuf.get() {
                 aucmd_prepbuf(&raw mut aco, buf);
                 set_bufref(&raw mut bufref, buf);
-                retval = do_doautocmd(arg, false_0 != 0, &raw mut did_aucmd);
-                if call_do_modelines != 0 && did_aucmd as ::core::ffi::c_int != 0 {
-                    do_modelines(if is_aucmd_win(curwin.get()) as ::core::ffi::c_int != 0 {
+
+                retval = do_doautocmd(arg, false, &raw mut did_aucmd);
+
+                if call_do_modelines && did_aucmd {
+                    // Don't set window-local options when the window we are
+                    // in belongs to another buffer.
+                    do_modelines(if is_aucmd_win(curwin.get()) {
                         OPT_NOWIN as ::core::ffi::c_int
                     } else {
-                        0 as ::core::ffi::c_int
+                        0
                     });
                 }
                 aucmd_restbuf(&raw mut aco);
+
+                // Stop on an error, or if the buffer was deleted under us.
                 if retval == FAIL || !bufref_valid(&raw mut bufref) {
                     retval = FAIL;
                     break;
@@ -102,353 +129,276 @@ pub unsafe fn ex_doautoall(mut eap: *mut exarg_T) {
             }
             buf = (*buf).b_next;
         }
+
         if retval == OK {
-            do_doautocmd(arg, false_0 != 0, &raw mut did_aucmd);
-            if call_do_modelines != 0 && did_aucmd as ::core::ffi::c_int != 0 {
-                do_modelines(0 as ::core::ffi::c_int);
+            do_doautocmd(arg, false, &raw mut did_aucmd);
+            if call_do_modelines && did_aucmd {
+                do_modelines(0);
             }
         }
     }
 }
 
+/// Queue `event` to fire at the next event-loop tick, rather than inside
+/// the code that noticed it.
+///
+/// Everything is copied: `fname`, `fname_io` and `data` are the caller's.
 pub unsafe extern "C" fn aucmd_defer(
-    mut event: event_T,
-    mut fname: *mut ::core::ffi::c_char,
-    mut fname_io: *mut ::core::ffi::c_char,
-    mut group: ::core::ffi::c_int,
-    mut buf: *mut buf_T,
-    mut eap: *mut exarg_T,
-    mut data: *mut Object,
+    event: event_T,
+    fname: *mut ::core::ffi::c_char,
+    fname_io: *mut ::core::ffi::c_char,
+    group: ::core::ffi::c_int,
+    buf: *mut buf_T,
+    eap: *mut exarg_T,
+    data: *mut Object,
 ) {
     unsafe {
-        let mut evdata: *mut AutoCmdEvent =
-            xmalloc(::core::mem::size_of::<AutoCmdEvent>()) as *mut AutoCmdEvent;
+        let dup = |s: *mut ::core::ffi::c_char| {
+            if s.is_null() {
+                ::core::ptr::null_mut()
+            } else {
+                xstrdup(s)
+            }
+        };
+
+        let evdata = xmalloc(::core::mem::size_of::<AutoCmdEvent>()).cast::<AutoCmdEvent>();
         (*evdata).event = event;
-        (*evdata).fname = if !fname.is_null() {
-            xstrdup(fname)
-        } else {
-            ::core::ptr::null_mut::<::core::ffi::c_char>()
-        };
-        (*evdata).fname_io = if !fname_io.is_null() {
-            xstrdup(fname_io)
-        } else {
-            ::core::ptr::null_mut::<::core::ffi::c_char>()
-        };
+        (*evdata).fname = dup(fname);
+        (*evdata).fname_io = dup(fname_io);
         (*evdata).group = group;
         (*evdata).buf = (*buf).handle as Buffer;
         (*evdata).eap = eap;
-        if !data.is_null() {
-            (*evdata).data = xmalloc(::core::mem::size_of::<Object>()) as *mut Object;
-            *(*evdata).data = copy_object(*data, ::core::ptr::null_mut::<Arena>());
+        (*evdata).data = if data.is_null() {
+            ::core::ptr::null_mut()
         } else {
-            (*evdata).data = ::core::ptr::null_mut::<Object>();
-        }
+            let copy = xmalloc(::core::mem::size_of::<Object>()).cast::<Object>();
+            *copy = copy_object(*data, ::core::ptr::null_mut());
+            copy
+        };
+
+        let mut argv = NO_ARGV;
+        argv[0] = evdata.cast::<::core::ffi::c_void>();
         multiqueue_put_event(
             deferred_events.get(),
             Event {
-                handler: Some(
-                    deferred_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
-                ),
-                argv: [
-                    evdata as *mut ::core::ffi::c_void,
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ],
+                handler: Some(deferred_event),
+                argv,
             },
         );
     }
 }
 
-unsafe extern "C" fn deferred_event(mut argv: *mut *mut ::core::ffi::c_void) {
+/// Run a queued [`aucmd_defer`] event, and free everything it copied.
+unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
     unsafe {
-        let mut e: *mut AutoCmdEvent =
-            *argv.offset(0 as ::core::ffi::c_int as isize) as *mut AutoCmdEvent;
-        let mut event: event_T = (*e).event;
-        let mut fname: *mut ::core::ffi::c_char = (*e).fname;
-        let mut fname_io: *mut ::core::ffi::c_char = (*e).fname_io;
-        let mut group: ::core::ffi::c_int = (*e).group;
-        let mut eap: *mut exarg_T = (*e).eap;
-        let mut data: *mut Object = (*e).data;
-        let mut err: Error = Error {
+        let e = (*argv).cast::<AutoCmdEvent>();
+        let event = (*e).event;
+        let fname = (*e).fname;
+        let fname_io = (*e).fname_io;
+        let group = (*e).group;
+        let eap = (*e).eap;
+        let data = (*e).data;
+
+        let mut err = Error {
             type_0: kErrorTypeNone,
-            msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            msg: ::core::ptr::null_mut(),
         };
-        let mut buf: *mut buf_T = find_buffer_by_handle((*e).buf, &raw mut err);
+        // The buffer may well have gone since the event was queued.
+        let buf = find_buffer_by_handle((*e).buf, &raw mut err);
         if !buf.is_null() {
-            let mut save_v_event: save_v_event_T = save_v_event_T {
-                sve_did_save: false,
-                sve_hashtab: hashtab_T {
-                    ht_mask: 0,
-                    ht_used: 0,
-                    ht_filled: 0,
-                    ht_changed: 0,
-                    ht_locked: 0,
-                    ht_array: ::core::ptr::null_mut::<hashitem_T>(),
-                    ht_smallarray: [hashitem_T {
-                        hi_hash: 0,
-                        hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    }; 16],
-                },
-            };
-            let mut v_event: *mut dict_T = get_v_event(&raw mut save_v_event);
-            if !data.is_null()
-                && (*data).type_0 as ::core::ffi::c_uint
-                    == kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                let mut i: size_t = 0 as size_t;
-                while i < (*data).data.dict.size {
-                    let mut item: KeyValuePair = *(*data).data.dict.items.offset(i as isize);
-                    let mut tv: typval_T = typval_T {
-                        v_type: VAR_UNKNOWN,
-                        v_lock: VAR_UNLOCKED,
-                        vval: typval_vval_union { v_number: 0 },
-                    };
+            let mut save_v_event = save_v_event_T::default();
+            let v_event = get_v_event(&raw mut save_v_event);
+            if !data.is_null() && (*data).type_0 == kObjectTypeDict {
+                let items = (*data).data.dict;
+                for i in 0..items.size {
+                    let item = *items.items.add(i);
+                    let mut tv = TV_INITIAL_VALUE;
                     object_to_vim(item.value, &raw mut tv, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                        api_clear_error(&raw mut err);
-                    } else {
+                    // A value `v:event` cannot hold is dropped, not fatal.
+                    if err.type_0 == kErrorTypeNone {
                         tv_dict_add_tv(v_event, item.key.data, item.key.size, &raw mut tv);
                         tv_clear(&raw mut tv);
+                    } else {
+                        api_clear_error(&raw mut err);
                     }
-                    i = i.wrapping_add(1);
                 }
             }
             tv_dict_set_keys_readonly(v_event);
-            let mut aco: aco_save_T = aco_save_T::default();
+
+            let mut aco = aco_save_T::default();
             aucmd_prepbuf(&raw mut aco, buf);
-            apply_autocmds_group(event, fname, fname_io, false_0 != 0, group, buf, eap, data);
+            apply_autocmds_group(event, fname, fname_io, false, group, buf, eap, data);
             aucmd_restbuf(&raw mut aco);
             restore_v_event(v_event, &raw mut save_v_event);
         }
-        xfree(fname as *mut ::core::ffi::c_void);
-        xfree(fname_io as *mut ::core::ffi::c_void);
+
+        xfree(fname.cast::<::core::ffi::c_void>());
+        xfree(fname_io.cast::<::core::ffi::c_void>());
         if !data.is_null() {
             api_free_object(*data);
-            xfree(data as *mut ::core::ffi::c_void);
+            xfree(data.cast::<::core::ffi::c_void>());
         }
-        xfree(e as *mut ::core::ffi::c_void);
+        xfree(e.cast::<::core::ffi::c_void>());
     }
 }
 
+/// Fire `TermResponse` with the terminal's reply in `v:event.sequence`.
 pub unsafe extern "C" fn do_termresponse_autocmd(sequence: String_0) {
     unsafe {
-        let mut data: Dict = Dict {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<KeyValuePair>(),
-        };
-        let mut data__items: [KeyValuePair; 1] = [KeyValuePair {
-            key: String_0 {
-                data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                size: 0,
-            },
-            value: Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            },
-        }; 1];
-        data.capacity = 1 as size_t;
-        data.items = &raw mut data__items as *mut KeyValuePair;
-        let c2rust_fresh11 = data.size;
-        data.size = data.size.wrapping_add(1);
-        *data.items.offset(c2rust_fresh11 as isize) = key_value_pair {
-            key: cstr_as_string(b"sequence\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed { string: sequence },
-            },
-        };
-        let mut c2rust_lvalue: Object = object {
-            type_0: kObjectTypeDict,
-            data: C2Rust_Unnamed { dict: data },
-        };
+        let mut data = DictBuf::<1>::new();
+        let mut event_data = data.insert(c"sequence", Object::string(sequence)).object();
         apply_autocmds_group(
             EVENT_TERMRESPONSE,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            true_0 != 0,
-            AUGROUP_ALL as ::core::ffi::c_int,
-            ::core::ptr::null_mut::<buf_T>(),
-            ::core::ptr::null_mut::<exarg_T>(),
-            &raw mut c2rust_lvalue,
+            ::core::ptr::null_mut(),
+            ::core::ptr::null_mut(),
+            true,
+            AUGROUP_ALL,
+            ::core::ptr::null_mut(),
+            ::core::ptr::null_mut(),
+            &raw mut event_data,
         );
-        termresponse_changed.set(true_0 != 0);
+        termresponse_changed.set(true);
     }
 }
 
-unsafe extern "C" fn vimresume_event(mut _argv: *mut *mut ::core::ffi::c_void) {
+/// The queued half of [`may_trigger_vim_suspend_resume`]: `VimResume` has
+/// to fire from the event loop, not from the signal handler's caller.
+unsafe extern "C" fn vimresume_event(_argv: *mut *mut ::core::ffi::c_void) {
     unsafe {
         apply_autocmds(
             EVENT_VIMRESUME,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            false_0 != 0,
-            ::core::ptr::null_mut::<buf_T>(),
+            ::core::ptr::null_mut(),
+            ::core::ptr::null_mut(),
+            false,
+            ::core::ptr::null_mut(),
         );
         pending_vimresume.set(kFalse);
     }
 }
 
-pub unsafe extern "C" fn may_trigger_vim_suspend_resume(mut suspend: bool) {
+/// Fire `VimSuspend`/`VimResume`, at most once per suspension.
+///
+/// `pending_vimresume` is the three-state latch that makes that true:
+/// `kFalse` nothing pending, `kNone` an event is being fired right now,
+/// `kTrue` a resume is owed.
+pub unsafe extern "C" fn may_trigger_vim_suspend_resume(suspend: bool) {
     unsafe {
-        if suspend as ::core::ffi::c_int != 0
-            && pending_vimresume.get() as ::core::ffi::c_int == kFalse as ::core::ffi::c_int
-        {
+        if suspend && pending_vimresume.get() == kFalse {
             pending_vimresume.set(kNone);
             apply_autocmds(
                 EVENT_VIMSUSPEND,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
-                ::core::ptr::null_mut::<buf_T>(),
+                ::core::ptr::null_mut(),
+                ::core::ptr::null_mut(),
+                false,
+                ::core::ptr::null_mut(),
             );
             pending_vimresume.set(kTrue);
-        } else if !suspend
-            && pending_vimresume.get() as ::core::ffi::c_int == kTrue as ::core::ffi::c_int
-        {
+        } else if !suspend && pending_vimresume.get() == kTrue {
             pending_vimresume.set(kNone);
             multiqueue_put_event(
                 (*main_loop.ptr()).events,
                 Event {
-                    handler: Some(
-                        vimresume_event
-                            as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
-                    ),
-                    argv: [
-                        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ],
+                    handler: Some(vimresume_event),
+                    argv: NO_ARGV,
                 },
             );
         }
     }
 }
 
-pub unsafe extern "C" fn do_autocmd_uienter(mut chanid: uint64_t, mut attached: bool) {
+/// Fire `UIEnter`/`UILeave` for the channel that attached or detached.
+pub unsafe extern "C" fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
     unsafe {
-        static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-        if starting.get() == NO_SCREEN {
+        static recursive: GlobalCell<bool> = GlobalCell::new(false);
+
+        if starting.get() == NO_SCREEN || recursive.get() {
             return;
         }
-        if recursive.get() {
-            return;
-        }
-        recursive.set(true_0 != 0);
-        let mut save_v_event: save_v_event_T = save_v_event_T {
-            sve_did_save: false,
-            sve_hashtab: hashtab_T {
-                ht_mask: 0,
-                ht_used: 0,
-                ht_filled: 0,
-                ht_changed: 0,
-                ht_locked: 0,
-                ht_array: ::core::ptr::null_mut::<hashitem_T>(),
-                ht_smallarray: [hashitem_T {
-                    hi_hash: 0,
-                    hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                }; 16],
-            },
-        };
-        let mut dict: *mut dict_T = get_v_event(&raw mut save_v_event);
-        '_c2rust_label: {
-            if chanid < 9223372036854775807 as uint64_t {
-            } else {
-                __assert_fail(
-                    b"chanid < VARNUMBER_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    2697 as ::core::ffi::c_uint,
-                    b"void do_autocmd_uienter(uint64_t, _Bool)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        tv_dict_add_nr(
-            dict,
-            b"chan\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-            chanid as varnumber_T,
-        );
+        recursive.set(true);
+
+        let mut save_v_event = save_v_event_T::default();
+        let dict = get_v_event(&raw mut save_v_event);
+        debug_assert!(chanid < varnumber_T::MAX as uint64_t);
+        tv_dict_add_nr(dict, c"chan".as_ptr(), 4, chanid as varnumber_T);
         tv_dict_set_keys_readonly(dict);
+
         apply_autocmds(
-            (if attached as ::core::ffi::c_int != 0 {
-                EVENT_UIENTER as ::core::ffi::c_int
+            if attached {
+                EVENT_UIENTER
             } else {
-                EVENT_UILEAVE as ::core::ffi::c_int
-            }) as event_T,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            false_0 != 0,
+                EVENT_UILEAVE
+            },
+            ::core::ptr::null_mut(),
+            ::core::ptr::null_mut(),
+            false,
             curbuf.get(),
         );
         restore_v_event(dict, &raw mut save_v_event);
-        recursive.set(false_0 != 0);
+
+        recursive.set(false);
     }
 }
 
-pub unsafe extern "C" fn do_autocmd_focusgained(mut gained: bool) {
+/// Fire `FocusGained`/`FocusLost`, and re-check file timestamps on a gain
+/// -- but not more often than every two seconds.
+pub unsafe extern "C" fn do_autocmd_focusgained(gained: bool) {
     unsafe {
-        static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+        static recursive: GlobalCell<bool> = GlobalCell::new(false);
         static last_time: GlobalCell<Timestamp> = GlobalCell::new(0 as Timestamp);
+
         if recursive.get() {
             return;
         }
-        recursive.set(true_0 != 0);
+        recursive.set(true);
+
         apply_autocmds(
-            (if gained as ::core::ffi::c_int != 0 {
-                EVENT_FOCUSGAINED as ::core::ffi::c_int
+            if gained {
+                EVENT_FOCUSGAINED
             } else {
-                EVENT_FOCUSLOST as ::core::ffi::c_int
-            }) as event_T,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            false_0 != 0,
+                EVENT_FOCUSLOST
+            },
+            ::core::ptr::null_mut(),
+            ::core::ptr::null_mut(),
+            false,
             curbuf.get(),
         );
-        if gained as ::core::ffi::c_int != 0
-            && (*last_time.ptr()).wrapping_add(2000 as ::core::ffi::c_int as Timestamp) < os_now()
-        {
+        if gained && last_time.get().wrapping_add(2000 as Timestamp) < os_now() {
             check_timestamps(true_0);
-            last_time.set(os_now() as Timestamp);
+            last_time.set(os_now());
         }
-        recursive.set(false_0 != 0);
+
+        recursive.set(false);
     }
 }
 
-pub unsafe extern "C" fn do_filetype_autocmd(mut buf: *mut buf_T, mut force: bool) -> bool {
+/// Fire `FileType` for `buf`, with `secure` cleared and recursion counted.
+///
+/// A nested `FileType` only fires when `force` says so; the *inner* one
+/// then does not `force` the autocommands themselves, which is what the
+/// `ft_recursive == 1` test says.
+pub unsafe extern "C" fn do_filetype_autocmd(buf: *mut buf_T, force: bool) -> bool {
     unsafe {
-        static ft_recursive: GlobalCell<::core::ffi::c_int> =
-            GlobalCell::new(0 as ::core::ffi::c_int);
-        if ft_recursive.get() > 0 as ::core::ffi::c_int && !force {
-            return false_0 != 0;
+        static ft_recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+
+        if ft_recursive.get() > 0 && !force {
+            return false;
         }
-        let mut secure_save: ::core::ffi::c_int = secure.get();
-        secure.set(0 as ::core::ffi::c_int);
-        (*ft_recursive.ptr()) += 1;
-        (*buf).b_did_filetype = true_0 != 0;
-        let mut ret: bool = apply_autocmds(
+
+        let secure_save = secure.get();
+        secure.set(0);
+        *ft_recursive.ptr() += 1;
+
+        (*buf).b_did_filetype = true;
+        let ret = apply_autocmds(
             EVENT_FILETYPE,
             (*buf).b_p_ft,
             (*buf).b_fname,
-            force as ::core::ffi::c_int != 0 || ft_recursive.get() == 1 as ::core::ffi::c_int,
+            force || ft_recursive.get() == 1,
             buf,
         );
-        (*ft_recursive.ptr()) -= 1;
+
+        *ft_recursive.ptr() -= 1;
         secure.set(secure_save);
-        return ret;
+        ret
     }
 }
