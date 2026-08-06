@@ -1,162 +1,174 @@
 //! Printing autocommands back, and asking whether one exists.
 //!
-//! `au_show_for_event` is `:autocmd`'s listing for one event -- the group
+//! [`au_show_for_event`] is `:autocmd`'s listing for one event -- the group
 //! header, the pattern column, the command, and the `Last set from` line a
-//! `:verbose` listing adds.  `au_exists` answers `exists('#Group#Event#pat')`
-//! in all four of its shapes, `has_autocmd` the pattern query behind it,
-//! and `set_context_in_autocmd` is command-line completion.
+//! `:verbose` listing adds.  [`au_exists`] answers
+//! `exists('#Group#Event#pat')` in all four of its shapes, [`has_autocmd`]
+//! the pattern query behind it, and [`set_context_in_autocmd`] is
+//! command-line completion.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
 
+/// `:autocmd` with no event: list every event's autocommands.
 pub(crate) unsafe extern "C" fn au_show_for_all_events(
-    mut group: ::core::ffi::c_int,
-    mut pat: *const ::core::ffi::c_char,
+    group: ::core::ffi::c_int,
+    pat: *const ::core::ffi::c_char,
 ) {
     unsafe {
-        let mut event: event_T = EVENT_BUFADD;
-        while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
+        for event in 0..NUM_EVENTS {
             au_show_for_event(group, event, pat);
-            event = (event as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as event_T;
         }
     }
 }
 
+/// List the autocommands defined for `event`, restricted to `group` and to
+/// the comma-separated pattern list `pat` when either is given.
+///
+/// `got_int` is checked between every write: a listing is interruptible,
+/// and each check is at the point where upstream put it.
 pub(crate) unsafe extern "C" fn au_show_for_event(
-    mut group: ::core::ffi::c_int,
-    mut event: event_T,
+    group: ::core::ffi::c_int,
+    event: event_T,
     mut pat: *const ::core::ffi::c_char,
 ) {
     unsafe {
-        let acs: *mut AutoCmdVec =
-            (autocmds.ptr() as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
-        if (*acs).size == 0 as size_t {
+        let acs = au_event_vec(event);
+        if (*acs).size == 0 {
             return;
         }
-        let mut patlen: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if *pat as ::core::ffi::c_int != NUL {
+
+        // An empty pattern shows every autocommand for the event.
+        let mut patlen: ::core::ffi::c_int = 0;
+        if *pat != 0 {
             patlen = aucmd_span_pattern(pat, &raw mut pat) as ::core::ffi::c_int;
-            if patlen == 0 as ::core::ffi::c_int {
+            // Only commas: nothing to show.
+            if patlen == 0 {
                 return;
             }
         }
-        let mut buflocal_pat: [::core::ffi::c_char; 25] = [0; 25];
-        let mut last_group: ::core::ffi::c_int = AUGROUP_ERROR as ::core::ffi::c_int;
-        let mut last_group_name: *const ::core::ffi::c_char =
-            ::core::ptr::null::<::core::ffi::c_char>();
+
+        let mut buflocal_pat = [0 as ::core::ffi::c_char; BUFLOCAL_PAT_LEN as usize];
+        let mut last_group = AUGROUP_ERROR;
+        let mut last_group_name: *const ::core::ffi::c_char = ::core::ptr::null();
+
+        // One pass per pattern in the list.
         loop {
-            let mut last_ap: *mut AutoPat = ::core::ptr::null_mut::<AutoPat>();
-            let mut endpat: *const ::core::ffi::c_char = pat.offset(patlen as isize);
+            let mut last_ap: *mut AutoPat = ::core::ptr::null_mut();
+            let endpat = pat.offset(patlen as isize);
+
+            // `<buffer[=X]>` is normalised, as it was when it was defined,
+            // so the comparison below can be a plain `strncmp`.
             if aupat_is_buflocal(pat, patlen) {
                 aupat_normalize_buflocal_pat(
-                    &raw mut buflocal_pat as *mut ::core::ffi::c_char,
+                    buflocal_pat.as_mut_ptr(),
                     pat,
                     patlen,
                     aupat_get_buflocal_nr(pat, patlen),
                 );
-                pat = &raw mut buflocal_pat as *mut ::core::ffi::c_char;
-                patlen =
-                    strlen(&raw mut buflocal_pat as *mut ::core::ffi::c_char) as ::core::ffi::c_int;
+                pat = buflocal_pat.as_ptr();
+                patlen = strlen(buflocal_pat.as_ptr()) as ::core::ffi::c_int;
             }
-            let mut i: size_t = 0 as size_t;
+
+            let mut i: usize = 0;
             while i < (*acs).size {
-                let ac: *mut AutoCmd = (*acs).items.offset(i as isize);
-                if !(*ac).pat.is_null() {
-                    if !(group != AUGROUP_ALL as ::core::ffi::c_int && (*(*ac).pat).group != group
-                        || patlen != 0
-                            && ((*(*ac).pat).patlen != patlen
-                                || strncmp(pat, (*(*ac).pat).pat, patlen as size_t)
-                                    != 0 as ::core::ffi::c_int))
-                    {
-                        if (*(*ac).pat).group != last_group {
-                            last_group = (*(*ac).pat).group;
-                            last_group_name = augroup_name((*(*ac).pat).group);
-                            if got_int.get() {
-                                return;
-                            }
-                            msg_putchar('\n' as ::core::ffi::c_int);
-                            if got_int.get() {
-                                return;
-                            }
-                            if (*(*ac).pat).group != AUGROUP_DEFAULT as ::core::ffi::c_int {
-                                if last_group_name.is_null() {
-                                    msg_puts_hl(get_deleted_augroup(), HLF_E, false_0 != 0);
-                                } else {
-                                    msg_puts_hl(last_group_name, HLF_T, false_0 != 0);
-                                }
-                                msg_puts(b"  \0".as_ptr() as *const ::core::ffi::c_char);
-                            }
-                            msg_puts_hl(event_nr2name(event), HLF_T, false_0 != 0);
-                        }
-                        if last_ap != (*ac).pat {
-                            last_ap = (*ac).pat;
-                            msg_putchar('\n' as ::core::ffi::c_int);
-                            if got_int.get() {
-                                return;
-                            }
-                            msg_advance(4 as ::core::ffi::c_int);
-                            msg_outtrans((*(*ac).pat).pat, 0 as ::core::ffi::c_int, false_0 != 0);
-                        }
-                        if got_int.get() {
-                            return;
-                        }
-                        if msg_col.get() >= 14 as ::core::ffi::c_int {
-                            msg_putchar('\n' as ::core::ffi::c_int);
-                        }
-                        msg_advance(14 as ::core::ffi::c_int);
-                        if got_int.get() {
-                            return;
-                        }
-                        let mut handler_str: *mut ::core::ffi::c_char = aucmd_handler_to_string(ac);
-                        if !(*ac).desc.is_null() {
-                            let mut msglen: size_t = 100 as size_t;
-                            let mut msg: *mut ::core::ffi::c_char =
-                                xmallocz(msglen) as *mut ::core::ffi::c_char;
-                            if !(*ac).handler_cmd.is_null() {
-                                snprintf(
-                                    msg,
-                                    msglen,
-                                    b"%s [%s]\0".as_ptr() as *const ::core::ffi::c_char,
-                                    handler_str,
-                                    (*ac).desc,
-                                );
-                            } else {
-                                msg_puts_hl(handler_str, HLF_8, false_0 != 0);
-                                snprintf(
-                                    msg,
-                                    msglen,
-                                    b" [%s]\0".as_ptr() as *const ::core::ffi::c_char,
-                                    (*ac).desc,
-                                );
-                            }
-                            msg_outtrans(msg, 0 as ::core::ffi::c_int, false_0 != 0);
-                            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                                &raw mut msg as *mut *mut ::core::ffi::c_void;
-                            xfree(*ptr_);
-                            *ptr_ = NULL_0;
-                            let _ = *ptr_;
-                        } else if !(*ac).handler_cmd.is_null() {
-                            msg_outtrans(handler_str, 0 as ::core::ffi::c_int, false_0 != 0);
-                        } else {
-                            msg_puts_hl(handler_str, HLF_8, false_0 != 0);
-                        }
-                        let mut ptr__0: *mut *mut ::core::ffi::c_void =
-                            &raw mut handler_str as *mut *mut ::core::ffi::c_void;
-                        xfree(*ptr__0);
-                        *ptr__0 = NULL_0;
-                        let _ = *ptr__0;
-                        if p_verbose.get() > 0 as OptInt {
-                            last_set_msg((*ac).script_ctx);
-                        }
-                        if got_int.get() {
-                            return;
-                        }
-                    }
-                }
+                let ac = (*acs).items.add(i);
                 i = i.wrapping_add(1);
+
+                let ap = (*ac).pat;
+                // Skip a row `aucmd_del` has marked.
+                if ap.is_null() {
+                    continue;
+                }
+                // Accept the row when the group matches (or none was asked
+                // for) and the pattern matches (or none was asked for).
+                if (group != AUGROUP_ALL && (*ap).group != group)
+                    || (patlen != 0
+                        && ((*ap).patlen != patlen
+                            || strncmp(pat, (*ap).pat, patlen as size_t) != 0))
+                {
+                    continue;
+                }
+
+                // The group and event headline only when the group changed.
+                if (*ap).group != last_group {
+                    last_group = (*ap).group;
+                    last_group_name = augroup_name((*ap).group);
+
+                    if got_int.get() {
+                        return;
+                    }
+                    msg_putchar('\n' as ::core::ffi::c_int);
+                    if got_int.get() {
+                        return;
+                    }
+                    if (*ap).group != AUGROUP_DEFAULT {
+                        // A group whose name is gone is one `:augroup!`
+                        // renamed out from under its autocommands.
+                        if last_group_name.is_null() {
+                            msg_puts_hl(get_deleted_augroup(), HLF_E, false);
+                        } else {
+                            msg_puts_hl(last_group_name, HLF_T, false);
+                        }
+                        msg_puts(c"  ".as_ptr());
+                    }
+                    msg_puts_hl(event_nr2name(event), HLF_T, false);
+                }
+
+                // The pattern only when it changed.
+                if last_ap != ap {
+                    last_ap = ap;
+                    msg_putchar('\n' as ::core::ffi::c_int);
+                    if got_int.get() {
+                        return;
+                    }
+                    msg_advance(4);
+                    msg_outtrans((*ap).pat, 0, false);
+                }
+
+                if got_int.get() {
+                    return;
+                }
+                if msg_col.get() >= 14 {
+                    msg_putchar('\n' as ::core::ffi::c_int);
+                }
+                msg_advance(14);
+                if got_int.get() {
+                    return;
+                }
+
+                let handler_str = aucmd_handler_to_string(ac);
+                if (*ac).desc.is_null() {
+                    // A command is transliterated, a callback is not.
+                    if (*ac).handler_cmd.is_null() {
+                        msg_puts_hl(handler_str, HLF_8, false);
+                    } else {
+                        msg_outtrans(handler_str, 0, false);
+                    }
+                } else {
+                    let msglen: size_t = 100;
+                    let msg = xmallocz(msglen).cast::<::core::ffi::c_char>();
+                    if (*ac).handler_cmd.is_null() {
+                        msg_puts_hl(handler_str, HLF_8, false);
+                        snprintf(msg, msglen, c" [%s]".as_ptr(), (*ac).desc);
+                    } else {
+                        snprintf(msg, msglen, c"%s [%s]".as_ptr(), handler_str, (*ac).desc);
+                    }
+                    msg_outtrans(msg, 0, false);
+                    xfree(msg.cast::<::core::ffi::c_void>());
+                }
+                xfree(handler_str.cast::<::core::ffi::c_void>());
+
+                if p_verbose.get() > 0 {
+                    last_set_msg((*ac).script_ctx);
+                }
+                if got_int.get() {
+                    return;
+                }
             }
+
             patlen = aucmd_span_pattern(endpat, &raw mut pat) as ::core::ffi::c_int;
             if patlen == 0 {
                 break;
@@ -165,173 +177,191 @@ pub(crate) unsafe extern "C" fn au_show_for_event(
     }
 }
 
+/// Whether any autocommand for `event` would match the file `sfname`
+/// opened in `buf`.
 pub unsafe extern "C" fn has_autocmd(
-    mut event: event_T,
-    mut sfname: *mut ::core::ffi::c_char,
-    mut buf: *mut buf_T,
+    event: event_T,
+    sfname: *mut ::core::ffi::c_char,
+    buf: *mut buf_T,
 ) -> bool {
     unsafe {
-        let mut tail: *mut ::core::ffi::c_char = path_tail(sfname);
-        let mut retval: bool = false_0 != 0;
-        let mut fname: *mut ::core::ffi::c_char = FullName_save(sfname, false_0 != 0);
+        let tail = path_tail(sfname);
+        let fname = FullName_save(sfname, false);
         if fname.is_null() {
-            return false_0 != 0;
+            return false;
         }
-        let acs: *mut AutoCmdVec =
-            (autocmds.ptr() as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
-        let mut i: size_t = 0 as size_t;
+
+        let acs = au_event_vec(event);
+        let mut retval = false;
+        let mut i: usize = 0;
         while i < (*acs).size {
-            let ap: *mut AutoPat = (*(*acs).items.offset(i as isize)).pat;
-            if !ap.is_null()
-                && (if (*ap).buflocal_nr == 0 as ::core::ffi::c_int {
+            let ap = (*(*acs).items.add(i)).pat;
+            if !ap.is_null() {
+                // A buffer-local pattern is matched by buffer number, every
+                // other one against the file name.
+                let matched = if (*ap).buflocal_nr == 0 {
                     match_file_pat(
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                        ::core::ptr::null_mut(),
                         &raw mut (*ap).reg_prog,
                         fname,
                         sfname,
                         tail,
                         (*ap).allow_dirs as ::core::ffi::c_int,
-                    ) as ::core::ffi::c_int
+                    )
                 } else {
-                    (!buf.is_null() && (*ap).buflocal_nr == (*buf).handle) as ::core::ffi::c_int
-                }) != 0
-            {
-                retval = true_0 != 0;
-                break;
-            } else {
-                i = i.wrapping_add(1);
+                    !buf.is_null() && (*ap).buflocal_nr == (*buf).handle
+                };
+                if matched {
+                    retval = true;
+                    break;
+                }
             }
+            i = i.wrapping_add(1);
         }
-        xfree(fname as *mut ::core::ffi::c_void);
-        return retval;
+
+        xfree(fname.cast::<::core::ffi::c_void>());
+        retval
     }
 }
 
+/// Command-line completion for `:autocmd` (`doautocmd` false) and
+/// `:doautocmd`/`:doautoall` (true).
+///
+/// Answers a pointer at the next command to expand instead, or null when
+/// it has set `xp` itself.
 pub unsafe extern "C" fn set_context_in_autocmd(
-    mut xp: *mut expand_T,
+    xp: *mut expand_T,
     mut arg: *mut ::core::ffi::c_char,
-    mut doautocmd: bool,
+    doautocmd: bool,
 ) -> *mut ::core::ffi::c_char {
     unsafe {
-        autocmd_include_groups.set(false_0 != 0);
-        let mut p: *mut ::core::ffi::c_char = arg;
-        let mut group: ::core::ffi::c_int = arg_augroup_get(&raw mut arg);
-        if *arg as ::core::ffi::c_int == NUL
-            && group != AUGROUP_ALL as ::core::ffi::c_int
-            && !ascii_iswhite(*arg.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-        {
-            arg = p;
-            group = AUGROUP_ALL as ::core::ffi::c_int;
+        // Skip a group name if there is one.
+        autocmd_include_groups.set(false);
+        let start = arg;
+        let mut group = arg_augroup_get(&raw mut arg);
+
+        // A group name and nothing else is what is being completed, unless
+        // it was already followed by a space.
+        if *arg == 0 && group != AUGROUP_ALL && !ascii_iswhite(*arg.sub(1) as ::core::ffi::c_int) {
+            arg = start;
+            group = AUGROUP_ALL;
         }
-        p = arg;
-        while *p as ::core::ffi::c_int != NUL && !ascii_iswhite(*p as ::core::ffi::c_int) {
-            if *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
-                arg = p.offset(1 as ::core::ffi::c_int as isize);
+
+        // Skip over the event name, keeping the start of the last one in a
+        // comma-separated list.
+        let mut p = arg;
+        while *p != 0 && !ascii_iswhite(*p as ::core::ffi::c_int) {
+            if *p == b',' as ::core::ffi::c_char {
+                arg = p.add(1);
             }
-            p = p.offset(1);
+            p = p.add(1);
         }
-        if *p as ::core::ffi::c_int == NUL {
-            if group == AUGROUP_ALL as ::core::ffi::c_int {
-                autocmd_include_groups.set(true_0 != 0);
+        if *p == 0 {
+            if group == AUGROUP_ALL {
+                autocmd_include_groups.set(true);
             }
-            (*xp).xp_context = EXPAND_EVENTS as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_EVENTS;
             (*xp).xp_pattern = arg;
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+            return ::core::ptr::null_mut();
         }
+
+        // Skip over the pattern, whose whitespace may be backslash-escaped.
         arg = skipwhite(p);
-        while *arg as ::core::ffi::c_int != 0
+        while *arg != 0
             && (!ascii_iswhite(*arg as ::core::ffi::c_int)
-                || *arg.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '\\' as ::core::ffi::c_int)
+                || *arg.sub(1) == b'\\' as ::core::ffi::c_char)
         {
-            arg = arg.offset(1);
+            arg = arg.add(1);
         }
         if *arg != 0 {
+            // What follows is the command, which the caller expands.
             return arg;
         }
-        if doautocmd {
-            (*xp).xp_context = EXPAND_FILES as ::core::ffi::c_int;
+
+        (*xp).xp_context = if doautocmd {
+            EXPAND_FILES
         } else {
-            (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
-        }
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+            EXPAND_NOTHING
+        };
+        ::core::ptr::null_mut()
     }
 }
 
+/// `exists('#…')`, in all four shapes: `#Group`, `#Event`, `#Event#pat`
+/// and `#Group#Event#pat`.
 pub unsafe extern "C" fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
     unsafe {
-        let mut pattern: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut event: event_T = EVENT_BUFADD;
-        let mut acs: *mut AutoCmdVec = ::core::ptr::null_mut::<AutoCmdVec>();
-        let mut buflocal_buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-        let mut retval: bool = false_0 != 0;
-        let arg_save: *mut ::core::ffi::c_char = xstrdup(arg);
-        let mut p: *mut ::core::ffi::c_char = strchr(arg_save, '#' as ::core::ffi::c_int);
-        if !p.is_null() {
-            let c2rust_fresh13 = p;
-            p = p.offset(1);
-            *c2rust_fresh13 = NUL as ::core::ffi::c_char;
-        }
-        let mut group: ::core::ffi::c_int = augroup_find(arg_save);
-        let mut event_name: *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<::core::ffi::c_char>();
-        '_theend: {
-            if group == AUGROUP_ERROR as ::core::ffi::c_int {
-                group = AUGROUP_ALL as ::core::ffi::c_int;
-                event_name = arg_save;
+        // A copy, so the `#` separators can be overwritten with NULs.
+        let arg_save = xstrdup(arg);
+        let retval = 'theend: {
+            let mut p = strchr(arg_save, '#' as ::core::ffi::c_int);
+            if !p.is_null() {
+                *p = 0;
+                p = p.add(1);
+            }
+
+            // The first field is a group name if it names one, and an event
+            // otherwise.
+            let mut group = augroup_find(arg_save);
+            let event_name = if group == AUGROUP_ERROR {
+                group = AUGROUP_ALL;
+                arg_save
             } else if p.is_null() {
-                retval = true_0 != 0;
-                break '_theend;
+                // Just "Group", and it exists.
+                break 'theend true;
             } else {
-                event_name = p;
+                // "Group#Event" or "Group#Event#pat".
+                let event_name = p;
                 p = strchr(event_name, '#' as ::core::ffi::c_int);
                 if !p.is_null() {
-                    let c2rust_fresh14 = p;
-                    p = p.offset(1);
-                    *c2rust_fresh14 = NUL as ::core::ffi::c_char;
+                    *p = 0;
+                    p = p.add(1);
                 }
+                event_name
+            };
+
+            // Null when no pattern was given.
+            let pattern = p;
+            let event = event_name2nr(event_name, &raw mut p);
+            if event == NUM_EVENTS {
+                break 'theend false;
             }
-            pattern = p;
-            event = event_name2nr(event_name, &raw mut p);
-            if event as ::core::ffi::c_uint
-                != NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                acs = (autocmds.ptr() as *mut AutoCmdVec)
-                    .offset(event as ::core::ffi::c_int as isize);
-                if (*acs).size != 0 as size_t {
-                    if !pattern.is_null()
-                        && strcasecmp(
-                            pattern,
-                            b"<buffer>\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
-                        ) == 0 as ::core::ffi::c_int
-                    {
-                        buflocal_buf = curbuf.get();
-                    }
-                    let mut i: size_t = 0 as size_t;
-                    while i < (*acs).size {
-                        let ap: *mut AutoPat = (*(*acs).items.offset(i as isize)).pat;
-                        if !ap.is_null()
-                            && (group == AUGROUP_ALL as ::core::ffi::c_int || (*ap).group == group)
-                            && (pattern.is_null()
-                                || (if buflocal_buf.is_null() {
-                                    (path_fnamecmp((*ap).pat, pattern) == 0 as ::core::ffi::c_int)
-                                        as ::core::ffi::c_int
-                                } else {
-                                    ((*ap).buflocal_nr == (*buflocal_buf).handle)
-                                        as ::core::ffi::c_int
-                                }) != 0)
-                        {
-                            retval = true_0 != 0;
-                            break;
+
+            let acs = au_event_vec(event);
+            if (*acs).size == 0 {
+                break 'theend false;
+            }
+
+            // `<buffer>` means curbuf; `<buffer=N>` is already normalised,
+            // so `path_fnamecmp` handles it.
+            let buflocal_buf =
+                if !pattern.is_null() && strcasecmp(pattern, c"<buffer>".as_ptr()) == 0 {
+                    curbuf.get()
+                } else {
+                    ::core::ptr::null_mut()
+                };
+
+            let mut i: usize = 0;
+            while i < (*acs).size {
+                let ap = (*(*acs).items.add(i)).pat;
+                // Only a pattern that has not been removed counts.
+                if !ap.is_null()
+                    && (group == AUGROUP_ALL || (*ap).group == group)
+                    && (pattern.is_null()
+                        || if buflocal_buf.is_null() {
+                            path_fnamecmp((*ap).pat, pattern) == 0
                         } else {
-                            i = i.wrapping_add(1);
-                        }
-                    }
+                            (*ap).buflocal_nr == (*buflocal_buf).handle
+                        })
+                {
+                    break 'theend true;
                 }
+                i = i.wrapping_add(1);
             }
-        }
-        xfree(arg_save as *mut ::core::ffi::c_void);
-        return retval;
+            false
+        };
+
+        xfree(arg_save.cast::<::core::ffi::c_void>());
+        retval
     }
 }

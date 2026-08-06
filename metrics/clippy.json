@@ -26,7 +26,6 @@
     "crates/nvim/src/nvim/api/window.rs": 37,
     "crates/nvim/src/nvim/autocmd/define.rs": 34,
     "crates/nvim/src/nvim/autocmd/fire.rs": 1,
-    "crates/nvim/src/nvim/autocmd/listing.rs": 7,
     "crates/nvim/src/nvim/autocmd/trigger.rs": 9,
     "crates/nvim/src/nvim/autocmd/walk.rs": 32,
     "crates/nvim/src/nvim/base64.rs": 2,
