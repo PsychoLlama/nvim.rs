@@ -1,27 +1,26 @@
 //! Autocommand groups: the two maps, and `:augroup`.
 //!
 //! A group is an id and a name, held in `map_augroup_name_to_id` and
-//! `map_augroup_id_to_name`; `augroup_add` allocates an id (reviving a
-//! deleted group's), `augroup_del` releases the name but *not* the
-//! autocommands defined under it, and `augroup_name` renders an id --
+//! `map_augroup_id_to_name`; [`augroup_add`] allocates an id (reviving a
+//! deleted group's), [`augroup_del`] releases the name but *not* the
+//! autocommands defined under it, and [`augroup_name`] renders an id --
 //! including `AUGROUP_DELETED`, whose name is the `--Deleted--`
-//! placeholder.  `do_augroup` is `:augroup` and `:augroup!`.
+//! placeholder.  [`do_augroup`] is `:augroup` and `:augroup!`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
 
-unsafe extern "C" fn augroup_map_del(
-    mut id: ::core::ffi::c_int,
-    mut name: *const ::core::ffi::c_char,
-) {
+/// Drop a group's entries from the two maps, freeing the keys they own.
+///
+/// A null `name` leaves the name map alone, which is how `:augroup! X`
+/// releases the *id* of a group whose name it has just re-pointed at
+/// `AUGROUP_DELETED`.
+unsafe fn augroup_map_del(id: ::core::ffi::c_int, name: *const ::core::ffi::c_char) {
     unsafe {
         if !name.is_null() {
-            let mut key: String_0 = String_0 {
-                data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                size: 0,
-            };
+            let mut key = STRING_INIT;
             map_del_String_int(
                 map_augroup_name_to_id.ptr(),
                 cstr_as_string(name),
@@ -29,276 +28,231 @@ unsafe extern "C" fn augroup_map_del(
             );
             api_free_string(key);
         }
-        if id > 0 as ::core::ffi::c_int {
-            let mut mapped: String_0 = map_del_int_String(
-                map_augroup_id_to_name.ptr(),
-                id,
-                ::core::ptr::null_mut::<::core::ffi::c_int>(),
-            );
+        if id > 0 {
+            let mapped =
+                map_del_int_String(map_augroup_id_to_name.ptr(), id, ::core::ptr::null_mut());
             api_free_string(mapped);
         }
     }
 }
 
+/// The name a deleted-but-still-referenced group lists under, translated
+/// once and cached.
 #[inline(always)]
 pub(crate) unsafe extern "C" fn get_deleted_augroup() -> *const ::core::ffi::c_char {
     unsafe {
-        if (*deleted_augroup.ptr()).is_null() {
-            deleted_augroup.set(gettext(
-                b"--Deleted--\0".as_ptr() as *const ::core::ffi::c_char
-            ));
+        if deleted_augroup.get().is_null() {
+            deleted_augroup.set(gettext(c"--Deleted--".as_ptr()));
         }
-        return deleted_augroup.get();
+        deleted_augroup.get()
     }
 }
 
-pub unsafe extern "C" fn augroup_add(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
+/// The id of the group called `name`, creating one if there is not
+/// already an id for that name.
+pub unsafe extern "C" fn augroup_add(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     unsafe {
-        '_c2rust_label: {
-            if strcasecmp(
-                name as *mut ::core::ffi::c_char,
-                b"end\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            ) != 0 as ::core::ffi::c_int
-            {
-            } else {
-                __assert_fail(
-                    b"STRICMP(name, \"end\") != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    400 as ::core::ffi::c_uint,
-                    b"int augroup_add(const char *)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        let mut existing_id: ::core::ffi::c_int = augroup_find(name);
-        if existing_id > 0 as ::core::ffi::c_int {
-            '_c2rust_label_0: {
-                if existing_id != AUGROUP_DELETED as ::core::ffi::c_int {
-                } else {
-                    __assert_fail(
-                        b"existing_id != AUGROUP_DELETED\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        404 as ::core::ffi::c_uint,
-                        b"int augroup_add(const char *)\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+        debug_assert!(strcasecmp(name, c"end".as_ptr()) != 0);
+
+        let existing_id = augroup_find(name);
+        if existing_id > 0 {
+            debug_assert!(existing_id != AUGROUP_DELETED);
             return existing_id;
         }
-        if existing_id == AUGROUP_DELETED as ::core::ffi::c_int {
+
+        // The name still maps to `AUGROUP_DELETED` from an earlier
+        // `:augroup! name`; that mapping has to go before a fresh id can
+        // take the name.
+        if existing_id == AUGROUP_DELETED {
             augroup_map_del(existing_id, name);
         }
-        let c2rust_fresh0 = next_augroup_id.get();
-        next_augroup_id.set(next_augroup_id.get() + 1);
-        let mut next_id: ::core::ffi::c_int = c2rust_fresh0;
-        let mut name_key: String_0 = cstr_to_string(name);
-        let mut name_val: String_0 = cstr_to_string(name);
-        map_put_String_int(map_augroup_name_to_id.ptr(), name_key, next_id);
-        map_put_int_String(map_augroup_id_to_name.ptr(), next_id, name_val);
-        return next_id;
+
+        let next_id = next_augroup_id.get();
+        next_augroup_id.set(next_id + 1);
+        // The two maps each own their copy of the name.
+        map_put_String_int(map_augroup_name_to_id.ptr(), cstr_to_string(name), next_id);
+        map_put_int_String(map_augroup_id_to_name.ptr(), next_id, cstr_to_string(name));
+        next_id
     }
 }
 
-pub unsafe extern "C" fn augroup_del(
-    mut name: *mut ::core::ffi::c_char,
-    mut stupid_legacy_mode: bool,
-) {
+/// Delete the group called `name`.
+///
+/// `stupid_legacy_mode` is `:augroup! {name}`: a group that still holds
+/// autocommands keeps them and is merely renamed `--Deleted--`, leaving
+/// them defined and unreachable (O-B14-2).  Everywhere else the
+/// autocommands go with the group.
+pub unsafe extern "C" fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bool) {
     unsafe {
-        let mut group: ::core::ffi::c_int = augroup_find(name);
-        if group == AUGROUP_ERROR as ::core::ffi::c_int {
-            semsg(
-                gettext(b"E367: No such group: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
-                name,
-            );
+        let group = augroup_find(name);
+        if group == AUGROUP_ERROR {
+            semsg(gettext(c"E367: No such group: \"%s\"".as_ptr()), name);
             return;
         } else if group == current_augroup.get() {
-            emsg(gettext(
-                b"E936: Cannot delete the current group\0".as_ptr() as *const ::core::ffi::c_char
-            ));
+            emsg(gettext(c"E936: Cannot delete the current group".as_ptr()));
             return;
         }
-        if stupid_legacy_mode {
-            let mut event: event_T = EVENT_BUFADD;
-            while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
-                let acs: *mut AutoCmdVec = (autocmds.ptr() as *mut AutoCmdVec)
-                    .offset(event as ::core::ffi::c_int as isize);
-                let mut i: size_t = 0 as size_t;
-                while i < (*acs).size {
-                    let ap: *mut AutoPat = (*(*acs).items.offset(i as isize)).pat;
-                    if !ap.is_null() && (*ap).group == group {
+
+        for event in 0..NUM_EVENTS {
+            let acs = au_event_vec(event);
+            let mut i: usize = 0;
+            // `(*acs).size` is re-read every step: `aucmd_del` only marks a
+            // row deleted, but nothing here may assume the list is frozen.
+            while i < (*acs).size {
+                let ac = (*acs).items.add(i);
+                let ap = (*ac).pat;
+                if !ap.is_null() && (*ap).group == group {
+                    if stupid_legacy_mode {
                         give_warning(
-                            gettext(b"W19: Deleting augroup that is still in use\0".as_ptr()
-                                as *const ::core::ffi::c_char),
-                            true_0 != 0,
-                            true_0 != 0,
+                            gettext(c"W19: Deleting augroup that is still in use".as_ptr()),
+                            true,
+                            true,
                         );
+                        // Re-point the *name* at the deleted-group id and
+                        // give up the old id, leaving the autocommands on it.
                         map_put_String_int(
                             map_augroup_name_to_id.ptr(),
                             cstr_as_string(name),
-                            AUGROUP_DELETED as ::core::ffi::c_int,
+                            AUGROUP_DELETED,
                         );
-                        augroup_map_del((*ap).group, ::core::ptr::null::<::core::ffi::c_char>());
+                        augroup_map_del((*ap).group, ::core::ptr::null());
                         return;
                     }
-                    i = i.wrapping_add(1);
+                    aucmd_del(ac);
                 }
-                event = (event as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as event_T;
-            }
-        } else {
-            let mut event_0: event_T = EVENT_BUFADD;
-            while (event_0 as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
-                let acs_0: *mut AutoCmdVec = (autocmds.ptr() as *mut AutoCmdVec)
-                    .offset(event_0 as ::core::ffi::c_int as isize);
-                let mut i_0: size_t = 0 as size_t;
-                while i_0 < (*acs_0).size {
-                    let ac: *mut AutoCmd = (*acs_0).items.offset(i_0 as isize);
-                    if !(*ac).pat.is_null() && (*(*ac).pat).group == group {
-                        aucmd_del(ac);
-                    }
-                    i_0 = i_0.wrapping_add(1);
-                }
-                event_0 = (event_0 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as event_T;
+                i = i.wrapping_add(1);
             }
         }
+
+        // Nothing is using the group, so it can go for real.
         augroup_map_del(group, name);
         au_cleanup();
     }
 }
 
-pub unsafe extern "C" fn augroup_find(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
+/// The id of the group called `name`, or `AUGROUP_ERROR` when there is
+/// none.  `AUGROUP_DELETED` is an answer of its own: the name is known and
+/// belongs to a group `:augroup!` renamed.
+pub unsafe extern "C" fn augroup_find(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     unsafe {
-        let mut existing_id: ::core::ffi::c_int =
-            map_get_String_int(map_augroup_name_to_id.ptr(), cstr_as_string(name));
-        if existing_id == AUGROUP_DELETED as ::core::ffi::c_int {
-            return existing_id;
+        let existing_id = map_get_String_int(map_augroup_name_to_id.ptr(), cstr_as_string(name));
+        if existing_id == AUGROUP_DELETED || existing_id > 0 {
+            existing_id
+        } else {
+            AUGROUP_ERROR
         }
-        if existing_id > 0 as ::core::ffi::c_int {
-            return existing_id;
-        }
-        return AUGROUP_ERROR as ::core::ffi::c_int;
     }
 }
 
+/// The name of group `group`, or null when no group ever had that id.
+///
+/// `next_augroup_id` is the source of truth about which ids have existed:
+/// the map shrinks when a group is deleted, so its size is not.  The id
+/// one past the last is spelled `END`, which is what makes `:augroup`
+/// completion terminate.
 pub unsafe extern "C" fn augroup_name(mut group: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
     unsafe {
-        '_c2rust_label: {
-            if group != 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"group != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    496 as ::core::ffi::c_uint,
-                    b"char *augroup_name(int)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        if group == AUGROUP_DELETED as ::core::ffi::c_int {
-            return get_deleted_augroup() as *mut ::core::ffi::c_char;
+        debug_assert!(group != 0);
+
+        if group == AUGROUP_DELETED {
+            return get_deleted_augroup().cast_mut();
         }
-        if group == AUGROUP_ALL as ::core::ffi::c_int {
+        if group == AUGROUP_ALL {
             group = current_augroup.get();
         }
         if group == next_augroup_id.get() {
-            return b"END\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            return c"END".as_ptr().cast_mut();
         }
         if group > next_augroup_id.get() {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+            return ::core::ptr::null_mut();
         }
-        let mut key: String_0 = map_get_int_String(map_augroup_id_to_name.ptr(), group);
+
+        let key = map_get_int_String(map_augroup_id_to_name.ptr(), group);
         if !key.data.is_null() {
             return key.data;
         }
-        return get_deleted_augroup() as *mut ::core::ffi::c_char;
+        // The id existed but is no longer in the map, so it was deleted.
+        get_deleted_augroup().cast_mut()
     }
 }
 
-pub unsafe extern "C" fn augroup_exists(mut name: *const ::core::ffi::c_char) -> bool {
-    unsafe {
-        return augroup_find(name) > 0 as ::core::ffi::c_int;
-    }
+/// Whether a group called `name` exists.
+pub unsafe extern "C" fn augroup_exists(name: *const ::core::ffi::c_char) -> bool {
+    unsafe { augroup_find(name) > 0 }
 }
 
-pub unsafe extern "C" fn do_augroup(mut arg: *mut ::core::ffi::c_char, mut del_group: bool) {
+/// `:augroup`: switch to a group, leave one, delete one, or list them.
+pub unsafe extern "C" fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
     unsafe {
         if del_group {
-            if *arg as ::core::ffi::c_int == NUL {
-                emsg(gettext(&raw const e_argreq as *const ::core::ffi::c_char));
+            if *arg == 0 {
+                emsg(gettext((&raw const e_argreq).cast::<::core::ffi::c_char>()));
             } else {
-                augroup_del(arg, true_0 != 0);
+                augroup_del(arg, true);
             }
-        } else if strcasecmp(
-            arg,
-            b"end\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        ) == 0 as ::core::ffi::c_int
-        {
-            current_augroup.set(AUGROUP_DEFAULT as ::core::ffi::c_int);
+        } else if strcasecmp(arg, c"end".as_ptr()) == 0 {
+            current_augroup.set(AUGROUP_DEFAULT);
         } else if *arg != 0 {
             current_augroup.set(augroup_add(arg));
         } else {
             msg_start();
-            msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
-            let mut name: String_0 = String_0 {
-                data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                size: 0,
-            };
-            let mut value: ::core::ffi::c_int = 0;
-            let mut __i: uint32_t = 0;
-            __i = 0 as uint32_t;
-            while __i < (*map_augroup_name_to_id.ptr()).set.h.n_keys {
-                name = *(*map_augroup_name_to_id.ptr())
-                    .set
-                    .keys
-                    .offset(__i as isize);
-                value = *(*map_augroup_name_to_id.ptr()).values.offset(__i as isize);
-                if value > 0 as ::core::ffi::c_int {
+            msg_ext_set_kind(c"list_cmd".as_ptr());
+            let map = map_augroup_name_to_id.ptr();
+            for i in 0..(*map).set.h.n_keys {
+                let name = *(*map).set.keys.add(i as usize);
+                let value = *(*map).values.add(i as usize);
+                // A group `:augroup!` renamed lists as `--Deleted--`; its
+                // key is still the old name.
+                if value > 0 {
                     msg_puts(name.data);
                 } else {
                     msg_puts(augroup_name(value));
                 }
-                msg_puts(b"  \0".as_ptr() as *const ::core::ffi::c_char);
-                __i = __i.wrapping_add(1);
+                msg_puts(c"  ".as_ptr());
             }
             msg_clr_eos();
             msg_end();
-        };
+        }
     }
 }
 
+/// Completion source for a group name: [`augroup_name`] answers null once
+/// `idx` runs past the last id.
 pub unsafe extern "C" fn expand_get_augroup_name(
-    mut _xp: *mut expand_T,
-    mut idx: ::core::ffi::c_int,
+    _xp: *mut expand_T,
+    idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    unsafe {
-        return augroup_name(idx + 1 as ::core::ffi::c_int);
-    }
+    unsafe { augroup_name(idx + 1) }
 }
 
+/// Take a leading group name off `*argp`, answering its id.
+///
+/// A name that is not a group is *not* consumed and answers
+/// `AUGROUP_ALL`, which is how `:autocmd BufEnter …` is told from
+/// `:autocmd MyGroup BufEnter …` without a lookahead.
 pub(crate) unsafe extern "C" fn arg_augroup_get(
-    mut argp: *mut *mut ::core::ffi::c_char,
+    argp: *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     unsafe {
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut arg: *mut ::core::ffi::c_char = *argp;
-        p = arg;
-        while *p as ::core::ffi::c_int != 0
-            && !ascii_iswhite(*p as ::core::ffi::c_int)
-            && *p as ::core::ffi::c_int != '|' as ::core::ffi::c_int
-        {
-            p = p.offset(1);
+        let arg = *argp;
+        let bytes = CStr::from_ptr(arg).to_bytes();
+        let len = bytes
+            .iter()
+            .position(|&c| ascii_iswhite(c as ::core::ffi::c_int) || c == b'|')
+            .unwrap_or(bytes.len());
+        if len == 0 {
+            return AUGROUP_ALL;
         }
-        if p <= arg {
-            return AUGROUP_ALL as ::core::ffi::c_int;
-        }
-        let mut group_name: *mut ::core::ffi::c_char = xmemdupz(
-            arg as *const ::core::ffi::c_void,
-            p.offset_from(arg) as size_t,
-        ) as *mut ::core::ffi::c_char;
-        let mut group: ::core::ffi::c_int = augroup_find(group_name);
-        if group == AUGROUP_ERROR as ::core::ffi::c_int {
-            group = AUGROUP_ALL as ::core::ffi::c_int;
+
+        let group_name =
+            xmemdupz(arg.cast::<::core::ffi::c_void>(), len).cast::<::core::ffi::c_char>();
+        let mut group = augroup_find(group_name);
+        if group == AUGROUP_ERROR {
+            group = AUGROUP_ALL;
         } else {
-            *argp = skipwhite(p);
+            *argp = skipwhite(arg.add(len));
         }
-        xfree(group_name as *mut ::core::ffi::c_void);
-        return group;
+        xfree(group_name.cast::<::core::ffi::c_void>());
+        group
     }
 }

@@ -635,5 +635,20 @@ const AUTOCMDVEC_INIT: AutoCmdVec = AutoCmdVec {
 
 /// The autocommands defined for each event, indexed by event number.
 static autocmds: GlobalCell<[AutoCmdVec; 145]> = GlobalCell::new([AUTOCMDVEC_INIT; 145]);
+
+/// The autocommand list of `event`.
+///
+/// It stays a raw pointer on purpose.  A handler running under the walk
+/// can define or delete autocommands, which reallocates the `items` block
+/// and marks rows deleted underneath it, so nothing may hold a borrow of
+/// one of these across a call into user code.  `wrapping_add` keeps the
+/// whole table's provenance and needs no `unsafe`; only reading through
+/// the result does.
+fn au_event_vec(event: event_T) -> *mut AutoCmdVec {
+    autocmds
+        .ptr()
+        .cast::<AutoCmdVec>()
+        .wrapping_add(event as usize)
+}
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
