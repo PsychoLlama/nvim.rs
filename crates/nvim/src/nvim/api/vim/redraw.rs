@@ -70,8 +70,8 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"cannot use both 'buf' and 'win'\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"%s".as_ptr(),
+                    c"cannot use both 'buf' and 'win'".as_ptr(),
                 );
                 return;
             }
@@ -87,8 +87,8 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
             api_set_error(
                 err,
                 kErrorTypeValidation,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                b"at least one action required\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%s".as_ptr(),
+                c"at least one action required".as_ptr(),
             );
             return;
         }
@@ -132,9 +132,8 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"Invalid 'range': Expected 2-tuple of Integers\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    c"%s".as_ptr(),
+                    c"Invalid 'range': Expected 2-tuple of Integers".as_ptr(),
                 );
                 return;
             }
@@ -198,7 +197,7 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
                 true_0
             } != 0;
         }
-        let mut flush_ui: bool = (*opts).flush as bool;
+        let mut flush_ui: bool = (*opts).flush;
         if (*opts).tabline {
             if redraw_tabline.get() as ::core::ffi::c_int != 0
                 && (*firstwin.get()).w_lines_valid == 0 as ::core::ffi::c_int

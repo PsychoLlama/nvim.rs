@@ -10,6 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::api::private::helpers::{array_add, dict_put};
 
 pub unsafe extern "C" fn nvim_get_api_info(
     mut channel_id: uint64_t,
@@ -21,25 +22,15 @@ pub unsafe extern "C" fn nvim_get_api_info(
             if channel_id <= 9223372036854775807 as uint64_t {
             } else {
                 __assert_fail(
-                    b"channel_id <= INT64_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/api/vim.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"channel_id <= INT64_MAX".as_ptr(),
+                    c"src/nvim/api/vim.rs".as_ptr(),
                     1658 as ::core::ffi::c_uint,
-                    b"Array nvim_get_api_info(uint64_t, Arena *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    c"Array nvim_get_api_info(uint64_t, Arena *)".as_ptr(),
                 );
             }
         };
-        let c2rust_fresh12 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh12 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: channel_id as int64_t,
-            },
-        };
-        let c2rust_fresh13 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh13 as isize) = api_metadata();
+        array_add(&mut rv, Object::integer(channel_id as int64_t));
+        array_add(&mut rv, api_metadata());
         return rv;
     }
 }
@@ -72,22 +63,11 @@ pub unsafe extern "C" fn nvim_set_client_info(
         }; 5];
         info.capacity = 5 as size_t;
         info.items = &raw mut info__items as *mut KeyValuePair;
-        let c2rust_fresh14 = info.size;
-        info.size = info.size.wrapping_add(1);
-        *info.items.offset(c2rust_fresh14 as isize) = key_value_pair {
-            key: cstr_as_string(b"name\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed { string: name },
-            },
-        };
+        dict_put(&mut info, c"name", Object::string(name));
         let mut has_major: bool = false_0 != 0;
         let mut i: size_t = 0 as size_t;
         while i < version.size {
-            if strequal(
-                (*version.items.offset(i as isize)).key.data,
-                b"major\0".as_ptr() as *const ::core::ffi::c_char,
-            ) {
+            if strequal((*version.items.add(i)).key.data, c"major".as_ptr()) {
                 has_major = true_0 != 0;
                 break;
             } else {
@@ -106,55 +86,13 @@ pub unsafe extern "C" fn nvim_set_client_info(
                 );
                 v.size = version.size;
             }
-            let c2rust_fresh15 = v.size;
-            v.size = v.size.wrapping_add(1);
-            *v.items.offset(c2rust_fresh15 as isize) = key_value_pair {
-                key: cstr_as_string(b"major\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed {
-                        integer: 0 as Integer,
-                    },
-                },
-            };
+            dict_put(&mut v, c"major", Object::integer(0 as Integer));
             version = v;
         }
-        let c2rust_fresh16 = info.size;
-        info.size = info.size.wrapping_add(1);
-        *info.items.offset(c2rust_fresh16 as isize) = key_value_pair {
-            key: cstr_as_string(b"version\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeDict,
-                data: C2Rust_Unnamed { dict: version },
-            },
-        };
-        let c2rust_fresh17 = info.size;
-        info.size = info.size.wrapping_add(1);
-        *info.items.offset(c2rust_fresh17 as isize) = key_value_pair {
-            key: cstr_as_string(b"type\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed { string: type_0 },
-            },
-        };
-        let c2rust_fresh18 = info.size;
-        info.size = info.size.wrapping_add(1);
-        *info.items.offset(c2rust_fresh18 as isize) = key_value_pair {
-            key: cstr_as_string(b"methods\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeDict,
-                data: C2Rust_Unnamed { dict: methods },
-            },
-        };
-        let c2rust_fresh19 = info.size;
-        info.size = info.size.wrapping_add(1);
-        *info.items.offset(c2rust_fresh19 as isize) = key_value_pair {
-            key: cstr_as_string(b"attributes\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeDict,
-                data: C2Rust_Unnamed { dict: attributes },
-            },
-        };
+        dict_put(&mut info, c"version", Object::dict(version));
+        dict_put(&mut info, c"type", Object::string(type_0));
+        dict_put(&mut info, c"methods", Object::dict(methods));
+        dict_put(&mut info, c"attributes", Object::dict(attributes));
         rpc_set_client_info(
             channel_id,
             copy_dict(info, ::core::ptr::null_mut::<Arena>()),
@@ -173,7 +111,7 @@ pub unsafe extern "C" fn nvim__chan_set_detach(
             api_set_error(
                 err,
                 kErrorTypeValidation,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%s".as_ptr(),
                 &raw const e_invchan as *const ::core::ffi::c_char,
             );
             return;
@@ -201,11 +139,10 @@ pub unsafe extern "C" fn nvim_get_chan_info(
                 if channel_id <= 9223372036854775807 as uint64_t {
                 } else {
                     __assert_fail(
-                        b"channel_id <= INT64_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/vim.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"channel_id <= INT64_MAX".as_ptr(),
+                        c"src/nvim/api/vim.rs".as_ptr(),
                         1800 as ::core::ffi::c_uint,
-                        b"Dict nvim_get_chan_info(uint64_t, Integer, Arena *, Error *)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        c"Dict nvim_get_chan_info(uint64_t, Integer, Arena *, Error *)".as_ptr(),
                     );
                 }
             };

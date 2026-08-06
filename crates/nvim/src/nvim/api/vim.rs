@@ -54,7 +54,6 @@ use crate::src::nvim::highlight_group::{
 };
 use crate::src::nvim::insexpand::get_cot_flags;
 use crate::src::nvim::keycodes::{name_to_mod_mask, replace_termcodes, vim_strsave_escape_ks};
-use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
 use crate::src::nvim::lua::executor::{
     api_free_luaref, nlua_call_ref, nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe,
@@ -71,9 +70,7 @@ use crate::src::nvim::mapping::{keymap_array, modify_keymap};
 use crate::src::nvim::mark::mark_get_global;
 use crate::src::nvim::mbyte::{mb_string2cells, utfc_ptr2len, utfc_ptr2schar};
 use crate::src::nvim::memline::ml_open;
-use crate::src::nvim::memory::{
-    arena_alloc, arena_strdup, memchrsub, strequal, xfree, xmalloc, xrealloc,
-};
+use crate::src::nvim::memory::{arena_alloc, arena_strdup, memchrsub, strequal, xfree, xrealloc};
 use crate::src::nvim::message::{
     do_autocmd_progress, hl_msg_free, msg_id_exists, msg_multihl, verbose_enter, verbose_leave,
     verbose_stop,
@@ -121,9 +118,9 @@ use crate::src::nvim::types::{
     kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kFalse, kNone,
     kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeInteger,
     kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kTrue, key_extra,
-    key_value_pair, linenr_T, mpack_token_type_t, msg_data, msglist_T, object,
-    object_data as C2Rust_Unnamed, pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T,
-    stl_hlrec_t, tabpage_T, uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
+    linenr_T, mpack_token_type_t, msg_data, msglist_T, object, object_data as C2Rust_Unnamed,
+    pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T, stl_hlrec_t, tabpage_T,
+    uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::src::nvim::window::{
@@ -226,10 +223,9 @@ pub const STRING_INIT: String_0 = String_0 {
     data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     size: 0 as size_t,
 };
-pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
-    << ::core::mem::size_of::<uint64_t>()
-        .wrapping_mul(8 as usize)
-        .wrapping_sub(1 as usize);
+/// The top bit of a channel id: an API call made by the editor itself
+/// rather than by a client.
+pub const INTERNAL_CALL_MASK: uint64_t = 1 << (::core::mem::size_of::<uint64_t>() * 8 - 1);
 #[inline(always)]
 unsafe extern "C" fn is_internal_call(channel_id: uint64_t) -> bool {
     return channel_id & INTERNAL_CALL_MASK != 0;

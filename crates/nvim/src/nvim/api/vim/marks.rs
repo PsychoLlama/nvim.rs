@@ -8,6 +8,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::api::private::helpers::array_add;
 
 pub unsafe extern "C" fn nvim_del_mark(mut name: String_0, mut err: *mut Error) -> Boolean {
     unsafe {
@@ -15,7 +16,7 @@ pub unsafe extern "C" fn nvim_del_mark(mut name: String_0, mut err: *mut Error) 
         if !(name.size == 1 as size_t) {
             api_err_invalid(
                 err,
-                b"mark name (must be a single char)\0".as_ptr() as *const ::core::ffi::c_char,
+                c"mark name (must be a single char)".as_ptr(),
                 name.data,
                 0 as int64_t,
                 true_0 != 0,
@@ -28,7 +29,7 @@ pub unsafe extern "C" fn nvim_del_mark(mut name: String_0, mut err: *mut Error) 
         {
             api_err_invalid(
                 err,
-                b"mark name (must be file/uppercase)\0".as_ptr() as *const ::core::ffi::c_char,
+                c"mark name (must be file/uppercase)".as_ptr(),
                 name.data,
                 0 as int64_t,
                 true_0 != 0,
@@ -61,7 +62,7 @@ pub unsafe extern "C" fn nvim_get_mark(
         if !(name.size == 1 as size_t) {
             api_err_invalid(
                 err,
-                b"mark name (must be a single char)\0".as_ptr() as *const ::core::ffi::c_char,
+                c"mark name (must be a single char)".as_ptr(),
                 name.data,
                 0 as int64_t,
                 true_0 != 0,
@@ -74,7 +75,7 @@ pub unsafe extern "C" fn nvim_get_mark(
         {
             api_err_invalid(
                 err,
-                b"mark name (must be file/uppercase)\0".as_ptr() as *const ::core::ffi::c_char,
+                c"mark name (must be file/uppercase)".as_ptr(),
                 name.data,
                 0 as int64_t,
                 true_0 != 0,
@@ -103,7 +104,7 @@ pub unsafe extern "C" fn nvim_get_mark(
                 xfree(filename as *mut ::core::ffi::c_void);
                 allocated = false_0 != 0;
             }
-            filename = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            filename = c"".as_ptr() as *mut ::core::ffi::c_char;
             bufnr = 0 as ::core::ffi::c_int;
             row = 0 as Integer;
             col = 0 as Integer;
@@ -112,34 +113,13 @@ pub unsafe extern "C" fn nvim_get_mark(
             col = pos.col as Integer;
         }
         rv = arena_array(arena, 4 as size_t);
-        let c2rust_fresh32 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh32 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed { integer: row },
-        };
-        let c2rust_fresh33 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh33 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed { integer: col },
-        };
-        let c2rust_fresh34 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh34 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: bufnr as Integer,
-            },
-        };
-        let c2rust_fresh35 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh35 as isize) = object {
-            type_0: kObjectTypeString,
-            data: C2Rust_Unnamed {
-                string: arena_string(arena, cstr_as_string(filename)),
-            },
-        };
+        array_add(&mut rv, Object::integer(row));
+        array_add(&mut rv, Object::integer(col));
+        array_add(&mut rv, Object::integer(bufnr as Integer));
+        array_add(
+            &mut rv,
+            Object::string(arena_string(arena, cstr_as_string(filename))),
+        );
         if allocated {
             xfree(filename as *mut ::core::ffi::c_void);
         }

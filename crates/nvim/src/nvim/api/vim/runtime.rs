@@ -9,6 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::kvec::InitVec;
 
 pub unsafe extern "C" fn nvim_exec_lua(
     mut code: String_0,
@@ -44,8 +45,8 @@ pub unsafe extern "C" fn nvim_strwidth(mut text: String_0, mut err: *mut Error) 
         if !(text.size <= 2147483647 as ::core::ffi::c_int as size_t) {
             api_err_invalid(
                 err,
-                b"text length\0".as_ptr() as *const ::core::ffi::c_char,
-                b"(too long)\0".as_ptr() as *const ::core::ffi::c_char,
+                c"text length".as_ptr(),
+                c"(too long)".as_ptr(),
                 0 as int64_t,
                 true_0 != 0,
             );
@@ -118,7 +119,7 @@ pub unsafe extern "C" fn nvim_get_runtime_file(
             (if name.size != 0 {
                 name.data as *const ::core::ffi::c_char
             } else {
-                b"\0".as_ptr() as *const ::core::ffi::c_char
+                c"".as_ptr()
             }) as *mut ::core::ffi::c_char,
             flags,
             Some(
@@ -147,84 +148,17 @@ unsafe extern "C" fn find_runtime_cb(
         let mut cookie: *mut RuntimeCookie = c as *mut RuntimeCookie;
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < num_fnames {
-            if (*cookie).rv.size == (*cookie).rv.capacity {
-                (*cookie).rv.capacity = if (*cookie).rv.capacity << 1 as ::core::ffi::c_int
-                    > ::core::mem::size_of::<[Object; 16]>()
-                        .wrapping_div(::core::mem::size_of::<Object>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[Object; 16]>()
-                                .wrapping_rem(::core::mem::size_of::<Object>())
-                                == 0) as ::core::ffi::c_int as usize,
-                        ) {
-                    (*cookie).rv.capacity << 1 as ::core::ffi::c_int
-                } else {
-                    ::core::mem::size_of::<[Object; 16]>()
-                        .wrapping_div(::core::mem::size_of::<Object>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[Object; 16]>()
-                                .wrapping_rem(::core::mem::size_of::<Object>())
-                                == 0) as ::core::ffi::c_int as size_t,
-                        )
-                };
-                (*cookie).rv.items = (if (*cookie).rv.capacity
-                    == ::core::mem::size_of::<[Object; 16]>()
-                        .wrapping_div(::core::mem::size_of::<Object>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[Object; 16]>()
-                                .wrapping_rem(::core::mem::size_of::<Object>())
-                                == 0) as ::core::ffi::c_int as usize,
-                        ) {
-                    if (*cookie).rv.items == &raw mut (*cookie).rv.init_array as *mut Object {
-                        (*cookie).rv.items as *mut ::core::ffi::c_void
-                    } else {
-                        _memcpy_free(
-                            &raw mut (*cookie).rv.init_array as *mut Object
-                                as *mut ::core::ffi::c_void,
-                            (*cookie).rv.items as *mut ::core::ffi::c_void,
-                            (*cookie)
-                                .rv
-                                .size
-                                .wrapping_mul(::core::mem::size_of::<Object>()),
-                        )
-                    }
-                } else {
-                    if (*cookie).rv.items == &raw mut (*cookie).rv.init_array as *mut Object {
-                        memcpy(
-                            xmalloc(
-                                (*cookie)
-                                    .rv
-                                    .capacity
-                                    .wrapping_mul(::core::mem::size_of::<Object>()),
-                            ),
-                            (*cookie).rv.items as *const ::core::ffi::c_void,
-                            (*cookie)
-                                .rv
-                                .size
-                                .wrapping_mul(::core::mem::size_of::<Object>()),
-                        )
-                    } else {
-                        xrealloc(
-                            (*cookie).rv.items as *mut ::core::ffi::c_void,
-                            (*cookie)
-                                .rv
-                                .capacity
-                                .wrapping_mul(::core::mem::size_of::<Object>()),
-                        )
-                    }
-                }) as *mut Object;
-            } else {
-            };
-            let c2rust_fresh0 = (*cookie).rv.size;
-            (*cookie).rv.size = (*cookie).rv.size.wrapping_add(1);
-            *(*cookie).rv.items.offset(c2rust_fresh0 as isize) = object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed {
-                    string: arena_string(
-                        (*cookie).arena,
-                        cstr_as_string(*fnames.offset(i as isize)),
-                    ),
-                },
-            };
+            // `kv_push`, whose growth step c2rust expanded inline.
+            InitVec::new(
+                &mut (*cookie).rv.size,
+                &mut (*cookie).rv.capacity,
+                &mut (*cookie).rv.items,
+                &mut (*cookie).rv.init_array,
+            )
+            .push(Object::string(arena_string(
+                (*cookie).arena,
+                cstr_as_string(*fnames.offset(i as isize)),
+            )));
             if !all {
                 return true_0 != 0;
             }
@@ -252,8 +186,8 @@ pub unsafe extern "C" fn nvim__get_runtime(
             api_set_error(
                 err,
                 kErrorTypeValidation,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                b"'do_source' used in fast callback\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%s".as_ptr(),
+                c"'do_source' used in fast callback".as_ptr(),
             );
         }
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -263,11 +197,11 @@ pub unsafe extern "C" fn nvim__get_runtime(
                 items: ::core::ptr::null_mut::<Object>(),
             };
         }
-        let mut res: Array = runtime_get_named((*opts).is_lua as bool, pat, all as bool, arena);
+        let mut res: Array = runtime_get_named((*opts).is_lua, pat, all, arena);
         if (*opts).do_source {
             let mut i: size_t = 0 as size_t;
             while i < res.size {
-                let mut name: String_0 = (*res.items.offset(i as isize)).data.string;
+                let mut name: String_0 = (*res.items.add(i)).data.string;
                 do_source(
                     name.data,
                     false_0 != 0,
@@ -286,8 +220,8 @@ pub unsafe extern "C" fn nvim_set_current_dir(mut dir: String_0, mut err: *mut E
         if !(dir.size < 4096 as size_t) {
             api_err_invalid(
                 err,
-                b"directory name\0".as_ptr() as *const ::core::ffi::c_char,
-                b"(too long)\0".as_ptr() as *const ::core::ffi::c_char,
+                c"directory name".as_ptr(),
+                c"(too long)".as_ptr(),
                 0 as int64_t,
                 true_0 != 0,
             );
@@ -299,7 +233,7 @@ pub unsafe extern "C" fn nvim_set_current_dir(mut dir: String_0, mut err: *mut E
             dir.data as *const ::core::ffi::c_void,
             dir.size,
         );
-        string[dir.size as usize] = NUL as ::core::ffi::c_char;
+        string[dir.size] = NUL as ::core::ffi::c_char;
         let mut tstate: TryState = TryState {
             current_exception: ::core::ptr::null_mut::<except_T>(),
             private_msg_list: ::core::ptr::null_mut::<msglist_T>(),

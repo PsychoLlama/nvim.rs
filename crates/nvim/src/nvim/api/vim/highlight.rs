@@ -10,6 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::api::private::helpers::dict_put_str;
 
 pub unsafe extern "C" fn nvim_get_hl_id_by_name(mut name: String_0) -> Integer {
     unsafe {
@@ -40,7 +41,7 @@ pub unsafe extern "C" fn nvim_set_hl(
         if !(hl_id != 0 as ::core::ffi::c_int) {
             api_err_invalid(
                 err,
-                b"highlight name\0".as_ptr() as *const ::core::ffi::c_char,
+                c"highlight name".as_ptr(),
                 name.data,
                 0 as int64_t,
                 true_0 != 0,
@@ -52,11 +53,7 @@ pub unsafe extern "C" fn nvim_set_hl(
             & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__url
             != 0 as ::core::ffi::c_ulonglong
         {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                b"Invalid key: 'url'\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            api_set_error(err, kErrorTypeValidation, c"Invalid key: 'url'".as_ptr());
             return;
         }
         let mut update: bool = (*val).is_set__highlight_ as ::core::ffi::c_ulonglong
@@ -115,7 +112,7 @@ pub unsafe extern "C" fn nvim_set_hl_ns(mut ns_id: Integer, mut err: *mut Error)
         if !(ns_id >= 0 as Integer) {
             api_err_invalid(
                 err,
-                b"namespace\0".as_ptr() as *const ::core::ffi::c_char,
+                c"namespace".as_ptr(),
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 ns_id as int64_t,
                 false_0 != 0,
@@ -146,17 +143,11 @@ pub unsafe extern "C" fn nvim_get_color_map(mut arena: *mut Arena) -> Dict {
     unsafe {
         let mut colors: Dict = arena_dict(arena, COLOR_NAMES.len() as size_t);
         for entry in &COLOR_NAMES {
-            let c2rust_fresh9 = colors.size;
-            colors.size = colors.size.wrapping_add(1);
-            *colors.items.offset(c2rust_fresh9 as isize) = key_value_pair {
-                key: cstr_as_string(entry.name.as_ptr()),
-                value: object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed {
-                        integer: entry.color as Integer,
-                    },
-                },
-            };
+            dict_put_str(
+                &mut colors,
+                cstr_as_string(entry.name.as_ptr()),
+                Object::integer(entry.color as Integer),
+            );
         }
         return colors;
     }

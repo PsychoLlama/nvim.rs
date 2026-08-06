@@ -67,7 +67,7 @@ pub unsafe extern "C" fn nvim_get_var(
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"Key not found: %s\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"Key not found: %s".as_ptr(),
                     name.data,
                 );
                 return object {
@@ -81,7 +81,7 @@ pub unsafe extern "C" fn nvim_get_var(
             api_set_error(
                 err,
                 kErrorTypeValidation,
-                b"Key not found: %s\0".as_ptr() as *const ::core::ffi::c_char,
+                c"Key not found: %s".as_ptr(),
                 name.data,
             );
             return object {

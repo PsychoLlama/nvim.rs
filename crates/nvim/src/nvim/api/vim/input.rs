@@ -26,7 +26,7 @@ pub unsafe extern "C" fn nvim_feedkeys(
         let mut lowlevel: bool = false_0 != 0;
         let mut i: size_t = 0 as size_t;
         while i < mode.size {
-            match *mode.data.offset(i as isize) as ::core::ffi::c_int {
+            match *mode.data.add(i) as ::core::ffi::c_int {
                 110 => {
                     remap = false_0 != 0;
                 }
@@ -124,75 +124,41 @@ pub unsafe extern "C" fn nvim_input_mouse(
         '_error: {
             if !(button.data.is_null() || action.data.is_null()) {
                 code = 0 as ::core::ffi::c_int;
-                if strequal(
-                    button.data,
-                    b"left\0".as_ptr() as *const ::core::ffi::c_char,
-                ) {
+                if strequal(button.data, c"left".as_ptr()) {
                     code = KE_LEFTMOUSE as ::core::ffi::c_int;
-                } else if strequal(
-                    button.data,
-                    b"middle\0".as_ptr() as *const ::core::ffi::c_char,
-                ) {
+                } else if strequal(button.data, c"middle".as_ptr()) {
                     code = KE_MIDDLEMOUSE as ::core::ffi::c_int;
-                } else if strequal(
-                    button.data,
-                    b"right\0".as_ptr() as *const ::core::ffi::c_char,
-                ) {
+                } else if strequal(button.data, c"right".as_ptr()) {
                     code = KE_RIGHTMOUSE as ::core::ffi::c_int;
-                } else if strequal(
-                    button.data,
-                    b"wheel\0".as_ptr() as *const ::core::ffi::c_char,
-                ) {
+                } else if strequal(button.data, c"wheel".as_ptr()) {
                     code = KE_MOUSEDOWN as ::core::ffi::c_int;
-                } else if strequal(button.data, b"x1\0".as_ptr() as *const ::core::ffi::c_char) {
+                } else if strequal(button.data, c"x1".as_ptr()) {
                     code = KE_X1MOUSE as ::core::ffi::c_int;
-                } else if strequal(button.data, b"x2\0".as_ptr() as *const ::core::ffi::c_char) {
+                } else if strequal(button.data, c"x2".as_ptr()) {
                     code = KE_X2MOUSE as ::core::ffi::c_int;
-                } else if strequal(
-                    button.data,
-                    b"move\0".as_ptr() as *const ::core::ffi::c_char,
-                ) {
+                } else if strequal(button.data, c"move".as_ptr()) {
                     code = KE_MOUSEMOVE as ::core::ffi::c_int;
                 } else {
                     break '_error;
                 }
                 if code == KE_MOUSEDOWN as ::core::ffi::c_int {
-                    if strequal(
-                        action.data,
-                        b"down\0".as_ptr() as *const ::core::ffi::c_char,
-                    ) {
+                    if strequal(action.data, c"down".as_ptr()) {
                         code = KE_MOUSEUP as ::core::ffi::c_int;
-                    } else if !strequal(action.data, b"up\0".as_ptr() as *const ::core::ffi::c_char)
-                    {
-                        if strequal(
-                            action.data,
-                            b"left\0".as_ptr() as *const ::core::ffi::c_char,
-                        ) {
+                    } else if !strequal(action.data, c"up".as_ptr()) {
+                        if strequal(action.data, c"left".as_ptr()) {
                             code = KE_MOUSERIGHT as ::core::ffi::c_int;
-                        } else if strequal(
-                            action.data,
-                            b"right\0".as_ptr() as *const ::core::ffi::c_char,
-                        ) {
+                        } else if strequal(action.data, c"right".as_ptr()) {
                             code = KE_MOUSELEFT as ::core::ffi::c_int;
                         } else {
                             break '_error;
                         }
                     }
                 } else if code != KE_MOUSEMOVE as ::core::ffi::c_int {
-                    if !strequal(
-                        action.data,
-                        b"press\0".as_ptr() as *const ::core::ffi::c_char,
-                    ) {
-                        if strequal(
-                            action.data,
-                            b"drag\0".as_ptr() as *const ::core::ffi::c_char,
-                        ) {
+                    if !strequal(action.data, c"press".as_ptr()) {
+                        if strequal(action.data, c"drag".as_ptr()) {
                             code += KE_LEFTDRAG as ::core::ffi::c_int
                                 - KE_LEFTMOUSE as ::core::ffi::c_int;
-                        } else if strequal(
-                            action.data,
-                            b"release\0".as_ptr() as *const ::core::ffi::c_char,
-                        ) {
+                        } else if strequal(action.data, c"release".as_ptr()) {
                             code += KE_LEFTRELEASE as ::core::ffi::c_int
                                 - KE_LEFTMOUSE as ::core::ffi::c_int;
                         } else {
@@ -203,7 +169,7 @@ pub unsafe extern "C" fn nvim_input_mouse(
                 modmask = 0 as ::core::ffi::c_int;
                 let mut i: size_t = 0 as size_t;
                 while i < modifier.size {
-                    let mut byte: ::core::ffi::c_char = *modifier.data.offset(i as isize);
+                    let mut byte: ::core::ffi::c_char = *modifier.data.add(i);
                     if byte as ::core::ffi::c_int != '-' as ::core::ffi::c_int {
                         let mut mod_0: ::core::ffi::c_int =
                             name_to_mod_mask(byte as ::core::ffi::c_int);
@@ -211,7 +177,7 @@ pub unsafe extern "C" fn nvim_input_mouse(
                             api_set_error(
                                 err,
                                 kErrorTypeValidation,
-                                b"Invalid modifier: %c\0".as_ptr() as *const ::core::ffi::c_char,
+                                c"Invalid modifier: %c".as_ptr(),
                                 byte as ::core::ffi::c_int,
                             );
                             return;
@@ -233,7 +199,7 @@ pub unsafe extern "C" fn nvim_input_mouse(
         api_set_error(
             err,
             kErrorTypeValidation,
-            b"invalid button or action\0".as_ptr() as *const ::core::ffi::c_char,
+            c"invalid button or action".as_ptr(),
         );
     }
 }
@@ -324,5 +290,5 @@ pub unsafe extern "C" fn nvim_select_popupmenu_item(
     if finish {
         insert = true_0 != 0;
     }
-    pum_ext_select_item(item as ::core::ffi::c_int, insert as bool, finish as bool);
+    pum_ext_select_item(item as ::core::ffi::c_int, insert, finish);
 }

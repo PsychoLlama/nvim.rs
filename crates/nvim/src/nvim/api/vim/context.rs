@@ -10,6 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::api::private::helpers::dict_put;
 
 pub unsafe extern "C" fn nvim_get_context(
     mut opts: *mut KeyDict_context,
@@ -36,31 +37,24 @@ pub unsafe extern "C" fn nvim_get_context(
         if types.size > 0 as size_t {
             let mut i: size_t = 0 as size_t;
             while i < types.size {
-                if (*types.items.offset(i as isize)).type_0 as ::core::ffi::c_uint
+                if (*types.items.add(i)).type_0 as ::core::ffi::c_uint
                     == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    let s: *const ::core::ffi::c_char =
-                        (*types.items.offset(i as isize)).data.string.data;
-                    if strequal(s, b"regs\0".as_ptr() as *const ::core::ffi::c_char) {
+                    let s: *const ::core::ffi::c_char = (*types.items.add(i)).data.string.data;
+                    if strequal(s, c"regs".as_ptr()) {
                         int_types |= kCtxRegs as ::core::ffi::c_int;
-                    } else if strequal(s, b"jumps\0".as_ptr() as *const ::core::ffi::c_char) {
+                    } else if strequal(s, c"jumps".as_ptr()) {
                         int_types |= kCtxJumps as ::core::ffi::c_int;
-                    } else if strequal(s, b"bufs\0".as_ptr() as *const ::core::ffi::c_char) {
+                    } else if strequal(s, c"bufs".as_ptr()) {
                         int_types |= kCtxBufs as ::core::ffi::c_int;
-                    } else if strequal(s, b"gvars\0".as_ptr() as *const ::core::ffi::c_char) {
+                    } else if strequal(s, c"gvars".as_ptr()) {
                         int_types |= kCtxGVars as ::core::ffi::c_int;
-                    } else if strequal(s, b"sfuncs\0".as_ptr() as *const ::core::ffi::c_char) {
+                    } else if strequal(s, c"sfuncs".as_ptr()) {
                         int_types |= kCtxSFuncs as ::core::ffi::c_int;
-                    } else if strequal(s, b"funcs\0".as_ptr() as *const ::core::ffi::c_char) {
+                    } else if strequal(s, c"funcs".as_ptr()) {
                         int_types |= kCtxFuncs as ::core::ffi::c_int;
                     } else if true {
-                        api_err_invalid(
-                            err,
-                            b"type\0".as_ptr() as *const ::core::ffi::c_char,
-                            s,
-                            0 as int64_t,
-                            true_0 != 0,
-                        );
+                        api_err_invalid(err, c"type".as_ptr(), s, 0 as int64_t, true_0 != 0);
                         return Dict {
                             size: 0 as size_t,
                             capacity: 0 as size_t,
@@ -104,26 +98,8 @@ pub unsafe extern "C" fn nvim_get_mode(mut arena: *mut Arena) -> Dict {
             arena_alloc(arena, MODE_MAX_LENGTH as size_t, false_0 != 0) as *mut ::core::ffi::c_char;
         get_mode(modestr);
         let mut blocked: bool = input_blocking();
-        let c2rust_fresh10 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh10 as isize) = key_value_pair {
-            key: cstr_as_string(b"mode\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed {
-                    string: cstr_as_string(modestr),
-                },
-            },
-        };
-        let c2rust_fresh11 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh11 as isize) = key_value_pair {
-            key: cstr_as_string(b"blocking\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeBoolean,
-                data: C2Rust_Unnamed { boolean: blocked },
-            },
-        };
+        dict_put(&mut rv, c"mode", Object::string(cstr_as_string(modestr)));
+        dict_put(&mut rv, c"blocking", Object::boolean(blocked));
         return rv;
     }
 }

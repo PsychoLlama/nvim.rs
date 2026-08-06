@@ -10,6 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::api::private::helpers::{array_add, dict_put};
 
 pub unsafe extern "C" fn nvim__id(mut obj: Object, mut arena: *mut Arena) -> Object {
     unsafe {
@@ -36,72 +37,28 @@ pub unsafe extern "C" fn nvim__id_float(mut flt: Float) -> Float {
 pub unsafe extern "C" fn nvim__stats(mut arena: *mut Arena) -> Dict {
     unsafe {
         let mut rv: Dict = arena_dict(arena, 6 as size_t);
-        let c2rust_fresh20 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh20 as isize) = key_value_pair {
-            key: cstr_as_string(b"fsync\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (*g_stats.ptr()).fsync,
-                },
-            },
-        };
-        let c2rust_fresh21 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh21 as isize) = key_value_pair {
-            key: cstr_as_string(b"log_skip\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (*g_stats.ptr()).log_skip as Integer,
-                },
-            },
-        };
-        let c2rust_fresh22 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh22 as isize) = key_value_pair {
-            key: cstr_as_string(b"lua_refcount\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: nlua_get_global_ref_count() as Integer,
-                },
-            },
-        };
-        let c2rust_fresh23 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh23 as isize) = key_value_pair {
-            key: cstr_as_string(b"redraw\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (*g_stats.ptr()).redraw,
-                },
-            },
-        };
-        let c2rust_fresh24 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh24 as isize) = key_value_pair {
-            key: cstr_as_string(b"arena_alloc_count\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: arena_alloc_count.get() as Integer,
-                },
-            },
-        };
-        let c2rust_fresh25 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh25 as isize) = key_value_pair {
-            key: cstr_as_string(b"ts_query_parse_count\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: tslua_query_parse_count.get() as Integer,
-                },
-            },
-        };
+        dict_put(&mut rv, c"fsync", Object::integer((*g_stats.ptr()).fsync));
+        dict_put(
+            &mut rv,
+            c"log_skip",
+            Object::integer((*g_stats.ptr()).log_skip as Integer),
+        );
+        dict_put(
+            &mut rv,
+            c"lua_refcount",
+            Object::integer(nlua_get_global_ref_count() as Integer),
+        );
+        dict_put(&mut rv, c"redraw", Object::integer((*g_stats.ptr()).redraw));
+        dict_put(
+            &mut rv,
+            c"arena_alloc_count",
+            Object::integer(arena_alloc_count.get() as Integer),
+        );
+        dict_put(
+            &mut rv,
+            c"ts_query_parse_count",
+            Object::integer(tslua_query_parse_count.get() as Integer),
+        );
         return rv;
     }
 }
@@ -122,7 +79,7 @@ pub unsafe extern "C" fn nvim_get_proc_children(
         if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
             api_err_invalid(
                 err,
-                b"pid\0".as_ptr() as *const ::core::ffi::c_char,
+                c"pid".as_ptr(),
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 pid as int64_t,
                 false_0 != 0,
@@ -137,10 +94,10 @@ pub unsafe extern "C" fn nvim_get_proc_children(
                 logmsg(
                     LOGLVL_DBG,
                     ::core::ptr::null::<::core::ffi::c_char>(),
-                    b"nvim_get_proc_children\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"nvim_get_proc_children".as_ptr(),
                     1924 as ::core::ffi::c_int,
                     true_0 != 0,
-                    b"fallback to vim._os_proc_children()\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"fallback to vim._os_proc_children()".as_ptr(),
                 );
                 let mut a: Array = Array {
                     size: 0 as size_t,
@@ -153,16 +110,10 @@ pub unsafe extern "C" fn nvim_get_proc_children(
                 }; 1];
                 a.capacity = 1 as size_t;
                 a.items = &raw mut a__items as *mut Object;
-                let c2rust_fresh26 = a.size;
-                a.size = a.size.wrapping_add(1);
-                *a.items.offset(c2rust_fresh26 as isize) = object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed { integer: pid },
-                };
+                array_add(&mut a, Object::integer(pid));
                 let mut o: Object = nlua_exec(
                     String_0 {
-                        data: b"return vim._os_proc_children(...)\0".as_ptr()
-                            as *const ::core::ffi::c_char
+                        data: c"return vim._os_proc_children(...)".as_ptr()
                             as *mut ::core::ffi::c_char,
                         size: ::core::mem::size_of::<[::core::ffi::c_char; 34]>()
                             .wrapping_sub(1 as size_t),
@@ -183,8 +134,7 @@ pub unsafe extern "C" fn nvim_get_proc_children(
                     api_set_error(
                         err,
                         kErrorTypeException,
-                        b"Failed to get process children. pid=%ld error=%d\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        c"Failed to get process children. pid=%ld error=%d".as_ptr(),
                         pid,
                         rv,
                     );
@@ -192,14 +142,7 @@ pub unsafe extern "C" fn nvim_get_proc_children(
             } else {
                 rvobj = arena_array(arena, children.len() as size_t);
                 for pid in children {
-                    let c2rust_fresh27 = rvobj.size;
-                    rvobj.size = rvobj.size.wrapping_add(1);
-                    *rvobj.items.offset(c2rust_fresh27 as isize) = object {
-                        type_0: kObjectTypeInteger,
-                        data: C2Rust_Unnamed {
-                            integer: pid as Integer,
-                        },
-                    };
+                    array_add(&mut rvobj, Object::integer(pid as Integer));
                 }
             }
         }
@@ -220,7 +163,7 @@ pub unsafe extern "C" fn nvim_get_proc(
         if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
             api_err_invalid(
                 err,
-                b"pid\0".as_ptr() as *const ::core::ffi::c_char,
+                c"pid".as_ptr(),
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 pid as int64_t,
                 false_0 != 0,
@@ -253,16 +196,10 @@ pub unsafe extern "C" fn nvim_get_proc(
             ) as *mut Object;
         } else {
         };
-        let c2rust_fresh28 = a.size;
-        a.size = a.size.wrapping_add(1);
-        *a.items.offset(c2rust_fresh28 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed { integer: pid },
-        };
+        array_add(&mut a, Object::integer(pid));
         let mut o: Object = nlua_exec(
             String_0 {
-                data: b"return vim._os_proc_info(...)\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                data: c"return vim._os_proc_info(...)".as_ptr() as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 30]>().wrapping_sub(1 as size_t),
             },
             ::core::ptr::null::<::core::ffi::c_char>(),
@@ -287,7 +224,7 @@ pub unsafe extern "C" fn nvim_get_proc(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"Failed to get process info. pid=%ld\0".as_ptr() as *const ::core::ffi::c_char,
+                c"Failed to get process info. pid=%ld".as_ptr(),
                 pid,
             );
         }
@@ -316,7 +253,7 @@ pub unsafe extern "C" fn nvim__inspect_cell(
             if !(!wp.is_null() && !(*wp).w_grid_alloc.chars.is_null()) {
                 api_err_invalid(
                     err,
-                    b"grid handle\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"grid handle".as_ptr(),
                     ::core::ptr::null::<::core::ffi::c_char>(),
                     grid as int64_t,
                     false_0 != 0,
@@ -333,37 +270,18 @@ pub unsafe extern "C" fn nvim__inspect_cell(
             return ret;
         }
         ret = arena_array(arena, 3 as size_t);
-        let mut off: size_t =
-            (*(*g).line_offset.offset(row as size_t as isize)).wrapping_add(col as size_t);
+        let mut off: size_t = (*(*g).line_offset.add(row as size_t)) + col as size_t;
         let mut sc_buf: *mut ::core::ffi::c_char =
             arena_alloc(arena, MAX_SCHAR_SIZE as size_t, false_0 != 0) as *mut ::core::ffi::c_char;
-        schar_get(sc_buf, *(*g).chars.offset(off as isize));
-        let c2rust_fresh29 = ret.size;
-        ret.size = ret.size.wrapping_add(1);
-        *ret.items.offset(c2rust_fresh29 as isize) = object {
-            type_0: kObjectTypeString,
-            data: C2Rust_Unnamed {
-                string: cstr_as_string(sc_buf),
-            },
-        };
-        let mut attr: ::core::ffi::c_int = *(*g).attrs.offset(off as isize) as ::core::ffi::c_int;
-        let c2rust_fresh30 = ret.size;
-        ret.size = ret.size.wrapping_add(1);
-        *ret.items.offset(c2rust_fresh30 as isize) = object {
-            type_0: kObjectTypeDict,
-            data: C2Rust_Unnamed {
-                dict: hl_get_attr_by_id(attr as Integer, true, arena, err),
-            },
-        };
+        schar_get(sc_buf, *(*g).chars.add(off));
+        array_add(&mut ret, Object::string(cstr_as_string(sc_buf)));
+        let mut attr: ::core::ffi::c_int = *(*g).attrs.add(off) as ::core::ffi::c_int;
+        array_add(
+            &mut ret,
+            Object::dict(hl_get_attr_by_id(attr as Integer, true, arena, err)),
+        );
         if !highlight_use_hlstate() {
-            let c2rust_fresh31 = ret.size;
-            ret.size = ret.size.wrapping_add(1);
-            *ret.items.offset(c2rust_fresh31 as isize) = object {
-                type_0: kObjectTypeArray,
-                data: C2Rust_Unnamed {
-                    array: hl_inspect(attr, arena),
-                },
-            };
+            array_add(&mut ret, Object::array(hl_inspect(attr, arena)));
         }
         return ret;
     }

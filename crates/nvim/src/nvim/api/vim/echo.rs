@@ -49,21 +49,21 @@ pub unsafe extern "C" fn nvim_echo(
                 integer: -1 as Integer,
             },
         };
-        let mut hl_msg: HlMessage = parse_hl_msg(chunks, (*opts).err as bool, err);
+        let mut hl_msg: HlMessage = parse_hl_msg(chunks, (*opts).err, err);
         if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             kind = (*opts).kind.data;
             if (*opts).verbose {
                 verbose_enter();
             } else if kind.is_null() {
                 kind = (if (*opts).err as ::core::ffi::c_int != 0 {
-                    b"echoerr\0".as_ptr() as *const ::core::ffi::c_char
+                    c"echoerr".as_ptr()
                 } else if history as ::core::ffi::c_int != 0 {
-                    b"echomsg\0".as_ptr() as *const ::core::ffi::c_char
+                    c"echomsg".as_ptr()
                 } else {
-                    b"echo\0".as_ptr() as *const ::core::ffi::c_char
+                    c"echo".as_ptr()
                 }) as *mut ::core::ffi::c_char;
             }
-            is_progress = strequal(kind, b"progress\0".as_ptr() as *const ::core::ffi::c_char);
+            is_progress = strequal(kind, c"progress".as_ptr());
             needs_clear = !history;
             if !(is_progress as ::core::ffi::c_int != 0
                 || (*opts).status.size == 0 as size_t
@@ -75,36 +75,20 @@ pub unsafe extern "C" fn nvim_echo(
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"Conflict: title/source/status/percent/data not allowed with kind='%s'\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    c"Conflict: title/source/status/percent/data not allowed with kind='%s'"
+                        .as_ptr(),
                     kind,
                 );
             } else if !(!is_progress
-                || strequal(
-                    (*opts).status.data,
-                    b"success\0".as_ptr() as *const ::core::ffi::c_char,
-                ) as ::core::ffi::c_int
-                    != 0
-                || strequal(
-                    (*opts).status.data,
-                    b"failed\0".as_ptr() as *const ::core::ffi::c_char,
-                ) as ::core::ffi::c_int
-                    != 0
-                || strequal(
-                    (*opts).status.data,
-                    b"running\0".as_ptr() as *const ::core::ffi::c_char,
-                ) as ::core::ffi::c_int
-                    != 0
-                || strequal(
-                    (*opts).status.data,
-                    b"cancel\0".as_ptr() as *const ::core::ffi::c_char,
-                ) as ::core::ffi::c_int
-                    != 0)
+                || strequal((*opts).status.data, c"success".as_ptr()) as ::core::ffi::c_int != 0
+                || strequal((*opts).status.data, c"failed".as_ptr()) as ::core::ffi::c_int != 0
+                || strequal((*opts).status.data, c"running".as_ptr()) as ::core::ffi::c_int != 0
+                || strequal((*opts).status.data, c"cancel".as_ptr()) as ::core::ffi::c_int != 0)
             {
                 api_err_exp(
                     err,
-                    b"status\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"success|failed|running|cancel\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"status".as_ptr(),
+                    c"success|failed|running|cancel".as_ptr(),
                     (*opts).status.data,
                 );
             } else if !(!is_progress
@@ -112,13 +96,13 @@ pub unsafe extern "C" fn nvim_echo(
             {
                 api_err_invalid(
                     err,
-                    b"percent\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"percent".as_ptr(),
+                    c"out of range".as_ptr(),
                     0 as int64_t,
                     false_0 != 0,
                 );
             } else if !(!is_progress || (*opts).source.size != 0 as size_t) {
-                api_err_required(err, b"opts.source\0".as_ptr() as *const ::core::ffi::c_char);
+                api_err_required(err, c"opts.source".as_ptr());
             } else if !((*opts).id.type_0 as ::core::ffi::c_uint
                 != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
                 || msg_id_exists((*opts).id.data.integer as int64_t) as ::core::ffi::c_int != 0)
@@ -126,7 +110,7 @@ pub unsafe extern "C" fn nvim_echo(
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"Invalid 'id': %ld\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"Invalid 'id': %ld".as_ptr(),
                     (*opts).id.data.integer,
                 );
             } else {
@@ -150,8 +134,8 @@ pub unsafe extern "C" fn nvim_echo(
                     (*opts).id,
                     hl_msg,
                     kind,
-                    history as bool,
-                    (*opts).err as bool,
+                    history,
+                    (*opts).err,
                     &raw mut msg_data,
                     &raw mut needs_clear,
                 );

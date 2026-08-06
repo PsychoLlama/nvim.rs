@@ -9,6 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::api::private::helpers::array_add;
 
 pub unsafe extern "C" fn nvim_paste(
     mut channel_id: uint64_t,
@@ -41,7 +42,7 @@ pub unsafe extern "C" fn nvim_paste(
         if !(phase >= -1 as Integer && phase <= 3 as Integer) {
             api_err_invalid(
                 err,
-                b"phase\0".as_ptr() as *const ::core::ffi::c_char,
+                c"phase".as_ptr(),
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 phase as int64_t,
                 false_0 != 0,
@@ -57,7 +58,7 @@ pub unsafe extern "C" fn nvim_paste(
             } else if cancelled.get() {
                 break 's_151;
             }
-            lines = string_to_array(data, crlf as bool, arena);
+            lines = string_to_array(data, crlf, arena);
             args = Array {
                 size: 0 as size_t,
                 capacity: 0 as size_t,
@@ -69,22 +70,11 @@ pub unsafe extern "C" fn nvim_paste(
             }; 2];
             args.capacity = 2 as size_t;
             args.items = &raw mut args__items as *mut Object;
-            let c2rust_fresh7 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh7 as isize) = object {
-                type_0: kObjectTypeArray,
-                data: C2Rust_Unnamed { array: lines },
-            };
-            let c2rust_fresh8 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh8 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed { integer: phase },
-            };
+            array_add(&mut args, Object::array(lines));
+            array_add(&mut args, Object::integer(phase));
             rv = nlua_exec(
                 String_0 {
-                    data: b"return vim.paste(...)\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    data: c"return vim.paste(...)".as_ptr() as *mut ::core::ffi::c_char,
                     size: ::core::mem::size_of::<[::core::ffi::c_char; 22]>()
                         .wrapping_sub(1 as size_t),
                 },
@@ -109,10 +99,10 @@ pub unsafe extern "C" fn nvim_paste(
                 terminal_set_streamed_paste((*curbuf.get()).terminal, false_0 != 0);
             }
             if !cancelled.get() && (phase == -1 as Integer || phase == 1 as Integer) {
-                paste_store(channel_id, kFalse, NULL_STRING, crlf as bool);
+                paste_store(channel_id, kFalse, NULL_STRING, crlf);
             }
             if !cancelled.get() {
-                paste_store(channel_id, kNone, data, crlf as bool);
+                paste_store(channel_id, kNone, data, crlf);
             }
             if phase == 3 as Integer
                 || phase
@@ -122,7 +112,7 @@ pub unsafe extern "C" fn nvim_paste(
                         -1 as ::core::ffi::c_int
                     }) as Integer
             {
-                paste_store(channel_id, kTrue, NULL_STRING, crlf as bool);
+                paste_store(channel_id, kTrue, NULL_STRING, crlf);
             }
         }
         let mut retval: bool = !cancelled.get();
@@ -153,7 +143,7 @@ pub unsafe extern "C" fn nvim_put(
         if !prepare_yankreg_from_object(&raw mut reg as *mut yankreg_T, type_0, lines.size) {
             api_err_invalid(
                 err,
-                b"type\0".as_ptr() as *const ::core::ffi::c_char,
+                c"type".as_ptr(),
                 type_0.data,
                 0 as int64_t,
                 true_0 != 0,
@@ -172,25 +162,21 @@ pub unsafe extern "C" fn nvim_put(
         let mut i: size_t = 0 as size_t;
         while i < lines.size {
             if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-                != (*lines.items.offset(i as isize)).type_0 as ::core::ffi::c_uint
+                != (*lines.items.add(i)).type_0 as ::core::ffi::c_uint
             {
                 api_err_exp(
                     err,
-                    b"line\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"line".as_ptr(),
                     api_typename(kObjectTypeString),
-                    api_typename((*lines.items.offset(i as isize)).type_0),
+                    api_typename((*lines.items.add(i)).type_0),
                 );
                 return;
             }
-            let mut line: String_0 = (*lines.items.offset(i as isize)).data.string;
-            *(*(&raw mut reg as *mut yankreg_T))
-                .y_array
-                .offset(i as isize) = copy_string(line, arena);
+            let mut line: String_0 = (*lines.items.add(i)).data.string;
+            *(*(&raw mut reg as *mut yankreg_T)).y_array.add(i) = copy_string(line, arena);
             memchrsub(
-                (*(*(&raw mut reg as *mut yankreg_T))
-                    .y_array
-                    .offset(i as isize))
-                .data as *mut ::core::ffi::c_void,
+                (*(*(&raw mut reg as *mut yankreg_T)).y_array.add(i)).data
+                    as *mut ::core::ffi::c_void,
                 NUL as ::core::ffi::c_char,
                 NL as ::core::ffi::c_char,
                 line.size,

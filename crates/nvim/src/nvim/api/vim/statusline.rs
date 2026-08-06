@@ -10,6 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::api::private::helpers::{array_add, dict_put};
 
 pub unsafe extern "C" fn nvim_eval_statusline(
     mut str: String_0,
@@ -29,18 +30,13 @@ pub unsafe extern "C" fn nvim_eval_statusline(
         if str.size < 2 as size_t
             || memcmp(
                 str.data as *const ::core::ffi::c_void,
-                b"%!\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
+                c"%!".as_ptr() as *const ::core::ffi::c_void,
                 2 as size_t,
             ) != 0 as ::core::ffi::c_int
         {
             let errmsg: *const ::core::ffi::c_char = check_stl_option(str.data);
             if !errmsg.is_null() {
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                    errmsg,
-                );
+                api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), errmsg);
                 return result;
             }
         }
@@ -54,8 +50,8 @@ pub unsafe extern "C" fn nvim_eval_statusline(
             {
                 api_err_exp(
                     err,
-                    b"fillchar\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"single character\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"fillchar".as_ptr(),
+                    c"single character".as_ptr(),
                     ::core::ptr::null::<::core::ffi::c_char>(),
                 );
                 return result;
@@ -74,7 +70,7 @@ pub unsafe extern "C" fn nvim_eval_statusline(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"unknown winid %d\0".as_ptr() as *const ::core::ffi::c_char,
+                c"unknown winid %d".as_ptr(),
                 window,
             );
             return result;
@@ -89,8 +85,8 @@ pub unsafe extern "C" fn nvim_eval_statusline(
             {
                 api_err_invalid(
                     err,
-                    b"use_statuscol_lnum\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"use_statuscol_lnum".as_ptr(),
+                    c"out of range".as_ptr(),
                     0 as int64_t,
                     false_0 != 0,
                 );
@@ -102,9 +98,9 @@ pub unsafe extern "C" fn nvim_eval_statusline(
             api_set_error(
                 err,
                 kErrorTypeValidation,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                b"Can only use one of 'use_winbar', 'use_tabline' and 'use_statuscol_lnum'\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                c"%s".as_ptr(),
+                c"Can only use one of 'use_winbar', 'use_tabline' and 'use_statuscol_lnum'"
+                    .as_ptr(),
             );
             return result;
         }
@@ -269,17 +265,7 @@ pub unsafe extern "C" fn nvim_eval_statusline(
                 ::core::ptr::null_mut::<statuscol_T>()
             },
         );
-        let c2rust_fresh36 = result.size;
-        result.size = result.size.wrapping_add(1);
-        *result.items.offset(c2rust_fresh36 as isize) = key_value_pair {
-            key: cstr_as_string(b"width\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: width as Integer,
-                },
-            },
-        };
+        dict_put(&mut result, c"width", Object::integer(width as Integer));
         (*wp).w_onebuf_opt.wo_crb = p_crb_save;
         if (*opts).highlights {
             let mut hl_values: Array = arena_array(arena, hltab_len.wrapping_add(1 as size_t));
@@ -290,57 +276,21 @@ pub unsafe extern "C" fn nvim_eval_statusline(
                 } else {
                     wp
                 },
-                (*opts).use_winbar as bool,
+                (*opts).use_winbar,
                 stc_hl_id,
             );
-            if (*hltab).start.is_null() || (*hltab).start.offset_from(buf) != 0 as isize {
+            if (*hltab).start.is_null() || (*hltab).start.offset_from(buf) != 0 {
                 let mut hl_info: Dict = arena_dict(arena, 3 as size_t);
-                let c2rust_fresh37 = hl_info.size;
-                hl_info.size = hl_info.size.wrapping_add(1);
-                *hl_info.items.offset(c2rust_fresh37 as isize) = key_value_pair {
-                    key: cstr_as_string(b"start\0".as_ptr() as *const ::core::ffi::c_char),
-                    value: object {
-                        type_0: kObjectTypeInteger,
-                        data: C2Rust_Unnamed {
-                            integer: 0 as Integer,
-                        },
-                    },
-                };
-                let c2rust_fresh38 = hl_info.size;
-                hl_info.size = hl_info.size.wrapping_add(1);
-                *hl_info.items.offset(c2rust_fresh38 as isize) = key_value_pair {
-                    key: cstr_as_string(b"group\0".as_ptr() as *const ::core::ffi::c_char),
-                    value: object {
-                        type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed {
-                            string: cstr_as_string(dfltname),
-                        },
-                    },
-                };
+                dict_put(&mut hl_info, c"start", Object::integer(0 as Integer));
+                dict_put(
+                    &mut hl_info,
+                    c"group",
+                    Object::string(cstr_as_string(dfltname)),
+                );
                 let mut groups: Array = arena_array(arena, 1 as size_t);
-                let c2rust_fresh39 = groups.size;
-                groups.size = groups.size.wrapping_add(1);
-                *groups.items.offset(c2rust_fresh39 as isize) = object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: cstr_as_string(dfltname),
-                    },
-                };
-                let c2rust_fresh40 = hl_info.size;
-                hl_info.size = hl_info.size.wrapping_add(1);
-                *hl_info.items.offset(c2rust_fresh40 as isize) = key_value_pair {
-                    key: cstr_as_string(b"groups\0".as_ptr() as *const ::core::ffi::c_char),
-                    value: object {
-                        type_0: kObjectTypeArray,
-                        data: C2Rust_Unnamed { array: groups },
-                    },
-                };
-                let c2rust_fresh41 = hl_values.size;
-                hl_values.size = hl_values.size.wrapping_add(1);
-                *hl_values.items.offset(c2rust_fresh41 as isize) = object {
-                    type_0: kObjectTypeDict,
-                    data: C2Rust_Unnamed { dict: hl_info },
-                };
+                array_add(&mut groups, Object::string(cstr_as_string(dfltname)));
+                dict_put(&mut hl_info, c"groups", Object::array(groups));
+                array_add(&mut hl_values, Object::dict(hl_info));
             }
             let mut sp: *mut stl_hlrec_t = hltab;
             while !(*sp).start.is_null() {
@@ -353,7 +303,7 @@ pub unsafe extern "C" fn nvim_eval_statusline(
                         } else {
                             wp
                         },
-                        (*opts).use_winbar as bool,
+                        (*opts).use_winbar,
                         stc_hl_id,
                     );
                 } else if (*sp).userhl < 0 as ::core::ffi::c_int {
@@ -362,7 +312,7 @@ pub unsafe extern "C" fn nvim_eval_statusline(
                     snprintf(
                         &raw mut user_group as *mut ::core::ffi::c_char,
                         ::core::mem::size_of::<[::core::ffi::c_char; 15]>(),
-                        b"User%d\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"User%d".as_ptr(),
                         (*sp).userhl,
                     );
                     grpname = arena_strdup(arena, &raw mut user_group as *mut ::core::ffi::c_char);
@@ -379,89 +329,32 @@ pub unsafe extern "C" fn nvim_eval_statusline(
                     dfltname
                 };
                 let mut hl_info_0: Dict = arena_dict(arena, 3 as size_t);
-                let c2rust_fresh42 = hl_info_0.size;
-                hl_info_0.size = hl_info_0.size.wrapping_add(1);
-                *hl_info_0.items.offset(c2rust_fresh42 as isize) = key_value_pair {
-                    key: cstr_as_string(b"start\0".as_ptr() as *const ::core::ffi::c_char),
-                    value: object {
-                        type_0: kObjectTypeInteger,
-                        data: C2Rust_Unnamed {
-                            integer: (*sp).start.offset_from(buf) as i64,
-                        },
-                    },
-                };
-                let c2rust_fresh43 = hl_info_0.size;
-                hl_info_0.size = hl_info_0.size.wrapping_add(1);
-                *hl_info_0.items.offset(c2rust_fresh43 as isize) = key_value_pair {
-                    key: cstr_as_string(b"group\0".as_ptr() as *const ::core::ffi::c_char),
-                    value: object {
-                        type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed {
-                            string: cstr_as_string(grpname),
-                        },
-                    },
-                };
+                dict_put(
+                    &mut hl_info_0,
+                    c"start",
+                    Object::integer((*sp).start.offset_from(buf) as i64),
+                );
+                dict_put(
+                    &mut hl_info_0,
+                    c"group",
+                    Object::string(cstr_as_string(grpname)),
+                );
                 let mut groups_0: Array = arena_array(
                     arena,
                     (1 as ::core::ffi::c_int + (combine != grpname) as ::core::ffi::c_int)
                         as size_t,
                 );
                 if combine != grpname {
-                    let c2rust_fresh44 = groups_0.size;
-                    groups_0.size = groups_0.size.wrapping_add(1);
-                    *groups_0.items.offset(c2rust_fresh44 as isize) = object {
-                        type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed {
-                            string: cstr_as_string(combine),
-                        },
-                    };
+                    array_add(&mut groups_0, Object::string(cstr_as_string(combine)));
                 }
-                let c2rust_fresh45 = groups_0.size;
-                groups_0.size = groups_0.size.wrapping_add(1);
-                *groups_0.items.offset(c2rust_fresh45 as isize) = object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: cstr_as_string(grpname),
-                    },
-                };
-                let c2rust_fresh46 = hl_info_0.size;
-                hl_info_0.size = hl_info_0.size.wrapping_add(1);
-                *hl_info_0.items.offset(c2rust_fresh46 as isize) = key_value_pair {
-                    key: cstr_as_string(b"groups\0".as_ptr() as *const ::core::ffi::c_char),
-                    value: object {
-                        type_0: kObjectTypeArray,
-                        data: C2Rust_Unnamed { array: groups_0 },
-                    },
-                };
-                let c2rust_fresh47 = hl_values.size;
-                hl_values.size = hl_values.size.wrapping_add(1);
-                *hl_values.items.offset(c2rust_fresh47 as isize) = object {
-                    type_0: kObjectTypeDict,
-                    data: C2Rust_Unnamed { dict: hl_info_0 },
-                };
+                array_add(&mut groups_0, Object::string(cstr_as_string(grpname)));
+                dict_put(&mut hl_info_0, c"groups", Object::array(groups_0));
+                array_add(&mut hl_values, Object::dict(hl_info_0));
                 sp = sp.offset(1);
             }
-            let c2rust_fresh48 = result.size;
-            result.size = result.size.wrapping_add(1);
-            *result.items.offset(c2rust_fresh48 as isize) = key_value_pair {
-                key: cstr_as_string(b"highlights\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeArray,
-                    data: C2Rust_Unnamed { array: hl_values },
-                },
-            };
+            dict_put(&mut result, c"highlights", Object::array(hl_values));
         }
-        let c2rust_fresh49 = result.size;
-        result.size = result.size.wrapping_add(1);
-        *result.items.offset(c2rust_fresh49 as isize) = key_value_pair {
-            key: cstr_as_string(b"str\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed {
-                    string: cstr_as_string(buf),
-                },
-            },
-        };
+        dict_put(&mut result, c"str", Object::string(cstr_as_string(buf)));
         return result;
     }
 }
@@ -480,8 +373,7 @@ pub unsafe extern "C" fn nvim__complete_set(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"completeopt option does not include popup\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"completeopt option does not include popup".as_ptr(),
             );
             return rv;
         }
@@ -491,28 +383,26 @@ pub unsafe extern "C" fn nvim__complete_set(
         {
             let mut wp: *mut win_T = pum_set_info(index as ::core::ffi::c_int, (*opts).info.data);
             if !wp.is_null() {
-                let c2rust_fresh50 = rv.size;
-                rv.size = rv.size.wrapping_add(1);
-                *rv.items.offset(c2rust_fresh50 as isize) = key_value_pair {
-                    key: cstr_as_string(b"winid\0".as_ptr() as *const ::core::ffi::c_char),
-                    value: object {
+                dict_put(
+                    &mut rv,
+                    c"winid",
+                    object {
                         type_0: kObjectTypeWindow,
                         data: C2Rust_Unnamed {
                             integer: (*wp).handle as Integer,
                         },
                     },
-                };
-                let c2rust_fresh51 = rv.size;
-                rv.size = rv.size.wrapping_add(1);
-                *rv.items.offset(c2rust_fresh51 as isize) = key_value_pair {
-                    key: cstr_as_string(b"bufnr\0".as_ptr() as *const ::core::ffi::c_char),
-                    value: object {
+                );
+                dict_put(
+                    &mut rv,
+                    c"bufnr",
+                    object {
                         type_0: kObjectTypeBuffer,
                         data: C2Rust_Unnamed {
                             integer: (*(*wp).w_buffer).handle as Integer,
                         },
                     },
-                };
+                );
             }
         }
         return rv;

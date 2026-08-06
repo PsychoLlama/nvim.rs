@@ -10,6 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::api::private::helpers::array_add;
 
 pub unsafe extern "C" fn nvim_open_term(
     mut buf: Buffer,
@@ -25,7 +26,7 @@ pub unsafe extern "C" fn nvim_open_term(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%s".as_ptr(),
                 &raw const e_cmdwin as *const ::core::ffi::c_char,
             );
             return 0 as Integer;
@@ -36,8 +37,7 @@ pub unsafe extern "C" fn nvim_open_term(
                 api_set_error(
                     err,
                     kErrorTypeException,
-                    b"Terminal already connected to buffer %d\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    c"Terminal already connected to buffer %d".as_ptr(),
                     (*b).handle,
                 );
                 return 0 as Integer;
@@ -117,12 +117,7 @@ pub unsafe extern "C" fn nvim_open_term(
                 &raw mut error,
             );
             if !error.is_null() {
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                    error,
-                );
+                api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), error);
             }
         }
         return (*chan).id as Integer;
@@ -153,37 +148,27 @@ unsafe extern "C" fn term_write(
         }; 3];
         args.capacity = 3 as size_t;
         args.items = &raw mut args__items as *mut Object;
-        let c2rust_fresh3 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh3 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: (*chan).id as Integer,
-            },
-        };
-        let c2rust_fresh4 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh4 as isize) = object {
-            type_0: kObjectTypeBuffer,
-            data: C2Rust_Unnamed {
-                integer: terminal_buf((*chan).term) as Integer,
-            },
-        };
-        let c2rust_fresh5 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh5 as isize) = object {
-            type_0: kObjectTypeString,
-            data: C2Rust_Unnamed {
-                string: String_0 {
-                    data: buf as *mut ::core::ffi::c_char,
-                    size: size,
+        array_add(&mut args, Object::integer((*chan).id as Integer));
+        array_add(
+            &mut args,
+            object {
+                type_0: kObjectTypeBuffer,
+                data: C2Rust_Unnamed {
+                    integer: terminal_buf((*chan).term) as Integer,
                 },
             },
-        };
+        );
+        array_add(
+            &mut args,
+            Object::string(String_0 {
+                data: buf as *mut ::core::ffi::c_char,
+                size: size,
+            }),
+        );
         (*textlock.ptr()) += 1;
         nlua_call_ref(
             cb,
-            b"input\0".as_ptr() as *const ::core::ffi::c_char,
+            c"input".as_ptr(),
             args,
             kRetNilBool,
             ::core::ptr::null_mut::<Arena>(),
@@ -230,12 +215,7 @@ pub unsafe extern "C" fn nvim_chan_send(
             &raw mut error,
         );
         if !error.is_null() {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                error,
-            );
+            api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), error);
         }
     }
 }

@@ -9,6 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::api::private::helpers::array_add;
 
 pub unsafe extern "C" fn nvim_list_bufs(mut arena: *mut Arena) -> Array {
     unsafe {
@@ -21,14 +22,15 @@ pub unsafe extern "C" fn nvim_list_bufs(mut arena: *mut Arena) -> Array {
         let mut rv: Array = arena_array(arena, n);
         let mut b_0: *mut buf_T = firstbuf.get();
         while !b_0.is_null() {
-            let c2rust_fresh1 = rv.size;
-            rv.size = rv.size.wrapping_add(1);
-            *rv.items.offset(c2rust_fresh1 as isize) = object {
-                type_0: kObjectTypeBuffer,
-                data: C2Rust_Unnamed {
-                    integer: (*b_0).handle as Integer,
+            array_add(
+                &mut rv,
+                object {
+                    type_0: kObjectTypeBuffer,
+                    data: C2Rust_Unnamed {
+                        integer: (*b_0).handle as Integer,
+                    },
                 },
-            };
+            );
             b_0 = (*b_0).b_next;
         }
         return rv;
@@ -93,14 +95,15 @@ pub unsafe extern "C" fn nvim_list_wins(mut arena: *mut Arena) -> Array {
                 (*tp_0).tp_firstwin
             };
             while !wp_0.is_null() {
-                let c2rust_fresh2 = rv.size;
-                rv.size = rv.size.wrapping_add(1);
-                *rv.items.offset(c2rust_fresh2 as isize) = object {
-                    type_0: kObjectTypeWindow,
-                    data: C2Rust_Unnamed {
-                        integer: (*wp_0).handle as Integer,
+                array_add(
+                    &mut rv,
+                    object {
+                        type_0: kObjectTypeWindow,
+                        data: C2Rust_Unnamed {
+                            integer: (*wp_0).handle as Integer,
+                        },
                     },
-                };
+                );
                 wp_0 = (*wp_0).w_next;
             }
             tp_0 = (*tp_0).tp_next as *mut tabpage_T;
@@ -188,8 +191,7 @@ pub unsafe extern "C" fn nvim_create_buf(
                         type_0: kOptValTypeString,
                         data: OptValData {
                             string: String_0 {
-                                data: b"hide\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
+                                data: c"hide".as_ptr() as *mut ::core::ffi::c_char,
                                 size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
                                     .wrapping_sub(1 as size_t),
                             },
@@ -206,8 +208,7 @@ pub unsafe extern "C" fn nvim_create_buf(
                         type_0: kOptValTypeString,
                         data: OptValData {
                             string: String_0 {
-                                data: b"nofile\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
+                                data: c"nofile".as_ptr() as *mut ::core::ffi::c_char,
                                 size: ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
                                     .wrapping_sub(1 as size_t),
                             },
@@ -222,11 +223,10 @@ pub unsafe extern "C" fn nvim_create_buf(
                     if (*(*buf).b_ml.ml_mfp).mf_fd < 0 as ::core::ffi::c_int {
                     } else {
                         __assert_fail(
-                            b"buf->b_ml.ml_mfp->mf_fd < 0\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/api/vim.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"buf->b_ml.ml_mfp->mf_fd < 0".as_ptr(),
+                            c"src/nvim/api/vim.rs".as_ptr(),
                             1077 as ::core::ffi::c_uint,
-                            b"Buffer nvim_create_buf(Boolean, Boolean, Error *)\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            c"Buffer nvim_create_buf(Boolean, Boolean, Error *)".as_ptr(),
                         );
                     }
                 };
@@ -268,7 +268,7 @@ pub unsafe extern "C" fn nvim_create_buf(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"Failed to create buffer\0".as_ptr() as *const ::core::ffi::c_char,
+                c"Failed to create buffer".as_ptr(),
             );
         }
         return ret;
@@ -286,14 +286,15 @@ pub unsafe extern "C" fn nvim_list_tabpages(mut arena: *mut Arena) -> Array {
         let mut rv: Array = arena_array(arena, n);
         let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
         while !tp_0.is_null() {
-            let c2rust_fresh6 = rv.size;
-            rv.size = rv.size.wrapping_add(1);
-            *rv.items.offset(c2rust_fresh6 as isize) = object {
-                type_0: kObjectTypeTabpage,
-                data: C2Rust_Unnamed {
-                    integer: (*tp_0).handle as Integer,
+            array_add(
+                &mut rv,
+                object {
+                    type_0: kObjectTypeTabpage,
+                    data: C2Rust_Unnamed {
+                        integer: (*tp_0).handle as Integer,
+                    },
                 },
-            };
+            );
             tp_0 = (*tp_0).tp_next as *mut tabpage_T;
         }
         return rv;
