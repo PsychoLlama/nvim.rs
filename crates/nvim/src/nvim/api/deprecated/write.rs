@@ -1,0 +1,268 @@
+//! Writing messages, and the retired subscription API.
+//!
+//! `write_msg` is the line-buffered writer behind `nvim_out_write` and the two
+//! `nvim_err_write` spellings: it accumulates until a newline, so a client may
+//! send a message in pieces.  `nvim_notify` is the message-with-a-level shim.
+//! `nvim_subscribe`/`nvim_unsubscribe` are empty: the broadcast events they
+//! filtered no longer exist.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+#[allow(unused_imports)]
+use super::*;
+
+pub unsafe extern "C" fn nvim_subscribe(mut _channel_id: uint64_t, mut _event: String_0) {}
+
+pub unsafe extern "C" fn nvim_unsubscribe(mut _channel_id: uint64_t, mut _event: String_0) {}
+
+unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) {
+    unsafe {
+        static out_line_buf: GlobalCell<StringBuilder> = GlobalCell::new(StringBuilder {
+            size: 0 as size_t,
+            capacity: 0 as size_t,
+            items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        });
+        static err_line_buf: GlobalCell<StringBuilder> = GlobalCell::new(StringBuilder {
+            size: 0 as size_t,
+            capacity: 0 as size_t,
+            items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        });
+        let mut line_buf: *mut StringBuilder = if to_err as ::core::ffi::c_int != 0 {
+            err_line_buf.ptr()
+        } else {
+            out_line_buf.ptr()
+        };
+        (*no_wait_return.ptr()) += 1;
+        let mut i: uint32_t = 0 as uint32_t;
+        while (i as size_t) < message.size {
+            if got_int.get() {
+                break;
+            }
+            if (*line_buf).capacity == 0 as size_t {
+                (*line_buf).capacity = LINE_BUFFER_MIN_SIZE as ::core::ffi::c_int as size_t;
+                (*line_buf).items = xrealloc(
+                    (*line_buf).items as *mut ::core::ffi::c_void,
+                    ::core::mem::size_of::<::core::ffi::c_char>()
+                        .wrapping_mul((*line_buf).capacity),
+                ) as *mut ::core::ffi::c_char;
+            }
+            if *message.data.offset(i as isize) as ::core::ffi::c_int == NL {
+                if (*line_buf).size == (*line_buf).capacity {
+                    (*line_buf).capacity = if (*line_buf).capacity != 0 {
+                        (*line_buf).capacity << 1 as ::core::ffi::c_int
+                    } else {
+                        8 as size_t
+                    };
+                    (*line_buf).items = xrealloc(
+                        (*line_buf).items as *mut ::core::ffi::c_void,
+                        ::core::mem::size_of::<::core::ffi::c_char>()
+                            .wrapping_mul((*line_buf).capacity),
+                    ) as *mut ::core::ffi::c_char;
+                } else {
+                };
+                let c2rust_fresh7 = (*line_buf).size;
+                (*line_buf).size = (*line_buf).size.wrapping_add(1);
+                *(*line_buf).items.offset(c2rust_fresh7 as isize) = '\0' as ::core::ffi::c_char;
+                if to_err {
+                    emsg((*line_buf).items);
+                } else {
+                    msg((*line_buf).items, 0 as ::core::ffi::c_int);
+                }
+                if msg_silent.get() == 0 as ::core::ffi::c_int {
+                    msg_didout.set(true);
+                }
+                (*line_buf).size = (*line_buf).size.wrapping_sub((*line_buf).size);
+                (*line_buf).capacity = LINE_BUFFER_MIN_SIZE as ::core::ffi::c_int as size_t;
+                (*line_buf).items = xrealloc(
+                    (*line_buf).items as *mut ::core::ffi::c_void,
+                    ::core::mem::size_of::<::core::ffi::c_char>()
+                        .wrapping_mul((*line_buf).capacity),
+                ) as *mut ::core::ffi::c_char;
+            } else if *message.data.offset(i as isize) as ::core::ffi::c_int == NUL {
+                if (*line_buf).size == (*line_buf).capacity {
+                    (*line_buf).capacity = if (*line_buf).capacity != 0 {
+                        (*line_buf).capacity << 1 as ::core::ffi::c_int
+                    } else {
+                        8 as size_t
+                    };
+                    (*line_buf).items = xrealloc(
+                        (*line_buf).items as *mut ::core::ffi::c_void,
+                        ::core::mem::size_of::<::core::ffi::c_char>()
+                            .wrapping_mul((*line_buf).capacity),
+                    ) as *mut ::core::ffi::c_char;
+                } else {
+                };
+                let c2rust_fresh8 = (*line_buf).size;
+                (*line_buf).size = (*line_buf).size.wrapping_add(1);
+                *(*line_buf).items.offset(c2rust_fresh8 as isize) = '\n' as ::core::ffi::c_char;
+            } else {
+                if (*line_buf).size == (*line_buf).capacity {
+                    (*line_buf).capacity = if (*line_buf).capacity != 0 {
+                        (*line_buf).capacity << 1 as ::core::ffi::c_int
+                    } else {
+                        8 as size_t
+                    };
+                    (*line_buf).items = xrealloc(
+                        (*line_buf).items as *mut ::core::ffi::c_void,
+                        ::core::mem::size_of::<::core::ffi::c_char>()
+                            .wrapping_mul((*line_buf).capacity),
+                    ) as *mut ::core::ffi::c_char;
+                } else {
+                };
+                let c2rust_fresh9 = (*line_buf).size;
+                (*line_buf).size = (*line_buf).size.wrapping_add(1);
+                *(*line_buf).items.offset(c2rust_fresh9 as isize) =
+                    *message.data.offset(i as isize);
+            }
+            i = i.wrapping_add(1);
+        }
+        if writeln {
+            if (*line_buf).capacity == 0 as size_t {
+                (*line_buf).capacity = LINE_BUFFER_MIN_SIZE as ::core::ffi::c_int as size_t;
+                (*line_buf).items = xrealloc(
+                    (*line_buf).items as *mut ::core::ffi::c_void,
+                    ::core::mem::size_of::<::core::ffi::c_char>()
+                        .wrapping_mul((*line_buf).capacity),
+                ) as *mut ::core::ffi::c_char;
+            }
+            if '\n' as ::core::ffi::c_int == NL {
+                if (*line_buf).size == (*line_buf).capacity {
+                    (*line_buf).capacity = if (*line_buf).capacity != 0 {
+                        (*line_buf).capacity << 1 as ::core::ffi::c_int
+                    } else {
+                        8 as size_t
+                    };
+                    (*line_buf).items = xrealloc(
+                        (*line_buf).items as *mut ::core::ffi::c_void,
+                        ::core::mem::size_of::<::core::ffi::c_char>()
+                            .wrapping_mul((*line_buf).capacity),
+                    ) as *mut ::core::ffi::c_char;
+                } else {
+                };
+                let c2rust_fresh10 = (*line_buf).size;
+                (*line_buf).size = (*line_buf).size.wrapping_add(1);
+                *(*line_buf).items.offset(c2rust_fresh10 as isize) = '\0' as ::core::ffi::c_char;
+                if to_err {
+                    emsg((*line_buf).items);
+                } else {
+                    msg((*line_buf).items, 0 as ::core::ffi::c_int);
+                }
+                if msg_silent.get() == 0 as ::core::ffi::c_int {
+                    msg_didout.set(true);
+                }
+                (*line_buf).size = (*line_buf).size.wrapping_sub((*line_buf).size);
+                (*line_buf).capacity = LINE_BUFFER_MIN_SIZE as ::core::ffi::c_int as size_t;
+                (*line_buf).items = xrealloc(
+                    (*line_buf).items as *mut ::core::ffi::c_void,
+                    ::core::mem::size_of::<::core::ffi::c_char>()
+                        .wrapping_mul((*line_buf).capacity),
+                ) as *mut ::core::ffi::c_char;
+            } else if '\n' as ::core::ffi::c_int == NUL {
+                if (*line_buf).size == (*line_buf).capacity {
+                    (*line_buf).capacity = if (*line_buf).capacity != 0 {
+                        (*line_buf).capacity << 1 as ::core::ffi::c_int
+                    } else {
+                        8 as size_t
+                    };
+                    (*line_buf).items = xrealloc(
+                        (*line_buf).items as *mut ::core::ffi::c_void,
+                        ::core::mem::size_of::<::core::ffi::c_char>()
+                            .wrapping_mul((*line_buf).capacity),
+                    ) as *mut ::core::ffi::c_char;
+                } else {
+                };
+                let c2rust_fresh11 = (*line_buf).size;
+                (*line_buf).size = (*line_buf).size.wrapping_add(1);
+                *(*line_buf).items.offset(c2rust_fresh11 as isize) = '\n' as ::core::ffi::c_char;
+            } else {
+                if (*line_buf).size == (*line_buf).capacity {
+                    (*line_buf).capacity = if (*line_buf).capacity != 0 {
+                        (*line_buf).capacity << 1 as ::core::ffi::c_int
+                    } else {
+                        8 as size_t
+                    };
+                    (*line_buf).items = xrealloc(
+                        (*line_buf).items as *mut ::core::ffi::c_void,
+                        ::core::mem::size_of::<::core::ffi::c_char>()
+                            .wrapping_mul((*line_buf).capacity),
+                    ) as *mut ::core::ffi::c_char;
+                } else {
+                };
+                let c2rust_fresh12 = (*line_buf).size;
+                (*line_buf).size = (*line_buf).size.wrapping_add(1);
+                *(*line_buf).items.offset(c2rust_fresh12 as isize) = '\n' as ::core::ffi::c_char;
+            }
+        }
+        (*no_wait_return.ptr()) -= 1;
+        msg_end();
+    }
+}
+
+pub unsafe extern "C" fn nvim_out_write(mut str: String_0) {
+    unsafe {
+        write_msg(str, false, false);
+    }
+}
+
+pub unsafe extern "C" fn nvim_err_write(mut str: String_0) {
+    unsafe {
+        write_msg(str, true, false);
+    }
+}
+
+pub unsafe extern "C" fn nvim_err_writeln(mut str: String_0) {
+    unsafe {
+        write_msg(str, true, true);
+    }
+}
+
+pub unsafe extern "C" fn nvim_notify(
+    mut msg_0: String_0,
+    mut log_level: Integer,
+    mut opts: Dict,
+    mut arena: *mut Arena,
+    mut err: *mut Error,
+) -> Object {
+    unsafe {
+        let mut args: Array = Array {
+            size: 0 as size_t,
+            capacity: 0 as size_t,
+            items: ::core::ptr::null_mut::<Object>(),
+        };
+        let mut args__items: [Object; 3] = [Object {
+            type_0: kObjectTypeNil,
+            data: C2Rust_Unnamed { boolean: false },
+        }; 3];
+        args.capacity = 3 as size_t;
+        args.items = &raw mut args__items as *mut Object;
+        let c2rust_fresh13 = args.size;
+        args.size = args.size.wrapping_add(1);
+        *args.items.offset(c2rust_fresh13 as isize) = object {
+            type_0: kObjectTypeString,
+            data: C2Rust_Unnamed { string: msg_0 },
+        };
+        let c2rust_fresh14 = args.size;
+        args.size = args.size.wrapping_add(1);
+        *args.items.offset(c2rust_fresh14 as isize) = object {
+            type_0: kObjectTypeInteger,
+            data: C2Rust_Unnamed { integer: log_level },
+        };
+        let c2rust_fresh15 = args.size;
+        args.size = args.size.wrapping_add(1);
+        *args.items.offset(c2rust_fresh15 as isize) = object {
+            type_0: kObjectTypeDict,
+            data: C2Rust_Unnamed { dict: opts },
+        };
+        return nlua_exec(
+            String_0 {
+                data: c"return vim.notify(...)".as_ptr() as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 23]>().wrapping_sub(1 as size_t),
+            },
+            ::core::ptr::null::<::core::ffi::c_char>(),
+            args,
+            kRetObject,
+            arena,
+            err,
+        );
+    }
+}
