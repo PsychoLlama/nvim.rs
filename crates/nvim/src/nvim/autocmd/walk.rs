@@ -1,350 +1,245 @@
 //! One step of a firing walk.
 //!
-//! `getnextac` is the `do_cmdline` getline callback an autocommand body is
+//! [`getnextac`] is the `do_cmdline` getline callback an autocommand body is
 //! executed through: each call hands back the next matching command,
-//! advancing `aucmd_next` over the pattern list until one matches the file
+//! advancing [`aucmd_next`] over the pattern list until one matches the file
 //! name being fired for.  `au_callback` is the same step for an autocommand
-//! whose body is a Lua callback rather than a Vimscript command.  Because
-//! the walk runs *while* the tables may be edited, every position here is
-//! re-validated rather than cached.
+//! whose body is a Lua callback rather than a Vimscript command.
+//!
+//! Nothing here may cache a position.  The walk runs *while* the handler it
+//! is running can define and delete autocommands, so `(*acs).items` is
+//! re-read at every use (a define reallocates it), a row may go
+//! `pat == NULL` under the index (`aucmd_del` only marks), and the walk's
+//! own bound is the `ausize` snapshot `apply_autocmds_group` took -- which
+//! is what keeps a handler that defines more autocommands for its own event
+//! from looping forever.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
 
-pub(crate) unsafe extern "C" fn aucmd_next(mut apc: *mut AutoPatCmd) {
+/// Advance `apc` to the next autocommand whose pattern matches, updating
+/// the execution-stack entry when the pattern changes.
+///
+/// When there is no next one, `lastpat` is left null and `auidx` at
+/// `SIZE_MAX`, which is how [`getnextac`] and its caller see the end.
+pub(crate) unsafe extern "C" fn aucmd_next(apc: *mut AutoPatCmd) {
     unsafe {
-        let entry: *mut estack_T = ((*exestack.ptr()).ga_data as *mut estack_T)
-            .offset((*exestack.ptr()).ga_len as isize)
-            .offset(-(1 as ::core::ffi::c_int as isize));
-        let acs: *mut AutoCmdVec =
-            (autocmds.ptr() as *mut AutoCmdVec).offset((*apc).event as ::core::ffi::c_int as isize);
-        '_c2rust_label: {
-            if (*apc).ausize <= (*acs).size {
-            } else {
-                __assert_fail(
-                    b"apc->ausize <= kv_size(*acs)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    2077 as ::core::ffi::c_uint,
-                    b"void aucmd_next(AutoPatCmd *)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
+        let entry = ((*exestack.ptr()).ga_data.cast::<estack_T>())
+            .offset(((*exestack.ptr()).ga_len - 1) as isize);
+        let acs = au_event_vec((*apc).event);
+        debug_assert!((*apc).ausize <= (*acs).size);
+
+        // `ausize` is the snapshot, not `(*acs).size`: a handler that
+        // defines more autocommands for its own event must not extend the
+        // walk it is running under.
+        for i in (*apc).auidx..(*apc).ausize {
+            if got_int.get() {
+                break;
             }
-        };
-        let mut i: size_t = (*apc).auidx;
-        while i < (*apc).ausize && !got_int.get() {
-            let ac: *mut AutoCmd = (*acs).items.offset(i as isize);
-            let ap: *mut AutoPat = (*ac).pat;
-            's_11: {
-                if !ap.is_null() {
-                    if ap != (*apc).lastpat {
-                        if (*apc).group != AUGROUP_ALL as ::core::ffi::c_int
-                            && (*apc).group != (*ap).group
-                        {
-                            break 's_11;
-                        } else if if (*ap).buflocal_nr == 0 as ::core::ffi::c_int {
-                            !match_file_pat(
-                                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                                &raw mut (*ap).reg_prog,
-                                (*apc).fname,
-                                (*apc).sfname,
-                                (*apc).tail,
-                                (*ap).allow_dirs as ::core::ffi::c_int,
-                            ) as ::core::ffi::c_int
-                        } else {
-                            ((*ap).buflocal_nr != (*apc).arg_bufnr) as ::core::ffi::c_int
-                        } != 0
-                        {
-                            break 's_11;
-                        } else {
-                            let name: *const ::core::ffi::c_char = event_nr2name((*apc).event);
-                            let s: *const ::core::ffi::c_char =
-                                gettext(b"%s Autocommands for \"%s\"\0".as_ptr()
-                                    as *const ::core::ffi::c_char);
-                            let sourcing_name_len: size_t = strlen(s)
-                                .wrapping_add(strlen(name))
-                                .wrapping_add((*ap).patlen as size_t)
-                                .wrapping_add(1 as size_t);
-                            let namep: *mut ::core::ffi::c_char =
-                                xmalloc(sourcing_name_len) as *mut ::core::ffi::c_char;
-                            snprintf(namep, sourcing_name_len, s, name, (*ap).pat);
-                            if p_verbose.get() >= 8 as OptInt {
-                                verbose_enter();
-                                smsg(
-                                    0 as ::core::ffi::c_int,
-                                    gettext(
-                                        b"Executing %s\0".as_ptr() as *const ::core::ffi::c_char
-                                    ),
-                                    namep,
-                                );
-                                verbose_leave();
-                            }
-                            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                                &raw mut (*entry).es_name as *mut *mut ::core::ffi::c_void;
-                            xfree(*ptr_);
-                            *ptr_ = NULL_0;
-                            let _ = *ptr_;
-                            (*entry).es_name = namep;
-                            (*entry).es_info.aucmd = apc;
-                        }
-                    }
-                    (*apc).lastpat = ap;
-                    (*apc).auidx = i;
-                    line_breakcheck();
-                    return;
+            let ap = (*(*acs).items.add(i)).pat;
+
+            // Skip deleted autocommands.
+            if ap.is_null() {
+                continue;
+            }
+            // Skip the matching when the pattern did not change.
+            if ap != (*apc).lastpat {
+                // Skip the ones that don't match the group...
+                if (*apc).group != AUGROUP_ALL && (*apc).group != (*ap).group {
+                    continue;
                 }
+                // ...or the pattern, or the buffer number.
+                let matched = if (*ap).buflocal_nr == 0 {
+                    match_file_pat(
+                        ::core::ptr::null_mut(),
+                        &raw mut (*ap).reg_prog,
+                        (*apc).fname,
+                        (*apc).sfname,
+                        (*apc).tail,
+                        (*ap).allow_dirs as ::core::ffi::c_int,
+                    )
+                } else {
+                    (*ap).buflocal_nr == (*apc).arg_bufnr
+                };
+                if !matched {
+                    continue;
+                }
+
+                let name = event_nr2name((*apc).event);
+                let s = gettext(c"%s Autocommands for \"%s\"".as_ptr());
+                let sourcing_name_len = strlen(s)
+                    .wrapping_add(strlen(name))
+                    .wrapping_add((*ap).patlen as size_t)
+                    .wrapping_add(1);
+                let namep = xmalloc(sourcing_name_len).cast::<::core::ffi::c_char>();
+                snprintf(namep, sourcing_name_len, s, name, (*ap).pat);
+                if p_verbose.get() >= 8 {
+                    verbose_enter();
+                    smsg(0, gettext(c"Executing %s".as_ptr()), namep);
+                    verbose_leave();
+                }
+
+                // Point the execution stack at this autocommand.
+                xfree((*entry).es_name.cast::<::core::ffi::c_void>());
+                (*entry).es_name = namep;
+                (*entry).es_info.aucmd = apc;
             }
-            i = i.wrapping_add(1);
+
+            (*apc).lastpat = ap;
+            (*apc).auidx = i;
+
+            line_breakcheck();
+            return;
         }
-        let mut ptr__0: *mut *mut ::core::ffi::c_void =
-            &raw mut (*entry).es_name as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr__0);
-        *ptr__0 = NULL_0;
-        let _ = *ptr__0;
-        (*entry).es_info.aucmd = ::core::ptr::null_mut::<AutoPatCmd>();
-        (*apc).lastpat = ::core::ptr::null_mut::<AutoPat>();
+
+        // Nothing left: clear the ETYPE_AUCMD stack entry.
+        xfree((*entry).es_name.cast::<::core::ffi::c_void>());
+        (*entry).es_name = ::core::ptr::null_mut();
+        (*entry).es_info.aucmd = ::core::ptr::null_mut();
+
+        (*apc).lastpat = ::core::ptr::null_mut();
         (*apc).auidx = SIZE_MAX as size_t;
     }
 }
 
-unsafe extern "C" fn au_callback(mut ac: *const AutoCmd, mut apc: *const AutoPatCmd) -> bool {
+/// Run an autocommand whose handler is a callback rather than an Ex
+/// command.
+///
+/// Answers whether the callback asked to be deleted, which only a Lua one
+/// can do (by returning `true`).
+unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
     unsafe {
-        let mut callback: Callback = (*ac).handler_fn;
-        if callback.type_0 as ::core::ffi::c_uint
-            == kCallbackLua as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut data: Dict = Dict {
-                size: 0 as size_t,
-                capacity: 0 as size_t,
-                items: ::core::ptr::null_mut::<KeyValuePair>(),
-            };
-            let mut data__items: [KeyValuePair; 7] = [KeyValuePair {
-                key: String_0 {
-                    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    size: 0,
-                },
-                value: Object {
-                    type_0: kObjectTypeNil,
-                    data: C2Rust_Unnamed { boolean: false },
-                },
-            }; 7];
-            data.capacity = 7 as size_t;
-            data.items = &raw mut data__items as *mut KeyValuePair;
-            let c2rust_fresh3 = data.size;
-            data.size = data.size.wrapping_add(1);
-            *data.items.offset(c2rust_fresh3 as isize) = key_value_pair {
-                key: cstr_as_string(b"id\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed { integer: (*ac).id },
-                },
-            };
-            let c2rust_fresh4 = data.size;
-            data.size = data.size.wrapping_add(1);
-            *data.items.offset(c2rust_fresh4 as isize) = key_value_pair {
-                key: cstr_as_string(b"event\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: cstr_as_string(event_nr2name((*apc).event)),
-                    },
-                },
-            };
-            let c2rust_fresh5 = data.size;
-            data.size = data.size.wrapping_add(1);
-            *data.items.offset(c2rust_fresh5 as isize) = key_value_pair {
-                key: cstr_as_string(b"file\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: cstr_as_string((*apc).afile_orig),
-                    },
-                },
-            };
-            let c2rust_fresh6 = data.size;
-            data.size = data.size.wrapping_add(1);
-            *data.items.offset(c2rust_fresh6 as isize) = key_value_pair {
-                key: cstr_as_string(b"match\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: cstr_as_string(autocmd_match.get()),
-                    },
-                },
-            };
-            let c2rust_fresh7 = data.size;
-            data.size = data.size.wrapping_add(1);
-            *data.items.offset(c2rust_fresh7 as isize) = key_value_pair {
-                key: cstr_as_string(b"buf\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed {
-                        integer: autocmd_bufnr.get() as Integer,
-                    },
-                },
-            };
-            if !(*apc).data.is_null() {
-                let c2rust_fresh8 = data.size;
-                data.size = data.size.wrapping_add(1);
-                *data.items.offset(c2rust_fresh8 as isize) = key_value_pair {
-                    key: cstr_as_string(b"data\0".as_ptr() as *const ::core::ffi::c_char),
-                    value: *(*apc).data,
-                };
+        let mut callback = (*ac).handler_fn;
+        if callback.type_0 != kCallbackLua {
+            let mut argsin = TV_INITIAL_VALUE;
+            let mut rettv = TV_INITIAL_VALUE;
+            callback_call(&raw mut callback, 0, &raw mut argsin, &raw mut rettv);
+            return false;
+        }
+
+        let mut data = DictBuf::<7>::new();
+        data.insert(c"id", Object::integer((*ac).id));
+        data.insert(
+            c"event",
+            Object::string(cstr_as_string(event_nr2name((*apc).event))),
+        );
+        data.insert(c"file", Object::string(cstr_as_string((*apc).afile_orig)));
+        data.insert(
+            c"match",
+            Object::string(cstr_as_string(autocmd_match.get())),
+        );
+        data.insert(c"buf", Object::integer(autocmd_bufnr.get() as Integer));
+        if !(*apc).data.is_null() {
+            data.insert(c"data", *(*apc).data);
+        }
+        match (*(*ac).pat).group {
+            AUGROUP_ERROR => abort(),
+            // The pseudo-groups are not something a handler can be told.
+            AUGROUP_DEFAULT | AUGROUP_ALL | AUGROUP_DELETED => {}
+            group => {
+                data.insert(c"group", Object::integer(group as Integer));
             }
-            let mut group: ::core::ffi::c_int = (*(*ac).pat).group;
-            match group {
-                -2 => {
-                    abort();
-                }
-                -1 | -3 | -4 => {}
-                _ => {
-                    let c2rust_fresh9 = data.size;
-                    data.size = data.size.wrapping_add(1);
-                    *data.items.offset(c2rust_fresh9 as isize) = key_value_pair {
-                        key: cstr_as_string(b"group\0".as_ptr() as *const ::core::ffi::c_char),
-                        value: object {
-                            type_0: kObjectTypeInteger,
-                            data: C2Rust_Unnamed {
-                                integer: group as Integer,
-                            },
-                        },
-                    };
-                }
-            }
-            let mut args: Array = Array {
-                size: 0 as size_t,
-                capacity: 0 as size_t,
-                items: ::core::ptr::null_mut::<Object>(),
-            };
-            let mut args__items: [Object; 1] = [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            }; 1];
-            args.capacity = 1 as size_t;
-            args.items = &raw mut args__items as *mut Object;
-            let c2rust_fresh10 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh10 as isize) = object {
-                type_0: kObjectTypeDict,
-                data: C2Rust_Unnamed { dict: data },
-            };
-            let mut result: Object = nlua_call_ref(
-                callback.data.luaref,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                args,
-                kRetNilBool,
-                ::core::ptr::null_mut::<Arena>(),
-                ::core::ptr::null_mut::<Error>(),
-            );
-            return result.type_0 as ::core::ffi::c_uint
-                == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
-                && result.data.boolean as ::core::ffi::c_int == true_0;
-        } else {
-            let mut argsin: typval_T = typval_T {
-                v_type: VAR_UNKNOWN,
-                v_lock: VAR_UNLOCKED,
-                vval: typval_vval_union { v_number: 0 },
-            };
-            let mut rettv: typval_T = typval_T {
-                v_type: VAR_UNKNOWN,
-                v_lock: VAR_UNLOCKED,
-                vval: typval_vval_union { v_number: 0 },
-            };
-            callback_call(
-                &raw mut callback,
-                0 as ::core::ffi::c_int,
-                &raw mut argsin,
-                &raw mut rettv,
-            );
-            return false_0 != 0;
-        };
+        }
+
+        let mut args = ArrayBuf::<1>::new();
+        args.push(data.object());
+
+        let result = nlua_call_ref(
+            callback.data.luaref,
+            ::core::ptr::null(),
+            args.array(),
+            kRetNilBool,
+            ::core::ptr::null_mut(),
+            ::core::ptr::null_mut(),
+        );
+        result.type_0 == kObjectTypeBoolean && result.data.boolean
     }
 }
 
+/// The `do_cmdline` getline callback an autocommand body runs through:
+/// one call per matching autocommand.
+///
+/// The `_c`/`_indent`/`_do_concat` parameters exist for `do_cmdline`'s
+/// signature.  A callback handler has no line to give back, so this
+/// answers an empty allocated string -- "not null, keep going".
 pub unsafe extern "C" fn getnextac(
-    mut _c: ::core::ffi::c_int,
-    mut cookie: *mut ::core::ffi::c_void,
-    mut _indent: ::core::ffi::c_int,
-    mut _do_concat: bool,
+    _c: ::core::ffi::c_int,
+    cookie: *mut ::core::ffi::c_void,
+    _indent: ::core::ffi::c_int,
+    _do_concat: bool,
 ) -> *mut ::core::ffi::c_char {
     unsafe {
-        let apc: *mut AutoPatCmd = cookie as *mut AutoPatCmd;
-        let acs: *mut AutoCmdVec =
-            (autocmds.ptr() as *mut AutoCmdVec).offset((*apc).event as ::core::ffi::c_int as isize);
+        let apc = cookie.cast::<AutoPatCmd>();
+        let acs = au_event_vec((*apc).event);
+
         aucmd_next(apc);
         if (*apc).lastpat.is_null() {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+            return ::core::ptr::null_mut();
         }
-        '_c2rust_label: {
-            if (*apc).auidx < (*acs).size {
-            } else {
-                __assert_fail(
-                    b"apc->auidx < kv_size(*acs)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    2193 as ::core::ffi::c_uint,
-                    b"char *getnextac(int, void *, int, _Bool)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        let ac: *mut AutoCmd = (*acs).items.offset((*apc).auidx as isize);
-        '_c2rust_label_0: {
-            if !(*ac).pat.is_null() {
-            } else {
-                __assert_fail(
-                    b"ac->pat != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/autocmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    2195 as ::core::ffi::c_uint,
-                    b"char *getnextac(int, void *, int, _Bool)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        let mut oneshot: bool = (*ac).once;
-        if p_verbose.get() >= 9 as OptInt {
+
+        debug_assert!((*apc).auidx < (*acs).size);
+        let ac = (*acs).items.add((*apc).auidx);
+        debug_assert!(!(*ac).pat.is_null());
+        let mut oneshot = (*ac).once;
+
+        if p_verbose.get() >= 9 {
             verbose_enter_scroll();
-            let mut handler_str: *mut ::core::ffi::c_char = aucmd_handler_to_string(ac);
-            smsg(
-                0 as ::core::ffi::c_int,
-                gettext(b"autocommand %s\0".as_ptr() as *const ::core::ffi::c_char),
-                handler_str,
-            );
-            msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                &raw mut handler_str as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr_);
-            *ptr_ = NULL_0;
-            let _ = *ptr_;
+            let handler_str = aucmd_handler_to_string(ac);
+            smsg(0, gettext(c"autocommand %s".as_ptr()), handler_str);
+            // Don't overwrite this either.
+            msg_puts(c"\n".as_ptr());
+            xfree(handler_str.cast::<::core::ffi::c_void>());
             verbose_leave_scroll();
         }
+
+        // `autocmd_nested` has to be set before any Lua runs, or a nested
+        // event fired from the callback sees the wrong value.
         autocmd_nested.set((*ac).nested);
         current_sctx.set((*ac).script_ctx);
         (*apc).script_ctx = current_sctx.get();
-        let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if !(*ac).handler_cmd.is_null() {
-            retval = xstrdup((*ac).handler_cmd);
-        } else {
-            let mut ac_copy: AutoCmd = *ac;
-            (*ac).pat = if oneshot as ::core::ffi::c_int != 0 {
-                ::core::ptr::null_mut::<AutoPat>()
+
+        let retval;
+        if (*ac).handler_cmd.is_null() {
+            let mut ac_copy = *ac;
+            // Mark a `++once` handler removed *before* running it, so a
+            // `:doautocmd` from inside it cannot run it again (#25526).
+            (*ac).pat = if oneshot {
+                ::core::ptr::null_mut()
             } else {
                 (*ac).pat
             };
-            let mut rv: bool = au_callback(&raw mut ac_copy, apc);
+            let rv = au_callback(&raw mut ac_copy, apc);
             if oneshot {
-                (*(*acs).items.offset((*apc).auidx as isize)).pat = ac_copy.pat;
+                // Through `acs`: the callback may have defined an
+                // autocommand, which reallocates `items` and invalidates
+                // `ac`.
+                (*(*acs).items.add((*apc).auidx)).pat = ac_copy.pat;
             }
-            oneshot = oneshot as ::core::ffi::c_int != 0 || rv as ::core::ffi::c_int != 0;
-            retval = xcalloc(1 as size_t, 1 as size_t) as *mut ::core::ffi::c_char;
+            // A callback returning true asks to be deleted.
+            oneshot = oneshot || rv;
+
+            // HACK(tjdevries): we just return "not-null" and keep going.
+            // Fixing it means either teaching `do_cmdline` to take
+            // something other than a string, or looping over the matches
+            // here instead of being pulled.
+            retval = xcalloc(1, 1).cast::<::core::ffi::c_char>();
+        } else {
+            retval = xstrdup((*ac).handler_cmd);
         }
+
+        // Delete a one-shot autocommand in anticipation of its execution.
         if oneshot {
-            aucmd_del((*acs).items.offset((*apc).auidx as isize));
+            aucmd_del((*acs).items.add((*apc).auidx));
         }
+
         if (*apc).auidx < (*apc).ausize {
             (*apc).auidx = (*apc).auidx.wrapping_add(1);
         } else {
             (*apc).auidx = SIZE_MAX as size_t;
         }
-        return retval;
+
+        retval
     }
 }
