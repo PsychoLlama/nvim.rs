@@ -190,12 +190,15 @@ func Test_assert_exception()
 endfunc
 
 func Test_wrong_error_type()
-  let save_verrors = v:errors
-  let v:['errors'] = {'foo': 3}
-  call assert_equal('yes', 'no')
-  let verrors = v:errors
-  let v:errors = save_verrors
-  call assert_equal(type([]), type(verrors))
+  " Nvim: a v: variable cannot be given a value of the wrong type at all, so
+  " there is no way to set up the recovery this test used to exercise. Vim
+  " rejects `let v:errors = {...}` but accepts the dictionary spelling
+  " `let v:['errors'] = {...}`, which skips the type check; reading a v:
+  " variable that was re-typed that way can then crash the editor. Both
+  " spellings take the same check here, so both fail the same way.
+  call assert_fails("let v:errors = {'foo': 3}", 'E963:')
+  call assert_fails("let v:['errors'] = {'foo': 3}", 'E963:')
+  call assert_equal(type([]), type(v:errors))
 endfunc
 
 func Test_compare_fail()
