@@ -1,6 +1,6 @@
 {
   "internal_exports": 40,
-  "files_without_forbid_unsafe": 799,
+  "files_without_forbid_unsafe": 804,
   "files_without_deny_unsafe_op": 182,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -12,7 +12,11 @@
     "crates/nvim/src/mpack/object.rs": {"unsafe": 9},
     "crates/nvim/src/mpack/rpc.rs": {"unsafe": 16},
     "crates/nvim/src/nvim/allocator.rs": {"unsafe": 5},
-    "crates/nvim/src/nvim/api/autocmd.rs": {"lines": 2136, "unsafe": 12},
+    "crates/nvim/src/nvim/api/autocmd/create.rs": {"unsafe": 4},
+    "crates/nvim/src/nvim/api/autocmd/exec.rs": {"unsafe": 1},
+    "crates/nvim/src/nvim/api/autocmd/group.rs": {"unsafe": 4},
+    "crates/nvim/src/nvim/api/autocmd/pattern.rs": {"unsafe": 2},
+    "crates/nvim/src/nvim/api/autocmd/query.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/api/buffer/attach.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/api/buffer/lines.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/api/buffer/marks.rs": {"unsafe": 3},
