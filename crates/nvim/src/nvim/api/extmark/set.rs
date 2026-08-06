@@ -1,0 +1,877 @@
+//! `nvim_buf_set_extmark()`: placing a mark and its decoration.
+//!
+//! One function, and the largest in the api, because the keyset it takes is the
+//! whole decoration surface: an id, an end position, a highlight (or a list of
+//! them), a sign, virtual text with a position and a highlight mode, virtual
+//! lines, conceal, spell, a url, a priority and the gravity of both ends.  Each
+//! is validated, packed into the inline or allocated decoration representation
+//! as its size allows, and handed to `extmark_set`.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+#[allow(unused_imports)]
+use super::*;
+
+pub unsafe extern "C" fn nvim_buf_set_extmark(
+    mut buf: Buffer,
+    mut ns_id: Integer,
+    mut line: Integer,
+    mut col: Integer,
+    mut opts: *mut KeyDict_set_extmark,
+    mut err: *mut Error,
+) -> Integer {
+    unsafe {
+        let mut id: uint32_t = 0;
+        let mut line2: ::core::ffi::c_int = 0;
+        let mut did_end_line: bool = false;
+        let mut strict: bool = false;
+        let mut col2: colnr_T = 0;
+        let mut virt_lines_flags: ::core::ffi::c_int = 0;
+        let mut right_gravity: bool = false;
+        let mut len: colnr_T = 0;
+        let mut hl: DecorHighlightInline = DECOR_HIGHLIGHT_INLINE_INIT;
+        let mut sign: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;
+        let mut virt_text: DecorVirtText = DecorVirtText {
+            flags: 0 as uint8_t,
+            hl_mode: kHlModeUnknown as ::core::ffi::c_int as uint8_t,
+            priority: DECOR_PRIORITY_BASE as DecorPriority,
+            width: 0 as ::core::ffi::c_int,
+            col: 0 as ::core::ffi::c_int,
+            pos: kVPosEndOfLine,
+            data: C2Rust_Unnamed_2 {
+                virt_text: VirtText {
+                    size: 0 as size_t,
+                    capacity: 0 as size_t,
+                    items: ::core::ptr::null_mut::<VirtTextChunk>(),
+                },
+            },
+            next: ::core::ptr::null_mut::<DecorVirtText>(),
+        };
+        let mut virt_lines: DecorVirtText = DecorVirtText {
+            flags: kVTIsLines as ::core::ffi::c_int as uint8_t,
+            hl_mode: kHlModeUnknown as ::core::ffi::c_int as uint8_t,
+            priority: DECOR_PRIORITY_BASE as DecorPriority,
+            width: 0 as ::core::ffi::c_int,
+            col: 0 as ::core::ffi::c_int,
+            pos: kVPosEndOfLine,
+            data: C2Rust_Unnamed_2 {
+                virt_lines: VirtLines {
+                    size: 0 as size_t,
+                    capacity: 0 as size_t,
+                    items: ::core::ptr::null_mut::<virt_line>(),
+                },
+            },
+            next: ::core::ptr::null_mut::<DecorVirtText>(),
+        };
+        let mut url: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        let mut has_hl: bool = false;
+        let mut has_hl_multiple: bool = false;
+        let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
+        '_error: {
+            if !b.is_null() {
+                if !ns_initialized(ns_id as uint32_t) {
+                    api_err_invalid(
+                        err,
+                        c"ns_id".as_ptr(),
+                        ::core::ptr::null::<::core::ffi::c_char>(),
+                        ns_id as int64_t,
+                        false,
+                    );
+                } else {
+                    id = 0 as uint32_t;
+                    if has_key((*opts).is_set__set_extmark_, KEYSET_OPTIDX_set_extmark__id) {
+                        if !((*opts).id > 0 as Integer) {
+                            api_err_exp(
+                                err,
+                                c"id".as_ptr(),
+                                c"positive Integer".as_ptr(),
+                                ::core::ptr::null::<::core::ffi::c_char>(),
+                            );
+                            break '_error;
+                        }
+                        id = (*opts).id as uint32_t;
+                    }
+                    line2 = -1 as ::core::ffi::c_int;
+                    did_end_line = false;
+                    if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__end_line,
+                    ) {
+                        if has_key((*opts).is_set__set_extmark_, 10 as ::core::ffi::c_int) {
+                            api_set_error(
+                                err,
+                                kErrorTypeValidation,
+                                c"%s".as_ptr(),
+                                c"cannot use both 'end_row' and 'end_line'".as_ptr(),
+                            );
+                            break '_error;
+                        }
+                        (*opts).end_row = (*opts).end_line;
+                        did_end_line = true;
+                    }
+                    strict = if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__strict,
+                    ) {
+                        (*opts).strict as ::core::ffi::c_int
+                    } else {
+                        true_0
+                    } != 0;
+                    if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__end_row,
+                    ) || did_end_line as ::core::ffi::c_int != 0
+                    {
+                        let mut val: Integer = (*opts).end_row;
+                        if !(val >= 0 as Integer
+                            && !(val > (*b).b_ml.ml_line_count as Integer
+                                && strict as ::core::ffi::c_int != 0))
+                        {
+                            api_err_invalid(
+                                err,
+                                c"end_row".as_ptr(),
+                                c"out of range".as_ptr(),
+                                0 as int64_t,
+                                false,
+                            );
+                            break '_error;
+                        }
+                        line2 = val as ::core::ffi::c_int;
+                    }
+                    col2 = -1 as colnr_T;
+                    if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__end_col,
+                    ) {
+                        let mut val_0: Integer = (*opts).end_col;
+                        if !(val_0 >= -1 as Integer
+                            && val_0 <= MAXCOL as ::core::ffi::c_int as Integer)
+                        {
+                            api_err_invalid(
+                                err,
+                                c"end_col".as_ptr(),
+                                c"out of range".as_ptr(),
+                                0 as int64_t,
+                                false,
+                            );
+                            break '_error;
+                        }
+                        if val_0 == -1 as Integer {
+                            val_0 = MAXCOL as ::core::ffi::c_int as Integer;
+                        }
+                        col2 = val_0 as ::core::ffi::c_int as colnr_T;
+                    }
+                    if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__hl_group,
+                    ) {
+                        's_293: {
+                            if (*opts).hl_group.type_0 as ::core::ffi::c_uint
+                                == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
+                            {
+                                let mut arr: Array = (*opts).hl_group.data.array;
+                                if arr.size >= 1 as size_t {
+                                    hl.hl_id = object_to_hl_id(
+                                        *arr.items.offset(0 as ::core::ffi::c_int as isize),
+                                        c"hl_group item".as_ptr(),
+                                        err,
+                                    );
+                                    if (*err).type_0 as ::core::ffi::c_int
+                                        != kErrorTypeNone as ::core::ffi::c_int
+                                    {
+                                        break '_error;
+                                    }
+                                }
+                                let mut i: size_t = 1 as size_t;
+                                loop {
+                                    if i >= arr.size {
+                                        break 's_293;
+                                    }
+                                    let mut hl_id: ::core::ffi::c_int = object_to_hl_id(
+                                        *arr.items.offset(i as isize),
+                                        c"hl_group item".as_ptr(),
+                                        err,
+                                    );
+                                    if (*err).type_0 as ::core::ffi::c_int
+                                        != kErrorTypeNone as ::core::ffi::c_int
+                                    {
+                                        break '_error;
+                                    }
+                                    if hl_id != 0 {
+                                        has_hl_multiple = true;
+                                    }
+                                    i = i.wrapping_add(1);
+                                }
+                            } else {
+                                hl.hl_id =
+                                    object_to_hl_id((*opts).hl_group, c"hl_group".as_ptr(), err);
+                                if (*err).type_0 as ::core::ffi::c_int
+                                    != kErrorTypeNone as ::core::ffi::c_int
+                                {
+                                    break '_error;
+                                }
+                            }
+                        }
+                        has_hl = hl.hl_id > 0 as ::core::ffi::c_int;
+                    }
+                    sign.hl_id = (*opts).sign_hl_group as ::core::ffi::c_int;
+                    sign.cursorline_hl_id = (*opts).cursorline_hl_group as ::core::ffi::c_int;
+                    sign.number_hl_id = (*opts).number_hl_group as ::core::ffi::c_int;
+                    sign.line_hl_id = (*opts).line_hl_group as ::core::ffi::c_int;
+                    if sign.hl_id != 0
+                        || sign.cursorline_hl_id != 0
+                        || sign.number_hl_id != 0
+                        || sign.line_hl_id != 0
+                    {
+                        sign.flags = (sign.flags as ::core::ffi::c_int
+                            | kSHIsSign as ::core::ffi::c_int)
+                            as uint16_t;
+                    }
+                    if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__conceal,
+                    ) {
+                        hl.flags = (hl.flags as ::core::ffi::c_int
+                            | kSHConceal as ::core::ffi::c_int)
+                            as uint16_t;
+                        has_hl = true;
+                        if (*opts).conceal.size > 0 as size_t {
+                            let mut ch: ::core::ffi::c_int = 0;
+                            hl.conceal_char = utfc_ptr2schar((*opts).conceal.data, &raw mut ch);
+                            if !(hl.conceal_char != 0
+                                && vim_isprintc(ch) as ::core::ffi::c_int != 0)
+                            {
+                                api_set_error(
+                                    err,
+                                    kErrorTypeValidation,
+                                    c"%s".as_ptr(),
+                                    c"conceal char has to be printable".as_ptr(),
+                                );
+                                break '_error;
+                            }
+                        }
+                    }
+                    if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__conceal_lines,
+                    ) {
+                        hl.flags = (hl.flags as ::core::ffi::c_int
+                            | kSHConcealLines as ::core::ffi::c_int)
+                            as uint16_t;
+                        has_hl = true;
+                        if (*opts).conceal_lines.size > 0 as size_t {
+                            if !(*(*opts).conceal_lines.data as ::core::ffi::c_int
+                                == '\0' as ::core::ffi::c_int)
+                            {
+                                api_set_error(
+                                    err,
+                                    kErrorTypeValidation,
+                                    c"%s".as_ptr(),
+                                    c"conceal_lines has to be an empty string".as_ptr(),
+                                );
+                                break '_error;
+                            }
+                        }
+                    }
+                    if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__virt_text,
+                    ) {
+                        virt_text.data.virt_text =
+                            parse_virt_text((*opts).virt_text, err, &raw mut virt_text.width);
+                        if (*err).type_0 as ::core::ffi::c_int
+                            != kErrorTypeNone as ::core::ffi::c_int
+                        {
+                            break '_error;
+                        }
+                    }
+                    if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__virt_text_pos,
+                    ) {
+                        let mut str: String_0 = (*opts).virt_text_pos;
+                        if strequal(c"eol".as_ptr(), str.data) {
+                            virt_text.pos = kVPosEndOfLine;
+                        } else if strequal(c"overlay".as_ptr(), str.data) {
+                            virt_text.pos = kVPosOverlay;
+                        } else if strequal(c"right_align".as_ptr(), str.data) {
+                            virt_text.pos = kVPosRightAlign;
+                        } else if strequal(c"eol_right_align".as_ptr(), str.data) {
+                            virt_text.pos = kVPosEndOfLineRightAlign;
+                        } else if strequal(c"inline".as_ptr(), str.data) {
+                            virt_text.pos = kVPosInline;
+                        } else if true {
+                            api_err_invalid(
+                                err,
+                                c"virt_text_pos".as_ptr(),
+                                str.data,
+                                0 as int64_t,
+                                true,
+                            );
+                            break '_error;
+                        }
+                    }
+                    if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__virt_text_win_col,
+                    ) {
+                        virt_text.col = (*opts).virt_text_win_col as ::core::ffi::c_int;
+                        virt_text.pos = kVPosWinCol;
+                    }
+                    hl.flags = (hl.flags as ::core::ffi::c_int
+                        | if (*opts).hl_eol as ::core::ffi::c_int != 0 {
+                            kSHHlEol as ::core::ffi::c_int
+                        } else {
+                            0 as ::core::ffi::c_int
+                        }) as uint16_t;
+                    virt_text.flags = (virt_text.flags as ::core::ffi::c_int
+                        | ((if (*opts).virt_text_hide as ::core::ffi::c_int != 0 {
+                            kVTHide as ::core::ffi::c_int
+                        } else {
+                            0 as ::core::ffi::c_int
+                        }) | (if (*opts).virt_text_repeat_linebreak as ::core::ffi::c_int != 0 {
+                            kVTRepeatLinebreak as ::core::ffi::c_int
+                        } else {
+                            0 as ::core::ffi::c_int
+                        }))) as uint8_t;
+                    if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__hl_mode,
+                    ) {
+                        let mut str_0: String_0 = (*opts).hl_mode;
+                        if strequal(c"replace".as_ptr(), str_0.data) {
+                            virt_text.hl_mode = kHlModeReplace as ::core::ffi::c_int as uint8_t;
+                        } else if strequal(c"combine".as_ptr(), str_0.data) {
+                            virt_text.hl_mode = kHlModeCombine as ::core::ffi::c_int as uint8_t;
+                        } else if strequal(c"blend".as_ptr(), str_0.data) {
+                            if virt_text.pos as ::core::ffi::c_uint
+                                == kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
+                            {
+                                if true {
+                                    api_set_error(
+                                        err,
+                                        kErrorTypeValidation,
+                                        c"%s".as_ptr(),
+                                        c"cannot use 'blend' hl_mode with inline virtual text"
+                                            .as_ptr(),
+                                    );
+                                    break '_error;
+                                }
+                            }
+                            virt_text.hl_mode = kHlModeBlend as ::core::ffi::c_int as uint8_t;
+                        } else if true {
+                            api_err_invalid(
+                                err,
+                                c"hl_mode".as_ptr(),
+                                str_0.data,
+                                0 as int64_t,
+                                true,
+                            );
+                            break '_error;
+                        }
+                    }
+                    virt_lines_flags = if (*opts).virt_lines_leftcol as ::core::ffi::c_int != 0 {
+                        kVLLeftcol as ::core::ffi::c_int
+                    } else {
+                        0 as ::core::ffi::c_int
+                    };
+                    if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__virt_lines_overflow,
+                    ) {
+                        let mut str_1: String_0 = (*opts).virt_lines_overflow;
+                        if strequal(c"scroll".as_ptr(), str_1.data) {
+                            virt_lines_flags |= kVLScroll as ::core::ffi::c_int;
+                        } else if !strequal(c"trunc".as_ptr(), str_1.data) {
+                            if true {
+                                api_err_invalid(
+                                    err,
+                                    c"virt_lines_overflow".as_ptr(),
+                                    str_1.data,
+                                    0 as int64_t,
+                                    true,
+                                );
+                                break '_error;
+                            }
+                        }
+                    }
+                    's_785: {
+                        if has_key(
+                            (*opts).is_set__set_extmark_,
+                            KEYSET_OPTIDX_set_extmark__virt_lines,
+                        ) {
+                            let mut a: Array = (*opts).virt_lines;
+                            let mut j: size_t = 0 as size_t;
+                            loop {
+                                if j >= a.size {
+                                    break 's_785;
+                                }
+                                if kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
+                                    != (*a.items.offset(j as isize)).type_0 as ::core::ffi::c_uint
+                                {
+                                    api_err_exp(
+                                        err,
+                                        c"virt_text_line".as_ptr(),
+                                        api_typename(kObjectTypeArray),
+                                        api_typename((*a.items.offset(j as isize)).type_0),
+                                    );
+                                    break '_error;
+                                }
+                                let mut dummig: ::core::ffi::c_int = 0;
+                                let mut jtem: VirtText = parse_virt_text(
+                                    (*a.items.offset(j as isize)).data.array,
+                                    err,
+                                    &raw mut dummig,
+                                );
+                                if virt_lines.data.virt_lines.size
+                                    == virt_lines.data.virt_lines.capacity
+                                {
+                                    virt_lines.data.virt_lines.capacity =
+                                        if virt_lines.data.virt_lines.capacity != 0 {
+                                            virt_lines.data.virt_lines.capacity
+                                                << 1 as ::core::ffi::c_int
+                                        } else {
+                                            8 as size_t
+                                        };
+                                    virt_lines.data.virt_lines.items = xrealloc(
+                                        virt_lines.data.virt_lines.items
+                                            as *mut ::core::ffi::c_void,
+                                        ::core::mem::size_of::<virt_line>()
+                                            .wrapping_mul(virt_lines.data.virt_lines.capacity),
+                                    )
+                                        as *mut virt_line;
+                                } else {
+                                };
+                                let c2rust_fresh22 = virt_lines.data.virt_lines.size;
+                                virt_lines.data.virt_lines.size =
+                                    virt_lines.data.virt_lines.size.wrapping_add(1);
+                                *virt_lines
+                                    .data
+                                    .virt_lines
+                                    .items
+                                    .offset(c2rust_fresh22 as isize) = virt_line {
+                                    line: jtem,
+                                    flags: virt_lines_flags,
+                                }
+                                    as virt_line;
+                                if (*err).type_0 as ::core::ffi::c_int
+                                    != kErrorTypeNone as ::core::ffi::c_int
+                                {
+                                    break '_error;
+                                }
+                                j = j.wrapping_add(1);
+                            }
+                        }
+                    }
+                    virt_lines.flags = (virt_lines.flags as ::core::ffi::c_int
+                        | if (*opts).virt_lines_above as ::core::ffi::c_int != 0 {
+                            kVTLinesAbove as ::core::ffi::c_int
+                        } else {
+                            0 as ::core::ffi::c_int
+                        }) as uint8_t;
+                    if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__priority,
+                    ) {
+                        if !((*opts).priority >= 0 as Integer
+                            && (*opts).priority <= 65535 as Integer)
+                        {
+                            api_err_invalid(
+                                err,
+                                c"priority".as_ptr(),
+                                c"out of range".as_ptr(),
+                                0 as int64_t,
+                                false,
+                            );
+                            break '_error;
+                        }
+                        hl.priority = (*opts).priority as DecorPriority;
+                        sign.priority = (*opts).priority as DecorPriority;
+                        virt_text.priority = (*opts).priority as DecorPriority;
+                        virt_lines.priority = (*opts).priority as DecorPriority;
+                    }
+                    if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__sign_text,
+                    ) {
+                        sign.text[0 as ::core::ffi::c_int as usize] = 0 as schar_T;
+                        if init_sign_text(
+                            (*opts).sign_text.data,
+                            &raw mut sign.text as *mut schar_T,
+                            false,
+                        ) == 0
+                        {
+                            api_err_invalid(
+                                err,
+                                c"sign_text".as_ptr(),
+                                c"".as_ptr(),
+                                0 as int64_t,
+                                true,
+                            );
+                            break '_error;
+                        }
+                        sign.flags = (sign.flags as ::core::ffi::c_int
+                            | kSHIsSign as ::core::ffi::c_int)
+                            as uint16_t;
+                    }
+                    right_gravity = if has_key(
+                        (*opts).is_set__set_extmark_,
+                        KEYSET_OPTIDX_set_extmark__right_gravity,
+                    ) {
+                        (*opts).right_gravity as ::core::ffi::c_int
+                    } else {
+                        true_0
+                    } != 0;
+                    if line2 == -1 as ::core::ffi::c_int
+                        && col2 == -1 as ::core::ffi::c_int
+                        && has_key((*opts).is_set__set_extmark_, 30 as ::core::ffi::c_int)
+                    {
+                        api_set_error(
+                            err,
+                            kErrorTypeValidation,
+                            c"%s".as_ptr(),
+                            c"cannot set end_right_gravity without end_row or end_col".as_ptr(),
+                        );
+                    } else {
+                        len = 0 as colnr_T;
+                        if has_key(
+                            (*opts).is_set__set_extmark_,
+                            KEYSET_OPTIDX_set_extmark__spell,
+                        ) {
+                            hl.flags = (hl.flags as ::core::ffi::c_int
+                                | if (*opts).spell as ::core::ffi::c_int != 0 {
+                                    kSHSpellOn as ::core::ffi::c_int
+                                } else {
+                                    kSHSpellOff as ::core::ffi::c_int
+                                }) as uint16_t;
+                            has_hl = true;
+                        }
+                        if has_key((*opts).is_set__set_extmark_, KEYSET_OPTIDX_set_extmark__url) {
+                            url = string_to_cstr((*opts).url);
+                            has_hl = true;
+                        }
+                        if (*opts).ui_watched {
+                            hl.flags = (hl.flags as ::core::ffi::c_int
+                                | kSHUIWatched as ::core::ffi::c_int)
+                                as uint16_t;
+                            if virt_text.pos as ::core::ffi::c_uint
+                                == kVPosOverlay as ::core::ffi::c_int as ::core::ffi::c_uint
+                            {
+                                hl.flags = (hl.flags as ::core::ffi::c_int
+                                    | kSHUIWatchedOverlay as ::core::ffi::c_int)
+                                    as uint16_t;
+                            }
+                            has_hl = true;
+                        }
+                        if !(line >= 0 as Integer) {
+                            api_err_invalid(
+                                err,
+                                c"line".as_ptr(),
+                                c"out of range".as_ptr(),
+                                0 as int64_t,
+                                false,
+                            );
+                        } else {
+                            if line > (*b).b_ml.ml_line_count as Integer {
+                                if strict {
+                                    api_err_invalid(
+                                        err,
+                                        c"line".as_ptr(),
+                                        c"out of range".as_ptr(),
+                                        0 as int64_t,
+                                        false,
+                                    );
+                                    break '_error;
+                                }
+                                line = (*b).b_ml.ml_line_count as Integer;
+                            } else if line < (*b).b_ml.ml_line_count as Integer {
+                                len = (if (*opts).ephemeral as ::core::ffi::c_int != 0 {
+                                    MAXCOL as ::core::ffi::c_int
+                                } else {
+                                    ml_get_buf_len(b, line as linenr_T + 1 as linenr_T)
+                                }) as colnr_T;
+                            }
+                            if col == -1 as Integer {
+                                col = len as Integer;
+                            } else if col > len as Integer {
+                                if strict {
+                                    api_err_invalid(
+                                        err,
+                                        c"col".as_ptr(),
+                                        c"out of range".as_ptr(),
+                                        0 as int64_t,
+                                        false,
+                                    );
+                                    break '_error;
+                                }
+                                col = len as Integer;
+                            } else if col < -1 as Integer {
+                                if true {
+                                    api_err_invalid(
+                                        err,
+                                        c"col".as_ptr(),
+                                        c"out of range".as_ptr(),
+                                        0 as int64_t,
+                                        false,
+                                    );
+                                    break '_error;
+                                }
+                            }
+                            if col2 >= 0 as ::core::ffi::c_int {
+                                if line2 >= 0 as ::core::ffi::c_int
+                                    && (line2 as linenr_T) < (*b).b_ml.ml_line_count
+                                {
+                                    len = (if (*opts).ephemeral as ::core::ffi::c_int != 0 {
+                                        MAXCOL as ::core::ffi::c_int
+                                    } else {
+                                        ml_get_buf_len(b, line2 as linenr_T + 1 as linenr_T)
+                                    }) as colnr_T;
+                                } else if line2 as linenr_T == (*b).b_ml.ml_line_count {
+                                    len = 0 as ::core::ffi::c_int as colnr_T;
+                                } else {
+                                    line2 = line as ::core::ffi::c_int;
+                                }
+                                if col2 > len {
+                                    if strict {
+                                        api_err_invalid(
+                                            err,
+                                            c"end_col".as_ptr(),
+                                            c"out of range".as_ptr(),
+                                            0 as int64_t,
+                                            false,
+                                        );
+                                        break '_error;
+                                    }
+                                    col2 = len;
+                                }
+                            } else if line2 >= 0 as ::core::ffi::c_int {
+                                col2 = 0 as ::core::ffi::c_int as colnr_T;
+                            }
+                            if (*opts).ephemeral as ::core::ffi::c_int != 0
+                                && !(*decor_state.ptr()).win.is_null()
+                                && (*(*decor_state.ptr()).win).w_buffer == b
+                            {
+                                let mut r: ::core::ffi::c_int = line as ::core::ffi::c_int;
+                                let mut c: ::core::ffi::c_int = col as ::core::ffi::c_int;
+                                if line2 == -1 as ::core::ffi::c_int {
+                                    line2 = r;
+                                    col2 = c as colnr_T;
+                                }
+                                let mut subpriority: DecorPriority = 0 as DecorPriority;
+                                if has_key(
+                                    (*opts).is_set__set_extmark_,
+                                    KEYSET_OPTIDX_set_extmark___subpriority,
+                                ) {
+                                    if !((*opts)._subpriority >= 0 as Integer
+                                        && (*opts)._subpriority <= 65535 as Integer)
+                                    {
+                                        api_err_invalid(
+                                            err,
+                                            c"_subpriority".as_ptr(),
+                                            c"out of range".as_ptr(),
+                                            0 as int64_t,
+                                            false,
+                                        );
+                                        break '_error;
+                                    }
+                                    subpriority = (*opts)._subpriority as DecorPriority;
+                                }
+                                if virt_text.data.virt_text.size != 0 {
+                                    decor_range_add_virt(
+                                        decor_state.ptr(),
+                                        r,
+                                        c,
+                                        line2,
+                                        col2 as ::core::ffi::c_int,
+                                        decor_put_vt(
+                                            virt_text,
+                                            ::core::ptr::null_mut::<DecorVirtText>(),
+                                        ),
+                                        true,
+                                    );
+                                }
+                                if virt_lines.data.virt_lines.size != 0 {
+                                    decor_range_add_virt(
+                                        decor_state.ptr(),
+                                        r,
+                                        c,
+                                        line2,
+                                        col2 as ::core::ffi::c_int,
+                                        decor_put_vt(
+                                            virt_lines,
+                                            ::core::ptr::null_mut::<DecorVirtText>(),
+                                        ),
+                                        true,
+                                    );
+                                }
+                                if has_hl {
+                                    let mut sh: DecorSignHighlight = decor_sh_from_inline(hl);
+                                    sh.url = url;
+                                    decor_range_add_sh(
+                                        decor_state.ptr(),
+                                        r,
+                                        c,
+                                        line2,
+                                        col2 as ::core::ffi::c_int,
+                                        &raw mut sh,
+                                        true,
+                                        ns_id as uint32_t,
+                                        id,
+                                        subpriority,
+                                    );
+                                }
+                            } else if (*opts).ephemeral {
+                                api_set_error(
+                                    err,
+                                    kErrorTypeException,
+                                    c"cannot set emphemeral mark outside of a decoration provider"
+                                        .as_ptr(),
+                                );
+                                break '_error;
+                            } else {
+                                let mut decor_flags: uint16_t = 0 as uint16_t;
+                                let mut decor_alloc: *mut DecorVirtText =
+                                    ::core::ptr::null_mut::<DecorVirtText>();
+                                if virt_text.data.virt_text.size != 0 {
+                                    decor_alloc = decor_put_vt(virt_text, decor_alloc);
+                                    if virt_text.pos as ::core::ffi::c_uint
+                                        == kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
+                                    {
+                                        decor_flags = (decor_flags as ::core::ffi::c_int
+                                            | MT_FLAG_DECOR_VIRT_TEXT_INLINE)
+                                            as uint16_t;
+                                    }
+                                }
+                                if virt_lines.data.virt_lines.size != 0 {
+                                    decor_alloc = decor_put_vt(virt_lines, decor_alloc);
+                                    decor_flags = (decor_flags as ::core::ffi::c_int
+                                        | MT_FLAG_DECOR_VIRT_LINES)
+                                        as uint16_t;
+                                }
+                                let mut decor_indexed: uint32_t = DECOR_ID_INVALID as uint32_t;
+                                if sign.flags as ::core::ffi::c_int
+                                    & kSHIsSign as ::core::ffi::c_int
+                                    != 0
+                                {
+                                    sign.next = decor_indexed;
+                                    decor_indexed = decor_put_sh(sign);
+                                    if sign.text[0 as ::core::ffi::c_int as usize] != 0 {
+                                        decor_flags = (decor_flags as ::core::ffi::c_int
+                                            | MT_FLAG_DECOR_SIGNTEXT)
+                                            as uint16_t;
+                                    }
+                                    if sign.number_hl_id != 0
+                                        || sign.line_hl_id != 0
+                                        || sign.cursorline_hl_id != 0
+                                    {
+                                        decor_flags = (decor_flags as ::core::ffi::c_int
+                                            | MT_FLAG_DECOR_SIGNHL)
+                                            as uint16_t;
+                                    }
+                                }
+                                if has_hl_multiple {
+                                    let mut arr_0: Array = (*opts).hl_group.data.array;
+                                    let mut i_0: size_t = arr_0.size.wrapping_sub(1 as size_t);
+                                    while i_0 > 0 as size_t {
+                                        let mut hl_id_0: ::core::ffi::c_int = object_to_hl_id(
+                                            *arr_0.items.offset(i_0 as isize),
+                                            c"hl_group item".as_ptr(),
+                                            err,
+                                        );
+                                        if hl_id_0 > 0 as ::core::ffi::c_int {
+                                            let mut sh_0: DecorSignHighlight =
+                                                DECOR_SIGN_HIGHLIGHT_INIT;
+                                            sh_0.hl_id = hl_id_0;
+                                            sh_0.flags =
+                                                (if (*opts).hl_eol as ::core::ffi::c_int != 0 {
+                                                    kSHHlEol as ::core::ffi::c_int
+                                                } else {
+                                                    0 as ::core::ffi::c_int
+                                                })
+                                                    as uint16_t;
+                                            sh_0.next = decor_indexed;
+                                            decor_indexed = decor_put_sh(sh_0);
+                                            decor_flags = (decor_flags as ::core::ffi::c_int
+                                                | MT_FLAG_DECOR_HL)
+                                                as uint16_t;
+                                        }
+                                        i_0 = i_0.wrapping_sub(1);
+                                    }
+                                }
+                                if hl.flags as ::core::ffi::c_int
+                                    & kSHConcealLines as ::core::ffi::c_int
+                                    != 0
+                                {
+                                    decor_flags = (decor_flags as ::core::ffi::c_int
+                                        | MT_FLAG_DECOR_CONCEAL_LINES)
+                                        as uint16_t;
+                                }
+                                let mut decor: DecorInline = DECOR_INLINE_INIT;
+                                if !decor_alloc.is_null()
+                                    || decor_indexed != DECOR_ID_INVALID as uint32_t
+                                    || !url.is_null()
+                                    || schar_high(hl.conceal_char) as ::core::ffi::c_int != 0
+                                {
+                                    if has_hl {
+                                        let mut sh_1: DecorSignHighlight = decor_sh_from_inline(hl);
+                                        sh_1.url = url;
+                                        sh_1.next = decor_indexed;
+                                        decor_indexed = decor_put_sh(sh_1);
+                                    }
+                                    decor.ext = true;
+                                    decor.data.ext = DecorExt {
+                                        sh_idx: decor_indexed,
+                                        vt: decor_alloc,
+                                    };
+                                } else {
+                                    decor.data.hl = hl;
+                                }
+                                if has_hl {
+                                    decor_flags = (decor_flags as ::core::ffi::c_int
+                                        | MT_FLAG_DECOR_HL)
+                                        as uint16_t;
+                                }
+                                extmark_set(
+                                    b,
+                                    ns_id as uint32_t,
+                                    &raw mut id,
+                                    line as ::core::ffi::c_int,
+                                    col as colnr_T,
+                                    line2,
+                                    col2,
+                                    decor,
+                                    decor_flags,
+                                    right_gravity,
+                                    (*opts).end_right_gravity as bool,
+                                    if has_key(
+                                        (*opts).is_set__set_extmark_,
+                                        KEYSET_OPTIDX_set_extmark__undo_restore,
+                                    ) {
+                                        (*opts).undo_restore as ::core::ffi::c_int
+                                    } else {
+                                        true_0
+                                    } == 0,
+                                    (*opts).invalidate as bool,
+                                    err,
+                                );
+                                if (*err).type_0 as ::core::ffi::c_int
+                                    != kErrorTypeNone as ::core::ffi::c_int
+                                {
+                                    decor_free(decor);
+                                    return 0 as Integer;
+                                }
+                            }
+                            return id as Integer;
+                        }
+                    }
+                }
+            }
+        }
+        clear_virttext(&raw mut virt_text.data.virt_text);
+        clear_virtlines(&raw mut virt_lines.data.virt_lines);
+        if !url.is_null() {
+            xfree(url as *mut ::core::ffi::c_void);
+        }
+        return 0 as Integer;
+    }
+}

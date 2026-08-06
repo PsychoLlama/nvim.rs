@@ -1,7 +1,7 @@
 {
   "internal_exports": 40,
-  "files_without_forbid_unsafe": 808,
-  "files_without_deny_unsafe_op": 180,
+  "files_without_forbid_unsafe": 812,
+  "files_without_deny_unsafe_op": 179,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2608, "unsafe": 56},
@@ -28,7 +28,11 @@
     "crates/nvim/src/nvim/api/command/user.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/api/deprecated.rs": {"lines": 1208, "unsafe": 42},
     "crates/nvim/src/nvim/api/events.rs": {"unsafe": 2},
-    "crates/nvim/src/nvim/api/extmark.rs": {"lines": 2184, "unsafe": 24},
+    "crates/nvim/src/nvim/api/extmark.rs": {"unsafe": 1},
+    "crates/nvim/src/nvim/api/extmark/decor.rs": {"unsafe": 4},
+    "crates/nvim/src/nvim/api/extmark/ns.rs": {"unsafe": 11},
+    "crates/nvim/src/nvim/api/extmark/query.rs": {"unsafe": 6},
+    "crates/nvim/src/nvim/api/extmark/set.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/api/options.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/api/private/converter.rs": {"no_mangle": 1, "unsafe": 14},
     "crates/nvim/src/nvim/api/private/dispatch/keysets.rs": {"unsafe": 27},
