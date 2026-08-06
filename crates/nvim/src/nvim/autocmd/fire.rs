@@ -193,15 +193,11 @@ pub unsafe extern "C" fn apply_autocmds_group(
                     {
                         if !event_ignored(event, p_ei.get()) {
                             win_ignore = false_0 != 0;
-                            if buf == curbuf.get()
-                                && (*event_names.ptr())[event as usize].event
-                                    <= 0 as ::core::ffi::c_int
-                            {
+                            if buf == curbuf.get() && event_row(event).event <= 0 {
                                 win_ignore =
                                     event_ignored(event, (*curwin.get()).w_onebuf_opt.wo_eiw);
                             } else if !buf.is_null()
-                                && (*event_names.ptr())[event as usize].event
-                                    <= 0 as ::core::ffi::c_int
+                                && event_row(event).event <= 0
                                 && (*buf).b_nwindows > 0 as ::core::ffi::c_int
                             {
                                 win_ignore = true_0 != 0;

@@ -60,8 +60,8 @@ use crate::src::nvim::options::kOptEventignore;
 use crate::src::nvim::os::env::expand_env_save;
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, abs, atoi, gettext, snprintf, strcasecmp, strchr, strcpy, strlen,
-    strncasecmp, strncmp,
+    __assert_fail, abort, atoi, gettext, snprintf, strcasecmp, strchr, strcpy, strlen, strncasecmp,
+    strncmp,
 };
 use crate::src::nvim::os::time::os_now;
 use crate::src::nvim::path::{FullName_save, path_fnamecmp, path_tail};
@@ -290,13 +290,6 @@ pub const AUGROUP_ERROR: C2Rust_Unnamed_31 = -2;
 pub const AUGROUP_DEFAULT: C2Rust_Unnamed_31 = -1;
 pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
 pub const BUFLOCAL_PAT_LEN: C2Rust_Unnamed_32 = 25;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct event_name {
-    pub len: size_t,
-    pub name: *mut ::core::ffi::c_char,
-    pub event: ::core::ffi::c_int,
-}
 pub const ETYPE_AUCMD: etype_T = 3;
 pub const DOCMD_REPEAT: C2Rust_Unnamed_34 = 4;
 pub const DOCMD_VERBOSE: C2Rust_Unnamed_34 = 1;
@@ -448,26 +441,36 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NO_SCREEN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
-/// One row of [`event_names`]: an event's name, and which event it is.
+/// One row of [`EVENT_NAMES`]: a spelling of an event, and which event it
+/// is.  There is one row -- and one `EVENT_*` constant, at the same index
+/// -- per *name*, so the four aliases have a constant of their own that no
+/// event ever takes: row `EVENT_BUFCREATE` is `BufCreate`, whose `event` is
+/// `EVENT_BUFADD`.  `event_nr2name` reads the row at the index, the name
+/// lookup answers the row's `event`, and the two agree everywhere a real
+/// event value can reach.
 ///
 /// The sign of `event` is upstream's window-local flag -- `gen_events.lua`
 /// negates the event of every name whose `auevents.lua` entry is `true` --
 /// and it is read back as `event <= 0`, which is why `BufAdd`, event 0,
 /// counts as window-local by having no sign at all.
-const fn named(name: &'static CStr, event: auto_event) -> event_name {
-    event_name {
-        len: name.count_bytes(),
-        name: name.as_ptr() as *mut ::core::ffi::c_char,
+pub struct EventName {
+    pub name: &'static CStr,
+    pub event: ::core::ffi::c_int,
+}
+
+/// A row of [`EVENT_NAMES`] for an event that is not window-local.
+const fn named(name: &'static CStr, event: auto_event) -> EventName {
+    EventName {
+        name,
         event: event as ::core::ffi::c_int,
     }
 }
 
 /// [`named`] for an event that is window-local, so it may be listed in
 /// 'eventignorewin' as well as 'eventignore'.
-const fn named_win_local(name: &'static CStr, event: auto_event) -> event_name {
-    event_name {
-        len: name.count_bytes(),
-        name: name.as_ptr() as *mut ::core::ffi::c_char,
+const fn named_win_local(name: &'static CStr, event: auto_event) -> EventName {
+    EventName {
+        name,
         event: -(event as ::core::ffi::c_int),
     }
 }
@@ -475,7 +478,7 @@ const fn named_win_local(name: &'static CStr, event: auto_event) -> event_name {
 /// Every autocommand event's name, sorted by lower-cased name -- the order
 /// `gen_events.lua` numbers the `auto_event` enum in, so a row's index *is*
 /// its event number, and the order the name lookup binary searches.
-static event_names: GlobalCell<[event_name; 145]> = GlobalCell::new([
+pub static EVENT_NAMES: [EventName; 145] = [
     named_win_local(c"BufAdd", EVENT_BUFADD),
     named_win_local(c"BufCreate", EVENT_BUFADD),
     named_win_local(c"BufDelete", EVENT_BUFDELETE),
@@ -621,7 +624,7 @@ static event_names: GlobalCell<[event_name; 145]> = GlobalCell::new([
     named(c"WinNewPre", EVENT_WINNEWPRE),
     named_win_local(c"WinResized", EVENT_WINRESIZED),
     named_win_local(c"WinScrolled", EVENT_WINSCROLLED),
-]);
+];
 /// The state every event's autocommand list starts in: an empty `kvec`
 /// with nothing allocated.
 const AUTOCMDVEC_INIT: AutoCmdVec = AutoCmdVec {

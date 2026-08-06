@@ -27,7 +27,6 @@
     "crates/nvim/src/nvim/autocmd/aucmdwin.rs": 1,
     "crates/nvim/src/nvim/autocmd/cleanup.rs": 14,
     "crates/nvim/src/nvim/autocmd/define.rs": 34,
-    "crates/nvim/src/nvim/autocmd/events.rs": 5,
     "crates/nvim/src/nvim/autocmd/fire.rs": 1,
     "crates/nvim/src/nvim/autocmd/groups.rs": 20,
     "crates/nvim/src/nvim/autocmd/listing.rs": 7,
