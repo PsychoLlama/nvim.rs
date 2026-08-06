@@ -59,8 +59,17 @@ and this project adheres to [CalVer](https://calver.org/).
   UTF-8 helpers, `vim.g`/`b`/`w`/`t`/`v`, `vim._with()`, `vim.ui_attach()`,
   the tree-sitter bindings, and the value conversions in both directions
   between Lua, Vimscript and the API.
+- Rewrote the API layer: every `nvim_*` function, covering buffers and their
+  lines, text and marks, windows, tabpages and floating windows, extmarks and
+  decorations, options, autocommands, user commands and `nvim_cmd`,
+  Vimscript evaluation and expression parsing, the UI attach protocol, and
+  the deprecated shims.
 
 ### Fixed
+
+- `nvim_parse_expression()` no longer kills the editor on an unfinished
+  curly-braces name. `'a{b'` needed no flags and one call; `'a{b}'` with
+  highlighting on was the second way in.
 
 - A dictionary key decoded from msgpack was randomly read-only, and randomly
   leaked. The key's item was allocated without initialising its flags, so
