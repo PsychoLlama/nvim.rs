@@ -7,9 +7,9 @@ use crate::src::nvim::lua::ffi::{
     lua_newuserdata, lua_objlen, lua_pcall, lua_pushboolean, lua_pushcclosure, lua_pushinteger,
     lua_pushlstring, lua_pushnil, lua_pushnumber, lua_pushstring, lua_pushvalue, lua_rawgeti,
     lua_rawseti, lua_setfenv, lua_setfield, lua_setmetatable, lua_settop, lua_toboolean,
-    lua_tointeger, lua_tolstring, lua_touserdata, lua_type, luaL_argerror, luaL_checkinteger,
-    luaL_checklstring, luaL_checknumber, luaL_checkudata, luaL_error, luaL_newmetatable, luaL_ref,
-    luaL_register, luaL_unref,
+    lua_tointeger, lua_tolstring, lua_touserdata, lua_type, luaL_argcheck, luaL_argerror,
+    luaL_checkinteger, luaL_checklstring, luaL_checknumber, luaL_checkudata, luaL_error,
+    luaL_newmetatable, luaL_ref, luaL_register, luaL_unref,
 };
 use crate::src::nvim::main::{IObuff, buffer_handles, tslua_query_parse_count};
 use crate::src::nvim::map::{

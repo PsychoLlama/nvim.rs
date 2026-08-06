@@ -56,8 +56,7 @@ unsafe extern "C-unwind" fn load_language_from_object(
             uv_dlclose(&raw mut lib);
             luaL_error(
                 L,
-                b"Failed to load parser for language '%s': uv_dlopen: %s\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"Failed to load parser for language '%s': uv_dlopen: %s".as_ptr(),
                 lang_name,
                 IObuff.ptr() as *mut ::core::ffi::c_char,
             );
@@ -66,7 +65,7 @@ unsafe extern "C-unwind" fn load_language_from_object(
         snprintf(
             &raw mut symbol_buf as *mut ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 128]>(),
-            b"tree_sitter_%s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"tree_sitter_%s".as_ptr(),
             symbol,
         );
         let mut lang_parser: Option<unsafe extern "C" fn() -> *mut TSLanguage> = None;
@@ -84,7 +83,7 @@ unsafe extern "C-unwind" fn load_language_from_object(
             uv_dlclose(&raw mut lib);
             luaL_error(
                 L,
-                b"Failed to load parser: uv_dlsym: %s\0".as_ptr() as *const ::core::ffi::c_char,
+                c"Failed to load parser: uv_dlsym: %s".as_ptr(),
                 IObuff.ptr() as *mut ::core::ffi::c_char,
             );
         }
@@ -93,8 +92,7 @@ unsafe extern "C-unwind" fn load_language_from_object(
             uv_dlclose(&raw mut lib);
             luaL_error(
                 L,
-                b"Failed to load parser %s: internal error\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"Failed to load parser %s: internal error".as_ptr(),
                 path,
             );
         }
@@ -108,7 +106,7 @@ unsafe extern "C-unwind" fn load_language_from_wasm(
     mut _lang_name: *const ::core::ffi::c_char,
 ) -> *const TSLanguage {
     unsafe {
-        luaL_error(L, b"Not supported\0".as_ptr() as *const ::core::ffi::c_char);
+        luaL_error(L, c"Not supported".as_ptr());
         return ::core::ptr::null::<TSLanguage>();
     }
 }
@@ -154,8 +152,7 @@ unsafe extern "C-unwind" fn add_language(
         {
             return luaL_error(
                 L,
-                b"ABI version mismatch for %s: supported between %d and %d, found %d\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"ABI version mismatch for %s: supported between %d and %d, found %d".as_ptr(),
                 path,
                 TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION,
                 TREE_SITTER_LANGUAGE_VERSION,
@@ -202,11 +199,7 @@ pub(crate) unsafe extern "C-unwind" fn lang_check(
         let mut lang: *mut TSLanguage =
             map_get_cstr_t_ptr_t(langs.ptr(), lang_name as cstr_t) as *mut TSLanguage;
         if lang.is_null() {
-            luaL_error(
-                L,
-                b"no such language: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                lang_name,
-            );
+            luaL_error(L, c"no such language: %s".as_ptr(), lang_name);
         }
         return lang;
     }
@@ -223,10 +216,10 @@ pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(
             if nsymbols < 2147483647 as uint32_t {
             } else {
                 __assert_fail(
-                    b"nsymbols < INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/lua/treesitter.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"nsymbols < INT_MAX".as_ptr(),
+                    c"src/nvim/lua/treesitter.rs".as_ptr(),
                     276 as ::core::ffi::c_uint,
-                    b"int tslua_inspect_lang(lua_State *)\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"int tslua_inspect_lang(lua_State *)".as_ptr(),
                 );
             }
         };
@@ -251,7 +244,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(
                     snprintf(
                         &raw mut buf as *mut ::core::ffi::c_char,
                         ::core::mem::size_of::<[::core::ffi::c_char; 256]>(),
-                        b"\"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"\"%s\"".as_ptr(),
                         name,
                     );
                     lua_setfield(
@@ -265,11 +258,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(
             }
             i = i.wrapping_add(1);
         }
-        lua_setfield(
-            L,
-            -2 as ::core::ffi::c_int,
-            b"symbols\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        lua_setfield(L, -2 as ::core::ffi::c_int, c"symbols".as_ptr());
         let mut nfields: uint32_t = ts_language_field_count(lang);
         lua_createtable(L, nfields as ::core::ffi::c_int, 1 as ::core::ffi::c_int);
         let mut i_0: uint32_t = 1 as uint32_t;
@@ -278,56 +267,24 @@ pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(
             lua_rawseti(L, -2 as ::core::ffi::c_int, i_0 as ::core::ffi::c_int);
             i_0 = i_0.wrapping_add(1);
         }
-        lua_setfield(
-            L,
-            -2 as ::core::ffi::c_int,
-            b"fields\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        lua_setfield(L, -2 as ::core::ffi::c_int, c"fields".as_ptr());
         lua_pushboolean(L, ts_language_is_wasm(lang) as ::core::ffi::c_int);
-        lua_setfield(
-            L,
-            -2 as ::core::ffi::c_int,
-            b"_wasm\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        lua_setfield(L, -2 as ::core::ffi::c_int, c"_wasm".as_ptr());
         lua_pushinteger(L, ts_language_abi_version(lang) as lua_Integer);
-        lua_setfield(
-            L,
-            -2 as ::core::ffi::c_int,
-            b"abi_version\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        lua_setfield(L, -2 as ::core::ffi::c_int, c"abi_version".as_ptr());
         let mut meta: *const TSLanguageMetadata = ts_language_metadata(lang);
         if !meta.is_null() {
             lua_createtable(L, 0 as ::core::ffi::c_int, 3 as ::core::ffi::c_int);
             lua_pushinteger(L, (*meta).major_version as lua_Integer);
-            lua_setfield(
-                L,
-                -2 as ::core::ffi::c_int,
-                b"major_version\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            lua_setfield(L, -2 as ::core::ffi::c_int, c"major_version".as_ptr());
             lua_pushinteger(L, (*meta).minor_version as lua_Integer);
-            lua_setfield(
-                L,
-                -2 as ::core::ffi::c_int,
-                b"minor_version\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            lua_setfield(L, -2 as ::core::ffi::c_int, c"minor_version".as_ptr());
             lua_pushinteger(L, (*meta).patch_version as lua_Integer);
-            lua_setfield(
-                L,
-                -2 as ::core::ffi::c_int,
-                b"patch_version\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            lua_setfield(
-                L,
-                -2 as ::core::ffi::c_int,
-                b"metadata\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            lua_setfield(L, -2 as ::core::ffi::c_int, c"patch_version".as_ptr());
+            lua_setfield(L, -2 as ::core::ffi::c_int, c"metadata".as_ptr());
         }
         lua_pushinteger(L, ts_language_state_count(lang) as lua_Integer);
-        lua_setfield(
-            L,
-            -2 as ::core::ffi::c_int,
-            b"state_count\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        lua_setfield(L, -2 as ::core::ffi::c_int, c"state_count".as_ptr());
         let mut nsupertypes: uint32_t = 0;
         let mut supertypes: *const TSSymbol = ts_language_supertypes(lang, &raw mut nsupertypes);
         lua_createtable(
@@ -337,17 +294,14 @@ pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(
         );
         let mut i_1: uint32_t = 0 as uint32_t;
         while i_1 < nsupertypes {
-            let supertype: TSSymbol = *supertypes.offset(i_1 as isize);
+            let supertype: TSSymbol = *supertypes.add(i_1 as usize);
             let mut nsubtypes: uint32_t = 0;
             let mut subtypes: *const TSSymbol =
                 ts_language_subtypes(lang, supertype, &raw mut nsubtypes);
             lua_createtable(L, nsubtypes as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
             let mut j: uint32_t = 1 as uint32_t;
             while j <= nsubtypes {
-                lua_pushstring(
-                    L,
-                    ts_language_symbol_name(lang, *subtypes.offset(j as isize)),
-                );
+                lua_pushstring(L, ts_language_symbol_name(lang, *subtypes.add(j as usize)));
                 lua_rawseti(L, -2 as ::core::ffi::c_int, j as ::core::ffi::c_int);
                 j = j.wrapping_add(1);
             }
@@ -358,11 +312,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(
             );
             i_1 = i_1.wrapping_add(1);
         }
-        lua_setfield(
-            L,
-            -2 as ::core::ffi::c_int,
-            b"supertypes\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        lua_setfield(L, -2 as ::core::ffi::c_int, c"supertypes".as_ptr());
         return 1 as ::core::ffi::c_int;
     }
 }

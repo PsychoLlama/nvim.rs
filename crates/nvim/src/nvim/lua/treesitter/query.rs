@@ -9,43 +9,16 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::luaL_reg_table;
+use crate::src::nvim::global_cell::SharedCell;
 
-pub(crate) static query_meta: GlobalCell<[luaL_Reg; 6]> = GlobalCell::new([
-    luaL_Reg {
-        name: b"__gc\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(query_gc as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
-    },
-    luaL_Reg {
-        name: b"__tostring\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            query_tostring as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: b"inspect\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            query_inspect as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: b"disable_capture\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            query_disable_capture
-                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: b"disable_pattern\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            query_disable_pattern
-                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: ::core::ptr::null::<::core::ffi::c_char>(),
-        func: None,
-    },
-]);
+pub(crate) static query_meta: SharedCell<[luaL_Reg; 6]> = luaL_reg_table![
+    c"__gc" => query_gc,
+    c"__tostring" => query_tostring,
+    c"inspect" => query_inspect,
+    c"disable_capture" => query_disable_capture,
+    c"disable_pattern" => query_disable_pattern,
+];
 
 pub(crate) unsafe extern "C-unwind" fn tslua_parse_query(
     mut L: *mut lua_State,
@@ -55,10 +28,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_parse_query(
             || lua_isstring(L, 1 as ::core::ffi::c_int) == 0
             || lua_isstring(L, 2 as ::core::ffi::c_int) == 0
         {
-            return luaL_error(
-                L,
-                b"string expected\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            return luaL_error(L, c"string expected".as_ptr());
         }
         let mut lang: *mut TSLanguage = lang_check(L, 1 as ::core::ffi::c_int);
         let mut len: size_t = 0;
@@ -85,7 +55,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_parse_query(
             );
             return luaL_error(
                 L,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%s".as_ptr(),
                 &raw mut err_msg as *mut ::core::ffi::c_char,
             );
         }
@@ -102,12 +72,12 @@ unsafe extern "C-unwind" fn query_err_to_string(
     mut error_type: TSQueryError,
 ) -> *const ::core::ffi::c_char {
     match error_type as ::core::ffi::c_uint {
-        1 => return b"Invalid syntax:\n\0".as_ptr() as *const ::core::ffi::c_char,
-        2 => return b"Invalid node type \0".as_ptr() as *const ::core::ffi::c_char,
-        3 => return b"Invalid field name \0".as_ptr() as *const ::core::ffi::c_char,
-        4 => return b"Invalid capture name \0".as_ptr() as *const ::core::ffi::c_char,
-        5 => return b"Impossible pattern:\n\0".as_ptr() as *const ::core::ffi::c_char,
-        _ => return b"error\0".as_ptr() as *const ::core::ffi::c_char,
+        1 => return c"Invalid syntax:\n".as_ptr(),
+        2 => return c"Invalid node type ".as_ptr(),
+        3 => return c"Invalid field name ".as_ptr(),
+        4 => return c"Invalid capture name ".as_ptr(),
+        5 => return c"Impossible pattern:\n".as_ptr(),
+        _ => return c"error".as_ptr(),
     };
 }
 
@@ -125,7 +95,7 @@ unsafe extern "C-unwind" fn query_err_string(
         let mut error_line_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut end_str: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         loop {
-            let mut src_tmp: *const ::core::ffi::c_char = src.offset(line_start as isize);
+            let mut src_tmp: *const ::core::ffi::c_char = src.add(line_start as usize);
             end_str = strchr(src_tmp, '\n' as ::core::ffi::c_int);
             let mut line_length: ::core::ffi::c_int = if !end_str.is_null() {
                 end_str.offset_from(src_tmp) as ::core::ffi::c_int
@@ -150,14 +120,14 @@ unsafe extern "C-unwind" fn query_err_string(
         snprintf(
             err,
             errlen,
-            b"Query error at %d:%d. %s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"Query error at %d:%d. %s".as_ptr(),
             row + 1 as ::core::ffi::c_int,
             column + 1 as ::core::ffi::c_int,
             type_msg,
         );
         let mut offset: size_t = strlen(err);
         errlen = errlen.wrapping_sub(offset);
-        err = err.offset(offset as isize);
+        err = err.add(offset);
         if error_type as ::core::ffi::c_uint
             == TSQueryErrorNodeType as ::core::ffi::c_int as ::core::ffi::c_uint
             || error_type as ::core::ffi::c_uint
@@ -165,13 +135,13 @@ unsafe extern "C-unwind" fn query_err_string(
             || error_type as ::core::ffi::c_uint
                 == TSQueryErrorCapture as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            let mut suffix: *const ::core::ffi::c_char = src.offset(error_offset as isize);
+            let mut suffix: *const ::core::ffi::c_char = src.add(error_offset as usize);
             let mut is_anonymous: bool = error_type as ::core::ffi::c_uint
                 == TSQueryErrorNodeType as ::core::ffi::c_int as ::core::ffi::c_uint
                 && *suffix.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == '"' as ::core::ffi::c_int;
             let mut suffix_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            let mut c: ::core::ffi::c_char = *suffix.offset(suffix_len as isize);
+            let mut c: ::core::ffi::c_char = *suffix.add(suffix_len as usize);
             if is_anonymous {
                 let mut backslashes: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 while c as ::core::ffi::c_int != '"' as ::core::ffi::c_int
@@ -183,7 +153,7 @@ unsafe extern "C-unwind" fn query_err_string(
                         backslashes = 0 as ::core::ffi::c_int;
                     }
                     suffix_len += 1;
-                    c = *suffix.offset(suffix_len as isize);
+                    c = *suffix.add(suffix_len as usize);
                 }
             } else {
                 while *(*__ctype_b_loc()).offset(c as ::core::ffi::c_int as isize)
@@ -195,36 +165,26 @@ unsafe extern "C-unwind" fn query_err_string(
                     || c as ::core::ffi::c_int == '.' as ::core::ffi::c_int
                 {
                     suffix_len += 1;
-                    c = *suffix.offset(suffix_len as isize);
+                    c = *suffix.add(suffix_len as usize);
                 }
             }
-            snprintf(
-                err,
-                errlen,
-                b"\"%.*s\":\n\0".as_ptr() as *const ::core::ffi::c_char,
-                suffix_len,
-                suffix,
-            );
+            snprintf(err, errlen, c"\"%.*s\":\n".as_ptr(), suffix_len, suffix);
             offset = strlen(err);
             errlen = errlen.wrapping_sub(offset);
-            err = err.offset(offset as isize);
+            err = err.add(offset);
         }
         if error_line.is_null() {
-            snprintf(
-                err,
-                errlen,
-                b"Unexpected EOF\n\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            snprintf(err, errlen, c"Unexpected EOF\n".as_ptr());
             return;
         }
         snprintf(
             err,
             errlen,
-            b"%.*s\n%*s^\n\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%.*s\n%*s^\n".as_ptr(),
             error_line_len,
             error_line,
             column,
-            b"\0".as_ptr() as *const ::core::ffi::c_char,
+            c"".as_ptr(),
         );
     }
 }
@@ -236,12 +196,7 @@ pub(crate) unsafe extern "C-unwind" fn query_check(
     unsafe {
         let mut ud: *mut *mut TSQuery =
             luaL_checkudata(L, index, TS_META_QUERY.as_ptr()) as *mut *mut TSQuery;
-        (!(*ud).is_null()
-            || luaL_argerror(
-                L,
-                index,
-                b"TSQuery expected\0".as_ptr() as *const ::core::ffi::c_char,
-            ) != 0) as ::core::ffi::c_int;
+        luaL_argcheck(L, !(*ud).is_null(), index, c"TSQuery expected".as_ptr());
         return *ud;
     }
 }
@@ -256,7 +211,7 @@ unsafe extern "C-unwind" fn query_gc(mut L: *mut lua_State) -> ::core::ffi::c_in
 
 unsafe extern "C-unwind" fn query_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
-        lua_pushstring(L, b"<query>\0".as_ptr() as *const ::core::ffi::c_char);
+        lua_pushstring(L, c"<query>".as_ptr());
         return 1 as ::core::ffi::c_int;
     }
 }
@@ -283,7 +238,7 @@ unsafe extern "C-unwind" fn query_inspect(mut L: *mut lua_State) -> ::core::ffi:
                 let mut nextitem: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
                 let mut k: size_t = 0 as size_t;
                 while k < len as size_t {
-                    if (*step.offset(k as isize)).type_0 as ::core::ffi::c_uint
+                    if (*step.add(k)).type_0 as ::core::ffi::c_uint
                         == TSQueryPredicateStepTypeDone as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         let c2rust_fresh0 = nextpred;
@@ -292,27 +247,24 @@ unsafe extern "C-unwind" fn query_inspect(mut L: *mut lua_State) -> ::core::ffi:
                         lua_createtable(L, 3 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
                         nextitem = 1 as ::core::ffi::c_int;
                     } else {
-                        if (*step.offset(k as isize)).type_0 as ::core::ffi::c_uint
+                        if (*step.add(k)).type_0 as ::core::ffi::c_uint
                             == TSQueryPredicateStepTypeString as ::core::ffi::c_int
                                 as ::core::ffi::c_uint
                         {
                             let mut strlen_0: uint32_t = 0;
                             let mut str: *const ::core::ffi::c_char = ts_query_string_value_for_id(
                                 query,
-                                (*step.offset(k as isize)).value_id,
+                                (*step.add(k)).value_id,
                                 &raw mut strlen_0,
                             );
                             lua_pushlstring(L, str, strlen_0 as size_t);
-                        } else if (*step.offset(k as isize)).type_0 as ::core::ffi::c_uint
+                        } else if (*step.add(k)).type_0 as ::core::ffi::c_uint
                             == TSQueryPredicateStepTypeCapture as ::core::ffi::c_int
                                 as ::core::ffi::c_uint
                         {
                             lua_pushinteger(
                                 L,
-                                (*step.offset(k as isize))
-                                    .value_id
-                                    .wrapping_add(1 as uint32_t)
-                                    as lua_Integer,
+                                (*step.add(k)).value_id.wrapping_add(1 as uint32_t) as lua_Integer,
                             );
                         } else {
                             abort();
@@ -332,11 +284,7 @@ unsafe extern "C-unwind" fn query_inspect(mut L: *mut lua_State) -> ::core::ffi:
             }
             i = i.wrapping_add(1);
         }
-        lua_setfield(
-            L,
-            -2 as ::core::ffi::c_int,
-            b"patterns\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        lua_setfield(L, -2 as ::core::ffi::c_int, c"patterns".as_ptr());
         let mut n_captures: uint32_t = ts_query_capture_count(query);
         lua_createtable(L, n_captures as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
         let mut i_0: size_t = 0 as size_t;
@@ -352,11 +300,7 @@ unsafe extern "C-unwind" fn query_inspect(mut L: *mut lua_State) -> ::core::ffi:
             );
             i_0 = i_0.wrapping_add(1);
         }
-        lua_setfield(
-            L,
-            -2 as ::core::ffi::c_int,
-            b"captures\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        lua_setfield(L, -2 as ::core::ffi::c_int, c"captures".as_ptr());
         return 1 as ::core::ffi::c_int;
     }
 }

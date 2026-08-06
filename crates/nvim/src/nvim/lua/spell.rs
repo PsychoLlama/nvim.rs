@@ -9,8 +9,8 @@
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 use crate::src::nvim::lua::ffi::{
-    lua_createtable, lua_gettop, lua_pushinteger, lua_pushlstring, lua_pushstring, lua_rawseti,
-    lua_tolstring, lua_type, luaL_argerror, luaL_error, luaL_register,
+    LUA_TSTRING, lua_createtable, lua_gettop, lua_pushinteger, lua_pushlstring, lua_pushstring,
+    lua_rawseti, lua_tolstring, lua_type, luaL_argerror, luaL_error, luaL_register,
 };
 use crate::src::nvim::main::{curwin, e_no_spell};
 use crate::src::nvim::message::emsg;
@@ -19,15 +19,6 @@ use crate::src::nvim::spell::{parse_spelllang, spell_check};
 use crate::src::nvim::types::{hlf_T, lua_Integer, lua_State, luaL_Reg, size_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
-
-/// No misspelling: `spell_check` leaves the attribute at this when the
-/// word it consumed was fine.
-/// Spelling mistake.
-/// Rare word.
-/// Word only valid in another region.
-/// Word should start with a capital.
-
-pub const LUA_TSTRING: c_int = 4;
 
 /// `vim.spell.check(str)`: the misspellings in `str`, each as a
 /// `{ word, kind, byte_index }` triple.

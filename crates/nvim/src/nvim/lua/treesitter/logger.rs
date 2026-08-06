@@ -48,9 +48,9 @@ unsafe extern "C" fn logger_cb(
             if logtype as ::core::ffi::c_uint
                 == TSLogTypeParse as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                b"parse\0".as_ptr() as *const ::core::ffi::c_char
+                c"parse".as_ptr()
             } else {
-                b"lex\0".as_ptr() as *const ::core::ffi::c_char
+                c"lex".as_ptr()
             },
         );
         lua_pushstring(lstate, s);
@@ -61,10 +61,7 @@ unsafe extern "C" fn logger_cb(
             0 as ::core::ffi::c_int,
         ) != 0
         {
-            luaL_error(
-                lstate,
-                b"treesitter logger callback failed\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            luaL_error(lstate, c"treesitter logger callback failed".as_ptr());
         }
     }
 }
@@ -74,24 +71,24 @@ pub(crate) unsafe extern "C-unwind" fn parser_set_logger(
 ) -> ::core::ffi::c_int {
     unsafe {
         let mut p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
-        (lua_type(L, 2 as ::core::ffi::c_int) == 1 as ::core::ffi::c_int
-            || luaL_argerror(
-                L,
-                2 as ::core::ffi::c_int,
-                b"boolean expected\0".as_ptr() as *const ::core::ffi::c_char,
-            ) != 0) as ::core::ffi::c_int;
-        (lua_type(L, 3 as ::core::ffi::c_int) == 1 as ::core::ffi::c_int
-            || luaL_argerror(
-                L,
-                3 as ::core::ffi::c_int,
-                b"boolean expected\0".as_ptr() as *const ::core::ffi::c_char,
-            ) != 0) as ::core::ffi::c_int;
-        (lua_type(L, 4 as ::core::ffi::c_int) == 6 as ::core::ffi::c_int
-            || luaL_argerror(
-                L,
-                4 as ::core::ffi::c_int,
-                b"function expected\0".as_ptr() as *const ::core::ffi::c_char,
-            ) != 0) as ::core::ffi::c_int;
+        luaL_argcheck(
+            L,
+            lua_type(L, 2 as ::core::ffi::c_int) == 1 as ::core::ffi::c_int,
+            2 as ::core::ffi::c_int,
+            c"boolean expected".as_ptr(),
+        );
+        luaL_argcheck(
+            L,
+            lua_type(L, 3 as ::core::ffi::c_int) == 1 as ::core::ffi::c_int,
+            3 as ::core::ffi::c_int,
+            c"boolean expected".as_ptr(),
+        );
+        luaL_argcheck(
+            L,
+            lua_type(L, 4 as ::core::ffi::c_int) == 6 as ::core::ffi::c_int,
+            4 as ::core::ffi::c_int,
+            c"function expected".as_ptr(),
+        );
         let mut opts: *mut TSLuaLoggerOpts =
             xmalloc(::core::mem::size_of::<TSLuaLoggerOpts>()) as *mut TSLuaLoggerOpts;
         lua_pushvalue(L, 4 as ::core::ffi::c_int);

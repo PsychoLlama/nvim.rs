@@ -302,3 +302,27 @@ pub unsafe fn luaL_argcheck(
 pub const fn lua_upvalueindex(i: ::core::ffi::c_int) -> ::core::ffi::c_int {
     LUA_GLOBALSINDEX - i
 }
+
+/// A `luaL_Reg` method table, terminated the way `luaL_register` expects.
+///
+/// `luaL_Reg`'s `name` is a `*const c_char`, so the table cannot be a plain
+/// `static` and lives in a [`SharedCell`]; the terminating all-null row is
+/// what `luaL_register` scans for and is added here rather than at each
+/// table. A bare fn item coerces to `lua_CFunction`, so no cast is needed.
+///
+/// [`SharedCell`]: crate::src::nvim::global_cell::SharedCell
+#[macro_export]
+macro_rules! luaL_reg_table {
+    ($($name:expr => $func:expr),* $(,)?) => {
+        $crate::src::nvim::global_cell::SharedCell::new([
+            $($crate::src::nvim::types::luaL_Reg {
+                name: $name.as_ptr(),
+                func: Some($func),
+            },)*
+            $crate::src::nvim::types::luaL_Reg {
+                name: ::core::ptr::null(),
+                func: None,
+            },
+        ])
+    };
+}

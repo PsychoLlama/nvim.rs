@@ -10,59 +10,19 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::luaL_reg_table;
+use crate::src::nvim::global_cell::SharedCell;
 
-pub(crate) static parser_meta: GlobalCell<[luaL_Reg; 9]> = GlobalCell::new([
-    luaL_Reg {
-        name: b"__gc\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(parser_gc as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
-    },
-    luaL_Reg {
-        name: b"__tostring\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            parser_tostring as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: b"parse\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            parser_parse as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: b"reset\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            parser_reset as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: b"set_included_ranges\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            parser_set_ranges as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: b"included_ranges\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            parser_get_ranges as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: b"_set_logger\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            parser_set_logger as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: b"_logger\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            parser_get_logger as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: ::core::ptr::null::<::core::ffi::c_char>(),
-        func: None,
-    },
-]);
+pub(crate) static parser_meta: SharedCell<[luaL_Reg; 9]> = luaL_reg_table![
+    c"__gc" => parser_gc,
+    c"__tostring" => parser_tostring,
+    c"parse" => parser_parse,
+    c"reset" => parser_reset,
+    c"set_included_ranges" => parser_set_ranges,
+    c"included_ranges" => parser_get_ranges,
+    c"_set_logger" => parser_set_logger,
+    c"_logger" => parser_get_logger,
+];
 
 pub(crate) unsafe extern "C-unwind" fn tslua_push_parser(
     mut L: *mut lua_State,
@@ -79,11 +39,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_push_parser(
                 1 as ::core::ffi::c_int,
                 ::core::ptr::null_mut::<size_t>(),
             );
-            return luaL_error(
-                L,
-                b"Failed to load language : %s\0".as_ptr() as *const ::core::ffi::c_char,
-                lang_name,
-            );
+            return luaL_error(L, c"Failed to load language : %s".as_ptr(), lang_name);
         }
         lua_getfield(L, LUA_REGISTRYINDEX, TS_META_PARSER.as_ptr());
         lua_setmetatable(L, -2 as ::core::ffi::c_int);
@@ -98,12 +54,12 @@ pub(crate) unsafe extern "C-unwind" fn parser_check(
     unsafe {
         let mut ud: *mut *mut TSParser =
             luaL_checkudata(L, index, TS_META_PARSER.as_ptr()) as *mut *mut TSParser;
-        (!(*ud).is_null()
-            || luaL_argerror(
-                L,
-                index,
-                b"Parser has been deleted\0".as_ptr() as *const ::core::ffi::c_char,
-            ) != 0) as ::core::ffi::c_int;
+        luaL_argcheck(
+            L,
+            !(*ud).is_null(),
+            index,
+            c"Parser has been deleted".as_ptr(),
+        );
         return *ud;
     }
 }
@@ -124,7 +80,7 @@ unsafe extern "C-unwind" fn parser_gc(mut L: *mut lua_State) -> ::core::ffi::c_i
 
 unsafe extern "C-unwind" fn parser_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
-        lua_pushstring(L, b"<parser>\0".as_ptr() as *const ::core::ffi::c_char);
+        lua_pushstring(L, c"<parser>".as_ptr());
         return 1 as ::core::ffi::c_int;
     }
 }
@@ -140,14 +96,14 @@ unsafe extern "C" fn input_cb(
         static buf: GlobalCell<[::core::ffi::c_char; 256]> = GlobalCell::new([0; 256]);
         if position.row as linenr_T >= (*bp).b_ml.ml_line_count {
             *bytes_read = 0 as uint32_t;
-            return b"\0".as_ptr() as *const ::core::ffi::c_char;
+            return c"".as_ptr();
         }
         let mut lnum: linenr_T = position.row as linenr_T + 1 as linenr_T;
         let mut line: *mut ::core::ffi::c_char = ml_get_buf(bp, lnum);
         let mut len: size_t = ml_get_buf_len(bp, lnum) as size_t;
         if position.column as size_t > len {
             *bytes_read = 0 as uint32_t;
-            return b"\0".as_ptr() as *const ::core::ffi::c_char;
+            return c"".as_ptr();
         }
         let mut tocopy: size_t = if len.wrapping_sub(position.column as size_t) < 256 as size_t {
             len.wrapping_sub(position.column as size_t)
@@ -156,7 +112,7 @@ unsafe extern "C" fn input_cb(
         };
         memcpy(
             buf.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
-            line.offset(position.column as isize) as *const ::core::ffi::c_void,
+            line.add(position.column as usize) as *const ::core::ffi::c_void,
             tocopy,
         );
         memchrsub(
@@ -486,7 +442,7 @@ unsafe extern "C-unwind" fn parser_parse(mut L: *mut lua_State) -> ::core::ffi::
                     vim_snprintf(
                         &raw mut ebuf as *mut ::core::ffi::c_char,
                         BUFSIZE_0 as size_t,
-                        b"invalid buffer handle: %d\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"invalid buffer handle: %d".as_ptr(),
                         bufnr,
                     );
                     return luaL_argerror(
@@ -532,8 +488,7 @@ unsafe extern "C-unwind" fn parser_parse(mut L: *mut lua_State) -> ::core::ffi::
                 return luaL_argerror(
                     L,
                     3 as ::core::ffi::c_int,
-                    b"expected either string or buffer handle\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    c"expected either string or buffer handle".as_ptr(),
                 );
             }
         }
@@ -543,8 +498,7 @@ unsafe extern "C-unwind" fn parser_parse(mut L: *mut lua_State) -> ::core::ffi::
             if ts_parser_language(p).is_null() {
                 return luaL_error(
                     L,
-                    b"Language was unset, or has an incompatible ABI.\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    c"Language was unset, or has an incompatible ABI.".as_ptr(),
                 );
             }
             return 0 as ::core::ffi::c_int;

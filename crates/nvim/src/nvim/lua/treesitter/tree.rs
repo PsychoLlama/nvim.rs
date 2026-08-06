@@ -9,41 +9,17 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::luaL_reg_table;
+use crate::src::nvim::global_cell::SharedCell;
 
-pub(crate) static tree_meta: GlobalCell<[luaL_Reg; 7]> = GlobalCell::new([
-    luaL_Reg {
-        name: b"__gc\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(tree_gc as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
-    },
-    luaL_Reg {
-        name: b"__tostring\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            tree_tostring as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: b"root\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(tree_root as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
-    },
-    luaL_Reg {
-        name: b"edit\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(tree_edit as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
-    },
-    luaL_Reg {
-        name: b"included_ranges\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            tree_get_ranges as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: b"copy\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(tree_copy as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
-    },
-    luaL_Reg {
-        name: ::core::ptr::null::<::core::ffi::c_char>(),
-        func: None,
-    },
-]);
+pub(crate) static tree_meta: SharedCell<[luaL_Reg; 7]> = luaL_reg_table![
+    c"__gc" => tree_gc,
+    c"__tostring" => tree_tostring,
+    c"root" => tree_root,
+    c"edit" => tree_edit,
+    c"included_ranges" => tree_get_ranges,
+    c"copy" => tree_copy,
+];
 
 pub(crate) unsafe extern "C-unwind" fn push_tree(mut L: *mut lua_State, mut tree: *const TSTree) {
     unsafe {
@@ -72,10 +48,7 @@ unsafe extern "C-unwind" fn tree_copy(mut L: *mut lua_State) -> ::core::ffi::c_i
 unsafe extern "C-unwind" fn tree_edit(mut L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         if lua_gettop(L) < 10 as ::core::ffi::c_int {
-            lua_pushstring(
-                L,
-                b"not enough args to tree:edit()\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            lua_pushstring(L, c"not enough args to tree:edit()".as_ptr());
             return lua_error(L);
         }
         let mut ud: *mut TSLuaTree =
@@ -140,7 +113,7 @@ unsafe extern "C-unwind" fn tree_gc(mut L: *mut lua_State) -> ::core::ffi::c_int
 
 unsafe extern "C-unwind" fn tree_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
-        lua_pushstring(L, b"<tree>\0".as_ptr() as *const ::core::ffi::c_char);
+        lua_pushstring(L, c"<tree>".as_ptr());
         return 1 as ::core::ffi::c_int;
     }
 }

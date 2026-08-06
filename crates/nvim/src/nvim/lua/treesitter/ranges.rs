@@ -30,39 +30,30 @@ pub(crate) unsafe extern "C-unwind" fn push_ranges(
                 0 as ::core::ffi::c_int,
             );
             let mut j: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-            lua_pushnumber(
-                L,
-                (*ranges.offset(i as isize)).start_point.row as lua_Number,
-            );
+            lua_pushnumber(L, (*ranges.add(i)).start_point.row as lua_Number);
             let c2rust_fresh2 = j;
             j = j + 1;
             lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh2);
-            lua_pushnumber(
-                L,
-                (*ranges.offset(i as isize)).start_point.column as lua_Number,
-            );
+            lua_pushnumber(L, (*ranges.add(i)).start_point.column as lua_Number);
             let c2rust_fresh3 = j;
             j = j + 1;
             lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh3);
             if include_bytes {
-                lua_pushnumber(L, (*ranges.offset(i as isize)).start_byte as lua_Number);
+                lua_pushnumber(L, (*ranges.add(i)).start_byte as lua_Number);
                 let c2rust_fresh4 = j;
                 j = j + 1;
                 lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh4);
             }
-            lua_pushnumber(L, (*ranges.offset(i as isize)).end_point.row as lua_Number);
+            lua_pushnumber(L, (*ranges.add(i)).end_point.row as lua_Number);
             let c2rust_fresh5 = j;
             j = j + 1;
             lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh5);
-            lua_pushnumber(
-                L,
-                (*ranges.offset(i as isize)).end_point.column as lua_Number,
-            );
+            lua_pushnumber(L, (*ranges.add(i)).end_point.column as lua_Number);
             let c2rust_fresh6 = j;
             j = j + 1;
             lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh6);
             if include_bytes {
-                lua_pushnumber(L, (*ranges.offset(i as isize)).end_byte as lua_Number);
+                lua_pushnumber(L, (*ranges.add(i)).end_byte as lua_Number);
                 let c2rust_fresh7 = j;
                 j = j + 1;
                 lua_rawseti(L, -2 as ::core::ffi::c_int, c2rust_fresh7);
@@ -81,8 +72,7 @@ unsafe extern "C-unwind" fn range_err(mut L: *mut lua_State) {
     unsafe {
         luaL_error(
             L,
-            b"Ranges can only be made from 6 element long tables or nodes.\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"Ranges can only be made from 6 element long tables or nodes.".as_ptr(),
         );
     }
 }
@@ -98,10 +88,7 @@ unsafe extern "C-unwind" fn lua_checkuint32(
             || value > UINT32_MAX as lua_Number
             || converted as lua_Number != value
         {
-            luaL_error(
-                L,
-                b"Range value out of bounds\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            luaL_error(L, c"Range value out of bounds".as_ptr());
         }
         return converted;
     }
@@ -168,17 +155,16 @@ pub(crate) unsafe extern "C-unwind" fn parser_set_ranges(
         if lua_gettop(L) < 2 as ::core::ffi::c_int {
             return luaL_error(
                 L,
-                b"not enough args to parser:set_included_ranges()\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"not enough args to parser:set_included_ranges()".as_ptr(),
             );
         }
         let mut p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
-        (lua_type(L, 2 as ::core::ffi::c_int) == 5 as ::core::ffi::c_int
-            || luaL_argerror(
-                L,
-                2 as ::core::ffi::c_int,
-                b"table expected.\0".as_ptr() as *const ::core::ffi::c_char,
-            ) != 0) as ::core::ffi::c_int;
+        luaL_argcheck(
+            L,
+            lua_type(L, 2 as ::core::ffi::c_int) == 5 as ::core::ffi::c_int,
+            2 as ::core::ffi::c_int,
+            c"table expected.".as_ptr(),
+        );
         let mut tbl_len: size_t = lua_objlen(L, 2 as ::core::ffi::c_int);
         let mut ranges: *mut TSRange =
             xmalloc(::core::mem::size_of::<TSRange>().wrapping_mul(tbl_len)) as *mut TSRange;
@@ -189,7 +175,7 @@ pub(crate) unsafe extern "C-unwind" fn parser_set_ranges(
                 2 as ::core::ffi::c_int,
                 index as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
             );
-            range_from_lua(L, ranges.offset(index as isize));
+            range_from_lua(L, ranges.add(index));
             lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
             index = index.wrapping_add(1);
         }

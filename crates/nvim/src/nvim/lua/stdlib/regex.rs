@@ -11,6 +11,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::{ERROR_INIT, TRY_STATE_INIT, error_set, nlua_push_errstr};
+use crate::luaL_reg_table;
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, handle_get_buffer, try_enter, try_leave,
 };
@@ -196,28 +197,12 @@ unsafe extern "C-unwind" fn regex_tostring(lstate: *mut lua_State) -> c_int {
 
 /// The userdatum's metatable, `luaL_register`ed under [`REGEX_TYPE`]. The
 /// trailing all-null row is the terminator `luaL_register` scans for.
-pub(crate) static REGEX_META: SharedCell<[luaL_Reg; 5]> = SharedCell::new([
-    luaL_Reg {
-        name: c"__gc".as_ptr(),
-        func: Some(regex_gc),
-    },
-    luaL_Reg {
-        name: c"__tostring".as_ptr(),
-        func: Some(regex_tostring),
-    },
-    luaL_Reg {
-        name: c"match_str".as_ptr(),
-        func: Some(regex_match_str),
-    },
-    luaL_Reg {
-        name: c"match_line".as_ptr(),
-        func: Some(regex_match_line),
-    },
-    luaL_Reg {
-        name: ptr::null(),
-        func: None,
-    },
-]);
+pub(crate) static REGEX_META: SharedCell<[luaL_Reg; 5]> = luaL_reg_table![
+    c"__gc" => regex_gc,
+    c"__tostring" => regex_tostring,
+    c"match_str" => regex_match_str,
+    c"match_line" => regex_match_line,
+];
 
 /// `vim.regex(pattern)`: compile it and push the userdatum.
 ///

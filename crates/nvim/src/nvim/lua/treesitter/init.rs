@@ -19,11 +19,7 @@ unsafe extern "C-unwind" fn build_meta(
         if luaL_newmetatable(L, tname) != 0 {
             luaL_register(L, ::core::ptr::null::<::core::ffi::c_char>(), meta);
             lua_pushvalue(L, -1 as ::core::ffi::c_int);
-            lua_setfield(
-                L,
-                -2 as ::core::ffi::c_int,
-                b"__index\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            lua_setfield(L, -2 as ::core::ffi::c_int, c"__index".as_ptr());
         }
         lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     }
@@ -98,7 +94,7 @@ pub unsafe extern "C-unwind" fn nlua_treesitter_init(lstate: *mut lua_State) {
         lua_setfield(
             lstate,
             -2 as ::core::ffi::c_int,
-            b"_create_ts_parser\0".as_ptr() as *const ::core::ffi::c_char,
+            c"_create_ts_parser".as_ptr(),
         );
         lua_pushcclosure(
             lstate,
@@ -111,7 +107,7 @@ pub unsafe extern "C-unwind" fn nlua_treesitter_init(lstate: *mut lua_State) {
         lua_setfield(
             lstate,
             -2 as ::core::ffi::c_int,
-            b"_create_ts_querycursor\0".as_ptr() as *const ::core::ffi::c_char,
+            c"_create_ts_querycursor".as_ptr(),
         );
         lua_pushcclosure(
             lstate,
@@ -124,7 +120,7 @@ pub unsafe extern "C-unwind" fn nlua_treesitter_init(lstate: *mut lua_State) {
         lua_setfield(
             lstate,
             -2 as ::core::ffi::c_int,
-            b"_ts_add_language_from_object\0".as_ptr() as *const ::core::ffi::c_char,
+            c"_ts_add_language_from_object".as_ptr(),
         );
         lua_pushcclosure(
             lstate,
@@ -137,7 +133,7 @@ pub unsafe extern "C-unwind" fn nlua_treesitter_init(lstate: *mut lua_State) {
         lua_setfield(
             lstate,
             -2 as ::core::ffi::c_int,
-            b"_ts_has_language\0".as_ptr() as *const ::core::ffi::c_char,
+            c"_ts_has_language".as_ptr(),
         );
         lua_pushcclosure(
             lstate,
@@ -150,7 +146,7 @@ pub unsafe extern "C-unwind" fn nlua_treesitter_init(lstate: *mut lua_State) {
         lua_setfield(
             lstate,
             -2 as ::core::ffi::c_int,
-            b"_ts_remove_language\0".as_ptr() as *const ::core::ffi::c_char,
+            c"_ts_remove_language".as_ptr(),
         );
         lua_pushcclosure(
             lstate,
@@ -163,7 +159,7 @@ pub unsafe extern "C-unwind" fn nlua_treesitter_init(lstate: *mut lua_State) {
         lua_setfield(
             lstate,
             -2 as ::core::ffi::c_int,
-            b"_ts_inspect_language\0".as_ptr() as *const ::core::ffi::c_char,
+            c"_ts_inspect_language".as_ptr(),
         );
         lua_pushcclosure(
             lstate,
@@ -176,7 +172,7 @@ pub unsafe extern "C-unwind" fn nlua_treesitter_init(lstate: *mut lua_State) {
         lua_setfield(
             lstate,
             -2 as ::core::ffi::c_int,
-            b"_ts_parse_query\0".as_ptr() as *const ::core::ffi::c_char,
+            c"_ts_parse_query".as_ptr(),
         );
         lua_pushcclosure(
             lstate,
@@ -189,7 +185,7 @@ pub unsafe extern "C-unwind" fn nlua_treesitter_init(lstate: *mut lua_State) {
         lua_setfield(
             lstate,
             -2 as ::core::ffi::c_int,
-            b"_ts_get_language_version\0".as_ptr() as *const ::core::ffi::c_char,
+            c"_ts_get_language_version".as_ptr(),
         );
         lua_pushcclosure(
             lstate,
@@ -202,7 +198,7 @@ pub unsafe extern "C-unwind" fn nlua_treesitter_init(lstate: *mut lua_State) {
         lua_setfield(
             lstate,
             -2 as ::core::ffi::c_int,
-            b"_ts_get_minimum_language_version\0".as_ptr() as *const ::core::ffi::c_char,
+            c"_ts_get_minimum_language_version".as_ptr(),
         );
     }
 }

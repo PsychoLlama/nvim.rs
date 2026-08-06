@@ -10,40 +10,15 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::luaL_reg_table;
+use crate::src::nvim::global_cell::SharedCell;
 
-pub(crate) static querycursor_meta: GlobalCell<[luaL_Reg; 5]> = GlobalCell::new([
-    luaL_Reg {
-        name: b"remove_match\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            querycursor_remove_match
-                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: b"next_capture\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            querycursor_next_capture
-                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: b"next_match\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            querycursor_next_match
-                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: b"__gc\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            querycursor_gc as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: ::core::ptr::null::<::core::ffi::c_char>(),
-        func: None,
-    },
-]);
+pub(crate) static querycursor_meta: SharedCell<[luaL_Reg; 5]> = luaL_reg_table![
+    c"remove_match" => querycursor_remove_match,
+    c"next_capture" => querycursor_next_capture,
+    c"next_match" => querycursor_next_match,
+    c"__gc" => querycursor_gc,
+];
 
 pub(crate) unsafe extern "C-unwind" fn tslua_push_querycursor(
     mut L: *mut lua_State,
@@ -55,39 +30,23 @@ pub(crate) unsafe extern "C-unwind" fn tslua_push_querycursor(
         if lua_gettop(L) >= 3 as ::core::ffi::c_int
             && !(lua_type(L, 3 as ::core::ffi::c_int) == LUA_TNIL)
         {
-            (lua_type(L, 3 as ::core::ffi::c_int) == 5 as ::core::ffi::c_int
-                || luaL_argerror(
-                    L,
-                    3 as ::core::ffi::c_int,
-                    b"table expected\0".as_ptr() as *const ::core::ffi::c_char,
-                ) != 0) as ::core::ffi::c_int;
+            luaL_argcheck(
+                L,
+                lua_type(L, 3 as ::core::ffi::c_int) == 5 as ::core::ffi::c_int,
+                3 as ::core::ffi::c_int,
+                c"table expected".as_ptr(),
+            );
         }
-        lua_getfield(
-            L,
-            3 as ::core::ffi::c_int,
-            b"start_row\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        lua_getfield(L, 3 as ::core::ffi::c_int, c"start_row".as_ptr());
         let mut start_row: uint32_t = luaL_checkinteger(L, -1 as ::core::ffi::c_int) as uint32_t;
         lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-        lua_getfield(
-            L,
-            3 as ::core::ffi::c_int,
-            b"start_col\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        lua_getfield(L, 3 as ::core::ffi::c_int, c"start_col".as_ptr());
         let mut start_col: uint32_t = luaL_checkinteger(L, -1 as ::core::ffi::c_int) as uint32_t;
         lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-        lua_getfield(
-            L,
-            3 as ::core::ffi::c_int,
-            b"end_row\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        lua_getfield(L, 3 as ::core::ffi::c_int, c"end_row".as_ptr());
         let mut end_row: uint32_t = luaL_checkinteger(L, -1 as ::core::ffi::c_int) as uint32_t;
         lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-        lua_getfield(
-            L,
-            3 as ::core::ffi::c_int,
-            b"end_col\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        lua_getfield(L, 3 as ::core::ffi::c_int, c"end_col".as_ptr());
         let mut end_col: uint32_t = luaL_checkinteger(L, -1 as ::core::ffi::c_int) as uint32_t;
         lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
         ts_query_cursor_set_point_range(
@@ -101,22 +60,14 @@ pub(crate) unsafe extern "C-unwind" fn tslua_push_querycursor(
                 column: end_col,
             },
         );
-        lua_getfield(
-            L,
-            3 as ::core::ffi::c_int,
-            b"max_start_depth\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        lua_getfield(L, 3 as ::core::ffi::c_int, c"max_start_depth".as_ptr());
         if !(lua_type(L, -1 as ::core::ffi::c_int) == LUA_TNIL) {
             let mut max_start_depth: uint32_t =
                 luaL_checkinteger(L, -1 as ::core::ffi::c_int) as uint32_t;
             ts_query_cursor_set_max_start_depth(cursor, max_start_depth);
         }
         lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-        lua_getfield(
-            L,
-            3 as ::core::ffi::c_int,
-            b"match_limit\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        lua_getfield(L, 3 as ::core::ffi::c_int, c"match_limit".as_ptr());
         if !(lua_type(L, -1 as ::core::ffi::c_int) == LUA_TNIL) {
             let mut match_limit: uint32_t =
                 luaL_checkinteger(L, -1 as ::core::ffi::c_int) as uint32_t;
@@ -158,7 +109,7 @@ unsafe extern "C-unwind" fn querycursor_next_capture(mut L: *mut lua_State) -> :
         if !ts_query_cursor_next_capture(cursor, &raw mut match_0, &raw mut capture_index) {
             return 0 as ::core::ffi::c_int;
         }
-        let mut capture: TSQueryCapture = *match_0.captures.offset(capture_index as isize);
+        let mut capture: TSQueryCapture = *match_0.captures.add(capture_index as usize);
         lua_pushinteger(L, capture.index.wrapping_add(1 as uint32_t) as lua_Integer);
         push_node(L, capture.node, 1 as ::core::ffi::c_int);
         push_querymatch(L, &raw mut match_0, 1 as ::core::ffi::c_int);
@@ -190,12 +141,12 @@ unsafe extern "C-unwind" fn querycursor_check(
     unsafe {
         let mut ud: *mut *mut TSQueryCursor =
             luaL_checkudata(L, index, TS_META_QUERYCURSOR.as_ptr()) as *mut *mut TSQueryCursor;
-        (!(*ud).is_null()
-            || luaL_argerror(
-                L,
-                index,
-                b"TSQueryCursor expected\0".as_ptr() as *const ::core::ffi::c_char,
-            ) != 0) as ::core::ffi::c_int;
+        luaL_argcheck(
+            L,
+            !(*ud).is_null(),
+            index,
+            c"TSQueryCursor expected".as_ptr(),
+        );
         return *ud;
     }
 }
@@ -208,25 +159,10 @@ unsafe extern "C-unwind" fn querycursor_gc(mut L: *mut lua_State) -> ::core::ffi
     }
 }
 
-pub(crate) static querymatch_meta: GlobalCell<[luaL_Reg; 3]> = GlobalCell::new([
-    luaL_Reg {
-        name: b"info\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            querymatch_info as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: b"captures\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            querymatch_captures
-                as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
-    },
-    luaL_Reg {
-        name: ::core::ptr::null::<::core::ffi::c_char>(),
-        func: None,
-    },
-]);
+pub(crate) static querymatch_meta: SharedCell<[luaL_Reg; 3]> = luaL_reg_table![
+    c"info" => querymatch_info,
+    c"captures" => querymatch_captures,
+];
 
 unsafe extern "C-unwind" fn push_querymatch(
     mut L: *mut lua_State,
@@ -267,7 +203,7 @@ unsafe extern "C-unwind" fn querymatch_captures(mut L: *mut lua_State) -> ::core
         lua_createtable(L, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
         let mut i: size_t = 0 as size_t;
         while i < (*match_0).capture_count as size_t {
-            let mut capture: TSQueryCapture = *(*match_0).captures.offset(i as isize);
+            let mut capture: TSQueryCapture = *(*match_0).captures.add(i);
             let mut index: ::core::ffi::c_int =
                 capture.index as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
             lua_rawgeti(L, -1 as ::core::ffi::c_int, index);

@@ -275,7 +275,7 @@ unsafe extern "C" fn call_on_hunk_cb(
         api_set_error(
             err,
             kErrorTypeException,
-            b"on_hunk: %s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"on_hunk: %s".as_ptr(),
             lua_tolstring(
                 lstate,
                 -1 as ::core::ffi::c_int,
@@ -297,11 +297,7 @@ unsafe extern "C-unwind" fn get_string_arg(
     mut idx: ::core::ffi::c_int,
 ) -> mmfile_t {
     if lua_type(lstate, idx) != LUA_TSTRING {
-        luaL_argerror(
-            lstate,
-            idx,
-            b"expected string\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        luaL_argerror(lstate, idx, c"expected string".as_ptr());
     }
     let mut mf: mmfile_t = mmfile_t {
         ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -310,11 +306,7 @@ unsafe extern "C-unwind" fn get_string_arg(
     let mut size: size_t = 0;
     mf.ptr = lua_tolstring(lstate, idx, &raw mut size) as *mut ::core::ffi::c_char;
     if size > INT_MAX as size_t {
-        luaL_argerror(
-            lstate,
-            idx,
-            b"string too long\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        luaL_argerror(lstate, idx, c"string too long".as_ptr());
     }
     mf.size = size as ::core::ffi::c_int;
     return mf;
@@ -346,20 +338,14 @@ unsafe extern "C-unwind" fn process_xdl_diff_opts(
             & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_xdl_diff__result_type
             != 0 as ::core::ffi::c_ulonglong
         {
-            if !strequal(
-                b"unified\0".as_ptr() as *const ::core::ffi::c_char,
-                opts.result_type.data,
-            ) {
-                if strequal(
-                    b"indices\0".as_ptr() as *const ::core::ffi::c_char,
-                    opts.result_type.data,
-                ) {
+            if !strequal(c"unified".as_ptr(), opts.result_type.data) {
+                if strequal(c"indices".as_ptr(), opts.result_type.data) {
                     had_result_type_indices = true_0 != 0;
                 } else {
                     api_set_error(
                         err,
                         kErrorTypeValidation,
-                        b"not a valid result_type\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"not a valid result_type".as_ptr(),
                     );
                     break '_exit_1;
                 }
@@ -369,31 +355,15 @@ unsafe extern "C-unwind" fn process_xdl_diff_opts(
             & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_xdl_diff__algorithm
             != 0 as ::core::ffi::c_ulonglong
         {
-            if !strequal(
-                b"myers\0".as_ptr() as *const ::core::ffi::c_char,
-                opts.algorithm.data,
-            ) {
-                if strequal(
-                    b"minimal\0".as_ptr() as *const ::core::ffi::c_char,
-                    opts.algorithm.data,
-                ) {
+            if !strequal(c"myers".as_ptr(), opts.algorithm.data) {
+                if strequal(c"minimal".as_ptr(), opts.algorithm.data) {
                     (*params).flags |= XDF_NEED_MINIMAL as ::core::ffi::c_ulong;
-                } else if strequal(
-                    b"patience\0".as_ptr() as *const ::core::ffi::c_char,
-                    opts.algorithm.data,
-                ) {
+                } else if strequal(c"patience".as_ptr(), opts.algorithm.data) {
                     (*params).flags |= XDF_PATIENCE_DIFF as ::core::ffi::c_ulong;
-                } else if strequal(
-                    b"histogram\0".as_ptr() as *const ::core::ffi::c_char,
-                    opts.algorithm.data,
-                ) {
+                } else if strequal(c"histogram".as_ptr(), opts.algorithm.data) {
                     (*params).flags |= XDF_HISTOGRAM_DIFF as ::core::ffi::c_ulong;
                 } else {
-                    api_set_error(
-                        err,
-                        kErrorTypeValidation,
-                        b"not a valid algorithm\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    api_set_error(err, kErrorTypeValidation, c"not a valid algorithm".as_ptr());
                     break '_exit_1;
                 }
             }
@@ -430,8 +400,7 @@ unsafe extern "C-unwind" fn process_xdl_diff_opts(
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"linematch must be a boolean or integer\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    c"linematch must be a boolean or integer".as_ptr(),
                 );
                 break '_exit_1;
             }
@@ -476,7 +445,7 @@ unsafe extern "C-unwind" fn process_xdl_diff_opts(
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"on_hunk is not a function\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"on_hunk is not a function".as_ptr(),
                 );
             }
         } else if had_result_type_indices {
@@ -504,10 +473,7 @@ pub unsafe extern "C-unwind" fn nlua_xdl_diff(mut lstate: *mut lua_State) -> ::c
         iwhite: false,
     };
     if lua_gettop(lstate) < 2 as ::core::ffi::c_int {
-        return luaL_error(
-            lstate,
-            b"Expected at least 2 arguments\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        return luaL_error(lstate, c"Expected at least 2 arguments".as_ptr());
     }
     let mut ma: mmfile_t = get_string_arg(lstate, 1 as ::core::ffi::c_int);
     let mut mb: mmfile_t = get_string_arg(lstate, 2 as ::core::ffi::c_int);
@@ -553,11 +519,7 @@ pub unsafe extern "C-unwind" fn nlua_xdl_diff(mut lstate: *mut lua_State) -> ::c
     '_exit_0: {
         if lua_gettop(lstate) == 3 as ::core::ffi::c_int {
             if lua_type(lstate, 3 as ::core::ffi::c_int) != LUA_TTABLE {
-                return luaL_argerror(
-                    lstate,
-                    3 as ::core::ffi::c_int,
-                    b"expected table\0".as_ptr() as *const ::core::ffi::c_char,
-                );
+                return luaL_argerror(lstate, 3 as ::core::ffi::c_int, c"expected table".as_ptr());
             }
             mode = process_xdl_diff_opts(
                 lstate,
@@ -662,7 +624,7 @@ pub unsafe extern "C-unwind" fn nlua_xdl_diff(mut lstate: *mut lua_State) -> ::c
                 api_set_error(
                     &raw mut err,
                     kErrorTypeException,
-                    b"diff operation failed\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"diff operation failed".as_ptr(),
                 );
             }
         }
