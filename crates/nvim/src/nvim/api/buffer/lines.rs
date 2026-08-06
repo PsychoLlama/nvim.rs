@@ -4,8 +4,8 @@
 //! the buffer API, and `nvim_buf_get_text` the read that takes a byte range
 //! but still hands back whole lines.  `push_linestr` is the shared
 //! line-to-`String_0` step every one of them ends in, and
-//! `buf_collect_lines` the loop over a range that the extmark and window
-//! code reaches too.
+//! `buf_collect_lines` the loop over a range that `buffer_updates.rs`
+//! reaches too, to build the `nvim_buf_attach` change notifications.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
