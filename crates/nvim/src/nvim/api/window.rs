@@ -450,7 +450,10 @@ pub unsafe extern "C" fn nvim_win_text_height(
     mut arena: *mut Arena,
     mut err: *mut Error,
 ) -> Dict {
-    let mut rv: Dict = arena_dict(arena, 2 as size_t);
+    // Upstream asks for two and writes four (`all`, `fill`, `end_row`,
+    // `end_vcol`), so every successful call overruns the arena block by two
+    // `KeyValuePair`s.  `dict_put`'s capacity assertion is what found it.
+    let mut rv: Dict = arena_dict(arena, 4 as size_t);
     let w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
         return rv;
