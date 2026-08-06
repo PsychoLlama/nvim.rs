@@ -8,8 +8,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::api::private::helpers::array_add;
+use crate::src::nvim::kvec::Kvec;
 
 unsafe extern "C" fn parse_float_anchor(mut anchor: String_0, mut out: *mut FloatAnchor) -> bool {
     unsafe {
@@ -156,24 +158,16 @@ unsafe extern "C" fn parse_bordertext(
             (*chunks).capacity = 0 as size_t;
             (*chunks).size = (*chunks).capacity;
             (*chunks).items = ::core::ptr::null_mut::<VirtTextChunk>();
-            if (*chunks).size == (*chunks).capacity {
-                (*chunks).capacity = if (*chunks).capacity != 0 {
-                    (*chunks).capacity << 1 as ::core::ffi::c_int
-                } else {
-                    8 as size_t
-                };
-                (*chunks).items = xrealloc(
-                    (*chunks).items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<VirtTextChunk>().wrapping_mul((*chunks).capacity),
-                ) as *mut VirtTextChunk;
-            } else {
-            };
-            let c2rust_fresh1 = (*chunks).size;
-            (*chunks).size = (*chunks).size.wrapping_add(1);
-            *(*chunks).items.offset(c2rust_fresh1 as isize) = VirtTextChunk {
+            // `kv_push`, whose growth step c2rust expanded inline.
+            Kvec::new(
+                &mut (*chunks).size,
+                &mut (*chunks).capacity,
+                &mut (*chunks).items,
+            )
+            .push(VirtTextChunk {
                 text: xstrdup(bordertext.data.string.data),
                 hl_id: -1 as ::core::ffi::c_int,
-            };
+            });
             *width = mb_string2cells(bordertext.data.string.data) as ::core::ffi::c_int;
             *is_present = true;
             return;

@@ -52,8 +52,7 @@ use crate::src::nvim::types::{
     Map_uint32_t_uint32_t, MapHash, MarkTree, NS, Object, OptionalKeys, Set_ptr_t, Set_uint32_t,
     String_0, UndoObjectType, VirtLines, VirtText, VirtTextChunk, Window, buf_T, colnr_T, handle_T,
     int32_t, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, key_value_pair,
-    linenr_T, object, object_data as C2Rust_Unnamed, ptr_t, schar_T, size_t, tabpage_T, uint8_t,
+    kObjectTypeInteger, kObjectTypeString, linenr_T, ptr_t, schar_T, size_t, tabpage_T, uint8_t,
     uint16_t, uint32_t, virt_line, win_T,
 };
 

@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::api::private::helpers::dict_put;
 
 pub unsafe extern "C" fn api_buf_ensure_loaded(mut buf: Buffer, mut err: *mut Error) -> *mut buf_T {
     unsafe {
@@ -18,11 +19,7 @@ pub unsafe extern "C" fn api_buf_ensure_loaded(mut buf: Buffer, mut err: *mut Er
             return ::core::ptr::null_mut::<buf_T>();
         }
         if (*b).b_ml.ml_mfp.is_null() && !buf_ensure_loaded(b) {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                b"Failed to load buffer\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            api_set_error(err, kErrorTypeException, c"Failed to load buffer".as_ptr());
             return ::core::ptr::null_mut::<buf_T>();
         }
         return b;
@@ -163,72 +160,36 @@ pub unsafe extern "C" fn nvim__buf_stats(
             };
         }
         let mut rv: Dict = arena_dict(arena, 7 as size_t);
-        let c2rust_fresh4 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh4 as isize) = key_value_pair {
-            key: cstr_as_string(b"flush_count\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (*b).flush_count as Integer,
-                },
-            },
-        };
-        let c2rust_fresh5 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh5 as isize) = key_value_pair {
-            key: cstr_as_string(b"current_lnum\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (*b).b_ml.ml_line_lnum as Integer,
-                },
-            },
-        };
-        let c2rust_fresh6 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh6 as isize) = key_value_pair {
-            key: cstr_as_string(b"line_dirty\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeBoolean,
-                data: C2Rust_Unnamed {
-                    boolean: (*b).b_ml.ml_flags & 0x2 as ::core::ffi::c_int != 0,
-                },
-            },
-        };
-        let c2rust_fresh7 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh7 as isize) = key_value_pair {
-            key: cstr_as_string(b"dirty_bytes\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (*b).deleted_bytes as Integer,
-                },
-            },
-        };
-        let c2rust_fresh8 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh8 as isize) = key_value_pair {
-            key: cstr_as_string(b"dirty_bytes2\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (*b).deleted_bytes2 as Integer,
-                },
-            },
-        };
-        let c2rust_fresh9 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh9 as isize) = key_value_pair {
-            key: cstr_as_string(b"virt_blocks\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: buf_meta_total(b, kMTMetaLines) as Integer,
-                },
-            },
-        };
+        dict_put(
+            &mut rv,
+            c"flush_count",
+            Object::integer((*b).flush_count as Integer),
+        );
+        dict_put(
+            &mut rv,
+            c"current_lnum",
+            Object::integer((*b).b_ml.ml_line_lnum as Integer),
+        );
+        dict_put(
+            &mut rv,
+            c"line_dirty",
+            Object::boolean((*b).b_ml.ml_flags & 0x2 as ::core::ffi::c_int != 0),
+        );
+        dict_put(
+            &mut rv,
+            c"dirty_bytes",
+            Object::integer((*b).deleted_bytes as Integer),
+        );
+        dict_put(
+            &mut rv,
+            c"dirty_bytes2",
+            Object::integer((*b).deleted_bytes2 as Integer),
+        );
+        dict_put(
+            &mut rv,
+            c"virt_blocks",
+            Object::integer(buf_meta_total(b, kMTMetaLines) as Integer),
+        );
         let mut uhp: *mut u_header_T = ::core::ptr::null_mut::<u_header_T>();
         if !(*b).b_u_curhead.is_null() {
             uhp = (*b).b_u_curhead;
@@ -236,17 +197,11 @@ pub unsafe extern "C" fn nvim__buf_stats(
             uhp = (*b).b_u_newhead;
         }
         if !uhp.is_null() {
-            let c2rust_fresh10 = rv.size;
-            rv.size = rv.size.wrapping_add(1);
-            *rv.items.offset(c2rust_fresh10 as isize) = key_value_pair {
-                key: cstr_as_string(b"uhp_extmark_size\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed {
-                        integer: (*uhp).uh_extmark.size as Integer,
-                    },
-                },
-            };
+            dict_put(
+                &mut rv,
+                c"uhp_extmark_size",
+                Object::integer((*uhp).uh_extmark.size as Integer),
+            );
         }
         return rv;
     }

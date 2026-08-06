@@ -40,9 +40,9 @@ use crate::src::nvim::types::{
     KeyDict_empty, KeyDict_exec_opts, KeyValuePair, LuaRetMode, MsgpackRpcRequestHandler, Object,
     OptIndex, OptScope, OptVal, OptValData, OptValType, String_0, StringBuilder, Tabpage, VirtText,
     VirtTextChunk, Window, buf_T, colnr_T, int64_t, kErrorTypeNone, kErrorTypeValidation, kFalse,
-    kObjectTypeArray, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
-    lua_State, object, object_data as C2Rust_Unnamed, schar_T, sctx_T, size_t, tabpage_T, uint8_t,
-    uint16_t, uint32_t, uint64_t, win_T,
+    kObjectTypeArray, kObjectTypeNil, kObjectTypeString, lua_State, object,
+    object_data as C2Rust_Unnamed, schar_T, sctx_T, size_t, tabpage_T, uint8_t, uint16_t, uint32_t,
+    uint64_t, win_T,
 };
 
 // The carve of the transpiled module; see each child's docs.

@@ -32,11 +32,7 @@ pub unsafe extern "C" fn nvim_create_augroup(
         let save_current_sctx: sctx_T = api_set_sctx(channel_id);
         augroup = augroup_add(augroup_name_0);
         if augroup == AUGROUP_ERROR as ::core::ffi::c_int {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                b"Failed to set augroup\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            api_set_error(err, kErrorTypeException, c"Failed to set augroup".as_ptr());
             return -1 as Integer;
         }
         if clear_autocmds {
@@ -104,7 +100,7 @@ pub(crate) unsafe extern "C" fn get_augroup_from_object(
                 if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
                     api_err_invalid(
                         err,
-                        b"group\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"group".as_ptr(),
                         group.data.string.data,
                         0 as int64_t,
                         true_0 != 0,
@@ -123,7 +119,7 @@ pub(crate) unsafe extern "C" fn get_augroup_from_object(
                 if !augroup_exists(name) {
                     api_err_invalid(
                         err,
-                        b"group\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"group".as_ptr(),
                         ::core::ptr::null::<::core::ffi::c_char>(),
                         au_group as int64_t,
                         false_0 != 0,
@@ -136,8 +132,8 @@ pub(crate) unsafe extern "C" fn get_augroup_from_object(
                 if true {
                     api_err_exp(
                         err,
-                        b"group\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"String or Integer\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"group".as_ptr(),
+                        c"String or Integer".as_ptr(),
                         api_typename(group.type_0),
                     );
                     return AUGROUP_ERROR as ::core::ffi::c_int;

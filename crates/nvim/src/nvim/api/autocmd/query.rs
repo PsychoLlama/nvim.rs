@@ -7,8 +7,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::api::private::helpers::{array_add, dict_put, dict_put_str};
+use crate::src::nvim::kvec::InitVec;
 use crate::src::nvim::types::OptionalKeys;
 
 pub unsafe extern "C" fn nvim_get_autocmds(
@@ -277,12 +279,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                         let mut pat: String_0 =
                             arena_printf(arena, c"<buffer=%d>".as_ptr(), (*b).handle);
                         buffers = arena_array(arena, 1 as size_t);
-                        let c2rust_fresh0 = buffers.size;
-                        buffers.size = buffers.size.wrapping_add(1);
-                        *buffers.items.offset(c2rust_fresh0 as isize) = object {
-                            type_0: kObjectTypeString,
-                            data: C2Rust_Unnamed { string: pat },
-                        };
+                        array_add(&mut buffers, Object::string(pat));
                     } else if buf.type_0 as ::core::ffi::c_uint
                         == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
@@ -324,18 +321,14 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                             {
                                 break '_cleanup;
                             }
-                            let c2rust_fresh1 = buffers.size;
-                            buffers.size = buffers.size.wrapping_add(1);
-                            *buffers.items.offset(c2rust_fresh1 as isize) = object {
-                                type_0: kObjectTypeString,
-                                data: C2Rust_Unnamed {
-                                    string: arena_printf(
-                                        arena,
-                                        c"<buffer=%d>".as_ptr(),
-                                        (*b_0).handle,
-                                    ),
-                                },
-                            };
+                            array_add(
+                                &mut buffers,
+                                Object::string(arena_printf(
+                                    arena,
+                                    c"<buffer=%d>".as_ptr(),
+                                    (*b_0).handle,
+                                )),
+                            );
                             bufnr_index = bufnr_index.wrapping_add(1);
                         }
                     } else if has_buf {
@@ -432,161 +425,77 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                 arena_dict(arena, 12 as size_t);
                                             if (*ap).group != AUGROUP_DEFAULT as ::core::ffi::c_int
                                             {
-                                                let c2rust_fresh2 = autocmd_info.size;
-                                                autocmd_info.size =
-                                                    autocmd_info.size.wrapping_add(1);
-                                                *autocmd_info
-                                                    .items
-                                                    .offset(c2rust_fresh2 as isize) =
-                                                    key_value_pair {
-                                                        key: cstr_as_string(c"group".as_ptr()),
-                                                        value: object {
-                                                            type_0: kObjectTypeInteger,
-                                                            data: C2Rust_Unnamed {
-                                                                integer: (*ap).group as Integer,
-                                                            },
-                                                        },
-                                                    };
-                                                let c2rust_fresh3 = autocmd_info.size;
-                                                autocmd_info.size =
-                                                    autocmd_info.size.wrapping_add(1);
-                                                *autocmd_info
-                                                    .items
-                                                    .offset(c2rust_fresh3 as isize) =
-                                                    key_value_pair {
-                                                        key: cstr_as_string(c"group_name".as_ptr()),
-                                                        value: object {
-                                                            type_0: kObjectTypeString,
-                                                            data: C2Rust_Unnamed {
-                                                                string: cstr_as_string(
-                                                                    augroup_name((*ap).group),
-                                                                ),
-                                                            },
-                                                        },
-                                                    };
+                                                dict_put(
+                                                    &mut autocmd_info,
+                                                    c"group",
+                                                    Object::integer((*ap).group as Integer),
+                                                );
+                                                dict_put(
+                                                    &mut autocmd_info,
+                                                    c"group_name",
+                                                    Object::string(cstr_as_string(augroup_name(
+                                                        (*ap).group,
+                                                    ))),
+                                                );
                                             }
                                             if (*ac).id > 0 as int64_t {
-                                                let c2rust_fresh4 = autocmd_info.size;
-                                                autocmd_info.size =
-                                                    autocmd_info.size.wrapping_add(1);
-                                                *autocmd_info
-                                                    .items
-                                                    .offset(c2rust_fresh4 as isize) =
-                                                    key_value_pair {
-                                                        key: cstr_as_string(c"id".as_ptr()),
-                                                        value: object {
-                                                            type_0: kObjectTypeInteger,
-                                                            data: C2Rust_Unnamed {
-                                                                integer: (*ac).id,
-                                                            },
-                                                        },
-                                                    };
+                                                dict_put(
+                                                    &mut autocmd_info,
+                                                    c"id",
+                                                    Object::integer((*ac).id),
+                                                );
                                             }
                                             if !(*ac).desc.is_null() {
-                                                let c2rust_fresh5 = autocmd_info.size;
-                                                autocmd_info.size =
-                                                    autocmd_info.size.wrapping_add(1);
-                                                *autocmd_info
-                                                    .items
-                                                    .offset(c2rust_fresh5 as isize) =
-                                                    key_value_pair {
-                                                        key: cstr_as_string(c"desc".as_ptr()),
-                                                        value: object {
-                                                            type_0: kObjectTypeString,
-                                                            data: C2Rust_Unnamed {
-                                                                string: cstr_as_string((*ac).desc),
-                                                            },
-                                                        },
-                                                    };
+                                                dict_put(
+                                                    &mut autocmd_info,
+                                                    c"desc",
+                                                    Object::string(cstr_as_string((*ac).desc)),
+                                                );
                                             }
                                             if !(*ac).handler_cmd.is_null() {
-                                                let c2rust_fresh6 = autocmd_info.size;
-                                                autocmd_info.size =
-                                                    autocmd_info.size.wrapping_add(1);
-                                                *autocmd_info
-                                                    .items
-                                                    .offset(c2rust_fresh6 as isize) =
-                                                    key_value_pair {
-                                                        key: cstr_as_string(c"command".as_ptr()),
-                                                        value: object {
-                                                            type_0: kObjectTypeString,
-                                                            data: C2Rust_Unnamed {
-                                                                string: cstr_as_string(
-                                                                    (*ac).handler_cmd,
-                                                                ),
-                                                            },
-                                                        },
-                                                    };
+                                                dict_put(
+                                                    &mut autocmd_info,
+                                                    c"command",
+                                                    Object::string(cstr_as_string(
+                                                        (*ac).handler_cmd,
+                                                    )),
+                                                );
                                             } else {
-                                                let c2rust_fresh7 = autocmd_info.size;
-                                                autocmd_info.size =
-                                                    autocmd_info.size.wrapping_add(1);
-                                                *autocmd_info
-                                                    .items
-                                                    .offset(c2rust_fresh7 as isize) =
-                                                    key_value_pair {
-                                                        key: cstr_as_string(c"command".as_ptr()),
-                                                        value: object {
-                                                            type_0: kObjectTypeString,
-                                                            data: C2Rust_Unnamed {
-                                                                string: String_0 {
-                                                                    data: ::core::ptr::null_mut::<
-                                                                        ::core::ffi::c_char,
-                                                                    >(
-                                                                    ),
-                                                                    size: 0 as size_t,
-                                                                },
-                                                            },
-                                                        },
-                                                    };
+                                                dict_put(
+                                                    &mut autocmd_info,
+                                                    c"command",
+                                                    Object::string(String_0 {
+                                                        data: ::core::ptr::null_mut::<
+                                                            ::core::ffi::c_char,
+                                                        >(
+                                                        ),
+                                                        size: 0 as size_t,
+                                                    }),
+                                                );
                                                 let mut cb: *mut Callback =
                                                     &raw mut (*ac).handler_fn;
                                                 match (*cb).type_0 as ::core::ffi::c_uint {
                                                     3 => {
                                                         if nlua_ref_is_function((*cb).data.luaref) {
-                                                            let c2rust_fresh8 = autocmd_info.size;
-                                                            autocmd_info.size =
-                                                                autocmd_info.size.wrapping_add(1);
-                                                            *autocmd_info
-                                                                .items
-                                                                .offset(c2rust_fresh8 as isize) =
-                                                                key_value_pair {
-                                                                    key: cstr_as_string(
-                                                                        c"callback".as_ptr(),
-                                                                    ),
-                                                                    value: object {
-                                                                        type_0: kObjectTypeLuaRef,
-                                                                        data: C2Rust_Unnamed {
-                                                                            luaref: api_new_luaref(
-                                                                                (*cb).data.luaref,
-                                                                            ),
-                                                                        },
-                                                                    },
-                                                                };
+                                                            dict_put_str(
+                                                                &mut autocmd_info,
+                                                                cstr_as_string(
+                                                                    c"callback".as_ptr(),
+                                                                ),
+                                                                Object::luaref(api_new_luaref(
+                                                                    (*cb).data.luaref,
+                                                                )),
+                                                            );
                                                         }
                                                     }
                                                     1 | 2 => {
-                                                        let c2rust_fresh9 = autocmd_info.size;
-                                                        autocmd_info.size =
-                                                            autocmd_info.size.wrapping_add(1);
-                                                        *autocmd_info
-                                                            .items
-                                                            .offset(c2rust_fresh9 as isize) =
-                                                            key_value_pair {
-                                                                key: cstr_as_string(
-                                                                    c"callback".as_ptr(),
-                                                                ),
-                                                                value: object {
-                                                                    type_0: kObjectTypeString,
-                                                                    data: C2Rust_Unnamed {
-                                                                        string: cstr_as_string(
-                                                                            callback_to_string(
-                                                                                cb, arena,
-                                                                            ),
-                                                                        ),
-                                                                    },
-                                                                },
-                                                            };
+                                                        dict_put_str(
+                                                            &mut autocmd_info,
+                                                            cstr_as_string(c"callback".as_ptr()),
+                                                            Object::string(cstr_as_string(
+                                                                callback_to_string(cb, arena),
+                                                            )),
+                                                        );
                                                     }
                                                     0 => {
                                                         abort();
@@ -594,210 +503,54 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                     _ => {}
                                                 }
                                             }
-                                            let c2rust_fresh10 = autocmd_info.size;
-                                            autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                            *autocmd_info.items.offset(c2rust_fresh10 as isize) =
-                                                key_value_pair {
-                                                    key: cstr_as_string(c"pattern".as_ptr()),
-                                                    value: object {
-                                                        type_0: kObjectTypeString,
-                                                        data: C2Rust_Unnamed {
-                                                            string: cstr_as_string((*ap).pat),
-                                                        },
-                                                    },
-                                                };
-                                            let c2rust_fresh11 = autocmd_info.size;
-                                            autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                            *autocmd_info.items.offset(c2rust_fresh11 as isize) =
-                                                key_value_pair {
-                                                    key: cstr_as_string(c"event".as_ptr()),
-                                                    value: object {
-                                                        type_0: kObjectTypeString,
-                                                        data: C2Rust_Unnamed {
-                                                            string: cstr_as_string(event_nr2name(
-                                                                event,
-                                                            )),
-                                                        },
-                                                    },
-                                                };
-                                            let c2rust_fresh12 = autocmd_info.size;
-                                            autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                            *autocmd_info.items.offset(c2rust_fresh12 as isize) =
-                                                key_value_pair {
-                                                    key: cstr_as_string(c"once".as_ptr()),
-                                                    value: object {
-                                                        type_0: kObjectTypeBoolean,
-                                                        data: C2Rust_Unnamed {
-                                                            boolean: (*ac).once,
-                                                        },
-                                                    },
-                                                };
+                                            dict_put(
+                                                &mut autocmd_info,
+                                                c"pattern",
+                                                Object::string(cstr_as_string((*ap).pat)),
+                                            );
+                                            dict_put(
+                                                &mut autocmd_info,
+                                                c"event",
+                                                Object::string(cstr_as_string(event_nr2name(
+                                                    event,
+                                                ))),
+                                            );
+                                            dict_put(
+                                                &mut autocmd_info,
+                                                c"once",
+                                                Object::boolean((*ac).once),
+                                            );
                                             if (*ap).buflocal_nr != 0 {
-                                                let c2rust_fresh13 = autocmd_info.size;
-                                                autocmd_info.size =
-                                                    autocmd_info.size.wrapping_add(1);
-                                                *autocmd_info
-                                                    .items
-                                                    .offset(c2rust_fresh13 as isize) =
-                                                    key_value_pair {
-                                                        key: cstr_as_string(c"buflocal".as_ptr()),
-                                                        value: object {
-                                                            type_0: kObjectTypeBoolean,
-                                                            data: C2Rust_Unnamed { boolean: true },
-                                                        },
-                                                    };
-                                                let c2rust_fresh14 = autocmd_info.size;
-                                                autocmd_info.size =
-                                                    autocmd_info.size.wrapping_add(1);
-                                                *autocmd_info
-                                                    .items
-                                                    .offset(c2rust_fresh14 as isize) =
-                                                    key_value_pair {
-                                                        key: cstr_as_string(c"buf".as_ptr()),
-                                                        value: object {
-                                                            type_0: kObjectTypeInteger,
-                                                            data: C2Rust_Unnamed {
-                                                                integer: (*ap).buflocal_nr
-                                                                    as Integer,
-                                                            },
-                                                        },
-                                                    };
-                                                let c2rust_fresh15 = autocmd_info.size;
-                                                autocmd_info.size =
-                                                    autocmd_info.size.wrapping_add(1);
-                                                *autocmd_info
-                                                    .items
-                                                    .offset(c2rust_fresh15 as isize) =
-                                                    key_value_pair {
-                                                        key: cstr_as_string(c"buffer".as_ptr()),
-                                                        value: object {
-                                                            type_0: kObjectTypeInteger,
-                                                            data: C2Rust_Unnamed {
-                                                                integer: (*ap).buflocal_nr
-                                                                    as Integer,
-                                                            },
-                                                        },
-                                                    };
+                                                dict_put(
+                                                    &mut autocmd_info,
+                                                    c"buflocal",
+                                                    Object::boolean(true),
+                                                );
+                                                dict_put(
+                                                    &mut autocmd_info,
+                                                    c"buf",
+                                                    Object::integer((*ap).buflocal_nr as Integer),
+                                                );
+                                                dict_put(
+                                                    &mut autocmd_info,
+                                                    c"buffer",
+                                                    Object::integer((*ap).buflocal_nr as Integer),
+                                                );
                                             } else {
-                                                let c2rust_fresh16 = autocmd_info.size;
-                                                autocmd_info.size =
-                                                    autocmd_info.size.wrapping_add(1);
-                                                *autocmd_info
-                                                    .items
-                                                    .offset(c2rust_fresh16 as isize) =
-                                                    key_value_pair {
-                                                        key: cstr_as_string(c"buflocal".as_ptr()),
-                                                        value: object {
-                                                            type_0: kObjectTypeBoolean,
-                                                            data: C2Rust_Unnamed { boolean: false },
-                                                        },
-                                                    };
+                                                dict_put(
+                                                    &mut autocmd_info,
+                                                    c"buflocal",
+                                                    Object::boolean(false),
+                                                );
                                             }
-                                            if autocmd_list.size == autocmd_list.capacity {
-                                                autocmd_list.capacity = if autocmd_list.capacity
-                                                    << 1 as ::core::ffi::c_int
-                                                    > ::core::mem::size_of::<[Object; 16]>()
-                                                        .wrapping_div(
-                                                            ::core::mem::size_of::<Object>(),
-                                                        )
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[Object; 16]>()
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                == 0)
-                                                                as ::core::ffi::c_int
-                                                                as usize,
-                                                        ) {
-                                                    autocmd_list.capacity << 1 as ::core::ffi::c_int
-                                                } else {
-                                                    ::core::mem::size_of::<[Object; 16]>()
-                                                        .wrapping_div(
-                                                            ::core::mem::size_of::<Object>(),
-                                                        )
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[Object; 16]>()
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                == 0)
-                                                                as ::core::ffi::c_int
-                                                                as size_t,
-                                                        )
-                                                };
-                                                autocmd_list.items = (if autocmd_list.capacity
-                                                    == ::core::mem::size_of::<[Object; 16]>()
-                                                        .wrapping_div(
-                                                            ::core::mem::size_of::<Object>(),
-                                                        )
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[Object; 16]>()
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                )
-                                                                == 0)
-                                                                as ::core::ffi::c_int
-                                                                as usize,
-                                                        ) {
-                                                    if autocmd_list.items
-                                                        == &raw mut autocmd_list.init_array
-                                                            as *mut Object
-                                                    {
-                                                        autocmd_list.items
-                                                            as *mut ::core::ffi::c_void
-                                                    } else {
-                                                        _memcpy_free(
-                                                            &raw mut autocmd_list.init_array
-                                                                as *mut Object
-                                                                as *mut ::core::ffi::c_void,
-                                                            autocmd_list.items
-                                                                as *mut ::core::ffi::c_void,
-                                                            autocmd_list.size.wrapping_mul(
-                                                                ::core::mem::size_of::<Object>(),
-                                                            ),
-                                                        )
-                                                    }
-                                                } else {
-                                                    if autocmd_list.items
-                                                        == &raw mut autocmd_list.init_array
-                                                            as *mut Object
-                                                    {
-                                                        memcpy(
-                                                            xmalloc(
-                                                                autocmd_list.capacity.wrapping_mul(
-                                                                    ::core::mem::size_of::<Object>(
-                                                                    ),
-                                                                ),
-                                                            ),
-                                                            autocmd_list.items
-                                                                as *const ::core::ffi::c_void,
-                                                            autocmd_list.size.wrapping_mul(
-                                                                ::core::mem::size_of::<Object>(),
-                                                            ),
-                                                        )
-                                                    } else {
-                                                        xrealloc(
-                                                            autocmd_list.items
-                                                                as *mut ::core::ffi::c_void,
-                                                            autocmd_list.capacity.wrapping_mul(
-                                                                ::core::mem::size_of::<Object>(),
-                                                            ),
-                                                        )
-                                                    }
-                                                })
-                                                    as *mut Object;
-                                            } else {
-                                            };
-                                            let c2rust_fresh17 = autocmd_list.size;
-                                            autocmd_list.size = autocmd_list.size.wrapping_add(1);
-                                            *autocmd_list.items.offset(c2rust_fresh17 as isize) =
-                                                object {
-                                                    type_0: kObjectTypeDict,
-                                                    data: C2Rust_Unnamed { dict: autocmd_info },
-                                                };
+                                            // `kv_push`, whose growth step c2rust expanded inline.
+                                            InitVec::new(
+                                                &mut autocmd_list.size,
+                                                &mut autocmd_list.capacity,
+                                                &mut autocmd_list.items,
+                                                &mut autocmd_list.init_array,
+                                            )
+                                            .push(Object::dict(autocmd_info));
                                         }
                                     }
                                 }

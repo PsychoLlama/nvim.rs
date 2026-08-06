@@ -19,20 +19,18 @@ use crate::src::nvim::eval::typval::{
     callback_free, callback_to_string, kCallbackFuncref, kCallbackLua, kCallbackNone,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::{api_new_luaref, nlua_ref_is_function};
 use crate::src::nvim::main::{curbuf, current_sctx};
-use crate::src::nvim::memory::{strequal, xfree, xmalloc, xrealloc};
-use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, strlen};
+use crate::src::nvim::memory::{strequal, xfree};
+use crate::src::nvim::os::libc::{__assert_fail, abort, strlen};
 use crate::src::nvim::strings::arena_printf;
 use crate::src::nvim::types::{
     Arena, Array, ArrayBuilder, AutoCmd, AutoCmdVec, AutoPat, Buffer, Callback,
     Callback_data as C2Rust_Unnamed_5, Dict, Error, Integer, KeyDict_clear_autocmds,
     KeyDict_create_augroup, KeyDict_create_autocmd, KeyDict_exec_autocmds, KeyDict_get_autocmds,
     LuaRef, Object, String_0, TryState, auto_event, buf_T, event_T, exarg_T, except_T, int64_t,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeInteger, kObjectTypeLuaRef,
-    kObjectTypeNil, kObjectTypeString, key_value_pair, msglist_T, object,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeBuffer,
+    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, msglist_T,
     object_data as C2Rust_Unnamed, sctx_T, size_t, uint64_t,
 };
 

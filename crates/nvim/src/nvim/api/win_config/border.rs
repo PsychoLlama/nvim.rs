@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::api::private::helpers::array_add;
 
 pub unsafe extern "C" fn parse_border_style(
     mut style: Object,
@@ -578,12 +579,7 @@ pub unsafe extern "C" fn parse_winborder(
                     ) as *mut Object;
                 } else {
                 };
-                let c2rust_fresh0 = border_chars.size;
-                border_chars.size = border_chars.size.wrapping_add(1);
-                *border_chars.items.offset(c2rust_fresh0 as isize) = object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed { string: str },
-                };
+                array_add(&mut border_chars, Object::string(str));
                 count += 1;
             }
             if count != 8 as ::core::ffi::c_int {

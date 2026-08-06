@@ -166,6 +166,52 @@ impl<'a, T: Copy> InitVec<'a, T> {
     }
 }
 
+/// A borrowed view of klib's plain `kvec_t`: the same three fields without
+/// the inline array, so `items` is always either null or a heap allocation.
+///
+/// `kv_push`'s growth step is the whole reason this exists — c2rust expanded
+/// it at every use site, a dozen lines apiece, and the shape is identical
+/// each time: double the capacity, or start at eight.
+pub struct Kvec<'a, T> {
+    size: &'a mut usize,
+    capacity: &'a mut usize,
+    items: &'a mut *mut T,
+}
+
+impl<'a, T> Kvec<'a, T> {
+    /// Borrow the three fields of one `kvec_t`. They are distinct fields of
+    /// the same struct, so the borrows do not conflict.
+    pub fn new(size: &'a mut usize, capacity: &'a mut usize, items: &'a mut *mut T) -> Self {
+        Kvec {
+            size,
+            capacity,
+            items,
+        }
+    }
+
+    /// `kv_push`.
+    ///
+    /// # Safety
+    /// `items` must be null or a live allocation of `capacity` elements.
+    pub unsafe fn push(&mut self, value: T) {
+        unsafe {
+            if *self.size == *self.capacity {
+                *self.capacity = if *self.capacity != 0 {
+                    *self.capacity * 2
+                } else {
+                    8
+                };
+                *self.items = xrealloc(
+                    *self.items as *mut c_void,
+                    *self.capacity * mem::size_of::<T>(),
+                ) as *mut T;
+            }
+            self.items.add(*self.size).write(value);
+        }
+        *self.size += 1;
+    }
+}
+
 /// Copy `size` bytes from `src` to `dest`, then free `src`. klib's kvec
 /// spells this inline in every `kv_concat`-shaped macro.
 pub unsafe fn _memcpy_free(

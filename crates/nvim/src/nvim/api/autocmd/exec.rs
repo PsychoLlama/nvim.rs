@@ -22,7 +22,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
         let mut data: *mut Object = ::core::ptr::null_mut::<Object>();
         let mut event_array: Array = unpack_string_or_array(
             event,
-            b"event\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"event".as_ptr() as *mut ::core::ffi::c_char,
             true_0 != 0,
             arena,
             err,
@@ -38,7 +38,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
                 if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
                     api_err_invalid(
                         err,
-                        b"group\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"group".as_ptr(),
                         (*opts).group.data.string.data,
                         0 as int64_t,
                         true_0 != 0,
@@ -56,7 +56,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
                 if !augroup_exists(name) {
                     api_err_invalid(
                         err,
-                        b"group\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"group".as_ptr(),
                         ::core::ptr::null::<::core::ffi::c_char>(),
                         au_group as int64_t,
                         false_0 != 0,
@@ -68,8 +68,8 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
                 if true {
                     api_err_exp(
                         err,
-                        b"group\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"String or Integer\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"group".as_ptr(),
+                        c"String or Integer".as_ptr(),
                         api_typename((*opts).group.type_0),
                     );
                     return;
@@ -97,11 +97,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
                 & (1 as ::core::ffi::c_ulonglong) << 4 as ::core::ffi::c_int
                 != 0 as ::core::ffi::c_ulonglong))
         {
-            api_err_conflict(
-                err,
-                b"buf\0".as_ptr() as *const ::core::ffi::c_char,
-                b"buffer\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            api_err_conflict(err, c"buf".as_ptr(), c"buffer".as_ptr());
             return;
         }
         if has_buf {
@@ -109,11 +105,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
                 & (1 as ::core::ffi::c_ulonglong) << 5 as ::core::ffi::c_int
                 != 0 as ::core::ffi::c_ulonglong
             {
-                api_err_conflict(
-                    err,
-                    b"pattern\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"buf\0".as_ptr() as *const ::core::ffi::c_char,
-                );
+                api_err_conflict(err, c"pattern".as_ptr(), c"buf".as_ptr());
                 return;
             }
             b = find_buffer_by_handle(buf, err);
@@ -125,7 +117,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
             (*opts).pattern,
             has_buf,
             buf,
-            b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"".as_ptr() as *mut ::core::ffi::c_char,
             arena,
             err,
         );
@@ -156,7 +148,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
             {
                 api_err_invalid(
                     err,
-                    b"event\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"event".as_ptr(),
                     event_str.data.string.data,
                     0 as int64_t,
                     true,

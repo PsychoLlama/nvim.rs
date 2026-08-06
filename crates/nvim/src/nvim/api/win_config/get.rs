@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::api::private::helpers::array_add;
 
 unsafe extern "C" fn config_put_bordertext(
     mut config: *mut KeyDict_win_config,
@@ -151,22 +152,8 @@ pub unsafe extern "C" fn nvim_win_get_config(
                     rv.win = (*config).window;
                     if (*config).bufpos.lnum >= 0 as linenr_T {
                         let mut pos: Array = arena_array(arena, 2 as size_t);
-                        let c2rust_fresh2 = pos.size;
-                        pos.size = pos.size.wrapping_add(1);
-                        *pos.items.offset(c2rust_fresh2 as isize) = object {
-                            type_0: kObjectTypeInteger,
-                            data: C2Rust_Unnamed {
-                                integer: (*config).bufpos.lnum as Integer,
-                            },
-                        };
-                        let c2rust_fresh3 = pos.size;
-                        pos.size = pos.size.wrapping_add(1);
-                        *pos.items.offset(c2rust_fresh3 as isize) = object {
-                            type_0: kObjectTypeInteger,
-                            data: C2Rust_Unnamed {
-                                integer: (*config).bufpos.col as Integer,
-                            },
-                        };
+                        array_add(&mut pos, Object::integer((*config).bufpos.lnum as Integer));
+                        array_add(&mut pos, Object::integer((*config).bufpos.col as Integer));
                         rv.is_set__win_config_ = (rv.is_set__win_config_
                             as ::core::ffi::c_ulonglong
                             | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__bufpos)
@@ -208,33 +195,11 @@ pub unsafe extern "C" fn nvim_win_get_config(
                     let mut hi_name: *mut ::core::ffi::c_char = syn_id2name(hi_id);
                     if *hi_name.offset(0 as ::core::ffi::c_int as isize) != 0 {
                         let mut tuple: Array = arena_array(arena, 2 as size_t);
-                        let c2rust_fresh4 = tuple.size;
-                        tuple.size = tuple.size.wrapping_add(1);
-                        *tuple.items.offset(c2rust_fresh4 as isize) = object {
-                            type_0: kObjectTypeString,
-                            data: C2Rust_Unnamed { string: s },
-                        };
-                        let c2rust_fresh5 = tuple.size;
-                        tuple.size = tuple.size.wrapping_add(1);
-                        *tuple.items.offset(c2rust_fresh5 as isize) = object {
-                            type_0: kObjectTypeString,
-                            data: C2Rust_Unnamed {
-                                string: cstr_as_string(hi_name),
-                            },
-                        };
-                        let c2rust_fresh6 = border.size;
-                        border.size = border.size.wrapping_add(1);
-                        *border.items.offset(c2rust_fresh6 as isize) = object {
-                            type_0: kObjectTypeArray,
-                            data: C2Rust_Unnamed { array: tuple },
-                        };
+                        array_add(&mut tuple, Object::string(s));
+                        array_add(&mut tuple, Object::string(cstr_as_string(hi_name)));
+                        array_add(&mut border, Object::array(tuple));
                     } else {
-                        let c2rust_fresh7 = border.size;
-                        border.size = border.size.wrapping_add(1);
-                        *border.items.offset(c2rust_fresh7 as isize) = object {
-                            type_0: kObjectTypeString,
-                            data: C2Rust_Unnamed { string: s },
-                        };
+                        array_add(&mut border, Object::string(s));
                     }
                     i = i.wrapping_add(1);
                 }

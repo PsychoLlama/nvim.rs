@@ -9,8 +9,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::api::private::helpers::array_add;
+use crate::src::nvim::kvec::Kvec;
 
 pub unsafe extern "C" fn nvim_buf_del_extmark(
     mut buf: Buffer,
@@ -235,27 +237,16 @@ pub unsafe extern "C" fn parse_virt_text(
                                     break '_free_exit;
                                 }
                                 if j < arr.size.wrapping_sub(1 as size_t) {
-                                    if virt_text.size == virt_text.capacity {
-                                        virt_text.capacity = if virt_text.capacity != 0 {
-                                            virt_text.capacity << 1 as ::core::ffi::c_int
-                                        } else {
-                                            8 as size_t
-                                        };
-                                        virt_text.items = xrealloc(
-                                            virt_text.items as *mut ::core::ffi::c_void,
-                                            ::core::mem::size_of::<VirtTextChunk>()
-                                                .wrapping_mul(virt_text.capacity),
-                                        )
-                                            as *mut VirtTextChunk;
-                                    } else {
-                                    };
-                                    let c2rust_fresh23 = virt_text.size;
-                                    virt_text.size = virt_text.size.wrapping_add(1);
-                                    *virt_text.items.offset(c2rust_fresh23 as isize) =
-                                        VirtTextChunk {
-                                            text: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                                            hl_id: hl_id,
-                                        };
+                                    // `kv_push`, whose growth step c2rust expanded inline.
+                                    Kvec::new(
+                                        &mut virt_text.size,
+                                        &mut virt_text.capacity,
+                                        &mut virt_text.items,
+                                    )
+                                    .push(VirtTextChunk {
+                                        text: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                                        hl_id: hl_id,
+                                    });
                                 }
                                 j = j.wrapping_add(1);
                             }
@@ -278,24 +269,16 @@ pub unsafe extern "C" fn parse_virt_text(
                     false,
                 );
                 w += mb_string2cells(text) as ::core::ffi::c_int;
-                if virt_text.size == virt_text.capacity {
-                    virt_text.capacity = if virt_text.capacity != 0 {
-                        virt_text.capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        8 as size_t
-                    };
-                    virt_text.items = xrealloc(
-                        virt_text.items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<VirtTextChunk>().wrapping_mul(virt_text.capacity),
-                    ) as *mut VirtTextChunk;
-                } else {
-                };
-                let c2rust_fresh24 = virt_text.size;
-                virt_text.size = virt_text.size.wrapping_add(1);
-                *virt_text.items.offset(c2rust_fresh24 as isize) = VirtTextChunk {
+                // `kv_push`, whose growth step c2rust expanded inline.
+                Kvec::new(
+                    &mut virt_text.size,
+                    &mut virt_text.capacity,
+                    &mut virt_text.items,
+                )
+                .push(VirtTextChunk {
                     text: text,
                     hl_id: hl_id,
-                };
+                });
                 i = i.wrapping_add(1);
             }
             if !width.is_null() {

@@ -6,8 +6,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::api::private::helpers::array_add;
 
 pub unsafe extern "C" fn nvim_buf_del_mark(
     mut buf: Buffer,
@@ -23,7 +24,7 @@ pub unsafe extern "C" fn nvim_buf_del_mark(
         if !(name.size == 1 as size_t) {
             api_err_invalid(
                 err,
-                b"mark name (must be a single char)\0".as_ptr() as *const ::core::ffi::c_char,
+                c"mark name (must be a single char)".as_ptr(),
                 name.data,
                 0 as int64_t,
                 true_0 != 0,
@@ -40,7 +41,7 @@ pub unsafe extern "C" fn nvim_buf_del_mark(
         if fm.is_null() {
             api_err_invalid(
                 err,
-                b"mark name\0".as_ptr() as *const ::core::ffi::c_char,
+                c"mark name".as_ptr(),
                 name.data,
                 0 as int64_t,
                 true_0 != 0,
@@ -71,7 +72,7 @@ pub unsafe extern "C" fn nvim_buf_set_mark(
         if !(name.size == 1 as size_t) {
             api_err_invalid(
                 err,
-                b"mark name (must be a single char)\0".as_ptr() as *const ::core::ffi::c_char,
+                c"mark name (must be a single char)".as_ptr(),
                 name.data,
                 0 as int64_t,
                 true_0 != 0,
@@ -102,7 +103,7 @@ pub unsafe extern "C" fn nvim_buf_get_mark(
         if !(name.size == 1 as size_t) {
             api_err_invalid(
                 err,
-                b"mark name (must be a single char)\0".as_ptr() as *const ::core::ffi::c_char,
+                c"mark name (must be a single char)".as_ptr(),
                 name.data,
                 0 as int64_t,
                 true_0 != 0,
@@ -126,7 +127,7 @@ pub unsafe extern "C" fn nvim_buf_get_mark(
         if fm.is_null() {
             api_err_invalid(
                 err,
-                b"mark name\0".as_ptr() as *const ::core::ffi::c_char,
+                c"mark name".as_ptr(),
                 name.data,
                 0 as int64_t,
                 true_0 != 0,
@@ -140,22 +141,8 @@ pub unsafe extern "C" fn nvim_buf_get_mark(
             pos = (*fm).mark;
         }
         rv = arena_array(arena, 2 as size_t);
-        let c2rust_fresh2 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh2 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: pos.lnum as Integer,
-            },
-        };
-        let c2rust_fresh3 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh3 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: pos.col as Integer,
-            },
-        };
+        array_add(&mut rv, Object::integer(pos.lnum as Integer));
+        array_add(&mut rv, Object::integer(pos.col as Integer));
         return rv;
     }
 }

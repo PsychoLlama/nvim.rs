@@ -17,15 +17,15 @@ pub unsafe extern "C" fn nvim_error_event(
     logmsg(
         LOGLVL_ERR,
         ::core::ptr::null::<::core::ffi::c_char>(),
-        b"nvim_error_event\0".as_ptr() as *const ::core::ffi::c_char,
+        c"nvim_error_event".as_ptr(),
         44 as ::core::ffi::c_int,
         true_0 != 0,
-        b"async error on channel %ld: %s\0".as_ptr() as *const ::core::ffi::c_char,
+        c"async error on channel %ld: %s".as_ptr(),
         channel_id,
         if msg.size != 0 {
             msg.data as *const ::core::ffi::c_char
         } else {
-            b"\0".as_ptr() as *const ::core::ffi::c_char
+            c"".as_ptr()
         },
     );
 }
@@ -35,16 +35,13 @@ pub unsafe extern "C" fn nvim_ui_term_event(
     mut value: Object,
     mut err: *mut Error,
 ) {
-    if strequal(
-        b"termresponse\0".as_ptr() as *const ::core::ffi::c_char,
-        event.data,
-    ) {
+    if strequal(c"termresponse".as_ptr(), event.data) {
         if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
             != value.type_0 as ::core::ffi::c_uint
         {
             api_err_exp(
                 err,
-                b"termresponse\0".as_ptr() as *const ::core::ffi::c_char,
+                c"termresponse".as_ptr(),
                 api_typename(kObjectTypeString),
                 api_typename(value.type_0),
             );

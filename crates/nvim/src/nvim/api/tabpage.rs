@@ -1,5 +1,5 @@
 use crate::src::nvim::api::private::helpers::{
-    api_clear_error, api_set_error, arena_array, dict_get_value, dict_set_var,
+    api_clear_error, api_set_error, arena_array, array_add, dict_get_value, dict_set_var,
     find_buffer_by_handle, find_tab_by_handle, find_window_by_handle, try_enter, try_leave,
 };
 use crate::src::nvim::api::vim::nvim_get_current_win;
@@ -52,14 +52,15 @@ pub unsafe extern "C" fn nvim_tabpage_list_wins(
         (*tab).tp_firstwin
     };
     while !wp_0.is_null() {
-        let c2rust_fresh0 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh0 as isize) = object {
-            type_0: kObjectTypeWindow,
-            data: C2Rust_Unnamed {
-                integer: (*wp_0).handle as Integer,
+        array_add(
+            &mut rv,
+            object {
+                type_0: kObjectTypeWindow,
+                data: C2Rust_Unnamed {
+                    integer: (*wp_0).handle as Integer,
+                },
             },
-        };
+        );
         wp_0 = (*wp_0).w_next;
     }
     return rv;
@@ -159,7 +160,7 @@ pub unsafe extern "C" fn nvim_tabpage_set_win(
         api_set_error(
             err,
             kErrorTypeException,
-            b"Window does not belong to tabpage %d\0".as_ptr() as *const ::core::ffi::c_char,
+            c"Window does not belong to tabpage %d".as_ptr(),
             (*tp).handle,
         );
         return;
@@ -217,7 +218,7 @@ pub unsafe extern "C" fn nvim_open_tabpage(
         api_set_error(
             err,
             kErrorTypeException,
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%s".as_ptr(),
             &raw const e_cmdwin as *const ::core::ffi::c_char,
         );
         return 0 as Tabpage;
@@ -253,7 +254,7 @@ pub unsafe extern "C" fn nvim_open_tabpage(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"Failed to create new tabpage\0".as_ptr() as *const ::core::ffi::c_char,
+                c"Failed to create new tabpage".as_ptr(),
             );
         }
         return 0 as Tabpage;
@@ -263,7 +264,7 @@ pub unsafe extern "C" fn nvim_open_tabpage(
         api_set_error(
             err,
             kErrorTypeException,
-            b"Tabpage was closed immediately\0".as_ptr() as *const ::core::ffi::c_char,
+            c"Tabpage was closed immediately".as_ptr(),
         );
         return 0 as Tabpage;
     }
@@ -283,7 +284,7 @@ pub unsafe extern "C" fn nvim_open_tabpage(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"Tabpage was closed immediately\0".as_ptr() as *const ::core::ffi::c_char,
+                c"Tabpage was closed immediately".as_ptr(),
             );
             return 0 as Tabpage;
         }

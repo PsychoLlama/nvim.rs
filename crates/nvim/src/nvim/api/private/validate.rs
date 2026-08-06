@@ -22,9 +22,9 @@ pub unsafe extern "C" fn api_err_invalid(
             err,
             errtype,
             if !has_space.is_null() {
-                b"Invalid %s\0".as_ptr() as *const ::core::ffi::c_char
+                c"Invalid %s".as_ptr()
             } else {
-                b"Invalid '%s'\0".as_ptr() as *const ::core::ffi::c_char
+                c"Invalid '%s'".as_ptr()
             },
             name,
         );
@@ -35,9 +35,9 @@ pub unsafe extern "C" fn api_err_invalid(
             err,
             errtype,
             if !has_space.is_null() {
-                b"Invalid %s: %ld\0".as_ptr() as *const ::core::ffi::c_char
+                c"Invalid %s: %ld".as_ptr()
             } else {
-                b"Invalid '%s': %ld\0".as_ptr() as *const ::core::ffi::c_char
+                c"Invalid '%s': %ld".as_ptr()
             },
             name,
             val_n,
@@ -49,9 +49,9 @@ pub unsafe extern "C" fn api_err_invalid(
             err,
             errtype,
             if quote_val as ::core::ffi::c_int != 0 {
-                b"Invalid %s: '%s'\0".as_ptr() as *const ::core::ffi::c_char
+                c"Invalid %s: '%s'".as_ptr()
             } else {
-                b"Invalid %s: %s\0".as_ptr() as *const ::core::ffi::c_char
+                c"Invalid %s: %s".as_ptr()
             },
             name,
             val_s,
@@ -61,9 +61,9 @@ pub unsafe extern "C" fn api_err_invalid(
             err,
             errtype,
             if quote_val as ::core::ffi::c_int != 0 {
-                b"Invalid '%s': '%s'\0".as_ptr() as *const ::core::ffi::c_char
+                c"Invalid '%s': '%s'".as_ptr()
             } else {
-                b"Invalid '%s': %s\0".as_ptr() as *const ::core::ffi::c_char
+                c"Invalid '%s': %s".as_ptr()
             },
             name,
             val_s,
@@ -83,9 +83,9 @@ pub unsafe extern "C" fn api_err_exp(
             err,
             errtype,
             if !has_space.is_null() {
-                b"Invalid %s: expected %s\0".as_ptr() as *const ::core::ffi::c_char
+                c"Invalid %s: expected %s".as_ptr()
             } else {
-                b"Invalid '%s': expected %s\0".as_ptr() as *const ::core::ffi::c_char
+                c"Invalid '%s': expected %s".as_ptr()
             },
             name,
             expected,
@@ -96,9 +96,9 @@ pub unsafe extern "C" fn api_err_exp(
         err,
         errtype,
         if !has_space.is_null() {
-            b"Invalid %s: expected %s, got %s\0".as_ptr() as *const ::core::ffi::c_char
+            c"Invalid %s: expected %s, got %s".as_ptr()
         } else {
-            b"Invalid '%s': expected %s, got %s\0".as_ptr() as *const ::core::ffi::c_char
+            c"Invalid '%s': expected %s, got %s".as_ptr()
         },
         name,
         expected,
@@ -115,9 +115,9 @@ pub unsafe extern "C" fn api_err_required(
         err,
         errtype,
         if !has_space.is_null() {
-            b"Required: %s\0".as_ptr() as *const ::core::ffi::c_char
+            c"Required: %s".as_ptr()
         } else {
-            b"Required: '%s'\0".as_ptr() as *const ::core::ffi::c_char
+            c"Required: '%s'".as_ptr()
         },
         name,
     );
@@ -133,9 +133,9 @@ pub unsafe extern "C" fn api_err_conflict(
         err,
         errtype,
         if !has_space2.is_null() {
-            b"Conflict: '%s' not allowed with %s\0".as_ptr() as *const ::core::ffi::c_char
+            c"Conflict: '%s' not allowed with %s".as_ptr()
         } else {
-            b"Conflict: '%s' not allowed with '%s'\0".as_ptr() as *const ::core::ffi::c_char
+            c"Conflict: '%s' not allowed with '%s'".as_ptr()
         },
         name,
         name2,
@@ -150,7 +150,7 @@ pub unsafe extern "C" fn check_string_array(
     snprintf(
         IObuff.ptr() as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
-        b"'%s' item\0".as_ptr() as *const ::core::ffi::c_char,
+        c"'%s' item".as_ptr(),
         name,
     );
     let mut i: size_t = 0 as size_t;
@@ -178,7 +178,7 @@ pub unsafe extern "C" fn check_string_array(
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"'%s' item contains newlines\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"'%s' item contains newlines".as_ptr(),
                     name,
                 );
                 return false;

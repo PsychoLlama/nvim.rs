@@ -1,5 +1,5 @@
 use crate::src::nvim::api::private::helpers::{
-    api_clear_error, api_set_error, arena_array, arena_dict, cstr_as_string, dict_get_value,
+    api_clear_error, api_set_error, arena_array, arena_dict, array_add, dict_get_value, dict_put,
     dict_set_var, find_buffer_by_handle, find_window_by_handle, normalize_index, try_enter,
     try_leave,
 };
@@ -25,8 +25,8 @@ use crate::src::nvim::types::{
     Arena, Array, Boolean, Buffer, Dict, Error, Integer, KeyDict_win_text_height, LuaRef,
     LuaRetMode, NS, Object, String_0, Tabpage, TryState, Window, buf_T, colnr_T, except_T, int64_t,
     kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeInteger, kObjectTypeNil,
-    key_value_pair, linenr_T, msglist_T, object, object_data as C2Rust_Unnamed, pos_T, size_t,
-    switchwin_T, tabpage_T, win_T, win_execute_T,
+    linenr_T, msglist_T, object, object_data as C2Rust_Unnamed, pos_T, size_t, switchwin_T,
+    tabpage_T, win_T, win_execute_T,
 };
 use crate::src::nvim::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
@@ -64,7 +64,7 @@ pub unsafe extern "C" fn nvim_win_set_buf(mut win: Window, mut buf: Buffer, mut 
         api_set_error(
             err,
             kErrorTypeException,
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%s".as_ptr(),
             &raw const e_cmdwin as *const ::core::ffi::c_char,
         );
         return;
@@ -80,22 +80,8 @@ pub unsafe extern "C" fn nvim_win_get_cursor(
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if !w.is_null() {
         rv = arena_array(arena, 2 as size_t);
-        let c2rust_fresh0 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh0 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: (*w).w_cursor.lnum as Integer,
-            },
-        };
-        let c2rust_fresh1 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh1 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: (*w).w_cursor.col as Integer,
-            },
-        };
+        array_add(&mut rv, Object::integer((*w).w_cursor.lnum as Integer));
+        array_add(&mut rv, Object::integer((*w).w_cursor.col as Integer));
     }
     return rv;
 }
@@ -112,8 +98,8 @@ pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mu
     {
         api_err_exp(
             err,
-            b"pos\0".as_ptr() as *const ::core::ffi::c_char,
-            b"[row, col] array\0".as_ptr() as *const ::core::ffi::c_char,
+            c"pos".as_ptr(),
+            c"[row, col] array".as_ptr(),
             ::core::ptr::null::<::core::ffi::c_char>(),
         );
         return;
@@ -127,8 +113,8 @@ pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mu
     if row <= 0 as int64_t || row > (*(*w).w_buffer).b_ml.ml_line_count as int64_t {
         api_err_invalid(
             err,
-            b"cursor line\0".as_ptr() as *const ::core::ffi::c_char,
-            b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+            c"cursor line".as_ptr(),
+            c"out of range".as_ptr(),
             0 as int64_t,
             false_0 != 0,
         );
@@ -137,8 +123,8 @@ pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mu
     if col > MAXCOL as ::core::ffi::c_int as int64_t || col < 0 as int64_t {
         api_err_invalid(
             err,
-            b"cursor column\0".as_ptr() as *const ::core::ffi::c_char,
-            b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+            c"cursor column".as_ptr(),
+            c"out of range".as_ptr(),
             0 as int64_t,
             false_0 != 0,
         );
@@ -291,22 +277,8 @@ pub unsafe extern "C" fn nvim_win_get_position(
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if !w.is_null() {
         rv = arena_array(arena, 2 as size_t);
-        let c2rust_fresh2 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh2 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: (*w).w_winrow as Integer,
-            },
-        };
-        let c2rust_fresh3 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh3 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: (*w).w_wincol as Integer,
-            },
-        };
+        array_add(&mut rv, Object::integer((*w).w_winrow as Integer));
+        array_add(&mut rv, Object::integer((*w).w_wincol as Integer));
     }
     return rv;
 }
@@ -467,8 +439,8 @@ pub unsafe extern "C" fn nvim_win_set_hl_ns(
     if !(ns_id >= -1 as Integer) {
         api_err_invalid(
             err,
-            b"namespace\0".as_ptr() as *const ::core::ffi::c_char,
-            b"\0".as_ptr() as *const ::core::ffi::c_char,
+            c"namespace".as_ptr(),
+            c"".as_ptr(),
             0 as int64_t,
             true_0 != 0,
         );
@@ -518,8 +490,8 @@ pub unsafe extern "C" fn nvim_win_text_height(
         api_set_error(
             err,
             kErrorTypeValidation,
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-            b"Line index out of bounds\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%s".as_ptr(),
+            c"Line index out of bounds".as_ptr(),
         );
         return rv;
     }
@@ -527,8 +499,8 @@ pub unsafe extern "C" fn nvim_win_text_height(
         api_set_error(
             err,
             kErrorTypeValidation,
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-            b"'start_row' is higher than 'end_row'\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%s".as_ptr(),
+            c"'start_row' is higher than 'end_row'".as_ptr(),
         );
         return rv;
     }
@@ -543,9 +515,8 @@ pub unsafe extern "C" fn nvim_win_text_height(
             api_set_error(
                 err,
                 kErrorTypeValidation,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                b"'start_vcol' specified without 'start_row'\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"%s".as_ptr(),
+                c"'start_vcol' specified without 'start_row'".as_ptr(),
             );
             return rv;
         }
@@ -553,8 +524,8 @@ pub unsafe extern "C" fn nvim_win_text_height(
         if !(start_vcol >= 0 as int64_t && start_vcol <= MAXCOL as ::core::ffi::c_int as int64_t) {
             api_err_invalid(
                 err,
-                b"start_vcol\0".as_ptr() as *const ::core::ffi::c_char,
-                b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                c"start_vcol".as_ptr(),
+                c"out of range".as_ptr(),
                 0 as int64_t,
                 false_0 != 0,
             );
@@ -572,8 +543,8 @@ pub unsafe extern "C" fn nvim_win_text_height(
             api_set_error(
                 err,
                 kErrorTypeValidation,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                b"'end_vcol' specified without 'end_row'\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%s".as_ptr(),
+                c"'end_vcol' specified without 'end_row'".as_ptr(),
             );
             return rv;
         }
@@ -581,8 +552,8 @@ pub unsafe extern "C" fn nvim_win_text_height(
         if !(end_vcol >= 0 as int64_t && end_vcol <= MAXCOL as ::core::ffi::c_int as int64_t) {
             api_err_invalid(
                 err,
-                b"end_vcol\0".as_ptr() as *const ::core::ffi::c_char,
-                b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                c"end_vcol".as_ptr(),
+                c"out of range".as_ptr(),
                 0 as int64_t,
                 false_0 != 0,
             );
@@ -597,8 +568,8 @@ pub unsafe extern "C" fn nvim_win_text_height(
         if !((*opts).max_height > 0 as Integer) {
             api_err_invalid(
                 err,
-                b"max_height\0".as_ptr() as *const ::core::ffi::c_char,
-                b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                c"max_height".as_ptr(),
+                c"out of range".as_ptr(),
                 0 as int64_t,
                 false_0 != 0,
             );
@@ -611,8 +582,8 @@ pub unsafe extern "C" fn nvim_win_text_height(
             api_set_error(
                 err,
                 kErrorTypeValidation,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                b"'start_vcol' is higher than 'end_vcol'\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%s".as_ptr(),
+                c"'start_vcol' is higher than 'end_vcol'".as_ptr(),
             );
             return rv;
         }
@@ -635,44 +606,14 @@ pub unsafe extern "C" fn nvim_win_text_height(
         fill += end_fill;
         all += end_fill;
     }
-    let c2rust_fresh4 = rv.size;
-    rv.size = rv.size.wrapping_add(1);
-    *rv.items.offset(c2rust_fresh4 as isize) = key_value_pair {
-        key: cstr_as_string(b"all\0".as_ptr() as *const ::core::ffi::c_char),
-        value: object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed { integer: all },
-        },
-    };
-    let c2rust_fresh5 = rv.size;
-    rv.size = rv.size.wrapping_add(1);
-    *rv.items.offset(c2rust_fresh5 as isize) = key_value_pair {
-        key: cstr_as_string(b"fill\0".as_ptr() as *const ::core::ffi::c_char),
-        value: object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed { integer: fill },
-        },
-    };
-    let c2rust_fresh6 = rv.size;
-    rv.size = rv.size.wrapping_add(1);
-    *rv.items.offset(c2rust_fresh6 as isize) = key_value_pair {
-        key: cstr_as_string(b"end_row\0".as_ptr() as *const ::core::ffi::c_char),
-        value: object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: (end_lnum - 1 as linenr_T) as Integer,
-            },
-        },
-    };
-    let c2rust_fresh7 = rv.size;
-    rv.size = rv.size.wrapping_add(1);
-    *rv.items.offset(c2rust_fresh7 as isize) = key_value_pair {
-        key: cstr_as_string(b"end_vcol\0".as_ptr() as *const ::core::ffi::c_char),
-        value: object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed { integer: end_vcol },
-        },
-    };
+    dict_put(&mut rv, c"all", Object::integer(all));
+    dict_put(&mut rv, c"fill", Object::integer(fill));
+    dict_put(
+        &mut rv,
+        c"end_row",
+        Object::integer((end_lnum - 1 as linenr_T) as Integer),
+    );
+    dict_put(&mut rv, c"end_vcol", Object::integer(end_vcol));
     return rv;
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

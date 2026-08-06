@@ -10,8 +10,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::api::private::helpers::{array_add, dict_put_str};
 
 #[inline]
 unsafe extern "C" fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
@@ -100,9 +101,8 @@ pub unsafe extern "C" fn nvim_create_namespace(mut name: String_0) -> Integer {
         if id > 0 as ::core::ffi::c_int {
             return id as Integer;
         }
-        let c2rust_fresh0 = next_namespace_id.get();
-        next_namespace_id.set(next_namespace_id.get() + 1);
-        id = c2rust_fresh0;
+        id = next_namespace_id.get();
+        next_namespace_id.set(id + 1);
         if name.size > 0 as size_t {
             let mut name_alloc: String_0 = copy_string(name, ::core::ptr::null_mut::<Arena>());
             map_put_String_int(namespace_ids.ptr(), name_alloc, id as ::core::ffi::c_int);
@@ -124,17 +124,11 @@ pub unsafe extern "C" fn nvim_get_namespaces(mut arena: *mut Arena) -> Dict {
         while __i < (*namespace_ids.ptr()).set.h.n_keys {
             name = *(*namespace_ids.ptr()).set.keys.offset(__i as isize);
             id = *(*namespace_ids.ptr()).values.offset(__i as isize) as handle_T;
-            let c2rust_fresh1 = retval.size;
-            retval.size = retval.size.wrapping_add(1);
-            *retval.items.offset(c2rust_fresh1 as isize) = key_value_pair {
-                key: cstr_as_string(name.data),
-                value: object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed {
-                        integer: id as Integer,
-                    },
-                },
-            };
+            dict_put_str(
+                &mut retval,
+                cstr_as_string(name.data),
+                Object::integer(id as Integer),
+            );
             __i = __i.wrapping_add(1);
         }
         return retval;
@@ -382,14 +376,7 @@ pub unsafe extern "C" fn nvim__ns_get(
                         ) as *mut Object;
                     } else {
                     };
-                    let c2rust_fresh25 = windows.size;
-                    windows.size = windows.size.wrapping_add(1);
-                    *windows.items.offset(c2rust_fresh25 as isize) = object {
-                        type_0: kObjectTypeInteger,
-                        data: C2Rust_Unnamed {
-                            integer: (*wp_0).handle as Integer,
-                        },
-                    };
+                    array_add(&mut windows, Object::integer((*wp_0).handle as Integer));
                 }
                 wp_0 = (*wp_0).w_next;
             }

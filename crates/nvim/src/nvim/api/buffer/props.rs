@@ -80,7 +80,7 @@ pub unsafe extern "C" fn nvim_buf_del_keymap(
 ) {
     unsafe {
         let mut rhs: String_0 = String_0 {
-            data: b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            data: c"".as_ptr() as *mut ::core::ffi::c_char,
             size: 0 as size_t,
         };
         modify_keymap(
@@ -201,7 +201,7 @@ pub unsafe extern "C" fn nvim_buf_set_name(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"Failed to rename buffer\0".as_ptr() as *const ::core::ffi::c_char,
+                c"Failed to rename buffer".as_ptr(),
             );
         }
     }
@@ -246,7 +246,7 @@ pub unsafe extern "C" fn nvim_buf_delete(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"Failed to unload buffer.\0".as_ptr() as *const ::core::ffi::c_char,
+                c"Failed to unload buffer.".as_ptr(),
             );
             return;
         }

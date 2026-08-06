@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::api::private::helpers::array_add;
 
 pub unsafe extern "C" fn nvim_exec(
     mut channel_id: uint64_t,
@@ -135,59 +136,24 @@ pub unsafe extern "C" fn nvim_call_atomic(
                 {
                     break;
                 }
-                let c2rust_fresh0 = results.size;
-                results.size = results.size.wrapping_add(1);
-                *results.items.offset(c2rust_fresh0 as isize) = copy_object(result, arena);
+                array_add(&mut results, copy_object(result, arena));
                 if handler.ret_alloc {
                     api_free_object(result);
                 }
                 i = i.wrapping_add(1);
             }
-            let c2rust_fresh1 = rv.size;
-            rv.size = rv.size.wrapping_add(1);
-            *rv.items.offset(c2rust_fresh1 as isize) = object {
-                type_0: kObjectTypeArray,
-                data: C2Rust_Unnamed { array: results },
-            };
+            array_add(&mut rv, Object::array(results));
             if nested_error.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                 let mut errval: Array = arena_array(arena, 3 as size_t);
-                let c2rust_fresh2 = errval.size;
-                errval.size = errval.size.wrapping_add(1);
-                *errval.items.offset(c2rust_fresh2 as isize) = object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed {
-                        integer: i as Integer,
-                    },
-                };
-                let c2rust_fresh3 = errval.size;
-                errval.size = errval.size.wrapping_add(1);
-                *errval.items.offset(c2rust_fresh3 as isize) = object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed {
-                        integer: nested_error.type_0 as Integer,
-                    },
-                };
-                let c2rust_fresh4 = errval.size;
-                errval.size = errval.size.wrapping_add(1);
-                *errval.items.offset(c2rust_fresh4 as isize) = object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: copy_string(cstr_as_string(nested_error.msg), arena),
-                    },
-                };
-                let c2rust_fresh5 = rv.size;
-                rv.size = rv.size.wrapping_add(1);
-                *rv.items.offset(c2rust_fresh5 as isize) = object {
-                    type_0: kObjectTypeArray,
-                    data: C2Rust_Unnamed { array: errval },
-                };
+                array_add(&mut errval, Object::integer(i as Integer));
+                array_add(&mut errval, Object::integer(nested_error.type_0 as Integer));
+                array_add(
+                    &mut errval,
+                    Object::string(copy_string(cstr_as_string(nested_error.msg), arena)),
+                );
+                array_add(&mut rv, Object::array(errval));
             } else {
-                let c2rust_fresh6 = rv.size;
-                rv.size = rv.size.wrapping_add(1);
-                *rv.items.offset(c2rust_fresh6 as isize) = object {
-                    type_0: kObjectTypeNil,
-                    data: C2Rust_Unnamed { boolean: false },
-                };
+                array_add(&mut rv, Object::NIL);
             }
         }
         api_clear_error(&raw mut nested_error);

@@ -9,8 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::api::private::helpers::{array_add, dict_put};
 
 pub unsafe extern "C" fn virt_text_to_array(
     mut vt: VirtText,
@@ -39,47 +40,23 @@ pub unsafe extern "C" fn virt_text_to_array(
             while i < j {
                 let mut hl_id: ::core::ffi::c_int = (*vt.items.offset(i as isize)).hl_id;
                 if hl_id >= 0 as ::core::ffi::c_int {
-                    let c2rust_fresh2 = hl_array.size;
-                    hl_array.size = hl_array.size.wrapping_add(1);
-                    *hl_array.items.offset(c2rust_fresh2 as isize) = hl_group_name(hl_id, hl_name);
+                    array_add(&mut hl_array, hl_group_name(hl_id, hl_name));
                 }
                 i = i.wrapping_add(1);
             }
             let mut text: *mut ::core::ffi::c_char = (*vt.items.offset(i as isize)).text;
             let mut hl_id_0: ::core::ffi::c_int = (*vt.items.offset(i as isize)).hl_id;
             let mut chunk: Array = arena_array(arena, 2 as size_t);
-            let c2rust_fresh3 = chunk.size;
-            chunk.size = chunk.size.wrapping_add(1);
-            *chunk.items.offset(c2rust_fresh3 as isize) = object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed {
-                    string: cstr_as_string(text),
-                },
-            };
+            array_add(&mut chunk, Object::string(cstr_as_string(text)));
             if hl_array.size > 0 as size_t {
                 if hl_id_0 >= 0 as ::core::ffi::c_int {
-                    let c2rust_fresh4 = hl_array.size;
-                    hl_array.size = hl_array.size.wrapping_add(1);
-                    *hl_array.items.offset(c2rust_fresh4 as isize) =
-                        hl_group_name(hl_id_0, hl_name);
+                    array_add(&mut hl_array, hl_group_name(hl_id_0, hl_name));
                 }
-                let c2rust_fresh5 = chunk.size;
-                chunk.size = chunk.size.wrapping_add(1);
-                *chunk.items.offset(c2rust_fresh5 as isize) = object {
-                    type_0: kObjectTypeArray,
-                    data: C2Rust_Unnamed { array: hl_array },
-                };
+                array_add(&mut chunk, Object::array(hl_array));
             } else if hl_id_0 >= 0 as ::core::ffi::c_int {
-                let c2rust_fresh6 = chunk.size;
-                chunk.size = chunk.size.wrapping_add(1);
-                *chunk.items.offset(c2rust_fresh6 as isize) = hl_group_name(hl_id_0, hl_name);
+                array_add(&mut chunk, hl_group_name(hl_id_0, hl_name));
             }
-            let c2rust_fresh7 = chunks.size;
-            chunks.size = chunks.size.wrapping_add(1);
-            *chunks.items.offset(c2rust_fresh7 as isize) = object {
-                type_0: kObjectTypeArray,
-                data: C2Rust_Unnamed { array: chunk },
-            };
+            array_add(&mut chunks, Object::array(chunk));
             i = i.wrapping_add(1);
         }
         return chunks;
@@ -97,31 +74,10 @@ unsafe extern "C" fn extmark_to_array(
         let mut start: MTKey = extmark.start;
         let mut rv: Array = arena_array(arena, 4 as size_t);
         if id {
-            let c2rust_fresh8 = rv.size;
-            rv.size = rv.size.wrapping_add(1);
-            *rv.items.offset(c2rust_fresh8 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: start.id as Integer,
-                },
-            };
+            array_add(&mut rv, Object::integer(start.id as Integer));
         }
-        let c2rust_fresh9 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh9 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: start.pos.row as Integer,
-            },
-        };
-        let c2rust_fresh10 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh10 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: start.pos.col as Integer,
-            },
-        };
+        array_add(&mut rv, Object::integer(start.pos.row as Integer));
+        array_add(&mut rv, Object::integer(start.pos.col as Integer));
         if add_dict {
             let mut dict: Dict = arena_dict(
                 arena,
@@ -133,103 +89,40 @@ unsafe extern "C" fn extmark_to_array(
                             == 0) as ::core::ffi::c_int as size_t,
                     ),
             );
-            let c2rust_fresh11 = dict.size;
-            dict.size = dict.size.wrapping_add(1);
-            *dict.items.offset(c2rust_fresh11 as isize) = key_value_pair {
-                key: cstr_as_string(c"ns_id".as_ptr()),
-                value: object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed {
-                        integer: start.ns as Integer,
-                    },
-                },
-            };
-            let c2rust_fresh12 = dict.size;
-            dict.size = dict.size.wrapping_add(1);
-            *dict.items.offset(c2rust_fresh12 as isize) = key_value_pair {
-                key: cstr_as_string(c"right_gravity".as_ptr()),
-                value: object {
-                    type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed {
-                        boolean: mt_right(start),
-                    },
-                },
-            };
+            dict_put(&mut dict, c"ns_id", Object::integer(start.ns as Integer));
+            dict_put(
+                &mut dict,
+                c"right_gravity",
+                Object::boolean(mt_right(start)),
+            );
             if mt_paired(start) {
-                let c2rust_fresh13 = dict.size;
-                dict.size = dict.size.wrapping_add(1);
-                *dict.items.offset(c2rust_fresh13 as isize) = key_value_pair {
-                    key: cstr_as_string(c"end_row".as_ptr()),
-                    value: object {
-                        type_0: kObjectTypeInteger,
-                        data: C2Rust_Unnamed {
-                            integer: extmark.end_pos.row as Integer,
-                        },
-                    },
-                };
-                let c2rust_fresh14 = dict.size;
-                dict.size = dict.size.wrapping_add(1);
-                *dict.items.offset(c2rust_fresh14 as isize) = key_value_pair {
-                    key: cstr_as_string(c"end_col".as_ptr()),
-                    value: object {
-                        type_0: kObjectTypeInteger,
-                        data: C2Rust_Unnamed {
-                            integer: extmark.end_pos.col as Integer,
-                        },
-                    },
-                };
-                let c2rust_fresh15 = dict.size;
-                dict.size = dict.size.wrapping_add(1);
-                *dict.items.offset(c2rust_fresh15 as isize) = key_value_pair {
-                    key: cstr_as_string(c"end_right_gravity".as_ptr()),
-                    value: object {
-                        type_0: kObjectTypeBoolean,
-                        data: C2Rust_Unnamed {
-                            boolean: extmark.end_right_gravity,
-                        },
-                    },
-                };
+                dict_put(
+                    &mut dict,
+                    c"end_row",
+                    Object::integer(extmark.end_pos.row as Integer),
+                );
+                dict_put(
+                    &mut dict,
+                    c"end_col",
+                    Object::integer(extmark.end_pos.col as Integer),
+                );
+                dict_put(
+                    &mut dict,
+                    c"end_right_gravity",
+                    Object::boolean(extmark.end_right_gravity),
+                );
             }
             if mt_no_undo(start) {
-                let c2rust_fresh16 = dict.size;
-                dict.size = dict.size.wrapping_add(1);
-                *dict.items.offset(c2rust_fresh16 as isize) = key_value_pair {
-                    key: cstr_as_string(c"undo_restore".as_ptr()),
-                    value: object {
-                        type_0: kObjectTypeBoolean,
-                        data: C2Rust_Unnamed { boolean: false },
-                    },
-                };
+                dict_put(&mut dict, c"undo_restore", Object::boolean(false));
             }
             if mt_invalidate(start) {
-                let c2rust_fresh17 = dict.size;
-                dict.size = dict.size.wrapping_add(1);
-                *dict.items.offset(c2rust_fresh17 as isize) = key_value_pair {
-                    key: cstr_as_string(c"invalidate".as_ptr()),
-                    value: object {
-                        type_0: kObjectTypeBoolean,
-                        data: C2Rust_Unnamed { boolean: true },
-                    },
-                };
+                dict_put(&mut dict, c"invalidate", Object::boolean(true));
             }
             if mt_invalid(start) {
-                let c2rust_fresh18 = dict.size;
-                dict.size = dict.size.wrapping_add(1);
-                *dict.items.offset(c2rust_fresh18 as isize) = key_value_pair {
-                    key: cstr_as_string(c"invalid".as_ptr()),
-                    value: object {
-                        type_0: kObjectTypeBoolean,
-                        data: C2Rust_Unnamed { boolean: true },
-                    },
-                };
+                dict_put(&mut dict, c"invalid", Object::boolean(true));
             }
             decor_to_dict_legacy(&mut dict, mt_decor(start), hl_name, arena);
-            let c2rust_fresh19 = rv.size;
-            rv.size = rv.size.wrapping_add(1);
-            *rv.items.offset(c2rust_fresh19 as isize) = object {
-                type_0: kObjectTypeDict,
-                data: C2Rust_Unnamed { dict: dict },
-            };
+            array_add(&mut rv, Object::dict(dict));
         }
         return rv;
     }
@@ -391,39 +284,31 @@ pub unsafe extern "C" fn nvim_buf_get_extmarks(
             let mut i: ::core::ffi::c_int =
                 marks.size as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
             while i >= 0 as ::core::ffi::c_int && rv.size < rv_limit {
-                let c2rust_fresh20 = rv.size;
-                rv.size = rv.size.wrapping_add(1);
-                *rv.items.offset(c2rust_fresh20 as isize) = object {
-                    type_0: kObjectTypeArray,
-                    data: C2Rust_Unnamed {
-                        array: extmark_to_array(
-                            *marks.items.offset(i as isize),
-                            true,
-                            details,
-                            hl_name,
-                            arena,
-                        ),
-                    },
-                };
+                array_add(
+                    &mut rv,
+                    Object::array(extmark_to_array(
+                        *marks.items.offset(i as isize),
+                        true,
+                        details,
+                        hl_name,
+                        arena,
+                    )),
+                );
                 i -= 1;
             }
         } else {
             let mut i_0: size_t = 0 as size_t;
             while i_0 < marks.size {
-                let c2rust_fresh21 = rv.size;
-                rv.size = rv.size.wrapping_add(1);
-                *rv.items.offset(c2rust_fresh21 as isize) = object {
-                    type_0: kObjectTypeArray,
-                    data: C2Rust_Unnamed {
-                        array: extmark_to_array(
-                            *marks.items.offset(i_0 as isize),
-                            true,
-                            details,
-                            hl_name,
-                            arena,
-                        ),
-                    },
-                };
+                array_add(
+                    &mut rv,
+                    Object::array(extmark_to_array(
+                        *marks.items.offset(i_0 as isize),
+                        true,
+                        details,
+                        hl_name,
+                        arena,
+                    )),
+                );
                 i_0 = i_0.wrapping_add(1);
             }
         }

@@ -401,7 +401,7 @@
     "crates/nvim/src/nvim/insexpand/text.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/insexpand/vimscript.rs": {"unsafe": 14},
     "crates/nvim/src/nvim/keycodes.rs": {"unsafe": 13},
-    "crates/nvim/src/nvim/kvec.rs": {"unsafe": 6},
+    "crates/nvim/src/nvim/kvec.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/log.rs": {"lines": 4537, "unsafe": 13, "variadic": 1},
     "crates/nvim/src/nvim/lua/api_wrappers/autocmd.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/lua/api_wrappers/buffer.rs": {"unsafe": 19},

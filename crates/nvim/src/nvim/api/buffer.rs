@@ -43,8 +43,7 @@ use crate::src::nvim::types::{
     LuaRef, LuaRetMode, MarkAdjustMode, MarkGet, Object, String_0, TryState, UndoObjectType,
     WinSplit, WinStyle, aco_save_T, bcount_t, buf_T, colnr_T, dobuf_action_values,
     dobuf_start_values, except_T, fmark_T, int64_t, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil,
-    kObjectTypeString, key_value_pair, linenr_T, lua_State, msglist_T, object,
+    kErrorTypeValidation, kObjectTypeNil, linenr_T, lua_State, msglist_T, object,
     object_data as C2Rust_Unnamed, pos_T, ptrdiff_t, size_t, tabpage_T, u_header_T, uint64_t,
     win_T,
 };

@@ -8,8 +8,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::api::private::helpers::array_add;
+use crate::src::nvim::kvec::Kvec;
 
 pub unsafe extern "C" fn nvim_subscribe(mut _channel_id: uint64_t, mut _event: String_0) {}
 
@@ -47,22 +49,13 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
                 ) as *mut ::core::ffi::c_char;
             }
             if *message.data.offset(i as isize) as ::core::ffi::c_int == NL {
-                if (*line_buf).size == (*line_buf).capacity {
-                    (*line_buf).capacity = if (*line_buf).capacity != 0 {
-                        (*line_buf).capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        8 as size_t
-                    };
-                    (*line_buf).items = xrealloc(
-                        (*line_buf).items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<::core::ffi::c_char>()
-                            .wrapping_mul((*line_buf).capacity),
-                    ) as *mut ::core::ffi::c_char;
-                } else {
-                };
-                let c2rust_fresh7 = (*line_buf).size;
-                (*line_buf).size = (*line_buf).size.wrapping_add(1);
-                *(*line_buf).items.offset(c2rust_fresh7 as isize) = '\0' as ::core::ffi::c_char;
+                // `kv_push`, whose growth step c2rust expanded inline.
+                Kvec::new(
+                    &mut (*line_buf).size,
+                    &mut (*line_buf).capacity,
+                    &mut (*line_buf).items,
+                )
+                .push('\0' as ::core::ffi::c_char);
                 if to_err {
                     emsg((*line_buf).items);
                 } else {
@@ -79,40 +72,21 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
                         .wrapping_mul((*line_buf).capacity),
                 ) as *mut ::core::ffi::c_char;
             } else if *message.data.offset(i as isize) as ::core::ffi::c_int == NUL {
-                if (*line_buf).size == (*line_buf).capacity {
-                    (*line_buf).capacity = if (*line_buf).capacity != 0 {
-                        (*line_buf).capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        8 as size_t
-                    };
-                    (*line_buf).items = xrealloc(
-                        (*line_buf).items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<::core::ffi::c_char>()
-                            .wrapping_mul((*line_buf).capacity),
-                    ) as *mut ::core::ffi::c_char;
-                } else {
-                };
-                let c2rust_fresh8 = (*line_buf).size;
-                (*line_buf).size = (*line_buf).size.wrapping_add(1);
-                *(*line_buf).items.offset(c2rust_fresh8 as isize) = '\n' as ::core::ffi::c_char;
+                // `kv_push`, whose growth step c2rust expanded inline.
+                Kvec::new(
+                    &mut (*line_buf).size,
+                    &mut (*line_buf).capacity,
+                    &mut (*line_buf).items,
+                )
+                .push('\n' as ::core::ffi::c_char);
             } else {
-                if (*line_buf).size == (*line_buf).capacity {
-                    (*line_buf).capacity = if (*line_buf).capacity != 0 {
-                        (*line_buf).capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        8 as size_t
-                    };
-                    (*line_buf).items = xrealloc(
-                        (*line_buf).items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<::core::ffi::c_char>()
-                            .wrapping_mul((*line_buf).capacity),
-                    ) as *mut ::core::ffi::c_char;
-                } else {
-                };
-                let c2rust_fresh9 = (*line_buf).size;
-                (*line_buf).size = (*line_buf).size.wrapping_add(1);
-                *(*line_buf).items.offset(c2rust_fresh9 as isize) =
-                    *message.data.offset(i as isize);
+                // `kv_push`, whose growth step c2rust expanded inline.
+                Kvec::new(
+                    &mut (*line_buf).size,
+                    &mut (*line_buf).capacity,
+                    &mut (*line_buf).items,
+                )
+                .push(*message.data.offset(i as isize));
             }
             i = i.wrapping_add(1);
         }
@@ -126,22 +100,13 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
                 ) as *mut ::core::ffi::c_char;
             }
             if '\n' as ::core::ffi::c_int == NL {
-                if (*line_buf).size == (*line_buf).capacity {
-                    (*line_buf).capacity = if (*line_buf).capacity != 0 {
-                        (*line_buf).capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        8 as size_t
-                    };
-                    (*line_buf).items = xrealloc(
-                        (*line_buf).items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<::core::ffi::c_char>()
-                            .wrapping_mul((*line_buf).capacity),
-                    ) as *mut ::core::ffi::c_char;
-                } else {
-                };
-                let c2rust_fresh10 = (*line_buf).size;
-                (*line_buf).size = (*line_buf).size.wrapping_add(1);
-                *(*line_buf).items.offset(c2rust_fresh10 as isize) = '\0' as ::core::ffi::c_char;
+                // `kv_push`, whose growth step c2rust expanded inline.
+                Kvec::new(
+                    &mut (*line_buf).size,
+                    &mut (*line_buf).capacity,
+                    &mut (*line_buf).items,
+                )
+                .push('\0' as ::core::ffi::c_char);
                 if to_err {
                     emsg((*line_buf).items);
                 } else {
@@ -158,39 +123,21 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
                         .wrapping_mul((*line_buf).capacity),
                 ) as *mut ::core::ffi::c_char;
             } else if '\n' as ::core::ffi::c_int == NUL {
-                if (*line_buf).size == (*line_buf).capacity {
-                    (*line_buf).capacity = if (*line_buf).capacity != 0 {
-                        (*line_buf).capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        8 as size_t
-                    };
-                    (*line_buf).items = xrealloc(
-                        (*line_buf).items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<::core::ffi::c_char>()
-                            .wrapping_mul((*line_buf).capacity),
-                    ) as *mut ::core::ffi::c_char;
-                } else {
-                };
-                let c2rust_fresh11 = (*line_buf).size;
-                (*line_buf).size = (*line_buf).size.wrapping_add(1);
-                *(*line_buf).items.offset(c2rust_fresh11 as isize) = '\n' as ::core::ffi::c_char;
+                // `kv_push`, whose growth step c2rust expanded inline.
+                Kvec::new(
+                    &mut (*line_buf).size,
+                    &mut (*line_buf).capacity,
+                    &mut (*line_buf).items,
+                )
+                .push('\n' as ::core::ffi::c_char);
             } else {
-                if (*line_buf).size == (*line_buf).capacity {
-                    (*line_buf).capacity = if (*line_buf).capacity != 0 {
-                        (*line_buf).capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        8 as size_t
-                    };
-                    (*line_buf).items = xrealloc(
-                        (*line_buf).items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<::core::ffi::c_char>()
-                            .wrapping_mul((*line_buf).capacity),
-                    ) as *mut ::core::ffi::c_char;
-                } else {
-                };
-                let c2rust_fresh12 = (*line_buf).size;
-                (*line_buf).size = (*line_buf).size.wrapping_add(1);
-                *(*line_buf).items.offset(c2rust_fresh12 as isize) = '\n' as ::core::ffi::c_char;
+                // `kv_push`, whose growth step c2rust expanded inline.
+                Kvec::new(
+                    &mut (*line_buf).size,
+                    &mut (*line_buf).capacity,
+                    &mut (*line_buf).items,
+                )
+                .push('\n' as ::core::ffi::c_char);
             }
         }
         (*no_wait_return.ptr()) -= 1;
@@ -235,24 +182,9 @@ pub unsafe extern "C" fn nvim_notify(
         }; 3];
         args.capacity = 3 as size_t;
         args.items = &raw mut args__items as *mut Object;
-        let c2rust_fresh13 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh13 as isize) = object {
-            type_0: kObjectTypeString,
-            data: C2Rust_Unnamed { string: msg_0 },
-        };
-        let c2rust_fresh14 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh14 as isize) = object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed { integer: log_level },
-        };
-        let c2rust_fresh15 = args.size;
-        args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh15 as isize) = object {
-            type_0: kObjectTypeDict,
-            data: C2Rust_Unnamed { dict: opts },
-        };
+        array_add(&mut args, Object::string(msg_0));
+        array_add(&mut args, Object::integer(log_level));
+        array_add(&mut args, Object::dict(opts));
         return nlua_exec(
             String_0 {
                 data: c"return vim.notify(...)".as_ptr() as *mut ::core::ffi::c_char,

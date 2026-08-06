@@ -60,23 +60,15 @@ unsafe extern "C" fn validate_option_value_args(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_option__scope
         != 0 as ::core::ffi::c_ulonglong
     {
-        if strcmp(
-            (*opts).scope.data,
-            b"local\0".as_ptr() as *const ::core::ffi::c_char,
-        ) == 0
-        {
+        if strcmp((*opts).scope.data, c"local".as_ptr()) == 0 {
             *opt_flags = OPT_LOCAL as ::core::ffi::c_int;
-        } else if strcmp(
-            (*opts).scope.data,
-            b"global\0".as_ptr() as *const ::core::ffi::c_char,
-        ) == 0
-        {
+        } else if strcmp((*opts).scope.data, c"global".as_ptr()) == 0 {
             *opt_flags = OPT_GLOBAL as ::core::ffi::c_int;
         } else if true {
             api_err_exp(
                 err,
-                b"scope\0".as_ptr() as *const ::core::ffi::c_char,
-                b"'local' or 'global'\0".as_ptr() as *const ::core::ffi::c_char,
+                c"scope".as_ptr(),
+                c"'local' or 'global'".as_ptr(),
                 ::core::ptr::null::<::core::ffi::c_char>(),
             );
             return 0 as ::core::ffi::c_int;
@@ -112,9 +104,8 @@ unsafe extern "C" fn validate_option_value_args(
             api_set_error(
                 err,
                 kErrorTypeValidation,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                b"cannot use both global 'scope' and 'buf'\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"%s".as_ptr(),
+                c"cannot use both global 'scope' and 'buf'".as_ptr(),
             );
             return 0 as ::core::ffi::c_int;
         }
@@ -141,9 +132,8 @@ unsafe extern "C" fn validate_option_value_args(
         api_set_error(
             err,
             kErrorTypeValidation,
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-            b"cannot use 'filetype' with 'scope', 'buf' or 'win'\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"%s".as_ptr(),
+            c"cannot use 'filetype' with 'scope', 'buf' or 'win'".as_ptr(),
         );
         return 0 as ::core::ffi::c_int;
     }
@@ -157,8 +147,8 @@ unsafe extern "C" fn validate_option_value_args(
         api_set_error(
             err,
             kErrorTypeValidation,
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-            b"cannot use both 'buf' and 'win'\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%s".as_ptr(),
+            c"cannot use both 'buf' and 'win'".as_ptr(),
         );
         return 0 as ::core::ffi::c_int;
     }
@@ -167,7 +157,7 @@ unsafe extern "C" fn validate_option_value_args(
         api_set_error(
             err,
             kErrorTypeValidation,
-            b"Unknown option '%s'\0".as_ptr() as *const ::core::ffi::c_char,
+            c"Unknown option '%s'".as_ptr(),
             name,
         );
     } else if *scope as ::core::ffi::c_uint
@@ -179,29 +169,28 @@ unsafe extern "C" fn validate_option_value_args(
             let mut tgt: *mut ::core::ffi::c_char = (if *scope as ::core::ffi::c_uint
                 == kOptScopeBuf as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                b"buf\0".as_ptr() as *const ::core::ffi::c_char
+                c"buf".as_ptr()
             } else {
-                b"win\0".as_ptr() as *const ::core::ffi::c_char
+                c"win".as_ptr()
             }) as *mut ::core::ffi::c_char;
             let mut global: *mut ::core::ffi::c_char =
                 (if option_has_scope(*opt_idxp, kOptScopeGlobal) as ::core::ffi::c_int != 0 {
-                    b"global \0".as_ptr() as *const ::core::ffi::c_char
+                    c"global ".as_ptr()
                 } else {
-                    b"\0".as_ptr() as *const ::core::ffi::c_char
+                    c"".as_ptr()
                 }) as *mut ::core::ffi::c_char;
             let mut req: *mut ::core::ffi::c_char =
                 (if option_has_scope(*opt_idxp, kOptScopeBuf) as ::core::ffi::c_int != 0 {
-                    b"buffer-local \0".as_ptr() as *const ::core::ffi::c_char
+                    c"buffer-local ".as_ptr()
                 } else if option_has_scope(*opt_idxp, kOptScopeWin) as ::core::ffi::c_int != 0 {
-                    b"window-local \0".as_ptr() as *const ::core::ffi::c_char
+                    c"window-local ".as_ptr()
                 } else {
-                    b"\0".as_ptr() as *const ::core::ffi::c_char
+                    c"".as_ptr()
                 }) as *mut ::core::ffi::c_char;
             api_set_error(
                 err,
                 kErrorTypeValidation,
-                b"'%s' cannot be passed for %s%soption '%s'\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"'%s' cannot be passed for %s%soption '%s'".as_ptr(),
                 tgt,
                 global,
                 req,
@@ -235,7 +224,7 @@ unsafe extern "C" fn do_ft_buf(
         api_set_error(
             err,
             kErrorTypeException,
-            b"Could not create internal buffer\0".as_ptr() as *const ::core::ffi::c_char,
+            c"Could not create internal buffer".as_ptr(),
         );
         return ::core::ptr::null_mut::<buf_T>();
     }
@@ -243,7 +232,7 @@ unsafe extern "C" fn do_ft_buf(
         api_set_error(
             err,
             kErrorTypeException,
-            b"Could not load internal buffer\0".as_ptr() as *const ::core::ffi::c_char,
+            c"Could not load internal buffer".as_ptr(),
         );
         return ftbuf;
     }
@@ -257,8 +246,7 @@ unsafe extern "C" fn do_ft_buf(
             type_0: kOptValTypeString,
             data: OptValData {
                 string: String_0 {
-                    data: b"hide\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    data: c"hide".as_ptr() as *mut ::core::ffi::c_char,
                     size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
                         .wrapping_sub(1 as size_t),
                 },
@@ -273,8 +261,7 @@ unsafe extern "C" fn do_ft_buf(
             type_0: kOptValTypeString,
             data: OptValData {
                 string: String_0 {
-                    data: b"nofile\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    data: c"nofile".as_ptr() as *mut ::core::ffi::c_char,
                     size: ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
                         .wrapping_sub(1 as size_t),
                 },
@@ -287,11 +274,10 @@ unsafe extern "C" fn do_ft_buf(
         if (*(*ftbuf).b_ml.ml_mfp).mf_fd < 0 as ::core::ffi::c_int {
         } else {
             __assert_fail(
-                b"ftbuf->b_ml.ml_mfp->mf_fd < 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/options.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                c"ftbuf->b_ml.ml_mfp->mf_fd < 0".as_ptr(),
+                c"src/nvim/api/options.rs".as_ptr(),
                 134 as ::core::ffi::c_uint,
-                b"buf_T *do_ft_buf(const char *, aco_save_T *, _Bool *, Error *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"buf_T *do_ft_buf(const char *, aco_save_T *, _Bool *, Error *)".as_ptr(),
             );
         }
     };
@@ -319,7 +305,7 @@ unsafe extern "C" fn do_ft_buf(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"Internal buffer was deleted\0".as_ptr() as *const ::core::ffi::c_char,
+                c"Internal buffer was deleted".as_ptr(),
             );
         }
         return ::core::ptr::null_mut::<buf_T>();
@@ -329,7 +315,7 @@ unsafe extern "C" fn do_ft_buf(
         api_set_error(
             err,
             kErrorTypeException,
-            b"Could not execute FileType autocommands\0".as_ptr() as *const ::core::ffi::c_char,
+            c"Could not execute FileType autocommands".as_ptr(),
         );
     }
     return ftbuf;
@@ -396,11 +382,10 @@ pub unsafe extern "C" fn nvim_get_option_value(
             if from.is_null() {
             } else {
                 __assert_fail(
-                    b"!from\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/api/options.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"!from".as_ptr(),
+                    c"src/nvim/api/options.rs".as_ptr(),
                     230 as ::core::ffi::c_uint,
-                    b"Object nvim_get_option_value(String, KeyDict_option *, Error *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    c"Object nvim_get_option_value(String, KeyDict_option *, Error *)".as_ptr(),
                 );
             }
         };
@@ -417,7 +402,7 @@ pub unsafe extern "C" fn nvim_get_option_value(
         if !(value.type_0 as ::core::ffi::c_int != kOptValTypeNil as ::core::ffi::c_int) {
             api_err_invalid(
                 err,
-                b"option\0".as_ptr() as *const ::core::ffi::c_char,
+                c"option".as_ptr(),
                 name.data,
                 0 as int64_t,
                 true_0 != 0,
@@ -466,8 +451,8 @@ pub unsafe extern "C" fn nvim_set_option_value(
     let Some(optval) = object_as_optval(value) else {
         api_err_exp(
             err,
-            b"value\0".as_ptr() as *const ::core::ffi::c_char,
-            b"valid option type\0".as_ptr() as *const ::core::ffi::c_char,
+            c"value".as_ptr(),
+            c"valid option type".as_ptr(),
             api_typename(value.type_0),
         );
         return;

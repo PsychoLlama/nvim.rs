@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::api::private::helpers::array_add;
 
 pub unsafe extern "C" fn nvim_buf_set_text(
     mut channel_id: uint64_t,
@@ -34,19 +35,14 @@ pub unsafe extern "C" fn nvim_buf_set_text(
         scratch.capacity = 1 as size_t;
         scratch.items = &raw mut scratch__items as *mut Object;
         if replacement.size == 0 as size_t {
-            let c2rust_fresh1 = scratch.size;
-            scratch.size = scratch.size.wrapping_add(1);
-            *scratch.items.offset(c2rust_fresh1 as isize) = object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed {
-                    string: String_0 {
-                        data: b"\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
-                        size: ::core::mem::size_of::<[::core::ffi::c_char; 1]>()
-                            .wrapping_sub(1 as size_t),
-                    },
-                },
-            };
+            array_add(
+                &mut scratch,
+                Object::string(String_0 {
+                    data: c"".as_ptr() as *mut ::core::ffi::c_char,
+                    size: ::core::mem::size_of::<[::core::ffi::c_char; 1]>()
+                        .wrapping_sub(1 as size_t),
+                }),
+            );
             replacement = scratch;
         }
         let mut b: *mut buf_T = api_buf_ensure_loaded(buf, err);
@@ -58,8 +54,8 @@ pub unsafe extern "C" fn nvim_buf_set_text(
         if oob {
             api_err_invalid(
                 err,
-                b"start_row\0".as_ptr() as *const ::core::ffi::c_char,
-                b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                c"start_row".as_ptr(),
+                c"out of range".as_ptr(),
                 0 as int64_t,
                 false_0 != 0,
             );
@@ -69,8 +65,8 @@ pub unsafe extern "C" fn nvim_buf_set_text(
         if oob {
             api_err_invalid(
                 err,
-                b"end_row\0".as_ptr() as *const ::core::ffi::c_char,
-                b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                c"end_row".as_ptr(),
+                c"out of range".as_ptr(),
                 0 as int64_t,
                 false_0 != 0,
             );
@@ -87,8 +83,8 @@ pub unsafe extern "C" fn nvim_buf_set_text(
         if !(start_col >= 0 as Integer && start_col <= len_at_start as Integer) {
             api_err_invalid(
                 err,
-                b"start_col\0".as_ptr() as *const ::core::ffi::c_char,
-                b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                c"start_col".as_ptr(),
+                c"out of range".as_ptr(),
                 0 as int64_t,
                 false_0 != 0,
             );
@@ -105,8 +101,8 @@ pub unsafe extern "C" fn nvim_buf_set_text(
         if !(end_col >= 0 as Integer && end_col <= len_at_end as Integer) {
             api_err_invalid(
                 err,
-                b"end_col\0".as_ptr() as *const ::core::ffi::c_char,
-                b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
+                c"end_col".as_ptr(),
+                c"out of range".as_ptr(),
                 0 as int64_t,
                 false_0 != 0,
             );
@@ -116,16 +112,15 @@ pub unsafe extern "C" fn nvim_buf_set_text(
             api_set_error(
                 err,
                 kErrorTypeValidation,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                b"'start' is higher than 'end'\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%s".as_ptr(),
+                c"'start' is higher than 'end'".as_ptr(),
             );
             return;
         }
         let mut disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
         if !check_string_array(
             replacement,
-            b"replacement string\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            c"replacement string".as_ptr() as *mut ::core::ffi::c_char,
             disallow_nl,
             err,
         ) {
@@ -247,7 +242,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 api_set_error(
                     err,
                     kErrorTypeException,
-                    b"Buffer is not 'modifiable'\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"Buffer is not 'modifiable'".as_ptr(),
                 );
             } else if u_save_buf(
                 b,
@@ -258,7 +253,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 api_set_error(
                     err,
                     kErrorTypeException,
-                    b"Failed to save undo information\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"Failed to save undo information".as_ptr(),
                 );
             } else {
                 let mut extra: ptrdiff_t = 0 as ptrdiff_t;
@@ -271,11 +266,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 let mut i_1: size_t = 0 as size_t;
                 while i_1 < to_delete {
                     if ml_delete_buf(b, start_row as linenr_T, false) == 0 as ::core::ffi::c_int {
-                        api_set_error(
-                            err,
-                            kErrorTypeException,
-                            b"Failed to delete line\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
+                        api_set_error(err, kErrorTypeException, c"Failed to delete line".as_ptr());
                         break 's_652;
                     } else {
                         i_1 = i_1.wrapping_add(1);
@@ -292,8 +283,8 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                         api_set_error(
                             err,
                             kErrorTypeValidation,
-                            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"Index out of bounds\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"%s".as_ptr(),
+                            c"Index out of bounds".as_ptr(),
                         );
                         break 's_652;
                     } else if ml_replace_buf(
@@ -304,11 +295,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                         true,
                     ) == 0 as ::core::ffi::c_int
                     {
-                        api_set_error(
-                            err,
-                            kErrorTypeException,
-                            b"Failed to replace line\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
+                        api_set_error(err, kErrorTypeException, c"Failed to replace line".as_ptr());
                         break 's_652;
                     } else {
                         i_2 = i_2.wrapping_add(1);
@@ -321,8 +308,8 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                         api_set_error(
                             err,
                             kErrorTypeValidation,
-                            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"Index out of bounds\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"%s".as_ptr(),
+                            c"Index out of bounds".as_ptr(),
                         );
                         break 's_652;
                     } else if ml_append_buf(
@@ -333,11 +320,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                         false,
                     ) == 0 as ::core::ffi::c_int
                     {
-                        api_set_error(
-                            err,
-                            kErrorTypeException,
-                            b"Failed to insert line\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
+                        api_set_error(err, kErrorTypeException, c"Failed to insert line".as_ptr());
                         break 's_652;
                     } else {
                         extra += 1;

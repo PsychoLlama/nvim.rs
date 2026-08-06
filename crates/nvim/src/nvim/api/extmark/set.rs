@@ -9,8 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::kvec::Kvec;
 
 pub unsafe extern "C" fn nvim_buf_set_extmark(
     mut buf: Buffer,
@@ -423,37 +424,16 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                     err,
                                     &raw mut dummig,
                                 );
-                                if virt_lines.data.virt_lines.size
-                                    == virt_lines.data.virt_lines.capacity
-                                {
-                                    virt_lines.data.virt_lines.capacity =
-                                        if virt_lines.data.virt_lines.capacity != 0 {
-                                            virt_lines.data.virt_lines.capacity
-                                                << 1 as ::core::ffi::c_int
-                                        } else {
-                                            8 as size_t
-                                        };
-                                    virt_lines.data.virt_lines.items = xrealloc(
-                                        virt_lines.data.virt_lines.items
-                                            as *mut ::core::ffi::c_void,
-                                        ::core::mem::size_of::<virt_line>()
-                                            .wrapping_mul(virt_lines.data.virt_lines.capacity),
-                                    )
-                                        as *mut virt_line;
-                                } else {
-                                };
-                                let c2rust_fresh22 = virt_lines.data.virt_lines.size;
-                                virt_lines.data.virt_lines.size =
-                                    virt_lines.data.virt_lines.size.wrapping_add(1);
-                                *virt_lines
-                                    .data
-                                    .virt_lines
-                                    .items
-                                    .offset(c2rust_fresh22 as isize) = virt_line {
+                                // `kv_push`, whose growth step c2rust expanded inline.
+                                Kvec::new(
+                                    &mut virt_lines.data.virt_lines.size,
+                                    &mut virt_lines.data.virt_lines.capacity,
+                                    &mut virt_lines.data.virt_lines.items,
+                                )
+                                .push(virt_line {
                                     line: jtem,
                                     flags: virt_lines_flags,
-                                }
-                                    as virt_line;
+                                });
                                 if (*err).type_0 as ::core::ffi::c_int
                                     != kErrorTypeNone as ::core::ffi::c_int
                                 {
