@@ -1,223 +1,224 @@
 //! Keysets: a Lua options table as a generated `KeySet` struct.
 //!
-//! `nlua_pop_keydict` fills one of the api's generated option structs from a
-//! Lua table, driven by the keyset's own [`KeySetLink`] hash function, and
-//! `nlua_push_keydict` renders one back.  `nlua_init_types` installs the
-//! metatables the api's handle types (buffer, window, tabpage) are
-//! recognised by.
+//! [`nlua_pop_keydict`] fills one of the api's generated option structs from
+//! a Lua table, driven by the keyset's own [`KeySetLink`] hash function, and
+//! [`nlua_push_keydict`] renders one back.  [`nlua_init_types`] installs the
+//! names the api's type tags are known by on the Lua side.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{CStr, c_char, c_int, c_void};
 
+use super::{
+    nlua_pop_Array, nlua_pop_Boolean_strict, nlua_pop_Dict, nlua_pop_Float, nlua_pop_Integer,
+    nlua_pop_LuaRef, nlua_pop_Object, nlua_pop_String, nlua_pop_handle, nlua_push_Array,
+    nlua_push_Dict, nlua_push_Object, nlua_push_String, nlua_push_type_idx, nlua_push_val_idx,
+};
+use crate::src::nvim::api::private::helpers::api_set_error;
+use crate::src::nvim::highlight_group::syn_check_group;
+use crate::src::nvim::lua::executor::nlua_pushref;
+use crate::src::nvim::lua::ffi::{
+    LUA_TSTRING, LUA_TTABLE, lua_createtable, lua_next, lua_pop, lua_pushboolean, lua_pushinteger,
+    lua_pushlstring, lua_pushnil, lua_pushnumber, lua_pushstring, lua_rawset, lua_settop,
+    lua_tolstring, lua_type,
+};
+use crate::src::nvim::os::libc::abort;
+use crate::src::nvim::types::{
+    Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Integer, KeySetLink, LuaRef, Object,
+    OptKeySet, OptionalKeys, String_0, handle_T, kErrorTypeNone, kErrorTypeValidation,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
+    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
+    kObjectTypeWindow, lua_Integer, lua_Number, lua_State, size_t,
+};
+
+/// The three api types that need a name of their own on the Lua side, both
+/// ways round: `vim.types.float` is the tag and `vim.types[tag]` the name.
+const NAMED_TYPES: [(&CStr, c_int); 3] = [
+    (c"float", kObjectTypeFloat as c_int),
+    (c"array", kObjectTypeArray as c_int),
+    (c"dictionary", kObjectTypeDict as c_int),
+];
+
+/// Install `type_idx`, `val_idx` and `types` on the `vim` table below the top
+/// of the stack.
+///
+/// # Safety
+/// `lstate` must be a live Lua state with that table at -3.
 pub unsafe extern "C-unwind" fn nlua_init_types(lstate: *mut lua_State) {
     unsafe {
-        lua_pushlstring(
-            lstate,
-            b"type_idx\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
-        );
+        // A Lua string, without its terminator.
+        let push_cstr = |s: &CStr| lua_pushlstring(lstate, s.as_ptr(), s.count_bytes());
+
+        push_cstr(c"type_idx");
         nlua_push_type_idx(lstate);
-        lua_rawset(lstate, -3 as ::core::ffi::c_int);
-        lua_pushlstring(
-            lstate,
-            b"val_idx\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        );
+        lua_rawset(lstate, -3);
+
+        push_cstr(c"val_idx");
         nlua_push_val_idx(lstate);
-        lua_rawset(lstate, -3 as ::core::ffi::c_int);
-        lua_pushlstring(
-            lstate,
-            b"types\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-        );
-        lua_createtable(lstate, 0 as ::core::ffi::c_int, 3 as ::core::ffi::c_int);
-        lua_pushlstring(
-            lstate,
-            b"float\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-        );
-        lua_pushnumber(lstate, kObjectTypeFloat as ::core::ffi::c_int as lua_Number);
-        lua_rawset(lstate, -3 as ::core::ffi::c_int);
-        lua_pushnumber(lstate, kObjectTypeFloat as ::core::ffi::c_int as lua_Number);
-        lua_pushlstring(
-            lstate,
-            b"float\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-        );
-        lua_rawset(lstate, -3 as ::core::ffi::c_int);
-        lua_pushlstring(
-            lstate,
-            b"array\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-        );
-        lua_pushnumber(lstate, kObjectTypeArray as ::core::ffi::c_int as lua_Number);
-        lua_rawset(lstate, -3 as ::core::ffi::c_int);
-        lua_pushnumber(lstate, kObjectTypeArray as ::core::ffi::c_int as lua_Number);
-        lua_pushlstring(
-            lstate,
-            b"array\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-        );
-        lua_rawset(lstate, -3 as ::core::ffi::c_int);
-        lua_pushlstring(
-            lstate,
-            b"dictionary\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 11]>().wrapping_sub(1 as size_t),
-        );
-        lua_pushnumber(lstate, kObjectTypeDict as ::core::ffi::c_int as lua_Number);
-        lua_rawset(lstate, -3 as ::core::ffi::c_int);
-        lua_pushnumber(lstate, kObjectTypeDict as ::core::ffi::c_int as lua_Number);
-        lua_pushlstring(
-            lstate,
-            b"dictionary\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 11]>().wrapping_sub(1 as size_t),
-        );
-        lua_rawset(lstate, -3 as ::core::ffi::c_int);
-        lua_rawset(lstate, -3 as ::core::ffi::c_int);
+        lua_rawset(lstate, -3);
+
+        push_cstr(c"types");
+        lua_createtable(lstate, 0, 3);
+        for (name, tag) in NAMED_TYPES {
+            push_cstr(name);
+            lua_pushnumber(lstate, tag as lua_Number);
+            lua_rawset(lstate, -3);
+
+            lua_pushnumber(lstate, tag as lua_Number);
+            push_cstr(name);
+            lua_rawset(lstate, -3);
+        }
+        lua_rawset(lstate, -3);
     }
 }
 
+/// Fill the generated keyset at `retval` from the Lua table on top.
+///
+/// `hashy` is the keyset's own perfect hash over its field names; a key it
+/// does not know is a refusal. On failure `*err_opt` names the field that
+/// failed, for the caller's message.
+///
+/// # Safety
+/// `retval` must point at the keyset `hashy` belongs to, and `lstate` have a
+/// value on top.
 pub unsafe extern "C-unwind" fn nlua_pop_keydict(
-    mut L: *mut lua_State,
-    mut retval: *mut ::core::ffi::c_void,
-    mut hashy: FieldHashfn,
-    mut err_opt: *mut *mut ::core::ffi::c_char,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
+    lstate: *mut lua_State,
+    retval: *mut c_void,
+    hashy: FieldHashfn,
+    err_opt: *mut *mut c_char,
+    arena: *mut Arena,
+    err: *mut Error,
 ) {
     unsafe {
-        if !(lua_type(L, -1 as ::core::ffi::c_int) == LUA_TTABLE) {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                b"Expected Lua table\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            lua_settop(L, -(-1 as ::core::ffi::c_int) - 1 as ::core::ffi::c_int);
+        if lua_type(lstate, -1) != LUA_TTABLE {
+            api_set_error(err, kErrorTypeValidation, c"Expected Lua table".as_ptr());
+            // Upstream writes `lua_pop(L, -1)` here, which expands to
+            // `lua_settop(L, 0)` -- it clears the *whole* stack rather than
+            // popping the one value. Kept verbatim; see the divergence
+            // docket.
+            lua_settop(lstate, 0);
             return;
         }
-        lua_pushnil(L);
-        while lua_next(L, -2 as ::core::ffi::c_int) != 0 {
+
+        lua_pushnil(lstate);
+        while lua_next(lstate, -2) != 0 {
             let mut len: size_t = 0;
-            let mut s: *const ::core::ffi::c_char =
-                lua_tolstring(L, -2 as ::core::ffi::c_int, &raw mut len);
-            let mut field: *mut KeySetLink = hashy.expect("non-null function pointer")(s, len);
+            let s = lua_tolstring(lstate, -2, &raw mut len);
+            let field: *mut KeySetLink = hashy.expect("non-null function pointer")(s, len);
             if field.is_null() {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"invalid key: %.*s\0".as_ptr() as *const ::core::ffi::c_char,
-                    len as ::core::ffi::c_int,
+                    c"invalid key: %.*s".as_ptr(),
+                    len as c_int,
                     s,
                 );
-                lua_settop(L, -3 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
+                lua_pop(lstate, 3);
                 return;
             }
-            if (*field).opt_index >= 0 as ::core::ffi::c_int {
-                let mut ks: *mut OptKeySet = retval as *mut OptKeySet;
-                (*ks).is_set_ = ((*ks).is_set_ as ::core::ffi::c_ulonglong
-                    | (1 as ::core::ffi::c_ulonglong) << (*field).opt_index)
-                    as OptionalKeys;
+            if (*field).opt_index >= 0 {
+                let ks = retval.cast::<OptKeySet>();
+                (*ks).is_set_ |= (1_u64 << (*field).opt_index) as OptionalKeys;
             }
-            let mut mem: *mut ::core::ffi::c_char =
-                (retval as *mut ::core::ffi::c_char).offset((*field).ptr_off as isize);
-            if (*field).type_0 == kObjectTypeNil as ::core::ffi::c_int {
-                *(mem as *mut Object) = nlua_pop_Object(L, true_0 != 0, arena, err);
-            } else if (*field).type_0 == kObjectTypeInteger as ::core::ffi::c_int {
-                if (*field).is_hlgroup as ::core::ffi::c_int != 0
-                    && lua_type(L, -1 as ::core::ffi::c_int) == LUA_TSTRING
-                {
-                    let mut name_len: size_t = 0;
-                    let mut name: *const ::core::ffi::c_char =
-                        lua_tolstring(L, -1 as ::core::ffi::c_int, &raw mut name_len);
-                    lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-                    *(mem as *mut Integer) = (if name_len > 0 as size_t {
-                        syn_check_group(name, name_len)
+
+            let mem = retval.cast::<c_char>().add((*field).ptr_off);
+            match (*field).type_0 as ObjectTypeInt {
+                T_ANY => *mem.cast::<Object>() = nlua_pop_Object(lstate, true, arena, err),
+                T_INTEGER => {
+                    // A highlight-group field takes the group's *name* as
+                    // well as its id.
+                    if (*field).is_hlgroup && lua_type(lstate, -1) == LUA_TSTRING {
+                        let mut name_len: size_t = 0;
+                        let name = lua_tolstring(lstate, -1, &raw mut name_len);
+                        lua_pop(lstate, 1);
+                        *mem.cast::<Integer>() = if name_len > 0 {
+                            syn_check_group(name, name_len) as Integer
+                        } else {
+                            0
+                        };
                     } else {
-                        0 as ::core::ffi::c_int
-                    }) as Integer;
-                } else {
-                    *(mem as *mut Integer) = nlua_pop_Integer(L, arena, err);
+                        *mem.cast::<Integer>() = nlua_pop_Integer(lstate, arena, err);
+                    }
                 }
-            } else if (*field).type_0 == kObjectTypeBoolean as ::core::ffi::c_int {
-                *(mem as *mut Boolean) = nlua_pop_Boolean_strict(L, err);
-            } else if (*field).type_0 == kObjectTypeString as ::core::ffi::c_int {
-                *(mem as *mut String_0) = nlua_pop_String(L, arena, err);
-            } else if (*field).type_0 == kObjectTypeFloat as ::core::ffi::c_int {
-                *(mem as *mut Float) = nlua_pop_Float(L, arena, err);
-            } else if (*field).type_0 == kObjectTypeBuffer as ::core::ffi::c_int
-                || (*field).type_0 == kObjectTypeWindow as ::core::ffi::c_int
-                || (*field).type_0 == kObjectTypeTabpage as ::core::ffi::c_int
-            {
-                *(mem as *mut handle_T) = nlua_pop_handle(L, arena, err);
-            } else if (*field).type_0 == kObjectTypeArray as ::core::ffi::c_int {
-                *(mem as *mut Array) = nlua_pop_Array(L, arena, err);
-            } else if (*field).type_0 == kObjectTypeDict as ::core::ffi::c_int {
-                *(mem as *mut Dict) = nlua_pop_Dict(L, false_0 != 0, arena, err);
-            } else if (*field).type_0 == kObjectTypeLuaRef as ::core::ffi::c_int {
-                *(mem as *mut LuaRef) = nlua_pop_LuaRef(L, arena, err);
-            } else {
-                abort();
+                T_BOOLEAN => *mem.cast::<Boolean>() = nlua_pop_Boolean_strict(lstate, err),
+                T_STRING => *mem.cast::<String_0>() = nlua_pop_String(lstate, arena, err),
+                T_FLOAT => *mem.cast::<Float>() = nlua_pop_Float(lstate, arena, err),
+                T_BUFFER | T_WINDOW | T_TABPAGE => {
+                    *mem.cast::<handle_T>() = nlua_pop_handle(lstate, arena, err);
+                }
+                T_ARRAY => *mem.cast::<Array>() = nlua_pop_Array(lstate, arena, err),
+                T_DICT => *mem.cast::<Dict>() = nlua_pop_Dict(lstate, false, arena, err),
+                T_LUAREF => *mem.cast::<LuaRef>() = nlua_pop_LuaRef(lstate, arena, err),
+                _ => abort(),
             }
-            if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-                continue;
+
+            if (*err).type_0 != kErrorTypeNone {
+                *err_opt = (*field).str;
+                break;
             }
-            *err_opt = (*field).str;
-            break;
         }
-        lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
+        lua_pop(lstate, 1);
     }
 }
 
+/// Push a generated keyset as a Lua table, one entry per field that is set.
+///
+/// # Safety
+/// `value` must point at the keyset `table` describes, terminated by a row
+/// with a null `str`.
 pub unsafe extern "C-unwind" fn nlua_push_keydict(
-    mut L: *mut lua_State,
-    mut value: *mut ::core::ffi::c_void,
-    mut table: *mut KeySetLink,
+    lstate: *mut lua_State,
+    value: *mut c_void,
+    table: *mut KeySetLink,
 ) {
     unsafe {
-        lua_createtable(L, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-        let mut i: size_t = 0 as size_t;
-        while !(*table.offset(i as isize)).str.is_null() {
-            let mut field: *mut KeySetLink = table.offset(i as isize);
-            let mut is_set: bool = true_0 != 0;
-            if (*field).opt_index >= 0 as ::core::ffi::c_int {
-                let mut ks: *mut OptKeySet = value as *mut OptKeySet;
-                is_set = (*ks).is_set_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << (*field).opt_index
-                    != 0;
-            }
-            if is_set {
-                let mut mem: *mut ::core::ffi::c_char =
-                    (value as *mut ::core::ffi::c_char).offset((*field).ptr_off as isize);
-                lua_pushstring(L, (*field).str);
-                if (*field).type_0 == kObjectTypeNil as ::core::ffi::c_int {
-                    nlua_push_Object(L, mem as *mut Object, 0 as ::core::ffi::c_int);
-                } else if (*field).type_0 == kObjectTypeInteger as ::core::ffi::c_int {
-                    lua_pushinteger(L, *(mem as *mut Integer) as lua_Integer);
-                } else if (*field).type_0 == kObjectTypeBuffer as ::core::ffi::c_int
-                    || (*field).type_0 == kObjectTypeWindow as ::core::ffi::c_int
-                    || (*field).type_0 == kObjectTypeTabpage as ::core::ffi::c_int
-                {
-                    lua_pushinteger(L, *(mem as *mut handle_T) as lua_Integer);
-                } else if (*field).type_0 == kObjectTypeFloat as ::core::ffi::c_int {
-                    lua_pushnumber(L, *(mem as *mut Float) as lua_Number);
-                } else if (*field).type_0 == kObjectTypeBoolean as ::core::ffi::c_int {
-                    lua_pushboolean(L, *(mem as *mut Boolean) as ::core::ffi::c_int);
-                } else if (*field).type_0 == kObjectTypeString as ::core::ffi::c_int {
-                    nlua_push_String(L, *(mem as *mut String_0), 0 as ::core::ffi::c_int);
-                } else if (*field).type_0 == kObjectTypeArray as ::core::ffi::c_int {
-                    nlua_push_Array(L, *(mem as *mut Array), 0 as ::core::ffi::c_int);
-                } else if (*field).type_0 == kObjectTypeDict as ::core::ffi::c_int {
-                    nlua_push_Dict(L, *(mem as *mut Dict), 0 as ::core::ffi::c_int);
-                } else if (*field).type_0 == kObjectTypeLuaRef as ::core::ffi::c_int {
-                    nlua_pushref(L, *(mem as *mut LuaRef));
-                } else {
-                    abort();
-                }
-                lua_rawset(L, -3 as ::core::ffi::c_int);
-            }
+        lua_createtable(lstate, 0, 0);
+        let mut i: size_t = 0;
+        while !(*table.add(i)).str.is_null() {
+            let field = table.add(i);
             i = i.wrapping_add(1);
+
+            // A field with an `opt_index` is only present when its bit is on;
+            // one without is always there.
+            if (*field).opt_index >= 0 {
+                let ks = value.cast::<OptKeySet>();
+                if (*ks).is_set_ & (1_u64 << (*field).opt_index) == 0 {
+                    continue;
+                }
+            }
+
+            let mem = value.cast::<c_char>().add((*field).ptr_off);
+            lua_pushstring(lstate, (*field).str);
+            match (*field).type_0 as ObjectTypeInt {
+                T_ANY => nlua_push_Object(lstate, mem.cast::<Object>(), 0),
+                T_INTEGER => lua_pushinteger(lstate, *mem.cast::<Integer>() as lua_Integer),
+                T_BUFFER | T_WINDOW | T_TABPAGE => {
+                    lua_pushinteger(lstate, *mem.cast::<handle_T>() as lua_Integer);
+                }
+                T_FLOAT => lua_pushnumber(lstate, *mem.cast::<Float>()),
+                T_BOOLEAN => lua_pushboolean(lstate, *mem.cast::<Boolean>() as c_int),
+                T_STRING => nlua_push_String(lstate, *mem.cast::<String_0>(), 0),
+                T_ARRAY => nlua_push_Array(lstate, *mem.cast::<Array>(), 0),
+                T_DICT => nlua_push_Dict(lstate, *mem.cast::<Dict>(), 0),
+                T_LUAREF => nlua_pushref(lstate, *mem.cast::<LuaRef>()),
+                _ => abort(),
+            }
+            lua_rawset(lstate, -3);
         }
     }
 }
+
+/// `KeySetLink::type_0` is a plain `int`, so the `ObjectType` tags have to be
+/// compared at that width.
+type ObjectTypeInt = c_int;
+const T_ANY: ObjectTypeInt = kObjectTypeNil as ObjectTypeInt;
+const T_BOOLEAN: ObjectTypeInt = kObjectTypeBoolean as ObjectTypeInt;
+const T_INTEGER: ObjectTypeInt = kObjectTypeInteger as ObjectTypeInt;
+const T_FLOAT: ObjectTypeInt = kObjectTypeFloat as ObjectTypeInt;
+const T_STRING: ObjectTypeInt = kObjectTypeString as ObjectTypeInt;
+const T_ARRAY: ObjectTypeInt = kObjectTypeArray as ObjectTypeInt;
+const T_DICT: ObjectTypeInt = kObjectTypeDict as ObjectTypeInt;
+const T_LUAREF: ObjectTypeInt = kObjectTypeLuaRef as ObjectTypeInt;
+const T_BUFFER: ObjectTypeInt = kObjectTypeBuffer as ObjectTypeInt;
+const T_WINDOW: ObjectTypeInt = kObjectTypeWindow as ObjectTypeInt;
+const T_TABPAGE: ObjectTypeInt = kObjectTypeTabpage as ObjectTypeInt;

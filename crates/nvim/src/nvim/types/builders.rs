@@ -16,10 +16,10 @@
 #![forbid(unsafe_code)]
 
 use super::{
-    Array, Buffer, Dict, Float, Integer, KeyValuePair, Object, String_0, Tabpage, Window,
+    Array, Buffer, Dict, Float, Integer, KeyValuePair, LuaRef, Object, String_0, Tabpage, Window,
     kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
-    object_data,
+    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
+    kObjectTypeWindow, object_data,
 };
 use core::ffi::{CStr, c_char};
 
@@ -103,6 +103,15 @@ impl Object {
         }
     }
 
+    /// A reference to a Lua value, held in that state's registry. The
+    /// reference is owned: whoever frees the object releases it.
+    pub const fn luaref(value: LuaRef) -> Self {
+        Self {
+            type_0: kObjectTypeLuaRef,
+            data: object_data { luaref: value },
+        }
+    }
+
     /// A window handle. Distinct from [`Object::integer`] only in the tag:
     /// the wire encoding gives handles their own msgpack extension type, so
     /// a handle sent as a plain integer arrives as a plain integer.
@@ -134,6 +143,24 @@ impl Object {
             },
         }
     }
+}
+
+impl Array {
+    /// No elements and nothing allocated: C's `ARRAY_DICT_INIT`.
+    pub const EMPTY: Self = Self {
+        size: 0,
+        capacity: 0,
+        items: ::core::ptr::null_mut(),
+    };
+}
+
+impl Dict {
+    /// No pairs and nothing allocated: C's `ARRAY_DICT_INIT`.
+    pub const EMPTY: Self = Self {
+        size: 0,
+        capacity: 0,
+        items: ::core::ptr::null_mut(),
+    };
 }
 
 /// Storage for an [`Array`] of at most `N` elements, on the stack of

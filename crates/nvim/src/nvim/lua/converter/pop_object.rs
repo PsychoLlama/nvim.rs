@@ -8,759 +8,240 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::CStr;
 
+use super::{API_INTEGER_MAX, API_INTEGER_MIN, nlua_traverse_table};
+use crate::src::nvim::api::private::helpers::{
+    api_free_object, api_set_error, arena_array, arena_dict, arena_string,
+};
+use crate::src::nvim::eval::typval_encode::InlineStack;
+use crate::src::nvim::lua::executor::{nlua_pushref, nlua_ref_global};
+use crate::src::nvim::lua::ffi::{
+    LUA_TBOOLEAN, LUA_TFUNCTION, LUA_TNIL, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE, LUA_TUSERDATA,
+    lua_checkstack, lua_gettop, lua_next, lua_pop, lua_pushnil, lua_rawequal, lua_rawgeti,
+    lua_toboolean, lua_tolstring, lua_tonumber, lua_type,
+};
+use crate::src::nvim::main::nlua_global_refs;
+use crate::src::nvim::os::libc::abort;
+use crate::src::nvim::types::{
+    Arena, Array, Dict, Error, Integer, Object, String_0, kErrorTypeException, kErrorTypeNone,
+    kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil,
+    lua_Number, lua_State, size_t,
+};
+
+/// One suspended container in the walk.
+///
+/// Simpler than [`super::pop_typval`]'s frame: an `Array`/`Dict` carries its
+/// own capacity, so "how far have we got" needs no field of its own and a
+/// self-reference is impossible — an arena value is a tree by construction.
+#[derive(Copy, Clone)]
+pub struct ObjPopStackItem {
+    /// Where the conversion's result is to be stored.
+    pub obj: *mut Object,
+    /// Whether `obj` is a container: a frame that is suspended rather than
+    /// about to be filled in.
+    pub container: bool,
+}
+
+impl ObjPopStackItem {
+    /// A frame about to be filled in, not a suspended container.
+    const fn leaf(obj: *mut Object) -> Self {
+        Self {
+            obj,
+            container: false,
+        }
+    }
+}
+
+/// Frames held without allocating: upstream's `kvec_withinit_t(…, 2)`.
+type ObjPopStack = InlineStack<ObjPopStackItem, 2>;
+
+/// Refused for a Lua value with no api image.
+const CANNOT_CONVERT: &CStr = c"Cannot convert given Lua type";
+
+/// Convert the Lua value on top of the stack, popping exactly one value.
+///
+/// With `ref_0`, a Lua function becomes a `LuaRef` rather than a refusal.
+/// `arena`, when non-null, owns every string and container the result holds;
+/// otherwise they are separately allocated and the caller frees them.
+///
+/// # Safety
+/// `lstate` must be a live Lua state with a value on top, and `err` the
+/// caller's error slot.
 pub unsafe extern "C-unwind" fn nlua_pop_Object(
     lstate: *mut lua_State,
-    mut ref_0: bool,
-    mut arena: *mut Arena,
+    ref_0: bool,
+    arena: *mut Arena,
     err: *mut Error,
 ) -> Object {
     unsafe {
-        let mut ret: Object = object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        };
-        let initial_size: ::core::ffi::c_int = lua_gettop(lstate);
-        let mut stack: C2Rust_Unnamed_8 = C2Rust_Unnamed_8 {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<ObjPopStackItem>(),
-            init_array: [ObjPopStackItem {
-                obj: ::core::ptr::null_mut::<Object>(),
-                container: false,
-            }; 2],
-        };
-        stack.capacity = ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-            .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
-            .wrapping_div(
-                (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                    .wrapping_rem(::core::mem::size_of::<ObjPopStackItem>())
-                    == 0) as ::core::ffi::c_int as usize,
-            ) as size_t;
-        stack.size = 0 as size_t;
-        stack.items = &raw mut stack.init_array as *mut ObjPopStackItem;
-        if stack.size == stack.capacity {
-            stack.capacity = if stack.capacity << 1 as ::core::ffi::c_int
-                > ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                    .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                            .wrapping_rem(::core::mem::size_of::<ObjPopStackItem>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                stack.capacity << 1 as ::core::ffi::c_int
-            } else {
-                ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                    .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                            .wrapping_rem(::core::mem::size_of::<ObjPopStackItem>())
-                            == 0) as ::core::ffi::c_int as size_t,
-                    )
-            };
-            stack.items = (if stack.capacity
-                == ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                    .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                            .wrapping_rem(::core::mem::size_of::<ObjPopStackItem>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem {
-                    stack.items as *mut ::core::ffi::c_void
-                } else {
-                    _memcpy_free(
-                        &raw mut stack.init_array as *mut ObjPopStackItem
-                            as *mut ::core::ffi::c_void,
-                        stack.items as *mut ::core::ffi::c_void,
-                        stack
-                            .size
-                            .wrapping_mul(::core::mem::size_of::<ObjPopStackItem>()),
-                    )
-                }
-            } else {
-                if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem {
-                    memcpy(
-                        xmalloc(
-                            stack
-                                .capacity
-                                .wrapping_mul(::core::mem::size_of::<ObjPopStackItem>()),
-                        ),
-                        stack.items as *const ::core::ffi::c_void,
-                        stack
-                            .size
-                            .wrapping_mul(::core::mem::size_of::<ObjPopStackItem>()),
-                    )
-                } else {
-                    xrealloc(
-                        stack.items as *mut ::core::ffi::c_void,
-                        stack
-                            .capacity
-                            .wrapping_mul(::core::mem::size_of::<ObjPopStackItem>()),
-                    )
-                }
-            }) as *mut ObjPopStackItem;
-        } else {
-        };
-        let c2rust_fresh15 = stack.size;
-        stack.size = stack.size.wrapping_add(1);
-        *stack.items.offset(c2rust_fresh15 as isize) = ObjPopStackItem {
-            obj: &raw mut ret,
-            container: false,
-        };
-        while !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int)
-            && stack.size != 0
-        {
-            stack.size = stack.size.wrapping_sub(1);
-            let mut cur: ObjPopStackItem = *stack.items.offset(stack.size as isize);
+        let mut ret = Object::NIL;
+        let initial_size = lua_gettop(lstate);
+        let mut stack = ObjPopStack::new();
+        stack.push(ObjPopStackItem::leaf(&raw mut ret));
+        while (*err).type_0 == kErrorTypeNone && !stack.is_empty() {
+            let mut cur = stack.last();
+            stack.pop();
             if cur.container {
-                if lua_checkstack(lstate, lua_gettop(lstate) + 3 as ::core::ffi::c_int) == 0 {
+                if lua_checkstack(lstate, lua_gettop(lstate) + 3) == 0 {
                     api_set_error(
                         err,
                         kErrorTypeException,
-                        b"Lua failed to grow stack\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"Lua failed to grow stack".as_ptr(),
                     );
                     break;
-                } else if (*cur.obj).type_0 as ::core::ffi::c_uint
-                    == kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
+                }
+                if (*cur.obj).type_0 == kObjectTypeDict {
                     if (*cur.obj).data.dict.size == (*cur.obj).data.dict.capacity {
-                        lua_settop(lstate, -2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
+                        // Full: pop the table and the key lua_next left.
+                        lua_pop(lstate, 2);
                         continue;
-                    } else {
-                        let mut next_key_found: bool = false_0 != 0;
-                        while lua_next(lstate, -2 as ::core::ffi::c_int) != 0 {
-                            if lua_type(lstate, -2 as ::core::ffi::c_int) == LUA_TSTRING {
-                                next_key_found = true_0 != 0;
-                                break;
-                            } else {
-                                lua_settop(
-                                    lstate,
-                                    -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                                );
-                            }
-                        }
-                        if next_key_found {
-                            let mut len: size_t = 0;
-                            let mut s: *const ::core::ffi::c_char =
-                                lua_tolstring(lstate, -2 as ::core::ffi::c_int, &raw mut len);
-                            let c2rust_fresh16 = (*cur.obj).data.dict.size;
-                            (*cur.obj).data.dict.size = (*cur.obj).data.dict.size.wrapping_add(1);
-                            let idx: size_t = c2rust_fresh16;
-                            (*(*cur.obj).data.dict.items.offset(idx as isize)).key = arena_string(
-                                arena,
-                                String_0 {
-                                    data: s as *mut ::core::ffi::c_char,
-                                    size: len,
-                                },
-                            );
-                            if stack.size == stack.capacity {
-                                stack.capacity = if stack.capacity << 1 as ::core::ffi::c_int
-                                    > ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                        .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
-                                        .wrapping_div(
-                                            (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                                .wrapping_rem(::core::mem::size_of::<
-                                                    ObjPopStackItem,
-                                                >(
-                                                ))
-                                                == 0)
-                                                as ::core::ffi::c_int
-                                                as usize,
-                                        ) {
-                                    stack.capacity << 1 as ::core::ffi::c_int
-                                } else {
-                                    ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                        .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
-                                        .wrapping_div(
-                                            (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                                .wrapping_rem(::core::mem::size_of::<
-                                                    ObjPopStackItem,
-                                                >(
-                                                ))
-                                                == 0)
-                                                as ::core::ffi::c_int
-                                                as size_t,
-                                        )
-                                };
-                                stack.items = (if stack.capacity
-                                    == ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                        .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
-                                        .wrapping_div(
-                                            (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                                .wrapping_rem(::core::mem::size_of::<
-                                                    ObjPopStackItem,
-                                                >(
-                                                ))
-                                                == 0)
-                                                as ::core::ffi::c_int
-                                                as usize,
-                                        ) {
-                                    if stack.items
-                                        == &raw mut stack.init_array as *mut ObjPopStackItem
-                                    {
-                                        stack.items as *mut ::core::ffi::c_void
-                                    } else {
-                                        _memcpy_free(
-                                            &raw mut stack.init_array as *mut ObjPopStackItem
-                                                as *mut ::core::ffi::c_void,
-                                            stack.items as *mut ::core::ffi::c_void,
-                                            stack.size.wrapping_mul(::core::mem::size_of::<
-                                                ObjPopStackItem,
-                                            >(
-                                            )),
-                                        )
-                                    }
-                                } else {
-                                    if stack.items
-                                        == &raw mut stack.init_array as *mut ObjPopStackItem
-                                    {
-                                        memcpy(
-                                            xmalloc(stack.capacity.wrapping_mul(
-                                                ::core::mem::size_of::<ObjPopStackItem>(),
-                                            )),
-                                            stack.items as *const ::core::ffi::c_void,
-                                            stack.size.wrapping_mul(::core::mem::size_of::<
-                                                ObjPopStackItem,
-                                            >(
-                                            )),
-                                        )
-                                    } else {
-                                        xrealloc(
-                                            stack.items as *mut ::core::ffi::c_void,
-                                            stack.capacity.wrapping_mul(::core::mem::size_of::<
-                                                ObjPopStackItem,
-                                            >(
-                                            )),
-                                        )
-                                    }
-                                })
-                                    as *mut ObjPopStackItem;
-                            } else {
-                            };
-                            let c2rust_fresh17 = stack.size;
-                            stack.size = stack.size.wrapping_add(1);
-                            *stack.items.offset(c2rust_fresh17 as isize) = cur;
-                            cur = ObjPopStackItem {
-                                obj: &raw mut (*(*cur.obj).data.dict.items.offset(idx as isize))
-                                    .value,
-                                container: false,
-                            };
-                        } else {
-                            lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-                            continue;
-                        }
                     }
+                    // Skip any non-string key: those are not part of the
+                    // dictionary being built.
+                    let mut next_key_found = false;
+                    while lua_next(lstate, -2) != 0 {
+                        if lua_type(lstate, -2) == LUA_TSTRING {
+                            next_key_found = true;
+                            break;
+                        }
+                        lua_pop(lstate, 1);
+                    }
+                    if !next_key_found {
+                        lua_pop(lstate, 1);
+                        continue;
+                    }
+                    let mut len: size_t = 0;
+                    let s = lua_tolstring(lstate, -2, &raw mut len);
+                    let idx = (*cur.obj).data.dict.size;
+                    (*cur.obj).data.dict.size = idx.wrapping_add(1);
+                    (*(*cur.obj).data.dict.items.add(idx)).key = arena_string(
+                        arena,
+                        String_0 {
+                            data: s.cast_mut(),
+                            size: len,
+                        },
+                    );
+                    stack.push(cur);
+                    cur = ObjPopStackItem::leaf(
+                        &raw mut (*(*cur.obj).data.dict.items.add(idx)).value,
+                    );
                 } else if (*cur.obj).data.array.size == (*cur.obj).data.array.capacity {
-                    lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
+                    lua_pop(lstate, 1);
                     continue;
                 } else {
-                    let c2rust_fresh18 = (*cur.obj).data.array.size;
-                    (*cur.obj).data.array.size = (*cur.obj).data.array.size.wrapping_add(1);
-                    let idx_0: size_t = c2rust_fresh18;
-                    lua_rawgeti(
-                        lstate,
-                        -1 as ::core::ffi::c_int,
-                        idx_0 as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
-                    );
-                    if stack.size == stack.capacity {
-                        stack.capacity = if stack.capacity << 1 as ::core::ffi::c_int
-                            > ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<ObjPopStackItem>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            stack.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<ObjPopStackItem>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as size_t,
-                                )
-                        };
-                        stack.items = (if stack.capacity
-                            == ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                        .wrapping_rem(::core::mem::size_of::<ObjPopStackItem>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem {
-                                stack.items as *mut ::core::ffi::c_void
-                            } else {
-                                _memcpy_free(
-                                    &raw mut stack.init_array as *mut ObjPopStackItem
-                                        as *mut ::core::ffi::c_void,
-                                    stack.items as *mut ::core::ffi::c_void,
-                                    stack
-                                        .size
-                                        .wrapping_mul(::core::mem::size_of::<ObjPopStackItem>()),
-                                )
-                            }
-                        } else {
-                            if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem {
-                                memcpy(
-                                xmalloc(
-                                    stack
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<ObjPopStackItem>()),
-                                ),
-                                stack.items as *const ::core::ffi::c_void,
-                                stack
-                                    .size
-                                    .wrapping_mul(::core::mem::size_of::<ObjPopStackItem>()),
-                            )
-                            } else {
-                                xrealloc(
-                                    stack.items as *mut ::core::ffi::c_void,
-                                    stack
-                                        .capacity
-                                        .wrapping_mul(::core::mem::size_of::<ObjPopStackItem>()),
-                                )
-                            }
-                        }) as *mut ObjPopStackItem;
-                    } else {
-                    };
-                    let c2rust_fresh19 = stack.size;
-                    stack.size = stack.size.wrapping_add(1);
-                    *stack.items.offset(c2rust_fresh19 as isize) = cur;
-                    cur = ObjPopStackItem {
-                        obj: (*cur.obj).data.array.items.offset(idx_0 as isize),
-                        container: false,
-                    };
+                    let idx = (*cur.obj).data.array.size;
+                    (*cur.obj).data.array.size = idx.wrapping_add(1);
+                    lua_rawgeti(lstate, -1, idx as ::core::ffi::c_int + 1);
+                    stack.push(cur);
+                    cur = ObjPopStackItem::leaf((*cur.obj).data.array.items.add(idx));
                 }
             }
-            '_c2rust_label: {
-                if !cur.container {
-                } else {
-                    __assert_fail(
-                        b"!cur.container\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/lua/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        1114 as ::core::ffi::c_uint,
-                        b"Object nlua_pop_Object(lua_State *const, _Bool, Arena *, Error *const)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            *cur.obj = object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
-            's_341: {
-                match lua_type(lstate, -1 as ::core::ffi::c_int) {
-                    LUA_TNIL => {
-                        break 's_341;
-                    }
+            debug_assert!(!cur.container);
+            *cur.obj = Object::NIL;
+            'converted: {
+                match lua_type(lstate, -1) {
+                    LUA_TNIL => break 'converted,
                     LUA_TBOOLEAN => {
-                        *cur.obj = object {
-                            type_0: kObjectTypeBoolean,
-                            data: C2Rust_Unnamed {
-                                boolean: lua_toboolean(lstate, -1 as ::core::ffi::c_int) != 0,
-                            },
-                        };
-                        break 's_341;
+                        *cur.obj = Object::boolean(lua_toboolean(lstate, -1) != 0);
+                        break 'converted;
                     }
                     LUA_TSTRING => {
-                        let mut len_0: size_t = 0;
-                        let mut s_0: *const ::core::ffi::c_char =
-                            lua_tolstring(lstate, -1 as ::core::ffi::c_int, &raw mut len_0);
-                        *cur.obj = object {
-                            type_0: kObjectTypeString,
-                            data: C2Rust_Unnamed {
-                                string: arena_string(
-                                    arena,
-                                    String_0 {
-                                        data: s_0 as *mut ::core::ffi::c_char,
-                                        size: len_0,
-                                    },
-                                ),
+                        let mut len: size_t = 0;
+                        let s = lua_tolstring(lstate, -1, &raw mut len);
+                        *cur.obj = Object::string(arena_string(
+                            arena,
+                            String_0 {
+                                data: s.cast_mut(),
+                                size: len,
                             },
-                        };
-                        break 's_341;
+                        ));
+                        break 'converted;
                     }
                     LUA_TNUMBER => {
-                        let n: lua_Number = lua_tonumber(lstate, -1 as ::core::ffi::c_int);
-                        if n > API_INTEGER_MAX as lua_Number
+                        let n = lua_tonumber(lstate, -1);
+                        *cur.obj = if n > API_INTEGER_MAX as lua_Number
                             || n < API_INTEGER_MIN as lua_Number
-                            || n as Integer as lua_Number != n
+                            || (n as Integer) as lua_Number != n
                         {
-                            *cur.obj = object {
-                                type_0: kObjectTypeFloat,
-                                data: C2Rust_Unnamed { floating: n },
-                            };
+                            Object::float(n)
                         } else {
-                            *cur.obj = object {
-                                type_0: kObjectTypeInteger,
-                                data: C2Rust_Unnamed {
-                                    integer: n as Integer,
-                                },
-                            };
-                        }
-                        break 's_341;
+                            Object::integer(n as Integer)
+                        };
+                        break 'converted;
                     }
                     LUA_TTABLE => {
-                        let table_props: LuaTableProps = nlua_traverse_table(lstate);
-                        match table_props.type_0 as ::core::ffi::c_uint {
-                            5 => {
-                                *cur.obj = object {
-                                    type_0: kObjectTypeArray,
-                                    data: C2Rust_Unnamed {
-                                        array: Array {
-                                            size: 0 as size_t,
-                                            capacity: 0 as size_t,
-                                            items: ::core::ptr::null_mut::<Object>(),
-                                        },
-                                    },
-                                };
-                                if table_props.maxidx != 0 as size_t {
+                        let table_props = nlua_traverse_table(lstate);
+                        match table_props.type_0 {
+                            kObjectTypeArray => {
+                                *cur.obj = Object::array(Array::EMPTY);
+                                if table_props.maxidx != 0 {
                                     (*cur.obj).data.array = arena_array(arena, table_props.maxidx);
-                                    cur.container = true_0 != 0;
-                                    '_c2rust_label_0: {
-                                        if stack.size < 18446744073709551615 as size_t {
-                                        } else {
-                                            __assert_fail(
-                                            b"kv_size(stack) < SIZE_MAX\0".as_ptr()
-                                                as *const ::core::ffi::c_char,
-                                            b"src/nvim/lua/converter.rs\0"
-                                                .as_ptr() as *const ::core::ffi::c_char,
-                                            1147 as ::core::ffi::c_uint,
-                                            b"Object nlua_pop_Object(lua_State *const, _Bool, Arena *, Error *const)\0"
-                                                .as_ptr() as *const ::core::ffi::c_char,
-                                        );
-                                        }
-                                    };
-                                    if stack.size == stack.capacity {
-                                        stack.capacity = if stack.capacity
-                                            << 1 as ::core::ffi::c_int
-                                            > ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                                .wrapping_div(
-                                                    ::core::mem::size_of::<ObjPopStackItem>(),
-                                                )
-                                                .wrapping_div(
-                                                    (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                                        .wrapping_rem(::core::mem::size_of::<
-                                                            ObjPopStackItem,
-                                                        >(
-                                                        ))
-                                                        == 0)
-                                                        as ::core::ffi::c_int
-                                                        as usize,
-                                                ) {
-                                            stack.capacity << 1 as ::core::ffi::c_int
-                                        } else {
-                                            ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                                .wrapping_div(
-                                                    ::core::mem::size_of::<ObjPopStackItem>(),
-                                                )
-                                                .wrapping_div(
-                                                    (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                                        .wrapping_rem(::core::mem::size_of::<
-                                                            ObjPopStackItem,
-                                                        >(
-                                                        ))
-                                                        == 0)
-                                                        as ::core::ffi::c_int
-                                                        as size_t,
-                                                )
-                                        };
-                                        stack.items = (if stack.capacity
-                                            == ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                                .wrapping_div(
-                                                    ::core::mem::size_of::<ObjPopStackItem>(),
-                                                )
-                                                .wrapping_div(
-                                                    (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                                        .wrapping_rem(::core::mem::size_of::<
-                                                            ObjPopStackItem,
-                                                        >(
-                                                        ))
-                                                        == 0)
-                                                        as ::core::ffi::c_int
-                                                        as usize,
-                                                ) {
-                                            if stack.items
-                                                == &raw mut stack.init_array as *mut ObjPopStackItem
-                                            {
-                                                stack.items as *mut ::core::ffi::c_void
-                                            } else {
-                                                _memcpy_free(
-                                                    &raw mut stack.init_array
-                                                        as *mut ObjPopStackItem
-                                                        as *mut ::core::ffi::c_void,
-                                                    stack.items as *mut ::core::ffi::c_void,
-                                                    stack.size.wrapping_mul(
-                                                        ::core::mem::size_of::<ObjPopStackItem>(),
-                                                    ),
-                                                )
-                                            }
-                                        } else {
-                                            if stack.items
-                                                == &raw mut stack.init_array as *mut ObjPopStackItem
-                                            {
-                                                memcpy(
-                                                    xmalloc(stack.capacity.wrapping_mul(
-                                                        ::core::mem::size_of::<ObjPopStackItem>(),
-                                                    )),
-                                                    stack.items as *const ::core::ffi::c_void,
-                                                    stack.size.wrapping_mul(
-                                                        ::core::mem::size_of::<ObjPopStackItem>(),
-                                                    ),
-                                                )
-                                            } else {
-                                                xrealloc(
-                                                    stack.items as *mut ::core::ffi::c_void,
-                                                    stack.capacity.wrapping_mul(
-                                                        ::core::mem::size_of::<ObjPopStackItem>(),
-                                                    ),
-                                                )
-                                            }
-                                        })
-                                            as *mut ObjPopStackItem;
-                                    } else {
-                                    };
-                                    let c2rust_fresh20 = stack.size;
-                                    stack.size = stack.size.wrapping_add(1);
-                                    *stack.items.offset(c2rust_fresh20 as isize) = cur;
+                                    cur.container = true;
+                                    stack.push(cur);
                                 }
                             }
-                            6 => {
-                                *cur.obj = object {
-                                    type_0: kObjectTypeDict,
-                                    data: C2Rust_Unnamed {
-                                        dict: Dict {
-                                            size: 0 as size_t,
-                                            capacity: 0 as size_t,
-                                            items: ::core::ptr::null_mut::<KeyValuePair>(),
-                                        },
-                                    },
-                                };
-                                if table_props.string_keys_num != 0 as size_t {
+                            kObjectTypeDict => {
+                                *cur.obj = Object::dict(Dict::EMPTY);
+                                if table_props.string_keys_num != 0 {
                                     (*cur.obj).data.dict =
                                         arena_dict(arena, table_props.string_keys_num);
-                                    cur.container = true_0 != 0;
-                                    '_c2rust_label_1: {
-                                        if stack.size < 18446744073709551615 as size_t {
-                                        } else {
-                                            __assert_fail(
-                                            b"kv_size(stack) < SIZE_MAX\0".as_ptr()
-                                                as *const ::core::ffi::c_char,
-                                            b"src/nvim/lua/converter.rs\0"
-                                                .as_ptr() as *const ::core::ffi::c_char,
-                                            1156 as ::core::ffi::c_uint,
-                                            b"Object nlua_pop_Object(lua_State *const, _Bool, Arena *, Error *const)\0"
-                                                .as_ptr() as *const ::core::ffi::c_char,
-                                        );
-                                        }
-                                    };
-                                    if stack.size == stack.capacity {
-                                        stack.capacity = if stack.capacity
-                                            << 1 as ::core::ffi::c_int
-                                            > ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                                .wrapping_div(
-                                                    ::core::mem::size_of::<ObjPopStackItem>(),
-                                                )
-                                                .wrapping_div(
-                                                    (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                                        .wrapping_rem(::core::mem::size_of::<
-                                                            ObjPopStackItem,
-                                                        >(
-                                                        ))
-                                                        == 0)
-                                                        as ::core::ffi::c_int
-                                                        as usize,
-                                                ) {
-                                            stack.capacity << 1 as ::core::ffi::c_int
-                                        } else {
-                                            ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                                .wrapping_div(
-                                                    ::core::mem::size_of::<ObjPopStackItem>(),
-                                                )
-                                                .wrapping_div(
-                                                    (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                                        .wrapping_rem(::core::mem::size_of::<
-                                                            ObjPopStackItem,
-                                                        >(
-                                                        ))
-                                                        == 0)
-                                                        as ::core::ffi::c_int
-                                                        as size_t,
-                                                )
-                                        };
-                                        stack.items = (if stack.capacity
-                                            == ::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                                .wrapping_div(
-                                                    ::core::mem::size_of::<ObjPopStackItem>(),
-                                                )
-                                                .wrapping_div(
-                                                    (::core::mem::size_of::<[ObjPopStackItem; 2]>()
-                                                        .wrapping_rem(::core::mem::size_of::<
-                                                            ObjPopStackItem,
-                                                        >(
-                                                        ))
-                                                        == 0)
-                                                        as ::core::ffi::c_int
-                                                        as usize,
-                                                ) {
-                                            if stack.items
-                                                == &raw mut stack.init_array as *mut ObjPopStackItem
-                                            {
-                                                stack.items as *mut ::core::ffi::c_void
-                                            } else {
-                                                _memcpy_free(
-                                                    &raw mut stack.init_array
-                                                        as *mut ObjPopStackItem
-                                                        as *mut ::core::ffi::c_void,
-                                                    stack.items as *mut ::core::ffi::c_void,
-                                                    stack.size.wrapping_mul(
-                                                        ::core::mem::size_of::<ObjPopStackItem>(),
-                                                    ),
-                                                )
-                                            }
-                                        } else {
-                                            if stack.items
-                                                == &raw mut stack.init_array as *mut ObjPopStackItem
-                                            {
-                                                memcpy(
-                                                    xmalloc(stack.capacity.wrapping_mul(
-                                                        ::core::mem::size_of::<ObjPopStackItem>(),
-                                                    )),
-                                                    stack.items as *const ::core::ffi::c_void,
-                                                    stack.size.wrapping_mul(
-                                                        ::core::mem::size_of::<ObjPopStackItem>(),
-                                                    ),
-                                                )
-                                            } else {
-                                                xrealloc(
-                                                    stack.items as *mut ::core::ffi::c_void,
-                                                    stack.capacity.wrapping_mul(
-                                                        ::core::mem::size_of::<ObjPopStackItem>(),
-                                                    ),
-                                                )
-                                            }
-                                        })
-                                            as *mut ObjPopStackItem;
-                                    } else {
-                                    };
-                                    let c2rust_fresh21 = stack.size;
-                                    stack.size = stack.size.wrapping_add(1);
-                                    *stack.items.offset(c2rust_fresh21 as isize) = cur;
+                                    cur.container = true;
+                                    stack.push(cur);
                                     lua_pushnil(lstate);
                                 }
                             }
-                            3 => {
-                                *cur.obj = object {
-                                    type_0: kObjectTypeFloat,
-                                    data: C2Rust_Unnamed {
-                                        floating: table_props.val,
-                                    },
-                                };
+                            kObjectTypeFloat => {
+                                *cur.obj = Object::float(table_props.val);
                             }
-                            0 => {
+                            kObjectTypeNil => {
                                 api_set_error(
                                     err,
                                     kErrorTypeValidation,
-                                    b"Cannot convert given Lua table\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    c"Cannot convert given Lua table".as_ptr(),
                                 );
                             }
-                            _ => {
-                                abort();
-                            }
+                            _ => abort(),
                         }
-                        break 's_341;
+                        break 'converted;
                     }
                     LUA_TFUNCTION => {
                         if ref_0 {
-                            *cur.obj = object {
-                                type_0: kObjectTypeLuaRef,
-                                data: C2Rust_Unnamed {
-                                    luaref: nlua_ref_global(lstate, -1 as ::core::ffi::c_int),
-                                },
-                            };
-                            break 's_341;
+                            *cur.obj = Object::luaref(nlua_ref_global(lstate, -1));
+                            break 'converted;
                         }
                     }
                     LUA_TUSERDATA => {
                         nlua_pushref(lstate, (*nlua_global_refs.get()).nil_ref);
-                        let mut is_nil: bool = lua_rawequal(
-                            lstate,
-                            -2 as ::core::ffi::c_int,
-                            -1 as ::core::ffi::c_int,
-                        ) != 0;
-                        lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
+                        let is_nil = lua_rawequal(lstate, -2, -1) != 0;
+                        lua_pop(lstate, 1);
                         if is_nil {
-                            *cur.obj = object {
-                                type_0: kObjectTypeNil,
-                                data: C2Rust_Unnamed { boolean: false },
-                            };
+                            *cur.obj = Object::NIL;
                         } else {
                             api_set_error(
                                 err,
                                 kErrorTypeValidation,
-                                b"Cannot convert userdata\0".as_ptr() as *const ::core::ffi::c_char,
+                                c"Cannot convert userdata".as_ptr(),
                             );
                         }
-                        break 's_341;
+                        break 'converted;
                     }
                     _ => {}
                 }
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    b"Cannot convert given Lua type\0".as_ptr() as *const ::core::ffi::c_char,
-                );
+                api_set_error(err, kErrorTypeValidation, CANNOT_CONVERT.as_ptr());
             }
             if !cur.container {
-                lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
+                lua_pop(lstate, 1);
             }
         }
-        if stack.items != &raw mut stack.init_array as *mut ObjPopStackItem {
-            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                &raw mut stack.items as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr_);
-            *ptr_ = NULL_0;
-            let _ = *ptr_;
-        }
-        if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+        if (*err).type_0 != kErrorTypeNone {
             if arena.is_null() {
                 api_free_object(ret);
             }
-            ret = object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            };
-            lua_settop(
-                lstate,
-                -(lua_gettop(lstate) - initial_size + 1 as ::core::ffi::c_int)
-                    - 1 as ::core::ffi::c_int,
-            );
+            ret = Object::NIL;
+            lua_pop(lstate, lua_gettop(lstate) - initial_size + 1);
         }
-        '_c2rust_label_2: {
-            if lua_gettop(lstate) == initial_size - 1 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"lua_gettop(lstate) == initial_size - 1\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                    b"src/nvim/lua/converter.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1211 as ::core::ffi::c_uint,
-                    b"Object nlua_pop_Object(lua_State *const, _Bool, Arena *, Error *const)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        return ret;
+        debug_assert!(lua_gettop(lstate) == initial_size - 1);
+        ret
     }
 }

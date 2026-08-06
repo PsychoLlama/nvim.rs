@@ -1,50 +1,31 @@
+//! Values across the Lua boundary, in both directions and for both of the
+//! editor's value types.
+//!
+//! Four walks live here. [`push`] converts a `typval_T` to a Lua value and
+//! [`pop_typval`] converts one back; [`push_object`] and [`pop_object`] do
+//! the same for the api's [`Object`](crate::src::nvim::types::Object). The
+//! two `pop` directions are separate because the type systems disagree at
+//! the leaves — an `Object` has no `VAR_SPECIAL`, carries `LuaRef`s for
+//! functions, and allocates into an `Arena` — but they share [`pop`]'s
+//! [`LuaTableProps`], which is the one place a Lua table's *shape* is
+//! decided, and [`keysets`] is a fifth, generated-struct-shaped direction on
+//! top of them.
+//!
+//! Neither `pop` walk recurses: a Lua table may nest arbitrarily deep and
+//! the conversion has to be able to refuse rather than overflow the C stack,
+//! so each keeps an explicit stack of suspended containers.
+
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::src::nvim::api::private::helpers::{
-    api_free_array, api_free_dict, api_free_object, api_set_error, api_typename, arena_array,
-    arena_dict, arena_string,
-};
-use crate::src::nvim::eval::decode::{decode_create_map_special_dict, decode_string};
-use crate::src::nvim::eval::typval::{
-    tv_clear, tv_copy, tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_item_alloc_len,
-    tv_list_alloc, tv_list_append_list, tv_list_append_owned_tv,
-};
-use crate::src::nvim::eval::typval::{tv_list_last, tv_list_len, tv_list_ref};
-use crate::src::nvim::eval::userfunc::register_luafunc;
-use crate::src::nvim::highlight_group::syn_check_group;
-use crate::src::nvim::kvec::_memcpy_free;
-use crate::src::nvim::lua::executor::{api_free_luaref, nlua_pushref, nlua_ref_global};
-use crate::src::nvim::lua::ffi::{
-    lua_checkstack, lua_createtable, lua_getmetatable, lua_gettop, lua_next, lua_pushboolean,
-    lua_pushinteger, lua_pushlstring, lua_pushnil, lua_pushnumber, lua_pushstring, lua_pushvalue,
-    lua_rawequal, lua_rawgeti, lua_rawset, lua_rawseti, lua_setmetatable, lua_settop,
-    lua_toboolean, lua_tolstring, lua_tonumber, lua_type,
-};
-use crate::src::nvim::main::nlua_global_refs;
-use crate::src::nvim::memory::{arena_memdupz, xfree, xmalloc, xrealloc, xstrdup};
-use crate::src::nvim::message::{emsg, semsg};
-use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memchr, memcpy, memset};
-use crate::src::nvim::types::{
-    Arena, Array, BoolVarValue, Boolean, Dict, Error, FieldHashfn, Float, Integer, KeySetLink,
-    KeyValuePair, LuaRef, Object, ObjectType, OptKeySet, OptionalKeys, String_0, VAR_BOOL,
-    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VAR_UNKNOWN, VAR_UNLOCKED,
-    dictitem_T, handle_T, kBoolVarFalse, kBoolVarTrue, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
-    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
-    kObjectTypeTabpage, kObjectTypeWindow, kSpecialVarNull, key_value_pair, list_T, lua_Integer,
-    lua_Number, lua_State, object, object_data as C2Rust_Unnamed, ptrdiff_t, size_t, typval_T,
-    typval_vval_union, varnumber_T,
-};
-pub type C2Rust_Unnamed_6 = ::core::ffi::c_uint;
-pub const kNluaPushFreeRefs: C2Rust_Unnamed_6 = 2;
-pub const kNluaPushSpecial: C2Rust_Unnamed_6 = 1;
+use core::ffi::c_int;
+
+use crate::src::nvim::types::{ObjectType, kObjectTypeNil, lua_Number, size_t};
 
 // The typval-to-Lua direction, carved out of this module's
 // `typval_encode.c.h` instantiation.
 mod push;
 pub use self::push::nlua_push_typval;
 
-// The carve of the transpiled module; see each child's docs.
 mod keysets;
 mod pop;
 mod pop_object;
@@ -56,73 +37,59 @@ pub use self::pop::*;
 pub use self::pop_object::*;
 pub use self::pop_typval::*;
 pub use self::push_object::*;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct TVPopStackItem {
-    pub tv: *mut typval_T,
-    pub list_len: size_t,
-    pub container: bool,
-    pub special: bool,
-    pub idx: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_7 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut TVPopStackItem,
-    pub init_array: [TVPopStackItem; 2],
-}
+
+/// `nlua_push_*` flags.
+pub type NluaPushFlags = ::core::ffi::c_uint;
+/// Push Vimscript's `null` and empty dictionary as `nil` and a `{_TYPE,
+/// _VAL}` table, rather than as the `vim.NIL` and `vim.empty_dict()`
+/// singletons Lua code normally sees.
+pub const kNluaPushSpecial: NluaPushFlags = 1;
+/// Release each `LuaRef` as it is pushed: the object is being consumed.
+pub const kNluaPushFreeRefs: NluaPushFlags = 2;
+
+/// The two boolean keys a `{_TYPE, _VAL}` special table is built from: `true`
+/// holds the type tag, `false` the value.
+pub(crate) const TYPE_IDX_VALUE: bool = true;
+pub(crate) const VAL_IDX_VALUE: bool = false;
+
+/// `ufunc_T::uf_flags`: this function is a Lua reference, not Vimscript.
+pub(crate) const FC_LUAREF: c_int = 0x800;
+
+/// The largest and smallest integers an api `Integer` and a Vimscript
+/// `varnumber_T` hold — both are `int64_t`.
+pub(crate) const API_INTEGER_MAX: i64 = i64::MAX;
+pub(crate) const API_INTEGER_MIN: i64 = i64::MIN;
+pub(crate) const VARNUMBER_MAX: i64 = i64::MAX;
+pub(crate) const VARNUMBER_MIN: i64 = i64::MIN;
+
+/// What keys a Lua table turned out to contain — the answer
+/// [`nlua_traverse_table`] hands both `pop` walks.
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct LuaTableProps {
+    /// The largest positive integral key found.
     pub maxidx: size_t,
+    /// How many string keys there are.
     pub string_keys_num: size_t,
+    /// Whether any string key contains a NUL byte.
     pub has_string_with_nul: bool,
+    /// The type attached under the `_TYPE` key when [`Self::has_type_key`];
+    /// otherwise the shape the other fields imply — nil, dict or array.
     pub type_0: ObjectType,
+    /// The value under the `_VAL` key, when that key holds a number.
     pub val: lua_Number,
+    /// Whether the `_TYPE` key is present.
     pub has_type_key: bool,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ObjPopStackItem {
-    pub obj: *mut Object,
-    pub container: bool,
+
+impl LuaTableProps {
+    /// "Not convertible": what both refusal paths answer.
+    pub(crate) const NIL: Self = Self {
+        maxidx: 0,
+        string_keys_num: 0,
+        has_string_with_nul: false,
+        type_0: kObjectTypeNil,
+        val: 0.0,
+        has_type_key: false,
+    };
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_8 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ObjPopStackItem,
-    pub init_array: [ObjPopStackItem; 2],
-}
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const LUA_TNIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const LUA_TBOOLEAN: ::core::ffi::c_int = 1;
-pub const LUA_TNUMBER: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const LUA_TSTRING: ::core::ffi::c_int = 4;
-pub const LUA_TTABLE: ::core::ffi::c_int = 5;
-pub const LUA_TFUNCTION: ::core::ffi::c_int = 6;
-pub const LUA_TUSERDATA: ::core::ffi::c_int = 7;
-pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const INT8_MIN: ::core::ffi::c_int = -128 as ::core::ffi::c_int;
-pub const INT64_MIN: ::core::ffi::c_long =
-    -9223372036854775807 as ::core::ffi::c_long - 1 as ::core::ffi::c_long;
-pub const INT8_MAX: ::core::ffi::c_int = 127 as ::core::ffi::c_int;
-pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
-pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-pub const API_INTEGER_MAX: ::core::ffi::c_long = INT64_MAX;
-pub const API_INTEGER_MIN: ::core::ffi::c_long = INT64_MIN;
-pub const VARNUMBER_MAX: ::core::ffi::c_long = INT64_MAX;
-pub const VARNUMBER_MIN: ::core::ffi::c_long = INT64_MIN;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const FC_LUAREF: ::core::ffi::c_int = 0x800 as ::core::ffi::c_int;
-pub const TYPE_IDX_VALUE: ::core::ffi::c_int = true_0;
-pub const VAL_IDX_VALUE: ::core::ffi::c_int = false_0;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
