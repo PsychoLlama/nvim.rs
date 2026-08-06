@@ -1,312 +1,182 @@
 //! Installing all of the above onto a `lua_State`.
 //!
-//! `nlua_state_add_stdlib` is the one registration point: it pushes every
+//! [`nlua_state_add_stdlib`] is the one registration point: it pushes every
 //! `vim.*` C function this module implements onto the `vim` table, and
-//! `nlua_state_add_internal` the `vim._*` half a thread's state also gets.
-//! `nlua_push_errstr` is the shared error formatter.
+//! `nlua_state_add_internal` the `vim._*` half that only the main state gets.
+//! [`nlua_push_errstr`] is the shared error formatter.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
 
-unsafe extern "C-unwind" fn nlua_foldupdate(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
+use super::{
+    REGEX_META, nlua_getvar, nlua_iconv, nlua_regex, nlua_setvar, nlua_str_byteindex,
+    nlua_str_utf_end, nlua_str_utf_pos, nlua_str_utf_start, nlua_str_utfindex, nlua_stricmp,
+    nlua_with,
+};
+use crate::src::cjson::lua_cjson::lua_cjson_new;
+use crate::src::mpack::lmpack::luaopen_mpack;
+use crate::src::nvim::api::private::helpers::handle_get_window;
+use crate::src::nvim::fold::foldUpdate;
+use crate::src::nvim::lua::base64::luaopen_base64;
+use crate::src::nvim::lua::ffi::{
+    lua_concat, lua_getfield, lua_getglobal, lua_pop, lua_pushcfunction, lua_pushvalue,
+    lua_pushvfstring, lua_setfield, luaL_checkinteger, luaL_error, luaL_newmetatable,
+    luaL_register, luaL_where,
+};
+use crate::src::nvim::lua::spell::luaopen_spell;
+use crate::src::nvim::lua::xdiff::nlua_xdl_diff;
+use crate::src::nvim::types::{handle_T, linenr_T, lua_State, luaL_Reg};
+
+unsafe extern "C-unwind" {
+    /// lpeg's own `luaopen_*`, linked in from the vendored library.
+    fn luaopen_lpeg(lstate: *mut lua_State) -> c_int;
+}
+
+/// `vim._foldupdate(win, top, bot)`: recompute fold levels (which can mean
+/// evaluating 'foldexpr') over a zero-based end-exclusive line range, without
+/// any of `zx`'s other side effects.
+///
+/// # Safety
+/// `lstate` must be a live Lua state holding this function's arguments.
+unsafe extern "C-unwind" fn nlua_foldupdate(lstate: *mut lua_State) -> c_int {
     unsafe {
-        let mut window: handle_T = luaL_checkinteger(lstate, 1 as ::core::ffi::c_int) as handle_T;
-        let mut win: *mut win_T =
-            map_get_int_ptr_t(window_handles.ptr(), window as ::core::ffi::c_int) as *mut win_T;
+        let window = luaL_checkinteger(lstate, 1) as handle_T;
+        let win = handle_get_window(window);
         if win.is_null() {
-            return luaL_error(
-                lstate,
-                b"invalid window\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            return luaL_error(lstate, c"invalid window".as_ptr());
         }
-        let mut top: linenr_T =
-            luaL_checkinteger(lstate, 2 as ::core::ffi::c_int) as linenr_T + 1 as linenr_T;
-        if top < 1 as linenr_T {
-            return luaL_error(
-                lstate,
-                b"invalid top\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+        let top = luaL_checkinteger(lstate, 2) as linenr_T + 1;
+        if top < 1 {
+            return luaL_error(lstate, c"invalid top".as_ptr());
         }
-        let mut bot: linenr_T = luaL_checkinteger(lstate, 3 as ::core::ffi::c_int) as linenr_T;
+        let bot = luaL_checkinteger(lstate, 3) as linenr_T;
         if top > bot {
-            return luaL_error(
-                lstate,
-                b"invalid bot\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            return luaL_error(lstate, c"invalid bot".as_ptr());
         }
+
         foldUpdate(win, top, bot);
-        return 0 as ::core::ffi::c_int;
+        0
     }
 }
 
-unsafe extern "C-unwind" fn nlua_state_add_internal(lstate: *mut lua_State) {
-    unsafe {
-        lua_pushcclosure(
-            lstate,
-            Some(nlua_getvar as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
-            0 as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"_getvar\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushcclosure(
-            lstate,
-            Some(nlua_setvar as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
-            0 as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"_setvar\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushcclosure(
-            lstate,
-            Some(
-                nlua_foldupdate
-                    as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
-            0 as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"_foldupdate\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushcclosure(
-            lstate,
-            Some(nlua_with as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int),
-            0 as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"_with_c\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    }
-}
-
-pub unsafe extern "C-unwind" fn nlua_state_add_stdlib(lstate: *mut lua_State, mut is_thread: bool) {
-    unsafe {
-        if !is_thread {
-            lua_pushcclosure(
-                lstate,
-                Some(
-                    nlua_stricmp
-                        as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-                ),
-                0 as ::core::ffi::c_int,
-            );
-            lua_setfield(
-                lstate,
-                -2 as ::core::ffi::c_int,
-                b"stricmp\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            lua_pushcclosure(
-                lstate,
-                Some(
-                    nlua_str_utfindex
-                        as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-                ),
-                0 as ::core::ffi::c_int,
-            );
-            lua_setfield(
-                lstate,
-                -2 as ::core::ffi::c_int,
-                b"_str_utfindex\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            lua_pushcclosure(
-                lstate,
-                Some(
-                    nlua_str_byteindex
-                        as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-                ),
-                0 as ::core::ffi::c_int,
-            );
-            lua_setfield(
-                lstate,
-                -2 as ::core::ffi::c_int,
-                b"_str_byteindex\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            lua_pushcclosure(
-                lstate,
-                Some(
-                    nlua_str_utf_pos
-                        as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-                ),
-                0 as ::core::ffi::c_int,
-            );
-            lua_setfield(
-                lstate,
-                -2 as ::core::ffi::c_int,
-                b"str_utf_pos\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            lua_pushcclosure(
-                lstate,
-                Some(
-                    nlua_str_utf_start
-                        as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-                ),
-                0 as ::core::ffi::c_int,
-            );
-            lua_setfield(
-                lstate,
-                -2 as ::core::ffi::c_int,
-                b"str_utf_start\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            lua_pushcclosure(
-                lstate,
-                Some(
-                    nlua_str_utf_end
-                        as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-                ),
-                0 as ::core::ffi::c_int,
-            );
-            lua_setfield(
-                lstate,
-                -2 as ::core::ffi::c_int,
-                b"str_utf_end\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            lua_pushcclosure(
-                lstate,
-                Some(
-                    nlua_regex as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-                ),
-                0 as ::core::ffi::c_int,
-            );
-            lua_setfield(
-                lstate,
-                -2 as ::core::ffi::c_int,
-                b"regex\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            luaL_newmetatable(
-                lstate,
-                b"nvim_regex\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            luaL_register(
-                lstate,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                regex_meta.ptr() as *mut luaL_Reg,
-            );
-            lua_pushvalue(lstate, -1 as ::core::ffi::c_int);
-            lua_setfield(
-                lstate,
-                -2 as ::core::ffi::c_int,
-                b"__index\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-            luaopen_spell(lstate);
-            lua_setfield(
-                lstate,
-                -2 as ::core::ffi::c_int,
-                b"spell\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            lua_pushcclosure(
-                lstate,
-                Some(
-                    nlua_iconv as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-                ),
-                0 as ::core::ffi::c_int,
-            );
-            lua_setfield(
-                lstate,
-                -2 as ::core::ffi::c_int,
-                b"iconv\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            luaopen_base64(lstate);
-            lua_setfield(
-                lstate,
-                -2 as ::core::ffi::c_int,
-                b"base64\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            nlua_state_add_internal(lstate);
-        }
-        luaopen_mpack(lstate);
-        lua_pushvalue(lstate, -1 as ::core::ffi::c_int);
-        lua_setfield(
-            lstate,
-            -3 as ::core::ffi::c_int,
-            b"mpack\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_getfield(
-            lstate,
-            LUA_GLOBALSINDEX,
-            b"package\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_getfield(
-            lstate,
-            -1 as ::core::ffi::c_int,
-            b"loaded\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushvalue(lstate, -3 as ::core::ffi::c_int);
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"mpack\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_settop(lstate, -3 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-        unsafe extern "C" {
-            #[link_name = "luaopen_lpeg"]
-            fn luaopen_lpeg_0(_: *mut lua_State) -> ::core::ffi::c_int;
-        }
-        luaopen_lpeg_0(lstate);
-        lua_pushvalue(lstate, -1 as ::core::ffi::c_int);
-        lua_setfield(
-            lstate,
-            -4 as ::core::ffi::c_int,
-            b"lpeg\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_getfield(
-            lstate,
-            LUA_GLOBALSINDEX,
-            b"package\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_getfield(
-            lstate,
-            -1 as ::core::ffi::c_int,
-            b"loaded\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushvalue(lstate, -3 as ::core::ffi::c_int);
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"lpeg\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_settop(lstate, -4 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-        lua_pushcclosure(
-            lstate,
-            Some(
-                nlua_xdl_diff as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
-            0 as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"diff\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_cjson_new(lstate);
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"json\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    }
-}
-
-pub unsafe extern "C-unwind" fn nlua_push_errstr(
-    mut L: *mut lua_State,
-    mut fmt: *const ::core::ffi::c_char,
-    mut c2rust_args: ...
+/// Store `f` under `name` in the table just below the top of the stack.
+///
+/// # Safety
+/// `lstate` must be a live Lua state with that table at -1.
+unsafe fn set_cfunction(
+    lstate: *mut lua_State,
+    name: &CStr,
+    f: unsafe extern "C-unwind" fn(*mut lua_State) -> c_int,
 ) {
     unsafe {
-        let mut argp: ::core::ffi::VaList;
-        argp = c2rust_args.clone();
-        luaL_where(L, 1 as ::core::ffi::c_int);
-        lua_pushvfstring(L, fmt, argp);
-        lua_concat(L, 2 as ::core::ffi::c_int);
+        lua_pushcfunction(lstate, f);
+        lua_setfield(lstate, -2, name.as_ptr());
+    }
+}
+
+/// Access to internal functions. For use in `runtime/`.
+///
+/// # Safety
+/// `lstate` must be a live Lua state with the `vim` table at -1.
+unsafe extern "C-unwind" fn nlua_state_add_internal(lstate: *mut lua_State) {
+    unsafe {
+        set_cfunction(lstate, c"_getvar", nlua_getvar);
+        set_cfunction(lstate, c"_setvar", nlua_setvar);
+        set_cfunction(lstate, c"_foldupdate", nlua_foldupdate);
+        set_cfunction(lstate, c"_with_c", nlua_with);
+    }
+}
+
+/// Register every `vim.*` function this module implements.
+///
+/// `is_thread` states are cut down to what is thread-safe: they get the
+/// vendored libraries and nothing that reaches editor state.
+///
+/// # Safety
+/// `lstate` must be a live Lua state with the `vim` table on top.
+pub unsafe extern "C-unwind" fn nlua_state_add_stdlib(lstate: *mut lua_State, is_thread: bool) {
+    unsafe {
+        if !is_thread {
+            // TODO(bfredl): some of the basic string functions should already
+            // be (or be easy to make) threadsafe.
+            set_cfunction(lstate, c"stricmp", nlua_stricmp);
+            set_cfunction(lstate, c"_str_utfindex", nlua_str_utfindex);
+            set_cfunction(lstate, c"_str_byteindex", nlua_str_byteindex);
+            set_cfunction(lstate, c"str_utf_pos", nlua_str_utf_pos);
+            set_cfunction(lstate, c"str_utf_start", nlua_str_utf_start);
+            set_cfunction(lstate, c"str_utf_end", nlua_str_utf_end);
+
+            set_cfunction(lstate, c"regex", nlua_regex);
+            luaL_newmetatable(lstate, c"nvim_regex".as_ptr());
+            luaL_register(lstate, ptr::null(), REGEX_META.ptr().cast::<luaL_Reg>());
+            lua_pushvalue(lstate, -1); // [meta, meta]
+            lua_setfield(lstate, -2, c"__index".as_ptr()); // [meta]
+            lua_pop(lstate, 1); // don't use metatable now
+
+            // vim.spell
+            luaopen_spell(lstate);
+            lua_setfield(lstate, -2, c"spell".as_ptr());
+
+            // vim.iconv -- depends on p_ambw, p_emoji
+            set_cfunction(lstate, c"iconv", nlua_iconv);
+
+            // vim.base64
+            luaopen_base64(lstate);
+            lua_setfield(lstate, -2, c"base64".as_ptr());
+
+            nlua_state_add_internal(lstate);
+        }
+
+        // Put the vendored library on top of the stack onto the `vim` table
+        // under `name` *and* into `package.loaded`, so `require` hands back
+        // this same table rather than initialising the library a second time.
+        // `depth` is how far below the library's table the `vim` table has
+        // sunk -- each library leaves its own table behind, so it grows.
+        let share_module = |name: &CStr, depth: c_int| {
+            lua_pushvalue(lstate, -1);
+            lua_setfield(lstate, -depth - 1, name.as_ptr());
+
+            lua_getglobal(lstate, c"package".as_ptr());
+            lua_getfield(lstate, -1, c"loaded".as_ptr());
+            lua_pushvalue(lstate, -3);
+            lua_setfield(lstate, -2, name.as_ptr());
+            lua_pop(lstate, depth + 1);
+        };
+
+        // vim.mpack -- shared, or luv is reinitialised by require'mpack'.
+        luaopen_mpack(lstate);
+        share_module(c"mpack", 2);
+
+        // vim.lpeg
+        luaopen_lpeg(lstate);
+        share_module(c"lpeg", 3);
+
+        // vim.text.diff
+        // TODO(justinmk): set vim.text.diff here, or rename this to "_diff".
+        set_cfunction(lstate, c"diff", nlua_xdl_diff);
+
+        // vim.json
+        lua_cjson_new(lstate);
+        lua_setfield(lstate, -2, c"json".as_ptr());
+    }
+}
+
+/// Like `luaL_error`, but leaves the message on the stack instead of throwing,
+/// so the caller can clean up before its own `lua_error`.
+///
+/// # Safety
+/// `lstate` must be a live Lua state, and `fmt`'s directives must match the
+/// variadic arguments.
+pub unsafe extern "C-unwind" fn nlua_push_errstr(
+    lstate: *mut lua_State,
+    fmt: *const c_char,
+    mut args: ...
+) {
+    unsafe {
+        luaL_where(lstate, 1);
+        lua_pushvfstring(lstate, fmt, args.clone());
+        lua_concat(lstate, 2);
     }
 }

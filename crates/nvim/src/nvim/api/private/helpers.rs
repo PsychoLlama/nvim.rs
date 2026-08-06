@@ -39,9 +39,9 @@ use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::runtime::script_is_lua;
 use crate::src::nvim::types::{
     Buffer, Dict, Error, ErrorType, HlMessage, Integer, Map_int_ptr_t, Object, String_0, Tabpage,
-    TryState, Window, buf_T, colnr_T, except_type_T, fmarkv_T, int64_t, kErrorTypeException,
-    kErrorTypeNone, kObjectTypeNil, linenr_T, msglist_T, object, object_data, pos_T, ptr_t, scid_T,
-    sctx_T, size_t, tabpage_T, uint32_t, uint64_t, win_T,
+    TryState, Window, buf_T, colnr_T, except_type_T, fmarkv_T, handle_T, int64_t,
+    kErrorTypeException, kErrorTypeNone, kObjectTypeNil, linenr_T, msglist_T, object, object_data,
+    pos_T, ptr_t, scid_T, sctx_T, size_t, tabpage_T, uint32_t, uint64_t, win_T,
 };
 
 mod keydict;
@@ -119,6 +119,20 @@ unsafe fn map_get_ptr(map: *mut Map_int_ptr_t, key: c_int) -> ptr_t {
             *(*map).values.add(slot as usize)
         }
     }
+}
+
+/// The buffer with this id, or null. Unlike [`find_buffer_by_handle`] it has
+/// no "0 means current" rule and reports nothing: it is upstream's
+/// `handle_get_buffer()`, the raw map lookup.
+pub(crate) unsafe fn handle_get_buffer(handle: handle_T) -> *mut buf_T {
+    // SAFETY: the handle map is initialised before any Lua state exists.
+    unsafe { map_get_ptr(buffer_handles.ptr(), handle).cast::<buf_T>() }
+}
+
+/// [`handle_get_buffer`] for a window.
+pub(crate) unsafe fn handle_get_window(handle: handle_T) -> *mut win_T {
+    // SAFETY: the handle map is initialised before any Lua state exists.
+    unsafe { map_get_ptr(window_handles.ptr(), handle).cast::<win_T>() }
 }
 
 /// The buffer `buffer` names, or the current one for 0. Null — with `err`
