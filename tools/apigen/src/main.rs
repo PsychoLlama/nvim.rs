@@ -7,8 +7,8 @@
 // output into one 27k-line Rust module. This tool takes the job back, from
 // the two real sources of truth in the crate:
 //
-//   --out-dir     one wrapper per `pub unsafe extern "C" fn nvim_*` in
-//                 <root>/src/nvim/api/*.rs: it validates an `Array` of
+//   --out-dir     one wrapper per `pub unsafe extern "C" fn nvim_*` under
+//                 <root>/src/nvim/api/ (bar `private/`): it validates an `Array` of
 //                 msgpack arguments, converts them, calls the API function
 //                 and boxes the result back into an `Object`.
 //   --tables-dir  the keyset tables and their key lookups, read off the
@@ -415,18 +415,50 @@ fn classify(sig: &syn::Signature) -> Result<Vec<Param>, String> {
     Ok(params)
 }
 
-/// Collect every `pub unsafe extern "C" fn` in `<root>/src/nvim/api/*.rs`.
-fn collect_api_fns(root: &Path) -> Result<BTreeMap<String, ApiFn>, String> {
-    let dir = root.join("src/nvim/api");
-    let mut out = BTreeMap::new();
-    let mut entries: Vec<PathBuf> = std::fs::read_dir(&dir)
+/// Every `.rs` file at or below `dir`, in path order, skipping `api/private`
+/// — the plumbing, which is not an API surface and which holds this tool's
+/// own output.
+fn api_sources(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+    let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
         .map_err(|e| format!("{}: {e}", dir.display()))?
         .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|e| e == "rs"))
         .collect();
     entries.sort();
     for path in entries {
-        let module = path.file_stem().unwrap().to_string_lossy().into_owned();
+        if path.is_dir() {
+            if path.file_name().is_some_and(|n| n == "private") {
+                continue;
+            }
+            api_sources(&path, out)?;
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            out.push(path);
+        }
+    }
+    Ok(())
+}
+
+/// Collect every `pub unsafe extern "C" fn` in `<root>/src/nvim/api/`.
+///
+/// An API source file over the tree's 1,000-line cap is carved into
+/// `api/<stem>.rs` plus `api/<stem>/*.rs`, with the parent re-exporting its
+/// children, so an API function may sit in a child and still be reached as
+/// `api::<stem>::nvim_foo`. The module recorded here is therefore always the
+/// *top-level* stem, however deep the function itself lives: it is what the
+/// generated `use` lines name and what the per-module wrapper split is keyed
+/// on, so a carve moves no wrapper.
+fn collect_api_fns(root: &Path) -> Result<BTreeMap<String, ApiFn>, String> {
+    let dir = root.join("src/nvim/api");
+    let mut out: BTreeMap<String, ApiFn> = BTreeMap::new();
+    let mut entries: Vec<PathBuf> = Vec::new();
+    api_sources(&dir, &mut entries)?;
+    for path in entries {
+        let rel = path.strip_prefix(&dir).expect("walked from dir");
+        let top = rel.components().next().expect("a file has one component");
+        let module = Path::new(top.as_os_str())
+            .file_stem()
+            .expect("a path component has a stem")
+            .to_string_lossy()
+            .into_owned();
         let text =
             std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         let file = syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -446,15 +478,22 @@ fn collect_api_fns(root: &Path) -> Result<BTreeMap<String, ApiFn>, String> {
             let Some(ret) = ret_type(&f.sig.output) else {
                 continue;
             };
-            out.insert(
+            // Two files may hold a same-named private helper, but a name the
+            // spec can reach must resolve to exactly one function.
+            if let Some(prev) = out.insert(
                 name.clone(),
                 ApiFn {
-                    name,
+                    name: name.clone(),
                     module: module.clone(),
                     params,
                     ret,
                 },
-            );
+            ) {
+                return Err(format!(
+                    "{name} is declared twice: in api::{} and in api::{module}",
+                    prev.module
+                ));
+            }
         }
     }
     Ok(out)
