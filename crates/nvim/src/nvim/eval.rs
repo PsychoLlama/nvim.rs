@@ -18,8 +18,8 @@ use crate::src::nvim::global_cell::GlobalCell;
 pub(crate) use crate::src::nvim::main::e_invalblob;
 use crate::src::nvim::types::{
     Array, ChannelStreamType, GRegFlags, LuaRetMode, Map_uint64_t_ptr_t, MapHash, MarkGet,
-    MotionType, Object, OptValType, Set_uint64_t, blob_T, dict_T, exprtype_T, funcexe_T, key_extra,
-    linenr_T, list_T, listwatch_T, partial_T, ptr_t, size_t, typval_T, uint32_t, uint64_t,
+    MotionType, Object, OptValType, Set_uint64_t, blob_T, dict_T, exprtype_T, funcexe_T, linenr_T,
+    list_T, listwatch_T, partial_T, ptr_t, size_t, typval_T, uint32_t, uint64_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
 
@@ -81,7 +81,6 @@ pub const EXPR_NEQUAL: exprtype_T = 2;
 pub const EXPR_EQUAL: exprtype_T = 1;
 pub const EXPR_UNKNOWN: exprtype_T = 0;
 pub const EVAL_EVALUATE: c_uint = 1;
-pub const KE_SNR: key_extra = 82;
 pub const kGRegExprSrc: GRegFlags = 2;
 pub const FSK_IN_STRING: c_uint = 4;
 pub const FSK_KEYCODE: c_uint = 1;

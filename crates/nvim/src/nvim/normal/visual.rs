@@ -29,8 +29,8 @@ use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memline::{ml_get_len, ml_get_pos};
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::normal::{
-    CA_NO_ADJ_OP_END, Ctrl_Q, Ctrl_V, NUL, OP_NOP, TAB, VIsual_mode_orig, clearopbeep, false_0,
-    may_clear_cmdline, nv_down, nv_g_cmd, nv_operator, nv_right, true_0,
+    CA_NO_ADJ_OP_END, NUL, OP_NOP, TAB, VIsual_mode_orig, clearopbeep, false_0, may_clear_cmdline,
+    nv_down, nv_g_cmd, nv_operator, nv_right, true_0,
 };
 use crate::src::nvim::ops::adjust_cursor_eol;
 use crate::src::nvim::option::get_ve_flags;
@@ -45,6 +45,7 @@ use crate::src::nvim::textobject::{
 use crate::src::nvim::types::{cmdarg_T, colnr_T, linenr_T, pos_T, size_t};
 use core::ffi::{c_char, c_int, c_uint};
 
+use crate::src::nvim::keycodes::{Ctrl_Q, Ctrl_V};
 use crate::src::nvim::r#move::{update_curswant_force, update_topline, validate_virtcol};
 
 /// Whether 'selection' is "exclusive": the character under the far end of the

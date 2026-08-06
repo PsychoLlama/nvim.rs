@@ -14,6 +14,7 @@ use core::ffi::{c_char, c_int};
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::Ctrl_Z;
 use crate::src::nvim::memfile::MfDirty;
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::types::CMOD_LOCKMARKS;

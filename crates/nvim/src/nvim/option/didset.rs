@@ -67,12 +67,12 @@ use crate::src::nvim::window::{
 use crate::src::nvim::winfloat::win_float_update_statusline;
 
 use super::{
-    B_IMODE_NONE, B_IMODE_USE_INSERT, BF_SYN_SET, Ctrl_C, NO_SCREEN, NUL, OPT_GLOBAL, OPT_LOCAL,
+    B_IMODE_NONE, B_IMODE_USE_INSERT, BF_SYN_SET, NO_SCREEN, NUL, OPT_GLOBAL, OPT_LOCAL,
     STATUS_HEIGHT, check_blending, did_set_title, kOptValTypeNumber, kOptValTypeString,
     option_was_set, redraw_titles, set_option_value, set_option_varp, set_options_bin,
 };
 use crate::src::nvim::highlight_group::HLF_W;
-use crate::src::nvim::keycodes::K_KENTER;
+use crate::src::nvim::keycodes::{Ctrl_C, K_KENTER};
 
 /// "E590", the one message a callback in this module reports.
 const E_PREVIEW_WINDOW_EXISTS: &CStr = c"E590: A preview window already exists";

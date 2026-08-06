@@ -119,7 +119,6 @@ pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const INT_MIN: ::core::ffi::c_int = ::core::ffi::c_int::MIN;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 pub const CPO_NUMCOL: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const VALID_WROW: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;

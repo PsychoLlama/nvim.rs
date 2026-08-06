@@ -16,7 +16,7 @@ use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_init};
 use crate::src::nvim::getchar::ins_typebuf;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::{HLF_8, HLF_D};
-use crate::src::nvim::keycodes::replace_termcodes;
+use crate::src::nvim::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_G, Ctrl_O, Ctrl_V, replace_termcodes};
 use crate::src::nvim::main::{
     State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect, VIsual_select, curbuf,
     current_sctx, curwin, e_cannot_change_menus_while_listing, e_invarg, e_invarg2,
@@ -92,11 +92,6 @@ pub struct menutrans_T {
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const Ctrl_G: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
-pub const Ctrl_O: ::core::ffi::c_int = 15 as ::core::ffi::c_int;
-pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-pub const Ctrl_BSL: ::core::ffi::c_int = 28 as ::core::ffi::c_int;
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_len: 0 as ::core::ffi::c_int,
     ga_maxlen: 0 as ::core::ffi::c_int,

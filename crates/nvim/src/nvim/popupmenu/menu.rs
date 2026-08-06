@@ -17,6 +17,7 @@ use std::ffi::CString;
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::Ctrl_C;
 
 /// The width `:popup` asks for even when the entries are narrower.
 const PUM_POPUP_MIN_WIDTH: c_int = 20;

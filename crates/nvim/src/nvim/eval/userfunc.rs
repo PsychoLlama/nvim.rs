@@ -89,7 +89,7 @@ use crate::src::nvim::types::{
     VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN,
     VAR_UNLOCKED, VV_TESTING, dict_T, dictitem_T, estack_T, evalarg_T, exarg_T, exception_state_T,
     expand_T, funccal_entry_T, funccall_S_fc_fixvar as C2Rust_Unnamed_7, funccall_T, funcdict_T,
-    funcexe_T, garray_T, hashitem_T, hashtab_T, key_extra, linenr_T, listitem_T, lval_T, partial_T,
+    funcexe_T, garray_T, hashitem_T, hashtab_T, linenr_T, listitem_T, lval_T, partial_T,
     regmatch_T, save_redo_T, size_t, typval_T, ufunc_T, varnumber_T,
 };
 use crate::src::nvim::ui::ui_has;
@@ -156,7 +156,6 @@ pub const FCERR_UNKNOWN: c_int = 0;
 pub const DOCMD_REPEAT: c_int = 4;
 pub const DOCMD_VERBOSE: c_int = 1;
 pub const DOCMD_NOWAIT: c_int = 2;
-pub const KE_SNR: key_extra = 82;
 pub const KS_EXTRA: c_int = 253;
 pub const LUA_NOREF: c_int = -2;
 pub const NUL: c_int = 0;

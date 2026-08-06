@@ -3,7 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
-use super::{Ctrl_V, FAIL, NUL, OK, OP_NOP, kMTBlockWise, kMTCharWise, kMTLineWise};
+use super::{FAIL, NUL, OK, OP_NOP, kMTBlockWise, kMTCharWise, kMTLineWise};
 use crate::src::nvim::api::private::helpers::cbuf_to_string;
 use crate::src::nvim::buffer::buflist_findnr;
 use crate::src::nvim::charset::getdigits_int;
@@ -13,6 +13,7 @@ use crate::src::nvim::eval::typval::{
     tv_list_alloc, tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_list,
     tv_list_append_number,
 };
+use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::main::{
     curbuf, curwin, e_buffer_is_not_loaded, e_invalid_column_number_nr, e_invalid_line_number_nr,
     e_invargNval, p_sel, virtual_op,

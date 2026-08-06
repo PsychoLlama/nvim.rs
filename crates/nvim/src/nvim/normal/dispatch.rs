@@ -25,8 +25,9 @@ use crate::src::nvim::getchar::{
     typebuf_maplen, ungetchars, vpeekc, vungetc,
 };
 use crate::src::nvim::keycodes::{
-    K_DEL, K_DOWN, K_END, K_HOME, K_KENTER, K_LEFT, K_RIGHT, K_S_END, K_S_HOME, K_S_LEFT,
-    K_S_RIGHT, K_UP, K_ZERO, simplify_key,
+    Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, K_DEL, K_DOWN, K_END, K_HOME, K_KENTER, K_LEFT,
+    K_RIGHT, K_S_END, K_S_HOME, K_S_LEFT, K_S_RIGHT, K_UP, K_ZERO, KE_C_LEFT, KE_C_RIGHT, KE_EVENT,
+    KE_IGNORE, KE_KDEL, KE_MOUSEMOVE, simplify_key,
 };
 use crate::src::nvim::main::{
     KeyStuffed, KeyTyped, State, VIsual_active, VIsual_select, VIsual_select_reg, allow_keys,
@@ -42,13 +43,12 @@ use crate::src::nvim::mbyte::{
 };
 use crate::src::nvim::memory::xfree;
 use crate::src::nvim::normal::{
-    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, CPO_DIGRAPH, Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, ESC,
-    GRAPHEME_STATE_INIT, KE_C_LEFT, KE_C_RIGHT, KE_EVENT, KE_IGNORE, KE_KDEL, KE_MOUSEMOVE,
-    MOD_MASK_SHIFT, NL, NUL, NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS,
-    NormalState, OP_COLON, OP_NOP, add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd,
-    del_from_showcmd, do_check_scrollbind, normal_handle_special_visual_command,
-    normal_need_additional_char, normal_need_redraw_mode_message, normal_redraw_mode_message,
-    nv_cmd_idx, nv_cmds, nv_max_linear, set_vcount_ca, start_selection,
+    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, CPO_DIGRAPH, ESC, GRAPHEME_STATE_INIT, MOD_MASK_SHIFT, NL,
+    NUL, NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState, OP_COLON,
+    OP_NOP, add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd,
+    do_check_scrollbind, normal_handle_special_visual_command, normal_need_additional_char,
+    normal_need_redraw_mode_message, normal_redraw_mode_message, nv_cmd_idx, nv_cmds,
+    nv_max_linear, set_vcount_ca, start_selection,
 };
 use crate::src::nvim::ops::{do_pending_operator, get_op_type};
 use crate::src::nvim::os::libc::qsort;

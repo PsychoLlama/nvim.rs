@@ -18,9 +18,10 @@ use crate::src::nvim::ex_docmd::path::findfunc_find_file;
 use crate::src::nvim::ex_docmd::scan::check_nextcmd;
 use crate::src::nvim::ex_docmd::source::ex_errmsg;
 use crate::src::nvim::ex_docmd::tags::ex_findpat;
-use crate::src::nvim::ex_docmd::{Ctrl_G, FAIL, FNAME_MESS, IOSIZE, NUL};
+use crate::src::nvim::ex_docmd::{FAIL, FNAME_MESS, IOSIZE, NUL};
 use crate::src::nvim::file_search::{find_file_in_path, vim_findfile_cleanup};
 use crate::src::nvim::highlight_group::HLF_T;
+use crate::src::nvim::keycodes::Ctrl_G;
 use crate::src::nvim::main::{
     Columns, IObuff, Rows, cmdmod, curbuf, curtab, curwin, e_invarg, e_invarg2, e_invcmd,
     e_invrange, e_screenmode, first_tabpage, firstwin, g_do_tagpreview, got_int, lastused_tabpage,

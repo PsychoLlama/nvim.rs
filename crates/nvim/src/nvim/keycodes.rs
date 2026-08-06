@@ -697,7 +697,7 @@ pub unsafe fn replace_termcodes(
             // that ":map xx ^V" maps xx to nothing. Without 'B' in 'cpoptions' a
             // backslash does the same job.
             let quoted = *src;
-            if c_int::from(quoted) == CTRL_V || (do_backslash && quoted == b'\\' as c_char) {
+            if c_int::from(quoted) == Ctrl_V || (do_backslash && quoted == b'\\' as c_char) {
                 src = src.add(1);
                 if src > end {
                     if flags & REPTERM_FROM_PART != 0 {

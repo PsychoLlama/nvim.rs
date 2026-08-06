@@ -162,7 +162,6 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const CPO_NUMCOL: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 /// The windows of the current tab page, in layout order.
 ///
 /// `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`. The current tab page keeps its window

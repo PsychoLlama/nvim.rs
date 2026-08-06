@@ -32,8 +32,44 @@ pub const CAR: c_int = 0x0d;
 pub const ESC: c_int = 0x1b;
 pub const DEL: c_int = 0x7f;
 pub const CSI: c_int = 0x9b;
-/// CTRL-V, which quotes the next character.
-pub const CTRL_V: c_int = 0x16;
+
+/// The C0 control characters, named after the key that types them
+/// (upstream's `ascii_defs.h`). Several have a second name above: `Ctrl_H`
+/// is `BS`, `Ctrl_I` is `TAB`, `Ctrl_J` is `NL`, `Ctrl_M` is `CAR`, and
+/// CTRL-`[` is `ESC` and has no `Ctrl_` spelling at all. `Ctrl_V` is the
+/// one that quotes the next character. The four non-letters are named after
+/// the character rather than the key: `@`, `\`, `]` and `^`.
+pub const Ctrl_AT: c_int = 0;
+pub const Ctrl_A: c_int = 1;
+pub const Ctrl_B: c_int = 2;
+pub const Ctrl_C: c_int = 3;
+pub const Ctrl_D: c_int = 4;
+pub const Ctrl_E: c_int = 5;
+pub const Ctrl_F: c_int = 6;
+pub const Ctrl_G: c_int = 7;
+pub const Ctrl_H: c_int = 8;
+pub const Ctrl_I: c_int = 9;
+pub const Ctrl_J: c_int = 10;
+pub const Ctrl_K: c_int = 11;
+pub const Ctrl_L: c_int = 12;
+pub const Ctrl_M: c_int = 13;
+pub const Ctrl_N: c_int = 14;
+pub const Ctrl_O: c_int = 15;
+pub const Ctrl_P: c_int = 16;
+pub const Ctrl_Q: c_int = 17;
+pub const Ctrl_R: c_int = 18;
+pub const Ctrl_S: c_int = 19;
+pub const Ctrl_T: c_int = 20;
+pub const Ctrl_U: c_int = 21;
+pub const Ctrl_V: c_int = 22;
+pub const Ctrl_W: c_int = 23;
+pub const Ctrl_X: c_int = 24;
+pub const Ctrl_Y: c_int = 25;
+pub const Ctrl_Z: c_int = 26;
+pub const Ctrl_BSL: c_int = 28;
+pub const Ctrl_RSB: c_int = 29;
+pub const Ctrl_HAT: c_int = 30;
+pub const Ctrl__: c_int = 31;
 
 /// The byte that introduces a special key in a byte stream. A literal 0x80
 /// in text is escaped as `K_SPECIAL KS_SPECIAL KE_FILLER`.

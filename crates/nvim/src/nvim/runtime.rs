@@ -32,6 +32,7 @@ use crate::src::nvim::garray::{
 use crate::src::nvim::getchar::openscript;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::lua::executor::{
     nlua_exec, nlua_exec_file, nlua_exec_ga, nlua_is_deferred_safe,
 };
@@ -275,7 +276,6 @@ unsafe extern "C" fn map_get_String_int(
     };
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 pub const SYS_OPTWIN_FILE: [::core::ffi::c_char; 31] = unsafe {
     ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(

@@ -16,7 +16,7 @@ use crate::src::nvim::getchar::{
     getcmdkeycmd, map_execute_lua, paste_repeat, stuffReadbuff, stuffcharReadbuff, stuffnumReadbuff,
 };
 use crate::src::nvim::help::ex_help;
-use crate::src::nvim::keycodes::{K_COMMAND, K_IGNORE, K_LUA};
+use crate::src::nvim::keycodes::{Ctrl_C, Ctrl_G, Ctrl_N, K_COMMAND, K_IGNORE, K_LUA};
 use crate::src::nvim::main::{
     KeyTyped, VIsual_active, VIsual_select, clear_cmdline, cmdwin_result, cmdwin_type, curbuf,
     curwin, did_emsg, ex_normal_busy, finish_op, firstwin, got_int, may_garbage_collect,
@@ -25,9 +25,9 @@ use crate::src::nvim::main::{
 use crate::src::nvim::memline::ml_get_len;
 use crate::src::nvim::message::{msg, msg_ext_set_trigger};
 use crate::src::nvim::normal::{
-    CA_COMMAND_BUSY, Ctrl_C, Ctrl_G, Ctrl_N, DOCMD_KEEPLINE, GETF_ALT, GETF_SETMARK, NUL, NULL,
-    OP_NOP, checkclearop, checkclearopq, clearop, clearopbeep, end_visual_mode, false_0,
-    kMTCharWise, nv_left, nv_operator, nv_pcmark, true_0, v_visop,
+    CA_COMMAND_BUSY, DOCMD_KEEPLINE, GETF_ALT, GETF_SETMARK, NUL, NULL, OP_NOP, checkclearop,
+    checkclearopq, clearop, clearopbeep, end_visual_mode, false_0, kMTCharWise, nv_left,
+    nv_operator, nv_pcmark, true_0, v_visop,
 };
 use crate::src::nvim::options::kOptBoFlagEsc;
 use crate::src::nvim::os::libc::gettext;

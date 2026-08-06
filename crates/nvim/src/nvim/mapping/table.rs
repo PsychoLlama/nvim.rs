@@ -19,6 +19,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::ex_docmd::sourcing_lnum;
+use crate::src::nvim::keycodes::Ctrl_C;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

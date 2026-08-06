@@ -24,15 +24,15 @@ use core::ffi::{c_char, c_int};
 use super::api::with_rex;
 use super::submatch::{clear_submatch_list, fill_submatch_list};
 use super::{
-    CAR, Ctrl_H, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, NUL, REGSUB_BACKSLASH, REGSUB_COPY,
-    REGSUB_MAGIC, TAB, can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len,
-    reg_prev_sub, reg_prev_sublen, regsubmatch_T, rex, rsm,
+    CAR, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, NUL, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, TAB,
+    can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len, reg_prev_sub, reg_prev_sublen,
+    regsubmatch_T, rex, rsm,
 };
 use crate::src::nvim::eval::typval::{tv_clear, tv_get_string_buf_chk, tv_list_len};
 use crate::src::nvim::eval::userfunc::call_func;
 use crate::src::nvim::eval::{eval_to_string, partial_name};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::keycodes::K_SPECIAL;
+use crate::src::nvim::keycodes::{Ctrl_H, K_SPECIAL};
 use crate::src::nvim::main::{curbuf, e_null, e_re_damg, e_resulting_text_too_long};
 use crate::src::nvim::mbyte::{
     mb_tolower, mb_toupper, utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len,

@@ -9,7 +9,10 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::keycodes::is_special;
+use crate::src::nvim::keycodes::{
+    Ctrl__, Ctrl_A, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_K, Ctrl_L,
+    Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_W, is_special,
+};
 
 /// Handle the erase keys: backspace, delete and CTRL-W.
 ///

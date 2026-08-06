@@ -15,6 +15,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y};
 use crate::src::nvim::types::{
     VAR_DICT, VAR_FIXED, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
 };

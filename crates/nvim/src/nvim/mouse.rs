@@ -18,7 +18,13 @@ use crate::src::nvim::getchar::{
 };
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{get_win_by_grid_handle, grid_adjust};
-use crate::src::nvim::keycodes::get_mouse_button;
+use crate::src::nvim::keycodes::{
+    Ctrl_G, Ctrl_O, Ctrl_P, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_V, KE_LEFTDRAG, KE_LEFTMOUSE,
+    KE_LEFTMOUSE_NM, KE_LEFTRELEASE, KE_LEFTRELEASE_NM, KE_MIDDLEDRAG, KE_MIDDLEMOUSE,
+    KE_MIDDLERELEASE, KE_MOUSEDOWN, KE_MOUSELEFT, KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP,
+    KE_RIGHTDRAG, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1DRAG, KE_X1MOUSE, KE_X1RELEASE, KE_X2DRAG,
+    KE_X2MOUSE, KE_X2RELEASE, get_mouse_button,
+};
 use crate::src::nvim::main::{
     Columns, KeyStuffed, Rows, State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect,
     VIsual_select, cmdwin_type, cmdwin_win, curbuf, curtab, curwin, first_tabpage, firstwin,
@@ -56,8 +62,8 @@ use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
     CharsizeArg, CharsizeKind, Direction, EvalFuncData, MotionType, OptInt, ScreenGrid,
     StlClickDefinition, StrCharInfo, VAR_FIXED, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
-    cmdarg_T, colnr_T, dict_T, frame_T, handle_T, key_extra, linenr_T, oparg_T, pos_T, size_t,
-    tabpage_T, typval_T, typval_vval_union, uint8_t, varnumber_T, win_T, yankreg_T,
+    cmdarg_T, colnr_T, dict_T, frame_T, handle_T, linenr_T, oparg_T, pos_T, size_t, tabpage_T,
+    typval_T, typval_vval_union, uint8_t, varnumber_T, win_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_check_mouse, ui_cursor_shape, ui_flush, ui_mouse_has};
 use crate::src::nvim::ui_compositor::ui_comp_mouse_focus;
@@ -65,28 +71,6 @@ use crate::src::nvim::window::{
     find_tabpage, global_stl_height, goto_tabpage, tabpage_index, tabpage_move,
     win_drag_status_line, win_drag_vsep_line, win_enter, win_fdccol_count, win_valid,
 };
-pub const KE_MOUSEMOVE: key_extra = 100;
-pub const KE_X2RELEASE: key_extra = 94;
-pub const KE_X2DRAG: key_extra = 93;
-pub const KE_X2MOUSE: key_extra = 92;
-pub const KE_X1RELEASE: key_extra = 91;
-pub const KE_X1DRAG: key_extra = 90;
-pub const KE_X1MOUSE: key_extra = 89;
-pub const KE_MOUSERIGHT: key_extra = 78;
-pub const KE_MOUSELEFT: key_extra = 77;
-pub const KE_MOUSEUP: key_extra = 76;
-pub const KE_MOUSEDOWN: key_extra = 75;
-pub const KE_LEFTRELEASE_NM: key_extra = 70;
-pub const KE_LEFTMOUSE_NM: key_extra = 69;
-pub const KE_RIGHTRELEASE: key_extra = 52;
-pub const KE_RIGHTDRAG: key_extra = 51;
-pub const KE_RIGHTMOUSE: key_extra = 50;
-pub const KE_MIDDLERELEASE: key_extra = 49;
-pub const KE_MIDDLEDRAG: key_extra = 48;
-pub const KE_MIDDLEMOUSE: key_extra = 47;
-pub const KE_LEFTRELEASE: key_extra = 46;
-pub const KE_LEFTDRAG: key_extra = 45;
-pub const KE_LEFTMOUSE: key_extra = 44;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
@@ -124,13 +108,6 @@ pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const Ctrl_G: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
-pub const Ctrl_O: ::core::ffi::c_int = 15 as ::core::ffi::c_int;
-pub const Ctrl_P: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
-pub const Ctrl_R: ::core::ffi::c_int = 18 as ::core::ffi::c_int;
-pub const Ctrl_T: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
-pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-pub const Ctrl_RSB: ::core::ffi::c_int = 29 as ::core::ffi::c_int;
 pub const VALID_WROW: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const VALID_CROW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
 pub const VALID_BOTLINE: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;

@@ -75,7 +75,7 @@ use crate::src::nvim::types::{
     Callback, Callback_data as C2Rust_Unnamed_20, CdCause, ChannelPart, Direction, LineGetter,
     LuaRetMode, MarkGet, MotionType, OptValType, RemapValues, TriState, cmd_addr_T,
     dobuf_action_values, dobuf_start_values, estack_arg_T, etype_T, exarg_T, except_T, garray_T,
-    handle_T, kNone, key_extra, linenr_T, optmagic_T, uint8_t, uint16_t, uint32_t,
+    handle_T, kNone, linenr_T, optmagic_T, uint8_t, uint16_t, uint32_t,
 };
 use crate::src::nvim::undo::{ex_undojoin, ex_undolist};
 use crate::src::nvim::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -280,10 +280,7 @@ pub const DT_NEXT: C2Rust_Unnamed_65 = 3;
 pub const DT_PREV: C2Rust_Unnamed_65 = 4;
 pub const DT_SELECT: C2Rust_Unnamed_65 = 7;
 pub const DT_JUMP: C2Rust_Unnamed_65 = 9;
-pub const KE_IGNORE: key_extra = 53;
 pub const OPT_LOCAL: C2Rust_Unnamed_59 = 2;
-pub const KE_XF2: key_extra = 58;
-pub const KE_XF1: key_extra = 57;
 pub const FIND_ANY: C2Rust_Unnamed_61 = 1;
 pub const FIND_DEFINE: C2Rust_Unnamed_61 = 2;
 pub const ACTION_SPLIT: C2Rust_Unnamed_62 = 3;
@@ -353,10 +350,6 @@ pub const EXFLAG_LIST: c_int = 0x1 as c_int;
 pub const EXFLAG_NR: c_int = 0x2 as c_int;
 pub const EXFLAG_PRINT: c_int = 0x4 as c_int;
 pub const NUL: c_int = '\0' as c_int;
-pub const Ctrl_C: c_int = 3 as c_int;
-pub const Ctrl_G: c_int = 7 as c_int;
-pub const Ctrl_O: c_int = 15 as c_int;
-pub const Ctrl_V: c_int = 22 as c_int;
 pub const OK: c_int = 1 as c_int;
 pub const FAIL: c_int = 0 as c_int;
 pub const CPO_ALTREAD: c_int = 'a' as c_int;
@@ -419,7 +412,6 @@ pub const INDOFF_FILE: [c_char; 11] = c_bytes(b"indoff.vim\0");
 pub const PROF_YES: c_int = 1 as c_int;
 pub const SID_NONE: c_int = -6 as c_int;
 pub const KS_SPECIAL: c_int = 254 as c_int;
-pub const KE_FILLER: c_int = 'X' as c_int;
 static command_count: GlobalCell<c_int> = GlobalCell::new(557 as c_int);
 /// One row of the Ex command table, spelled the way `ex_cmds.lua` spells it.
 ///

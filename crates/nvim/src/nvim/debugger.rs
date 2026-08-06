@@ -9,7 +9,7 @@ use crate::src::nvim::fileio::file_pat_to_reg_pat;
 use crate::src::nvim::garray::{ga_clear, ga_grow};
 use crate::src::nvim::getchar::{restore_typeahead, save_typeahead};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::keycodes::K_SPECIAL;
+use crate::src::nvim::keycodes::{K_SPECIAL, KE_SNR};
 use crate::src::nvim::main::{
     NameBuff, RedrawingDisabled, Rows, State, cmd_silent, cmdline_row, curbuf, curwin,
     debug_backtrace_level, debug_break_level, debug_did_msg, debug_mode, debug_tick, did_emsg,
@@ -28,15 +28,14 @@ use crate::src::nvim::state::MODE_NORMAL;
 use crate::src::nvim::types::{
     CMD_breakdel, CMD_profdel, CMD_profile, Callback, Callback_data as C2Rust_Unnamed_5, String_0,
     buf_T, buffblock, buffblock_T, buffheader_T, colnr_T, estack_T, estack_arg_T, exarg_T,
-    exprtype_T, garray_T, int32_t, int64_t, key_extra, linenr_T, regprog_T, size_t, tasave_T,
-    typebuf_T, typval_T, uint8_t, varnumber_T,
+    exprtype_T, garray_T, int32_t, int64_t, linenr_T, regprog_T, size_t, tasave_T, typebuf_T,
+    typval_T, uint8_t, varnumber_T,
 };
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_13 = 0;
 pub const DOCMD_EXCRESET: C2Rust_Unnamed_17 = 16;
 pub const DOCMD_VERBOSE: C2Rust_Unnamed_17 = 1;
 pub const ESTACK_NONE: estack_arg_T = 0;
-pub const KE_SNR: key_extra = 82;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct debuggy {

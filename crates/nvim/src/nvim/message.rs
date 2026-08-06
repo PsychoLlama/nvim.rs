@@ -193,9 +193,6 @@ pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = 10;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = 27;
-pub const Ctrl_B: ::core::ffi::c_int = 2;
-pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const Ctrl_F: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub const PROGRESS_TARGET_CMD: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 static keep_msg_more: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static msg_ext_kind: GlobalCell<*const ::core::ffi::c_char> =

@@ -14,14 +14,15 @@ use crate::src::nvim::buffer::bt_prompt;
 use crate::src::nvim::edit::{beginline, cursor_down, prompt_curpos_editable};
 use crate::src::nvim::eval::vars::{set_reg_var, set_vim_var_string};
 use crate::src::nvim::getchar::{plain_vgetc, start_redo, stuffcharReadbuff};
+use crate::src::nvim::keycodes::{Ctrl_V, KE_CMDWIN};
 use crate::src::nvim::main::{
     VIsual_active, VIsual_select, VIsual_select_reg, arrow_used, cmdwin_type, curbuf, curwin,
     got_int, no_mapping, reg_executing, reg_recorded, restart_edit,
 };
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::{
-    BL_FIX, BL_SOL, BL_WHITE, Ctrl_V, FAIL, KE_CMDWIN, NUL, OP_DELETE, OP_FORMAT, OP_LOWER,
-    OP_LSHIFT, OP_NOP, OP_RSHIFT, OP_UPPER, OP_YANK, checkclearop, checkclearopq, clearopbeep,
+    BL_FIX, BL_SOL, BL_WHITE, FAIL, NUL, OP_DELETE, OP_FORMAT, OP_LOWER, OP_LSHIFT, OP_NOP,
+    OP_RSHIFT, OP_UPPER, OP_YANK, checkclearop, checkclearopq, clearopbeep,
     e_cmdline_window_already_open, false_0, kMTLineWise, langmap_adjust, true_0,
 };
 use crate::src::nvim::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};

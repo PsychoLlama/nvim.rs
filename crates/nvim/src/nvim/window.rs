@@ -49,7 +49,11 @@ use crate::src::nvim::grid::{
     grid_adjust, grid_assign_handle, grid_clear, grid_free, win_grid_alloc,
 };
 use crate::src::nvim::hashtab::hash_init;
-use crate::src::nvim::keycodes::{K_BS, K_DOWN, K_KENTER, K_LEFT, K_RIGHT, K_UP};
+use crate::src::nvim::keycodes::{
+    Ctrl__, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_I, Ctrl_J, Ctrl_K,
+    Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_V, Ctrl_W,
+    Ctrl_X, Ctrl_Z, K_BS, K_DOWN, K_KENTER, K_LEFT, K_RIGHT, K_UP,
+};
 use crate::src::nvim::main::aucmd_win_vec;
 use crate::src::nvim::main::{
     Columns, KeyStuffed, KeyTyped, RedrawingDisabled, Rows, State, VIsual_active, allow_keys,
@@ -298,30 +302,6 @@ unsafe extern "C" fn map_put_int_ptr_t(
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = 9;
 pub const CAR: ::core::ffi::c_int = 13;
-pub const Ctrl_B: ::core::ffi::c_int = 2;
-pub const Ctrl_C: ::core::ffi::c_int = 3;
-pub const Ctrl_D: ::core::ffi::c_int = 4;
-pub const Ctrl_F: ::core::ffi::c_int = 6;
-pub const Ctrl_G: ::core::ffi::c_int = 7;
-pub const Ctrl_H: ::core::ffi::c_int = 8;
-pub const Ctrl_I: ::core::ffi::c_int = 9;
-pub const Ctrl_J: ::core::ffi::c_int = 10;
-pub const Ctrl_K: ::core::ffi::c_int = 11;
-pub const Ctrl_L: ::core::ffi::c_int = 12;
-pub const Ctrl_N: ::core::ffi::c_int = 14;
-pub const Ctrl_O: ::core::ffi::c_int = 15;
-pub const Ctrl_P: ::core::ffi::c_int = 16;
-pub const Ctrl_Q: ::core::ffi::c_int = 17;
-pub const Ctrl_R: ::core::ffi::c_int = 18;
-pub const Ctrl_S: ::core::ffi::c_int = 19;
-pub const Ctrl_T: ::core::ffi::c_int = 20;
-pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-pub const Ctrl_W: ::core::ffi::c_int = 23;
-pub const Ctrl_X: ::core::ffi::c_int = 24;
-pub const Ctrl_Z: ::core::ffi::c_int = 26;
-pub const Ctrl_RSB: ::core::ffi::c_int = 29;
-pub const Ctrl_HAT: ::core::ffi::c_int = 30;
-pub const Ctrl__: ::core::ffi::c_int = 31;
 pub const SID_WINLAYOUT: ::core::ffi::c_int = -7 as ::core::ffi::c_int;
 pub const NOWIN: *mut win_T = -1 as ::core::ffi::c_int as *mut win_T;
 static e_cannot_close_last_window: GlobalCell<[::core::ffi::c_char; 31]> =

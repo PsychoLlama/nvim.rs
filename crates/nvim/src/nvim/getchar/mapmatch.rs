@@ -10,7 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::keycodes::key_escape;
+use crate::src::nvim::keycodes::{Ctrl_N, Ctrl_P, KE_IGNORE, KE_PLUG, KE_SNR, key_escape};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

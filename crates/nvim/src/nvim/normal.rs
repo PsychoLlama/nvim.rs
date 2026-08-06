@@ -15,7 +15,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::mouse::{nv_mouse, nv_mousescroll};
 use crate::src::nvim::types::{
     Array, Direction, MarkGet, MarkMove, MarkMoveRes, MotionType, Object, SpellAddType, VimState,
-    cmdarg_T, getf_values, int16_t, key_extra, oparg_T, pos_T, size_t, smt_T, uint16_t,
+    cmdarg_T, getf_values, int16_t, oparg_T, pos_T, size_t, smt_T, uint16_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
@@ -44,9 +44,16 @@ pub(crate) use self::operator::*;
 mod gcmd;
 pub use self::gcmd::*;
 use crate::src::nvim::keycodes::{
-    K_BS, K_DEL, K_DOWN, K_END, K_F1, K_HELP, K_HOME, K_INS, K_KEND, K_KHOME, K_KPAGEDOWN,
-    K_KPAGEUP, K_LEFT, K_PAGEDOWN, K_PAGEUP, K_PASTE_START, K_RIGHT, K_S_END, K_S_HOME, K_S_LEFT,
-    K_S_RIGHT, K_SELECT, K_UNDO, K_UP,
+    Ctrl__, Ctrl_A, Ctrl_B, Ctrl_BSL, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT,
+    Ctrl_I, Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T,
+    Ctrl_U, Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, Ctrl_Z, K_BS, K_DEL, K_DOWN, K_END, K_F1, K_HELP,
+    K_HOME, K_INS, K_KEND, K_KHOME, K_KPAGEDOWN, K_KPAGEUP, K_LEFT, K_PAGEDOWN, K_PAGEUP,
+    K_PASTE_START, K_RIGHT, K_S_END, K_S_HOME, K_S_LEFT, K_S_RIGHT, K_SELECT, K_UNDO, K_UP,
+    KE_C_END, KE_C_HOME, KE_C_LEFT, KE_C_RIGHT, KE_COMMAND, KE_EVENT, KE_IGNORE, KE_KDEL, KE_KINS,
+    KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTMOUSE_NM, KE_LEFTRELEASE, KE_LEFTRELEASE_NM, KE_LUA,
+    KE_MIDDLEDRAG, KE_MIDDLEMOUSE, KE_MIDDLERELEASE, KE_MOUSEDOWN, KE_MOUSELEFT, KE_MOUSEMOVE,
+    KE_MOUSERIGHT, KE_MOUSEUP, KE_NOP, KE_RIGHTDRAG, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_S_DOWN,
+    KE_S_UP, KE_X1DRAG, KE_X1MOUSE, KE_X1RELEASE, KE_X2DRAG, KE_X2MOUSE, KE_X2RELEASE, KE_XF1,
 };
 use crate::src::nvim::search::{BACKWARD, FORWARD, SEARCH_REV};
 mod misc;
@@ -78,43 +85,6 @@ pub const ECMD_HIDE: c_uint = 1;
 pub const ECMD_LAST: c_int = -1;
 pub const DOCMD_KEEPLINE: c_uint = 32;
 pub const VSE_NONE: c_uint = 0;
-pub const KE_COMMAND: key_extra = 104;
-pub const KE_LUA: key_extra = 103;
-pub const KE_EVENT: key_extra = 102;
-pub const KE_MOUSEMOVE: key_extra = 100;
-pub const KE_NOP: key_extra = 97;
-pub const KE_X2RELEASE: key_extra = 94;
-pub const KE_X2DRAG: key_extra = 93;
-pub const KE_X2MOUSE: key_extra = 92;
-pub const KE_X1RELEASE: key_extra = 91;
-pub const KE_X1DRAG: key_extra = 90;
-pub const KE_X1MOUSE: key_extra = 89;
-pub const KE_C_END: key_extra = 88;
-pub const KE_C_HOME: key_extra = 87;
-pub const KE_C_RIGHT: key_extra = 86;
-pub const KE_C_LEFT: key_extra = 85;
-pub const KE_CMDWIN: key_extra = 84;
-pub const KE_KDEL: key_extra = 80;
-pub const KE_KINS: key_extra = 79;
-pub const KE_MOUSERIGHT: key_extra = 78;
-pub const KE_MOUSELEFT: key_extra = 77;
-pub const KE_MOUSEUP: key_extra = 76;
-pub const KE_MOUSEDOWN: key_extra = 75;
-pub const KE_LEFTRELEASE_NM: key_extra = 70;
-pub const KE_LEFTMOUSE_NM: key_extra = 69;
-pub const KE_XF1: key_extra = 57;
-pub const KE_IGNORE: key_extra = 53;
-pub const KE_RIGHTRELEASE: key_extra = 52;
-pub const KE_RIGHTDRAG: key_extra = 51;
-pub const KE_RIGHTMOUSE: key_extra = 50;
-pub const KE_MIDDLERELEASE: key_extra = 49;
-pub const KE_MIDDLEDRAG: key_extra = 48;
-pub const KE_MIDDLEMOUSE: key_extra = 47;
-pub const KE_LEFTRELEASE: key_extra = 46;
-pub const KE_LEFTDRAG: key_extra = 45;
-pub const KE_LEFTMOUSE: key_extra = 44;
-pub const KE_S_DOWN: key_extra = 5;
-pub const KE_S_UP: key_extra = 4;
 pub const ML_DEL_MESSAGE: c_uint = 1;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
@@ -216,34 +186,6 @@ pub const CAR: c_int = '\r' as c_int;
 pub const ESC: c_int = '\u{1b}' as c_int;
 pub const DEL: c_int = 0x7f as c_int;
 pub(crate) const POUND: c_int = 0xa3 as c_int;
-pub const Ctrl_A: c_int = 1 as c_int;
-pub const Ctrl_B: c_int = 2 as c_int;
-pub const Ctrl_C: c_int = 3 as c_int;
-pub const Ctrl_D: c_int = 4 as c_int;
-pub const Ctrl_E: c_int = 5 as c_int;
-pub const Ctrl_F: c_int = 6 as c_int;
-pub const Ctrl_G: c_int = 7;
-pub const Ctrl_H: c_int = 8;
-pub const Ctrl_I: c_int = 9 as c_int;
-pub const Ctrl_K: c_int = 11 as c_int;
-pub const Ctrl_L: c_int = 12 as c_int;
-pub const Ctrl_N: c_int = 14 as c_int;
-pub const Ctrl_O: c_int = 15 as c_int;
-pub const Ctrl_P: c_int = 16 as c_int;
-pub const Ctrl_Q: c_int = 17 as c_int;
-pub const Ctrl_R: c_int = 18 as c_int;
-pub const Ctrl_S: c_int = 19 as c_int;
-pub const Ctrl_T: c_int = 20 as c_int;
-pub const Ctrl_U: c_int = 21 as c_int;
-pub const Ctrl_V: c_int = 22 as c_int;
-pub const Ctrl_W: c_int = 23 as c_int;
-pub const Ctrl_X: c_int = 24;
-pub const Ctrl_Y: c_int = 25 as c_int;
-pub const Ctrl_Z: c_int = 26 as c_int;
-pub const Ctrl_BSL: c_int = 28 as c_int;
-pub const Ctrl_RSB: c_int = 29 as c_int;
-pub const Ctrl_HAT: c_int = 30 as c_int;
-pub const Ctrl__: c_int = 31 as c_int;
 pub(crate) const FO_OPEN_COMS: c_int = 'o' as c_int;
 pub(crate) const CPO_DIGRAPH: c_int = 'D' as c_int;
 pub(crate) const CPO_CHANGEW: c_int = '_' as c_int;

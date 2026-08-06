@@ -9,6 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
 use crate::src::nvim::types::{VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 
 /// The pattern, column and length for normal (CTRL-N / CTRL-P) completion.

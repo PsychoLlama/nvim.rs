@@ -156,8 +156,8 @@ use crate::src::nvim::types::{
     RemapValues, Set_ptr_t, String_0, TryState, UndoObjectType, VimState, aco_save_T, buf_T,
     bufref_T, cmd_addr_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T, dobuf_action_values,
     dobuf_start_values, event_T, exarg_T, except_T, expand_T, garray_T, handle_T, hashitem_T,
-    hashtab_T, kErrorTypeNone, key_extra, linenr_T, list_T, listitem_T, magic_T, msglist_T,
-    oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, regmatch_T, regprog_T,
+    hashtab_T, kErrorTypeNone, linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T,
+    optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, regmatch_T, regprog_T,
     save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union,
     u_header_T, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
 };
@@ -456,7 +456,6 @@ pub(crate) enum KeyOutcome {
     /// Leave the command line for Normal mode.
     GotoNormalMode,
 }
-pub const KE_WILD: key_extra = 108;
 pub const OPT_LOCAL: C2Rust_Unnamed_53 = 2;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -519,31 +518,6 @@ pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
-pub const Ctrl_A: ::core::ffi::c_int = 1;
-pub const Ctrl_B: ::core::ffi::c_int = 2;
-pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const Ctrl_D: ::core::ffi::c_int = 4;
-pub const Ctrl_E: ::core::ffi::c_int = 5;
-pub const Ctrl_F: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
-pub const Ctrl_G: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
-pub const Ctrl_H: ::core::ffi::c_int = 8;
-pub const Ctrl_K: ::core::ffi::c_int = 11;
-pub const Ctrl_L: ::core::ffi::c_int = 12;
-pub const Ctrl_N: ::core::ffi::c_int = 14 as ::core::ffi::c_int;
-pub const Ctrl_O: ::core::ffi::c_int = 15 as ::core::ffi::c_int;
-pub const Ctrl_P: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
-pub const Ctrl_Q: ::core::ffi::c_int = 17;
-pub const Ctrl_R: ::core::ffi::c_int = 18 as ::core::ffi::c_int;
-pub const Ctrl_T: ::core::ffi::c_int = 20;
-pub const Ctrl_U: ::core::ffi::c_int = 21;
-pub const Ctrl_V: ::core::ffi::c_int = 22;
-pub const Ctrl_W: ::core::ffi::c_int = 23 as ::core::ffi::c_int;
-pub const Ctrl_Y: ::core::ffi::c_int = 25 as ::core::ffi::c_int;
-pub const Ctrl_Z: ::core::ffi::c_int = 26 as ::core::ffi::c_int;
-pub const Ctrl_BSL: ::core::ffi::c_int = 28 as ::core::ffi::c_int;
-pub const Ctrl_RSB: ::core::ffi::c_int = 29 as ::core::ffi::c_int;
-pub const Ctrl_HAT: ::core::ffi::c_int = 30;
-pub const Ctrl__: ::core::ffi::c_int = 31;
 pub const EX_RANGE: ::core::ffi::c_uint = 0x1 as ::core::ffi::c_uint;
 pub const EX_PREVIEW: ::core::ffi::c_uint = 0x8000000 as ::core::ffi::c_uint;
 pub const CPO_ESC: ::core::ffi::c_int = 'x' as ::core::ffi::c_int;

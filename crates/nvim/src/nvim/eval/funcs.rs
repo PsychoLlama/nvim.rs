@@ -227,7 +227,6 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_data: NULL_0,
 };
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 pub const EX_NOSPC: ::core::ffi::c_uint = 0x10 as ::core::ffi::c_uint;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

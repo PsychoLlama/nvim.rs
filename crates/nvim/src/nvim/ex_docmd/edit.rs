@@ -21,17 +21,16 @@ use crate::src::nvim::ex_docmd::cmdline::do_cmdline;
 use crate::src::nvim::ex_docmd::modifier::expr_map_locked;
 use crate::src::nvim::ex_docmd::scan::{find_nextcmd, get_flags};
 use crate::src::nvim::ex_docmd::{
-    BL_FIX, BL_SOL, BL_WHITE, CPO_EXECBUF, Ctrl_C, Ctrl_O, DOCMD_NOWAIT, DOCMD_VERBOSE,
-    EXFLAG_LIST, EXFLAG_NR, FAIL, KE_FILLER, KS_SPECIAL, ML_EMPTY, NUL, OP_DELETE, OP_LSHIFT,
-    OP_RSHIFT, OP_YANK, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE,
-    REMAP_NONE, REMAP_YES, kMTLineWise,
+    BL_FIX, BL_SOL, BL_WHITE, CPO_EXECBUF, DOCMD_NOWAIT, DOCMD_VERBOSE, EXFLAG_LIST, EXFLAG_NR,
+    FAIL, KS_SPECIAL, ML_EMPTY, NUL, OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK, OPTION_MAGIC_OFF,
+    OPTION_MAGIC_ON, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, REMAP_NONE, REMAP_YES, kMTLineWise,
 };
 use crate::src::nvim::ex_getln::getexline;
 use crate::src::nvim::fold::{foldCreate, foldManualAllowed, hasFolding, opFoldRange};
 use crate::src::nvim::getchar::{
     beep_flush, ins_typebuf, restore_typeahead, save_typeahead, stuff_empty, typebuf_typed, vpeekc,
 };
-use crate::src::nvim::keycodes::K_SPECIAL;
+use crate::src::nvim::keycodes::{Ctrl_C, Ctrl_O, K_SPECIAL, KE_FILLER};
 use crate::src::nvim::lua::executor::ex_lua;
 use crate::src::nvim::main::{
     State, VIsual_active, curbuf, curwin, did_syncbind, e_argreq, e_empty_buffer, e_invarg2,

@@ -183,7 +183,6 @@ pub const NUL: c_int = '\0' as c_int;
 pub const TAB: c_int = '\t' as c_int;
 pub const CTRL_F_STR: [c_char; 2] =
     unsafe { ::core::mem::transmute::<[u8; 2], [c_char; 2]>(*b"\x06\0") };
-pub const Ctrl_C: c_int = 3 as c_int;
 pub const PATHSEPSTR: [c_char; 2] =
     unsafe { ::core::mem::transmute::<[u8; 2], [c_char; 2]>(*b"/\0") };
 pub const FORCE_BIN: c_int = 1 as c_int;

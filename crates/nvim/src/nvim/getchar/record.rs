@@ -15,7 +15,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::keycodes::{KS_EXTRA, key_unescape};
+use crate::src::nvim::keycodes::{KE_IGNORE, KS_EXTRA, key_unescape};
 use core::ffi::{c_char, c_int, c_uint};
 
 /// Longest UTF-8 sequence a character can occupy.

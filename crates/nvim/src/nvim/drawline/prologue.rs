@@ -20,6 +20,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::decoration::kMTMetaInline;
+use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::spell::SMT_ALL;
 

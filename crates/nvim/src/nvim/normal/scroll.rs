@@ -15,15 +15,14 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     VIsual_active, VIsual_select, curbuf, curwin, did_syncbind, firstwin, mod_mask, p_sbo,
 };
-use crate::src::nvim::normal::{
-    Ctrl_D, MOD_MASK_CTRL, checkclearop, checkclearopq, clearopbeep, false_0,
-};
+use crate::src::nvim::normal::{MOD_MASK_CTRL, checkclearop, checkclearopq, clearopbeep, false_0};
 use crate::src::nvim::plines::plines_m_win_fill;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{Direction, buf_T, cmdarg_T, colnr_T, linenr_T, win_T};
 use crate::src::nvim::window::goto_tabpage;
 use core::ffi::c_int;
 
+use crate::src::nvim::keycodes::Ctrl_D;
 use crate::src::nvim::r#move::{cursor_correct, pagescroll, scroll_redraw, scrolldown, scrollup};
 use crate::src::nvim::search::{BACKWARD, FORWARD};
 

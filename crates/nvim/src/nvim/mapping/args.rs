@@ -11,6 +11,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::{Ctrl_V, KE_LUA};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

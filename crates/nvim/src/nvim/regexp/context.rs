@@ -20,12 +20,13 @@
 use core::ffi::{c_char, c_int};
 
 use super::{
-    Ctrl_V, MULTI_MULT, NSUBEXP, RA_FAIL, RA_MATCH, RA_NOMATCH, REGMAGIC, bt_regprog_T, cstrncmp,
+    MULTI_MULT, NSUBEXP, RA_FAIL, RA_MATCH, RA_NOMATCH, REGMAGIC, bt_regprog_T, cstrncmp,
     nfa_regengine, peekchr, re_multi_type, reg_endzp, reg_endzpos, reg_startzp, reg_startzpos,
     reg_tofree, reg_tofreelen, rex, rsm,
 };
 use crate::semsg;
 use crate::src::nvim::charset::vim_iswordc_buf;
+use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::main::{
     VIsual, VIsual_active, VIsual_mode, curbuf, curwin, e_re_corr, got_int, p_sel, rc_did_emsg,
 };

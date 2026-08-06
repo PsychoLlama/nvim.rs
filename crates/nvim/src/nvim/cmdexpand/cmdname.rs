@@ -10,6 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::types::{
     CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_abbreviate, CMD_aboveleft, CMD_amenu, CMD_and,
     CMD_anoremenu, CMD_append, CMD_argdelete, CMD_argdo, CMD_augroup, CMD_aunmenu, CMD_autocmd,

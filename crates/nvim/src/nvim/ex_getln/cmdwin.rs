@@ -9,6 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::Ctrl_C;
 use crate::src::nvim::types::CMOD_NOSWAPFILE;
 
 /// True when the text must not be changed and we cannot switch to another

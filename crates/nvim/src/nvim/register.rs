@@ -38,7 +38,10 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::HLF_8;
 use crate::src::nvim::indent::{get_indent, preprocs_left, set_indent, tabstop_padding};
 use crate::src::nvim::insexpand::{ins_compl_delete, ins_compl_preinsert_effect};
-use crate::src::nvim::keycodes::{vim_strsave_escape_ks, vim_unescape_ks};
+use crate::src::nvim::keycodes::{
+    Ctrl_A, Ctrl_F, Ctrl_L, Ctrl_P, Ctrl_R, Ctrl_U, Ctrl_V, Ctrl_W, vim_strsave_escape_ks,
+    vim_unescape_ks,
+};
 use crate::src::nvim::main::{
     Columns, State, VIsual_active, VIsual_mode, cmdmod, curbuf, curwin, e_nobufnr, e_noinstext,
     e_nolastcmd, e_noprevre, e_resulting_text_too_long, got_int, last_cmdline, msg_ext_skip_flush,
@@ -145,14 +148,6 @@ pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
-pub const Ctrl_A: ::core::ffi::c_int = 1;
-pub const Ctrl_F: ::core::ffi::c_int = 6;
-pub const Ctrl_L: ::core::ffi::c_int = 12;
-pub const Ctrl_P: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
-pub const Ctrl_R: ::core::ffi::c_int = 18 as ::core::ffi::c_int;
-pub const Ctrl_U: ::core::ffi::c_int = 21 as ::core::ffi::c_int;
-pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-pub const Ctrl_W: ::core::ffi::c_int = 23 as ::core::ffi::c_int;
 static expr_line: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static execreg_lastc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(NUL);

@@ -9,7 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::keycodes::key_unescape;
+use crate::src::nvim::keycodes::{Ctrl_V, KE_SNR, key_unescape};
 use core::ffi::{CStr, c_char, c_int};
 
 /// The command-name prefix letters that reproduce each mode set a `:map`

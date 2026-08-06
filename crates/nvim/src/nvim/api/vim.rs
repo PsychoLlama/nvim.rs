@@ -117,7 +117,7 @@ use crate::src::nvim::types::{
     dobuf_action_values, dobuf_start_values, except_T, foldinfo_T, handle_T, hlf_T, int64_t,
     kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kFalse, kNone,
     kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil,
-    kObjectTypeString, kTrue, key_extra, linenr_T, mpack_token_type_t, msg_data, msglist_T, object,
+    kObjectTypeString, kTrue, linenr_T, mpack_token_type_t, msg_data, msglist_T, object,
     object_data as C2Rust_Unnamed, pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T,
     stl_hlrec_t, tabpage_T, uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
 };
@@ -161,18 +161,6 @@ pub const kOptValTypeString: OptValType = 2;
 pub const kOptScopeBuf: OptScope = 2;
 pub const REMAP_NONE: RemapValues = -1;
 pub const REMAP_YES: RemapValues = 0;
-pub const KE_LEFTMOUSE: key_extra = 44;
-pub const KE_LEFTRELEASE: key_extra = 46;
-pub const KE_LEFTDRAG: key_extra = 45;
-pub const KE_MOUSEMOVE: key_extra = 100;
-pub const KE_MOUSELEFT: key_extra = 77;
-pub const KE_MOUSERIGHT: key_extra = 78;
-pub const KE_MOUSEUP: key_extra = 76;
-pub const KE_MOUSEDOWN: key_extra = 75;
-pub const KE_X2MOUSE: key_extra = 92;
-pub const KE_X1MOUSE: key_extra = 89;
-pub const KE_RIGHTMOUSE: key_extra = 50;
-pub const KE_MIDDLEMOUSE: key_extra = 47;
 pub const REPTERM_NO_SPECIAL: C2Rust_Unnamed_36 = 4;
 pub const REPTERM_DO_LT: C2Rust_Unnamed_36 = 2;
 pub const REPTERM_FROM_PART: C2Rust_Unnamed_36 = 1;

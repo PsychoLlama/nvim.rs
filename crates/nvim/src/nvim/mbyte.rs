@@ -10,7 +10,7 @@ use crate::src::nvim::eval::typval::{tv_list_first, tv_list_len};
 use crate::src::nvim::getchar::beep_flush;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::schar_from_buf;
-use crate::src::nvim::keycodes::K_SPECIAL;
+use crate::src::nvim::keycodes::{K_SPECIAL, KE_FILLER};
 use crate::src::nvim::main::{
     IObuff, cmp_flags, curbuf, curwin, e_listreq, fenc_default, p_ambw, p_emoji, p_enc,
 };
@@ -151,7 +151,6 @@ pub const DBCS_CHT: ::core::ffi::c_int = 950 as ::core::ffi::c_int;
 pub const DBCS_CHTU: ::core::ffi::c_int = 9950 as ::core::ffi::c_int;
 pub const DBCS_DEBUG: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
-pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
 static e_list_item_nr_is_not_list: GlobalCell<[::core::ffi::c_char; 34]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(

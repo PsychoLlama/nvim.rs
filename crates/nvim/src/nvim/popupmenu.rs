@@ -118,7 +118,6 @@ pub const OK: c_int = 1;
 pub const NL: c_int = '\n' as c_int;
 pub const CAR: c_int = '\r' as c_int;
 pub const ESC: c_int = '\u{1b}' as c_int;
-pub const Ctrl_C: c_int = 3;
 pub const DEFAULT_GRID_HANDLE: c_int = 1;
 
 // The menu's state. Every one of these is written by one of the placement

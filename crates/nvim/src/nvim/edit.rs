@@ -65,13 +65,16 @@ use crate::src::nvim::insexpand::{
     pum_wanted,
 };
 use crate::src::nvim::keycodes::{
-    K_BS, K_COMMAND, K_DEL, K_DOWN, K_END, K_F1, K_HELP, K_HOME, K_INS, K_KDEL, K_KEND, K_KENTER,
-    K_KHOME, K_KINS, K_KPAGEDOWN, K_KPAGEUP, K_LEFT, K_LEFTDRAG, K_LEFTMOUSE, K_LEFTMOUSE_NM,
-    K_LEFTRELEASE, K_LEFTRELEASE_NM, K_LUA, K_MIDDLEDRAG, K_MIDDLEMOUSE, K_MIDDLERELEASE,
-    K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP, K_PAGEDOWN, K_PAGEUP,
-    K_PASTE_START, K_RIGHT, K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_S_DOWN, K_S_END, K_S_HOME,
-    K_S_LEFT, K_S_RIGHT, K_S_TAB, K_S_UP, K_SELECT, K_SPECIAL, K_UP, K_X1DRAG, K_X1MOUSE,
-    K_X1RELEASE, K_X2DRAG, K_X2MOUSE, K_X2RELEASE, K_XF1, K_ZERO, add_char2buf,
+    Ctrl__, Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_J,
+    Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U,
+    Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, Ctrl_Z, K_BS, K_COMMAND, K_DEL, K_DOWN, K_END, K_F1, K_HELP,
+    K_HOME, K_INS, K_KDEL, K_KEND, K_KENTER, K_KHOME, K_KINS, K_KPAGEDOWN, K_KPAGEUP, K_LEFT,
+    K_LEFTDRAG, K_LEFTMOUSE, K_LEFTMOUSE_NM, K_LEFTRELEASE, K_LEFTRELEASE_NM, K_LUA, K_MIDDLEDRAG,
+    K_MIDDLEMOUSE, K_MIDDLERELEASE, K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP,
+    K_PAGEDOWN, K_PAGEUP, K_PASTE_START, K_RIGHT, K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE,
+    K_S_DOWN, K_S_END, K_S_HOME, K_S_LEFT, K_S_RIGHT, K_S_TAB, K_S_UP, K_SELECT, K_SPECIAL, K_UP,
+    K_X1DRAG, K_X1MOUSE, K_X1RELEASE, K_X2DRAG, K_X2MOUSE, K_X2RELEASE, K_XF1, K_ZERO, KE_C_END,
+    KE_C_HOME, KE_C_LEFT, KE_C_RIGHT, KE_EVENT, KE_IGNORE, KE_NOP, add_char2buf,
     get_special_key_name,
 };
 use crate::src::nvim::main::{
@@ -147,9 +150,8 @@ use crate::src::nvim::types::{
     AdditionalData, CMOD_KEEPJUMPS, CharsizeArg, CharsizeKind, Direction, GraphemeState,
     MotionType, OptInt, StrCharInfo, String_0, TriState, UndoObjectType, VV_CHAR, VV_INSERTMODE,
     VimState, aco_save_T, buf_T, cmdarg_T, colnr_T, event_T, fmark_T, fmarkv_T, foldinfo_T,
-    int32_t, int64_t, kFalse, kNone, kTrue, key_extra, linenr_T, pos_T, ptrdiff_t, schar_T, size_t,
-    ssize_t, state_check_callback, state_execute_callback, uint8_t, uint32_t, varnumber_T, win_T,
-    yankreg_T,
+    int32_t, int64_t, kFalse, kNone, kTrue, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t,
+    state_check_callback, state_execute_callback, uint8_t, uint32_t, varnumber_T, win_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::src::nvim::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -210,14 +212,6 @@ pub struct C2Rust_Unnamed_26 {
     pub capacity: size_t,
     pub items: *mut ::core::ffi::c_char,
 }
-pub const KE_EVENT: key_extra = 102;
-pub const KE_NOP: key_extra = 97;
-pub const KE_S_DOWN: key_extra = 5;
-pub const KE_S_UP: key_extra = 4;
-pub const KE_C_RIGHT: key_extra = 86;
-pub const KE_C_LEFT: key_extra = 85;
-pub const KE_C_END: key_extra = 88;
-pub const KE_C_HOME: key_extra = 87;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_27 {
@@ -226,49 +220,19 @@ pub struct C2Rust_Unnamed_27 {
     pub insert: bool,
     pub finish: bool,
 }
-pub const KE_LUA: key_extra = 103;
-pub const KE_COMMAND: key_extra = 104;
-pub const KE_IGNORE: key_extra = 53;
 pub const MSCR_RIGHT: C2Rust_Unnamed_30 = -2;
-pub const KE_MOUSERIGHT: key_extra = 78;
 pub const MSCR_LEFT: C2Rust_Unnamed_30 = -1;
-pub const KE_MOUSELEFT: key_extra = 77;
 pub const MSCR_UP: C2Rust_Unnamed_30 = 1;
-pub const KE_MOUSEUP: key_extra = 76;
 pub const MSCR_DOWN: C2Rust_Unnamed_30 = 0;
-pub const KE_MOUSEDOWN: key_extra = 75;
-pub const KE_X2RELEASE: key_extra = 94;
-pub const KE_X2DRAG: key_extra = 93;
-pub const KE_X2MOUSE: key_extra = 92;
-pub const KE_X1RELEASE: key_extra = 91;
-pub const KE_X1DRAG: key_extra = 90;
-pub const KE_X1MOUSE: key_extra = 89;
-pub const KE_RIGHTRELEASE: key_extra = 52;
-pub const KE_RIGHTDRAG: key_extra = 51;
-pub const KE_RIGHTMOUSE: key_extra = 50;
-pub const KE_MIDDLERELEASE: key_extra = 49;
-pub const KE_MIDDLEDRAG: key_extra = 48;
-pub const KE_MIDDLEMOUSE: key_extra = 47;
-pub const KE_MOUSEMOVE: key_extra = 100;
-pub const KE_LEFTRELEASE_NM: key_extra = 70;
-pub const KE_LEFTRELEASE: key_extra = 46;
-pub const KE_LEFTDRAG: key_extra = 45;
-pub const KE_LEFTMOUSE_NM: key_extra = 69;
-pub const KE_LEFTMOUSE: key_extra = 44;
 pub const BACKSPACE_LINE: C2Rust_Unnamed_34 = 4;
 pub const BACKSPACE_CHAR: C2Rust_Unnamed_34 = 1;
 pub const BACKSPACE_WORD_NOT_SPACE: C2Rust_Unnamed_34 = 3;
 pub const BACKSPACE_WORD: C2Rust_Unnamed_34 = 2;
-pub const KE_KDEL: key_extra = 80;
 pub const PUT_CURSEND: C2Rust_Unnamed_31 = 2;
 pub const YREG_PASTE: C2Rust_Unnamed_32 = 0;
 pub const PUT_FIXINDENT: C2Rust_Unnamed_31 = 1;
-pub const KE_XF1: key_extra = 57;
-pub const KE_KINS: key_extra = 79;
 pub const MB_MAXBYTES: C2Rust_Unnamed_28 = 21;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
-pub const KE_CMDWIN: key_extra = 84;
-pub const KE_XF2: key_extra = 58;
 pub type C2Rust_Unnamed_30 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
 pub const PUT_BLOCK_INNER: C2Rust_Unnamed_31 = 64;
@@ -306,33 +270,6 @@ pub const ESC_STR: [::core::ffi::c_char; 2] =
 pub const DEL: ::core::ffi::c_int = 0x7f as ::core::ffi::c_int;
 pub const CTRL_V_STR: [::core::ffi::c_char; 2] =
     unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"\x16\0") };
-pub const Ctrl_A: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const Ctrl_D: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const Ctrl_E: ::core::ffi::c_int = 5;
-pub const Ctrl_F: ::core::ffi::c_int = 6;
-pub const Ctrl_G: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
-pub const Ctrl_H: ::core::ffi::c_int = 8;
-pub const Ctrl_J: ::core::ffi::c_int = 10;
-pub const Ctrl_K: ::core::ffi::c_int = 11 as ::core::ffi::c_int;
-pub const Ctrl_L: ::core::ffi::c_int = 12;
-pub const Ctrl_N: ::core::ffi::c_int = 14;
-pub const Ctrl_O: ::core::ffi::c_int = 15 as ::core::ffi::c_int;
-pub const Ctrl_P: ::core::ffi::c_int = 16;
-pub const Ctrl_Q: ::core::ffi::c_int = 17 as ::core::ffi::c_int;
-pub const Ctrl_R: ::core::ffi::c_int = 18 as ::core::ffi::c_int;
-pub const Ctrl_S: ::core::ffi::c_int = 19;
-pub const Ctrl_T: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
-pub const Ctrl_U: ::core::ffi::c_int = 21;
-pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-pub const Ctrl_W: ::core::ffi::c_int = 23 as ::core::ffi::c_int;
-pub const Ctrl_X: ::core::ffi::c_int = 24;
-pub const Ctrl_Y: ::core::ffi::c_int = 25 as ::core::ffi::c_int;
-pub const Ctrl_Z: ::core::ffi::c_int = 26;
-pub const Ctrl_BSL: ::core::ffi::c_int = 28 as ::core::ffi::c_int;
-pub const Ctrl_RSB: ::core::ffi::c_int = 29 as ::core::ffi::c_int;
-pub const Ctrl_HAT: ::core::ffi::c_int = 30;
-pub const Ctrl__: ::core::ffi::c_int = 31;
 pub const FO_RET_COMS: ::core::ffi::c_int = 'r' as ::core::ffi::c_int;
 pub const FO_INS_LONG: ::core::ffi::c_int = 'l' as ::core::ffi::c_int;
 pub const FO_INS_BLANK: ::core::ffi::c_int = 'b' as ::core::ffi::c_int;

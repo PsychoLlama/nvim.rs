@@ -15,6 +15,7 @@ use core::ffi::CStr;
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::types::VV_ECHOSPACE;
 
 /// `VIsual_mode` for a linewise selection.

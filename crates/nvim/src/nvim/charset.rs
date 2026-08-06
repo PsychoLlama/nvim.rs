@@ -39,6 +39,7 @@ pub use display::{
     transstr_buf, transstr_len, vim_strnsize, vim_strsize,
 };
 
+use crate::src::nvim::keycodes::Ctrl_V;
 use str2nr::Radix;
 
 /// Bases `vim_str2nr` may recognise, plus the two behaviour flags. `FORCE`
@@ -63,7 +64,6 @@ const NUL: c_int = 0;
 const TAB: c_int = 9;
 const NL: c_int = 10;
 const CAR: c_int = 13;
-const Ctrl_V: c_int = 22;
 const KS_ZERO: c_int = 255;
 const KS_SPECIAL: c_int = 254;
 const EOL_MAC: c_int = 2;

@@ -17,6 +17,7 @@ use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::ex_getln::vim_strsave_fnameescape;
 use crate::src::nvim::file_search::grab_file_name;
 use crate::src::nvim::fold::foldOpenCursor;
+use crate::src::nvim::keycodes::Ctrl_RSB;
 use crate::src::nvim::main::{
     KeyTyped, VIsual_active, clear_cmdline, curbuf, curwin, e_noident, fdo_flags, g_tag_at_cursor,
     msg_silent, no_smartcase, p_kp, p_scs, p_ws, restart_edit,
@@ -28,10 +29,9 @@ use crate::src::nvim::memline::ml_get_buf;
 use crate::src::nvim::memory::{strequal, xfree, xmalloc, xrealloc};
 use crate::src::nvim::message::{emsg, messaging};
 use crate::src::nvim::normal::{
-    BL_FIX, BL_SOL, Ctrl_RSB, DT_POP, ECMD_HIDE, ECMD_LAST, FIND_EVAL, FIND_IDENT, FIND_STRING,
-    FM_FORWARD, HIST_SEARCH, NUL, OK, OP_NOP, POUND, SHM_SEARCHCOUNT, VSE_NONE,
-    check_text_or_curbuf_locked, checkclearopq, clearop, clearopbeep, false_0, get_visual_text,
-    normal_search, true_0,
+    BL_FIX, BL_SOL, DT_POP, ECMD_HIDE, ECMD_LAST, FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD,
+    HIST_SEARCH, NUL, OK, OP_NOP, POUND, SHM_SEARCHCOUNT, VSE_NONE, check_text_or_curbuf_locked,
+    checkclearopq, clearop, clearopbeep, false_0, get_visual_text, normal_search, true_0,
 };
 use crate::src::nvim::ops::clear_oparg;
 use crate::src::nvim::option::{magic_isset, shortmess};

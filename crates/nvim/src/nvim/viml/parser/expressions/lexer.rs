@@ -1,5 +1,9 @@
 use super::*;
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_isident, ascii_iswhite};
+use crate::src::nvim::keycodes::{
+    Ctrl_A, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_K, Ctrl_L, Ctrl_M, Ctrl_N,
+    Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_S, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, Ctrl_Z,
+};
 
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
 #[inline(always)]

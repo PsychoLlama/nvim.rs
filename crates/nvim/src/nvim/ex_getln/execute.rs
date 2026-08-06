@@ -9,6 +9,10 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::{
+    Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_U, Ctrl_W,
+    Ctrl_Y, Ctrl_Z,
+};
 use crate::src::nvim::types::kErrorTypeNone;
 
 /// What `CTRL-\` did with the key typed after it.

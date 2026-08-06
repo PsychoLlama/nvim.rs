@@ -22,20 +22,20 @@
 use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::src::nvim::getchar::{ins_char_typebuf, ungetchars};
 use crate::src::nvim::keycodes::{
-    K_BS, K_C_END, K_C_HOME, K_C_LEFT, K_C_RIGHT, K_DEL, K_DOWN, K_END, K_F1, K_F2, K_F3, K_F4,
-    K_F5, K_F6, K_F7, K_F8, K_F9, K_F10, K_F11, K_F12, K_F13, K_F14, K_F15, K_F16, K_F17, K_F18,
-    K_F19, K_F20, K_F21, K_F22, K_F23, K_F24, K_F25, K_F26, K_F27, K_F28, K_F29, K_F30, K_F31,
-    K_F32, K_F33, K_F34, K_F35, K_F36, K_F37, K_F38, K_F39, K_F40, K_F41, K_F42, K_F43, K_F44,
-    K_F45, K_F46, K_F47, K_F48, K_F49, K_F50, K_F51, K_F52, K_F53, K_F54, K_F55, K_F56, K_F57,
-    K_F58, K_F59, K_F60, K_F61, K_F62, K_F63, K_HOME, K_INS, K_K0, K_K1, K_K2, K_K3, K_K4, K_K5,
-    K_K6, K_K7, K_K8, K_K9, K_KDEL, K_KDIVIDE, K_KDOWN, K_KEND, K_KENTER, K_KHOME, K_KINS, K_KLEFT,
-    K_KMINUS, K_KMULTIPLY, K_KORIGIN, K_KPAGEDOWN, K_KPAGEUP, K_KPLUS, K_KPOINT, K_KRIGHT, K_KUP,
-    K_LEFT, K_LEFTDRAG, K_LEFTMOUSE, K_LEFTRELEASE, K_MIDDLEDRAG, K_MIDDLEMOUSE, K_MIDDLERELEASE,
-    K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP, K_PAGEDOWN, K_PAGEUP, K_RIGHT,
-    K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_S_DOWN, K_S_END, K_S_F1, K_S_F2, K_S_F3, K_S_F4,
-    K_S_F5, K_S_F6, K_S_F7, K_S_F8, K_S_F9, K_S_F10, K_S_F11, K_S_F12, K_S_HOME, K_S_LEFT,
-    K_S_RIGHT, K_S_TAB, K_S_UP, K_UP, K_X1DRAG, K_X1MOUSE, K_X1RELEASE, K_X2DRAG, K_X2MOUSE,
-    K_X2RELEASE, K_ZERO,
+    Ctrl_AT, Ctrl_M, K_BS, K_C_END, K_C_HOME, K_C_LEFT, K_C_RIGHT, K_DEL, K_DOWN, K_END, K_F1,
+    K_F2, K_F3, K_F4, K_F5, K_F6, K_F7, K_F8, K_F9, K_F10, K_F11, K_F12, K_F13, K_F14, K_F15,
+    K_F16, K_F17, K_F18, K_F19, K_F20, K_F21, K_F22, K_F23, K_F24, K_F25, K_F26, K_F27, K_F28,
+    K_F29, K_F30, K_F31, K_F32, K_F33, K_F34, K_F35, K_F36, K_F37, K_F38, K_F39, K_F40, K_F41,
+    K_F42, K_F43, K_F44, K_F45, K_F46, K_F47, K_F48, K_F49, K_F50, K_F51, K_F52, K_F53, K_F54,
+    K_F55, K_F56, K_F57, K_F58, K_F59, K_F60, K_F61, K_F62, K_F63, K_HOME, K_INS, K_K0, K_K1, K_K2,
+    K_K3, K_K4, K_K5, K_K6, K_K7, K_K8, K_K9, K_KDEL, K_KDIVIDE, K_KDOWN, K_KEND, K_KENTER,
+    K_KHOME, K_KINS, K_KLEFT, K_KMINUS, K_KMULTIPLY, K_KORIGIN, K_KPAGEDOWN, K_KPAGEUP, K_KPLUS,
+    K_KPOINT, K_KRIGHT, K_KUP, K_LEFT, K_LEFTDRAG, K_LEFTMOUSE, K_LEFTRELEASE, K_MIDDLEDRAG,
+    K_MIDDLEMOUSE, K_MIDDLERELEASE, K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP,
+    K_PAGEDOWN, K_PAGEUP, K_RIGHT, K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_S_DOWN, K_S_END,
+    K_S_F1, K_S_F2, K_S_F3, K_S_F4, K_S_F5, K_S_F6, K_S_F7, K_S_F8, K_S_F9, K_S_F10, K_S_F11,
+    K_S_F12, K_S_HOME, K_S_LEFT, K_S_RIGHT, K_S_TAB, K_S_UP, K_UP, K_X1DRAG, K_X1MOUSE,
+    K_X1RELEASE, K_X2DRAG, K_X2MOUSE, K_X2RELEASE, K_ZERO,
 };
 use crate::src::nvim::main::{
     KeyTyped, curbuf, curwin, mod_mask, mouse_col, mouse_grid, mouse_row, tpf_flags, vgetc_char,
@@ -81,12 +81,6 @@ const MOD_MASK_ALT: c_int = 0x8;
 
 const TAB: c_int = 9;
 const ESC: c_int = 27;
-const Ctrl_AT: c_int = 0;
-pub(super) const Ctrl_C: c_int = 3;
-const Ctrl_M: c_int = 13;
-pub(super) const Ctrl_N: c_int = 14;
-pub(super) const Ctrl_O: c_int = 15;
-pub(super) const Ctrl_BSL: c_int = 28;
 
 /// vterm's name for function key `n`.
 const fn function_key(n: c_int) -> VTermKey {

@@ -23,11 +23,12 @@ use crate::src::nvim::ex_cmds2::{autowrite_all, check_changed, check_changed_any
 use crate::src::nvim::ex_docmd::argopt::{check_more, get_tabpage_arg};
 use crate::src::nvim::ex_docmd::source::not_exiting;
 use crate::src::nvim::ex_docmd::{
-    CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, Ctrl_C, DOBUF_DEL, DOBUF_UNLOAD, DOBUF_WIPE, EXIT_FAILURE,
-    FAIL, KE_IGNORE, KE_XF1, KE_XF2, NUL, OK,
+    CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, DOBUF_DEL, DOBUF_UNLOAD, DOBUF_WIPE, EXIT_FAILURE, FAIL,
+    NUL, OK,
 };
 use crate::src::nvim::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
 use crate::src::nvim::getchar::beep_flush;
+use crate::src::nvim::keycodes::{Ctrl_C, KE_IGNORE, KE_XF1, KE_XF2};
 use crate::src::nvim::main::{
     cmdmod, cmdwin_result, cmdwin_type, curbuf, curtab, curwin, e_autocmd_close, exiting,
     first_tabpage, firstwin, getout, lastwin, p_awa, p_confirm, p_write, topframe,

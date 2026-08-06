@@ -56,14 +56,14 @@ use crate::src::nvim::vterm::state::{
 use crate::src::nvim::window::{may_trigger_win_scrolled_resized, win_valid};
 use core::ffi::{c_char, c_int, c_void};
 
-use super::input::{
-    Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, is_mouse_key, send_mouse_event, terminal_send_key,
-};
+use super::input::{is_mouse_key, send_mouse_event, terminal_send_key};
 use super::refresh::{
     adjust_topline_cursor, invalidate_terminal, refresh_cursor, terminal_check_refresh,
 };
 use super::{map_get_int_ptr_t, terminal_check_size, terminal_set_state};
-use crate::src::nvim::keycodes::{K_COMMAND, K_EVENT, K_IGNORE, K_LUA, K_NOP, K_PASTE_START};
+use crate::src::nvim::keycodes::{
+    Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, K_COMMAND, K_EVENT, K_IGNORE, K_LUA, K_NOP, K_PASTE_START,
+};
 use crate::src::nvim::search::FORWARD;
 
 const DOBUF_WIPE: c_int = 4;

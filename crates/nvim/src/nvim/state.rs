@@ -9,7 +9,7 @@ use crate::src::nvim::getchar::{
 };
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
-use crate::src::nvim::keycodes::get_special_key_name;
+use crate::src::nvim::keycodes::{Ctrl_V, KE_EVENT, get_special_key_name};
 use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
 use crate::src::nvim::main::{
     State, VIsual_active, VIsual_mode, VIsual_select, curbuf, debug_mode, exmode_active, finish_op,
@@ -22,8 +22,8 @@ use crate::src::nvim::os::input::{input_available, input_get, os_breakcheck};
 use crate::src::nvim::os::libc::{strcmp, strcpy};
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
-    Direction, Event, ProcType, VimState, dict_T, hashitem_T, hashtab_T, kNone, key_extra,
-    save_v_event_T, size_t, uint8_t, win_T,
+    Direction, Event, ProcType, VimState, dict_T, hashitem_T, hashtab_T, kNone, save_v_event_T,
+    size_t, uint8_t, win_T,
 };
 use crate::src::nvim::ui::ui_flush;
 pub const kProcTypePty: ProcType = 1;
@@ -50,46 +50,8 @@ pub const MODE_CMDLINE: ModeFlags = 8;
 pub const MODE_OP_PENDING: ModeFlags = 4;
 pub const MODE_VISUAL: ModeFlags = 2;
 pub const MODE_NORMAL: ModeFlags = 1;
-pub const KE_COMMAND: key_extra = 104;
-pub const KE_LUA: key_extra = 103;
-pub const KE_EVENT: key_extra = 102;
-pub const KE_MOUSEMOVE: key_extra = 100;
-pub const KE_NOP: key_extra = 97;
-pub const KE_X2RELEASE: key_extra = 94;
-pub const KE_X2DRAG: key_extra = 93;
-pub const KE_X2MOUSE: key_extra = 92;
-pub const KE_X1RELEASE: key_extra = 91;
-pub const KE_X1DRAG: key_extra = 90;
-pub const KE_X1MOUSE: key_extra = 89;
-pub const KE_C_END: key_extra = 88;
-pub const KE_C_HOME: key_extra = 87;
-pub const KE_C_RIGHT: key_extra = 86;
-pub const KE_C_LEFT: key_extra = 85;
-pub const KE_CMDWIN: key_extra = 84;
-pub const KE_KDEL: key_extra = 80;
-pub const KE_KINS: key_extra = 79;
-pub const KE_MOUSERIGHT: key_extra = 78;
-pub const KE_MOUSELEFT: key_extra = 77;
-pub const KE_MOUSEUP: key_extra = 76;
-pub const KE_MOUSEDOWN: key_extra = 75;
-pub const KE_LEFTRELEASE_NM: key_extra = 70;
-pub const KE_LEFTMOUSE_NM: key_extra = 69;
-pub const KE_XF1: key_extra = 57;
-pub const KE_IGNORE: key_extra = 53;
-pub const KE_RIGHTRELEASE: key_extra = 52;
-pub const KE_RIGHTDRAG: key_extra = 51;
-pub const KE_RIGHTMOUSE: key_extra = 50;
-pub const KE_MIDDLERELEASE: key_extra = 49;
-pub const KE_MIDDLEDRAG: key_extra = 48;
-pub const KE_MIDDLEMOUSE: key_extra = 47;
-pub const KE_LEFTRELEASE: key_extra = 46;
-pub const KE_LEFTDRAG: key_extra = 45;
-pub const KE_LEFTMOUSE: key_extra = 44;
-pub const KE_S_DOWN: key_extra = 5;
-pub const KE_S_UP: key_extra = 4;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 pub unsafe extern "C" fn state_enter(mut s: *mut VimState) {
     's_132: loop {
         let mut check_result: ::core::ffi::c_int = if (*s).check.is_some() {

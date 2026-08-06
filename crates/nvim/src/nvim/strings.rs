@@ -10,6 +10,7 @@ use crate::src::nvim::eval::typval::{
 use crate::src::nvim::ex_docmd::find_cmdline_var;
 use crate::src::nvim::garray::{ga_append, ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::main::{e_invarg, e_invarg2, e_using_number_as_bool_nr, e_val_too_large_len};
 use crate::src::nvim::mbyte::{
     mb_copy_char, mb_cptr2char_adv, mb_ptr2char_adv, mb_string2cells, mb_tolower, mb_toupper,
@@ -63,7 +64,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 static e_cannot_mix_positional_and_non_positional_str: GlobalCell<[::core::ffi::c_char; 62]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(

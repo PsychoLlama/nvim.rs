@@ -71,9 +71,9 @@ use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
     Arena, Array, ArrayBuilder, Buffer, Dict, Error, EvalFuncData, FILE, Integer, KeyDict_keymap,
     LuaRef, LuaRetMode, Object, RemapValues, String_0, buf_T, cmdidx_T, dict_T, exarg_T, expand_T,
-    fuzmatch_str_T, garray_T, kObjectTypeLuaRef, kObjectTypeString, key_extra, key_value_pair,
-    linenr_T, mapblock_T, object_data as C2Rust_Unnamed, optset_T, ptrdiff_t, regmatch_T, scid_T,
-    size_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
+    fuzmatch_str_T, garray_T, kObjectTypeLuaRef, kObjectTypeString, key_value_pair, linenr_T,
+    mapblock_T, object_data as C2Rust_Unnamed, optset_T, ptrdiff_t, regmatch_T, scid_T, size_t,
+    typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -105,8 +105,6 @@ pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_17 = -2147483648;
 pub const REMAP_SCRIPT: RemapValues = -2;
 pub const REMAP_NONE: RemapValues = -1;
 pub const REMAP_YES: RemapValues = 0;
-pub const KE_LUA: key_extra = 103;
-pub const KE_SNR: key_extra = 82;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const REPTERM_NO_SIMPLIFY: C2Rust_Unnamed_20 = 8;
 pub const REPTERM_DO_LT: C2Rust_Unnamed_20 = 2;
@@ -154,11 +152,6 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const Ctrl_H: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
-pub const Ctrl_J: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
-pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-pub const Ctrl_RSB: ::core::ffi::c_int = 29 as ::core::ffi::c_int;
 pub const CPO_BSLASH: ::core::ffi::c_int = 'B' as ::core::ffi::c_int;
 /// How many hash buckets the mapping table has.
 pub const MAX_MAPHASH: usize = 256;
@@ -167,7 +160,6 @@ pub const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
-pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
 /// The error texts `mapping` raises for itself; the rest come from the
 /// shared table in `main`.
 pub const E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR: &CStr =

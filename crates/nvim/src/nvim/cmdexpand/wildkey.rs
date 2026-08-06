@@ -9,6 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::{Ctrl_N, Ctrl_P};
 use core::ffi::{c_char, c_int};
 
 /// One directory level up, as it is spelled on the command line.

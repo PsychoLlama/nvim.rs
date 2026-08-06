@@ -10,6 +10,9 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::{
+    Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_F, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_V, Ctrl_W,
+};
 
 /// The command line's own bytes: `cmdbuff[..cmdlen]`.
 ///

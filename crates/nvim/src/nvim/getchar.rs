@@ -78,7 +78,7 @@ use crate::src::nvim::types::{
     Arena, Array, CharsizeArg, Error, EvalFuncData, FileDescriptor, Integer, LuaRef, LuaRetMode,
     MotionType, MultiQueue, Object, OptInt, RemapValues, String_0, TriState, VV_MOUSE_COL,
     VV_MOUSE_LNUM, VV_MOUSE_WIN, VV_MOUSE_WINID, buffblock, buffblock_T, buffheader_T, colnr_T,
-    flush_buffers_T, garray_T, kFalse, kNone, key_extra, linenr_T, mapblock_T, oparg_T, ptrdiff_t,
+    flush_buffers_T, garray_T, kFalse, kNone, linenr_T, mapblock_T, oparg_T, ptrdiff_t,
     save_redo_T, size_t, tasave_T, typebuf_T, typval_T, uint8_t, uint64_t, varnumber_T,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
@@ -121,7 +121,6 @@ pub const RM_SCRIPT: C2Rust_Unnamed_36 = 2;
 pub const RM_NONE: C2Rust_Unnamed_36 = 1;
 pub const RM_YES: C2Rust_Unnamed_36 = 0;
 pub const RM_ABBR: C2Rust_Unnamed_36 = 4;
-pub const KE_IGNORE: key_extra = 53;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct gotchars_state_T {
@@ -139,8 +138,6 @@ pub const map_result_nomatch: map_result_T = 3;
 pub const map_result_retry: map_result_T = 2;
 pub const map_result_fail: map_result_T = 0;
 pub const KEYLEN_PART_MAP: C2Rust_Unnamed_37 = -2;
-pub const KE_SNR: key_extra = 82;
-pub const KE_PLUG: key_extra = 83;
 pub const kMTCharWise: MotionType = 0;
 pub const kFileReadOnly: C2Rust_Unnamed_34 = 1;
 pub const kFileNonBlocking: C2Rust_Unnamed_34 = 128;
@@ -181,11 +178,6 @@ pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 pub const DEL: ::core::ffi::c_int = 0x7f as ::core::ffi::c_int;
-pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const Ctrl_N: ::core::ffi::c_int = 14 as ::core::ffi::c_int;
-pub const Ctrl_O: ::core::ffi::c_int = 15 as ::core::ffi::c_int;
-pub const Ctrl_P: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
-pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 static curscript: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 /// Streams to read script (`-s` / `:source!`) input from, innermost last.
 static scriptin: GlobalCell<[FileDescriptor; NSCRIPT as usize]> =
@@ -288,7 +280,6 @@ pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
 pub const K_SELECT_STRING: [::core::ffi::c_char; 4] =
     unsafe { ::core::mem::transmute::<[u8; 4], [::core::ffi::c_char; 4]>(*b"\x80\xF5X\0") };
-pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
 pub const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const MOD_MASK_ALT: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;

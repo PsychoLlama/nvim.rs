@@ -4,8 +4,8 @@
 
 use super::args::{Args, frame};
 use super::{
-    Ctrl_V, FAIL, NUL, OK, YREG_YANK, kGRegExprSrc, kGRegList, kMTBlockWise, kMTCharWise,
-    kMTLineWise, kMTUnknown,
+    FAIL, NUL, OK, YREG_YANK, kGRegExprSrc, kGRegList, kMTBlockWise, kMTCharWise, kMTLineWise,
+    kMTUnknown,
 };
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::charset::getdigits_int;
@@ -15,6 +15,7 @@ use crate::src::nvim::eval::typval::{
     tv_get_string_chk, tv_list_alloc, tv_list_len, tv_list_ref,
 };
 use crate::src::nvim::eval::vars::get_vim_var_str;
+use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::main::{
     e_invargval, e_toomanyarg, reg_executing, reg_recorded, reg_recording,
 };

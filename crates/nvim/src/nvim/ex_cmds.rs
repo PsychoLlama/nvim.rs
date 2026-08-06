@@ -60,6 +60,7 @@ use crate::src::nvim::help::prepare_help_buffer;
 use crate::src::nvim::highlight_group::{HLF_N, HLF_R, syn_check_group};
 use crate::src::nvim::indent::{get_indent, get_indent_lnum, set_indent};
 use crate::src::nvim::input::prompt_for_input;
+use crate::src::nvim::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::src::nvim::main::{
     Columns, IObuff, KeyTyped, RedrawingDisabled, Rows, State, VIsual, VIsual_active,
     au_new_curbuf, autocmd_busy, bangredo, cmdmod, cmdwin_buf, cmdwin_old_curwin, cmdwin_type,
@@ -351,9 +352,6 @@ pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
-pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const Ctrl_E: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
-pub const Ctrl_Y: ::core::ffi::c_int = 25 as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const CPO_ALTWRITE: ::core::ffi::c_int = 'A' as ::core::ffi::c_int;
 pub const CPO_OVERNEW: ::core::ffi::c_int = 'O' as ::core::ffi::c_int;

@@ -11,7 +11,11 @@ use crate::src::nvim::event::rstream::{
 };
 use crate::src::nvim::getchar::{before_blocking, typebuf_changed};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::keycodes::{K_SPECIAL, trans_special};
+use crate::src::nvim::keycodes::{
+    Ctrl_C, K_SPECIAL, KE_EVENT, KE_FILLER, KE_LEFTMOUSE, KE_MIDDLEMOUSE, KE_MOUSEDOWN,
+    KE_MOUSEMOVE, KE_MOUSERIGHT, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1MOUSE, KE_X2MOUSE,
+    KE_X2RELEASE, trans_special,
+};
 use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
 use crate::src::nvim::main::{
     Columns, Rows, State, ch_before_blocking_events, ctrl_c_interrupts, curbuf, current_ui,
@@ -25,34 +29,21 @@ use crate::src::nvim::state::{MODE_INSERT, get_real_state};
 use crate::src::nvim::types::libc::STDIN_FILENO;
 use crate::src::nvim::types::{
     Event, MultiQueue, ProcType, RStream, String_0, TriState, event_T, int64_t, kFalse, kNone,
-    kTrue, key_extra, rstream, size_t, ssize_t, stream, stream_uv as C2Rust_Unnamed_25, uint8_t,
-    uint64_t, uv__io_t, uv__queue, uv_buf_t, uv_connect_t, uv_file, uv_handle_t, uv_handle_type,
-    uv_loop_t, uv_pipe_s_u as C2Rust_Unnamed_7, uv_pipe_t, uv_shutdown_t, uv_stream_t,
+    kTrue, rstream, size_t, ssize_t, stream, stream_uv as C2Rust_Unnamed_25, uint8_t, uint64_t,
+    uv__io_t, uv__queue, uv_buf_t, uv_connect_t, uv_file, uv_handle_t, uv_handle_type, uv_loop_t,
+    uv_pipe_s_u as C2Rust_Unnamed_7, uv_pipe_t, uv_shutdown_t, uv_stream_t,
 };
 pub const UV_TTY: uv_handle_type = 14;
 pub const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
 pub const kProcTypePty: ProcType = 1;
-pub const KE_EVENT: key_extra = 102;
-pub const KE_MOUSEMOVE: key_extra = 100;
-pub const KE_X2RELEASE: key_extra = 94;
-pub const KE_X2MOUSE: key_extra = 92;
-pub const KE_X1MOUSE: key_extra = 89;
-pub const KE_MOUSERIGHT: key_extra = 78;
-pub const KE_MOUSEDOWN: key_extra = 75;
-pub const KE_RIGHTRELEASE: key_extra = 52;
-pub const KE_RIGHTMOUSE: key_extra = 50;
-pub const KE_MIDDLEMOUSE: key_extra = 47;
-pub const KE_LEFTMOUSE: key_extra = 44;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub const FSK_KEYCODE: C2Rust_Unnamed_27 = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
-pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
 pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const MOD_MASK_2CLICK: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
 pub const MOD_MASK_3CLICK: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;

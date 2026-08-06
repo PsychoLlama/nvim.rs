@@ -30,6 +30,7 @@ use crate::src::nvim::indent::{
     use_indentexpr_for_lisp,
 };
 use crate::src::nvim::indent_c::get_c_indent;
+use crate::src::nvim::keycodes::{Ctrl_A, Ctrl_V, Ctrl_X, KE_COMMAND, KE_LUA};
 use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::main::{
     IObuff, Insstart, KeyTyped, State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect,
@@ -80,8 +81,8 @@ use crate::src::nvim::types::{
     CMOD_LOCKMARKS, Callback, Callback_data as C2Rust_Unnamed_5, CharsizeArg, CharsizeKind,
     ExtmarkOp, MotionType, OptInt, StrCharInfo, TriState, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
     bcount_t, block_def, buf_T, cmdarg_T, colnr_T, dict_T, ht_stack_T, int32_t, int64_t, kNone,
-    key_extra, linenr_T, list_stack_T, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T,
-    typval_vval_union, uint8_t, uvarnumber_T, varnumber_T, yankreg_T,
+    linenr_T, list_stack_T, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T, typval_vval_union,
+    uint8_t, uvarnumber_T, varnumber_T, yankreg_T,
 };
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::undo::{u_clearline, u_save, u_save_cursor};
@@ -114,8 +115,6 @@ pub const BL_SOL: C2Rust_Unnamed_26 = 2;
 pub const BL_WHITE: C2Rust_Unnamed_26 = 1;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
 pub const SIN_CHANGED: C2Rust_Unnamed_28 = 1;
-pub const KE_COMMAND: key_extra = 104;
-pub const KE_LUA: key_extra = 103;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
 pub const OP_NR_SUB: C2Rust_Unnamed_29 = 29;
 pub const OP_NR_ADD: C2Rust_Unnamed_29 = 28;
@@ -179,9 +178,6 @@ pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const NL_STR: [::core::ffi::c_char; 2] =
     unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"\n\0") };
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-pub const Ctrl_A: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-pub const Ctrl_X: ::core::ffi::c_int = 24 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const OPF_LINES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const OPF_CHANGE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

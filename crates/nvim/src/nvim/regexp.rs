@@ -469,8 +469,6 @@ pub const TAB: c_int = '\t' as c_int;
 pub const NL: c_int = '\n' as c_int;
 pub const CAR: c_int = '\r' as c_int;
 pub const ESC: c_int = '\u{1b}' as c_int;
-pub const Ctrl_H: c_int = 8;
-pub const Ctrl_V: c_int = 22;
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_len: 0,
     ga_maxlen: 0,

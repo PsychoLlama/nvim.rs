@@ -11,6 +11,10 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::{
+    KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTRELEASE, KE_MIDDLEMOUSE, KE_MOUSEDOWN, KE_MOUSELEFT,
+    KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP, KE_RIGHTMOUSE, KE_X1MOUSE, KE_X2MOUSE,
+};
 
 pub unsafe extern "C" fn nvim_feedkeys(
     mut keys: String_0,

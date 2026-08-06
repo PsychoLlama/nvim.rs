@@ -30,7 +30,6 @@ use crate::src::nvim::register::{
 };
 
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const Ctrl_V: ::core::ffi::c_int = 22;
 
 /// The module's mutable state, all of it.
 #[derive(Copy, Clone)]

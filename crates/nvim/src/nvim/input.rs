@@ -3,7 +3,7 @@ use crate::src::nvim::getchar::{fix_input_buffer, merge_modifiers};
 
 use crate::src::nvim::eval::typval::kCallbackNone;
 use crate::src::nvim::highlight_group::HLF_R;
-use crate::src::nvim::keycodes::{K_SPECIAL, K_ZERO};
+use crate::src::nvim::keycodes::{Ctrl_C, K_SPECIAL, K_ZERO, KE_IGNORE, KE_LEFTMOUSE};
 use crate::src::nvim::main::{
     IObuff, State, allow_keys, cmdline_row, keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask,
     msg_row, msg_scrolled, need_wait_return, no_mapping, no_wait_return,
@@ -16,18 +16,15 @@ use crate::src::nvim::os::input::input_get;
 use crate::src::nvim::os::libc::{atoi, gettext, memmove, snprintf};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    Callback, Callback_data as C2Rust_Unnamed, MultiQueue, key_extra, size_t, uint8_t,
+    Callback, Callback_data as C2Rust_Unnamed, MultiQueue, size_t, uint8_t,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has};
 pub type C2Rust_Unnamed_1 = ::core::ffi::c_int;
 pub const EXPAND_FILES: C2Rust_Unnamed_1 = 2;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_1 = 0;
-pub const KE_LEFTMOUSE: key_extra = 44;
-pub const KE_IGNORE: key_extra = 53;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
-pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub unsafe extern "C" fn ask_yesno(str: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let save_State: ::core::ffi::c_int = State.get();

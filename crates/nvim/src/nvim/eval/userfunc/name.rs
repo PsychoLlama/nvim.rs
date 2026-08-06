@@ -16,6 +16,7 @@ use core::slice;
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::keycodes::KE_SNR;
 
 /// The name of the function `name` refers to.
 ///

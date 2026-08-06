@@ -17,9 +17,10 @@ use crate::src::nvim::eval::skip_expr;
 use crate::src::nvim::ex_cmds::skip_vimgrep_pat;
 use crate::src::nvim::ex_docmd::onecmd::shift_cmd_args;
 use crate::src::nvim::ex_docmd::{
-    ADDR_LINES, CPO_BAR, Ctrl_V, EX_BUFNAME, EX_COUNT, EX_CTRLV, EX_NOTRLCOM, EX_REGSTR, EX_XFILE,
+    ADDR_LINES, CPO_BAR, EX_BUFNAME, EX_COUNT, EX_CTRLV, EX_NOTRLCOM, EX_REGSTR, EX_XFILE,
     EX_ZEROR, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, FAIL, INT32_MAX, NUL, OK, e_zerocount,
 };
+use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::main::{curbuf, p_cpo};
 use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memory::xstrdup;

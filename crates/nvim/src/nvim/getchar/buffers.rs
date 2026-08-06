@@ -16,7 +16,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::keycodes::key_escape;
+use crate::src::nvim::keycodes::{Ctrl_O, Ctrl_V, key_escape};
 use core::ffi::{c_char, c_int, c_uint};
 use core::mem::offset_of;
 use core::ptr;

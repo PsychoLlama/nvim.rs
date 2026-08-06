@@ -14,10 +14,10 @@ use crate::src::nvim::charset::{skipwhite, vim_isIDc};
 use crate::src::nvim::eval::userfunc::eval_fname_script;
 use crate::src::nvim::eval::vars::get_vim_var_partial;
 use crate::src::nvim::eval::{
-    AUTOLOAD_CHAR, FNE_CHECK_START, FNE_INCL_BR, KE_SNR, KS_EXTRA, NUL, OPT_GLOBAL, OPT_LOCAL,
+    AUTOLOAD_CHAR, FNE_CHECK_START, FNE_INCL_BR, KS_EXTRA, NUL, OPT_GLOBAL, OPT_LOCAL,
     eval_to_string, namespace_char,
 };
-use crate::src::nvim::keycodes::K_SPECIAL;
+use crate::src::nvim::keycodes::{K_SPECIAL, KE_SNR};
 use crate::src::nvim::main::e_invexpr2;
 use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memory::{xfree, xmalloc};
