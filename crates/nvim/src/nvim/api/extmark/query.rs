@@ -24,7 +24,7 @@ pub unsafe extern "C" fn virt_text_to_array(
         while i < vt.size {
             let mut j: size_t = i;
             while j < vt.size {
-                if !(*vt.items.offset(j as isize)).text.is_null() {
+                if !(*vt.items.add(j)).text.is_null() {
                     break;
                 }
                 j = j.wrapping_add(1);
@@ -38,14 +38,14 @@ pub unsafe extern "C" fn virt_text_to_array(
                 },
             );
             while i < j {
-                let mut hl_id: ::core::ffi::c_int = (*vt.items.offset(i as isize)).hl_id;
+                let mut hl_id: ::core::ffi::c_int = (*vt.items.add(i)).hl_id;
                 if hl_id >= 0 as ::core::ffi::c_int {
                     array_add(&mut hl_array, hl_group_name(hl_id, hl_name));
                 }
                 i = i.wrapping_add(1);
             }
-            let mut text: *mut ::core::ffi::c_char = (*vt.items.offset(i as isize)).text;
-            let mut hl_id_0: ::core::ffi::c_int = (*vt.items.offset(i as isize)).hl_id;
+            let mut text: *mut ::core::ffi::c_char = (*vt.items.add(i)).text;
+            let mut hl_id_0: ::core::ffi::c_int = (*vt.items.add(i)).hl_id;
             let mut chunk: Array = arena_array(arena, 2 as size_t);
             array_add(&mut chunk, Object::string(cstr_as_string(text)));
             if hl_array.size > 0 as size_t {
@@ -152,7 +152,7 @@ pub unsafe extern "C" fn nvim_buf_get_extmark_by_id(
             );
             return rv;
         }
-        let mut details: bool = (*opts).details as bool;
+        let mut details: bool = (*opts).details;
         let mut hl_name: bool = if has_key(
             (*opts).is_set__get_extmark_,
             KEYSET_OPTIDX_get_extmark__hl_name,
@@ -195,7 +195,7 @@ pub unsafe extern "C" fn nvim_buf_get_extmarks(
             );
             return rv;
         }
-        let mut details: bool = (*opts).details as bool;
+        let mut details: bool = (*opts).details;
         let mut hl_name: bool = if has_key(
             (*opts).is_set__get_extmarks_,
             KEYSET_OPTIDX_get_extmarks__hl_name,
@@ -254,12 +254,8 @@ pub unsafe extern "C" fn nvim_buf_get_extmarks(
         let mut reverse: bool = l_row > u_row || l_row == u_row && l_col > u_col;
         if reverse {
             limit = INT64_MAX as Integer;
-            let mut row: ::core::ffi::c_int = l_row;
-            l_row = u_row;
-            u_row = row;
-            let mut col: colnr_T = l_col;
-            l_col = u_col;
-            u_col = col;
+            ::core::mem::swap(&mut l_row, &mut u_row);
+            ::core::mem::swap(&mut l_col, &mut u_col);
         }
         let mut marks: ExtmarkInfoArray = extmark_get(
             b,
@@ -270,7 +266,7 @@ pub unsafe extern "C" fn nvim_buf_get_extmarks(
             u_col,
             limit,
             type_0,
-            (*opts).overlap as bool,
+            (*opts).overlap,
         );
         rv = arena_array(
             arena,
@@ -302,7 +298,7 @@ pub unsafe extern "C" fn nvim_buf_get_extmarks(
                 array_add(
                     &mut rv,
                     Object::array(extmark_to_array(
-                        *marks.items.offset(i_0 as isize),
+                        *marks.items.add(i_0),
                         true,
                         details,
                         hl_name,
@@ -428,10 +424,6 @@ pub unsafe extern "C" fn nvim__buf_debug_extmarks(
         if b.is_null() {
             return NULL_STRING;
         }
-        return mt_inspect(
-            &raw mut (*b).b_marktree as *mut MarkTree,
-            keys as bool,
-            dot as bool,
-        );
+        return mt_inspect(&raw mut (*b).b_marktree as *mut MarkTree, keys, dot);
     }
 }

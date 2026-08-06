@@ -274,7 +274,7 @@ pub unsafe extern "C" fn parse_border_style(
             }
             let mut i: size_t = 0 as size_t;
             while i < size {
-                let mut iytem: Object = *arr.items.offset(i as isize);
+                let mut iytem: Object = *arr.items.add(i);
                 let mut string: String_0 = String_0 {
                     data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     size: 0,
@@ -343,7 +343,7 @@ pub unsafe extern "C" fn parse_border_style(
                     return;
                 }
                 let mut len: size_t = if string.size
-                    < ::core::mem::size_of::<[::core::ffi::c_char; 32]>().wrapping_sub(1 as usize)
+                    < ::core::mem::size_of::<[::core::ffi::c_char; 32]>().wrapping_sub(1_usize)
                 {
                     string.size
                 } else {
@@ -351,24 +351,24 @@ pub unsafe extern "C" fn parse_border_style(
                 };
                 if len != 0 {
                     memcpy(
-                        &raw mut *chars.offset(i as isize) as *mut ::core::ffi::c_char
+                        &raw mut *chars.add(i) as *mut ::core::ffi::c_char
                             as *mut ::core::ffi::c_void,
                         string.data as *const ::core::ffi::c_void,
                         len,
                     );
                 }
-                (*chars.offset(i as isize))[len as usize] = NUL as ::core::ffi::c_char;
-                *hl_ids.offset(i as isize) = hl_id;
+                (*chars.add(i))[len as usize] = NUL as ::core::ffi::c_char;
+                *hl_ids.add(i) = hl_id;
                 i = i.wrapping_add(1);
             }
             while size < 8 as size_t {
                 memcpy(
-                    chars.offset(size as isize) as *mut ::core::ffi::c_void,
+                    chars.add(size) as *mut ::core::ffi::c_void,
                     chars as *const ::core::ffi::c_void,
                     ::core::mem::size_of::<[::core::ffi::c_char; 32]>().wrapping_mul(size),
                 );
                 memcpy(
-                    hl_ids.offset(size as isize) as *mut ::core::ffi::c_void,
+                    hl_ids.add(size) as *mut ::core::ffi::c_void,
                     hl_ids as *const ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul(size),
                 );
@@ -439,9 +439,8 @@ pub unsafe extern "C" fn parse_border_style(
                 if strequal(str.data, defaults[i_0 as usize].name) {
                     memcpy(
                         chars as *mut ::core::ffi::c_void,
-                        &raw mut (*(&raw mut defaults as *mut C2Rust_Unnamed_15)
-                            .offset(i_0 as isize))
-                        .chars as *mut [::core::ffi::c_char; 32]
+                        &raw mut (*(&raw mut defaults as *mut C2Rust_Unnamed_15).add(i_0)).chars
+                            as *mut [::core::ffi::c_char; 32]
                             as *const ::core::ffi::c_void,
                         ::core::mem::size_of::<[[::core::ffi::c_char; 32]; 8]>(),
                     );

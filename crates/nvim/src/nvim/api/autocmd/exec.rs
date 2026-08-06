@@ -141,7 +141,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
         let mut did_aucmd: bool = false_0 != 0;
         let mut event_str_index: size_t = 0 as size_t;
         while event_str_index < event_array.size {
-            let mut event_str: Object = *event_array.items.offset(event_str_index as isize);
+            let mut event_str: Object = *event_array.items.add(event_str_index);
             let mut event_nr: event_T = event_name2nr_str(event_str.data.string);
             if !((event_nr as ::core::ffi::c_uint)
                 < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
@@ -157,7 +157,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
             }
             let mut pat_index: size_t = 0 as size_t;
             while pat_index < patterns.size {
-                let mut pat: Object = *patterns.items.offset(pat_index as isize);
+                let mut pat: Object = *patterns.items.add(pat_index);
                 let mut fname: *mut ::core::ffi::c_char = if !has_buf {
                     pat.data.string.data
                 } else {

@@ -189,7 +189,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                         break 's_293;
                                     }
                                     let mut hl_id: ::core::ffi::c_int = object_to_hl_id(
-                                        *arr.items.offset(i as isize),
+                                        *arr.items.add(i),
                                         c"hl_group item".as_ptr(),
                                         err,
                                     );
@@ -408,19 +408,19 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                     break 's_785;
                                 }
                                 if kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    != (*a.items.offset(j as isize)).type_0 as ::core::ffi::c_uint
+                                    != (*a.items.add(j)).type_0 as ::core::ffi::c_uint
                                 {
                                     api_err_exp(
                                         err,
                                         c"virt_text_line".as_ptr(),
                                         api_typename(kObjectTypeArray),
-                                        api_typename((*a.items.offset(j as isize)).type_0),
+                                        api_typename((*a.items.add(j)).type_0),
                                     );
                                     break '_error;
                                 }
                                 let mut dummig: ::core::ffi::c_int = 0;
                                 let mut jtem: VirtText = parse_virt_text(
-                                    (*a.items.offset(j as isize)).data.array,
+                                    (*a.items.add(j)).data.array,
                                     err,
                                     &raw mut dummig,
                                 );
@@ -754,7 +754,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                     let mut i_0: size_t = arr_0.size.wrapping_sub(1 as size_t);
                                     while i_0 > 0 as size_t {
                                         let mut hl_id_0: ::core::ffi::c_int = object_to_hl_id(
-                                            *arr_0.items.offset(i_0 as isize),
+                                            *arr_0.items.add(i_0),
                                             c"hl_group item".as_ptr(),
                                             err,
                                         );
@@ -822,7 +822,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                     decor,
                                     decor_flags,
                                     right_gravity,
-                                    (*opts).end_right_gravity as bool,
+                                    (*opts).end_right_gravity,
                                     if has_key(
                                         (*opts).is_set__set_extmark_,
                                         KEYSET_OPTIDX_set_extmark__undo_restore,
@@ -831,7 +831,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                     } else {
                                         true_0
                                     } == 0,
-                                    (*opts).invalidate as bool,
+                                    (*opts).invalidate,
                                     err,
                                 );
                                 if (*err).type_0 as ::core::ffi::c_int

@@ -188,7 +188,7 @@ pub unsafe extern "C" fn nvim_win_get_config(
                     let mut s: String_0 = cstrn_as_string(
                         &raw mut *(&raw mut (*config).border_chars
                             as *mut [::core::ffi::c_char; 32])
-                            .offset(i as isize) as *mut ::core::ffi::c_char,
+                            .add(i) as *mut ::core::ffi::c_char,
                         MAX_SCHAR_SIZE as size_t,
                     );
                     let mut hi_id: ::core::ffi::c_int = (*config).border_hl_ids[i as usize];

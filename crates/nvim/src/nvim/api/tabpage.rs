@@ -245,7 +245,7 @@ pub unsafe extern "C" fn nvim_open_tabpage(
     tp = win_new_tabpage(
         after + 1 as ::core::ffi::c_int,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        enter as bool,
+        enter,
         &raw mut wp,
     );
     try_leave(&raw mut tstate, err);

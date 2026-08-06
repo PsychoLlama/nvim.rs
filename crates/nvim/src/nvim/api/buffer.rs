@@ -83,8 +83,8 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
     << ::core::mem::size_of::<uint64_t>()
-        .wrapping_mul(8 as usize)
-        .wrapping_sub(1 as usize);
+        .wrapping_mul(8_usize)
+        .wrapping_sub(1_usize);
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL.wrapping_add(1 as uint64_t);
 pub const KEYSET_OPTIDX_buf_attach__on_bytes: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

@@ -141,8 +141,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                             if event_v_index >= v.data.array.size {
                                 break 's_299;
                             }
-                            let mut event_v: Object =
-                                *v.data.array.items.offset(event_v_index as isize);
+                            let mut event_v: Object = *v.data.array.items.add(event_v_index);
                             if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
                                 != event_v.type_0 as ::core::ffi::c_uint
                             {
@@ -234,8 +233,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                 if item_index >= v_0.data.array.size {
                                     break 's_506;
                                 }
-                                let mut item: Object =
-                                    *v_0.data.array.items.offset(item_index as isize);
+                                let mut item: Object = *v_0.data.array.items.add(item_index);
                                 if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
                                     != item.type_0 as ::core::ffi::c_uint
                                 {
@@ -298,8 +296,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                             if bufnr_index >= buf.data.array.size {
                                 break 's_659;
                             }
-                            let mut bufnr: Object =
-                                *buf.data.array.items.offset(bufnr_index as isize);
+                            let mut bufnr: Object = *buf.data.array.items.add(bufnr_index);
                             if !(bufnr.type_0 as ::core::ffi::c_uint
                                 == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
                                 || bufnr.type_0 as ::core::ffi::c_uint
@@ -345,7 +342,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                 }
                 let mut bufnr_index_0: size_t = 0 as size_t;
                 while bufnr_index_0 < buffers.size {
-                    let mut bufnr_0: Object = *buffers.items.offset(bufnr_index_0 as isize);
+                    let mut bufnr_0: Object = *buffers.items.add(bufnr_index_0);
                     pattern_filters[pattern_filter_count as usize] = bufnr_0.data.string.data;
                     pattern_filter_count += 1 as ::core::ffi::c_int;
                     bufnr_index_0 = bufnr_index_0.wrapping_add(1);
@@ -356,7 +353,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                         let mut acs: *mut AutoCmdVec = au_get_autocmds_for_event(event);
                         let mut i: size_t = 0 as size_t;
                         while i < (*acs).size {
-                            let ac: *mut AutoCmd = (*acs).items.offset(i as isize);
+                            let ac: *mut AutoCmd = (*acs).items.add(i);
                             let ap: *mut AutoPat = (*ac).pat;
                             's_712: {
                                 if !ap.is_null() {

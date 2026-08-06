@@ -427,8 +427,12 @@ pub unsafe extern "C" fn object_to_vim(obj: Object, tv: *mut typval_T, err: *mut
 /// Useful where `obj` sits on an arena, which cannot free the Lua registry
 /// references its objects hold.
 ///
+/// `err` is vestigial: upstream threads it through the recursion and never
+/// reads it, and it is part of the signature both callers spell.
+///
 /// # Safety
 /// As [`object_to_vim`]; `obj` must point at a live object tree.
+#[allow(clippy::only_used_in_recursion)]
 pub unsafe extern "C" fn object_to_vim_take_luaref(
     obj: *mut Object,
     tv: *mut typval_T,

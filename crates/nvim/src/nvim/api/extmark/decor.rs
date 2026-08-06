@@ -185,17 +185,17 @@ pub unsafe extern "C" fn parse_virt_text(
         '_free_exit: {
             while i < chunks.size {
                 if kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                    != (*chunks.items.offset(i as isize)).type_0 as ::core::ffi::c_uint
+                    != (*chunks.items.add(i)).type_0 as ::core::ffi::c_uint
                 {
                     api_err_exp(
                         err,
                         c"chunk".as_ptr(),
                         api_typename(kObjectTypeArray),
-                        api_typename((*chunks.items.offset(i as isize)).type_0),
+                        api_typename((*chunks.items.add(i)).type_0),
                     );
                     break '_free_exit;
                 }
-                let mut chunk: Array = (*chunks.items.offset(i as isize)).data.array;
+                let mut chunk: Array = (*chunks.items.add(i)).data.array;
                 if !(chunk.size > 0 as size_t
                     && chunk.size <= 2 as size_t
                     && (*chunk.items.offset(0 as ::core::ffi::c_int as isize)).type_0
@@ -227,7 +227,7 @@ pub unsafe extern "C" fn parse_virt_text(
                                     break 's_146;
                                 }
                                 hl_id = object_to_hl_id(
-                                    *arr.items.offset(j as isize),
+                                    *arr.items.add(j),
                                     c"virt_text highlight".as_ptr(),
                                     err,
                                 );

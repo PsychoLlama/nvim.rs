@@ -290,7 +290,7 @@ pub(crate) unsafe fn execute_cmd0(
                 // is the name with no scanning at all.
                 ea.line2 = buflist_findpat(
                     *ea.args,
-                    (*ea.args).add(*ea.arglens as usize),
+                    (*ea.args).add(*ea.arglens),
                     ea.argt & EX_BUFUNL as uint32_t != 0,
                     false,
                     false,

@@ -417,7 +417,7 @@ pub(crate) unsafe extern "C" fn parse_win_config(
                     (*config).is_set__win_config_,
                     KEYSET_OPTIDX_win_config__external,
                 ) {
-                    (*fconfig).external = (*config).external as bool;
+                    (*fconfig).external = (*config).external;
                     if has_relative as ::core::ffi::c_int != 0
                         && (*fconfig).external as ::core::ffi::c_int != 0
                     {
@@ -478,14 +478,14 @@ pub(crate) unsafe extern "C" fn parse_win_config(
                         (*config).is_set__win_config_,
                         KEYSET_OPTIDX_win_config__focusable,
                     ) {
-                        (*fconfig).focusable = (*config).focusable as bool;
-                        (*fconfig).mouse = (*config).focusable as bool;
+                        (*fconfig).focusable = (*config).focusable;
+                        (*fconfig).mouse = (*config).focusable;
                     }
                     if has_key(
                         (*config).is_set__win_config_,
                         KEYSET_OPTIDX_win_config__mouse,
                     ) {
-                        (*fconfig).mouse = (*config).mouse as bool;
+                        (*fconfig).mouse = (*config).mouse;
                     }
                     if has_key(
                         (*config).is_set__win_config_,
@@ -626,19 +626,19 @@ pub(crate) unsafe extern "C" fn parse_win_config(
                             );
                             break '_fail;
                         }
-                        (*fconfig).noautocmd = (*config).noautocmd as bool;
+                        (*fconfig).noautocmd = (*config).noautocmd;
                     }
                     if has_key(
                         (*config).is_set__win_config_,
                         KEYSET_OPTIDX_win_config__fixed,
                     ) {
-                        (*fconfig).fixed = (*config).fixed as bool;
+                        (*fconfig).fixed = (*config).fixed;
                     }
                     if has_key(
                         (*config).is_set__win_config_,
                         KEYSET_OPTIDX_win_config__hide,
                     ) {
-                        (*fconfig).hide = (*config).hide as bool;
+                        (*fconfig).hide = (*config).hide;
                     }
                     if has_key(
                         (*config).is_set__win_config_,

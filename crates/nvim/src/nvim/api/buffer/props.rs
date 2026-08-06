@@ -229,8 +229,8 @@ pub unsafe extern "C" fn nvim_buf_delete(
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             return;
         }
-        let mut force: bool = (*opts).force as bool;
-        let mut unload: bool = (*opts).unload as bool;
+        let mut force: bool = (*opts).force;
+        let mut unload: bool = (*opts).unload;
         let mut result: ::core::ffi::c_int = do_buffer(
             if unload as ::core::ffi::c_int != 0 {
                 DOBUF_UNLOAD as ::core::ffi::c_int

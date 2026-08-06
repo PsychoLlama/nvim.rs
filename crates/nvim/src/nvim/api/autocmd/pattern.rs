@@ -107,7 +107,7 @@ pub(crate) unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                             size: patlen,
                         },
                     )));
-                    patlen = aucmd_span_pattern(pat.offset(patlen as isize), &raw mut pat);
+                    patlen = aucmd_span_pattern(pat.add(patlen), &raw mut pat);
                 }
             } else if pattern.type_0 as ::core::ffi::c_uint
                 == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -127,7 +127,7 @@ pub(crate) unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                 let mut array: Array = pattern.data.array;
                 let mut entry_index: size_t = 0 as size_t;
                 while entry_index < array.size {
-                    let mut entry: Object = *array.items.offset(entry_index as isize);
+                    let mut entry: Object = *array.items.add(entry_index);
                     let mut pat_0: *const ::core::ffi::c_char = entry.data.string.data;
                     let mut patlen_0: size_t = aucmd_span_pattern(pat_0, &raw mut pat_0);
                     while patlen_0 != 0 {
@@ -145,8 +145,7 @@ pub(crate) unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                                 size: patlen_0,
                             },
                         )));
-                        patlen_0 =
-                            aucmd_span_pattern(pat_0.offset(patlen_0 as isize), &raw mut pat_0);
+                        patlen_0 = aucmd_span_pattern(pat_0.add(patlen_0), &raw mut pat_0);
                     }
                     entry_index = entry_index.wrapping_add(1);
                 }

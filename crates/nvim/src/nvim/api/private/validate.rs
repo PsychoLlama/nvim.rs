@@ -156,18 +156,18 @@ pub unsafe extern "C" fn check_string_array(
     let mut i: size_t = 0 as size_t;
     while i < arr.size {
         if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-            != (*arr.items.offset(i as isize)).type_0 as ::core::ffi::c_uint
+            != (*arr.items.add(i)).type_0 as ::core::ffi::c_uint
         {
             api_err_exp(
                 err,
                 IObuff.ptr() as *mut ::core::ffi::c_char,
                 api_typename(kObjectTypeString),
-                api_typename((*arr.items.offset(i as isize)).type_0),
+                api_typename((*arr.items.add(i)).type_0),
             );
             return false;
         }
         if disallow_nl {
-            let l: String_0 = (*arr.items.offset(i as isize)).data.string;
+            let l: String_0 = (*arr.items.add(i)).data.string;
             if !memchr(
                 l.data as *const ::core::ffi::c_void,
                 '\n' as ::core::ffi::c_int,

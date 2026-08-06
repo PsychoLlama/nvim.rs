@@ -40,9 +40,6 @@ use crate::src::nvim::types::ui::kLineFlagWrap;
 use crate::src::nvim::types::{Integer, LineFlags, RemoteUI, sattr_T, schar_T};
 use core::ffi::{c_char, c_int};
 
-/// The wrap bit of the flags a line carries: the next row continues this
-/// one, which matters to a UI that reflows on copy.
-
 /// The largest a single cell can pack to: a fixarray header, the text with
 /// its header, the highlight id and the repeat count. Two of those plus the
 /// closing `wrap` byte is what has to be free before a cell is emitted.

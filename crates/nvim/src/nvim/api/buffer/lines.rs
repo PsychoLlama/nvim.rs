@@ -139,10 +139,10 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
         }) as *mut *mut ::core::ffi::c_char;
         let mut i: size_t = 0 as size_t;
         while i < new_len {
-            let l: String_0 = (*replacement.items.offset(i as isize)).data.string;
-            *lines.offset(i as isize) = arena_memdupz(arena, l.data, l.size);
+            let l: String_0 = (*replacement.items.add(i)).data.string;
+            *lines.add(i) = arena_memdupz(arena, l.data, l.size);
             memchrsub(
-                *lines.offset(i as isize) as *mut ::core::ffi::c_void,
+                *lines.add(i) as *mut ::core::ffi::c_void,
                 NUL as ::core::ffi::c_char,
                 NL as ::core::ffi::c_char,
                 l.size,
@@ -212,19 +212,13 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
                             c"Index out of bounds".as_ptr(),
                         );
                         break 's_382;
-                    } else if ml_replace_buf(
-                        b,
-                        lnum as linenr_T,
-                        *lines.offset(i_1 as isize),
-                        false,
-                        true,
-                    ) == 0 as ::core::ffi::c_int
+                    } else if ml_replace_buf(b, lnum as linenr_T, *lines.add(i_1), false, true)
+                        == 0 as ::core::ffi::c_int
                     {
                         api_set_error(err, kErrorTypeException, c"Failed to replace line".as_ptr());
                         break 's_382;
                     } else {
-                        inserted_bytes +=
-                            strlen(*lines.offset(i_1 as isize)) as bcount_t + 1 as bcount_t;
+                        inserted_bytes += strlen(*lines.add(i_1)) as bcount_t + 1 as bcount_t;
                         i_1 = i_1.wrapping_add(1);
                     }
                 }
@@ -242,7 +236,7 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
                     } else if ml_append_buf(
                         b,
                         lnum_0 as linenr_T,
-                        *lines.offset(i_2 as isize),
+                        *lines.add(i_2),
                         0 as colnr_T,
                         false,
                     ) == 0 as ::core::ffi::c_int
@@ -250,8 +244,7 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
                         api_set_error(err, kErrorTypeException, c"Failed to insert line".as_ptr());
                         break 's_382;
                     } else {
-                        inserted_bytes +=
-                            strlen(*lines.offset(i_2 as isize)) as bcount_t + 1 as bcount_t;
+                        inserted_bytes += strlen(*lines.add(i_2)) as bcount_t + 1 as bcount_t;
                         extra += 1;
                         i_2 = i_2.wrapping_add(1);
                     }

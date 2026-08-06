@@ -75,10 +75,10 @@ pub unsafe extern "C" fn nvim_buf_attach(
                 cb.on_reload = (*opts).on_reload;
                 (*opts).on_reload = LUA_NOREF as LuaRef;
             }
-            cb.utf_sizes = (*opts).utf_sizes as bool;
-            cb.preview = (*opts).preview as bool;
+            cb.utf_sizes = (*opts).utf_sizes;
+            cb.preview = (*opts).preview;
         }
-        return buf_updates_register(b, channel_id, cb, send_buffer as bool);
+        return buf_updates_register(b, channel_id, cb, send_buffer);
     }
 }
 

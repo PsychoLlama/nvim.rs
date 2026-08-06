@@ -172,7 +172,7 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                                             break '_cleanup;
                                         }
                                         let mut event_str: Object =
-                                            *event_array.items.offset(event_str_index as isize);
+                                            *event_array.items.add(event_str_index);
                                         let mut event_nr: event_T =
                                             event_name2nr_str(event_str.data.string);
                                         if !((event_nr as ::core::ffi::c_uint)
@@ -192,7 +192,7 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                                             let mut pat_index: size_t = 0 as size_t;
                                             while pat_index < patterns.size {
                                                 let mut pat: Object =
-                                                    *patterns.items.offset(pat_index as isize);
+                                                    *patterns.items.add(pat_index);
                                                 let save_current_sctx: sctx_T =
                                                     api_set_sctx(channel_id);
                                                 retval = autocmd_register(
@@ -201,8 +201,8 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                                                     pat.data.string.data,
                                                     pat.data.string.size as ::core::ffi::c_int,
                                                     au_group,
-                                                    (*opts).once as bool,
-                                                    (*opts).nested as bool,
+                                                    (*opts).once,
+                                                    (*opts).nested,
                                                     desc,
                                                     handler_cmd,
                                                     &raw mut handler_fn,
@@ -333,7 +333,7 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
             while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
                 let mut pat_object_index: size_t = 0 as size_t;
                 while pat_object_index < patterns.size {
-                    let mut pat_object: Object = *patterns.items.offset(pat_object_index as isize);
+                    let mut pat_object: Object = *patterns.items.add(pat_object_index);
                     let mut pat: *mut ::core::ffi::c_char = pat_object.data.string.data;
                     if !clear_autocmd(event, pat, au_group, err) {
                         return;
@@ -345,7 +345,7 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
         } else {
             let mut event_str_index: size_t = 0 as size_t;
             while event_str_index < event_array.size {
-                let mut event_str: Object = *event_array.items.offset(event_str_index as isize);
+                let mut event_str: Object = *event_array.items.add(event_str_index);
                 let mut event_nr: event_T = event_name2nr_str(event_str.data.string);
                 if !((event_nr as ::core::ffi::c_uint)
                     < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
@@ -361,8 +361,7 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
                 }
                 let mut pat_object_index_0: size_t = 0 as size_t;
                 while pat_object_index_0 < patterns.size {
-                    let mut pat_object_0: Object =
-                        *patterns.items.offset(pat_object_index_0 as isize);
+                    let mut pat_object_0: Object = *patterns.items.add(pat_object_index_0);
                     let mut pat_0: *mut ::core::ffi::c_char = pat_object_0.data.string.data;
                     if !clear_autocmd(event_nr, pat_0, au_group, err) {
                         return;

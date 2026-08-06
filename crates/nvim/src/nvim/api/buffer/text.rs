@@ -150,7 +150,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 .string;
         let mut last_item: String_0 = (*replacement
             .items
-            .offset(replacement.size.wrapping_sub(1 as size_t) as isize))
+            .add(replacement.size.wrapping_sub(1 as size_t)))
         .data
         .string;
         let mut firstlen: size_t = (start_col as size_t).wrapping_add(first_item.size);
@@ -178,9 +178,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
         );
         if replacement.size == 1 as size_t {
             memcpy(
-                first
-                    .offset(start_col as isize)
-                    .offset(first_item.size as isize) as *mut ::core::ffi::c_void,
+                first.offset(start_col as isize).add(first_item.size) as *mut ::core::ffi::c_void,
                 str_at_end.offset(end_col as isize) as *const ::core::ffi::c_void,
                 last_part_len,
             );
@@ -198,7 +196,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 last_item.size,
             );
             memcpy(
-                last.offset(last_item.size as isize) as *mut ::core::ffi::c_void,
+                last.add(last_item.size) as *mut ::core::ffi::c_void,
                 str_at_end.offset(end_col as isize) as *const ::core::ffi::c_void,
                 last_part_len,
             );
@@ -212,10 +210,10 @@ pub unsafe extern "C" fn nvim_buf_set_text(
         new_byte += first_item.size as bcount_t;
         let mut i_0: size_t = 1 as size_t;
         while i_0 < new_len.wrapping_sub(1 as size_t) {
-            let l: String_0 = (*replacement.items.offset(i_0 as isize)).data.string;
-            *lines.offset(i_0 as isize) = arena_memdupz(arena, l.data, l.size);
+            let l: String_0 = (*replacement.items.add(i_0)).data.string;
+            *lines.add(i_0) = arena_memdupz(arena, l.data, l.size);
             memchrsub(
-                *lines.offset(i_0 as isize) as *mut ::core::ffi::c_void,
+                *lines.add(i_0) as *mut ::core::ffi::c_void,
                 NUL as ::core::ffi::c_char,
                 NL as ::core::ffi::c_char,
                 l.size,
@@ -224,7 +222,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
             i_0 = i_0.wrapping_add(1);
         }
         if replacement.size > 1 as size_t {
-            *lines.offset(replacement.size.wrapping_sub(1 as size_t) as isize) = last;
+            *lines.add(replacement.size.wrapping_sub(1 as size_t)) = last;
             new_byte += last_item.size as bcount_t + 1 as bcount_t;
         }
         let mut tstate: TryState = TryState {
@@ -287,13 +285,8 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                             c"Index out of bounds".as_ptr(),
                         );
                         break 's_652;
-                    } else if ml_replace_buf(
-                        b,
-                        lnum_0 as linenr_T,
-                        *lines.offset(i_2 as isize),
-                        false,
-                        true,
-                    ) == 0 as ::core::ffi::c_int
+                    } else if ml_replace_buf(b, lnum_0 as linenr_T, *lines.add(i_2), false, true)
+                        == 0 as ::core::ffi::c_int
                     {
                         api_set_error(err, kErrorTypeException, c"Failed to replace line".as_ptr());
                         break 's_652;
@@ -315,7 +308,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                     } else if ml_append_buf(
                         b,
                         lnum_1 as linenr_T,
-                        *lines.offset(i_3 as isize),
+                        *lines.add(i_3),
                         0 as colnr_T,
                         false,
                     ) == 0 as ::core::ffi::c_int

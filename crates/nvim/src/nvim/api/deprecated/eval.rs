@@ -71,17 +71,17 @@ pub unsafe extern "C" fn nvim_call_atomic(
         '_theend: {
             while i < calls.size {
                 if kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                    != (*calls.items.offset(i as isize)).type_0 as ::core::ffi::c_uint
+                    != (*calls.items.add(i)).type_0 as ::core::ffi::c_uint
                 {
                     api_err_exp(
                         err,
                         c"'calls' item".as_ptr(),
                         api_typename(kObjectTypeArray),
-                        api_typename((*calls.items.offset(i as isize)).type_0),
+                        api_typename((*calls.items.add(i)).type_0),
                     );
                     break '_theend;
                 }
-                let mut call: Array = (*calls.items.offset(i as isize)).data.array;
+                let mut call: Array = (*calls.items.add(i)).data.array;
                 if !(call.size == 2 as size_t) {
                     api_err_exp(
                         err,

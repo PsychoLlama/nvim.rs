@@ -193,7 +193,7 @@ pub unsafe extern "C" fn nvim__ns_set(
             };
             let mut i: size_t = 0 as size_t;
             while i < (*opts).wins.size {
-                let mut win: Integer = (*(*opts).wins.items.offset(i as isize)).data.integer;
+                let mut win: Integer = (*(*opts).wins.items.add(i)).data.integer;
                 let mut wp: *mut win_T = find_window_by_handle(win as Window, err);
                 if wp.is_null() {
                     return;
