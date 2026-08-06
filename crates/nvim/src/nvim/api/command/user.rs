@@ -9,8 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::api::private::helpers::has_key;
 
 pub unsafe extern "C" fn nvim_create_user_command(
     mut channel_id: uint64_t,
@@ -139,12 +140,8 @@ pub unsafe extern "C" fn create_user_command(
                     0 as int64_t,
                     true_0 != 0,
                 );
-            } else if !(!((*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << 8 as ::core::ffi::c_int
-                != 0 as ::core::ffi::c_ulonglong)
-                || !((*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << 5 as ::core::ffi::c_int
-                    != 0 as ::core::ffi::c_ulonglong))
+            } else if !(!(has_key((*opts).is_set__user_command_, 8 as ::core::ffi::c_int))
+                || !(has_key((*opts).is_set__user_command_, 5 as ::core::ffi::c_int)))
             {
                 api_set_error(
                     err,
@@ -222,10 +219,10 @@ pub unsafe extern "C" fn create_user_command(
                             }
                         }
                     }
-                } else if (*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_user_command__nargs
-                    != 0 as ::core::ffi::c_ulonglong
-                {
+                } else if has_key(
+                    (*opts).is_set__user_command_,
+                    KEYSET_OPTIDX_user_command__nargs,
+                ) {
                     if true {
                         api_err_invalid(
                             err,
@@ -237,9 +234,7 @@ pub unsafe extern "C" fn create_user_command(
                         break '_err;
                     }
                 }
-                if !(!((*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << 10 as ::core::ffi::c_int
-                    != 0 as ::core::ffi::c_ulonglong)
+                if !(!(has_key((*opts).is_set__user_command_, 10 as ::core::ffi::c_int))
                     || argt != 0)
                 {
                     api_set_error(
@@ -288,10 +283,10 @@ pub unsafe extern "C" fn create_user_command(
                         argt = (argt as ::core::ffi::c_uint | (EX_RANGE | EX_ZEROR)) as uint32_t;
                         def = (*opts).range.data.integer as int64_t;
                         addr_type_arg = ADDR_LINES;
-                    } else if (*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_user_command__range
-                        != 0 as ::core::ffi::c_ulonglong
-                    {
+                    } else if has_key(
+                        (*opts).is_set__user_command_,
+                        KEYSET_OPTIDX_user_command__range,
+                    ) {
                         if true {
                             api_err_invalid(
                                 err,
@@ -319,10 +314,10 @@ pub unsafe extern "C" fn create_user_command(
                             as uint32_t;
                         addr_type_arg = ADDR_OTHER;
                         def = (*opts).count.data.integer as int64_t;
-                    } else if (*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_user_command__count
-                        != 0 as ::core::ffi::c_ulonglong
-                    {
+                    } else if has_key(
+                        (*opts).is_set__user_command_,
+                        KEYSET_OPTIDX_user_command__count,
+                    ) {
                         if true {
                             api_err_invalid(
                                 err,
@@ -334,10 +329,10 @@ pub unsafe extern "C" fn create_user_command(
                             break '_err;
                         }
                     }
-                    if (*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_user_command__addr
-                        != 0 as ::core::ffi::c_ulonglong
-                    {
+                    if has_key(
+                        (*opts).is_set__user_command_,
+                        KEYSET_OPTIDX_user_command__addr,
+                    ) {
                         if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
                             != (*opts).addr.type_0 as ::core::ffi::c_uint
                         {
@@ -384,10 +379,10 @@ pub unsafe extern "C" fn create_user_command(
                     if (*opts).keepscript {
                         argt = (argt as ::core::ffi::c_uint | EX_KEEPSCRIPT) as uint32_t;
                     }
-                    force = if (*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_user_command__force
-                        != 0 as ::core::ffi::c_ulonglong
-                    {
+                    force = if has_key(
+                        (*opts).is_set__user_command_,
+                        KEYSET_OPTIDX_user_command__force,
+                    ) {
                         (*opts).force as ::core::ffi::c_int
                     } else {
                         true_0
@@ -420,11 +415,10 @@ pub unsafe extern "C" fn create_user_command(
                                 );
                                 break '_err;
                             }
-                        } else if (*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
-                            & (1 as ::core::ffi::c_ulonglong)
-                                << KEYSET_OPTIDX_user_command__complete
-                            != 0 as ::core::ffi::c_ulonglong
-                        {
+                        } else if has_key(
+                            (*opts).is_set__user_command_,
+                            KEYSET_OPTIDX_user_command__complete,
+                        ) {
                             if true {
                                 api_err_exp(
                                     err,
@@ -435,10 +429,10 @@ pub unsafe extern "C" fn create_user_command(
                                 break '_err;
                             }
                         }
-                        if (*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
-                            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_user_command__preview
-                            != 0 as ::core::ffi::c_ulonglong
-                        {
+                        if has_key(
+                            (*opts).is_set__user_command_,
+                            KEYSET_OPTIDX_user_command__preview,
+                        ) {
                             if kObjectTypeLuaRef as ::core::ffi::c_int as ::core::ffi::c_uint
                                 != (*opts).preview.type_0 as ::core::ffi::c_uint
                             {

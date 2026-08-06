@@ -2,7 +2,7 @@
 
 use crate::src::nvim::api::private::helpers::{
     api_set_error, api_typename, arena_array, arena_dict, copy_string, cstr_as_string,
-    find_buffer_by_handle, find_window_by_handle, object_to_hl_id, string_to_cstr,
+    find_buffer_by_handle, find_window_by_handle, has_key, object_to_hl_id, string_to_cstr,
 };
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::src::nvim::charset::{transstr, vim_isprintc};
@@ -188,13 +188,3 @@ pub const KEYDICT_INIT: KeyDict_ns_opts = KeyDict_ns_opts {
 };
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-
-/// `HAS_KEY(d, kind, key)`: is the keyset's "was this key given?" bit set?
-///
-/// The keysets carry one `is_set__<kind>_` mask whose bits are indexed by
-/// the generated `KEYSET_OPTIDX_<kind>__<key>` constants. c2rust expanded
-/// the macro at every use, which is three lines of shifting and casting per
-/// question asked.
-const fn has_key(set: OptionalKeys, idx: ::core::ffi::c_int) -> bool {
-    set & (1 as OptionalKeys) << idx != 0
-}

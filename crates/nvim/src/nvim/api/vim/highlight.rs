@@ -10,7 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::api::private::helpers::dict_put_str;
+use crate::src::nvim::api::private::helpers::{dict_put_str, has_key};
 
 pub unsafe extern "C" fn nvim_get_hl_id_by_name(mut name: String_0) -> Integer {
     unsafe {
@@ -49,16 +49,11 @@ pub unsafe extern "C" fn nvim_set_hl(
             return;
         }
         let mut link_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-        if (*val).is_set__highlight_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__url
-            != 0 as ::core::ffi::c_ulonglong
-        {
+        if has_key((*val).is_set__highlight_, KEYSET_OPTIDX_highlight__url) {
             api_set_error(err, kErrorTypeValidation, c"Invalid key: 'url'".as_ptr());
             return;
         }
-        let mut update: bool = (*val).is_set__highlight_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__update
-            != 0 as ::core::ffi::c_ulonglong
+        let mut update: bool = has_key((*val).is_set__highlight_, KEYSET_OPTIDX_highlight__update)
             && (*val).update as ::core::ffi::c_int != 0;
         let mut base: Option<&HlAttrs> = None;
         let mut base_attrs: HlAttrs = HlAttrs {
@@ -92,10 +87,7 @@ pub unsafe extern "C" fn nvim_get_hl_ns(
     mut err: *mut Error,
 ) -> Integer {
     unsafe {
-        if (*opts).is_set__get_ns_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_get_ns__winid
-            != 0 as ::core::ffi::c_ulonglong
-        {
+        if has_key((*opts).is_set__get_ns_, KEYSET_OPTIDX_get_ns__winid) {
             let mut win: *mut win_T = find_window_by_handle((*opts).winid, err);
             if win.is_null() {
                 return 0 as Integer;

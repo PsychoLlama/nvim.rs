@@ -9,7 +9,7 @@
 
 use super::*;
 #[allow(unused_imports)]
-use crate::src::nvim::api::private::helpers::array_add;
+use crate::src::nvim::api::private::helpers::{array_add, set_key};
 
 unsafe extern "C" fn config_put_bordertext(
     mut config: *mut KeyDict_win_config,
@@ -113,42 +113,31 @@ pub unsafe extern "C" fn nvim_win_get_config(
             return rv;
         }
         let mut config: *mut WinConfig = &raw mut (*wp).w_config;
-        rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-            | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__focusable)
-            as OptionalKeys;
+        rv.is_set__win_config_ =
+            set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__focusable);
         rv.focusable = (*config).focusable as Boolean;
-        rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-            | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__external)
-            as OptionalKeys;
+        rv.is_set__win_config_ =
+            set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__external);
         rv.external = (*config).external as Boolean;
-        rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-            | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__hide)
-            as OptionalKeys;
+        rv.is_set__win_config_ = set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__hide);
         rv.hide = (*config).hide as Boolean;
-        rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-            | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__mouse)
-            as OptionalKeys;
+        rv.is_set__win_config_ = set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__mouse);
         rv.mouse = (*config).mouse as Boolean;
-        rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-            | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__style)
-            as OptionalKeys;
+        rv.is_set__win_config_ = set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__style);
         rv.style = cstr_as_string((*win_style_str.ptr())[(*config).style as usize]);
         if (*wp).w_floating {
-            rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-                | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__width)
-                as OptionalKeys;
+            rv.is_set__win_config_ =
+                set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__width);
             rv.width = (*config).width as Integer;
-            rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-                | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__height)
-                as OptionalKeys;
+            rv.is_set__win_config_ =
+                set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__height);
             rv.height = (*config).height as Integer;
             if !(*config).external {
                 if (*config).relative as ::core::ffi::c_uint
                     == kFloatRelativeWindow as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-                        | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__win)
-                        as OptionalKeys;
+                    rv.is_set__win_config_ =
+                        set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__win);
                     rv.win = (*config).window;
                     if (*config).bufpos.lnum >= 0 as linenr_T {
                         let mut pos: Array = arena_array(arena, 2 as size_t);
@@ -161,24 +150,20 @@ pub unsafe extern "C" fn nvim_win_get_config(
                         rv.bufpos = pos;
                     }
                 }
-                rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-                    | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__anchor)
-                    as OptionalKeys;
+                rv.is_set__win_config_ =
+                    set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__anchor);
                 rv.anchor = cstr_as_string(
                     *(&raw const float_anchor_str as *const *const ::core::ffi::c_char)
                         .offset((*config).anchor as isize),
                 );
-                rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-                    | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__row)
-                    as OptionalKeys;
+                rv.is_set__win_config_ =
+                    set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__row);
                 rv.row = (*config).row as Float;
-                rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-                    | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__col)
-                    as OptionalKeys;
+                rv.is_set__win_config_ =
+                    set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__col);
                 rv.col = (*config).col as Float;
-                rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-                    | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__zindex)
-                    as OptionalKeys;
+                rv.is_set__win_config_ =
+                    set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__zindex);
                 rv.zindex = (*config).zindex as Integer;
             }
             if (*config).border {
@@ -203,9 +188,8 @@ pub unsafe extern "C" fn nvim_win_get_config(
                     }
                     i = i.wrapping_add(1);
                 }
-                rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-                    | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__border)
-                    as OptionalKeys;
+                rv.is_set__win_config_ =
+                    set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__border);
                 rv.border = object {
                     type_0: kObjectTypeArray,
                     data: C2Rust_Unnamed { array: border },
@@ -217,9 +201,8 @@ pub unsafe extern "C" fn nvim_win_get_config(
                     config_put_bordertext(&raw mut rv, config, kBorderTextFooter, arena);
                 }
             } else {
-                rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-                    | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__border)
-                    as OptionalKeys;
+                rv.is_set__win_config_ =
+                    set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__border);
                 rv.border = object {
                     type_0: kObjectTypeString,
                     data: C2Rust_Unnamed {
@@ -228,18 +211,15 @@ pub unsafe extern "C" fn nvim_win_get_config(
                 };
             }
         } else if !(*config).external {
-            rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-                | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__width)
-                as OptionalKeys;
+            rv.is_set__win_config_ =
+                set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__width);
             rv.width = (*wp).w_width as Integer;
-            rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-                | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__height)
-                as OptionalKeys;
+            rv.is_set__win_config_ =
+                set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__height);
             rv.height = (*wp).w_height as Integer;
             let mut split: WinSplit = win_split_dir(wp);
-            rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-                | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__split)
-                as OptionalKeys;
+            rv.is_set__win_config_ =
+                set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__split);
             rv.split = cstr_as_string((*win_split_str.ptr())[split as usize]);
         }
         let mut rel: *const ::core::ffi::c_char =
@@ -248,14 +228,14 @@ pub unsafe extern "C" fn nvim_win_get_config(
             } else {
                 c"".as_ptr()
             };
-        rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-            | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__relative)
-            as OptionalKeys;
+        rv.is_set__win_config_ =
+            set_key(rv.is_set__win_config_, KEYSET_OPTIDX_win_config__relative);
         rv.relative = cstr_as_string(rel);
         if (*config)._cmdline_offset < INT_MAX {
-            rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-                | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config___cmdline_offset)
-                as OptionalKeys;
+            rv.is_set__win_config_ = set_key(
+                rv.is_set__win_config_,
+                KEYSET_OPTIDX_win_config___cmdline_offset,
+            );
             rv._cmdline_offset = (*config)._cmdline_offset as Integer;
         }
         return rv;

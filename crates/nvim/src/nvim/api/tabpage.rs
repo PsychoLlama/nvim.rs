@@ -1,6 +1,7 @@
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_set_error, arena_array, array_add, dict_get_value, dict_set_var,
-    find_buffer_by_handle, find_tab_by_handle, find_window_by_handle, try_enter, try_leave,
+    find_buffer_by_handle, find_tab_by_handle, find_window_by_handle, has_key, try_enter,
+    try_leave,
 };
 use crate::src::nvim::api::vim::nvim_get_current_win;
 
@@ -224,10 +225,10 @@ pub unsafe extern "C" fn nvim_open_tabpage(
         return 0 as Tabpage;
     }
     let mut after: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    if (*config).is_set__tabpage_config_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_tabpage_config__after
-        != 0 as ::core::ffi::c_ulonglong
-    {
+    if has_key(
+        (*config).is_set__tabpage_config_,
+        KEYSET_OPTIDX_tabpage_config__after,
+    ) {
         after = (*config).after as ::core::ffi::c_int;
     }
     let mut tp: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();

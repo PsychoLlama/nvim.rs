@@ -25,6 +25,24 @@ use crate::src::nvim::types::{
 };
 use core::ffi::{c_char, c_int, c_void};
 
+/// Whether the caller supplied the optional key at `idx`.
+///
+/// The keysets carry one `is_set__<kind>_` mask whose bits are indexed by the
+/// generated `KEYSET_OPTIDX_<kind>__<key>` constants. c2rust expanded the
+/// macro at every use, which is three lines of shifting and casting per
+/// question asked.
+pub(crate) const fn has_key(set: OptionalKeys, idx: c_int) -> bool {
+    set & (1 as OptionalKeys) << idx != 0
+}
+
+/// Record that the optional key at `idx` was supplied.
+///
+/// `PUT_KEY`'s half of the same mask, expanded at every use for the same
+/// reason.
+pub(crate) const fn set_key(set: OptionalKeys, idx: c_int) -> OptionalKeys {
+    set | (1 as OptionalKeys) << idx
+}
+
 /// [`api_luarefs_free_object`] over a keydict, walking `table` to find which
 /// of its fields can hold a reference.
 pub(crate) unsafe fn api_luarefs_free_keydict(dict: *mut c_void, table: *mut KeySetLink) {

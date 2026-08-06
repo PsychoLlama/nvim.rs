@@ -12,7 +12,7 @@
 
 use super::*;
 #[allow(unused_imports)]
-use crate::src::nvim::api::private::helpers::{array_add, dict_put_str};
+use crate::src::nvim::api::private::helpers::{array_add, dict_put_str, has_key, set_key};
 
 #[inline]
 unsafe extern "C" fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
@@ -321,9 +321,7 @@ pub unsafe extern "C" fn nvim__ns_get(
     unsafe {
         let mut opts: KeyDict_ns_opts = KEYDICT_INIT;
         let mut windows: Array = ARRAY_DICT_INIT;
-        opts.is_set__ns_opts_ = (opts.is_set__ns_opts_ as ::core::ffi::c_ulonglong
-            | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_ns_opts__wins)
-            as OptionalKeys;
+        opts.is_set__ns_opts_ = set_key(opts.is_set__ns_opts_, KEYSET_OPTIDX_ns_opts__wins);
         opts.wins = windows;
         if !ns_initialized(ns_id as uint32_t) {
             api_err_invalid(
@@ -382,9 +380,7 @@ pub unsafe extern "C" fn nvim__ns_get(
             }
             tp_0 = (*tp_0).tp_next as *mut tabpage_T;
         }
-        opts.is_set__ns_opts_ = (opts.is_set__ns_opts_ as ::core::ffi::c_ulonglong
-            | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_ns_opts__wins)
-            as OptionalKeys;
+        opts.is_set__ns_opts_ = set_key(opts.is_set__ns_opts_, KEYSET_OPTIDX_ns_opts__wins);
         opts.wins = windows;
         return opts;
     }

@@ -1,7 +1,7 @@
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_set_error, arena_array, arena_dict, array_add, dict_get_value, dict_put,
-    dict_set_var, find_buffer_by_handle, find_window_by_handle, normalize_index, try_enter,
-    try_leave,
+    dict_set_var, find_buffer_by_handle, find_window_by_handle, has_key, normalize_index,
+    try_enter, try_leave,
 };
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::src::nvim::autocmd::is_aucmd_win;
@@ -468,10 +468,10 @@ pub unsafe extern "C" fn nvim_win_text_height(
     let mut start_vcol: int64_t = -1 as int64_t;
     let mut end_vcol: int64_t = -1 as int64_t;
     let mut oob: bool = false_0 != 0;
-    if (*opts).is_set__win_text_height_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_text_height__start_row
-        != 0 as ::core::ffi::c_ulonglong
-    {
+    if has_key(
+        (*opts).is_set__win_text_height_,
+        KEYSET_OPTIDX_win_text_height__start_row,
+    ) {
         start_lnum = normalize_index(
             buf,
             (*opts).start_row as int64_t,
@@ -479,10 +479,10 @@ pub unsafe extern "C" fn nvim_win_text_height(
             &raw mut oob,
         ) as linenr_T;
     }
-    if (*opts).is_set__win_text_height_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_text_height__end_row
-        != 0 as ::core::ffi::c_ulonglong
-    {
+    if has_key(
+        (*opts).is_set__win_text_height_,
+        KEYSET_OPTIDX_win_text_height__end_row,
+    ) {
         end_lnum = normalize_index(buf, (*opts).end_row as int64_t, false_0 != 0, &raw mut oob)
             as linenr_T;
     }
@@ -504,14 +504,11 @@ pub unsafe extern "C" fn nvim_win_text_height(
         );
         return rv;
     }
-    if (*opts).is_set__win_text_height_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_text_height__start_vcol
-        != 0 as ::core::ffi::c_ulonglong
-    {
-        if !((*opts).is_set__win_text_height_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << 3 as ::core::ffi::c_int
-            != 0 as ::core::ffi::c_ulonglong)
-        {
+    if has_key(
+        (*opts).is_set__win_text_height_,
+        KEYSET_OPTIDX_win_text_height__start_vcol,
+    ) {
+        if !(has_key((*opts).is_set__win_text_height_, 3 as ::core::ffi::c_int)) {
             api_set_error(
                 err,
                 kErrorTypeValidation,
@@ -532,14 +529,11 @@ pub unsafe extern "C" fn nvim_win_text_height(
             return rv;
         }
     }
-    if (*opts).is_set__win_text_height_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_text_height__end_vcol
-        != 0 as ::core::ffi::c_ulonglong
-    {
-        if !((*opts).is_set__win_text_height_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << 1 as ::core::ffi::c_int
-            != 0 as ::core::ffi::c_ulonglong)
-        {
+    if has_key(
+        (*opts).is_set__win_text_height_,
+        KEYSET_OPTIDX_win_text_height__end_vcol,
+    ) {
+        if !(has_key((*opts).is_set__win_text_height_, 1 as ::core::ffi::c_int)) {
             api_set_error(
                 err,
                 kErrorTypeValidation,
@@ -561,10 +555,10 @@ pub unsafe extern "C" fn nvim_win_text_height(
         }
     }
     let mut max: int64_t = INT64_MAX as int64_t;
-    if (*opts).is_set__win_text_height_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_text_height__max_height
-        != 0 as ::core::ffi::c_ulonglong
-    {
+    if has_key(
+        (*opts).is_set__win_text_height_,
+        KEYSET_OPTIDX_win_text_height__max_height,
+    ) {
         if !((*opts).max_height > 0 as Integer) {
             api_err_invalid(
                 err,
@@ -598,10 +592,10 @@ pub unsafe extern "C" fn nvim_win_text_height(
         &raw mut fill,
         max,
     );
-    if !((*opts).is_set__win_text_height_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_text_height__end_row
-        != 0 as ::core::ffi::c_ulonglong)
-    {
+    if !(has_key(
+        (*opts).is_set__win_text_height_,
+        KEYSET_OPTIDX_win_text_height__end_row,
+    )) {
         let end_fill: int64_t = win_get_fill(w, line_count + 1 as linenr_T) as int64_t;
         fill += end_fill;
         all += end_fill;

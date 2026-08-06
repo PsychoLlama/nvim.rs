@@ -10,7 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::api::private::helpers::array_add;
+use crate::src::nvim::api::private::helpers::{array_add, has_key};
 
 pub unsafe extern "C" fn nvim_open_term(
     mut buf: Buffer,
@@ -46,10 +46,10 @@ pub unsafe extern "C" fn nvim_open_term(
             may_read_buffer = false_0 != 0;
         }
         let mut cb: LuaRef = LUA_NOREF;
-        if (*opts).is_set__open_term_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_open_term__on_input
-            != 0 as ::core::ffi::c_ulonglong
-        {
+        if has_key(
+            (*opts).is_set__open_term_,
+            KEYSET_OPTIDX_open_term__on_input,
+        ) {
             cb = (*opts).on_input;
             (*opts).on_input = LUA_NOREF as LuaRef;
         }
@@ -83,10 +83,10 @@ pub unsafe extern "C" fn nvim_open_term(
             ),
             resume_cb: Some(term_resume as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()),
             close_cb: Some(term_close as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()),
-            force_crlf: if (*opts).is_set__open_term_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_open_term__force_crlf
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            force_crlf: if has_key(
+                (*opts).is_set__open_term_,
+                KEYSET_OPTIDX_open_term__force_crlf,
+            ) {
                 (*opts).force_crlf as ::core::ffi::c_int
             } else {
                 true_0

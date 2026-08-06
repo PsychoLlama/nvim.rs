@@ -1,6 +1,6 @@
 use crate::src::nvim::api::private::helpers::{
     api_set_error, api_set_sctx, api_typename, find_buffer_by_handle, find_window_by_handle,
-    try_enter, try_leave,
+    has_key, try_enter, try_leave,
 };
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::src::nvim::autocmd::{
@@ -56,10 +56,7 @@ unsafe extern "C" fn validate_option_value_args(
     mut filetype: *mut *mut ::core::ffi::c_char,
     mut err: *mut Error,
 ) -> ::core::ffi::c_int {
-    if (*opts).is_set__option_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_option__scope
-        != 0 as ::core::ffi::c_ulonglong
-    {
+    if has_key((*opts).is_set__option_, KEYSET_OPTIDX_option__scope) {
         if strcmp((*opts).scope.data, c"local".as_ptr()) == 0 {
             *opt_flags = OPT_LOCAL as ::core::ffi::c_int;
         } else if strcmp((*opts).scope.data, c"global".as_ptr()) == 0 {
@@ -75,30 +72,18 @@ unsafe extern "C" fn validate_option_value_args(
         }
     }
     *scope = kOptScopeGlobal;
-    if !filetype.is_null()
-        && (*opts).is_set__option_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_option__filetype
-            != 0 as ::core::ffi::c_ulonglong
-    {
+    if !filetype.is_null() && has_key((*opts).is_set__option_, KEYSET_OPTIDX_option__filetype) {
         *filetype = (*opts).filetype.data;
     }
-    if (*opts).is_set__option_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_option__win
-        != 0 as ::core::ffi::c_ulonglong
-    {
+    if has_key((*opts).is_set__option_, KEYSET_OPTIDX_option__win) {
         *scope = kOptScopeWin;
         *from = find_window_by_handle((*opts).win, err) as *mut ::core::ffi::c_void;
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             return FAIL;
         }
     }
-    if (*opts).is_set__option_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_option__buf
-        != 0 as ::core::ffi::c_ulonglong
-    {
-        if (*opts).is_set__option_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << 3 as ::core::ffi::c_int
-            != 0 as ::core::ffi::c_ulonglong
+    if has_key((*opts).is_set__option_, KEYSET_OPTIDX_option__buf) {
+        if has_key((*opts).is_set__option_, 3 as ::core::ffi::c_int)
             && *opt_flags == OPT_GLOBAL as ::core::ffi::c_int
         {
             api_set_error(
@@ -116,18 +101,10 @@ unsafe extern "C" fn validate_option_value_args(
             return FAIL;
         }
     }
-    if !(!((*opts).is_set__option_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << 4 as ::core::ffi::c_int
-        != 0 as ::core::ffi::c_ulonglong)
-        || !((*opts).is_set__option_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << 1 as ::core::ffi::c_int
-            != 0 as ::core::ffi::c_ulonglong
-            || (*opts).is_set__option_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << 3 as ::core::ffi::c_int
-                != 0 as ::core::ffi::c_ulonglong
-            || (*opts).is_set__option_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << 2 as ::core::ffi::c_int
-                != 0 as ::core::ffi::c_ulonglong))
+    if !(!(has_key((*opts).is_set__option_, 4 as ::core::ffi::c_int))
+        || !(has_key((*opts).is_set__option_, 1 as ::core::ffi::c_int)
+            || has_key((*opts).is_set__option_, 3 as ::core::ffi::c_int)
+            || has_key((*opts).is_set__option_, 2 as ::core::ffi::c_int)))
     {
         api_set_error(
             err,
@@ -137,12 +114,8 @@ unsafe extern "C" fn validate_option_value_args(
         );
         return 0 as ::core::ffi::c_int;
     }
-    if !(!((*opts).is_set__option_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << 2 as ::core::ffi::c_int
-        != 0 as ::core::ffi::c_ulonglong)
-        || !((*opts).is_set__option_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << 1 as ::core::ffi::c_int
-            != 0 as ::core::ffi::c_ulonglong))
+    if !(!(has_key((*opts).is_set__option_, 2 as ::core::ffi::c_int))
+        || !(has_key((*opts).is_set__option_, 1 as ::core::ffi::c_int)))
     {
         api_set_error(
             err,

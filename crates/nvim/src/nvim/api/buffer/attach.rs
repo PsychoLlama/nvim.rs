@@ -10,7 +10,7 @@
 
 use super::*;
 #[allow(unused_imports)]
-use crate::src::nvim::api::private::helpers::dict_put;
+use crate::src::nvim::api::private::helpers::{dict_put, has_key};
 
 pub unsafe extern "C" fn api_buf_ensure_loaded(mut buf: Buffer, mut err: *mut Error) -> *mut buf_T {
     unsafe {
@@ -40,38 +40,38 @@ pub unsafe extern "C" fn nvim_buf_attach(
         }
         let mut cb: BufUpdateCallbacks = BUF_UPDATE_CALLBACKS_INIT;
         if channel_id == LUA_INTERNAL_CALL {
-            if (*opts).is_set__buf_attach_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_buf_attach__on_lines
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            if has_key(
+                (*opts).is_set__buf_attach_,
+                KEYSET_OPTIDX_buf_attach__on_lines,
+            ) {
                 cb.on_lines = (*opts).on_lines;
                 (*opts).on_lines = LUA_NOREF as LuaRef;
             }
-            if (*opts).is_set__buf_attach_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_buf_attach__on_bytes
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            if has_key(
+                (*opts).is_set__buf_attach_,
+                KEYSET_OPTIDX_buf_attach__on_bytes,
+            ) {
                 cb.on_bytes = (*opts).on_bytes;
                 (*opts).on_bytes = LUA_NOREF as LuaRef;
             }
-            if (*opts).is_set__buf_attach_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_buf_attach__on_changedtick
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            if has_key(
+                (*opts).is_set__buf_attach_,
+                KEYSET_OPTIDX_buf_attach__on_changedtick,
+            ) {
                 cb.on_changedtick = (*opts).on_changedtick;
                 (*opts).on_changedtick = LUA_NOREF as LuaRef;
             }
-            if (*opts).is_set__buf_attach_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_buf_attach__on_detach
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            if has_key(
+                (*opts).is_set__buf_attach_,
+                KEYSET_OPTIDX_buf_attach__on_detach,
+            ) {
                 cb.on_detach = (*opts).on_detach;
                 (*opts).on_detach = LUA_NOREF as LuaRef;
             }
-            if (*opts).is_set__buf_attach_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_buf_attach__on_reload
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            if has_key(
+                (*opts).is_set__buf_attach_,
+                KEYSET_OPTIDX_buf_attach__on_reload,
+            ) {
                 cb.on_reload = (*opts).on_reload;
                 (*opts).on_reload = LUA_NOREF as LuaRef;
             }

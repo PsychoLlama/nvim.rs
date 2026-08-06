@@ -10,7 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::api::private::helpers::array_add;
+use crate::src::nvim::api::private::helpers::{array_add, has_key};
 
 pub unsafe extern "C" fn nvim_cmd(
     mut channel_id: uint64_t,
@@ -830,14 +830,4 @@ pub unsafe extern "C" fn nvim_cmd(
         xfree(ea.arglens as *mut ::core::ffi::c_void);
         return retv;
     }
-}
-
-/// `HAS_KEY(d, kind, key)`: is the keyset's "was this key given?" bit set?
-///
-/// The keysets carry one `is_set__<kind>_` mask whose bits are indexed by
-/// the generated `KEYSET_OPTIDX_<kind>__<key>` constants. c2rust expanded
-/// the macro at every use, which is three lines of shifting and casting per
-/// question asked.
-const fn has_key(set: OptionalKeys, idx: ::core::ffi::c_int) -> bool {
-    set & (1 as OptionalKeys) << idx != 0
 }

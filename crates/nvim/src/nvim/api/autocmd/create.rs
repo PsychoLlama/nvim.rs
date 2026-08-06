@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::api::private::helpers::has_key;
 
 pub unsafe extern "C" fn nvim_create_autocmd(
     mut channel_id: uint64_t,
@@ -46,19 +47,15 @@ pub unsafe extern "C" fn nvim_create_autocmd(
         );
         '_cleanup: {
             if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-                if !(!((*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong) << 9 as ::core::ffi::c_int
-                    != 0 as ::core::ffi::c_ulonglong)
-                    || !((*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << 7 as ::core::ffi::c_int
-                        != 0 as ::core::ffi::c_ulonglong))
+                if !(!(has_key((*opts).is_set__create_autocmd_, 9 as ::core::ffi::c_int))
+                    || !(has_key((*opts).is_set__create_autocmd_, 7 as ::core::ffi::c_int)))
                 {
                     api_err_conflict(err, c"callback".as_ptr(), c"command".as_ptr());
                 } else {
-                    if (*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_create_autocmd__callback
-                        != 0 as ::core::ffi::c_ulonglong
-                    {
+                    if has_key(
+                        (*opts).is_set__create_autocmd_,
+                        KEYSET_OPTIDX_create_autocmd__callback,
+                    ) {
                         let mut callback: *mut Object = &raw mut (*opts).callback;
                         match (*callback).type_0 as ::core::ffi::c_uint {
                             7 => {
@@ -102,10 +99,10 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                                 }
                             }
                         }
-                    } else if (*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_create_autocmd__command
-                        != 0 as ::core::ffi::c_ulonglong
-                    {
+                    } else if has_key(
+                        (*opts).is_set__create_autocmd_,
+                        KEYSET_OPTIDX_create_autocmd__command,
+                    ) {
                         handler_cmd = string_to_cstr((*opts).command);
                     } else if true {
                         api_err_required(err, c"'command' or 'callback'".as_ptr());
@@ -113,33 +110,29 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                     }
                     au_group = get_augroup_from_object((*opts).group, err);
                     if au_group != AUGROUP_ERROR as ::core::ffi::c_int {
-                        has_buf = (*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
-                            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_create_autocmd__buf
-                            != 0 as ::core::ffi::c_ulonglong
-                            || (*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
-                                & (1 as ::core::ffi::c_ulonglong)
-                                    << KEYSET_OPTIDX_create_autocmd__buffer
-                                != 0 as ::core::ffi::c_ulonglong;
-                        buf = if (*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
-                            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_create_autocmd__buf
-                            != 0 as ::core::ffi::c_ulonglong
-                        {
+                        has_buf = has_key(
+                            (*opts).is_set__create_autocmd_,
+                            KEYSET_OPTIDX_create_autocmd__buf,
+                        ) || has_key(
+                            (*opts).is_set__create_autocmd_,
+                            KEYSET_OPTIDX_create_autocmd__buffer,
+                        );
+                        buf = if has_key(
+                            (*opts).is_set__create_autocmd_,
+                            KEYSET_OPTIDX_create_autocmd__buf,
+                        ) {
                             (*opts).buf
                         } else {
                             (*opts).buffer
                         };
-                        if !(!((*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
-                            & (1 as ::core::ffi::c_ulonglong) << 1 as ::core::ffi::c_int
-                            != 0 as ::core::ffi::c_ulonglong)
-                            || !((*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
-                                & (1 as ::core::ffi::c_ulonglong) << 5 as ::core::ffi::c_int
-                                != 0 as ::core::ffi::c_ulonglong))
+                        if !(!(has_key((*opts).is_set__create_autocmd_, 1 as ::core::ffi::c_int))
+                            || !(has_key((*opts).is_set__create_autocmd_, 5 as ::core::ffi::c_int)))
                         {
                             api_err_conflict(err, c"buf".as_ptr(), c"buffer".as_ptr());
-                        } else if !(!((*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
-                            & (1 as ::core::ffi::c_ulonglong) << 8 as ::core::ffi::c_int
-                            != 0 as ::core::ffi::c_ulonglong)
-                            || !has_buf)
+                        } else if !(!(has_key(
+                            (*opts).is_set__create_autocmd_,
+                            8 as ::core::ffi::c_int,
+                        )) || !has_buf)
                         {
                             api_err_conflict(err, c"pattern".as_ptr(), c"buf".as_ptr());
                         } else {
@@ -154,11 +147,10 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                             if (*err).type_0 as ::core::ffi::c_int
                                 == kErrorTypeNone as ::core::ffi::c_int
                             {
-                                if (*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
-                                    & (1 as ::core::ffi::c_ulonglong)
-                                        << KEYSET_OPTIDX_create_autocmd__desc
-                                    != 0 as ::core::ffi::c_ulonglong
-                                {
+                                if has_key(
+                                    (*opts).is_set__create_autocmd_,
+                                    KEYSET_OPTIDX_create_autocmd__desc,
+                                ) {
                                     desc = (*opts).desc.data;
                                 }
                                 if !(event_array.size > 0 as size_t) {
@@ -280,12 +272,13 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
         if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             return;
         }
-        let mut has_buf: bool = (*opts).is_set__clear_autocmds_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_clear_autocmds__buf
-            != 0 as ::core::ffi::c_ulonglong
-            || (*opts).is_set__clear_autocmds_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_clear_autocmds__buffer
-                != 0 as ::core::ffi::c_ulonglong;
+        let mut has_buf: bool = has_key(
+            (*opts).is_set__clear_autocmds_,
+            KEYSET_OPTIDX_clear_autocmds__buf,
+        ) || has_key(
+            (*opts).is_set__clear_autocmds_,
+            KEYSET_OPTIDX_clear_autocmds__buffer,
+        );
         let mut buf: ::core::ffi::c_int = if (*opts).is_set__clear_autocmds_
             as ::core::ffi::c_ulonglong
             & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_clear_autocmds__buf
@@ -295,21 +288,13 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
         } else {
             (*opts).buffer as ::core::ffi::c_int
         };
-        if !(!((*opts).is_set__clear_autocmds_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << 1 as ::core::ffi::c_int
-            != 0 as ::core::ffi::c_ulonglong)
-            || !((*opts).is_set__clear_autocmds_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << 4 as ::core::ffi::c_int
-                != 0 as ::core::ffi::c_ulonglong))
+        if !(!(has_key((*opts).is_set__clear_autocmds_, 1 as ::core::ffi::c_int))
+            || !(has_key((*opts).is_set__clear_autocmds_, 4 as ::core::ffi::c_int)))
         {
             api_err_conflict(err, c"buf".as_ptr(), c"buffer".as_ptr());
             return;
         }
-        if !(!((*opts).is_set__clear_autocmds_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << 5 as ::core::ffi::c_int
-            != 0 as ::core::ffi::c_ulonglong)
-            || !has_buf)
-        {
+        if !(!(has_key((*opts).is_set__clear_autocmds_, 5 as ::core::ffi::c_int)) || !has_buf) {
             api_err_conflict(err, c"pattern".as_ptr(), c"buf".as_ptr());
             return;
         }

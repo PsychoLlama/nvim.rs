@@ -4,7 +4,7 @@ use crate::src::nvim::api::extmark::{parse_virt_text, virt_text_to_array};
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_array, api_free_object, api_set_error, api_typename, arena_array,
     cstr_as_string, cstr_to_string, cstrn_as_string, find_buffer_by_handle, find_window_by_handle,
-    object_to_hl_id, try_enter, try_leave,
+    has_key, object_to_hl_id, try_enter, try_leave,
 };
 use crate::src::nvim::api::private::validate::{
     api_err_conflict, api_err_exp, api_err_invalid, api_err_required,
@@ -185,13 +185,3 @@ pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
-
-/// `HAS_KEY(d, kind, key)`: is the keyset's "was this key given?" bit set?
-///
-/// The keysets carry one `is_set__<kind>_` mask whose bits are indexed by
-/// the generated `KEYSET_OPTIDX_<kind>__<key>` constants. c2rust expanded
-/// the macro at every use, which is three lines of shifting and casting per
-/// question asked.
-const fn has_key(set: OptionalKeys, idx: ::core::ffi::c_int) -> bool {
-    set & (1 as OptionalKeys) << idx != 0
-}

@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::src::nvim::api::private::helpers::has_key;
 
 unsafe extern "C" fn redraw_status(
     mut wp: *mut win_T,
@@ -53,19 +54,13 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
     unsafe {
         let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
         let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-        if (*opts).is_set__redraw_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_redraw__win
-            != 0 as ::core::ffi::c_ulonglong
-        {
+        if has_key((*opts).is_set__redraw_, KEYSET_OPTIDX_redraw__win) {
             win = find_window_by_handle((*opts).win, err);
             if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                 return;
             }
         }
-        if (*opts).is_set__redraw_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_redraw__buf
-            != 0 as ::core::ffi::c_ulonglong
-        {
+        if has_key((*opts).is_set__redraw_, KEYSET_OPTIDX_redraw__buf) {
             if !win.is_null() {
                 api_set_error(
                     err,
@@ -92,10 +87,7 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
             );
             return;
         }
-        if (*opts).is_set__redraw_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_redraw__valid
-            != 0 as ::core::ffi::c_ulonglong
-        {
+        if has_key((*opts).is_set__redraw_, KEYSET_OPTIDX_redraw__valid) {
             let mut type_0: ::core::ffi::c_int = if (*opts).valid as ::core::ffi::c_int != 0 {
                 UPD_VALID
             } else {
@@ -109,10 +101,7 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
                 redraw_all_later(type_0);
             }
         }
-        if (*opts).is_set__redraw_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_redraw__range
-            != 0 as ::core::ffi::c_ulonglong
-        {
+        if has_key((*opts).is_set__redraw_, KEYSET_OPTIDX_redraw__range) {
             if !((*opts).range.size == 2 as size_t
                 && (*(*opts).range.items.offset(0 as ::core::ffi::c_int as isize)).type_0
                     as ::core::ffi::c_uint
@@ -181,17 +170,10 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
                 redraw_buf_range_later(rbuf, 1 as linenr_T + begin as linenr_T, end as linenr_T);
             }
         }
-        if (*opts).is_set__redraw_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_redraw__valid
-            != 0 as ::core::ffi::c_ulonglong
-            || (*opts).is_set__redraw_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_redraw__range
-                != 0 as ::core::ffi::c_ulonglong
+        if has_key((*opts).is_set__redraw_, KEYSET_OPTIDX_redraw__valid)
+            || has_key((*opts).is_set__redraw_, KEYSET_OPTIDX_redraw__range)
         {
-            (*opts).flush = if (*opts).is_set__redraw_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_redraw__flush
-                != 0 as ::core::ffi::c_ulonglong
-            {
+            (*opts).flush = if has_key((*opts).is_set__redraw_, KEYSET_OPTIDX_redraw__flush) {
                 (*opts).flush as ::core::ffi::c_int
             } else {
                 true_0

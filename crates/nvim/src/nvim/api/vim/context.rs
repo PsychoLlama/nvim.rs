@@ -10,7 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::api::private::helpers::dict_put;
+use crate::src::nvim::api::private::helpers::{dict_put, has_key};
 
 pub unsafe extern "C" fn nvim_get_context(
     mut opts: *mut KeyDict_context,
@@ -23,10 +23,7 @@ pub unsafe extern "C" fn nvim_get_context(
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<Object>(),
         };
-        if (*opts).is_set__context_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_context__types
-            != 0 as ::core::ffi::c_ulonglong
-        {
+        if has_key((*opts).is_set__context_, KEYSET_OPTIDX_context__types) {
             types = (*opts).types;
         }
         let mut int_types: ::core::ffi::c_int = if types.size > 0 as size_t {

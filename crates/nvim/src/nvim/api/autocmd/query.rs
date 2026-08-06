@@ -9,9 +9,8 @@
 
 use super::*;
 #[allow(unused_imports)]
-use crate::src::nvim::api::private::helpers::{array_add, dict_put, dict_put_str};
+use crate::src::nvim::api::private::helpers::{array_add, dict_put, dict_put_str, has_key};
 use crate::src::nvim::kvec::InitVec;
-use crate::src::nvim::types::OptionalKeys;
 
 pub unsafe extern "C" fn nvim_get_autocmds(
     mut opts: *mut KeyDict_get_autocmds,
@@ -561,14 +560,4 @@ pub unsafe extern "C" fn nvim_get_autocmds(
         }
         return arena_take_arraybuilder(arena, &raw mut autocmd_list);
     }
-}
-
-/// `HAS_KEY(d, kind, key)`: is the keyset's "was this key given?" bit set?
-///
-/// The keysets carry one `is_set__<kind>_` mask whose bits are indexed by
-/// the generated `KEYSET_OPTIDX_<kind>__<key>` constants. c2rust expanded
-/// the macro at every use, which is three lines of shifting and casting per
-/// question asked.
-const fn has_key(set: OptionalKeys, idx: ::core::ffi::c_int) -> bool {
-    set & (1 as OptionalKeys) << idx != 0
 }

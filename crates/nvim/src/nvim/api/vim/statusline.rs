@@ -10,7 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::api::private::helpers::{array_add, dict_put};
+use crate::src::nvim::api::private::helpers::{array_add, dict_put, has_key};
 
 pub unsafe extern "C" fn nvim_eval_statusline(
     mut str: String_0,
@@ -41,10 +41,10 @@ pub unsafe extern "C" fn nvim_eval_statusline(
             }
         }
         let mut window: Window = (*opts).winid;
-        if (*opts).is_set__eval_statusline_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_eval_statusline__fillchar
-            != 0 as ::core::ffi::c_ulonglong
-        {
+        if has_key(
+            (*opts).is_set__eval_statusline_,
+            KEYSET_OPTIDX_eval_statusline__fillchar,
+        ) {
             if !(*(*opts).fillchar.data as ::core::ffi::c_int != 0 as ::core::ffi::c_int
                 && utfc_ptr2len((*opts).fillchar.data) as size_t == (*opts).fillchar.size)
             {
@@ -75,10 +75,10 @@ pub unsafe extern "C" fn nvim_eval_statusline(
             );
             return result;
         }
-        if (*opts).is_set__eval_statusline_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_eval_statusline__use_statuscol_lnum
-            != 0 as ::core::ffi::c_ulonglong
-        {
+        if has_key(
+            (*opts).is_set__eval_statusline_,
+            KEYSET_OPTIDX_eval_statusline__use_statuscol_lnum,
+        ) {
             statuscol_lnum = (*opts).use_statuscol_lnum as ::core::ffi::c_int;
             if !(statuscol_lnum > 0 as ::core::ffi::c_int
                 && statuscol_lnum as linenr_T <= (*(*wp).w_buffer).b_ml.ml_line_count)
@@ -220,10 +220,10 @@ pub unsafe extern "C" fn nvim_eval_statusline(
                 fillchar = fillchar_status(&raw mut group, wp);
             }
         }
-        if (*opts).is_set__eval_statusline_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_eval_statusline__maxwidth
-            != 0 as ::core::ffi::c_ulonglong
-        {
+        if has_key(
+            (*opts).is_set__eval_statusline_,
+            KEYSET_OPTIDX_eval_statusline__maxwidth,
+        ) {
             maxwidth = (*opts).maxwidth as ::core::ffi::c_int;
         } else {
             maxwidth = if statuscol_lnum != 0 {
@@ -377,10 +377,10 @@ pub unsafe extern "C" fn nvim__complete_set(
             );
             return rv;
         }
-        if (*opts).is_set__complete_set_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_complete_set__info
-            != 0 as ::core::ffi::c_ulonglong
-        {
+        if has_key(
+            (*opts).is_set__complete_set_,
+            KEYSET_OPTIDX_complete_set__info,
+        ) {
             let mut wp: *mut win_T = pum_set_info(index as ::core::ffi::c_int, (*opts).info.data);
             if !wp.is_null() {
                 dict_put(&mut rv, c"winid", Object::window((*wp).handle));
