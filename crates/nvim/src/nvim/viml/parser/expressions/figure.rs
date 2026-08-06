@@ -19,7 +19,8 @@ pub(super) unsafe fn figure_brace(p: &mut ExprParser) -> Flow {
         // Value: may be any of a lambda, a dictionary literal and a curly
         // braces name. Though if this is an assignment it may only be a curly
         // braces name.
-        let node = if pt_is_assignment(p.cur_pt) {
+        let in_assignment = pt_is_assignment(p.cur_pt);
+        let node = if in_assignment {
             let node = p.new_node(kExprNodeCurlyBracesIdentifier);
             (*node).data.fig.type_guesses.allow_lambda = false;
             (*node).data.fig.type_guesses.allow_dict = false;
@@ -38,8 +39,27 @@ pub(super) unsafe fn figure_brace(p: &mut ExprParser) -> Flow {
         }
         *p.top_node_p = node;
         p.ast_stack.push(&raw mut (*node).children);
-        p.pt_stack.push(kEPTLambdaArguments);
-        p.lambda_node = node;
+        if !in_assignment {
+            // Upstream pushes kEPTLambdaArguments and arms `lambda_node`
+            // unconditionally, but the assignment arm above has already decided
+            // the node is a curly braces name (`allow_lambda == false`) — a
+            // `:let` lvalue cannot be a lambda. Every consumer of
+            // kEPTLambdaArguments then assumes the figure node is still a
+            // *candidate* lambda, and on that path it is not: `,` trips
+            // `assert(allow_lambda)` (compiled out upstream, so a curly braces
+            // name silently became a Lambda) and `->` walks the AST stack for a
+            // Lambda/UnknownFigure that is not there, popping past the bottom —
+            // `kv_last` of an empty kvec. Both were reachable from a plain
+            // `nvim_parse_expression(.., 'l', ..)`; see O-B14-15.
+            //
+            // Not arming it is the identity on every input that parsed before:
+            // the kEPTLambdaArguments normalisation at the top of the loop
+            // drops the entry (and clears `lambda_node`) for every token except
+            // a bare identifier, `,` and `->` — and `,`/`->` are exactly the two
+            // that misbehaved.
+            p.pt_stack.push(kEPTLambdaArguments);
+            p.lambda_node = node;
+        }
     } else {
         // Operator: this may only be a part of a curly braces name.
         let Some(slot) = p.open_complex_identifier() else {

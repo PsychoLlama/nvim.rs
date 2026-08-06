@@ -638,10 +638,16 @@ impl ExprParser {
                 kExprNodeDictLiteral => c"E723: Missing end of Dictionary '}': %.*s",
                 kExprNodeUnknownFigure => c"E15: Missing closing figure brace: %.*s",
                 kExprNodeLambda => c"E15: Missing closing figure brace for lambda: %.*s",
-                // Until the trailing "}" it is impossible to distinguish a
-                // curly braces identifier from a Dict, so it must not appear
-                // in the stack like this.
-                kExprNodeCurlyBracesIdentifier => abort(),
+                // Upstream `abort()`s here, on the premise that until the
+                // trailing "}" a curly braces identifier cannot be told from a
+                // Dict and so can never be left unfinished on the stack. The
+                // premise is false: a `{` in *operator* position is a curly
+                // braces name from the moment it is lexed (see
+                // `figure::figure_brace`'s else arm), so any unterminated one
+                // reaches this loop. `nvim_parse_expression('a{b')` — no flags
+                // — killed the process. It is an unclosed figure brace like any
+                // other; say so.
+                kExprNodeCurlyBracesIdentifier => c"E15: Missing closing figure brace: %.*s",
                 // These are plain values and not containers; they can only
                 // show up in the topmost stack element, which was
                 // unconditionally popped above.
