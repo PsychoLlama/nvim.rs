@@ -76,10 +76,10 @@ use crate::src::nvim::types::{
     Callback_data as C2Rust_Unnamed_5, Error, Event, Integer, LuaRetMode, Map_String_int,
     Map_int_String, Map_int_ptr_t, MapHash, Object, OptVal, OptValData, OptValType, Set_String,
     Set_int, String_0, Timestamp, TriState, VV_CMDBANG, VV_TERMRESPONSE, aco_save_T, aucmdwin_T,
-    auto_event, buf_T, buffblock, buffblock_T, buffheader_T, bufref_T, estack_T, etype_T, event_T,
-    exarg_T, expand_T, funccal_entry_T, int64_t, kErrorTypeNone, kFalse, kNone, kObjectTypeBoolean,
-    kObjectTypeDict, kTrue, linenr_T, proftime_T, ptr_t, save_redo_T, save_v_event_T, sctx_T,
-    size_t, tabpage_T, uint32_t, uint64_t, varnumber_T, win_T,
+    auto_event, buf_T, buffblock_T, buffheader_T, bufref_T, estack_T, etype_T, event_T, exarg_T,
+    expand_T, funccal_entry_T, int64_t, kErrorTypeNone, kFalse, kNone, kObjectTypeBoolean,
+    kObjectTypeDict, kTrue, proftime_T, ptr_t, save_redo_T, save_v_event_T, sctx_T, size_t,
+    uint32_t, uint64_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::ui_call_win_hide;
 use crate::src::nvim::ui_compositor::ui_comp_remove_grid;
@@ -396,12 +396,9 @@ unsafe extern "C" fn map_get_int_String(
 }
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static e_autocommand_nesting_too_deep: GlobalCell<[::core::ffi::c_char; 35]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
-            *b"E218: Autocommand nesting too deep\0",
-        )
-    });
+/// `e_autocommand_nesting_too_deep`.  A `GlobalCell` holding a transmuted
+/// byte array upstream, because c2rust has no `CStr`; nothing writes it.
+const E_AUTOCOMMAND_NESTING_TOO_DEEP: &CStr = c"E218: Autocommand nesting too deep";
 static active_apc_list: GlobalCell<*mut AutoPatCmd> =
     GlobalCell::new(::core::ptr::null_mut::<AutoPatCmd>());
 static next_augroup_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
