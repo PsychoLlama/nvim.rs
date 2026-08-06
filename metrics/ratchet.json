@@ -22,7 +22,7 @@
     "crates/nvim/src/nvim/api/buffer/marks.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/api/buffer/props.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/api/buffer/text.rs": {"unsafe": 4},
-    "crates/nvim/src/nvim/api/command.rs": {"lines": 3588, "unsafe": 16},
+    "crates/nvim/src/nvim/api/command.rs": {"lines": 2565, "unsafe": 17},
     "crates/nvim/src/nvim/api/deprecated.rs": {"lines": 1283, "unsafe": 42},
     "crates/nvim/src/nvim/api/events.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/api/extmark.rs": {"lines": 2271, "unsafe": 24},

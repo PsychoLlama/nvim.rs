@@ -19,7 +19,7 @@
     "crates/nvim/src/nvim/api/buffer/marks.rs": 7,
     "crates/nvim/src/nvim/api/buffer/props.rs": 5,
     "crates/nvim/src/nvim/api/buffer/text.rs": 31,
-    "crates/nvim/src/nvim/api/command.rs": 373,
+    "crates/nvim/src/nvim/api/command.rs": 170,
     "crates/nvim/src/nvim/api/deprecated.rs": 41,
     "crates/nvim/src/nvim/api/events.rs": 5,
     "crates/nvim/src/nvim/api/extmark.rs": 145,

@@ -22,9 +22,7 @@ use crate::src::nvim::lua::executor::{api_free_luaref, api_new_luaref};
 use crate::src::nvim::main::{capture_ga, curbuf, current_sctx, msg_col, msg_silent, redir_off};
 use crate::src::nvim::mbyte::mb_islower;
 use crate::src::nvim::memory::{arena_alloc, arena_memdupz, xcalloc, xfree, xrealloc};
-use crate::src::nvim::os::libc::{
-    __assert_fail, memcpy, memmove, memset, snprintf, strcmp, strlen, strncmp, strtol,
-};
+use crate::src::nvim::os::libc::{memcpy, memmove, snprintf, strcmp, strlen, strncmp, strtol};
 use crate::src::nvim::regexp::{RE_MAGIC, vim_regcomp};
 use crate::src::nvim::register::valid_yank_reg;
 use crate::src::nvim::strings::kv_do_printf;
@@ -108,11 +106,6 @@ pub const EX_ARGOPT: ::core::ffi::c_uint = 0x20000 as ::core::ffi::c_uint;
 pub const EX_SBOXOK: ::core::ffi::c_uint = 0x40000 as ::core::ffi::c_uint;
 pub const EX_KEEPSCRIPT: ::core::ffi::c_uint = 0x4000000 as ::core::ffi::c_uint;
 pub const EX_PREVIEW: ::core::ffi::c_uint = 0x8000000 as ::core::ffi::c_uint;
-pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 66] = unsafe {
-    ::core::mem::transmute::<[u8; 66], [::core::ffi::c_char; 66]>(
-        *b"void build_cmdline_str(char **, exarg_T *, CmdParseInfo *, Array)\0",
-    )
-};
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 unsafe extern "C" fn parse_map_cmd(
@@ -821,79 +814,8 @@ pub unsafe extern "C" fn nvim_cmd(
     let mut save_redir_off: bool = false;
     let mut save_capture_ga: *mut garray_T = ::core::ptr::null_mut::<garray_T>();
     let mut save_msg_col: ::core::ffi::c_int = 0;
-    let mut ea: exarg_T = exarg_T {
-        arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        args: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-        arglens: ::core::ptr::null_mut::<size_t>(),
-        argc: 0,
-        nextcmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        cmdlinep: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-        cmdline_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        cmdidx: CMD_append,
-        argt: 0,
-        skip: 0,
-        forceit: 0,
-        addr_count: 0,
-        line1: 0,
-        line2: 0,
-        addr_type: ADDR_LINES,
-        flags: 0,
-        do_ecmd_cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        do_ecmd_lnum: 0,
-        append: 0,
-        usefilter: 0,
-        amount: 0,
-        regname: 0,
-        force_bin: 0,
-        read_edit: 0,
-        mkdir_p: 0,
-        force_ff: 0,
-        force_enc: 0,
-        bad_char: 0,
-        useridx: 0,
-        errmsg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        ea_getline: None,
-        cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        cstack: ::core::ptr::null_mut::<cstack_T>(),
-    };
-    memset(
-        &raw mut ea as *mut ::core::ffi::c_void,
-        0 as ::core::ffi::c_int,
-        ::core::mem::size_of::<exarg_T>(),
-    );
-    let mut cmdinfo: CmdParseInfo = CmdParseInfo {
-        cmdmod: cmdmod_T {
-            cmod_flags: 0,
-            cmod_split: 0,
-            cmod_tab: 0,
-            cmod_filter_pat: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            cmod_filter_regmatch: regmatch_T {
-                regprog: ::core::ptr::null_mut::<regprog_T>(),
-                startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-                endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-                rm_matchcol: 0,
-                rm_ic: false,
-            },
-            cmod_filter_force: false,
-            cmod_verbose: 0,
-            cmod_save_ei: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            cmod_did_sandbox: 0,
-            cmod_verbose_save: 0,
-            cmod_save_msg_silent: 0,
-            cmod_save_msg_scroll: 0,
-            cmod_did_esilent: 0,
-        },
-        magic: C2Rust_Unnamed_13 {
-            file: false,
-            bar: false,
-        },
-    };
-    memset(
-        &raw mut cmdinfo as *mut ::core::ffi::c_void,
-        0 as ::core::ffi::c_int,
-        ::core::mem::size_of::<CmdParseInfo>(),
-    );
+    let mut ea: exarg_T = ::core::mem::zeroed();
+    let mut cmdinfo: CmdParseInfo = ::core::mem::zeroed();
     let mut cmdline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut cmdname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut args: Array = Array {
@@ -1857,6 +1779,52 @@ unsafe extern "C" fn string_iswhite(mut str: String_0) -> bool {
     }
     return true_0 != 0;
 }
+/// Append `len` bytes to a [`StringBuilder`], growing it to the next power
+/// of two when they do not fit: upstream's `kv_concat_len(cmdline, src,
+/// len)`.  c2rust expanded that macro at all twenty-four of
+/// [`build_cmdline_str`]'s call sites, ~40 lines apiece.
+///
+/// # Safety
+/// `cmdline` points at a live builder and `src` at `len` readable bytes.
+unsafe fn cmdline_concat(
+    cmdline: *mut StringBuilder,
+    src: *const ::core::ffi::c_char,
+    len: size_t,
+) {
+    if len == 0 as size_t {
+        return;
+    }
+    if (*cmdline).capacity < (*cmdline).size.wrapping_add(len) {
+        let mut capacity: size_t = (*cmdline).size.wrapping_add(len);
+        capacity = capacity.wrapping_sub(1);
+        capacity |= capacity >> 1 as ::core::ffi::c_int;
+        capacity |= capacity >> 2 as ::core::ffi::c_int;
+        capacity |= capacity >> 4 as ::core::ffi::c_int;
+        capacity |= capacity >> 8 as ::core::ffi::c_int;
+        capacity |= capacity >> 16 as ::core::ffi::c_int;
+        (*cmdline).capacity = capacity.wrapping_add(1);
+        (*cmdline).items = xrealloc(
+            (*cmdline).items as *mut ::core::ffi::c_void,
+            ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*cmdline).capacity),
+        ) as *mut ::core::ffi::c_char;
+    }
+    debug_assert!(!(*cmdline).items.is_null());
+    memcpy(
+        (*cmdline).items.offset((*cmdline).size as isize) as *mut ::core::ffi::c_void,
+        src as *const ::core::ffi::c_void,
+        ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(len),
+    );
+    (*cmdline).size = (*cmdline).size.wrapping_add(len);
+}
+
+/// [`cmdline_concat`] for a string literal: upstream's `kv_concat`.
+///
+/// # Safety
+/// `cmdline` points at a live builder.
+unsafe fn cmdline_concat_str(cmdline: *mut StringBuilder, s: &::core::ffi::CStr) {
+    cmdline_concat(cmdline, s.as_ptr(), s.count_bytes())
+}
+
 unsafe extern "C" fn build_cmdline_str(
     mut cmdlinep: *mut *mut ::core::ffi::c_char,
     mut eap: *mut exarg_T,
@@ -1889,135 +1857,12 @@ unsafe extern "C" fn build_cmdline_str(
         );
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_ERRSILENT as ::core::ffi::c_int != 0 {
-        if strlen(b"silent! \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(strlen(b"silent! \0".as_ptr() as *const ::core::ffi::c_char))
-            {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(strlen(b"silent! \0".as_ptr() as *const ::core::ffi::c_char));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        852 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"silent! \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(strlen(b"silent! \0".as_ptr() as *const ::core::ffi::c_char)),
-            );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(strlen(b"silent! \0".as_ptr() as *const ::core::ffi::c_char));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"silent! ");
     } else if (*cmdinfo).cmdmod.cmod_flags & CMOD_SILENT as ::core::ffi::c_int != 0 {
-        if strlen(b"silent \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(strlen(b"silent \0".as_ptr() as *const ::core::ffi::c_char))
-            {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(strlen(b"silent \0".as_ptr() as *const ::core::ffi::c_char));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_0: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        854 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"silent \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(strlen(b"silent \0".as_ptr() as *const ::core::ffi::c_char)),
-            );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(strlen(b"silent \0".as_ptr() as *const ::core::ffi::c_char));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"silent ");
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_UNSILENT as ::core::ffi::c_int != 0 {
-        if strlen(b"unsilent \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(strlen(b"unsilent \0".as_ptr() as *const ::core::ffi::c_char))
-            {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(strlen(b"unsilent \0".as_ptr() as *const ::core::ffi::c_char));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_1: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        858 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"unsilent \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(strlen(b"unsilent \0".as_ptr() as *const ::core::ffi::c_char)),
-            );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(strlen(b"unsilent \0".as_ptr() as *const ::core::ffi::c_char));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"unsilent ");
     }
     match (*cmdinfo).cmdmod.cmod_split
         & (WSP_ABOVE as ::core::ffi::c_int
@@ -2026,779 +1871,57 @@ unsafe extern "C" fn build_cmdline_str(
             | WSP_BOT as ::core::ffi::c_int)
     {
         128 => {
-            if strlen(b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-                if cmdline.capacity
-                    < cmdline.size.wrapping_add(strlen(
-                        b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char
-                    ))
-                {
-                    cmdline.capacity = cmdline.size.wrapping_add(strlen(
-                        b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char
-                    ));
-                    cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                    cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                    cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                    cmdline.items = xrealloc(
-                        cmdline.items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<::core::ffi::c_char>()
-                            .wrapping_mul(cmdline.capacity),
-                    ) as *mut ::core::ffi::c_char;
-                }
-                '_c2rust_label_2: {
-                    if !cmdline.items.is_null() {
-                    } else {
-                        __assert_fail(
-                            b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                            863 as ::core::ffi::c_uint,
-                            __ASSERT_FUNCTION.as_ptr(),
-                        );
-                    }
-                };
-                memcpy(
-                    cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                    b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char
-                        as *const ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
-                        b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char,
-                    )),
-                );
-                cmdline.size = cmdline.size.wrapping_add(strlen(
-                    b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char
-                ));
-            }
+            cmdline_concat_str(&raw mut cmdline, c"aboveleft ");
         }
         64 => {
-            if strlen(b"belowright \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-                if cmdline.capacity
-                    < cmdline.size.wrapping_add(strlen(
-                        b"belowright \0".as_ptr() as *const ::core::ffi::c_char
-                    ))
-                {
-                    cmdline.capacity = cmdline.size.wrapping_add(strlen(
-                        b"belowright \0".as_ptr() as *const ::core::ffi::c_char
-                    ));
-                    cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                    cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                    cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                    cmdline.items = xrealloc(
-                        cmdline.items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<::core::ffi::c_char>()
-                            .wrapping_mul(cmdline.capacity),
-                    ) as *mut ::core::ffi::c_char;
-                }
-                '_c2rust_label_3: {
-                    if !cmdline.items.is_null() {
-                    } else {
-                        __assert_fail(
-                            b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                            866 as ::core::ffi::c_uint,
-                            __ASSERT_FUNCTION.as_ptr(),
-                        );
-                    }
-                };
-                memcpy(
-                    cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                    b"belowright \0".as_ptr() as *const ::core::ffi::c_char
-                        as *const ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
-                        b"belowright \0".as_ptr() as *const ::core::ffi::c_char,
-                    )),
-                );
-                cmdline.size = cmdline.size.wrapping_add(strlen(
-                    b"belowright \0".as_ptr() as *const ::core::ffi::c_char
-                ));
-            }
+            cmdline_concat_str(&raw mut cmdline, c"belowright ");
         }
         8 => {
-            if strlen(b"topleft \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-                if cmdline.capacity
-                    < cmdline
-                        .size
-                        .wrapping_add(strlen(b"topleft \0".as_ptr() as *const ::core::ffi::c_char))
-                {
-                    cmdline.capacity = cmdline
-                        .size
-                        .wrapping_add(strlen(b"topleft \0".as_ptr() as *const ::core::ffi::c_char));
-                    cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                    cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                    cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                    cmdline.items = xrealloc(
-                        cmdline.items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<::core::ffi::c_char>()
-                            .wrapping_mul(cmdline.capacity),
-                    ) as *mut ::core::ffi::c_char;
-                }
-                '_c2rust_label_4: {
-                    if !cmdline.items.is_null() {
-                    } else {
-                        __assert_fail(
-                            b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                            869 as ::core::ffi::c_uint,
-                            __ASSERT_FUNCTION.as_ptr(),
-                        );
-                    }
-                };
-                memcpy(
-                    cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                    b"topleft \0".as_ptr() as *const ::core::ffi::c_char
-                        as *const ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(strlen(b"topleft \0".as_ptr() as *const ::core::ffi::c_char)),
-                );
-                cmdline.size = cmdline
-                    .size
-                    .wrapping_add(strlen(b"topleft \0".as_ptr() as *const ::core::ffi::c_char));
-            }
+            cmdline_concat_str(&raw mut cmdline, c"topleft ");
         }
         16 => {
-            if strlen(b"botright \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-                if cmdline.capacity
-                    < cmdline
-                        .size
-                        .wrapping_add(strlen(b"botright \0".as_ptr() as *const ::core::ffi::c_char))
-                {
-                    cmdline.capacity = cmdline.size.wrapping_add(strlen(
-                        b"botright \0".as_ptr() as *const ::core::ffi::c_char
-                    ));
-                    cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                    cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                    cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                    cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                    cmdline.items = xrealloc(
-                        cmdline.items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<::core::ffi::c_char>()
-                            .wrapping_mul(cmdline.capacity),
-                    ) as *mut ::core::ffi::c_char;
-                }
-                '_c2rust_label_5: {
-                    if !cmdline.items.is_null() {
-                    } else {
-                        __assert_fail(
-                            b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                            872 as ::core::ffi::c_uint,
-                            __ASSERT_FUNCTION.as_ptr(),
-                        );
-                    }
-                };
-                memcpy(
-                    cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                    b"botright \0".as_ptr() as *const ::core::ffi::c_char
-                        as *const ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
-                        b"botright \0".as_ptr() as *const ::core::ffi::c_char,
-                    )),
-                );
-                cmdline.size = cmdline
-                    .size
-                    .wrapping_add(strlen(b"botright \0".as_ptr() as *const ::core::ffi::c_char));
-            }
+            cmdline_concat_str(&raw mut cmdline, c"botright ");
         }
         _ => {}
     }
     if (*cmdinfo).cmdmod.cmod_split & WSP_VERT as ::core::ffi::c_int != 0 {
-        if strlen(b"vertical \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(strlen(b"vertical \0".as_ptr() as *const ::core::ffi::c_char))
-            {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(strlen(b"vertical \0".as_ptr() as *const ::core::ffi::c_char));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_6: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        885 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"vertical \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(strlen(b"vertical \0".as_ptr() as *const ::core::ffi::c_char)),
-            );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(strlen(b"vertical \0".as_ptr() as *const ::core::ffi::c_char));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"vertical ");
     }
     if (*cmdinfo).cmdmod.cmod_split & WSP_HOR as ::core::ffi::c_int != 0 {
-        if strlen(b"horizontal \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline.size.wrapping_add(strlen(
-                    b"horizontal \0".as_ptr() as *const ::core::ffi::c_char
-                ))
-            {
-                cmdline.capacity = cmdline.size.wrapping_add(strlen(
-                    b"horizontal \0".as_ptr() as *const ::core::ffi::c_char
-                ));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_7: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        886 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"horizontal \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
-                    b"horizontal \0".as_ptr() as *const ::core::ffi::c_char,
-                )),
-            );
-            cmdline.size = cmdline.size.wrapping_add(strlen(
-                b"horizontal \0".as_ptr() as *const ::core::ffi::c_char
-            ));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"horizontal ");
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_SANDBOX as ::core::ffi::c_int != 0 {
-        if strlen(b"sandbox \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(strlen(b"sandbox \0".as_ptr() as *const ::core::ffi::c_char))
-            {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(strlen(b"sandbox \0".as_ptr() as *const ::core::ffi::c_char));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_8: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        887 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"sandbox \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(strlen(b"sandbox \0".as_ptr() as *const ::core::ffi::c_char)),
-            );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(strlen(b"sandbox \0".as_ptr() as *const ::core::ffi::c_char));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"sandbox ");
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_NOAUTOCMD as ::core::ffi::c_int != 0 {
-        if strlen(b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline.size.wrapping_add(strlen(
-                    b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char
-                ))
-            {
-                cmdline.capacity = cmdline.size.wrapping_add(strlen(
-                    b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char
-                ));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_9: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        888 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
-                    b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char,
-                )),
-            );
-            cmdline.size = cmdline.size.wrapping_add(strlen(
-                b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char
-            ));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"noautocmd ");
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_BROWSE as ::core::ffi::c_int != 0 {
-        if strlen(b"browse \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(strlen(b"browse \0".as_ptr() as *const ::core::ffi::c_char))
-            {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(strlen(b"browse \0".as_ptr() as *const ::core::ffi::c_char));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_10: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        889 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"browse \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(strlen(b"browse \0".as_ptr() as *const ::core::ffi::c_char)),
-            );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(strlen(b"browse \0".as_ptr() as *const ::core::ffi::c_char));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"browse ");
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0 {
-        if strlen(b"confirm \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(strlen(b"confirm \0".as_ptr() as *const ::core::ffi::c_char))
-            {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(strlen(b"confirm \0".as_ptr() as *const ::core::ffi::c_char));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_11: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        890 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"confirm \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(strlen(b"confirm \0".as_ptr() as *const ::core::ffi::c_char)),
-            );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(strlen(b"confirm \0".as_ptr() as *const ::core::ffi::c_char));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"confirm ");
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_HIDE as ::core::ffi::c_int != 0 {
-        if strlen(b"hide \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(strlen(b"hide \0".as_ptr() as *const ::core::ffi::c_char))
-            {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(strlen(b"hide \0".as_ptr() as *const ::core::ffi::c_char));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_12: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        891 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"hide \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(strlen(b"hide \0".as_ptr() as *const ::core::ffi::c_char)),
-            );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(strlen(b"hide \0".as_ptr() as *const ::core::ffi::c_char));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"hide ");
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_KEEPALT as ::core::ffi::c_int != 0 {
-        if strlen(b"keepalt \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(strlen(b"keepalt \0".as_ptr() as *const ::core::ffi::c_char))
-            {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(strlen(b"keepalt \0".as_ptr() as *const ::core::ffi::c_char));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_13: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        892 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"keepalt \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(strlen(b"keepalt \0".as_ptr() as *const ::core::ffi::c_char)),
-            );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(strlen(b"keepalt \0".as_ptr() as *const ::core::ffi::c_char));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"keepalt ");
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_KEEPJUMPS as ::core::ffi::c_int != 0 {
-        if strlen(b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline.size.wrapping_add(strlen(
-                    b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char
-                ))
-            {
-                cmdline.capacity = cmdline.size.wrapping_add(strlen(
-                    b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char
-                ));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_14: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        893 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
-                    b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char,
-                )),
-            );
-            cmdline.size = cmdline.size.wrapping_add(strlen(
-                b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char
-            ));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"keepjumps ");
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_KEEPMARKS as ::core::ffi::c_int != 0 {
-        if strlen(b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline.size.wrapping_add(strlen(
-                    b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char
-                ))
-            {
-                cmdline.capacity = cmdline.size.wrapping_add(strlen(
-                    b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char
-                ));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_15: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        894 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
-                    b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char,
-                )),
-            );
-            cmdline.size = cmdline.size.wrapping_add(strlen(
-                b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char
-            ));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"keepmarks ");
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_KEEPPATTERNS as ::core::ffi::c_int != 0 {
-        if strlen(b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline.size.wrapping_add(strlen(
-                    b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char
-                ))
-            {
-                cmdline.capacity = cmdline.size.wrapping_add(strlen(
-                    b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char
-                ));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_16: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        895 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
-                    b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char,
-                )),
-            );
-            cmdline.size = cmdline.size.wrapping_add(strlen(
-                b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char
-            ));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"keeppatterns ");
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0 {
-        if strlen(b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline.size.wrapping_add(strlen(
-                    b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char
-                ))
-            {
-                cmdline.capacity = cmdline.size.wrapping_add(strlen(
-                    b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char
-                ));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_17: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        896 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
-                    b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char,
-                )),
-            );
-            cmdline.size = cmdline.size.wrapping_add(strlen(
-                b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char
-            ));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"lockmarks ");
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int != 0 {
-        if strlen(b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline.size.wrapping_add(strlen(
-                    b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char
-                ))
-            {
-                cmdline.capacity = cmdline.size.wrapping_add(strlen(
-                    b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char
-                ));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_18: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        897 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
-                    b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char,
-                )),
-            );
-            cmdline.size = cmdline.size.wrapping_add(strlen(
-                b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char
-            ));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"noswapfile ");
     }
     if (*eap).argt & EX_RANGE as uint32_t != 0 {
         if (*eap).addr_count == 1 as ::core::ffi::c_int {
@@ -2818,82 +1941,9 @@ unsafe extern "C" fn build_cmdline_str(
         }
     }
     let mut cmdname_idx: size_t = cmdline.size;
-    if strlen((*eap).cmd) > 0 as size_t {
-        if cmdline.capacity < cmdline.size.wrapping_add(strlen((*eap).cmd)) {
-            cmdline.capacity = cmdline.size.wrapping_add(strlen((*eap).cmd));
-            cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-            cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-            cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-            cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-            cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-            cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-            cmdline.capacity = cmdline.capacity.wrapping_add(1);
-            cmdline.items = xrealloc(
-                cmdline.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-            ) as *mut ::core::ffi::c_char;
-        }
-        '_c2rust_label_19: {
-            if !cmdline.items.is_null() {
-            } else {
-                __assert_fail(
-                    b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    912 as ::core::ffi::c_uint,
-                    __ASSERT_FUNCTION.as_ptr(),
-                );
-            }
-        };
-        memcpy(
-            cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-            (*eap).cmd as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen((*eap).cmd)),
-        );
-        cmdline.size = cmdline.size.wrapping_add(strlen((*eap).cmd));
-    }
+    cmdline_concat(&raw mut cmdline, (*eap).cmd, strlen((*eap).cmd));
     if (*eap).argt & EX_BANG as uint32_t != 0 && (*eap).forceit != 0 {
-        if strlen(b"!\0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(strlen(b"!\0".as_ptr() as *const ::core::ffi::c_char))
-            {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(strlen(b"!\0".as_ptr() as *const ::core::ffi::c_char));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_20: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        916 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"!\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(strlen(b"!\0".as_ptr() as *const ::core::ffi::c_char)),
-            );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(strlen(b"!\0".as_ptr() as *const ::core::ffi::c_char));
-        }
+        cmdline_concat_str(&raw mut cmdline, c"!");
     }
     if (*eap).argt & EX_REGSTR as uint32_t != 0 && (*eap).regname != 0 {
         kv_do_printf(
@@ -2913,81 +1963,8 @@ unsafe extern "C" fn build_cmdline_str(
     while i < argc {
         let mut s: String_0 = (*args.items.offset(i as isize)).data.string;
         *(*eap).arglens.offset(i as isize) = s.size;
-        if strlen(b" \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
-            if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(strlen(b" \0".as_ptr() as *const ::core::ffi::c_char))
-            {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(strlen(b" \0".as_ptr() as *const ::core::ffi::c_char));
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_21: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        930 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b" \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(strlen(b" \0".as_ptr() as *const ::core::ffi::c_char)),
-            );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(strlen(b" \0".as_ptr() as *const ::core::ffi::c_char));
-        }
-        if s.size > 0 as size_t {
-            if cmdline.capacity < cmdline.size.wrapping_add(s.size) {
-                cmdline.capacity = cmdline.size.wrapping_add(s.size);
-                cmdline.capacity = cmdline.capacity.wrapping_sub(1);
-                cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 4 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 8 as ::core::ffi::c_int;
-                cmdline.capacity |= cmdline.capacity >> 16 as ::core::ffi::c_int;
-                cmdline.capacity = cmdline.capacity.wrapping_add(1);
-                cmdline.items = xrealloc(
-                    cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label_22: {
-                if !cmdline.items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/api/command.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        931 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            memcpy(
-                cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                s.data as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(s.size),
-            );
-            cmdline.size = cmdline.size.wrapping_add(s.size);
-        }
+        cmdline_concat_str(&raw mut cmdline, c" ");
+        cmdline_concat(&raw mut cmdline, s.data, s.size);
         i = i.wrapping_add(1);
     }
     if cmdline.size == cmdline.capacity {
