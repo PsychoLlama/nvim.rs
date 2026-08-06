@@ -47,6 +47,11 @@ and this project adheres to [CalVer](https://calver.org/).
   with its defaults and `...`, funcrefs, partials, closures and lambdas,
   `:call`, `:return` and `:defer`, autoloading, and the `a:`/`l:` scopes a
   call runs in.
+- Rewrote autocommands: `:autocmd` and `:augroup`, `:doautocmd` and
+  `:doautoall`, the event table and the `<buffer=N>` patterns, `++once` and
+  `++nested`, `'eventignore'` and `'eventignorewin'`, `exists('#…')`, the
+  hidden window an autocommand runs a buffer in, and the
+  `nvim_create_autocmd` family.
 
 ### Fixed
 
