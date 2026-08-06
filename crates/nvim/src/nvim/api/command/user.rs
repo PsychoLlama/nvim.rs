@@ -94,7 +94,7 @@ pub unsafe extern "C" fn nvim_buf_del_user_command(
         api_set_error(
             err,
             kErrorTypeException,
-            b"Invalid command (not found): %s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"Invalid command (not found): %s".as_ptr(),
             name.data,
         );
     }
@@ -124,7 +124,7 @@ pub unsafe extern "C" fn create_user_command(
             if uc_validate_name(name.data).is_null() {
                 api_err_invalid(
                     err,
-                    b"command name\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"command name".as_ptr(),
                     name.data,
                     0 as int64_t,
                     true_0 != 0,
@@ -134,8 +134,7 @@ pub unsafe extern "C" fn create_user_command(
             ) {
                 api_err_invalid(
                     err,
-                    b"command name (must start with uppercase)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    c"command name (must start with uppercase)".as_ptr(),
                     name.data,
                     0 as int64_t,
                     true_0 != 0,
@@ -150,8 +149,8 @@ pub unsafe extern "C" fn create_user_command(
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"Cannot use both 'range' and 'count'\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"%s".as_ptr(),
+                    c"Cannot use both 'range' and 'count'".as_ptr(),
                 );
             } else {
                 if (*opts).nargs.type_0 as ::core::ffi::c_uint
@@ -168,7 +167,7 @@ pub unsafe extern "C" fn create_user_command(
                             if true {
                                 api_err_invalid(
                                     err,
-                                    b"nargs\0".as_ptr() as *const ::core::ffi::c_char,
+                                    c"nargs".as_ptr(),
                                     ::core::ptr::null::<::core::ffi::c_char>(),
                                     (*opts).nargs.data.integer,
                                     false_0 != 0,
@@ -183,7 +182,7 @@ pub unsafe extern "C" fn create_user_command(
                     if !((*opts).nargs.data.string.size <= 1 as size_t) {
                         api_err_invalid(
                             err,
-                            b"nargs\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"nargs".as_ptr(),
                             (*opts).nargs.data.string.data,
                             0 as int64_t,
                             true_0 != 0,
@@ -213,7 +212,7 @@ pub unsafe extern "C" fn create_user_command(
                                 if true {
                                     api_err_invalid(
                                         err,
-                                        b"nargs\0".as_ptr() as *const ::core::ffi::c_char,
+                                        c"nargs".as_ptr(),
                                         (*opts).nargs.data.string.data,
                                         0 as int64_t,
                                         true_0 != 0,
@@ -230,8 +229,8 @@ pub unsafe extern "C" fn create_user_command(
                     if true {
                         api_err_invalid(
                             err,
-                            b"nargs\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"nargs".as_ptr(),
+                            c"".as_ptr(),
                             0 as int64_t,
                             true_0 != 0,
                         );
@@ -246,8 +245,8 @@ pub unsafe extern "C" fn create_user_command(
                     api_set_error(
                         err,
                         kErrorTypeValidation,
-                        b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"'complete' used without 'nargs'\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"%s".as_ptr(),
+                        c"'complete' used without 'nargs'".as_ptr(),
                     );
                 } else {
                     if (*opts).range.type_0 as ::core::ffi::c_uint
@@ -272,8 +271,8 @@ pub unsafe extern "C" fn create_user_command(
                         {
                             api_err_invalid(
                                 err,
-                                b"range\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"\0".as_ptr() as *const ::core::ffi::c_char,
+                                c"range".as_ptr(),
+                                c"".as_ptr(),
                                 0 as int64_t,
                                 true_0 != 0,
                             );
@@ -296,8 +295,8 @@ pub unsafe extern "C" fn create_user_command(
                         if true {
                             api_err_invalid(
                                 err,
-                                b"range\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"\0".as_ptr() as *const ::core::ffi::c_char,
+                                c"range".as_ptr(),
+                                c"".as_ptr(),
                                 0 as int64_t,
                                 true_0 != 0,
                             );
@@ -327,8 +326,8 @@ pub unsafe extern "C" fn create_user_command(
                         if true {
                             api_err_invalid(
                                 err,
-                                b"count\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"\0".as_ptr() as *const ::core::ffi::c_char,
+                                c"count".as_ptr(),
+                                c"".as_ptr(),
                                 0 as int64_t,
                                 true_0 != 0,
                             );
@@ -344,7 +343,7 @@ pub unsafe extern "C" fn create_user_command(
                         {
                             api_err_exp(
                                 err,
-                                b"addr\0".as_ptr() as *const ::core::ffi::c_char,
+                                c"addr".as_ptr(),
                                 api_typename(kObjectTypeString),
                                 api_typename((*opts).addr.type_0),
                             );
@@ -358,7 +357,7 @@ pub unsafe extern "C" fn create_user_command(
                         {
                             api_err_invalid(
                                 err,
-                                b"addr\0".as_ptr() as *const ::core::ffi::c_char,
+                                c"addr".as_ptr(),
                                 (*opts).addr.data.string.data,
                                 0 as int64_t,
                                 true_0 != 0,
@@ -414,7 +413,7 @@ pub unsafe extern "C" fn create_user_command(
                             {
                                 api_err_invalid(
                                     err,
-                                    b"complete\0".as_ptr() as *const ::core::ffi::c_char,
+                                    c"complete".as_ptr(),
                                     (*opts).complete.data.string.data,
                                     0 as int64_t,
                                     true_0 != 0,
@@ -429,8 +428,8 @@ pub unsafe extern "C" fn create_user_command(
                             if true {
                                 api_err_exp(
                                     err,
-                                    b"complete\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"Function or String\0".as_ptr() as *const ::core::ffi::c_char,
+                                    c"complete".as_ptr(),
+                                    c"Function or String".as_ptr(),
                                     ::core::ptr::null::<::core::ffi::c_char>(),
                                 );
                                 break '_err;
@@ -445,7 +444,7 @@ pub unsafe extern "C" fn create_user_command(
                             {
                                 api_err_exp(
                                     err,
-                                    b"preview\0".as_ptr() as *const ::core::ffi::c_char,
+                                    c"preview".as_ptr(),
                                     api_typename(kObjectTypeLuaRef),
                                     api_typename((*opts).preview.type_0),
                                 );
@@ -465,7 +464,7 @@ pub unsafe extern "C" fn create_user_command(
                                 {
                                     rep = (*opts).desc.data.string.data;
                                 } else {
-                                    rep = b"\0".as_ptr() as *const ::core::ffi::c_char;
+                                    rep = c"".as_ptr();
                                 }
                             }
                             4 => {
@@ -475,9 +474,8 @@ pub unsafe extern "C" fn create_user_command(
                                 if true {
                                     api_err_exp(
                                         err,
-                                        b"command\0".as_ptr() as *const ::core::ffi::c_char,
-                                        b"Function or String\0".as_ptr()
-                                            as *const ::core::ffi::c_char,
+                                        c"command".as_ptr(),
+                                        c"Function or String".as_ptr(),
                                         ::core::ptr::null::<::core::ffi::c_char>(),
                                     );
                                     break '_err;
@@ -504,8 +502,7 @@ pub unsafe extern "C" fn create_user_command(
                             api_set_error(
                                 err,
                                 kErrorTypeException,
-                                b"Failed to create user command\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                c"Failed to create user command".as_ptr(),
                             );
                         }
                         current_sctx.set(save_current_sctx);
@@ -560,7 +557,7 @@ pub unsafe extern "C" fn nvim_buf_get_commands(
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"builtin=true not implemented\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"builtin=true not implemented".as_ptr(),
                 );
                 return Dict {
                     size: 0 as size_t,

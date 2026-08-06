@@ -29,19 +29,17 @@ use crate::src::nvim::regexp::{RE_MAGIC, vim_regcomp};
 use crate::src::nvim::register::valid_yank_reg;
 use crate::src::nvim::strings::kv_do_printf;
 use crate::src::nvim::types::{
-    Arena, Array, Buffer, CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_append, CMD_iput, CMD_put,
-    CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS,
-    CMOD_KEEPMARKS, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_NOSWAPFILE,
-    CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, CmdParseInfo,
-    CmdParseInfo_magic as C2Rust_Unnamed_13, Dict, Direction, Error, Integer, KeyDict_cmd,
-    KeyDict_cmd_magic, KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty,
+    Arena, Array, Buffer, CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_iput, CMD_put, CMOD_BROWSE,
+    CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS, CMOD_KEEPMARKS,
+    CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_NOSWAPFILE, CMOD_SANDBOX, CMOD_SILENT,
+    CMOD_UNSILENT, CmdParseInfo, Dict, Direction, Error, Integer, KeyDict_cmd, KeyDict_cmd_magic,
+    KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty,
     KeyDict_get_commands, KeyDict_user_command, KeySetLink, KeyValuePair, LuaRef, Object,
-    OptionalKeys, String_0, StringBuilder, TryState, buf_T, cmd_addr_T, cmdmod_T, cstack_T,
-    exarg_T, except_T, expand_T, garray_T, int64_t, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
-    kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, key_value_pair, linenr_T, msglist_T,
-    object, object_data as C2Rust_Unnamed, regmatch_T, regprog_T, sctx_T, size_t, ucmd_T, uint8_t,
-    uint32_t, uint64_t,
+    OptionalKeys, String_0, StringBuilder, TryState, buf_T, cmd_addr_T, cmdmod_T, exarg_T,
+    except_T, expand_T, garray_T, int64_t, kErrorTypeException, kErrorTypeNone,
+    kErrorTypeValidation, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeInteger,
+    kObjectTypeLuaRef, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, linenr_T,
+    msglist_T, sctx_T, size_t, ucmd_T, uint8_t, uint32_t, uint64_t,
 };
 use crate::src::nvim::usercmd::{
     commands_array, free_ucmd, get_user_command_name, parse_addr_type_arg, parse_compl_arg,
@@ -61,6 +59,12 @@ pub use self::parse::*;
 pub use self::user::*;
 pub const ADDR_NONE: cmd_addr_T = 11;
 pub const ADDR_OTHER: cmd_addr_T = 10;
+pub const ADDR_TABS: cmd_addr_T = 5;
+pub const ADDR_BUFFERS: cmd_addr_T = 4;
+pub const ADDR_LOADED_BUFFERS: cmd_addr_T = 3;
+pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
+pub const ADDR_WINDOWS: cmd_addr_T = 1;
+pub const ADDR_QUICKFIX: cmd_addr_T = 8;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const NUMBUFLEN: C2Rust_Unnamed_15 = 65;

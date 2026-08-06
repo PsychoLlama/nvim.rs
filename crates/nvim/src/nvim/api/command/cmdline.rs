@@ -1,30 +1,30 @@
 //! Rebuilding a command *string* from the parsed pieces.
 //!
-//! `build_cmdline_str` is what `nvim_cmd` hands `execute_cmd` for the paths
+//! [`build_cmdline_str`] is what `nvim_cmd` hands `execute_cmd` for the paths
 //! that still want text: it writes the modifiers back in their canonical
-//! order, then the range, the command name, the bang, the register and
-//! each argument, recording where each one landed so `eap->args` can point
-//! into the finished buffer.
+//! order, then the range, the command name, the bang, the register and each
+//! argument, recording where each one landed so `eap->args` can point into the
+//! finished buffer.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::{mem, ptr};
 
-pub(crate) unsafe extern "C" fn string_iswhite(mut str: String_0) -> bool {
+/// Nothing but spaces and tabs.
+///
+/// Upstream also breaks out of the scan on a NUL, which cannot happen:
+/// `ascii_iswhite` has already answered false for one and returned.
+pub(crate) unsafe extern "C" fn string_iswhite(str: String_0) -> bool {
     unsafe {
-        let mut i: size_t = 0 as size_t;
-        while i < str.size {
-            if !ascii_iswhite(*str.data.offset(i as isize) as ::core::ffi::c_int) {
-                return false_0 != 0;
-            } else {
-                if *str.data.offset(i as isize) as ::core::ffi::c_int == NUL {
-                    break;
-                }
-                i = i.wrapping_add(1);
+        for i in 0..str.size {
+            if !ascii_iswhite(*str.data.add(i) as c_int) {
+                return false;
             }
         }
-        return true_0 != 0;
+        true
     }
 }
 
@@ -35,36 +35,29 @@ pub(crate) unsafe extern "C" fn string_iswhite(mut str: String_0) -> bool {
 ///
 /// # Safety
 /// `cmdline` points at a live builder and `src` at `len` readable bytes.
-unsafe fn cmdline_concat(
-    cmdline: *mut StringBuilder,
-    src: *const ::core::ffi::c_char,
-    len: size_t,
-) {
+unsafe fn cmdline_concat(cmdline: *mut StringBuilder, src: *const c_char, len: size_t) {
     unsafe {
-        if len == 0 as size_t {
+        if len == 0 {
             return;
         }
-        if (*cmdline).capacity < (*cmdline).size.wrapping_add(len) {
-            let mut capacity: size_t = (*cmdline).size.wrapping_add(len);
-            capacity = capacity.wrapping_sub(1);
-            capacity |= capacity >> 1 as ::core::ffi::c_int;
-            capacity |= capacity >> 2 as ::core::ffi::c_int;
-            capacity |= capacity >> 4 as ::core::ffi::c_int;
-            capacity |= capacity >> 8 as ::core::ffi::c_int;
-            capacity |= capacity >> 16 as ::core::ffi::c_int;
-            (*cmdline).capacity = capacity.wrapping_add(1);
-            (*cmdline).items = xrealloc(
-                (*cmdline).items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*cmdline).capacity),
-            ) as *mut ::core::ffi::c_char;
+        if (*cmdline).capacity < (*cmdline).size + len {
+            let mut capacity = (*cmdline).size + len - 1;
+            capacity |= capacity >> 1;
+            capacity |= capacity >> 2;
+            capacity |= capacity >> 4;
+            capacity |= capacity >> 8;
+            capacity |= capacity >> 16;
+            (*cmdline).capacity = capacity + 1;
+            (*cmdline).items =
+                xrealloc((*cmdline).items.cast(), (*cmdline).capacity).cast::<c_char>();
         }
         debug_assert!(!(*cmdline).items.is_null());
         memcpy(
-            (*cmdline).items.offset((*cmdline).size as isize) as *mut ::core::ffi::c_void,
-            src as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(len),
+            (*cmdline).items.add((*cmdline).size).cast(),
+            src.cast::<c_void>(),
+            len,
         );
-        (*cmdline).size = (*cmdline).size.wrapping_add(len);
+        (*cmdline).size += len;
     }
 }
 
@@ -72,205 +65,152 @@ unsafe fn cmdline_concat(
 ///
 /// # Safety
 /// `cmdline` points at a live builder.
-unsafe fn cmdline_concat_str(cmdline: *mut StringBuilder, s: &::core::ffi::CStr) {
+unsafe fn cmdline_concat_str(cmdline: *mut StringBuilder, s: &CStr) {
     unsafe { cmdline_concat(cmdline, s.as_ptr(), s.count_bytes()) }
 }
 
-pub(crate) unsafe extern "C" fn build_cmdline_str(
-    mut cmdlinep: *mut *mut ::core::ffi::c_char,
-    mut eap: *mut exarg_T,
-    mut cmdinfo: *mut CmdParseInfo,
-    mut args: Array,
-) {
+/// Write out the `:silent`/`:vertical`/... prefixes in the order upstream
+/// parses them back.
+unsafe fn concat_cmdmods(cmdline: *mut StringBuilder, cmdmod: &cmdmod_T) {
     unsafe {
-        let mut argc: size_t = args.size;
-        let mut cmdline: StringBuilder = StringBuilder {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        };
-        cmdline.capacity = 32 as size_t;
-        cmdline.items = xrealloc(
-            cmdline.items as *mut ::core::ffi::c_void,
-            ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-        ) as *mut ::core::ffi::c_char;
-        if (*cmdinfo).cmdmod.cmod_tab != 0 as ::core::ffi::c_int {
-            kv_do_printf(
-                &raw mut cmdline,
-                b"%dtab \0".as_ptr() as *const ::core::ffi::c_char,
-                (*cmdinfo).cmdmod.cmod_tab - 1 as ::core::ffi::c_int,
-            );
+        if cmdmod.cmod_tab != 0 {
+            kv_do_printf(cmdline, c"%dtab ".as_ptr(), cmdmod.cmod_tab - 1);
         }
-        if (*cmdinfo).cmdmod.cmod_verbose > 0 as ::core::ffi::c_int {
-            kv_do_printf(
-                &raw mut cmdline,
-                b"%dverbose \0".as_ptr() as *const ::core::ffi::c_char,
-                (*cmdinfo).cmdmod.cmod_verbose - 1 as ::core::ffi::c_int,
-            );
+        if cmdmod.cmod_verbose > 0 {
+            kv_do_printf(cmdline, c"%dverbose ".as_ptr(), cmdmod.cmod_verbose - 1);
         }
-        if (*cmdinfo).cmdmod.cmod_flags & CMOD_ERRSILENT as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"silent! ");
-        } else if (*cmdinfo).cmdmod.cmod_flags & CMOD_SILENT as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"silent ");
+        if cmdmod.cmod_flags & CMOD_ERRSILENT as c_int != 0 {
+            cmdline_concat_str(cmdline, c"silent! ");
+        } else if cmdmod.cmod_flags & CMOD_SILENT as c_int != 0 {
+            cmdline_concat_str(cmdline, c"silent ");
         }
-        if (*cmdinfo).cmdmod.cmod_flags & CMOD_UNSILENT as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"unsilent ");
+        if cmdmod.cmod_flags & CMOD_UNSILENT as c_int != 0 {
+            cmdline_concat_str(cmdline, c"unsilent ");
         }
-        match (*cmdinfo).cmdmod.cmod_split
-            & (WSP_ABOVE as ::core::ffi::c_int
-                | WSP_BELOW as ::core::ffi::c_int
-                | WSP_TOP as ::core::ffi::c_int
-                | WSP_BOT as ::core::ffi::c_int)
-        {
-            128 => {
-                cmdline_concat_str(&raw mut cmdline, c"aboveleft ");
-            }
-            64 => {
-                cmdline_concat_str(&raw mut cmdline, c"belowright ");
-            }
-            8 => {
-                cmdline_concat_str(&raw mut cmdline, c"topleft ");
-            }
-            16 => {
-                cmdline_concat_str(&raw mut cmdline, c"botright ");
-            }
+        // A switch over the *masked* value, so two placement bits at once
+        // spell no modifier at all rather than the first of them.
+        const ABOVE: c_int = WSP_ABOVE as c_int;
+        const BELOW: c_int = WSP_BELOW as c_int;
+        const TOP: c_int = WSP_TOP as c_int;
+        const BOT: c_int = WSP_BOT as c_int;
+        match cmdmod.cmod_split & (ABOVE | BELOW | TOP | BOT) {
+            ABOVE => cmdline_concat_str(cmdline, c"aboveleft "),
+            BELOW => cmdline_concat_str(cmdline, c"belowright "),
+            TOP => cmdline_concat_str(cmdline, c"topleft "),
+            BOT => cmdline_concat_str(cmdline, c"botright "),
             _ => {}
         }
-        if (*cmdinfo).cmdmod.cmod_split & WSP_VERT as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"vertical ");
+        if cmdmod.cmod_split & WSP_VERT as c_int != 0 {
+            cmdline_concat_str(cmdline, c"vertical ");
         }
-        if (*cmdinfo).cmdmod.cmod_split & WSP_HOR as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"horizontal ");
+        if cmdmod.cmod_split & WSP_HOR as c_int != 0 {
+            cmdline_concat_str(cmdline, c"horizontal ");
         }
-        if (*cmdinfo).cmdmod.cmod_flags & CMOD_SANDBOX as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"sandbox ");
+        for (mask, text) in [
+            (CMOD_SANDBOX, c"sandbox "),
+            (CMOD_NOAUTOCMD, c"noautocmd "),
+            (CMOD_BROWSE, c"browse "),
+            (CMOD_CONFIRM, c"confirm "),
+            (CMOD_HIDE, c"hide "),
+            (CMOD_KEEPALT, c"keepalt "),
+            (CMOD_KEEPJUMPS, c"keepjumps "),
+            (CMOD_KEEPMARKS, c"keepmarks "),
+            (CMOD_KEEPPATTERNS, c"keeppatterns "),
+            (CMOD_LOCKMARKS, c"lockmarks "),
+            (CMOD_NOSWAPFILE, c"noswapfile "),
+        ] {
+            if cmdmod.cmod_flags & mask as c_int != 0 {
+                cmdline_concat_str(cmdline, text);
+            }
         }
-        if (*cmdinfo).cmdmod.cmod_flags & CMOD_NOAUTOCMD as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"noautocmd ");
-        }
-        if (*cmdinfo).cmdmod.cmod_flags & CMOD_BROWSE as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"browse ");
-        }
-        if (*cmdinfo).cmdmod.cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"confirm ");
-        }
-        if (*cmdinfo).cmdmod.cmod_flags & CMOD_HIDE as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"hide ");
-        }
-        if (*cmdinfo).cmdmod.cmod_flags & CMOD_KEEPALT as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"keepalt ");
-        }
-        if (*cmdinfo).cmdmod.cmod_flags & CMOD_KEEPJUMPS as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"keepjumps ");
-        }
-        if (*cmdinfo).cmdmod.cmod_flags & CMOD_KEEPMARKS as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"keepmarks ");
-        }
-        if (*cmdinfo).cmdmod.cmod_flags & CMOD_KEEPPATTERNS as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"keeppatterns ");
-        }
-        if (*cmdinfo).cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"lockmarks ");
-        }
-        if (*cmdinfo).cmdmod.cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int != 0 {
-            cmdline_concat_str(&raw mut cmdline, c"noswapfile ");
-        }
+    }
+}
+
+pub(crate) unsafe extern "C" fn build_cmdline_str(
+    cmdlinep: *mut *mut c_char,
+    eap: *mut exarg_T,
+    cmdinfo: *mut CmdParseInfo,
+    args: Array,
+) {
+    unsafe {
+        let argc: size_t = args.size;
+        let mut cmdline: StringBuilder = StringBuilder {
+            size: 0,
+            capacity: 32,
+            items: xrealloc(ptr::null_mut(), 32).cast::<c_char>(),
+        };
+        concat_cmdmods(&raw mut cmdline, &(*cmdinfo).cmdmod);
+
         if (*eap).argt & EX_RANGE as uint32_t != 0 {
-            if (*eap).addr_count == 1 as ::core::ffi::c_int {
+            if (*eap).addr_count == 1 {
+                kv_do_printf(&raw mut cmdline, c"%d".as_ptr(), (*eap).line2);
+            } else if (*eap).addr_count > 1 {
                 kv_do_printf(
                     &raw mut cmdline,
-                    b"%d\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*eap).line2,
-                );
-            } else if (*eap).addr_count > 1 as ::core::ffi::c_int {
-                kv_do_printf(
-                    &raw mut cmdline,
-                    b"%d,%d\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"%d,%d".as_ptr(),
                     (*eap).line1,
                     (*eap).line2,
                 );
-                (*eap).addr_count = 2 as ::core::ffi::c_int;
+                // Only two of them made it into the string.
+                (*eap).addr_count = 2;
             }
         }
-        let mut cmdname_idx: size_t = cmdline.size;
+        let cmdname_idx: size_t = cmdline.size;
         cmdline_concat(&raw mut cmdline, (*eap).cmd, strlen((*eap).cmd));
         if (*eap).argt & EX_BANG as uint32_t != 0 && (*eap).forceit != 0 {
             cmdline_concat_str(&raw mut cmdline, c"!");
         }
         if (*eap).argt & EX_REGSTR as uint32_t != 0 && (*eap).regname != 0 {
-            kv_do_printf(
-                &raw mut cmdline,
-                b" %c\0".as_ptr() as *const ::core::ffi::c_char,
-                (*eap).regname,
-            );
+            kv_do_printf(&raw mut cmdline, c" %c".as_ptr(), (*eap).regname);
         }
+
+        // Each argument is preceded by one space, which is what lets the
+        // offsets below be recovered from the lengths alone.
         (*eap).argc = argc;
-        (*eap).arglens = (if (*eap).argc > 0 as size_t {
-            xcalloc(argc, ::core::mem::size_of::<size_t>())
+        (*eap).arglens = if argc > 0 {
+            xcalloc(argc, mem::size_of::<size_t>()).cast::<size_t>()
         } else {
-            NULL
-        }) as *mut size_t;
-        let mut argstart_idx: size_t = cmdline.size;
-        let mut i: size_t = 0 as size_t;
-        while i < argc {
-            let mut s: String_0 = (*args.items.offset(i as isize)).data.string;
-            *(*eap).arglens.offset(i as isize) = s.size;
+            ptr::null_mut::<size_t>()
+        };
+        let argstart_idx: size_t = cmdline.size;
+        for i in 0..argc {
+            let s: String_0 = (*args.items.add(i)).data.string;
+            *(*eap).arglens.add(i) = s.size;
             cmdline_concat_str(&raw mut cmdline, c" ");
             cmdline_concat(&raw mut cmdline, s.data, s.size);
-            i = i.wrapping_add(1);
         }
-        if cmdline.size == cmdline.capacity {
-            cmdline.capacity = if cmdline.capacity != 0 {
-                cmdline.capacity << 1 as ::core::ffi::c_int
-            } else {
-                8 as size_t
-            };
-            cmdline.items = xrealloc(
-                cmdline.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
-            ) as *mut ::core::ffi::c_char;
+        // The NUL is part of `size`, so that `arg` below can point at it.
+        cmdline_concat(&raw mut cmdline, c"".as_ptr(), 1);
+
+        (*eap).cmd = cmdline.items.add(cmdname_idx);
+        (*eap).args = if argc > 0 {
+            xcalloc(argc, mem::size_of::<*mut c_char>()).cast::<*mut c_char>()
         } else {
+            ptr::null_mut::<*mut c_char>()
         };
-        let c2rust_fresh33 = cmdline.size;
-        cmdline.size = cmdline.size.wrapping_add(1);
-        *cmdline.items.offset(c2rust_fresh33 as isize) = '\0' as ::core::ffi::c_char;
-        (*eap).cmd = cmdline.items.offset(cmdname_idx as isize);
-        (*eap).args = (if (*eap).argc > 0 as size_t {
-            xcalloc(argc, ::core::mem::size_of::<*mut ::core::ffi::c_char>())
-        } else {
-            NULL
-        }) as *mut *mut ::core::ffi::c_char;
         let mut offset: size_t = argstart_idx;
-        let mut i_0: size_t = 0 as size_t;
-        while i_0 < argc {
-            offset = offset.wrapping_add(1);
-            *(*eap).args.offset(i_0 as isize) = cmdline.items.offset(offset as isize);
-            offset = offset.wrapping_add(*(*eap).arglens.offset(i_0 as isize));
-            i_0 = i_0.wrapping_add(1);
+        for i in 0..argc {
+            offset += 1;
+            *(*eap).args.add(i) = cmdline.items.add(offset);
+            offset += *(*eap).arglens.add(i);
         }
-        (*eap).arg = if argc > 0 as size_t {
-            *(*eap).args.offset(0 as ::core::ffi::c_int as isize)
+        (*eap).arg = if argc > 0 {
+            *(*eap).args
         } else {
-            cmdline
-                .items
-                .offset(cmdline.size as isize)
-                .offset(-(1 as ::core::ffi::c_int as isize))
+            cmdline.items.add(cmdline.size - 1)
         };
         *cmdlinep = cmdline.items;
-        let mut p: *mut ::core::ffi::c_char = replace_makeprg(eap, (*eap).arg, cmdlinep);
+
+        // `:make`/`:grep` rewrite their own argument, and the rewrite has no
+        // relation to the `args` array that was just built.
+        let p: *mut c_char = replace_makeprg(eap, (*eap).arg, cmdlinep);
         if p != (*eap).arg {
             (*eap).arg = p;
-            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                &raw mut (*eap).args as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr_);
-            *ptr_ = NULL;
-            let _ = *ptr_;
-            let mut ptr__0: *mut *mut ::core::ffi::c_void =
-                &raw mut (*eap).arglens as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr__0);
-            *ptr__0 = NULL;
-            let _ = *ptr__0;
-            (*eap).argc = 0 as size_t;
+            xfree((*eap).args.cast());
+            (*eap).args = ptr::null_mut::<*mut c_char>();
+            xfree((*eap).arglens.cast());
+            (*eap).arglens = ptr::null_mut::<size_t>();
+            (*eap).argc = 0;
         }
     }
 }

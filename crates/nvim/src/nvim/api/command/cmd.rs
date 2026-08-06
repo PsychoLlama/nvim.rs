@@ -10,6 +10,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::api::private::helpers::array_add;
 
 pub unsafe extern "C" fn nvim_cmd(
     mut channel_id: uint64_t,
@@ -139,8 +140,7 @@ pub unsafe extern "C" fn nvim_cmd(
                                 api_set_error(
                                     err,
                                     kErrorTypeValidation,
-                                    b"Invalid command: \"%s\"\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    c"Invalid command: \"%s\"".as_ptr(),
                                     cmdname,
                                 );
                                 break '_end;
@@ -197,56 +197,42 @@ pub unsafe extern "C" fn nvim_cmd(
                             }
                             if !count_from_first_arg {
                                 args = arena_array(arena, (*cmd).args.size);
-                                let mut i: size_t = 0 as size_t;
-                                while i < (*cmd).args.size {
-                                    let mut elem: Object = *(*cmd).args.items.offset(i as isize);
-                                    let mut data_str: *mut ::core::ffi::c_char =
-                                        ::core::ptr::null_mut::<::core::ffi::c_char>();
-                                    match elem.type_0 as ::core::ffi::c_uint {
-                                        1 => {
-                                            data_str = arena_alloc(arena, 2 as size_t, false_0 != 0)
-                                                as *mut ::core::ffi::c_char;
-                                            *data_str.offset(0 as ::core::ffi::c_int as isize) =
-                                                (if elem.data.boolean as ::core::ffi::c_int != 0 {
-                                                    '1' as ::core::ffi::c_int
-                                                } else {
-                                                    '0' as ::core::ffi::c_int
-                                                })
-                                                    as ::core::ffi::c_char;
-                                            *data_str.offset(1 as ::core::ffi::c_int as isize) =
-                                                NUL as ::core::ffi::c_char;
-                                            let c2rust_fresh30 = args.size;
-                                            args.size = args.size.wrapping_add(1);
-                                            *args.items.offset(c2rust_fresh30 as isize) = object {
-                                                type_0: kObjectTypeString,
-                                                data: C2Rust_Unnamed {
-                                                    string: cstr_as_string(data_str),
-                                                },
-                                            };
+                                for i in 0..(*cmd).args.size {
+                                    let elem: Object = *(*cmd).args.items.add(i);
+                                    match elem.type_0 {
+                                        // A boolean argument is spelled to the
+                                        // command as "0" or "1".
+                                        kObjectTypeBoolean => {
+                                            let data_str: *mut ::core::ffi::c_char =
+                                                arena_alloc(arena, 2, false).cast();
+                                            *data_str = if elem.data.boolean { b'1' } else { b'0' }
+                                                as ::core::ffi::c_char;
+                                            *data_str.add(1) = NUL as ::core::ffi::c_char;
+                                            array_add(
+                                                &mut args,
+                                                Object::string(cstr_as_string(data_str)),
+                                            );
                                         }
-                                        8 | 9 | 10 | 2 => {
-                                            data_str = arena_alloc(
-                                                arena,
-                                                NUMBUFLEN as ::core::ffi::c_int as size_t,
-                                                false_0 != 0,
-                                            )
-                                                as *mut ::core::ffi::c_char;
+                                        // A handle is its id, like any integer.
+                                        kObjectTypeBuffer | kObjectTypeWindow
+                                        | kObjectTypeTabpage | kObjectTypeInteger => {
+                                            let data_str: *mut ::core::ffi::c_char =
+                                                arena_alloc(arena, NUMBUFLEN as size_t, false)
+                                                    .cast();
                                             snprintf(
                                                 data_str,
-                                                NUMBUFLEN as ::core::ffi::c_int as size_t,
+                                                NUMBUFLEN as size_t,
                                                 c"%ld".as_ptr(),
                                                 elem.data.integer,
                                             );
-                                            let c2rust_fresh31 = args.size;
-                                            args.size = args.size.wrapping_add(1);
-                                            *args.items.offset(c2rust_fresh31 as isize) = object {
-                                                type_0: kObjectTypeString,
-                                                data: C2Rust_Unnamed {
-                                                    string: cstr_as_string(data_str),
-                                                },
-                                            };
+                                            array_add(
+                                                &mut args,
+                                                Object::string(cstr_as_string(data_str)),
+                                            );
                                         }
-                                        4 => {
+                                        kObjectTypeString => {
+                                            // An all-whitespace argument would
+                                            // vanish into the separators.
                                             if string_iswhite(elem.data.string) {
                                                 api_err_exp(
                                                     err,
@@ -256,23 +242,18 @@ pub unsafe extern "C" fn nvim_cmd(
                                                 );
                                                 break '_end;
                                             }
-                                            let c2rust_fresh32 = args.size;
-                                            args.size = args.size.wrapping_add(1);
-                                            *args.items.offset(c2rust_fresh32 as isize) = elem;
+                                            array_add(&mut args, elem);
                                         }
                                         _ => {
-                                            if true {
-                                                api_err_exp(
-                                                    err,
-                                                    c"command arg".as_ptr(),
-                                                    c"valid type".as_ptr(),
-                                                    api_typename(elem.type_0),
-                                                );
-                                                break '_end;
-                                            }
+                                            api_err_exp(
+                                                err,
+                                                c"command arg".as_ptr(),
+                                                c"valid type".as_ptr(),
+                                                api_typename(elem.type_0),
+                                            );
+                                            break '_end;
                                         }
                                     }
-                                    i = i.wrapping_add(1);
                                 }
                                 let mut argc_valid: bool = false;
                                 match ea.argt
@@ -339,16 +320,11 @@ pub unsafe extern "C" fn nvim_cmd(
                                 );
                                 break '_end;
                             }
-                            let mut range: Array = (*cmd).range;
+                            let range: Array = (*cmd).range;
                             ea.addr_count = range.size as ::core::ffi::c_int;
-                            let mut i_0: size_t = 0 as size_t;
-                            while i_0 < range.size {
-                                let mut elem_0: Object = *range.items.offset(i_0 as isize);
-                                if !(elem_0.type_0 as ::core::ffi::c_uint
-                                    == kObjectTypeInteger as ::core::ffi::c_int
-                                        as ::core::ffi::c_uint
-                                    && elem_0.data.integer >= 0 as Integer)
-                                {
+                            for i in 0..range.size {
+                                let elem: Object = *range.items.add(i);
+                                if elem.type_0 != kObjectTypeInteger || elem.data.integer < 0 {
                                     api_err_exp(
                                         err,
                                         c"range element".as_ptr(),
@@ -357,17 +333,12 @@ pub unsafe extern "C" fn nvim_cmd(
                                     );
                                     break '_end;
                                 }
-                                i_0 = i_0.wrapping_add(1);
                             }
-                            if range.size > 0 as size_t {
-                                ea.line1 = (*range.items.offset(0 as ::core::ffi::c_int as isize))
-                                    .data
-                                    .integer as linenr_T;
-                                ea.line2 = (*range
-                                    .items
-                                    .offset(range.size.wrapping_sub(1 as size_t) as isize))
-                                .data
-                                .integer as linenr_T;
+                            // One element gives both bounds.
+                            if range.size > 0 {
+                                ea.line1 = (*range.items).data.integer as linenr_T;
+                                ea.line2 =
+                                    (*range.items.add(range.size - 1)).data.integer as linenr_T;
                             }
                             if !invalid_range(&raw mut ea).is_null() {
                                 api_err_invalid(
@@ -448,8 +419,7 @@ pub unsafe extern "C" fn nvim_cmd(
                                     err,
                                     kErrorTypeValidation,
                                     c"%s".as_ptr(),
-                                    b"Cannot use register \"=\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    c"Cannot use register \"=".as_ptr(),
                                 );
                                 break '_end;
                             } else if !valid_yank_reg(
@@ -463,8 +433,7 @@ pub unsafe extern "C" fn nvim_cmd(
                                 api_set_error(
                                     err,
                                     kErrorTypeValidation,
-                                    b"Invalid register: \"%c\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    c"Invalid register: \"%c".as_ptr(),
                                     regname as ::core::ffi::c_int,
                                 );
                                 break '_end;
