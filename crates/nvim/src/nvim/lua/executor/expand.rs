@@ -1,114 +1,123 @@
 //! Command-line completion over Lua names.
 //!
-//! `nlua_expand_pat` hands the pattern to `vim._expand_pat` and stashes the
-//! results in [`expand_result_array`], which `nlua_expand_get_matches` then
-//! drains -- the two-step shape exists because the caller wants the matches
-//! after the Lua state has been unwound.
+//! [`nlua_expand_pat`] hands the pattern to `vim._expand_pat` and stashes the
+//! results in `EXPAND_RESULTS`, which [`nlua_expand_get_matches`] then drains
+//! -- the two-step shape exists because the caller wants the matches after
+//! the Lua state has been unwound.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{c_char, c_int};
 
-static expand_result_array: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
+use super::{GA_EMPTY_INIT_VALUE, get_global_lstate, nlua_error, nlua_pcall};
+use crate::src::nvim::api::private::helpers::string_to_cstr;
+use crate::src::nvim::ex_getln::ERROR_INIT;
+use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::lua::converter::{nlua_pop_Array, nlua_pop_Integer};
+use crate::src::nvim::lua::ffi::{
+    LUA_TFUNCTION, lua_getfield, lua_getglobal, lua_pushlstring, luaL_checktype,
+};
+use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::types::{
+    Arena, expand_T, garray_T, kErrorTypeNone, kObjectTypeString, ptrdiff_t, size_t,
+};
 
-pub unsafe extern "C-unwind" fn nlua_expand_pat(mut xp: *mut expand_T) {
+/// `nlua_expand_pat`'s two answers.
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+/// How many matches the result garray grows by at a time.
+const EXPAND_GROWSIZE: c_int = 80;
+
+/// The matches [`nlua_expand_pat`] produced, waiting for
+/// [`nlua_expand_get_matches`] to take ownership of them.
+static EXPAND_RESULTS: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
+
+/// Complete `xp->xp_pattern` through `vim._expand_pat`, which answers a
+/// prefix length and a list of strings.
+///
+/// The prefix length is how much of the pattern the matches already include,
+/// so `xp_pattern` is advanced past it. Anything that goes wrong — the call,
+/// the conversion, a non-string in the list, a prefix longer than the
+/// pattern — leaves no matches at all.
+///
+/// # Safety
+/// `xp` must be a live expansion context whose `xp_pattern` points into
+/// `xp_line`.
+pub unsafe extern "C-unwind" fn nlua_expand_pat(xp: *mut expand_T) {
     unsafe {
-        let mut completions: Array = Array {
-            size: 0,
-            capacity: 0,
-            items: ::core::ptr::null_mut::<Object>(),
-        };
-        let lstate: *mut lua_State = global_lstate.get();
-        let mut status: ::core::ffi::c_int = FAIL;
-        lua_getfield(
-            lstate,
-            LUA_GLOBALSINDEX,
-            b"vim\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_getfield(
-            lstate,
-            -1 as ::core::ffi::c_int,
-            b"_expand_pat\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        luaL_checktype(lstate, -1 as ::core::ffi::c_int, LUA_TFUNCTION);
-        let mut pat: *const ::core::ffi::c_char = (*xp).xp_pattern;
-        '_c2rust_label: {
-            if (*xp).xp_line.offset((*xp).xp_col as isize) >= pat as *mut ::core::ffi::c_char {
-            } else {
-                __assert_fail(
-                    b"xp->xp_line + xp->xp_col >= pat\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/lua/executor.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1971 as ::core::ffi::c_uint,
-                    b"void nlua_expand_pat(expand_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        let mut patlen: ptrdiff_t = (*xp).xp_line.offset((*xp).xp_col as isize).offset_from(pat);
+        let lstate = get_global_lstate();
+        let mut status = FAIL;
+
+        lua_getglobal(lstate, c"vim".as_ptr());
+        lua_getfield(lstate, -1, c"_expand_pat".as_ptr());
+        luaL_checktype(lstate, -1, LUA_TFUNCTION);
+
+        let pat: *const c_char = (*xp).xp_pattern;
+        debug_assert!((*xp).xp_line.add((*xp).xp_col as usize) >= pat.cast_mut());
+        let patlen: ptrdiff_t = (*xp).xp_line.add((*xp).xp_col as usize).offset_from(pat);
         lua_pushlstring(lstate, pat, patlen as size_t);
-        if nlua_pcall(lstate, 1 as ::core::ffi::c_int, 2 as ::core::ffi::c_int)
-            != 0 as ::core::ffi::c_int
-        {
-            nlua_error(
-                lstate,
-                gettext(b"vim._expand_pat: %.*s\0".as_ptr() as *const ::core::ffi::c_char),
-            );
+
+        if nlua_pcall(lstate, 1, 2) != 0 {
+            nlua_error(lstate, gettext(c"vim._expand_pat: %.*s".as_ptr()));
             return;
         }
-        let mut err: Error = Error {
-            type_0: kErrorTypeNone,
-            msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        };
+
+        let mut err = ERROR_INIT;
         let mut arena: Arena = ARENA_EMPTY;
-        let mut prefix_len: ptrdiff_t =
-            nlua_pop_Integer(lstate, &raw mut arena, &raw mut err) as ptrdiff_t;
-        if !(err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
-            || prefix_len > patlen)
-        {
-            completions = nlua_pop_Array(lstate, &raw mut arena, &raw mut err);
-            '_cleanup_array: {
-                if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-                    ga_clear(expand_result_array.ptr());
-                    ga_init(
-                        expand_result_array.ptr(),
-                        ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-                        80 as ::core::ffi::c_int,
-                    );
-                    let mut i: size_t = 0 as size_t;
-                    while i < completions.size {
-                        let mut v: Object = *completions.items.offset(i as isize);
-                        if v.type_0 as ::core::ffi::c_uint
-                            != kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            break '_cleanup_array;
-                        }
-                        ga_grow(expand_result_array.ptr(), 1 as ::core::ffi::c_int);
-                        *((*expand_result_array.ptr()).ga_data as *mut *mut ::core::ffi::c_char)
-                            .offset((*expand_result_array.ptr()).ga_len as isize) =
-                            string_to_cstr(v.data.string);
-                        (*expand_result_array.ptr()).ga_len += 1;
-                        i = i.wrapping_add(1);
-                    }
-                    (*xp).xp_pattern = (*xp).xp_pattern.offset(prefix_len as isize);
-                    status = OK;
+        let prefix_len = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err) as ptrdiff_t;
+        if err.type_0 == kErrorTypeNone && prefix_len <= patlen {
+            let completions = nlua_pop_Array(lstate, &raw mut arena, &raw mut err);
+            'cleanup_array: {
+                if err.type_0 != kErrorTypeNone {
+                    break 'cleanup_array;
                 }
+                ga_clear(EXPAND_RESULTS.ptr());
+                ga_init(
+                    EXPAND_RESULTS.ptr(),
+                    size_of::<*mut c_char>() as c_int,
+                    EXPAND_GROWSIZE,
+                );
+                for i in 0..completions.size {
+                    let v = *completions.items.add(i);
+                    if v.type_0 != kObjectTypeString {
+                        break 'cleanup_array;
+                    }
+                    ga_grow(EXPAND_RESULTS.ptr(), 1);
+                    let ga = EXPAND_RESULTS.ptr();
+                    *(*ga)
+                        .ga_data
+                        .cast::<*mut c_char>()
+                        .add((*ga).ga_len as usize) = string_to_cstr(v.data.string);
+                    (*ga).ga_len += 1;
+                }
+                (*xp).xp_pattern = (*xp).xp_pattern.offset(prefix_len as isize);
+                status = OK;
             }
             arena_mem_free(arena_finish(&raw mut arena));
         }
+
         if status == FAIL {
-            ga_clear(expand_result_array.ptr());
+            ga_clear(EXPAND_RESULTS.ptr());
         }
     }
 }
 
+/// Hand the stashed matches to the caller, which takes ownership of both the
+/// array and every string in it.
+///
+/// # Safety
+/// Both out-parameters must be writable.
 pub unsafe extern "C-unwind" fn nlua_expand_get_matches(
-    mut num_results: *mut ::core::ffi::c_int,
-    mut results: *mut *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+    num_results: *mut c_int,
+    results: *mut *mut *mut c_char,
+) -> c_int {
     unsafe {
-        *results = (*expand_result_array.ptr()).ga_data as *mut *mut ::core::ffi::c_char;
-        *num_results = (*expand_result_array.ptr()).ga_len;
-        expand_result_array.set(GA_EMPTY_INIT_VALUE);
-        return (*num_results > 0 as ::core::ffi::c_int) as ::core::ffi::c_int;
+        *results = (*EXPAND_RESULTS.ptr()).ga_data.cast::<*mut c_char>();
+        *num_results = (*EXPAND_RESULTS.ptr()).ga_len;
+        EXPAND_RESULTS.set(GA_EMPTY_INIT_VALUE);
+        (*num_results > 0) as c_int
     }
 }

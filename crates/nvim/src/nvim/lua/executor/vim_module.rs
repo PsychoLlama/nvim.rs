@@ -1,372 +1,242 @@
 //! Building the `vim` table itself.
 //!
-//! `nlua_common_vim_init` is the shared half every state gets -- the api
-//! functions, the `vim.*` C functions, the metatables -- and
-//! `nlua_init_packages` runs `vim._init_packages` over the embedded Lua
-//! modules.  `nlua_ui_attach`/`nlua_ui_detach` are `vim.ui_attach()`, whose
-//! callbacks the compositor calls back into.
+//! [`nlua_common_vim_init`] is the shared half every state gets -- the
+//! reference table, the `vim.NIL` and `vim.empty_dict()` sentinels, luv --
+//! and [`nlua_init_packages`] runs `vim._init_packages` over the embedded Lua
+//! modules.  [`nlua_ui_attach`]/[`nlua_ui_detach`] are `vim.ui_attach()`,
+//! whose callbacks the compositor calls back into.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{CStr, c_char, c_int};
 
+use super::{
+    BUILTIN_MODULES, luv_set_callback, luv_set_cthread, luv_set_thread, nlua_empty_dict_tostring,
+    nlua_fast_cfpcall, nlua_is_thread, nlua_luv_thread_cb_cfpcall, nlua_luv_thread_cfcpcall,
+    nlua_luv_thread_cfpcall, nlua_new_ref_state, nlua_nil_tostring, nlua_pcall, nlua_ref,
+    nlua_ref_global,
+};
+use crate::src::nvim::api::extmark::ns_initialized;
+use crate::src::nvim::lua::ffi::{
+    LUA_REGISTRYINDEX, LUA_TFUNCTION, LUA_TTABLE, lua_call, lua_error, lua_getfield, lua_getglobal,
+    lua_newtable, lua_newuserdata, lua_next, lua_pop, lua_pushboolean, lua_pushcclosure,
+    lua_pushcfunction, lua_pushinteger, lua_pushnil, lua_pushstring, lua_pushvalue, lua_setfield,
+    lua_setmetatable, lua_toboolean, lua_tointeger, lua_tolstring, lua_tostring, lua_type,
+    lua_upvalueindex, luaL_checkinteger, luaL_error, luaL_loadbuffer, luaopen_luv, luv_set_loop,
+};
+use crate::src::nvim::main::{main_loop, nlua_disable_preload, ui_ext_names, ui_refresh_cmdheight};
+use crate::src::nvim::memory::strequal;
+use crate::src::nvim::os::libc::{fprintf, stderr};
+use crate::src::nvim::types::ui::kUILinegrid;
+use crate::src::nvim::types::{LuaRef, lua_Integer, lua_State, size_t, uint32_t};
+use crate::src::nvim::ui::{ui_add_cb, ui_remove_cb};
+
+/// The registry key this state's reference bookkeeping is parked under.
+const REF_STATE_KEY: &CStr = c"nlua.ref_state";
+/// The name the module whose preload the `--luamod-dev` flag stops at.
+const FIRST_DEV_MODULE: &CStr = c"vim.inspect";
+
+/// The half of the `vim` table that a thread state gets as well as the main
+/// one: the reference table, the two identity sentinels, and luv.
+///
+/// Expects the `vim` table on top; leaves it there.
+///
+/// # Safety
+/// `lstate` must be a live Lua state with the `vim` table on top.
 pub(crate) unsafe extern "C-unwind" fn nlua_common_vim_init(
-    mut lstate: *mut lua_State,
-    mut is_thread: bool,
-    mut is_standalone: bool,
+    lstate: *mut lua_State,
+    is_thread: bool,
+    is_standalone: bool,
 ) {
     unsafe {
-        let mut ref_state: *mut nlua_ref_state_t = nlua_new_ref_state(lstate, is_thread);
-        lua_setfield(
-            lstate,
-            LUA_REGISTRYINDEX,
-            b"nlua.ref_state\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushboolean(lstate, is_thread as ::core::ffi::c_int);
-        lua_setfield(
-            lstate,
-            LUA_REGISTRYINDEX,
-            b"nvim.thread\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushcclosure(
-            lstate,
-            Some(
-                nlua_is_thread as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
-            0 as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"is_thread\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_newuserdata(lstate, 0 as size_t);
-        lua_createtable(lstate, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-        lua_pushcclosure(
-            lstate,
-            Some(
-                nlua_nil_tostring
-                    as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
-            0 as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"__tostring\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_setmetatable(lstate, -2 as ::core::ffi::c_int);
-        (*ref_state).nil_ref = nlua_ref(lstate, ref_state, -1 as ::core::ffi::c_int);
-        lua_pushvalue(lstate, -1 as ::core::ffi::c_int);
-        lua_setfield(
-            lstate,
-            LUA_REGISTRYINDEX,
-            b"mpack.NIL\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"NIL\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_createtable(lstate, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-        lua_pushcclosure(
-            lstate,
-            Some(
-                nlua_empty_dict_tostring
-                    as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
-            0 as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"__tostring\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        (*ref_state).empty_dict_ref = nlua_ref(lstate, ref_state, -1 as ::core::ffi::c_int);
-        lua_pushvalue(lstate, -1 as ::core::ffi::c_int);
-        lua_setfield(
-            lstate,
-            LUA_REGISTRYINDEX,
-            b"mpack.empty_dict\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"_empty_dict_mt\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        let ref_state = nlua_new_ref_state(lstate, is_thread);
+        lua_setfield(lstate, LUA_REGISTRYINDEX, REF_STATE_KEY.as_ptr());
+
+        lua_pushboolean(lstate, is_thread as c_int);
+        lua_setfield(lstate, LUA_REGISTRYINDEX, c"nvim.thread".as_ptr());
+        lua_pushcfunction(lstate, nlua_is_thread);
+        lua_setfield(lstate, -2, c"is_thread".as_ptr());
+
+        // vim.NIL: a zero-length userdatum, so it is unique and compares by
+        // identity, with a metatable that renders it.
+        lua_newuserdata(lstate, 0);
+        lua_newtable(lstate);
+        lua_pushcfunction(lstate, nlua_nil_tostring);
+        lua_setfield(lstate, -2, c"__tostring".as_ptr());
+        lua_setmetatable(lstate, -2);
+        (*ref_state).nil_ref = nlua_ref(lstate, ref_state, -1);
+        lua_pushvalue(lstate, -1);
+        lua_setfield(lstate, LUA_REGISTRYINDEX, c"mpack.NIL".as_ptr());
+        lua_setfield(lstate, -2, c"NIL".as_ptr());
+
+        // vim.empty_dict(): the *metatable* is the marker, so an empty table
+        // carrying it converts as a dictionary rather than a list.
+        lua_newtable(lstate);
+        lua_pushcfunction(lstate, nlua_empty_dict_tostring);
+        lua_setfield(lstate, -2, c"__tostring".as_ptr());
+        (*ref_state).empty_dict_ref = nlua_ref(lstate, ref_state, -1);
+        lua_pushvalue(lstate, -1);
+        lua_setfield(lstate, LUA_REGISTRYINDEX, c"mpack.empty_dict".as_ptr());
+        lua_setfield(lstate, -2, c"_empty_dict_mt".as_ptr());
+
         if !is_standalone {
             if is_thread {
-                luv_set_callback(
-                    lstate,
-                    Some(
-                        nlua_luv_thread_cb_cfpcall
-                            as unsafe extern "C-unwind" fn(
-                                *mut lua_State,
-                                ::core::ffi::c_int,
-                                ::core::ffi::c_int,
-                                ::core::ffi::c_int,
-                            )
-                                -> ::core::ffi::c_int,
-                    ),
-                );
-                luv_set_thread(
-                    lstate,
-                    Some(
-                        nlua_luv_thread_cfpcall
-                            as unsafe extern "C-unwind" fn(
-                                *mut lua_State,
-                                ::core::ffi::c_int,
-                                ::core::ffi::c_int,
-                                ::core::ffi::c_int,
-                            )
-                                -> ::core::ffi::c_int,
-                    ),
-                );
-                luv_set_cthread(
-                    lstate,
-                    Some(
-                        nlua_luv_thread_cfcpcall
-                            as unsafe extern "C-unwind" fn(
-                                *mut lua_State,
-                                lua_CFunction,
-                                *mut ::core::ffi::c_void,
-                                ::core::ffi::c_int,
-                            )
-                                -> ::core::ffi::c_int,
-                    ),
-                );
+                luv_set_callback(lstate, Some(nlua_luv_thread_cb_cfpcall));
+                luv_set_thread(lstate, Some(nlua_luv_thread_cfpcall));
+                luv_set_cthread(lstate, Some(nlua_luv_thread_cfcpcall));
             } else {
                 luv_set_loop(lstate, &raw mut (*main_loop.ptr()).uv);
-                luv_set_callback(
-                    lstate,
-                    Some(
-                        nlua_fast_cfpcall
-                            as unsafe extern "C-unwind" fn(
-                                *mut lua_State,
-                                ::core::ffi::c_int,
-                                ::core::ffi::c_int,
-                                ::core::ffi::c_int,
-                            )
-                                -> ::core::ffi::c_int,
-                    ),
-                );
+                luv_set_callback(lstate, Some(nlua_fast_cfpcall));
             }
         }
+
+        // vim.uv, vim.loop and package.loaded.luv are the same table.
         luaopen_luv(lstate);
-        lua_pushvalue(lstate, -1 as ::core::ffi::c_int);
-        lua_setfield(
-            lstate,
-            -3 as ::core::ffi::c_int,
-            b"uv\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushvalue(lstate, -1 as ::core::ffi::c_int);
-        lua_setfield(
-            lstate,
-            -3 as ::core::ffi::c_int,
-            b"loop\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_getfield(
-            lstate,
-            LUA_GLOBALSINDEX,
-            b"package\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_getfield(
-            lstate,
-            -1 as ::core::ffi::c_int,
-            b"loaded\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushvalue(lstate, -3 as ::core::ffi::c_int);
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"luv\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_settop(lstate, -3 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
+        lua_pushvalue(lstate, -1);
+        lua_setfield(lstate, -3, c"uv".as_ptr());
+        lua_pushvalue(lstate, -1);
+        lua_setfield(lstate, -3, c"loop".as_ptr());
+
+        lua_getglobal(lstate, c"package".as_ptr());
+        lua_getfield(lstate, -1, c"loaded".as_ptr());
+        lua_pushvalue(lstate, -3);
+        lua_setfield(lstate, -2, c"luv".as_ptr());
+        lua_pop(lstate, 3);
     }
 }
 
-pub(crate) unsafe extern "C-unwind" fn nlua_module_preloader(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+/// The `package.preload` entry for one embedded module: load its bytecode and
+/// run it. Its upvalue is the module's index in [`BUILTIN_MODULES`].
+///
+/// # Safety
+/// `lstate` must be a live Lua state and the upvalue a valid index.
+pub(crate) unsafe extern "C-unwind" fn nlua_module_preloader(lstate: *mut lua_State) -> c_int {
     unsafe {
-        let mut i: size_t =
-            lua_tointeger(lstate, LUA_GLOBALSINDEX - 1 as ::core::ffi::c_int) as size_t;
-        let mut def: ModuleDef = (*builtin_modules.ptr())[i as usize];
+        let i = lua_tointeger(lstate, lua_upvalueindex(1)) as size_t;
+        let chunk = BUILTIN_MODULES[i].chunk();
         if luaL_loadbuffer(
             lstate,
-            def.data as *const ::core::ffi::c_char,
-            def.size.wrapping_sub(1 as size_t),
-            ::core::ptr::null::<::core::ffi::c_char>(),
+            chunk.as_ptr().cast::<c_char>(),
+            chunk.len(),
+            ::core::ptr::null(),
         ) != 0
         {
             return lua_error(lstate);
         }
-        lua_call(lstate, 0 as ::core::ffi::c_int, 1 as ::core::ffi::c_int);
-        return 1 as ::core::ffi::c_int;
+        lua_call(lstate, 0, 1);
+        1
     }
 }
 
+/// Register every embedded module in `package.preload`, then `require`
+/// `vim._init_packages`, which is what wires up the rest of the runtime.
+///
+/// `nlua_disable_preload` (`--luamod-dev`) stops the registration at
+/// `vim.inspect`, so everything after it is loaded from the runtime
+/// directory instead.
+///
+/// # Safety
+/// `lstate` must be a live Lua state.
 pub(crate) unsafe extern "C-unwind" fn nlua_init_packages(
-    mut lstate: *mut lua_State,
-    mut is_standalone: bool,
+    lstate: *mut lua_State,
+    is_standalone: bool,
 ) -> bool {
     unsafe {
-        lua_getfield(
-            lstate,
-            LUA_GLOBALSINDEX,
-            b"package\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_getfield(
-            lstate,
-            -1 as ::core::ffi::c_int,
-            b"preload\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        let mut i: size_t = 0 as size_t;
-        while i < ::core::mem::size_of::<[ModuleDef; 21]>()
-            .wrapping_div(::core::mem::size_of::<ModuleDef>())
-            .wrapping_div(
-                (::core::mem::size_of::<[ModuleDef; 21]>()
-                    .wrapping_rem(::core::mem::size_of::<ModuleDef>())
-                    == 0) as ::core::ffi::c_int as usize,
-            )
-        {
-            let mut def: ModuleDef = (*builtin_modules.ptr())[i as usize];
+        lua_getglobal(lstate, c"package".as_ptr());
+        lua_getfield(lstate, -1, c"preload".as_ptr());
+        for (i, def) in BUILTIN_MODULES.iter().enumerate() {
             lua_pushinteger(lstate, i as lua_Integer);
-            lua_pushcclosure(
-                lstate,
-                Some(
-                    nlua_module_preloader
-                        as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-                ),
-                1 as ::core::ffi::c_int,
-            );
-            lua_setfield(lstate, -2 as ::core::ffi::c_int, def.name);
-            if nlua_disable_preload.get() as ::core::ffi::c_int != 0
+            lua_pushcclosure(lstate, Some(nlua_module_preloader), 1);
+            lua_setfield(lstate, -2, def.name.as_ptr());
+            if nlua_disable_preload.get()
                 && !is_standalone
-                && strequal(
-                    def.name,
-                    b"vim.inspect\0".as_ptr() as *const ::core::ffi::c_char,
-                ) as ::core::ffi::c_int
-                    != 0
+                && strequal(def.name.as_ptr(), FIRST_DEV_MODULE.as_ptr())
             {
                 break;
             }
-            i = i.wrapping_add(1);
         }
-        lua_settop(lstate, -2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-        lua_getfield(
-            lstate,
-            LUA_GLOBALSINDEX,
-            b"require\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushstring(
-            lstate,
-            b"vim._init_packages\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        if nlua_pcall(lstate, 1 as ::core::ffi::c_int, 0 as ::core::ffi::c_int) != 0 {
-            fprintf(
-                stderr,
-                b"%s\n\0".as_ptr() as *const ::core::ffi::c_char,
-                lua_tolstring(
-                    lstate,
-                    -1 as ::core::ffi::c_int,
-                    ::core::ptr::null_mut::<size_t>(),
-                ),
-            );
-            return false_0 != 0;
+        lua_pop(lstate, 2);
+
+        lua_getglobal(lstate, c"require".as_ptr());
+        lua_pushstring(lstate, c"vim._init_packages".as_ptr());
+        if nlua_pcall(lstate, 1, 0) != 0 {
+            fprintf(stderr, c"%s\n".as_ptr(), lua_tostring(lstate, -1));
+            return false;
         }
-        return true_0 != 0;
+        true
     }
 }
 
-pub(crate) unsafe extern "C-unwind" fn nlua_ui_attach(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+/// `vim.ui_attach(ns_id, opts, callback)`.
+///
+/// `opts` names the UI extensions the callback wants; at least one must be
+/// true, or the attach is refused.
+///
+/// # Safety
+/// `lstate` must be a live Lua state holding this function's arguments.
+pub(crate) unsafe extern "C-unwind" fn nlua_ui_attach(lstate: *mut lua_State) -> c_int {
     unsafe {
-        let mut ns_id: uint32_t = luaL_checkinteger(lstate, 1 as ::core::ffi::c_int) as uint32_t;
+        let ns_id = luaL_checkinteger(lstate, 1) as uint32_t;
         if !ns_initialized(ns_id) {
-            return luaL_error(
-                lstate,
-                b"invalid ns_id\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            return luaL_error(lstate, c"invalid ns_id".as_ptr());
         }
-        if !(lua_type(lstate, 2 as ::core::ffi::c_int) == LUA_TTABLE) {
-            return luaL_error(
-                lstate,
-                b"opts must be a table\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+        if lua_type(lstate, 2) != LUA_TTABLE {
+            return luaL_error(lstate, c"opts must be a table".as_ptr());
         }
-        if !(lua_type(lstate, 3 as ::core::ffi::c_int) == LUA_TFUNCTION) {
-            return luaL_error(
-                lstate,
-                b"callback must be a Lua function\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+        if lua_type(lstate, 3) != LUA_TFUNCTION {
+            return luaL_error(lstate, c"callback must be a Lua function".as_ptr());
         }
-        let mut ext_widgets: [bool; 5] = [false_0 != 0, false, false, false, false];
-        let mut tbl_has_true_val: bool = false_0 != 0;
-        lua_pushvalue(lstate, 2 as ::core::ffi::c_int);
+
+        let mut ext_widgets = [false; 5];
+        let mut tbl_has_true_val = false;
+        lua_pushvalue(lstate, 2);
         lua_pushnil(lstate);
-        while lua_next(lstate, -2 as ::core::ffi::c_int) != 0 {
+        while lua_next(lstate, -2) != 0 {
             let mut len: size_t = 0;
-            let mut s: *const ::core::ffi::c_char =
-                lua_tolstring(lstate, -2 as ::core::ffi::c_int, &raw mut len);
-            let mut val: bool = lua_toboolean(lstate, -1 as ::core::ffi::c_int) != 0;
-            '_ok: {
-                if strequal(s, b"set_cmdheight\0".as_ptr() as *const ::core::ffi::c_char) {
-                    ui_refresh_cmdheight.set(val);
-                } else {
-                    let mut i: size_t = 0 as size_t;
-                    while i < kUILinegrid as ::core::ffi::c_int as size_t {
-                        if strequal(
-                            s,
-                            *(ui_ext_names.ptr() as *mut *const ::core::ffi::c_char)
-                                .offset(i as isize),
-                        ) {
-                            if val {
-                                tbl_has_true_val = true_0 != 0;
-                            }
-                            ext_widgets[i as usize] = val;
-                            break '_ok;
-                        } else {
-                            i = i.wrapping_add(1);
+            let s = lua_tolstring(lstate, -2, &raw mut len);
+            let val = lua_toboolean(lstate, -1) != 0;
+            if strequal(s, c"set_cmdheight".as_ptr()) {
+                ui_refresh_cmdheight.set(val);
+            } else {
+                let names = ui_ext_names.ptr().cast::<*const c_char>();
+                let found = (0..kUILinegrid as size_t).find(|&i| strequal(s, *names.add(i)));
+                match found {
+                    Some(i) => {
+                        if val {
+                            tbl_has_true_val = true;
                         }
+                        ext_widgets[i] = val;
                     }
-                    return luaL_error(
-                        lstate,
-                        b"Unexpected key: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                        s,
-                    );
+                    None => return luaL_error(lstate, c"Unexpected key: %s".as_ptr(), s),
                 }
             }
-            lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
+            lua_pop(lstate, 1);
         }
         if !tbl_has_true_val {
             return luaL_error(
                 lstate,
-                b"opts table must contain at least one 'true' ext_widget\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"opts table must contain at least one 'true' ext_widget".as_ptr(),
             );
         }
-        let mut ui_event_cb: LuaRef = nlua_ref_global(lstate, 3 as ::core::ffi::c_int);
-        ui_add_cb(ns_id, ui_event_cb, &raw mut ext_widgets as *mut bool);
-        ui_refresh_cmdheight.set(true_0 != 0);
-        return 0 as ::core::ffi::c_int;
+
+        let ui_event_cb: LuaRef = nlua_ref_global(lstate, 3);
+        ui_add_cb(ns_id, ui_event_cb, ext_widgets.as_mut_ptr());
+        ui_refresh_cmdheight.set(true);
+        0
     }
 }
 
-pub(crate) unsafe extern "C-unwind" fn nlua_ui_detach(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+/// `vim.ui_detach(ns_id)`.
+///
+/// # Safety
+/// `lstate` must be a live Lua state holding this function's arguments.
+pub(crate) unsafe extern "C-unwind" fn nlua_ui_detach(lstate: *mut lua_State) -> c_int {
     unsafe {
-        let mut ns_id: uint32_t = luaL_checkinteger(lstate, 1 as ::core::ffi::c_int) as uint32_t;
+        let ns_id = luaL_checkinteger(lstate, 1) as uint32_t;
         if !ns_initialized(ns_id) {
-            return luaL_error(
-                lstate,
-                b"invalid ns_id\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            return luaL_error(lstate, c"invalid ns_id".as_ptr());
         }
-        ui_remove_cb(ns_id, false_0 != 0);
-        return 0 as ::core::ffi::c_int;
+        ui_remove_cb(ns_id, false);
+        0
     }
 }

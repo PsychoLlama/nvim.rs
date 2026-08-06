@@ -1,650 +1,300 @@
 //! A user command whose implementation is a Lua function.
 //!
-//! `nlua_do_ucmd` builds the command's argument table -- name, args, fargs,
-//! bang, line1/line2, range, count, reg, mods and the parsed `smods` -- and
-//! calls the registered `LuaRef` with it.  `nlua_set_sctx` is what makes an
-//! error inside that function report the Lua file and line it was defined
-//! at rather than the command's.
+//! [`nlua_do_ucmd`] builds the command's argument table -- name, args,
+//! fargs, bang, line1/line2, range, count, reg, mods and the parsed `smods`
+//! -- and calls the registered `LuaRef` with it.  [`nlua_set_sctx`] is what
+//! makes an error inside that function report the Lua file and line it was
+//! defined at rather than the command's.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{CStr, c_char, c_int, c_void};
 
-pub unsafe extern "C-unwind" fn nlua_set_sctx(mut current: *mut sctx_T) {
+use super::{
+    active_lstate, get_global_lstate, lua_Debug, lua_getinfo, lua_getstack, nlua_error, nlua_pcall,
+    nlua_pushref,
+};
+use crate::src::nvim::ex_getln::{cmdpreview_get_bufnr, cmdpreview_get_ns};
+use crate::src::nvim::lua::ffi::{
+    lua_isnumber, lua_newtable, lua_pop, lua_pushboolean, lua_pushinteger, lua_pushlstring,
+    lua_pushnil, lua_pushstring, lua_pushvalue, lua_rawseti, lua_setfield, lua_tointeger,
+};
+use crate::src::nvim::main::{cmdmod, p_verbose};
+use crate::src::nvim::memory::{xcalloc, xfree, xmalloc};
+use crate::src::nvim::os::libc::{gettext, strlen};
+use crate::src::nvim::path::fix_fname;
+use crate::src::nvim::runtime::{find_script_by_name, new_script_item, script_is_lua};
+use crate::src::nvim::types::{
+    CMOD_BROWSE, CMOD_CONFIRM, CMOD_ERRSILENT, CMOD_HIDE, CMOD_KEEPALT, CMOD_KEEPJUMPS,
+    CMOD_KEEPMARKS, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_NOSWAPFILE,
+    CMOD_SANDBOX, CMOD_SILENT, CMOD_UNSILENT, OptInt, exarg_T, handle_T, linenr_T, lua_Integer,
+    scid_T, sctx_T, size_t, ucmd_T, uint32_t,
+};
+use crate::src::nvim::usercmd::{EX_EXTRA, EX_NEEDARG, EX_NOSPC, uc_mods, uc_split_args_iter};
+use crate::src::nvim::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
+
+/// How much room `uc_mods` is given to render the modifier prefix.
+const MODS_BUFSIZE: usize = 200;
+
+/// The `smods` flags that are just a bit and a name.
+const MOD_FLAGS: [(c_int, &CStr); 9] = [
+    (CMOD_BROWSE as c_int, c"browse"),
+    (CMOD_CONFIRM as c_int, c"confirm"),
+    (CMOD_HIDE as c_int, c"hide"),
+    (CMOD_KEEPALT as c_int, c"keepalt"),
+    (CMOD_KEEPJUMPS as c_int, c"keepjumps"),
+    (CMOD_KEEPMARKS as c_int, c"keepmarks"),
+    (CMOD_KEEPPATTERNS as c_int, c"keeppatterns"),
+    (CMOD_LOCKMARKS as c_int, c"lockmarks"),
+    (CMOD_NOSWAPFILE as c_int, c"noswapfile"),
+];
+
+/// Point `current` at the Lua source position the running function was
+/// defined at, so `:verbose` and an error message name the `.lua` file.
+///
+/// Only the *innermost Lua* frame counts: C frames and chunks that came from
+/// a string rather than a file are skipped. Nothing happens below
+/// `'verbose'` 1, because walking the Lua stack is not free.
+///
+/// # Safety
+/// `current` must be a writable script context.
+pub unsafe extern "C-unwind" fn nlua_set_sctx(current: *mut sctx_T) {
     unsafe {
-        let mut source_path: *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut sid: ::core::ffi::c_int = 0;
         if !script_is_lua((*current).sc_sid) {
             return;
         }
-        (*current).sc_lnum = 0 as ::core::ffi::c_int as linenr_T;
+        (*current).sc_lnum = 0;
         if p_verbose.get() <= 0 as OptInt {
             return;
         }
-        let lstate: *mut lua_State = active_lstate.get();
-        let mut info: *mut lua_Debug =
-            xmalloc(::core::mem::size_of::<lua_Debug>()) as *mut lua_Debug;
-        let mut level: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-        '_cleanup: {
+
+        let lstate = active_lstate.get();
+        let info = xmalloc(size_of::<lua_Debug>()).cast::<lua_Debug>();
+        let mut level: c_int = 1;
+        'cleanup: {
             loop {
-                if lua_getstack(lstate, level, info) != 1 as ::core::ffi::c_int {
-                    break '_cleanup;
+                if lua_getstack(lstate, level, info) != 1 {
+                    break 'cleanup;
                 }
-                if lua_getinfo(
-                    lstate,
-                    b"nSl\0".as_ptr() as *const ::core::ffi::c_char,
-                    info,
-                ) == 0 as ::core::ffi::c_int
-                {
-                    break '_cleanup;
+                if lua_getinfo(lstate, c"nSl".as_ptr(), info) == 0 {
+                    break 'cleanup;
                 }
-                if !(*(*info).what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == 'C' as ::core::ffi::c_int
-                    || *(*info).source.offset(0 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int
-                        != '@' as ::core::ffi::c_int)
-                {
+                let is_c = *(*info).what == b'C' as c_char;
+                let from_string = *(*info).source != b'@' as c_char;
+                if !is_c && !from_string {
                     break;
                 }
                 level += 1;
             }
-            source_path = fix_fname((*info).source.offset(1 as ::core::ffi::c_int as isize));
-            sid = find_script_by_name(source_path);
-            if sid > 0 as ::core::ffi::c_int {
-                xfree(source_path as *mut ::core::ffi::c_void);
+
+            let source_path = fix_fname((*info).source.add(1));
+            let mut sid = find_script_by_name(source_path);
+            if sid > 0 {
+                xfree(source_path.cast::<c_void>());
             } else {
-                let mut si: *mut scriptitem_T = new_script_item(source_path, &raw mut sid);
-                (*si).sn_lua = true_0 != 0;
+                let si = new_script_item(source_path, &raw mut sid);
+                (*si).sn_lua = true;
             }
             (*current).sc_sid = sid as scid_T;
-            (*current).sc_seq = -1 as ::core::ffi::c_int;
+            (*current).sc_seq = -1;
             (*current).sc_lnum = (*info).currentline as linenr_T;
         }
-        xfree(info as *mut ::core::ffi::c_void);
+        xfree(info.cast::<c_void>());
     }
 }
 
+/// Call a Lua-implemented user command, or its `preview` half.
+///
+/// The preview callback takes two extra arguments — the preview namespace
+/// and buffer — and answers how much of a preview it produced (0 to 2);
+/// anything else is 0.
+///
+/// # Safety
+/// `cmd` and `eap` must be live, and the command must carry the `LuaRef`
+/// this is being asked for.
 pub unsafe extern "C-unwind" fn nlua_do_ucmd(
-    mut cmd: *mut ucmd_T,
-    mut eap: *mut exarg_T,
-    mut preview: bool,
-) -> ::core::ffi::c_int {
+    cmd: *mut ucmd_T,
+    eap: *mut exarg_T,
+    preview: bool,
+) -> c_int {
     unsafe {
-        let lstate: *mut lua_State = global_lstate.get();
+        let lstate = get_global_lstate();
         nlua_pushref(
             lstate,
-            if preview as ::core::ffi::c_int != 0 {
+            if preview {
                 (*cmd).uc_preview_luaref
             } else {
                 (*cmd).uc_luaref
             },
         );
-        lua_createtable(lstate, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
+
+        // The one argument is a table describing the invocation.
+        lua_newtable(lstate);
+        let set = |name: &CStr| lua_setfield(lstate, -2, name.as_ptr());
+
         lua_pushstring(lstate, (*cmd).uc_name);
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"name\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushboolean(
-            lstate,
-            ((*eap).forceit == 1 as ::core::ffi::c_int) as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"bang\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        set(c"name");
+        lua_pushboolean(lstate, ((*eap).forceit == 1) as c_int);
+        set(c"bang");
         lua_pushinteger(lstate, (*eap).line1 as lua_Integer);
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"line1\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        set(c"line1");
         lua_pushinteger(lstate, (*eap).line2 as lua_Integer);
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"line2\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_createtable(lstate, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
+        set(c"line2");
+
+        // `args` is the raw argument text; `fargs` the split one. The raw
+        // string is pushed once and stored twice.
+        lua_newtable(lstate);
         lua_pushstring(lstate, (*eap).arg);
-        lua_pushvalue(lstate, -1 as ::core::ffi::c_int);
-        lua_setfield(
-            lstate,
-            -4 as ::core::ffi::c_int,
-            b"args\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        lua_pushvalue(lstate, -1);
+        lua_setfield(lstate, -4, c"args".as_ptr());
         if (*cmd).uc_argt & EX_NOSPC as uint32_t != 0 {
+            // At most one argument: `fargs` is the whole of it, or empty.
             if (*cmd).uc_argt & EX_NEEDARG as uint32_t != 0 || strlen((*eap).arg) != 0 {
-                lua_rawseti(lstate, -2 as ::core::ffi::c_int, 1 as ::core::ffi::c_int);
+                lua_rawseti(lstate, -2, 1);
             } else {
-                lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
+                lua_pop(lstate, 1);
             }
         } else if (*eap).args.is_null() {
-            lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-            let mut length: size_t = strlen((*eap).arg);
-            let mut end: size_t = 0 as size_t;
-            let mut len: size_t = 0 as size_t;
-            let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-            let mut buf: *mut ::core::ffi::c_char =
-                xcalloc(length, ::core::mem::size_of::<::core::ffi::c_char>())
-                    as *mut ::core::ffi::c_char;
-            let mut done: bool = false_0 != 0;
+            lua_pop(lstate, 1);
+            // Not pre-split (`:command` rather than `nvim_cmd`): split here,
+            // honouring backslash escapes.
+            let length = strlen((*eap).arg);
+            let mut end: size_t = 0;
+            let mut len: size_t = 0;
+            let mut i: c_int = 1;
+            let buf = xcalloc(length, size_of::<c_char>()).cast::<c_char>();
+            let mut done = false;
             while !done {
                 done = uc_split_args_iter((*eap).arg, length, &raw mut end, buf, &raw mut len);
-                if len > 0 as size_t {
+                if len > 0 {
                     lua_pushlstring(lstate, buf, len);
-                    lua_rawseti(lstate, -2 as ::core::ffi::c_int, i);
+                    lua_rawseti(lstate, -2, i);
                     i += 1;
                 }
             }
-            xfree(buf as *mut ::core::ffi::c_void);
+            xfree(buf.cast::<c_void>());
         } else {
-            lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-            let mut i_0: size_t = 0 as size_t;
-            while i_0 < (*eap).argc {
-                lua_pushlstring(
-                    lstate,
-                    *(*eap).args.offset(i_0 as isize),
-                    *(*eap).arglens.offset(i_0 as isize),
-                );
-                lua_rawseti(
-                    lstate,
-                    -2 as ::core::ffi::c_int,
-                    i_0 as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
-                );
-                i_0 = i_0.wrapping_add(1);
+            lua_pop(lstate, 1);
+            for i in 0..(*eap).argc {
+                lua_pushlstring(lstate, *(*eap).args.add(i), *(*eap).arglens.add(i));
+                lua_rawseti(lstate, -2, i as c_int + 1);
             }
         }
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"fargs\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        let mut reg: [::core::ffi::c_char; 2] = [
-            (*eap).regname as ::core::ffi::c_char,
-            NUL as ::core::ffi::c_char,
-        ];
-        lua_pushstring(lstate, &raw mut reg as *mut ::core::ffi::c_char);
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"reg\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        set(c"fargs");
+
+        let reg = [(*eap).regname as c_char, 0];
+        lua_pushstring(lstate, reg.as_ptr());
+        set(c"reg");
         lua_pushinteger(lstate, (*eap).addr_count as lua_Integer);
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"range\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        if (*eap).addr_count > 0 as ::core::ffi::c_int {
+        set(c"range");
+        if (*eap).addr_count > 0 {
             lua_pushinteger(lstate, (*eap).line2 as lua_Integer);
         } else {
             lua_pushinteger(lstate, (*cmd).uc_def as lua_Integer);
         }
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"count\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        let mut nargs: [::core::ffi::c_char; 2] = [0; 2];
-        if (*cmd).uc_argt & EX_EXTRA as uint32_t != 0 {
-            if (*cmd).uc_argt & EX_NOSPC as uint32_t != 0 {
-                if (*cmd).uc_argt & EX_NEEDARG as uint32_t != 0 {
-                    nargs[0 as ::core::ffi::c_int as usize] = '1' as ::core::ffi::c_char;
-                } else {
-                    nargs[0 as ::core::ffi::c_int as usize] = '?' as ::core::ffi::c_char;
-                }
-            } else if (*cmd).uc_argt & EX_NEEDARG as uint32_t != 0 {
-                nargs[0 as ::core::ffi::c_int as usize] = '+' as ::core::ffi::c_char;
-            } else {
-                nargs[0 as ::core::ffi::c_int as usize] = '*' as ::core::ffi::c_char;
-            }
+        set(c"count");
+
+        // `nargs` as `:command -nargs=` spells it.
+        let nargs = [nargs_char((*cmd).uc_argt), 0];
+        lua_pushstring(lstate, nargs.as_ptr());
+        set(c"nargs");
+
+        let mut buf = [0 as c_char; MODS_BUFSIZE];
+        uc_mods(buf.as_mut_ptr(), cmdmod.ptr(), false);
+        lua_pushstring(lstate, buf.as_ptr());
+        set(c"mods");
+
+        // `smods`: the same modifiers, parsed.
+        lua_newtable(lstate);
+        let cmod = cmdmod.ptr();
+        lua_pushinteger(lstate, ((*cmod).cmod_tab - 1) as lua_Integer);
+        set(c"tab");
+        lua_pushinteger(lstate, ((*cmod).cmod_verbose - 1) as lua_Integer);
+        set(c"verbose");
+
+        let split = (*cmod).cmod_split;
+        let split_name = if split & WSP_ABOVE as c_int != 0 {
+            c"aboveleft"
+        } else if split & WSP_BELOW as c_int != 0 {
+            c"belowright"
+        } else if split & WSP_TOP as c_int != 0 {
+            c"topleft"
+        } else if split & WSP_BOT as c_int != 0 {
+            c"botright"
         } else {
-            nargs[0 as ::core::ffi::c_int as usize] = '0' as ::core::ffi::c_char;
+            c""
+        };
+        lua_pushstring(lstate, split_name.as_ptr());
+        set(c"split");
+
+        lua_pushboolean(lstate, split & WSP_VERT as c_int);
+        set(c"vertical");
+        lua_pushboolean(lstate, split & WSP_HOR as c_int);
+        set(c"horizontal");
+
+        let flags = (*cmod).cmod_flags;
+        lua_pushboolean(lstate, flags & CMOD_SILENT as c_int);
+        set(c"silent");
+        lua_pushboolean(lstate, flags & CMOD_ERRSILENT as c_int);
+        set(c"emsg_silent");
+        lua_pushboolean(lstate, flags & CMOD_UNSILENT as c_int);
+        set(c"unsilent");
+        lua_pushboolean(lstate, flags & CMOD_SANDBOX as c_int);
+        set(c"sandbox");
+        lua_pushboolean(lstate, flags & CMOD_NOAUTOCMD as c_int);
+        set(c"noautocmd");
+        for (flag, name) in MOD_FLAGS {
+            lua_pushboolean(lstate, flags & flag);
+            set(name);
         }
-        nargs[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-        lua_pushstring(lstate, &raw mut nargs as *mut ::core::ffi::c_char);
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"nargs\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        let mut buf_0: [::core::ffi::c_char; 200] = [
-            0 as ::core::ffi::c_char,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-        ];
-        uc_mods(
-            &raw mut buf_0 as *mut ::core::ffi::c_char,
-            cmdmod.ptr(),
-            false_0 != 0,
-        );
-        lua_pushstring(lstate, &raw mut buf_0 as *mut ::core::ffi::c_char);
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"mods\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_createtable(lstate, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-        lua_pushinteger(
-            lstate,
-            ((*cmdmod.ptr()).cmod_tab - 1 as ::core::ffi::c_int) as lua_Integer,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"tab\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushinteger(
-            lstate,
-            ((*cmdmod.ptr()).cmod_verbose - 1 as ::core::ffi::c_int) as lua_Integer,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"verbose\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        if (*cmdmod.ptr()).cmod_split & WSP_ABOVE as ::core::ffi::c_int != 0 {
-            lua_pushstring(
-                lstate,
-                b"aboveleft\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        } else if (*cmdmod.ptr()).cmod_split & WSP_BELOW as ::core::ffi::c_int != 0 {
-            lua_pushstring(
-                lstate,
-                b"belowright\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        } else if (*cmdmod.ptr()).cmod_split & WSP_TOP as ::core::ffi::c_int != 0 {
-            lua_pushstring(lstate, b"topleft\0".as_ptr() as *const ::core::ffi::c_char);
-        } else if (*cmdmod.ptr()).cmod_split & WSP_BOT as ::core::ffi::c_int != 0 {
-            lua_pushstring(lstate, b"botright\0".as_ptr() as *const ::core::ffi::c_char);
-        } else {
-            lua_pushstring(lstate, b"\0".as_ptr() as *const ::core::ffi::c_char);
-        }
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"split\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushboolean(
-            lstate,
-            (*cmdmod.ptr()).cmod_split & WSP_VERT as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"vertical\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushboolean(
-            lstate,
-            (*cmdmod.ptr()).cmod_split & WSP_HOR as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"horizontal\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushboolean(
-            lstate,
-            (*cmdmod.ptr()).cmod_flags & CMOD_SILENT as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"silent\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushboolean(
-            lstate,
-            (*cmdmod.ptr()).cmod_flags & CMOD_ERRSILENT as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"emsg_silent\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushboolean(
-            lstate,
-            (*cmdmod.ptr()).cmod_flags & CMOD_UNSILENT as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"unsilent\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushboolean(
-            lstate,
-            (*cmdmod.ptr()).cmod_flags & CMOD_SANDBOX as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"sandbox\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        lua_pushboolean(
-            lstate,
-            (*cmdmod.ptr()).cmod_flags & CMOD_NOAUTOCMD as ::core::ffi::c_int,
-        );
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"noautocmd\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        static mod_entries: GlobalCell<[mod_entry_T; 9]> = GlobalCell::new([
-            mod_entry_T {
-                flag: CMOD_BROWSE as ::core::ffi::c_int,
-                name: b"browse\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-            },
-            mod_entry_T {
-                flag: CMOD_CONFIRM as ::core::ffi::c_int,
-                name: b"confirm\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-            },
-            mod_entry_T {
-                flag: CMOD_HIDE as ::core::ffi::c_int,
-                name: b"hide\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            },
-            mod_entry_T {
-                flag: CMOD_KEEPALT as ::core::ffi::c_int,
-                name: b"keepalt\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-            },
-            mod_entry_T {
-                flag: CMOD_KEEPJUMPS as ::core::ffi::c_int,
-                name: b"keepjumps\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-            },
-            mod_entry_T {
-                flag: CMOD_KEEPMARKS as ::core::ffi::c_int,
-                name: b"keepmarks\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-            },
-            mod_entry_T {
-                flag: CMOD_KEEPPATTERNS as ::core::ffi::c_int,
-                name: b"keeppatterns\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-            },
-            mod_entry_T {
-                flag: CMOD_LOCKMARKS as ::core::ffi::c_int,
-                name: b"lockmarks\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-            },
-            mod_entry_T {
-                flag: CMOD_NOSWAPFILE as ::core::ffi::c_int,
-                name: b"noswapfile\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-            },
-        ]);
-        let mut i_1: size_t = 0 as size_t;
-        while i_1
-            < ::core::mem::size_of::<[mod_entry_T; 9]>()
-                .wrapping_div(::core::mem::size_of::<mod_entry_T>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[mod_entry_T; 9]>()
-                        .wrapping_rem(::core::mem::size_of::<mod_entry_T>())
-                        == 0) as ::core::ffi::c_int as usize,
-                )
-        {
-            lua_pushboolean(
-                lstate,
-                (*cmdmod.ptr()).cmod_flags & (*mod_entries.ptr())[i_1 as usize].flag,
-            );
-            lua_setfield(
-                lstate,
-                -2 as ::core::ffi::c_int,
-                (*mod_entries.ptr())[i_1 as usize].name,
-            );
-            i_1 = i_1.wrapping_add(1);
-        }
-        lua_setfield(
-            lstate,
-            -2 as ::core::ffi::c_int,
-            b"smods\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        set(c"smods");
+
         if preview {
             lua_pushinteger(lstate, cmdpreview_get_ns() as lua_Integer);
-            let mut cmdpreview_bufnr: handle_T = cmdpreview_get_bufnr();
-            if cmdpreview_bufnr != 0 as ::core::ffi::c_int {
+            let cmdpreview_bufnr: handle_T = cmdpreview_get_bufnr();
+            if cmdpreview_bufnr != 0 {
                 lua_pushinteger(lstate, cmdpreview_bufnr as lua_Integer);
             } else {
                 lua_pushnil(lstate);
             }
         }
-        if nlua_pcall(
-            lstate,
-            if preview as ::core::ffi::c_int != 0 {
-                3 as ::core::ffi::c_int
-            } else {
-                1 as ::core::ffi::c_int
-            },
-            if preview as ::core::ffi::c_int != 0 {
-                1 as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            },
-        ) != 0
-        {
-            nlua_error(
-                lstate,
-                gettext(b"Lua :command callback: %.*s\0".as_ptr() as *const ::core::ffi::c_char),
-            );
-            return 0 as ::core::ffi::c_int;
+
+        let (nargs_in, nresults) = if preview { (3, 1) } else { (1, 0) };
+        if nlua_pcall(lstate, nargs_in, nresults) != 0 {
+            nlua_error(lstate, gettext(c"Lua :command callback: %.*s".as_ptr()));
+            return 0;
         }
-        let mut retv: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
+        let mut retv: c_int = 0;
         if preview {
-            if lua_isnumber(lstate, -1 as ::core::ffi::c_int) != 0
-                && {
-                    retv = lua_tointeger(lstate, -1 as ::core::ffi::c_int) as ::core::ffi::c_int;
-                    retv >= 0 as ::core::ffi::c_int
-                }
-                && retv <= 2 as ::core::ffi::c_int
-            {
-                lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
+            if lua_isnumber(lstate, -1) != 0 && {
+                retv = lua_tointeger(lstate, -1) as c_int;
+                (0..=2).contains(&retv)
+            } {
+                lua_pop(lstate, 1);
             } else {
-                retv = 0 as ::core::ffi::c_int;
+                retv = 0;
             }
         }
-        return retv;
+        retv
+    }
+}
+
+/// The `-nargs=` letter this command's argument flags mean.
+fn nargs_char(argt: uint32_t) -> c_char {
+    if argt & EX_EXTRA as uint32_t == 0 {
+        return b'0' as c_char;
+    }
+    let needarg = argt & EX_NEEDARG as uint32_t != 0;
+    if argt & EX_NOSPC as uint32_t != 0 {
+        if needarg {
+            b'1' as c_char
+        } else {
+            b'?' as c_char
+        }
+    } else if needarg {
+        b'+' as c_char
+    } else {
+        b'*' as c_char
     }
 }
