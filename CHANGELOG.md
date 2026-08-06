@@ -7,90 +7,61 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+Ongoing migration of the transpiled code toward safe, idiomatic Rust.
+
 ### Changed
 
-- Dropped the dead half of every transpiled module preamble: the `types`
-  re-export blobs and the per-module copies of the constants, `#define`s and
-  type aliases each C translation unit could see.
-- Rewrote the input layer: key codes, the message family, the typeahead
-  core (the stuff/redo/record buffers, `vgetc`, `vgetorpeek` and the mapping
-  match) and mappings themselves (`:map` and friends, `maparg()`/`mapset()`,
-  `nvim_set_keymap`, abbreviations and `'langmap'`) are hand-written Rust
-  rather than transpiled C.
-- Rewrote command-line completion, covering `<Tab>` and the wildmenu, the
-  popup menu, every `EXPAND_*` source from file names to `:command
--complete=customlist,` and buffer-text search patterns, and
-  `getcompletion()`.
+- Rewrote the input layer, covering key codes, the typeahead and its
+  stuff/redo/record buffers, `:map` and friends, `maparg()`/`mapset()`,
+  `nvim_set_keymap`, abbreviations, and `'langmap'`.
+- Rewrote command-line completion, covering `<Tab>` and the wildmenu, every
+  `EXPAND_*` source, and `getcompletion()`.
 - Rewrote the command-line editor, covering the `:`, `/` and `?` key loop and
-  its history, the command-line window, `'incsearch'` and `'inccommand'`
-  previews, command-line highlighting, `input()` and the `getcmd*()` and
-  `setcmdline()` functions, and the `ext_cmdline` UI events.
-- Rewrote insert-mode completion, covering every `CTRL-X` source from
-  keywords and whole lines to dictionaries, thesauruses, tags, file names and
-  registers, `'complete'` and `'completeopt'` including fuzzy matching and
-  `preinsert`, `'completefunc'`/`'omnifunc'`/`'thesaurusfunc'`, the completion
-  popup menu, and the `complete()`, `complete_info()` and `CompleteDone`
-  interfaces.
-- Rewrote the Vimscript value core: lists, dictionaries and blobs, the
-  reference counting, locking and deep copying behind them, `sort()` and
-  `uniq()`, dictionary watchers, and the type checks and conversions every
+  its history, the command-line window, `'incsearch'` and `'inccommand'`,
+  command-line highlighting, `input()`, the `getcmd*()` and `setcmdline()`
+  functions, and the `ext_cmdline` UI events.
+- Rewrote insert-mode completion, covering every `CTRL-X` source, `'complete'`
+  and `'completeopt'`, `'completefunc'`/`'omnifunc'`/`'thesaurusfunc'`, the
+  completion popup menu, and `complete()`, `complete_info()` and
+  `CompleteDone`.
+- Rewrote the Vimscript value core, covering lists, dictionaries and blobs,
+  `sort()` and `uniq()`, dictionary watchers, and the type checks every
   builtin argument and return value goes through.
-- Collapsed the value encoders. One C header spelled the same container walk
-  out seven times, once per destination — msgpack, JSON, `string()`, `:echo`,
-  Lua values, API objects, and the deep free every discarded value goes
-  through. It is now one walk those seven hang off, and it no longer keeps a
-  pointer into its own stack across a reallocation of it.
-- Rewrote the value decoders, the other direction: `json_decode()` and
-  `msgpackparse()` — JSON's scanner, its `\u` and surrogate-pair escapes, the
-  special dictionaries a map or an oversized integer needs, and the msgpack
-  parser callbacks.
-- Rewrote the variable layer: `:let`, `:unlet`, `:const`, `:lockvar`, the
-  `g:`/`b:`/`w:`/`t:`/`v:`/`l:`/`s:` scopes and their dictionaries, the
-  `getbufvar()`/`setwinvar()` family, here-documents and `:redir =>`.
-- Rewrote user functions: `:function` and `:delfunction`, the argument list
-  with its defaults and `...`, funcrefs, partials, closures and lambdas,
-  `:call`, `:return` and `:defer`, autoloading, and the `a:`/`l:` scopes a
-  call runs in.
-- Rewrote autocommands: `:autocmd` and `:augroup`, `:doautocmd` and
-  `:doautoall`, the event table and the `<buffer=N>` patterns, `++once` and
-  `++nested`, `'eventignore'` and `'eventignorewin'`, `exists('#…')`, the
-  hidden window an autocommand runs a buffer in, and the
+- Rewrote value encoding and decoding, covering msgpack, JSON, `string()`,
+  `:echo`, `json_decode()` and `msgpackparse()`, and the conversions to Lua
+  values and API objects.
+- Rewrote the variable layer, covering `:let`, `:unlet`, `:const`, `:lockvar`,
+  the `g:`/`b:`/`w:`/`t:`/`v:`/`l:`/`s:` scopes, the
+  `getbufvar()`/`setwinvar()` family, here-documents, and `:redir =>`.
+- Rewrote user functions, covering `:function` and `:delfunction`, argument
+  defaults and `...`, funcrefs, partials, closures and lambdas, `:call`,
+  `:return` and `:defer`, and autoloading.
+- Rewrote autocommands, covering `:autocmd` and `:augroup`, `:doautocmd` and
+  `:doautoall`, the `<buffer=N>` patterns, `++once` and `++nested`,
+  `'eventignore'` and `'eventignorewin'`, `exists('#…')`, and the
   `nvim_create_autocmd` family.
-- Rewrote the Lua runtime: the interpreter's state and the `vim` table on it,
-  `:lua`, `:luado` and `:luafile`, `vim.call()`, `luaeval()` and `v:lua`,
-  `vim.schedule()` and `vim.wait()`, `print()` and `require()`, the luv event
-  bridge, Lua-implemented user commands, `vim.regex()`, `vim.iconv()` and the
-  UTF-8 helpers, `vim.g`/`b`/`w`/`t`/`v`, `vim._with()`, `vim.ui_attach()`,
-  the tree-sitter bindings, and the value conversions in both directions
-  between Lua, Vimscript and the API.
-- Rewrote the API layer: every `nvim_*` function, covering buffers and their
-  lines, text and marks, windows, tabpages and floating windows, extmarks and
-  decorations, options, autocommands, user commands and `nvim_cmd`,
-  Vimscript evaluation and expression parsing, the UI attach protocol, and
-  the deprecated shims.
+- Rewrote the Lua runtime, covering `:lua`, `:luado` and `:luafile`,
+  `luaeval()` and `v:lua`, `vim.schedule()` and `vim.wait()`, the luv event
+  bridge, Lua-implemented user commands, `vim.regex()` and `vim.iconv()`, the
+  `vim.*` table, `vim.ui_attach()`, and the tree-sitter bindings.
+- Rewrote the API layer, covering every `nvim_*` function from buffers,
+  windows and tabpages to extmarks and decorations, options, user commands
+  and `nvim_cmd`, expression parsing, the UI attach protocol, and the
+  deprecated shims.
 
 ### Fixed
 
-- Internal consistency checks no longer abort a release build. Ninety-nine of
-  them descend from C `assert()`s, which a release build of the original
-  compiles out, so cases the original carries on past — `nvim_set_hl()` with a
-  negative namespace id, for one — killed this editor instead.
+- Internal consistency checks no longer abort a release build, so cases the
+  original carries on past (`nvim_set_hl()` with a negative namespace id, for
+  one) no longer kill the editor.
 - `nvim_parse_expression()` no longer kills the editor on an unfinished
-  curly-braces name. `'a{b'` needed no flags and one call; `'a{b}'` with
-  highlighting on was the second way in.
-
-- A dictionary key decoded from msgpack was randomly read-only, and randomly
-  leaked. The key's item was allocated without initialising its flags, so
-  whether it refused assignment and whether it was ever freed depended on
-  what the heap block last held.
-- Assigning to a `v:` variable through the `v:` dictionary — `let v:['errmsg']
-= 4` rather than `let v:errmsg = 4` — no longer replaces the variable's
-  type. It skipped the check the plain spelling passes, so a `v:` variable
-  could be left holding a value of the wrong type permanently, and reading
-  `v:oldfiles` after `let v:['oldfiles'] = 1` crashed.
+  curly-braces name such as `'a{b'`.
+- A dictionary key decoded from msgpack is no longer randomly read-only or
+  randomly leaked.
+- Assigning to a `v:` variable through the `v:` dictionary rather than by name
+  no longer replaces the variable's type.
 - `nvim_win_text_height()` no longer writes past the end of the reply it
-  allocates. It reserved room for two of the four keys it answers with, and
-  the other two landed in whatever memory came next.
+  allocates.
 
 ## [2026.08.02-af6bcec290]
 
