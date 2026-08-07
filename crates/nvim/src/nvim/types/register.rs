@@ -23,6 +23,35 @@ pub struct block_def {
     pub end_char_vcols: colnr_T,
     pub start_char_vcols: colnr_T,
 }
+
+impl block_def {
+    /// All zeros — the state `block_prep` and `charwise_block_prep` overwrite.
+    ///
+    /// C declares these uninitialised and fills them in; every caller in the
+    /// tree does exactly that, so the zeros are never read.
+    pub const ZERO: Self = block_def {
+        startspaces: 0,
+        endspaces: 0,
+        textlen: 0,
+        textstart: ::core::ptr::null_mut(),
+        textcol: 0,
+        start_vcol: 0,
+        end_vcol: 0,
+        is_short: 0,
+        is_MAX: 0,
+        is_oneChar: 0,
+        pre_whitesp: 0,
+        pre_whitesp_c: 0,
+        end_char_vcols: 0,
+        start_char_vcols: 0,
+    };
+}
+
+impl Default for block_def {
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct yankreg_T {

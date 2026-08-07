@@ -1,68 +1,60 @@
 //! `g~`, `gu`, `gU` and `g?` -- rewriting the characters in place.
 //!
-//! `op_tilde` walks the region and hands each position to `swapchar`, which
-//! is the whole of the per-character decision: which of the four operators
-//! is running, whether the character has a case at all, and -- for rot13 --
-//! that only ASCII letters move.  A case change can change a character's
-//! *byte length* (there are pairs whose upper and lower cases differ in
-//! UTF-8 width), which is why the walk works through `pbyte` rather than
-//! writing into the line.
+//! [`op_tilde`] walks the region and hands each position to [`swapchar`],
+//! which is the whole of the per-character decision: which of the four
+//! operators is running, whether the character has a case at all, and -- for
+//! rot13 -- that only ASCII letters move.
+//!
+//! The awkward part is that a case change can change a character's *byte
+//! length*: `İ` is two bytes and its lower case is one, so the walk cannot
+//! simply overwrite. [`swapchar`] therefore has two writers -- a byte poke
+//! through `pbyte` when both the old and the new character are ASCII, and a
+//! delete-then-insert through the change layer otherwise -- and [`swapchars`]
+//! re-measures the character under `pos` on every step rather than trusting
+//! the length it was given.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use ::core::ffi::c_int;
+
 use super::*;
 
-pub unsafe extern "C" fn op_tilde(mut oap: *mut oparg_T) {
+/// `g~`, `gu`, `gU`, `g?` over the operator's region.
+///
+/// # Safety
+/// `oap` must point to a live `oparg_T` describing a region of the current
+/// buffer.
+pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
     unsafe {
-        let mut bd: block_def = block_def {
-            startspaces: 0,
-            endspaces: 0,
-            textlen: 0,
-            textstart: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            textcol: 0,
-            start_vcol: 0,
-            end_vcol: 0,
-            is_short: 0,
-            is_MAX: 0,
-            is_oneChar: 0,
-            pre_whitesp: 0,
-            pre_whitesp_c: 0,
-            end_char_vcols: 0,
-            start_char_vcols: 0,
-        };
-        let mut did_change: bool = false_0 != 0;
-        if u_save(
-            (*oap).start.lnum - 1 as linenr_T,
-            (*oap).end.lnum + 1 as linenr_T,
-        ) == FAIL
-        {
+        let mut did_change = false;
+
+        if u_save((*oap).start.lnum - 1, (*oap).end.lnum + 1) == FAIL {
             return;
         }
+
         let mut pos: pos_T = (*oap).start;
-        if (*oap).motion_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
+        if (*oap).motion_type == kMTBlockWise {
+            let mut bd = block_def::ZERO;
             while pos.lnum <= (*oap).end.lnum {
-                block_prep(oap, &raw mut bd, pos.lnum, false_0 != 0);
+                block_prep(oap, &raw mut bd, pos.lnum, false);
                 pos.col = bd.textcol;
-                let mut one_change: bool = swapchars((*oap).op_type, &raw mut pos, bd.textlen) != 0;
-                did_change =
-                    did_change as ::core::ffi::c_int | one_change as ::core::ffi::c_int != 0;
+                did_change |= swapchars((*oap).op_type, &raw mut pos, bd.textlen) != 0;
                 pos.lnum += 1;
             }
             if did_change {
                 changed_lines(
                     curbuf.get(),
                     (*oap).start.lnum,
-                    0 as colnr_T,
-                    (*oap).end.lnum + 1 as linenr_T,
-                    0 as linenr_T,
-                    true_0 != 0,
+                    0,
+                    (*oap).end.lnum + 1,
+                    0,
+                    true,
                 );
             }
         } else {
-            if (*oap).motion_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int {
-                (*oap).start.col = 0 as ::core::ffi::c_int as colnr_T;
-                pos.col = 0 as ::core::ffi::c_int as colnr_T;
+            if (*oap).motion_type == kMTLineWise {
+                (*oap).start.col = 0;
+                pos.col = 0;
                 (*oap).end.col = ml_get_len((*oap).end.lnum);
                 if (*oap).end.col != 0 {
                     (*oap).end.col -= 1;
@@ -70,29 +62,21 @@ pub unsafe extern "C" fn op_tilde(mut oap: *mut oparg_T) {
             } else if !(*oap).inclusive {
                 dec(&raw mut (*oap).end);
             }
+
             if pos.lnum == (*oap).end.lnum {
-                did_change = swapchars(
-                    (*oap).op_type,
-                    &raw mut pos,
-                    (*oap).end.col as ::core::ffi::c_int - pos.col as ::core::ffi::c_int
-                        + 1 as ::core::ffi::c_int,
-                ) != 0;
+                did_change =
+                    swapchars((*oap).op_type, &raw mut pos, (*oap).end.col - pos.col + 1) != 0;
             } else {
                 loop {
-                    did_change = did_change as ::core::ffi::c_int
-                        | swapchars(
-                            (*oap).op_type,
-                            &raw mut pos,
-                            if pos.lnum == (*oap).end.lnum {
-                                (*oap).end.col as ::core::ffi::c_int + 1 as ::core::ffi::c_int
-                            } else {
-                                ml_get_pos_len(&raw mut pos)
-                            },
-                        )
-                        != 0;
-                    if ltoreq((*oap).end, pos) as ::core::ffi::c_int != 0
-                        || inc(&raw mut pos) == -1 as ::core::ffi::c_int
-                    {
+                    let len = if pos.lnum == (*oap).end.lnum {
+                        (*oap).end.col + 1
+                    } else {
+                        ml_get_pos_len(&raw mut pos)
+                    };
+                    did_change |= swapchars((*oap).op_type, &raw mut pos, len) != 0;
+                    // `inc` answers -1 at the end of the buffer; either exit
+                    // leaves `pos` where the walk stopped.
+                    if ltoreq((*oap).end, pos) || inc(&raw mut pos) == -1 {
                         break;
                     }
                 }
@@ -102,27 +86,29 @@ pub unsafe extern "C" fn op_tilde(mut oap: *mut oparg_T) {
                     curbuf.get(),
                     (*oap).start.lnum,
                     (*oap).start.col,
-                    (*oap).end.lnum + 1 as linenr_T,
-                    0 as linenr_T,
-                    true_0 != 0,
+                    (*oap).end.lnum + 1,
+                    0,
+                    true,
                 );
             }
         }
-        if !did_change && (*oap).is_VIsual as ::core::ffi::c_int != 0 {
+
+        if !did_change && (*oap).is_VIsual {
+            // No change: the Visual selection still has to come off the screen.
             redraw_curbuf_later(UPD_INVERTED);
         }
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
-            == 0 as ::core::ffi::c_int
-        {
+
+        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
             (*curbuf.get()).b_op_start = (*oap).start;
             (*curbuf.get()).b_op_end = (*oap).end;
         }
+
         if (*oap).line_count as OptInt > p_report.get() {
             smsg(
-                0 as ::core::ffi::c_int,
+                0,
                 ngettext(
-                    b"%ld line changed\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"%ld lines changed\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"%ld line changed".as_ptr(),
+                    c"%ld lines changed".as_ptr(),
                     (*oap).line_count as ::core::ffi::c_ulong,
                 ),
                 (*oap).line_count as int64_t,
@@ -131,69 +117,89 @@ pub unsafe extern "C" fn op_tilde(mut oap: *mut oparg_T) {
     }
 }
 
-unsafe extern "C" fn swapchars(
-    mut op_type: ::core::ffi::c_int,
-    mut pos: *mut pos_T,
-    mut length: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// [`swapchar`] over `length` *bytes* from `pos`, which is left just after the
+/// last character touched.
+///
+/// `length` is rounded up to a whole character: a multi-byte character
+/// straddling the end is changed entirely. Because a change can alter the
+/// character's byte length, the loop re-measures at `pos` each time rather
+/// than stepping by what it was told.
+///
+/// # Safety
+/// `pos` must point to a valid position in the current buffer.
+unsafe fn swapchars(op_type: OpType, pos: *mut pos_T, length: c_int) -> c_int {
     unsafe {
-        let mut did_change: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut todo: ::core::ffi::c_int = length;
-        while todo > 0 as ::core::ffi::c_int {
-            let len: ::core::ffi::c_int = utfc_ptr2len(ml_get_pos(pos));
-            if len > 0 as ::core::ffi::c_int {
-                todo -= len - 1 as ::core::ffi::c_int;
+        let mut did_change: c_int = 0;
+        let mut todo = length;
+        while todo > 0 {
+            // We are counting bytes, not characters.
+            let len = utfc_ptr2len(ml_get_pos(pos));
+            if len > 0 {
+                todo -= len - 1;
             }
-            did_change |= swapchar(op_type, pos) as ::core::ffi::c_int;
-            if inc(pos) == -1 as ::core::ffi::c_int {
+            did_change |= c_int::from(swapchar(op_type, pos));
+            if inc(pos) == -1 {
+                // At the end of the buffer; do not run the decrement.
                 break;
             }
             todo -= 1;
         }
-        return did_change;
+        did_change
     }
 }
 
-pub unsafe extern "C" fn swapchar(mut op_type: ::core::ffi::c_int, mut pos: *mut pos_T) -> bool {
+/// Apply one case operator to the character at `pos`; `true` if it changed.
+///
+/// `op_type` is `OP_UPPER`, `OP_LOWER`, `OP_ROT13`, or anything else for
+/// "swap the case".
+///
+/// # Safety
+/// `pos` must point to a valid position in the current buffer.
+pub unsafe fn swapchar(op_type: OpType, pos: *mut pos_T) -> bool {
     unsafe {
-        let c: ::core::ffi::c_int = gchar_pos(pos);
-        if c >= 0x80 as ::core::ffi::c_int && op_type == OP_ROT13 {
-            return false_0 != 0;
+        let c = gchar_pos(pos);
+
+        // Only rot13 ASCII.
+        if c >= 0x80 && op_type == OP_ROT13 {
+            return false;
         }
-        let mut nc: ::core::ffi::c_int = c;
+
+        let mut nc = c;
         if mb_islower(c) {
             if op_type == OP_ROT13 {
-                nc = (c - 'a' as ::core::ffi::c_int + 13 as ::core::ffi::c_int)
-                    % 26 as ::core::ffi::c_int
-                    + 'a' as ::core::ffi::c_int;
+                nc = rot13(c, 'a' as c_int);
             } else if op_type != OP_LOWER {
                 nc = mb_toupper(c);
             }
         } else if mb_isupper(c) {
             if op_type == OP_ROT13 {
-                nc = (c - 'A' as ::core::ffi::c_int + 13 as ::core::ffi::c_int)
-                    % 26 as ::core::ffi::c_int
-                    + 'A' as ::core::ffi::c_int;
+                nc = rot13(c, 'A' as c_int);
             } else if op_type != OP_UPPER {
                 nc = mb_tolower(c);
             }
         }
-        if nc != c {
-            if c >= 0x80 as ::core::ffi::c_int || nc >= 0x80 as ::core::ffi::c_int {
-                let mut sp: pos_T = (*curwin.get()).w_cursor;
-                (*curwin.get()).w_cursor = *pos;
-                del_bytes(
-                    utf_ptr2len(get_cursor_pos_ptr()),
-                    false_0 != 0,
-                    false_0 != 0,
-                );
-                ins_char(nc);
-                (*curwin.get()).w_cursor = sp;
-            } else {
-                pbyte(*pos, nc);
-            }
-            return true_0 != 0;
+        if nc == c {
+            return false;
         }
-        return false_0 != 0;
+
+        if c >= 0x80 || nc >= 0x80 {
+            // The byte length can differ, so rebuild the character through the
+            // change layer. Not `del_char()`: that would take the composing
+            // characters with it.
+            let saved: pos_T = (*curwin.get()).w_cursor;
+            (*curwin.get()).w_cursor = *pos;
+            del_bytes(utf_ptr2len(get_cursor_pos_ptr()), false, false);
+            ins_char(nc);
+            (*curwin.get()).w_cursor = saved;
+        } else {
+            pbyte(*pos, nc);
+        }
+        true
     }
+}
+
+/// Upstream's `ROT13(c, a)`: rotate `c` by 13 within the 26 letters starting
+/// at `a`.
+fn rot13(c: c_int, a: c_int) -> c_int {
+    (c - a + 13) % 26 + a
 }
