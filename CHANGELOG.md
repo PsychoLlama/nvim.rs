@@ -14,12 +14,17 @@ and this project adheres to [CalVer](https://calver.org/).
   the locale and `:language`, and the input buffer every keystroke arrives
   in. File-system access was reorganised but not rewritten.
 - Rewrote the msgpack codec and the `vim.mpack` module.
+- Rewrote the JSON codec behind `vim.json`, including its float formatting,
+  which is what decides the exact text `vim.json.encode()` produces for a
+  number.
 
 ### Fixed
 
 - `vim.mpack.encode()` no longer aborts the editor on a number over 2^53, on
   `math.huge` or on a NaN, and no longer drops the high half of a negative
   integer larger than 2^32 (which decoded back as a different number).
+- `vim.json.encode()` called from inside a metamethod of the value it is
+  encoding no longer corrupts the document its caller was building.
 
 ## [2026.08.06-eb75350b02]
 
