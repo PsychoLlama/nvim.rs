@@ -18,19 +18,17 @@
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
-use super::{FAIL, given};
+use super::{FAIL, given, strict_bool_arg};
 use crate::src::nvim::eval::typval::{
     tv_check_for_number_arg, tv_check_for_opt_bool_arg, tv_check_for_opt_number_arg,
-    tv_check_for_string_arg, tv_get_bool, tv_get_bool_chk, tv_get_number, tv_get_number_chk,
-    tv_get_string, tv_get_string_chk,
+    tv_check_for_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk, tv_get_string,
+    tv_get_string_chk,
 };
-use crate::src::nvim::main::e_using_number_as_bool_nr;
 use crate::src::nvim::mbyte::{
     mb_cptr2char_adv, mb_ptr2char_adv, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::src::nvim::memory::xmemdupz;
-use crate::src::nvim::message::semsg;
-use crate::src::nvim::os::libc::{gettext, strlen};
+use crate::src::nvim::os::libc::strlen;
 use crate::src::nvim::types::{EvalFuncData, VAR_STRING, int64_t, size_t, typval_T, varnumber_T};
 
 /// The character-length function a `countcc`/`comp` flag selects: with
@@ -55,28 +53,6 @@ unsafe fn code_point(p: *const c_char, char_len: c_int) -> c_int {
         } else {
             *p as c_int
         }
-    }
-}
-
-/// Read an optional boolean argument that must be spelled `0` or `1`.
-///
-/// Returns `None` after raising the error, which both callers turn into a
-/// silent `-1` result.
-unsafe fn strict_bool_arg(tv: *mut typval_T) -> Option<bool> {
-    unsafe {
-        let mut error = false;
-        let value = tv_get_bool_chk(tv, &raw mut error);
-        if error {
-            return None;
-        }
-        if !(0..=1).contains(&value) {
-            semsg(
-                gettext(e_using_number_as_bool_nr.ptr().cast::<c_char>()),
-                value,
-            );
-            return None;
-        }
-        Some(value != 0)
     }
 }
 

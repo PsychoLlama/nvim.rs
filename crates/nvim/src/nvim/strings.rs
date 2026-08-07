@@ -1,21 +1,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::ascii::ascii_isdigit;
-use crate::src::nvim::charset::{skipwhite, transstr, vim_str2nr};
-use crate::src::nvim::eval::encode::{encode_tv2echo, encode_tv2string};
-use crate::src::nvim::eval::typval::{
-    tv_check_for_opt_string_arg, tv_get_bool, tv_get_bool_chk, tv_get_number, tv_get_number_chk,
-    tv_get_string, tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc_ret,
-    tv_list_append_number,
-};
-use crate::src::nvim::garray::{ga_append, ga_clear, ga_grow, ga_init};
+use crate::src::nvim::eval::encode::encode_tv2echo;
+use crate::src::nvim::eval::typval::{tv_get_bool_chk, tv_get_number_chk, tv_get_string_chk};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::keycodes::Ctrl_V;
-use crate::src::nvim::main::{e_invarg, e_invarg2, e_using_number_as_bool_nr, e_val_too_large_len};
-use crate::src::nvim::mbyte::{
-    mb_cptr2char_adv, mb_ptr2char_adv, mb_string2cells, utf_char2bytes, utf_head_off,
-    utf_ptr2cells, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
-};
+use crate::src::nvim::main::{e_using_number_as_bool_nr, e_val_too_large_len};
+use crate::src::nvim::mbyte::{utf_char2bytes, utf_ptr2cells, utfc_ptr2len};
 use crate::src::nvim::memory::{
     arena_alloc, arena_alloc_block, xcalloc, xfree, xmalloc, xmallocz, xmemscan, xrealloc,
     xstrchrnul, xstrlcpy,
@@ -25,11 +16,9 @@ use crate::src::nvim::os::libc::{
     __assert_fail, gettext, log10, memmove, memset, qsort, snprintf, strcasecmp, strchr, strcmp,
     strlen, strncmp, strstr, vsnprintf,
 };
-use crate::src::nvim::plines::linetabsize_col;
 use crate::src::nvim::types::{
-    Arena, EvalFuncData, String_0, StringBuilder, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    float_T, garray_T, int16_t, intmax_t, kListLenUnknown, keyvalue_T, ptrdiff_t, size_t, typval_T,
-    uint8_t, uint16_t, uintmax_t, uvarnumber_T, varnumber_T,
+    Arena, String_0, StringBuilder, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, float_T,
+    int16_t, intmax_t, keyvalue_T, ptrdiff_t, size_t, typval_T, uint16_t, uintmax_t, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -64,6 +53,28 @@ pub const false_0: c_int = 0;
 /// caller's own block already had to produce one.
 pub(crate) fn given(tv: &typval_T) -> bool {
     tv.v_type != VAR_UNKNOWN
+}
+
+/// Read an optional boolean argument that must be spelled `0` or `1`.
+///
+/// Returns `None` after raising the error, which both callers turn into a
+/// silent `-1` result.
+pub(crate) unsafe fn strict_bool_arg(tv: *mut typval_T) -> Option<bool> {
+    unsafe {
+        let mut error = false;
+        let value = tv_get_bool_chk(tv, &raw mut error);
+        if error {
+            return None;
+        }
+        if !(0..=1).contains(&value) {
+            semsg(
+                gettext(e_using_number_as_bool_nr.ptr().cast::<c_char>()),
+                value,
+            );
+            return None;
+        }
+        Some(value != 0)
+    }
 }
 
 /// `strnlen`: bytes before the terminator, reading at most `maxlen` bytes.

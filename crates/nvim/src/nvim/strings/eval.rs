@@ -9,576 +9,515 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{c_char, c_int, c_void};
+use core::ptr;
+
+use super::{FAIL, given, strcase_save, strict_bool_arg, xstrnsave};
 use crate::src::nvim::charset::{
-    STR2NR_BIN, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT, STR2NR_OOCT, STR2NR_QUOTE,
+    STR2NR_BIN, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT, STR2NR_OOCT, STR2NR_QUOTE, skipwhite,
+    transstr, vim_str2nr,
+};
+use crate::src::nvim::eval::encode::encode_tv2string;
+use crate::src::nvim::eval::typval::{
+    tv_check_for_opt_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk, tv_get_string,
+    tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc_ret, tv_list_append_number,
+};
+use crate::src::nvim::garray::{ga_append, ga_clear, ga_grow, ga_init};
+use crate::src::nvim::main::{e_invarg, e_invarg2};
+use crate::src::nvim::mbyte::{
+    mb_cptr2char_adv, mb_ptr2char_adv, mb_string2cells, utf_head_off, utf_ptr2char, utf_ptr2len,
+    utfc_ptr2len,
+};
+use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::os::libc::{gettext, strlen, strncmp, strstr};
+use crate::src::nvim::plines::linetabsize_col;
+use crate::src::nvim::types::{
+    EvalFuncData, VAR_STRING, garray_T, kListLenUnknown, ptrdiff_t, size_t, typval_T, uint8_t,
+    varnumber_T,
 };
 
+/// The scratch buffer `tv_get_string_buf_chk` renders a Number into.
+/// `NUMBUFLEN` in the C.
+const NUMBUFLEN: usize = 65;
+
+/// "str2list()" function: the string as a list of code points.
 pub unsafe extern "C" fn f_str2list(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        tv_list_alloc_ret(rettv, kListLenUnknown as ::core::ffi::c_int as ptrdiff_t);
-        let mut p: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        while *p as ::core::ffi::c_int != NUL {
+        tv_list_alloc_ret(rettv, kListLenUnknown as ptrdiff_t);
+        let mut p = tv_get_string(argvars);
+        while *p != 0 {
             tv_list_append_number((*rettv).vval.v_list, utf_ptr2char(p) as varnumber_T);
             p = p.offset(utf_ptr2len(p) as isize);
         }
     }
 }
 
+/// "str2nr()" function.
+///
+/// The sign is handled here rather than by `vim_str2nr`, so that a base
+/// prefix may follow it and so that whitespace between the two is allowed.
+/// Text after the number is silently ignored.
 pub unsafe extern "C" fn f_str2nr(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        let mut base: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
-        let mut what: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            base = tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize))
-                as ::core::ffi::c_int;
-            if base != 2 as ::core::ffi::c_int
-                && base != 8 as ::core::ffi::c_int
-                && base != 10 as ::core::ffi::c_int
-                && base != 16 as ::core::ffi::c_int
-            {
-                emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
+        let mut base = 10;
+        let mut what = 0;
+        if given(&*argvars.add(1)) {
+            base = tv_get_number(argvars.add(1)) as c_int;
+            if !matches!(base, 2 | 8 | 10 | 16) {
+                emsg(gettext(e_invarg.ptr().cast::<c_char>()));
                 return;
             }
-            if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                && tv_get_bool(argvars.offset(2 as ::core::ffi::c_int as isize)) != 0
-            {
+            if given(&*argvars.add(2)) && tv_get_bool(argvars.add(2)) != 0 {
                 what |= STR2NR_QUOTE;
             }
         }
-        let mut p: *mut ::core::ffi::c_char = skipwhite(tv_get_string(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-        ));
-        let mut isneg: bool = *p as ::core::ffi::c_int == '-' as ::core::ffi::c_int;
-        if *p as ::core::ffi::c_int == '+' as ::core::ffi::c_int
-            || *p as ::core::ffi::c_int == '-' as ::core::ffi::c_int
-        {
-            p = skipwhite(p.offset(1 as ::core::ffi::c_int as isize));
+
+        let mut p = skipwhite(tv_get_string(argvars));
+        let isneg = *p == b'-' as c_char;
+        if *p == b'+' as c_char || *p == b'-' as c_char {
+            p = skipwhite(p.add(1));
         }
-        match base {
-            2 => {
-                what |= STR2NR_BIN | STR2NR_FORCE;
-            }
-            8 => {
-                what |= STR2NR_OCT | STR2NR_OOCT | STR2NR_FORCE;
-            }
-            16 => {
-                what |= STR2NR_HEX | STR2NR_FORCE;
-            }
-            _ => {}
-        }
+
+        // An explicit base forces that radix; base 10 accepts none.
+        what |= match base {
+            2 => STR2NR_BIN | STR2NR_FORCE,
+            8 => STR2NR_OCT | STR2NR_OOCT | STR2NR_FORCE,
+            16 => STR2NR_HEX | STR2NR_FORCE,
+            _ => 0,
+        };
+
         let mut n: varnumber_T = 0;
         vim_str2nr(
             p,
-            ::core::ptr::null_mut::<::core::ffi::c_int>(),
-            ::core::ptr::null_mut::<::core::ffi::c_int>(),
+            ptr::null_mut(),
+            ptr::null_mut(),
             what,
             &raw mut n,
-            ::core::ptr::null_mut::<uvarnumber_T>(),
-            0 as ::core::ffi::c_int,
-            false_0 != 0,
-            ::core::ptr::null_mut::<bool>(),
+            ptr::null_mut(),
+            0,
+            false,
+            ptr::null_mut(),
         );
-        if isneg {
-            (*rettv).vval.v_number = -n;
-        } else {
-            (*rettv).vval.v_number = n;
-        };
+        (*rettv).vval.v_number = if isneg { -n } else { n };
     }
 }
 
+/// "stridx()" function: the byte index of the first occurrence.
 pub unsafe extern "C" fn f_stridx(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        (*rettv).vval.v_number = -1 as varnumber_T;
-        let mut buf: [::core::ffi::c_char; 65] = [0; 65];
-        let needle: *const ::core::ffi::c_char =
-            tv_get_string_chk(argvars.offset(1 as ::core::ffi::c_int as isize));
-        let mut haystack: *const ::core::ffi::c_char = tv_get_string_buf_chk(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-            &raw mut buf as *mut ::core::ffi::c_char,
-        );
-        let haystack_start: *const ::core::ffi::c_char = haystack;
+        (*rettv).vval.v_number = -1;
+
+        let mut buf = [0 as c_char; NUMBUFLEN];
+        let needle = tv_get_string_chk(argvars.add(1));
+        let haystack_start = tv_get_string_buf_chk(argvars, buf.as_mut_ptr());
+        let mut haystack = haystack_start;
         if needle.is_null() || haystack.is_null() {
             return;
         }
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut error: bool = false_0 != 0;
-            let start_idx: ptrdiff_t = tv_get_number_chk(
-                argvars.offset(2 as ::core::ffi::c_int as isize),
-                &raw mut error,
-            ) as ptrdiff_t;
-            if error as ::core::ffi::c_int != 0 || start_idx >= strlen(haystack) as ptrdiff_t {
+
+        if given(&*argvars.add(2)) {
+            let mut error = false;
+            let start_idx = tv_get_number_chk(argvars.add(2), &raw mut error) as ptrdiff_t;
+            if error || start_idx >= strlen(haystack) as ptrdiff_t {
                 return;
             }
-            if start_idx >= 0 as ptrdiff_t {
+            // A negative start is ignored, not counted from the end.
+            if start_idx >= 0 {
                 haystack = haystack.offset(start_idx as isize);
             }
         }
-        let mut pos: *const ::core::ffi::c_char = strstr(haystack, needle);
+
+        let pos = strstr(haystack, needle);
         if !pos.is_null() {
+            // Reported against the whole string, not against the start.
             (*rettv).vval.v_number = pos.offset_from(haystack_start) as varnumber_T;
         }
     }
 }
 
-pub unsafe extern "C" fn f_string(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = encode_tv2string(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-            ::core::ptr::null_mut::<size_t>(),
-        );
-    }
-}
-
-pub unsafe extern "C" fn f_strlen(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        (*rettv).vval.v_number = strlen(tv_get_string(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-        )) as varnumber_T;
-    }
-}
-
-unsafe extern "C" fn strchar_common(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut skipcc: bool,
-) {
-    unsafe {
-        let mut s: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let mut len: varnumber_T = 0 as varnumber_T;
-        let mut func_mb_ptr2char_adv: Option<
-            unsafe extern "C" fn(*mut *const ::core::ffi::c_char) -> ::core::ffi::c_int,
-        > = None;
-        func_mb_ptr2char_adv = (if skipcc as ::core::ffi::c_int != 0 {
-            Some(
-                mb_ptr2char_adv
-                    as unsafe extern "C" fn(*mut *const ::core::ffi::c_char) -> ::core::ffi::c_int,
-            )
-        } else {
-            Some(
-                mb_cptr2char_adv
-                    as unsafe extern "C" fn(*mut *const ::core::ffi::c_char) -> ::core::ffi::c_int,
-            )
-        })
-            as Option<unsafe extern "C" fn(*mut *const ::core::ffi::c_char) -> ::core::ffi::c_int>;
-        while *s as ::core::ffi::c_int != NUL {
-            func_mb_ptr2char_adv.expect("non-null function pointer")(&raw mut s);
-            len += 1;
-        }
-        (*rettv).vval.v_number = len;
-    }
-}
-
-pub unsafe extern "C" fn f_strcharlen(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        strchar_common(argvars, rettv, true_0 != 0);
-    }
-}
-
-pub unsafe extern "C" fn f_strchars(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        let mut skipcc: varnumber_T = false_0 as varnumber_T;
-        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut error: bool = false_0 != 0;
-            skipcc = tv_get_bool_chk(
-                argvars.offset(1 as ::core::ffi::c_int as isize),
-                &raw mut error,
-            );
-            if error {
-                return;
-            }
-            if skipcc < 0 as varnumber_T || skipcc > 1 as varnumber_T {
-                semsg(
-                    gettext(&raw const e_using_number_as_bool_nr as *const ::core::ffi::c_char),
-                    skipcc,
-                );
-                return;
-            }
-        }
-        strchar_common(argvars, rettv, skipcc != 0);
-    }
-}
-
-pub unsafe extern "C" fn f_strdisplaywidth(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        let s: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            col = tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize))
-                as ::core::ffi::c_int;
-        }
-        (*rettv).vval.v_number =
-            (linetabsize_col(col, s as *mut ::core::ffi::c_char) - col) as varnumber_T;
-    }
-}
-
-pub unsafe extern "C" fn f_strwidth(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        let s: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        (*rettv).vval.v_number = mb_string2cells(s) as varnumber_T;
-    }
-}
-
+/// "strridx()" function: the byte index of the last occurrence at or
+/// before `end_idx`.
 pub unsafe extern "C" fn f_strridx(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        let mut buf: [::core::ffi::c_char; 65] = [0; 65];
-        let needle: *const ::core::ffi::c_char =
-            tv_get_string_chk(argvars.offset(1 as ::core::ffi::c_int as isize));
-        let haystack: *const ::core::ffi::c_char = tv_get_string_buf_chk(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-            &raw mut buf as *mut ::core::ffi::c_char,
-        );
-        (*rettv).vval.v_number = -1 as varnumber_T;
+        (*rettv).vval.v_number = -1;
+
+        let mut buf = [0 as c_char; NUMBUFLEN];
+        let needle = tv_get_string_chk(argvars.add(1));
+        let haystack = tv_get_string_buf_chk(argvars, buf.as_mut_ptr());
         if needle.is_null() || haystack.is_null() {
             return;
         }
-        let haystack_len: size_t = strlen(haystack);
-        let mut end_idx: ptrdiff_t = 0;
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            end_idx = tv_get_number_chk(
-                argvars.offset(2 as ::core::ffi::c_int as isize),
-                ::core::ptr::null_mut::<bool>(),
-            ) as ptrdiff_t;
-            if end_idx < 0 as ptrdiff_t {
+
+        let end_idx = if given(&*argvars.add(2)) {
+            let idx = tv_get_number_chk(argvars.add(2), ptr::null_mut()) as ptrdiff_t;
+            if idx < 0 {
                 return;
             }
+            idx
         } else {
-            end_idx = haystack_len as ptrdiff_t;
-        }
-        let mut lastmatch: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        if *needle as ::core::ffi::c_int == NUL {
-            lastmatch = haystack.offset(end_idx as isize);
+            strlen(haystack) as ptrdiff_t
+        };
+        let last_allowed = haystack.offset(end_idx as isize);
+
+        let lastmatch = if *needle == 0 {
+            // The empty needle matches at the end of the range.
+            last_allowed
         } else {
-            let mut rest: *const ::core::ffi::c_char = haystack;
-            while *rest as ::core::ffi::c_int != NUL {
+            let mut found = ptr::null();
+            let mut rest = haystack;
+            while *rest != 0 {
                 rest = strstr(rest, needle);
-                if rest.is_null() || rest > haystack.offset(end_idx as isize) {
+                if rest.is_null() || rest > last_allowed {
                     break;
                 }
-                lastmatch = rest;
-                rest = rest.offset(1);
+                found = rest;
+                rest = rest.add(1);
             }
-        }
+            found
+        };
+
         if !lastmatch.is_null() {
             (*rettv).vval.v_number = lastmatch.offset_from(haystack) as varnumber_T;
         }
     }
 }
 
-pub unsafe extern "C" fn f_strtrans(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+/// "string()" function.
+pub unsafe extern "C" fn f_string(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
         (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = transstr(
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize)),
-            true_0 != 0,
-        );
+        (*rettv).vval.v_string = encode_tv2string(argvars, ptr::null_mut());
     }
 }
 
-pub unsafe extern "C" fn f_tolower(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+/// "strlen()" function: the length in bytes.
+pub unsafe extern "C" fn f_strlen(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = strcase_save(
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize)),
-            false_0 != 0,
-        );
+        (*rettv).vval.v_number = strlen(tv_get_string(argvars)) as varnumber_T;
     }
 }
 
-pub unsafe extern "C" fn f_toupper(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
+/// The character count `strchars()` and `strcharlen()` share.
+///
+/// `skipcc` folds a composing character into the base character it
+/// follows; without it each one counts on its own.
+unsafe fn strchar_common(argvars: *mut typval_T, rettv: *mut typval_T, skipcc: bool) {
     unsafe {
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = strcase_save(
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize)),
-            true_0 != 0,
-        );
-    }
-}
-
-pub unsafe extern "C" fn f_tr(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        let mut buf: [::core::ffi::c_char; 65] = [0; 65];
-        let mut buf2: [::core::ffi::c_char; 65] = [0; 65];
-        let mut in_str: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let mut fromstr: *const ::core::ffi::c_char = tv_get_string_buf_chk(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-            &raw mut buf as *mut ::core::ffi::c_char,
-        );
-        let mut tostr: *const ::core::ffi::c_char = tv_get_string_buf_chk(
-            argvars.offset(2 as ::core::ffi::c_int as isize),
-            &raw mut buf2 as *mut ::core::ffi::c_char,
-        );
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if fromstr.is_null() || tostr.is_null() {
-            return;
+        let next_char: unsafe extern "C" fn(*mut *const c_char) -> c_int = if skipcc {
+            mb_ptr2char_adv
+        } else {
+            mb_cptr2char_adv
+        };
+        let mut s = tv_get_string(argvars);
+        let mut len: varnumber_T = 0;
+        while *s != 0 {
+            next_char(&raw mut s);
+            len += 1;
         }
+        (*rettv).vval.v_number = len;
+    }
+}
+
+/// "strcharlen()" function: characters, composing characters folded in.
+pub unsafe extern "C" fn f_strcharlen(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    unsafe { strchar_common(argvars, rettv, true) }
+}
+
+/// "strchars()" function: characters, composing ones counted unless the
+/// optional `skipcc` argument says otherwise.
+pub unsafe extern "C" fn f_strchars(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    unsafe {
+        let skipcc = if given(&*argvars.add(1)) {
+            match strict_bool_arg(argvars.add(1)) {
+                Some(flag) => flag,
+                None => return,
+            }
+        } else {
+            false
+        };
+        strchar_common(argvars, rettv, skipcc);
+    }
+}
+
+/// "strdisplaywidth()" function: screen cells, tabs expanded against the
+/// optional starting column.
+pub unsafe extern "C" fn f_strdisplaywidth(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    unsafe {
+        let s = tv_get_string(argvars);
+        let col = if given(&*argvars.add(1)) {
+            tv_get_number(argvars.add(1)) as c_int
+        } else {
+            0
+        };
+        (*rettv).vval.v_number = (linetabsize_col(col, s as *mut c_char) - col) as varnumber_T;
+    }
+}
+
+/// "strwidth()" function: screen cells, with a tab counting as one.
+pub unsafe extern "C" fn f_strwidth(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    unsafe {
+        (*rettv).vval.v_number = mb_string2cells(tv_get_string(argvars)) as varnumber_T;
+    }
+}
+
+/// "strtrans()" function: unprintable characters as `^X`/`<xx>`.
+pub unsafe extern "C" fn f_strtrans(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    unsafe {
+        (*rettv).v_type = VAR_STRING;
+        (*rettv).vval.v_string = transstr(tv_get_string(argvars), true);
+    }
+}
+
+/// "tolower()" function.
+pub unsafe extern "C" fn f_tolower(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    unsafe {
+        (*rettv).v_type = VAR_STRING;
+        (*rettv).vval.v_string = strcase_save(tv_get_string(argvars), false);
+    }
+}
+
+/// "toupper()" function.
+pub unsafe extern "C" fn f_toupper(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    unsafe {
+        (*rettv).v_type = VAR_STRING;
+        (*rettv).vval.v_string = strcase_save(tv_get_string(argvars), true);
+    }
+}
+
+/// "tr()" function: character-wise translation.
+///
+/// `fromstr` and `tostr` must hold the same number of characters, which is
+/// checked lazily -- either when a mapped character's counterpart runs off
+/// the end of `tostr`, or once, the first time an input character is *not*
+/// in `fromstr` and the counts can be compared directly. So
+/// `tr('a', 'ab', 'x')` is an error but `tr('a', 'a', 'x')` is not.
+pub unsafe extern "C" fn f_tr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    unsafe {
+        let mut buf = [0 as c_char; NUMBUFLEN];
+        let mut buf2 = [0 as c_char; NUMBUFLEN];
+        let mut in_str = tv_get_string(argvars);
+        let fromstr = tv_get_string_buf_chk(argvars.add(1), buf.as_mut_ptr());
+        let tostr = tv_get_string_buf_chk(argvars.add(2), buf2.as_mut_ptr());
+
+        (*rettv).v_type = VAR_STRING;
+        (*rettv).vval.v_string = ptr::null_mut();
+        if fromstr.is_null() || tostr.is_null() {
+            return; // Type error; the message is already out.
+        }
+
+        // The `n`-th character of a set, as (start, byte length).
+        let nth_char = |set: *const c_char, n: c_int| -> Option<(*const c_char, c_int)> {
+            let mut p = set;
+            let mut left = n;
+            while *p != 0 {
+                let len = utfc_ptr2len(p);
+                if left == 0 {
+                    return Some((p, len));
+                }
+                left -= 1;
+                p = p.offset(len as isize);
+            }
+            None
+        };
+        let count_chars = |set: *const c_char| -> c_int {
+            let mut p = set;
+            let mut n = 0;
+            while *p != 0 {
+                p = p.offset(utfc_ptr2len(p) as isize);
+                n += 1;
+            }
+            n
+        };
+
         let mut ga: garray_T = garray_T {
             ga_len: 0,
             ga_maxlen: 0,
             ga_itemsize: 0,
             ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+            ga_data: ptr::null_mut::<c_void>(),
         };
-        ga_init(
-            &raw mut ga,
-            ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int,
-            80 as ::core::ffi::c_int,
-        );
-        let mut first: bool = true_0 != 0;
-        '_error: {
-            while *in_str as ::core::ffi::c_int != NUL {
-                let mut cpstr: *const ::core::ffi::c_char = in_str;
-                let inlen: ::core::ffi::c_int = utfc_ptr2len(in_str);
-                let mut cplen: ::core::ffi::c_int = inlen;
-                let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                let mut fromlen: ::core::ffi::c_int = 0;
-                let mut p: *const ::core::ffi::c_char = fromstr;
-                while *p as ::core::ffi::c_int != NUL {
-                    fromlen = utfc_ptr2len(p);
-                    if fromlen == inlen
-                        && strncmp(in_str, p, inlen as size_t) == 0 as ::core::ffi::c_int
-                    {
-                        let mut tolen: ::core::ffi::c_int = 0;
-                        p = tostr;
-                        while *p as ::core::ffi::c_int != NUL {
-                            tolen = utfc_ptr2len(p);
-                            let c2rust_fresh32 = idx;
-                            idx = idx - 1;
-                            if c2rust_fresh32 == 0 as ::core::ffi::c_int {
-                                cplen = tolen;
-                                cpstr = p;
-                                break;
-                            } else {
-                                p = p.offset(tolen as isize);
-                            }
-                        }
-                        if *p as ::core::ffi::c_int == NUL {
-                            break '_error;
-                        } else {
-                            break;
-                        }
-                    } else {
-                        idx += 1;
-                        p = p.offset(fromlen as isize);
+        ga_init(&raw mut ga, ::core::mem::size_of::<c_char>() as c_int, 80);
+
+        let mut lengths_checked = false;
+        'error: {
+            while *in_str != 0 {
+                let inlen = utfc_ptr2len(in_str);
+
+                // Which character of `fromstr` is this, if any?
+                let mut idx = 0;
+                let mut found = false;
+                let mut p = fromstr;
+                while *p != 0 {
+                    let fromlen = utfc_ptr2len(p);
+                    if fromlen == inlen && strncmp(in_str, p, inlen as size_t) == 0 {
+                        found = true;
+                        break;
                     }
+                    idx += 1;
+                    p = p.offset(fromlen as isize);
                 }
-                if first as ::core::ffi::c_int != 0 && cpstr == in_str {
-                    first = false_0 != 0;
-                    let mut tolen_0: ::core::ffi::c_int = 0;
-                    let mut p_0: *const ::core::ffi::c_char = tostr;
-                    while *p_0 as ::core::ffi::c_int != NUL {
-                        tolen_0 = utfc_ptr2len(p_0);
-                        idx -= 1;
-                        p_0 = p_0.offset(tolen_0 as isize);
+
+                let (cpstr, cplen) = if found {
+                    match nth_char(tostr, idx) {
+                        Some(hit) => hit,
+                        None => break 'error, // tostr is shorter than fromstr
                     }
-                    if idx != 0 as ::core::ffi::c_int {
-                        break '_error;
+                } else {
+                    if !lengths_checked {
+                        lengths_checked = true;
+                        // `idx` is now `fromstr`'s character count.
+                        if count_chars(tostr) != idx {
+                            break 'error;
+                        }
                     }
-                }
+                    (in_str, inlen)
+                };
+
                 ga_grow(&raw mut ga, cplen);
-                memmove(
-                    (ga.ga_data as *mut ::core::ffi::c_char).offset(ga.ga_len as isize)
-                        as *mut ::core::ffi::c_void,
-                    cpstr as *const ::core::ffi::c_void,
-                    cplen as size_t,
+                ptr::copy_nonoverlapping(
+                    cpstr,
+                    (ga.ga_data as *mut c_char).offset(ga.ga_len as isize),
+                    cplen as usize,
                 );
                 ga.ga_len += cplen;
                 in_str = in_str.offset(inlen as isize);
             }
-            ga_append(&raw mut ga, NUL as uint8_t);
-            (*rettv).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char;
+            ga_append(&raw mut ga, 0 as uint8_t);
+            (*rettv).vval.v_string = ga.ga_data as *mut c_char;
             return;
         }
-        semsg(
-            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-            fromstr,
-        );
+        semsg(gettext(e_invarg2.ptr().cast::<c_char>()), fromstr);
         ga_clear(&raw mut ga);
     }
 }
 
-pub unsafe extern "C" fn f_trim(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
+/// "trim()" function.
+///
+/// `dir` is 0 (both ends, the default), 1 (leading) or 2 (trailing). With
+/// no mask the set trimmed is whitespace plus U+00A0; with one it is
+/// exactly the mask's characters, and an empty mask reverts to the
+/// default.
+pub unsafe extern "C" fn f_trim(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
-        let mut buf1: [::core::ffi::c_char; 65] = [0; 65];
-        let mut buf2: [::core::ffi::c_char; 65] = [0; 65];
-        let mut head: *const ::core::ffi::c_char = tv_get_string_buf_chk(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-            &raw mut buf1 as *mut ::core::ffi::c_char,
-        );
-        let mut mask: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut prev: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut dir: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+        let mut buf1 = [0 as c_char; NUMBUFLEN];
+        let mut buf2 = [0 as c_char; NUMBUFLEN];
+        let mut head = tv_get_string_buf_chk(argvars, buf1.as_mut_ptr());
+        let mut mask = ptr::null::<c_char>();
+        let mut dir = 0;
+
         (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if head.is_null() {
+        (*rettv).vval.v_string = ptr::null_mut();
+        if head.is_null() || tv_check_for_opt_string_arg(argvars, 1) == FAIL {
             return;
         }
-        if tv_check_for_opt_string_arg(argvars, 1 as ::core::ffi::c_int) == FAIL {
-            return;
-        }
-        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            mask = tv_get_string_buf_chk(
-                argvars.offset(1 as ::core::ffi::c_int as isize),
-                &raw mut buf2 as *mut ::core::ffi::c_char,
-            );
-            if *mask as ::core::ffi::c_int == NUL {
-                mask = ::core::ptr::null::<::core::ffi::c_char>();
+
+        if (*argvars.add(1)).v_type == VAR_STRING {
+            mask = tv_get_string_buf_chk(argvars.add(1), buf2.as_mut_ptr());
+            if *mask == 0 {
+                mask = ptr::null();
             }
-            if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                let mut error: bool = false_0 != 0;
-                dir = tv_get_number_chk(
-                    argvars.offset(2 as ::core::ffi::c_int as isize),
-                    &raw mut error,
-                ) as ::core::ffi::c_int;
+            if given(&*argvars.add(2)) {
+                let mut error = false;
+                dir = tv_get_number_chk(argvars.add(2), &raw mut error) as c_int;
                 if error {
                     return;
                 }
-                if dir < 0 as ::core::ffi::c_int || dir > 2 as ::core::ffi::c_int {
+                if !(0..=2).contains(&dir) {
                     semsg(
-                        gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                        tv_get_string(argvars.offset(2 as ::core::ffi::c_int as isize)),
+                        gettext(e_invarg2.ptr().cast::<c_char>()),
+                        tv_get_string(argvars.add(2)),
                     );
                     return;
                 }
             }
         }
-        if dir == 0 as ::core::ffi::c_int || dir == 1 as ::core::ffi::c_int {
-            while *head as ::core::ffi::c_int != NUL {
-                let mut c1: ::core::ffi::c_int = utf_ptr2char(head);
-                if mask.is_null() {
-                    if c1 > ' ' as ::core::ffi::c_int && c1 != 0xa0 as ::core::ffi::c_int {
-                        break;
-                    }
-                } else {
-                    p = mask;
-                    while *p as ::core::ffi::c_int != NUL {
-                        if c1 == utf_ptr2char(p) {
-                            break;
-                        }
-                        p = p.offset(utfc_ptr2len(p as *mut ::core::ffi::c_char) as isize);
-                    }
-                    if *p as ::core::ffi::c_int == NUL {
-                        break;
-                    }
+
+        // Whitespace and NBSP by default, else exactly the mask's set.
+        let trimmable = |c: c_int| -> bool {
+            if mask.is_null() {
+                return c <= b' ' as c_int || c == 0xa0;
+            }
+            let mut p = mask;
+            while *p != 0 {
+                if c == utf_ptr2char(p) {
+                    return true;
                 }
-                head = head.offset(utfc_ptr2len(head as *mut ::core::ffi::c_char) as isize);
+                p = p.offset(utfc_ptr2len(p) as isize);
+            }
+            false
+        };
+
+        if dir == 0 || dir == 1 {
+            while *head != 0 && trimmable(utf_ptr2char(head)) {
+                head = head.offset(utfc_ptr2len(head) as isize);
             }
         }
-        let mut tail: *const ::core::ffi::c_char = head.offset(strlen(head) as isize);
-        if dir == 0 as ::core::ffi::c_int || dir == 2 as ::core::ffi::c_int {
+
+        let mut tail = head.add(strlen(head));
+        if dir == 0 || dir == 2 {
             while tail > head {
-                prev = tail;
-                prev = prev.offset(
-                    -((utf_head_off(
-                        head as *mut ::core::ffi::c_char,
-                        (prev as *mut ::core::ffi::c_char)
-                            .offset(-(1 as ::core::ffi::c_int as isize)),
-                    ) + 1 as ::core::ffi::c_int) as isize),
-                );
-                let mut c1_0: ::core::ffi::c_int = utf_ptr2char(prev);
-                if mask.is_null() {
-                    if c1_0 > ' ' as ::core::ffi::c_int && c1_0 != 0xa0 as ::core::ffi::c_int {
-                        break;
-                    }
-                } else {
-                    p = mask;
-                    while *p as ::core::ffi::c_int != NUL {
-                        if c1_0 == utf_ptr2char(p) {
-                            break;
-                        }
-                        p = p.offset(utfc_ptr2len(p as *mut ::core::ffi::c_char) as isize);
-                    }
-                    if *p as ::core::ffi::c_int == NUL {
-                        break;
-                    }
+                // Step back over one whole character.
+                let prev =
+                    tail.offset(-(utf_head_off(head as *mut c_char, tail.sub(1)) as isize) - 1);
+                if !trimmable(utf_ptr2char(prev)) {
+                    break;
                 }
                 tail = prev;
             }
         }
+
         (*rettv).vval.v_string = xstrnsave(head, tail.offset_from(head) as size_t);
     }
 }
