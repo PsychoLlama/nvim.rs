@@ -4,20 +4,19 @@
 //! The thirteen children hold the code; this file holds the surface they
 //! share -- the `diffin_T`/`diffout_T`/`diffio_T` triple a diff run is
 //! carried in, the `DIFF_*` bits of `'diffopt'`, and the module's
-//! **process-wide state**, which is eight cells and nothing else:
+//! **process-wide state**, which is seven cells and nothing else:
 //!
 //! | cell | written by | meaning |
 //! | --- | --- | --- |
 //! | `diff_flags` | `diffopt_changed` | the parsed `'diffopt'` bit set |
 //! | `diff_algorithm` | `diffopt_changed` | the `XDF_*` bits for `algorithm:` |
-//! | `diff_word_gap` | `diffopt_changed` | `inline-word-gap:`, in characters |
 //! | `linematch_lines` | `diffopt_changed` | `linematch:`, 0 when off |
 //! | `diff_a_works` | `check_external_diff` | does the host's `diff(1)` take `-a`? |
 //! | `diff_busy` | `diff_try_update` | a recompute is on the stack |
 //! | `diff_need_update` | `diff_buf_*`, `ex_diffupdate` | one was asked for while busy |
 //! | `simple_diffline_change` | `diff_find_change_simple` | the one-element answer buffer |
 //!
-//! The first five are option state and are only interesting because
+//! The first four are option state and are only interesting because
 //! `'diffopt'` is global; the last three are the ones that carry state
 //! *across* calls. `diff_busy`/`diff_need_update` are a reentrancy guard:
 //! `diff_try_update` runs autocommands, which can ask for another
@@ -257,7 +256,12 @@ static diff_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(
     DIFF_INTERNAL | DIFF_FILLER | DIFF_CLOSE_OFF | DIFF_LINEMATCH | DIFF_INLINE_CHAR,
 );
 static diff_algorithm: GlobalCell<u64> = GlobalCell::new(XDF_INDENT_HEURISTIC);
-static diff_word_gap: GlobalCell<::core::ffi::c_int> = GlobalCell::new(5 as ::core::ffi::c_int);
+/// `inline:word`'s gap threshold, in bytes.
+///
+/// A `static int` upstream, with no setter: `'diffopt'` has no spelling that
+/// reaches it, so it is a tuning constant rather than option state and does
+/// not belong in a cell.
+const DIFF_WORD_GAP: ::core::ffi::c_int = 5;
 static linematch_lines: GlobalCell<::core::ffi::c_int> = GlobalCell::new(40 as ::core::ffi::c_int);
 pub const LBUFLEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 pub const MAX_XDIFF_SIZE: ::core::ffi::c_long =

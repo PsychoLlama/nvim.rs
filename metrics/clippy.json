@@ -14,7 +14,6 @@
     "crates/nvim/src/nvim/diff/excmd.rs": 18,
     "crates/nvim/src/nvim/diff/getput.rs": 10,
     "crates/nvim/src/nvim/diff/hunk.rs": 10,
-    "crates/nvim/src/nvim/diff/opts.rs": 27,
     "crates/nvim/src/nvim/diff/update.rs": 7,
     "crates/nvim/src/nvim/digraph.rs": 9,
     "crates/nvim/src/nvim/drawline/columns.rs": 1,

@@ -163,7 +163,7 @@ unsafe fn refine_inline_word(
             merge_gaps(dp_orig, linemap, idx1, 2, |dp, entry1, entry2| {
                 let gap_start = entry1.byte_start + entry1.num_bytes;
                 let gap_size = entry2.byte_start - gap_start;
-                if gap_size <= 0 || gap_size > diff_word_gap.get() {
+                if gap_size <= 0 || gap_size > DIFF_WORD_GAP {
                     return Gap::Keep(false);
                 }
                 // The gap is only worth swallowing if it is *punctuation*
