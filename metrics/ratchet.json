@@ -1,7 +1,7 @@
 {
   "internal_exports": 40,
-  "files_without_forbid_unsafe": 882,
-  "files_without_deny_unsafe_op": 155,
+  "files_without_forbid_unsafe": 887,
+  "files_without_deny_unsafe_op": 154,
   "files": {
     "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe": 7},
     "crates/nvim/src/cjson/lua_cjson/decode.rs": {"unsafe": 20},
@@ -119,7 +119,11 @@
     "crates/nvim/src/nvim/bufwrite/backup.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/bufwrite/convert.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/bufwrite/lines.rs": {"unsafe": 3},
-    "crates/nvim/src/nvim/change.rs": {"lines": 2374, "no_mangle": 4, "unsafe": 33},
+    "crates/nvim/src/nvim/change/flag.rs": {"no_mangle": 1, "unsafe": 6},
+    "crates/nvim/src/nvim/change/leader.rs": {"unsafe": 2},
+    "crates/nvim/src/nvim/change/open_line.rs": {"lines": 1032, "unsafe": 2},
+    "crates/nvim/src/nvim/change/splice.rs": {"no_mangle": 3, "unsafe": 13},
+    "crates/nvim/src/nvim/change/text.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/channel.rs": {"unsafe": 31},
     "crates/nvim/src/nvim/channel/info.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/channel/reader.rs": {"unsafe": 11},
