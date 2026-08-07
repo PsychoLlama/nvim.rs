@@ -17,15 +17,6 @@
 use super::*;
 use ::core::ffi::{CStr, c_char, c_int};
 
-/// The byte at `i` of a NUL-terminated line held as a slice.
-///
-/// Past the end is the terminator: `to_bytes()` drops it, but the memory is
-/// still there and every reader in this file is one that upstream reaches
-/// through the NUL rather than a length.
-fn at(s: &[u8], i: usize) -> u8 {
-    s.get(i).copied().unwrap_or(0)
-}
-
 /// Where the comment enclosing the cursor starts, bounded by 'cinoptions'
 /// `*N`.
 ///
@@ -143,37 +134,37 @@ pub(crate) unsafe fn ind_find_start_CORS(is_raw: Option<&mut linenr_T>) -> *mut 
 fn string_end(s: &[u8]) -> isize {
     let mut p = 0usize;
     loop {
-        if at(s, p) == b'\'' {
+        if byte_at(s, p) == b'\'' {
             // 'c', '\n' or '\000'.
-            if at(s, p + 1) == 0 {
+            if byte_at(s, p + 1) == 0 {
                 break; // ' at end of line
             }
             let mut i = 2;
-            if at(s, p + 1) == b'\\' && at(s, p + 2) != 0 {
+            if byte_at(s, p + 1) == b'\\' && byte_at(s, p + 2) != 0 {
                 i += 1;
-                while at(s, p + i - 1).is_ascii_digit() {
+                while byte_at(s, p + i - 1).is_ascii_digit() {
                     i += 1;
                 }
             }
             // Check for the trailing '.
-            if at(s, p + i - 1) == 0 || at(s, p + i) != b'\'' {
+            if byte_at(s, p + i - 1) == 0 || byte_at(s, p + i) != b'\'' {
                 break;
             }
             p += i;
-        } else if at(s, p) == b'"' {
+        } else if byte_at(s, p) == b'"' {
             p += 1;
-            while at(s, p) != 0 {
-                if at(s, p) == b'\\' && at(s, p + 1) != 0 {
+            while byte_at(s, p) != 0 {
+                if byte_at(s, p) == b'\\' && byte_at(s, p + 1) != 0 {
                     p += 1;
-                } else if at(s, p) == b'"' {
+                } else if byte_at(s, p) == b'"' {
                     break; // end of string
                 }
                 p += 1;
             }
-            if at(s, p) != b'"' {
+            if byte_at(s, p) != b'"' {
                 break;
             }
-        } else if at(s, p) == b'R' && at(s, p + 1) == b'"' {
+        } else if byte_at(s, p) == b'R' && byte_at(s, p + 1) == b'"' {
             // Raw string: R"[delim](...)[delim]"
             let delim = p + 2;
             let Some(delim_len) = s
@@ -183,17 +174,17 @@ fn string_end(s: &[u8]) -> isize {
                 break;
             };
             p += 3;
-            while at(s, p) != 0 {
-                if at(s, p) == b')'
+            while byte_at(s, p) != 0 {
+                if byte_at(s, p) == b')'
                     && s[p + 1..].starts_with(&s[delim..delim + delim_len])
-                    && at(s, p + delim_len + 1) == b'"'
+                    && byte_at(s, p + delim_len + 1) == b'"'
                 {
                     p += delim_len + 1;
                     break;
                 }
                 p += 1;
             }
-            if at(s, p) != b'"' {
+            if byte_at(s, p) != b'"' {
                 break;
             }
         } else {
@@ -202,7 +193,7 @@ fn string_end(s: &[u8]) -> isize {
         p += 1;
     }
     // Back up off the NUL, as upstream does -- to -1 when `s` is empty.
-    if at(s, p) == 0 {
+    if byte_at(s, p) == 0 {
         p as isize - 1
     } else {
         p as isize
@@ -253,29 +244,29 @@ pub(crate) unsafe fn cin_skipcomment(s: *const c_char) -> *const c_char {
 /// [`cin_skipcomment`] over a slice: the index of the first byte of code.
 fn skip_comment(s: &[u8], hash_comment: bool) -> usize {
     let mut p = 0usize;
-    while at(s, p) != 0 {
+    while byte_at(s, p) != 0 {
         let prev = p;
-        while ascii_iswhite(c_int::from(at(s, p))) {
+        while ascii_iswhite(c_int::from(byte_at(s, p))) {
             p += 1;
         }
         // A Perl/shell `#` comment runs to end of line.
-        if hash_comment && p != prev && at(s, p) == b'#' {
+        if hash_comment && p != prev && byte_at(s, p) == b'#' {
             return s.len();
         }
-        if at(s, p) != b'/' {
+        if byte_at(s, p) != b'/' {
             break;
         }
         p += 1;
-        if at(s, p) == b'/' {
+        if byte_at(s, p) == b'/' {
             // A `//` comment runs to end of line.
             return s.len();
         }
-        if at(s, p) != b'*' {
+        if byte_at(s, p) != b'*' {
             break;
         }
         p += 1;
-        while at(s, p) != 0 {
-            if at(s, p) == b'*' && at(s, p + 1) == b'/' {
+        while byte_at(s, p) != 0 {
+            if byte_at(s, p) == b'*' && byte_at(s, p + 1) == b'/' {
                 p += 2;
                 break;
             }

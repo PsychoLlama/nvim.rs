@@ -38,7 +38,7 @@ use crate::src::nvim::keycodes::get_special_key_code;
 use crate::src::nvim::main::{State, curbuf, curwin, p_paste};
 use crate::src::nvim::mbyte::{mb_prevptr, mb_strnicmp, utfc_ptr2len};
 use crate::src::nvim::memline::{ml_get, ml_get_pos};
-use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
+use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::option::{copy_option_part, skip_to_option_part};
 use crate::src::nvim::os::libc::{__assert_fail, atoi, strcpy, strlen, strncmp, tolower};
 use crate::src::nvim::plines::getvcol;
@@ -71,6 +71,15 @@ pub use self::keys::*;
 pub(crate) use self::label::*;
 pub(crate) use self::paren::*;
 pub use self::recog::*;
+
+/// The byte at `i` of a NUL-terminated line held as a slice.
+///
+/// Past the end is the terminator: `CStr::to_bytes()` drops it, but the
+/// memory is still there, and upstream reaches these strings through the NUL
+/// rather than through a length.
+pub(crate) fn byte_at(s: &[u8], i: usize) -> u8 {
+    s.get(i).copied().unwrap_or(0)
+}
 
 pub const KEY_COMPLETE: ::core::ffi::c_int = 259;
 pub const KEY_OPEN_BACK: ::core::ffi::c_int = 258;

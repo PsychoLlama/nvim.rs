@@ -11,6 +11,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use ::core::ffi::CStr;
 
 unsafe extern "C" fn cin_islabel_skip(mut s: *mut *const ::core::ffi::c_char) -> bool {
     unsafe {
@@ -31,7 +32,7 @@ unsafe extern "C" fn cin_islabel_skip(mut s: *mut *const ::core::ffi::c_char) ->
 pub(crate) unsafe extern "C" fn cin_islabel() -> bool {
     unsafe {
         let mut s: *const ::core::ffi::c_char = cin_skipcomment(get_cursor_line_ptr());
-        if cin_isdefault(s) != 0 {
+        if cin_isdefault(s) {
             return false;
         }
         if cin_isscopedecl(s) {
@@ -67,9 +68,9 @@ pub(crate) unsafe extern "C" fn cin_islabel() -> bool {
                 continue;
             }
             (*curwin.get()).w_cursor = cursor_save;
-            if cin_isterminated(line, true_0, false_0) as ::core::ffi::c_int != 0
-                || cin_isscopedecl(line) as ::core::ffi::c_int != 0
-                || cin_iscase(line, true) as ::core::ffi::c_int != 0
+            if cin_isterminated(line, true, false) != 0
+                || cin_isscopedecl(line)
+                || cin_iscase(line, true)
                 || cin_islabel_skip(&raw mut line) as ::core::ffi::c_int != 0 && cin_nocode(line)
             {
                 return true;
@@ -149,7 +150,7 @@ pub(crate) unsafe extern "C" fn cin_isinit() -> bool {
             c"private".as_ptr() as *mut ::core::ffi::c_char,
         ]);
         s = cin_skipcomment(get_cursor_line_ptr());
-        if cin_starts_with(s, c"typedef".as_ptr()) != 0 {
+        if cin_starts_with(s, b"typedef") {
             s = cin_skipcomment(s.offset(7 as ::core::ffi::c_int as isize));
         }
         loop {
@@ -165,7 +166,7 @@ pub(crate) unsafe extern "C" fn cin_isinit() -> bool {
                 ) as ::core::ffi::c_int
             {
                 l = strlen((*skip.ptr())[i as usize]) as ::core::ffi::c_int;
-                if cin_starts_with(s, (*skip.ptr())[i as usize]) != 0 {
+                if cin_starts_with(s, CStr::from_ptr((*skip.ptr())[i as usize]).to_bytes()) {
                     s = cin_skipcomment(s.offset(l as isize));
                     l = 0 as ::core::ffi::c_int;
                     break;
@@ -177,7 +178,7 @@ pub(crate) unsafe extern "C" fn cin_isinit() -> bool {
                 break;
             }
         }
-        if cin_starts_with(s, c"enum".as_ptr()) != 0 {
+        if cin_starts_with(s, b"enum") {
             return true;
         }
         return cin_is_compound_init(s);

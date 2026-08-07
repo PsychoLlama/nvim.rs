@@ -238,10 +238,10 @@ pub(crate) unsafe extern "C" fn find_match(
             (*curwin.get()).w_cursor.lnum -= 1;
             (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
             look = cin_skipcomment(get_cursor_line_ptr());
-            if cin_iselse(look) == 0
-                && cin_isif(look) == 0
-                && cin_isdo(look) == 0
-                && cin_iswhileofdo(look, (*curwin.get()).w_cursor.lnum) == 0
+            if !cin_iselse(look)
+                && !cin_isif(look)
+                && !cin_isdo(look)
+                && !cin_iswhileofdo(look, (*curwin.get()).w_cursor.lnum)
             {
                 continue;
             }
@@ -257,23 +257,23 @@ pub(crate) unsafe extern "C" fn find_match(
             }
             look = cin_skipcomment(get_cursor_line_ptr());
             if !(lookfor == LOOKFOR_IF && whilelevel != 0) {
-                if cin_iselse(look) != 0 {
+                if cin_iselse(look) {
                     mightbeif = cin_skipcomment(look.offset(4 as ::core::ffi::c_int as isize));
-                    if cin_isif(mightbeif) == 0 {
+                    if !cin_isif(mightbeif) {
                         elselevel += 1;
                     }
                     continue;
-                } else if cin_isif(look) != 0 {
+                } else if cin_isif(look) {
                     elselevel -= 1;
                     if elselevel == 0 as ::core::ffi::c_int && lookfor == LOOKFOR_IF {
                         whilelevel = 0 as ::core::ffi::c_int;
                     }
                 }
             }
-            if cin_iswhileofdo(look, (*curwin.get()).w_cursor.lnum) != 0 {
+            if cin_iswhileofdo(look, (*curwin.get()).w_cursor.lnum) {
                 whilelevel += 1;
             } else {
-                if cin_isdo(look) != 0 {
+                if cin_isdo(look) {
                     whilelevel -= 1;
                 }
                 if elselevel <= 0 as ::core::ffi::c_int && whilelevel <= 0 as ::core::ffi::c_int {

@@ -254,7 +254,7 @@ pub(crate) unsafe extern "C" fn get_baseclass_amount(
             {
                 amount = get_indent_lnum((*trypos).lnum);
             }
-            if cin_ends_in(get_cursor_line_ptr(), c",".as_ptr()) == 0 {
+            if !cin_ends_in(get_cursor_line_ptr(), b",") {
                 amount += (*curbuf.get()).b_ind_cpp_baseclass;
             }
         } else {

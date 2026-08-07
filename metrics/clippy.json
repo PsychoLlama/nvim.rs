@@ -46,7 +46,6 @@
     "crates/nvim/src/nvim/indent_c/engine.rs": 7,
     "crates/nvim/src/nvim/indent_c/keys.rs": 2,
     "crates/nvim/src/nvim/indent_c/label.rs": 1,
-    "crates/nvim/src/nvim/indent_c/recog.rs": 4,
     "crates/nvim/src/nvim/input.rs": 3,
     "crates/nvim/src/nvim/log.rs": 31,
     "crates/nvim/src/nvim/main.rs": 22,
