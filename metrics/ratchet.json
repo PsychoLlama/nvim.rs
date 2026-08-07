@@ -698,7 +698,7 @@
     "crates/nvim/src/nvim/regexp/parse.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/regexp/submatch.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/regexp/substitute.rs": {"unsafe": 13},
-    "crates/nvim/src/nvim/register.rs": {"lines": 3835, "no_mangle": 2, "unsafe": 54},
+    "crates/nvim/src/nvim/register.rs": {"lines": 3532, "no_mangle": 2, "unsafe": 54},
     "crates/nvim/src/nvim/runtime.rs": {"lines": 5046, "unsafe": 117},
     "crates/nvim/src/nvim/search/charsearch.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/search/command.rs": {"unsafe": 13},
