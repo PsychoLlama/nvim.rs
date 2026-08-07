@@ -1,324 +1,405 @@
+//! The locale layer: `setlocale`, `:language`, and locale-name completion.
+//!
+//! # Boundary
+//!
+//! Every answer here comes from the C library — `setlocale` for what is in
+//! effect, `bindtextdomain`/`textdomain` for where the message catalogues
+//! live, and the `locale -a` command for what could be selected. None of it
+//! has a Rust equivalent: `std` deliberately does not touch the global
+//! locale, and nvim's whole point in this file is to set it.
+//!
+//! Only the POSIX build was transpiled. Upstream's `lang_init` queries
+//! CoreServices for the system language when `$LANG` is unset, which only
+//! happens on macOS; here it is the no-op the `#ifdef` leaves behind, kept
+//! because `option/defaults.rs` calls it unconditionally.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::ascii::ascii_iswhite;
 use crate::src::nvim::buffer::maketitle;
 use crate::src::nvim::charset::{skiptowhite, skipwhite};
 use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string};
-use crate::src::nvim::garray::{ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::time_fd;
-use crate::src::nvim::memory::{xfree, xstrdup, xstrlcpy};
+use crate::src::nvim::memory::{xfree, xstrlcpy};
 use crate::src::nvim::message::{semsg, smsg};
-use crate::src::nvim::option::set_helplang_default;
+use crate::src::nvim::option::{PROJECT_NAME, set_helplang_default};
 use crate::src::nvim::os::env::os_setenv;
-use crate::src::nvim::os::libc::{
-    bindtextdomain, gettext, setlocale, snprintf, strncasecmp, strtok_r, textdomain,
-};
-use crate::src::nvim::os::shell::get_cmd_output;
+use crate::src::nvim::os::libc::{bindtextdomain, gettext, setlocale, textdomain};
+use crate::src::nvim::os::shell::{get_cmd_output, kShellOptSilent};
 use crate::src::nvim::path::{path_tail, path_tail_with_sep};
 use crate::src::nvim::profile::time_msg;
 use crate::src::nvim::types::{
-    VV_COLLATE, VV_CTYPE, VV_LANG, VV_LC_TIME, VV_PROGPATH, exarg_T, expand_T, garray_T,
-    proftime_T, ptrdiff_t, size_t,
+    VV_COLLATE, VV_CTYPE, VV_LANG, VV_LC_TIME, VV_PROGPATH, exarg_T, expand_T,
 };
-pub const kShellOptSilent: C2Rust_Unnamed_0 = 8;
-pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
-pub const LC_CTYPE: ::core::ffi::c_int = __LC_CTYPE;
-pub const LC_NUMERIC: ::core::ffi::c_int = __LC_NUMERIC;
-pub const LC_TIME: ::core::ffi::c_int = __LC_TIME;
-pub const LC_COLLATE: ::core::ffi::c_int = __LC_COLLATE;
-pub const LC_MESSAGES: ::core::ffi::c_int = __LC_MESSAGES;
-pub const LC_ALL: ::core::ffi::c_int = __LC_ALL;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-unsafe extern "C" fn get_locale_val(mut what: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
-    let mut loc: *mut ::core::ffi::c_char =
-        setlocale(what, ::core::ptr::null::<::core::ffi::c_char>());
-    return loc;
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
+use std::ffi::CString;
+
+// The `<locale.h>` categories, glibc's numbering. `LC_MESSAGES` is the one
+// upstream compiles conditionally: where it does not exist (Windows) the
+// `:language messages` selector becomes a sentinel that reaches no
+// `setlocale` call at all. On POSIX the two are the same number, so
+// `VIM_LC_MESSAGES` below reads as upstream's `#define`.
+const LC_CTYPE: c_int = 0;
+const LC_NUMERIC: c_int = 1;
+const LC_TIME: c_int = 2;
+const LC_COLLATE: c_int = 3;
+const LC_MESSAGES: c_int = 5;
+const LC_ALL: c_int = 6;
+const VIM_LC_MESSAGES: c_int = LC_MESSAGES;
+
+/// `MAXPATHL` — the buffer [`init_locale`] builds the catalogue path in.
+const MAXPATHL: usize = 4096;
+
+/// The locale currently in effect for `what`, as libc reports it.
+///
+/// The pointer is libc's own static storage and is only valid until the next
+/// `setlocale` call, which is why every caller consumes it immediately.
+fn get_locale_val(what: c_int) -> *mut c_char {
+    // SAFETY: a NULL locale name queries rather than sets. No pointer of
+    // ours is involved.
+    unsafe { setlocale(what, ptr::null()) }
 }
-unsafe extern "C" fn is_valid_mess_lang(mut lang: *const ::core::ffi::c_char) -> bool {
-    return !lang.is_null()
-        && (*lang.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-            >= 'A' as ::core::ffi::c_uint
-            && *lang.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                <= 'Z' as ::core::ffi::c_uint
-            || *lang.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                >= 'a' as ::core::ffi::c_uint
-                && *lang.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                    <= 'z' as ::core::ffi::c_uint)
-        && (*lang.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-            >= 'A' as ::core::ffi::c_uint
-            && *lang.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                <= 'Z' as ::core::ffi::c_uint
-            || *lang.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                >= 'a' as ::core::ffi::c_uint
-                && *lang.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                    <= 'z' as ::core::ffi::c_uint);
+
+/// Whether `lang` starts with a language name — two letters. Rejects NULL,
+/// `""`, `"C"` and `"C.UTF-8"`, which are not languages anybody has help
+/// files for.
+fn is_valid_mess_lang(lang: *const c_char) -> bool {
+    if lang.is_null() {
+        return false;
+    }
+    // SAFETY: a non-NULL locale name is NUL-terminated, and `&&`
+    // short-circuits before the second byte exactly as the C `&&` does, so a
+    // one-character name is never read past its NUL.
+    unsafe { (*lang as u8).is_ascii_alphabetic() && (*lang.add(1) as u8).is_ascii_alphabetic() }
 }
-pub unsafe extern "C" fn get_mess_lang() -> *mut ::core::ffi::c_char {
-    let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    p = get_locale_val(LC_MESSAGES);
-    return if is_valid_mess_lang(p) as ::core::ffi::c_int != 0 {
+
+/// The messages language, as the default for `'helplang'`. May be NULL.
+pub fn get_mess_lang() -> *mut c_char {
+    let p = get_locale_val(LC_MESSAGES);
+    if is_valid_mess_lang(p) {
         p
     } else {
-        ::core::ptr::null_mut::<::core::ffi::c_char>()
-    };
-}
-unsafe extern "C" fn get_mess_env() -> *mut ::core::ffi::c_char {
-    return get_locale_val(LC_MESSAGES);
-}
-pub unsafe extern "C" fn set_lang_var() {
-    let mut loc: *const ::core::ffi::c_char = get_locale_val(LC_CTYPE);
-    set_vim_var_string(VV_CTYPE, loc, -1 as ptrdiff_t);
-    loc = get_mess_env();
-    set_vim_var_string(VV_LANG, loc, -1 as ptrdiff_t);
-    loc = get_locale_val(LC_TIME);
-    set_vim_var_string(VV_LC_TIME, loc, -1 as ptrdiff_t);
-    loc = get_locale_val(LC_COLLATE);
-    set_vim_var_string(VV_COLLATE, loc, -1 as ptrdiff_t);
-}
-pub unsafe extern "C" fn init_locale() {
-    setlocale(LC_ALL, b"\0".as_ptr() as *const ::core::ffi::c_char);
-    setlocale(LC_NUMERIC, b"C\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut localepath: [::core::ffi::c_char; 4096] = [0; 4096];
-    snprintf(
-        &raw mut localepath as *mut ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
-        b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-        get_vim_var_str(VV_PROGPATH),
-    );
-    let mut tail: *mut ::core::ffi::c_char =
-        path_tail_with_sep(&raw mut localepath as *mut ::core::ffi::c_char);
-    *tail = NUL as ::core::ffi::c_char;
-    tail = path_tail(&raw mut localepath as *mut ::core::ffi::c_char);
-    xstrlcpy(
-        tail,
-        b"share/locale\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 4096]>().wrapping_sub(
-            tail.offset_from(&raw mut localepath as *mut ::core::ffi::c_char) as size_t,
-        ),
-    );
-    bindtextdomain(
-        PROJECT_NAME.as_ptr(),
-        &raw mut localepath as *mut ::core::ffi::c_char,
-    );
-    textdomain(PROJECT_NAME.as_ptr());
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"locale set\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
+        ptr::null_mut()
     }
 }
-pub unsafe fn ex_language(mut eap: *mut exarg_T) {
-    let mut loc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut what: ::core::ffi::c_int = LC_ALL;
-    let mut whatstr: *mut ::core::ffi::c_char =
-        b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-    let mut name: *mut ::core::ffi::c_char = (*eap).arg;
-    let mut p: *mut ::core::ffi::c_char = skiptowhite((*eap).arg);
-    if (*p as ::core::ffi::c_int == NUL
-        || ascii_iswhite(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0)
-        && p.offset_from((*eap).arg) >= 3 as isize
-    {
-        if strncasecmp(
-            (*eap).arg,
-            b"messages\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            p.offset_from((*eap).arg) as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            what = VIM_LC_MESSAGES;
-            name = skipwhite(p);
-            whatstr =
-                b"messages \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        } else if strncasecmp(
-            (*eap).arg,
-            b"ctype\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            p.offset_from((*eap).arg) as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            what = LC_CTYPE;
-            name = skipwhite(p);
-            whatstr =
-                b"ctype \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        } else if strncasecmp(
-            (*eap).arg,
-            b"time\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            p.offset_from((*eap).arg) as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            what = LC_TIME;
-            name = skipwhite(p);
-            whatstr = b"time \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        } else if strncasecmp(
-            (*eap).arg,
-            b"collate\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            p.offset_from((*eap).arg) as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            what = LC_COLLATE;
-            name = skipwhite(p);
-            whatstr =
-                b"collate \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
+
+/// The language messages are shown in.
+///
+/// On POSIX this is just `LC_MESSAGES`; upstream's fallback chain through
+/// `$LC_ALL`/`$LC_MESSAGES`/`$LANG` exists only for the platforms that lack
+/// the category.
+fn get_mess_env() -> *mut c_char {
+    get_locale_val(LC_MESSAGES)
+}
+
+/// Publish the effective locale as `v:ctype`, `v:lang`, `v:lc_time` and
+/// `v:collate`.
+pub fn set_lang_var() {
+    for (var, loc) in [
+        (VV_CTYPE, get_locale_val(LC_CTYPE)),
+        (VV_LANG, get_mess_env()),
+        (VV_LC_TIME, get_locale_val(LC_TIME)),
+        (VV_COLLATE, get_locale_val(LC_COLLATE)),
+    ] {
+        // SAFETY: each value is libc's NUL-terminated locale name (or NULL,
+        // which `set_vim_var_string` documents as clearing the variable),
+        // and is consumed before the next `setlocale` invalidates it. -1 asks
+        // for the whole string.
+        unsafe { set_vim_var_string(var, loc, -1) };
     }
-    if *name as ::core::ffi::c_int == NUL {
-        if what == VIM_LC_MESSAGES {
-            p = get_mess_env();
+}
+
+/// Adopt the environment's locale, and point gettext at the message
+/// catalogues shipped beside the binary.
+///
+/// `LC_NUMERIC` is forced back to `"C"` so `strtod` keeps reading a decimal
+/// point rather than whatever the user's locale uses; vimscript's number
+/// syntax is not localised.
+pub fn init_locale() {
+    let mut localepath: [c_char; MAXPATHL] = [0; MAXPATHL];
+    // SAFETY: both locale names are static NUL-terminated literals, and
+    // `v:progpath` is set from the executable path in `init_path`, which
+    // startup runs before this, so it is a non-NULL NUL-terminated string.
+    // Both `path_tail*` answer a pointer inside the buffer they are given, so
+    // `used` is in bounds and the second `xstrlcpy` gets exactly the room
+    // left. Everything is derived from the one `base` pointer.
+    unsafe {
+        setlocale(LC_ALL, c"".as_ptr());
+        setlocale(LC_NUMERIC, c"C".as_ptr());
+
+        // `$prefix/bin/nvim` -> `$prefix/share/locale`: drop the executable,
+        // then overwrite the directory it sat in.
+        let base = localepath.as_mut_ptr();
+        xstrlcpy(base, get_vim_var_str(VV_PROGPATH), MAXPATHL);
+        *path_tail_with_sep(base) = 0;
+        let tail = path_tail(base);
+        let used = tail.offset_from(base) as usize;
+        xstrlcpy(tail, c"share/locale".as_ptr(), MAXPATHL - used);
+        bindtextdomain(PROJECT_NAME.as_ptr(), base);
+        textdomain(PROJECT_NAME.as_ptr());
+    }
+
+    if !time_fd.get().is_null() {
+        // SAFETY: a static message and no start time, which `time_msg`
+        // documents as "report the elapsed total".
+        unsafe { time_msg(c"locale set".as_ptr(), ptr::null()) };
+    }
+}
+
+/// The `:language` sub-commands, each with the category it selects and the
+/// word `:language` echoes back for it.
+///
+/// Upstream requires at least three characters typed so that `me` and `ct`
+/// stay available as two-letter *language* names.
+const SELECTORS: [(&CStr, c_int, &CStr); 4] = [
+    (c"messages", VIM_LC_MESSAGES, c"messages "),
+    (c"ctype", LC_CTYPE, c"ctype "),
+    (c"time", LC_TIME, c"time "),
+    (c"collate", LC_COLLATE, c"collate "),
+];
+
+/// The selector `word` abbreviates, if any. `word` matches case-insensitively
+/// and may be shortened, but never lengthened — which is what `STRNICMP` over
+/// `word`'s length answers, since the ninth byte of `"messages"` is its NUL
+/// and no byte of `word` can be.
+fn selector_for(word: &[u8]) -> Option<(c_int, &'static CStr)> {
+    if word.len() < 3 {
+        return None;
+    }
+    SELECTORS
+        .iter()
+        .find(|(name, ..)| {
+            name.to_bytes()
+                .get(..word.len())
+                .is_some_and(|n| n.eq_ignore_ascii_case(word))
+        })
+        .map(|&(_, what, whatstr)| (what, whatstr))
+}
+
+/// `:language [messages|ctype|time|collate] [{name}]` — report or set the
+/// locale.
+///
+/// # Safety
+/// `eap` must point at a live [`exarg_T`] whose `arg` is NUL-terminated.
+pub unsafe fn ex_language(eap: *mut exarg_T) {
+    // SAFETY: the caller's contract. `skiptowhite` stays inside `arg`, so the
+    // slice between them is in bounds and initialised.
+    let (arg, word, name) = unsafe {
+        let arg = (*eap).arg;
+        let p = skiptowhite(arg);
+        let len = p.offset_from(arg) as usize;
+        let ends_word = *p == 0 || ascii_iswhite(*p as c_int);
+        let word = if ends_word {
+            core::slice::from_raw_parts(arg as *const u8, len)
         } else {
-            p = setlocale(what, ::core::ptr::null::<::core::ffi::c_char>());
-        }
-        if p.is_null() || *p as ::core::ffi::c_int == NUL {
-            p = b"Unknown\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        smsg(
-            0 as ::core::ffi::c_int,
-            gettext(b"Current %slanguage: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
-            whatstr,
-            p,
-        );
-    } else {
-        loc = setlocale(what, name);
-        setlocale(LC_NUMERIC, b"C\0".as_ptr() as *const ::core::ffi::c_char);
-        if loc.is_null() {
-            semsg(
-                gettext(
-                    b"E197: Cannot set language to \"%s\"\0".as_ptr() as *const ::core::ffi::c_char
-                ),
-                name,
-            );
-        } else {
-            unsafe extern "C" {
-                static mut _nl_msg_cat_cntr: ::core::ffi::c_int;
-            }
-            _nl_msg_cat_cntr += 1;
-            os_setenv(
-                b"LC_ALL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"\0".as_ptr() as *const ::core::ffi::c_char,
-                1 as ::core::ffi::c_int,
-            );
-            if what != LC_TIME && what != LC_COLLATE {
-                if what == LC_ALL {
-                    os_setenv(
-                        b"LANG\0".as_ptr() as *const ::core::ffi::c_char,
-                        name,
-                        1 as ::core::ffi::c_int,
-                    );
-                    os_setenv(
-                        b"LANGUAGE\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"\0".as_ptr() as *const ::core::ffi::c_char,
-                        1 as ::core::ffi::c_int,
-                    );
-                }
-                if what != LC_CTYPE {
-                    os_setenv(
-                        b"LC_MESSAGES\0".as_ptr() as *const ::core::ffi::c_char,
-                        name,
-                        1 as ::core::ffi::c_int,
-                    );
-                    set_helplang_default(name);
-                }
-            }
-            set_lang_var();
-            maketitle();
-        }
+            b""
+        };
+        (arg, word, skipwhite(p))
     };
-}
-pub const VIM_LC_MESSAGES: ::core::ffi::c_int = LC_MESSAGES;
-static locales: GlobalCell<*mut *mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
-static did_init_locales: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-unsafe extern "C" fn find_locales() -> *mut *mut ::core::ffi::c_char {
-    let mut locales_ga: garray_T = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+
+    let (what, whatstr, name) = match selector_for(word) {
+        Some((what, whatstr)) => (what, whatstr, name),
+        // No sub-command: the whole argument is the locale name, and
+        // `:language` alone reports every category at once.
+        None => (LC_ALL, c"", arg),
     };
-    let mut saveptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut locale_a: *mut ::core::ffi::c_char = get_cmd_output(
-        b"locale -a\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        kShellOptSilent as ::core::ffi::c_int,
-        ::core::ptr::null_mut::<size_t>(),
-    );
-    if locale_a.is_null() {
-        return ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-    }
-    ga_init(
-        &raw mut locales_ga,
-        ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-        20 as ::core::ffi::c_int,
-    );
-    let mut loc: *mut ::core::ffi::c_char = strtok_r(
-        locale_a,
-        b"\n\0".as_ptr() as *const ::core::ffi::c_char,
-        &raw mut saveptr,
-    );
-    while !loc.is_null() {
-        loc = xstrdup(loc);
-        ga_grow(&raw mut locales_ga, 1 as ::core::ffi::c_int);
-        *(locales_ga.ga_data as *mut *mut ::core::ffi::c_char).offset(locales_ga.ga_len as isize) =
-            loc;
-        locales_ga.ga_len += 1;
-        loc = strtok_r(
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            b"\n\0".as_ptr() as *const ::core::ffi::c_char,
-            &raw mut saveptr,
-        );
-    }
-    xfree(locale_a as *mut ::core::ffi::c_void);
-    ga_grow(&raw mut locales_ga, 1 as ::core::ffi::c_int);
-    *(locales_ga.ga_data as *mut *mut ::core::ffi::c_char).offset(locales_ga.ga_len as isize) =
-        ::core::ptr::null_mut::<::core::ffi::c_char>();
-    return locales_ga.ga_data as *mut *mut ::core::ffi::c_char;
-}
-unsafe extern "C" fn init_locales() {
-    if did_init_locales.get() {
+
+    // SAFETY: `name` points into `eap->arg`, so reading its first byte is in
+    // bounds.
+    if unsafe { *name } == 0 {
+        report(what, whatstr);
         return;
     }
-    did_init_locales.set(true_0 != 0);
-    locales.set(find_locales());
+
+    // SAFETY: `name` is NUL-terminated. `LC_NUMERIC` is restored for the same
+    // reason `init_locale` sets it: `strtod` must keep seeing a decimal point.
+    let loc = unsafe {
+        let loc = setlocale(what, name);
+        setlocale(LC_NUMERIC, c"C".as_ptr());
+        loc
+    };
+    if loc.is_null() {
+        // SAFETY: `semsg` is printf-shaped and `name` outlives the call.
+        unsafe {
+            semsg(
+                gettext(c"E197: Cannot set language to \"%s\"".as_ptr()),
+                name,
+            )
+        };
+        return;
+    }
+    // SAFETY: `_nl_msg_cat_cntr` is GNU gettext's "the catalogue selection
+    // changed" counter; bumping it is how upstream stops cached translations
+    // from being reused, and nothing else in the process touches it. Every
+    // environment variable name below is a static literal, and `name` is
+    // NUL-terminated.
+    unsafe {
+        unsafe extern "C" {
+            static mut _nl_msg_cat_cntr: c_int;
+        }
+        _nl_msg_cat_cntr += 1;
+
+        // $LC_ALL would overrule everything set below.
+        os_setenv(c"LC_ALL".as_ptr(), c"".as_ptr(), 1);
+        if what != LC_TIME && what != LC_COLLATE {
+            // gettext does not consult the effective locale, so it has to be
+            // told separately what to translate to.
+            if what == LC_ALL {
+                os_setenv(c"LANG".as_ptr(), name, 1);
+                // GNU gettext prefers $LANGUAGE over $LANG.
+                os_setenv(c"LANGUAGE".as_ptr(), c"".as_ptr(), 1);
+            }
+            if what != LC_CTYPE {
+                os_setenv(c"LC_MESSAGES".as_ptr(), name, 1);
+                set_helplang_default(name);
+            }
+        }
+        set_lang_var();
+        maketitle();
+    }
 }
-pub unsafe extern "C" fn get_lang_arg(
-    mut _xp: *mut expand_T,
-    mut idx: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    if idx == 0 as ::core::ffi::c_int {
-        return b"messages\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+
+/// `:language {category}` with no name: echo what is in effect.
+fn report(what: c_int, whatstr: &CStr) {
+    // SAFETY: a NULL locale name queries rather than sets, and the answer is
+    // libc's own NUL-terminated storage, valid until the next `setlocale`.
+    // `smsg` is printf-shaped, so neither argument becomes the format string,
+    // and both outlive the call.
+    unsafe {
+        let mut p = if what == VIM_LC_MESSAGES {
+            get_mess_env()
+        } else {
+            setlocale(what, ptr::null())
+        };
+        if p.is_null() || *p == 0 {
+            p = c"Unknown".as_ptr().cast_mut();
+        }
+        smsg(
+            0,
+            gettext(c"Current %slanguage: \"%s\"".as_ptr()),
+            whatstr.as_ptr(),
+            p.cast_const(),
+        );
     }
-    if idx == 1 as ::core::ffi::c_int {
-        return b"ctype\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+}
+
+/// Every locale `locale -a` reports, discovered once and then kept for the
+/// life of the process — the completion machinery copies what it is handed,
+/// so these never have to be freed and leaking them is what upstream does.
+static LOCALES: GlobalCell<Option<&'static [CString]>> = GlobalCell::new(None);
+static DID_INIT_LOCALES: GlobalCell<bool> = GlobalCell::new(false);
+
+/// Run `locale -a` and split its output. `None` when the command could not be
+/// run, which just means there is no locale completion.
+fn find_locales() -> Option<&'static [CString]> {
+    // SAFETY: a static command line, no input file and no length wanted. The
+    // buffer that comes back is NUL-terminated and ours to free; nothing
+    // refers to it past the `xfree`, because `text` owns a copy.
+    let text = unsafe {
+        let out = get_cmd_output(
+            c"locale -a".as_ptr().cast_mut(),
+            ptr::null_mut(),
+            kShellOptSilent as c_int,
+            ptr::null_mut(),
+        );
+        if out.is_null() {
+            return None;
+        }
+        let text = CStr::from_ptr(out).to_bytes().to_vec();
+        xfree(out.cast());
+        text
+    };
+
+    let locales: Vec<CString> = text
+        .split(|&b| b == b'\n')
+        // `strtok` yields no empty tokens, so neither do we.
+        .filter(|line| !line.is_empty())
+        .map(|line| CString::new(line).expect("no NUL inside a NUL-terminated buffer"))
+        .collect();
+    Some(Vec::leak(locales))
+}
+
+/// Populate [`LOCALES`] the first time completion asks for it.
+fn init_locales() {
+    if DID_INIT_LOCALES.get() {
+        return;
     }
-    if idx == 2 as ::core::ffi::c_int {
-        return b"time\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-    }
-    if idx == 3 as ::core::ffi::c_int {
-        return b"collate\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-    }
+    DID_INIT_LOCALES.set(true);
+    LOCALES.set(find_locales());
+}
+
+/// The `idx`th known locale name, or NULL past the end — the shape
+/// `ExpandGeneric` walks.
+fn locale_name(idx: c_int) -> *mut c_char {
     init_locales();
-    if (*locales.ptr()).is_null() {
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let idx = usize::try_from(idx).ok();
+    match (LOCALES.get(), idx) {
+        // The slice is leaked, so the pointer outlives this borrow.
+        (Some(locales), Some(idx)) => locales
+            .get(idx)
+            .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut()),
+        _ => ptr::null_mut(),
     }
-    return *(*locales.ptr()).offset((idx - 4 as ::core::ffi::c_int) as isize);
 }
-pub unsafe extern "C" fn get_locales(
-    mut _xp: *mut expand_T,
-    mut idx: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    init_locales();
-    if (*locales.ptr()).is_null() {
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+
+/// `ExpandGeneric` source for `:language`'s argument: the four sub-commands
+/// first, then every locale (because `:language {name}` takes one directly).
+///
+/// # Safety
+/// Nothing is dereferenced; the signature is the one the `ItemGetter`
+/// function-pointer table demands.
+pub unsafe extern "C" fn get_lang_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+    match SELECTORS.get(idx as usize) {
+        Some((name, ..)) => name.as_ptr().cast::<c_char>().cast_mut(),
+        None => locale_name(idx - SELECTORS.len() as c_int),
     }
-    return *(*locales.ptr()).offset(idx as isize);
 }
-pub unsafe extern "C" fn lang_init() {}
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const __LC_CTYPE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const __LC_NUMERIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const __LC_TIME: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const __LC_COLLATE: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const __LC_MESSAGES: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
-pub const __LC_ALL: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
-pub const PROJECT_NAME: [::core::ffi::c_char; 5] =
-    unsafe { ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"nvim\0") };
+
+/// `ExpandGeneric` source for `:language`'s locale names alone.
+///
+/// # Safety
+/// Nothing is dereferenced; the signature is the one the `ItemGetter`
+/// function-pointer table demands.
+pub unsafe extern "C" fn get_locales(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+    locale_name(idx)
+}
+
+/// Nothing to do on POSIX: see the module docs.
+pub fn lang_init() {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_selector_may_be_abbreviated_but_not_lengthened() {
+        assert_eq!(selector_for(b"mes").map(|s| s.0), Some(VIM_LC_MESSAGES));
+        assert_eq!(
+            selector_for(b"MESSAGES").map(|s| s.0),
+            Some(VIM_LC_MESSAGES)
+        );
+        assert_eq!(selector_for(b"CoLl").map(|s| s.0), Some(LC_COLLATE));
+        assert_eq!(selector_for(b"messagesx"), None);
+        assert_eq!(selector_for(b"collates"), None);
+    }
+
+    #[test]
+    fn two_letters_stay_available_as_language_names() {
+        // "me" and "ct" would otherwise shadow real language names.
+        assert_eq!(selector_for(b"me"), None);
+        assert_eq!(selector_for(b"ct"), None);
+        assert_eq!(selector_for(b""), None);
+    }
+
+    #[test]
+    fn a_message_language_needs_two_leading_letters() {
+        assert!(is_valid_mess_lang(c"de_DE.UTF-8".as_ptr()));
+        assert!(is_valid_mess_lang(c"en".as_ptr()));
+        assert!(!is_valid_mess_lang(c"C".as_ptr()));
+        assert!(!is_valid_mess_lang(c"C.UTF-8".as_ptr()));
+        assert!(!is_valid_mess_lang(c"".as_ptr()));
+        assert!(!is_valid_mess_lang(ptr::null()));
+    }
+}
