@@ -166,12 +166,12 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                         );
                         ap.next_arg::<::core::ffi::c_int>()
                     };
-                    if j > MAX_ALLOWED_STRING_WIDTH as ::core::ffi::c_int {
+                    if j > MAX_ALLOWED_STRING_WIDTH {
                         if !tvs.is_null() {
                             format_overflow_error(digstart_0);
                             break '_error;
                         } else {
-                            j = MAX_ALLOWED_STRING_WIDTH as ::core::ffi::c_int;
+                            j = MAX_ALLOWED_STRING_WIDTH;
                         }
                     }
                     if j >= 0 as ::core::ffi::c_int {
@@ -232,12 +232,12 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             );
                             ap.next_arg::<::core::ffi::c_int>()
                         };
-                        if j_0 > MAX_ALLOWED_STRING_WIDTH as ::core::ffi::c_int {
+                        if j_0 > MAX_ALLOWED_STRING_WIDTH {
                             if !tvs.is_null() {
                                 format_overflow_error(digstart_3);
                                 break '_error;
                             } else {
-                                j_0 = MAX_ALLOWED_STRING_WIDTH as ::core::ffi::c_int;
+                                j_0 = MAX_ALLOWED_STRING_WIDTH;
                             }
                         }
                         if j_0 >= 0 as ::core::ffi::c_int {

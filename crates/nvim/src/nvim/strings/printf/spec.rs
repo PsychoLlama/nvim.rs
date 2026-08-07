@@ -15,39 +15,35 @@ use super::super::*;
 #[allow(unused_imports)]
 use super::*;
 
-pub const TYPE_FLOAT: C2Rust_Unnamed_1 = 12;
+pub const TYPE_FLOAT: ::core::ffi::c_int = 12;
 
-pub const TYPE_SIZET: C2Rust_Unnamed_1 = 7;
+pub const TYPE_SIZET: ::core::ffi::c_int = 7;
 
-pub const TYPE_UNSIGNEDLONGLONGINT: C2Rust_Unnamed_1 = 6;
+pub const TYPE_UNSIGNEDLONGLONGINT: ::core::ffi::c_int = 6;
 
-pub const TYPE_UNSIGNEDLONGINT: C2Rust_Unnamed_1 = 5;
+pub const TYPE_UNSIGNEDLONGINT: ::core::ffi::c_int = 5;
 
-pub const TYPE_UNSIGNEDINT: C2Rust_Unnamed_1 = 4;
+pub const TYPE_UNSIGNEDINT: ::core::ffi::c_int = 4;
 
-pub const TYPE_SIGNEDSIZET: C2Rust_Unnamed_1 = 3;
+pub const TYPE_SIGNEDSIZET: ::core::ffi::c_int = 3;
 
-pub const TYPE_LONGLONGINT: C2Rust_Unnamed_1 = 2;
+pub const TYPE_LONGLONGINT: ::core::ffi::c_int = 2;
 
-pub const TYPE_LONGINT: C2Rust_Unnamed_1 = 1;
+pub const TYPE_LONGINT: ::core::ffi::c_int = 1;
 
-pub const TYPE_INT: C2Rust_Unnamed_1 = 0;
+pub const TYPE_INT: ::core::ffi::c_int = 0;
 
-pub const TYPE_POINTER: C2Rust_Unnamed_1 = 8;
+pub const TYPE_POINTER: ::core::ffi::c_int = 8;
 
-pub const TYPE_STRING: C2Rust_Unnamed_1 = 11;
+pub const TYPE_STRING: ::core::ffi::c_int = 11;
 
-pub const TYPE_CHAR: C2Rust_Unnamed_1 = 10;
+pub const TYPE_CHAR: ::core::ffi::c_int = 10;
 
-pub const TYPE_UNKNOWN: C2Rust_Unnamed_1 = -1;
+pub const TYPE_UNKNOWN: ::core::ffi::c_int = -1;
 
-pub const TYPE_PERCENT: C2Rust_Unnamed_1 = 9;
+pub const TYPE_PERCENT: ::core::ffi::c_int = 9;
 
-pub const MAX_ALLOWED_STRING_WIDTH: C2Rust_Unnamed_2 = 1048576;
-
-pub type C2Rust_Unnamed_1 = ::core::ffi::c_int;
-
-pub type C2Rust_Unnamed_2 = ::core::ffi::c_uint;
+pub const MAX_ALLOWED_STRING_WIDTH: ::core::ffi::c_int = 1048576;
 
 static e_cannot_mix_positional_and_non_positional_str: GlobalCell<[::core::ffi::c_char; 62]> =
     GlobalCell::new(unsafe {
@@ -203,38 +199,38 @@ unsafe extern "C" fn format_typeof(mut type_0: *const ::core::ffi::c_char) -> ::
             _ => {}
         }
         match fmt_spec as ::core::ffi::c_int {
-            37 => return TYPE_PERCENT as ::core::ffi::c_int,
-            99 => return TYPE_CHAR as ::core::ffi::c_int,
-            115 | 83 => return TYPE_STRING as ::core::ffi::c_int,
+            37 => return TYPE_PERCENT,
+            99 => return TYPE_CHAR,
+            115 | 83 => return TYPE_STRING,
             100 | 117 | 98 | 66 | 111 | 120 | 88 | 112 => {
                 if fmt_spec as ::core::ffi::c_int == 'p' as ::core::ffi::c_int {
-                    return TYPE_POINTER as ::core::ffi::c_int;
+                    return TYPE_POINTER;
                 } else if fmt_spec as ::core::ffi::c_int == 'b' as ::core::ffi::c_int
                     || fmt_spec as ::core::ffi::c_int == 'B' as ::core::ffi::c_int
                 {
-                    return TYPE_UNSIGNEDLONGLONGINT as ::core::ffi::c_int;
+                    return TYPE_UNSIGNEDLONGLONGINT;
                 } else if fmt_spec as ::core::ffi::c_int == 'd' as ::core::ffi::c_int {
                     match length_modifier as ::core::ffi::c_int {
-                        NUL | 104 => return TYPE_INT as ::core::ffi::c_int,
-                        108 => return TYPE_LONGINT as ::core::ffi::c_int,
-                        76 => return TYPE_LONGLONGINT as ::core::ffi::c_int,
-                        122 => return TYPE_SIGNEDSIZET as ::core::ffi::c_int,
+                        NUL | 104 => return TYPE_INT,
+                        108 => return TYPE_LONGINT,
+                        76 => return TYPE_LONGLONGINT,
+                        122 => return TYPE_SIGNEDSIZET,
                         _ => {}
                     }
                 } else {
                     match length_modifier as ::core::ffi::c_int {
-                        NUL | 104 => return TYPE_UNSIGNEDINT as ::core::ffi::c_int,
-                        108 => return TYPE_UNSIGNEDLONGINT as ::core::ffi::c_int,
-                        76 => return TYPE_UNSIGNEDLONGLONGINT as ::core::ffi::c_int,
-                        122 => return TYPE_SIZET as ::core::ffi::c_int,
+                        NUL | 104 => return TYPE_UNSIGNEDINT,
+                        108 => return TYPE_UNSIGNEDLONGINT,
+                        76 => return TYPE_UNSIGNEDLONGLONGINT,
+                        122 => return TYPE_SIZET,
                         _ => {}
                     }
                 }
             }
-            102 | 70 | 101 | 69 | 103 | 71 => return TYPE_FLOAT as ::core::ffi::c_int,
+            102 | 70 | 101 | 69 | 103 | 71 => return TYPE_FLOAT,
             _ => {}
         }
-        return TYPE_UNKNOWN as ::core::ffi::c_int;
+        return TYPE_UNKNOWN;
     }
 }
 
@@ -407,19 +403,19 @@ pub(crate) unsafe extern "C" fn get_unsigned_int(
         *uj = (**p as ::core::ffi::c_int - '0' as ::core::ffi::c_int) as ::core::ffi::c_uint;
         *p = (*p).offset(1);
         while ascii_isdigit(**p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-            && *uj < MAX_ALLOWED_STRING_WIDTH as ::core::ffi::c_int as ::core::ffi::c_uint
+            && *uj < MAX_ALLOWED_STRING_WIDTH as ::core::ffi::c_uint
         {
             *uj = (10 as ::core::ffi::c_uint).wrapping_mul(*uj).wrapping_add(
                 (**p as ::core::ffi::c_int - '0' as ::core::ffi::c_int) as ::core::ffi::c_uint,
             );
             *p = (*p).offset(1);
         }
-        if *uj > MAX_ALLOWED_STRING_WIDTH as ::core::ffi::c_int as ::core::ffi::c_uint {
+        if *uj > MAX_ALLOWED_STRING_WIDTH as ::core::ffi::c_uint {
             if overflow_err {
                 format_overflow_error(pstart);
                 return FAIL;
             } else {
-                *uj = MAX_ALLOWED_STRING_WIDTH as ::core::ffi::c_int as ::core::ffi::c_uint;
+                *uj = MAX_ALLOWED_STRING_WIDTH as ::core::ffi::c_uint;
             }
         }
         return OK;

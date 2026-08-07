@@ -11,20 +11,9 @@
 
 #[allow(unused_imports)]
 use super::*;
-
-pub const STR2NR_FORCE: C2Rust_Unnamed_0 = 128;
-
-pub const STR2NR_HEX: C2Rust_Unnamed_0 = 4;
-
-pub const STR2NR_OOCT: C2Rust_Unnamed_0 = 8;
-
-pub const STR2NR_OCT: C2Rust_Unnamed_0 = 2;
-
-pub const STR2NR_BIN: C2Rust_Unnamed_0 = 1;
-
-pub const STR2NR_QUOTE: C2Rust_Unnamed_0 = 16;
-
-pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
+use crate::src::nvim::charset::{
+    STR2NR_BIN, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT, STR2NR_OOCT, STR2NR_QUOTE,
+};
 
 pub unsafe extern "C" fn f_str2list(
     mut argvars: *mut typval_T,
@@ -67,7 +56,7 @@ pub unsafe extern "C" fn f_str2nr(
                 != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
                 && tv_get_bool(argvars.offset(2 as ::core::ffi::c_int as isize)) != 0
             {
-                what |= STR2NR_QUOTE as ::core::ffi::c_int;
+                what |= STR2NR_QUOTE;
             }
         }
         let mut p: *mut ::core::ffi::c_char = skipwhite(tv_get_string(
@@ -81,15 +70,13 @@ pub unsafe extern "C" fn f_str2nr(
         }
         match base {
             2 => {
-                what |= STR2NR_BIN as ::core::ffi::c_int | STR2NR_FORCE as ::core::ffi::c_int;
+                what |= STR2NR_BIN | STR2NR_FORCE;
             }
             8 => {
-                what |= STR2NR_OCT as ::core::ffi::c_int
-                    | STR2NR_OOCT as ::core::ffi::c_int
-                    | STR2NR_FORCE as ::core::ffi::c_int;
+                what |= STR2NR_OCT | STR2NR_OOCT | STR2NR_FORCE;
             }
             16 => {
-                what |= STR2NR_HEX as ::core::ffi::c_int | STR2NR_FORCE as ::core::ffi::c_int;
+                what |= STR2NR_HEX | STR2NR_FORCE;
             }
             _ => {}
         }
