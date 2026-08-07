@@ -1,469 +1,421 @@
 //! Display width: how many screen cells a character occupies.
 //!
-//! `utf_char2cells` is the answer for a codepoint -- 0 for a combining mark, 2
-//! for a wide or fullwidth one, and for an ambiguous-width one whatever
-//! `'ambiwidth'` says -- and the `ptr`/`string` spellings sum it over a buffer.
-//! `setcellwidths()` overrides the table for chosen ranges; `cw_table` is that
-//! override, kept sorted so `cw_value` can binary-search it.
+//! Almost everything is one cell. The exceptions are the East Asian wide and
+//! fullwidth characters (two), the combining marks (zero — they render on top
+//! of the character before), the *ambiguous-width* characters, which are one
+//! or two depending on `'ambiwidth'`, and anything unprintable, which is
+//! shown as a `<xx>` or `<xxxx>` escape and so takes four or six.
+//!
+//! Emoji are the awkward case. Unicode calls most of them ambiguous, but a
+//! terminal draws them two cells wide, so `'emoji'` widens everything from
+//! `U+1F000` up — and a character followed by VS-16 (`U+FE0F`) asks for
+//! emoji presentation and widens too, which is why the `ptr` spellings look
+//! at the *next* character and `utf_char2cells` cannot.
+//!
+//! `setcellwidths()` overrides the answer for chosen ranges, for terminals
+//! and fonts that disagree with Unicode.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use core::cmp::Ordering;
+use core::ffi::{c_char, c_int, c_uint, c_void};
 
+/// Variation Selector 16: "draw the character before me as an emoji".
+const VS16: c_int = 0xfe0f;
+
+/// Below this codepoint, `'emoji'` leaves widths alone: the older symbol
+/// blocks have traditionally been drawn one cell wide and widening them
+/// causes more trouble than it fixes.
+const FIRST_EMOJI_BLOCK: c_int = 0x1f000;
+
+/// One `setcellwidths()` override: every codepoint in `first..=last` is
+/// `width` cells wide.
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct cw_interval_T {
-    pub first: int64_t,
-    pub last: int64_t,
-    pub width: ::core::ffi::c_char,
+struct CellWidthRange {
+    first: varnumber_T,
+    last: varnumber_T,
+    width: c_int,
 }
 
-static e_list_item_nr_is_not_list: GlobalCell<[::core::ffi::c_char; 34]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
-            *b"E1109: List item %d is not a List\0",
-        )
-    });
+/// The `setcellwidths()` overrides, sorted by `first` and non-overlapping.
+///
+/// [`cw_value`] binary-searches this, and [`f_setcellwidths`] is where both
+/// properties are established: it sorts the user's list and rejects it with
+/// `E1113` if two ranges meet.
+static CELL_WIDTHS: GlobalCell<Vec<CellWidthRange>> = GlobalCell::new(Vec::new());
 
-static e_list_item_nr_does_not_contain_3_numbers: GlobalCell<[::core::ffi::c_char; 47]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
-            *b"E1110: List item %d does not contain 3 numbers\0",
-        )
-    });
-
-static e_list_item_nr_range_invalid: GlobalCell<[::core::ffi::c_char; 34]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
-            *b"E1111: List item %d range invalid\0",
-        )
-    });
-
-static e_list_item_nr_cell_width_invalid: GlobalCell<[::core::ffi::c_char; 39]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
-            *b"E1112: List item %d cell width invalid\0",
-        )
-    });
-
-static e_overlapping_ranges_for_nr: GlobalCell<[::core::ffi::c_char; 36]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
-            *b"E1113: Overlapping ranges for 0x%lx\0",
-        )
-    });
-
-static e_only_values_of_0x80_and_higher_supported: GlobalCell<[::core::ffi::c_char; 48]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
-            *b"E1114: Only values of 0x80 and higher supported\0",
-        )
-    });
-
-pub unsafe extern "C" fn utf_char2cells(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    unsafe {
-        if c < 0x80 as ::core::ffi::c_int {
-            return 1 as ::core::ffi::c_int;
-        }
-        if !vim_isprintc(c) {
-            debug_assert!(c <= 0xffff as ::core::ffi::c_int, "c <= 0xFFFF");
-            return if c > 0xff as ::core::ffi::c_int {
-                6 as ::core::ffi::c_int
-            } else {
-                4 as ::core::ffi::c_int
-            };
-        }
-        let mut n: ::core::ffi::c_int = cw_value(c);
-        if n != 0 as ::core::ffi::c_int {
-            return n;
-        }
-        let mut prop: *const utf8proc_property_t = utf8proc_get_property(c as utf8proc_int32_t);
-        if (*prop).charwidth as ::core::ffi::c_int == 2 as ::core::ffi::c_int {
-            return 2 as ::core::ffi::c_int;
-        }
-        if *p_ambw.get() as ::core::ffi::c_int == 'd' as ::core::ffi::c_int
-            && (*prop).ambiguous_width
-        {
-            return 2 as ::core::ffi::c_int;
-        }
-        if p_emoji.get() != 0
-            && c >= 0x1f000 as ::core::ffi::c_int
-            && !(*prop).ambiguous_width
-            && prop_is_emojilike(&*prop) as ::core::ffi::c_int != 0
-        {
-            return 2 as ::core::ffi::c_int;
-        }
-        return 1 as ::core::ffi::c_int;
-    }
-}
-
-pub unsafe extern "C" fn utf_ptr2cells(mut p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    unsafe {
-        let mut p: *const uint8_t = p_in as *const uint8_t;
-        if *p as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int {
-            let mut len: ::core::ffi::c_int = utf8len_tab[*p as usize] as ::core::ffi::c_int;
-            let mut c: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
-            if c <= 0 as int32_t {
-                return 4 as ::core::ffi::c_int;
-            }
-            if c < 0x80 as int32_t {
-                return char2cells(c as ::core::ffi::c_int);
-            }
-            let mut cells: ::core::ffi::c_int = utf_char2cells(c as ::core::ffi::c_int);
-            if cells == 1 as ::core::ffi::c_int
-                && p_emoji.get() != 0
-                && prop_is_emojilike(utf8proc_get_property(c as utf8proc_int32_t))
-                    as ::core::ffi::c_int
-                    != 0
-            {
-                let mut c2: ::core::ffi::c_int = utf_ptr2char(p_in.offset(len as isize));
-                if c2 == 0xfe0f as ::core::ffi::c_int {
-                    return 2 as ::core::ffi::c_int;
+/// The width `setcellwidths()` was told to give `c`, or 0 for "not overridden".
+fn cw_value(c: c_int) -> c_int {
+    let c = c as varnumber_T;
+    CELL_WIDTHS.with(|table| {
+        table
+            .binary_search_by(|r| {
+                if r.last < c {
+                    Ordering::Less
+                } else if r.first > c {
+                    Ordering::Greater
+                } else {
+                    Ordering::Equal
                 }
-            }
-            return cells;
+            })
+            .map_or(0, |i| table[i].width)
+    })
+}
+
+/// How many cells the codepoint `c` occupies on its own.
+///
+/// "On its own" is the limit of this answer: a character whose width depends
+/// on what follows it — an emoji base plus VS-16 — needs [`utf_ptr2cells`].
+///
+/// # Safety
+///
+/// Reads `'ambiwidth'`, `'emoji'` and `'isprint'` through their globals, so
+/// it is only callable once options exist.
+pub unsafe fn utf_char2cells(c: c_int) -> c_int {
+    if c < 0x80 {
+        return 1;
+    }
+
+    // SAFETY: the caller's obligation, forwarded.
+    if !unsafe { vim_isprintc(c) } {
+        debug_assert!(c <= 0xffff, "c <= 0xFFFF");
+        // Shown as <xx> or <xxxx>.
+        return if c > 0xff { 6 } else { 4 };
+    }
+
+    let overridden = cw_value(c);
+    if overridden != 0 {
+        return overridden;
+    }
+
+    let prop = utf8proc_get_property(c);
+    if prop.charwidth as c_int == 2 {
+        return 2;
+    }
+    // SAFETY: `p_ambw` is 'ambiwidth', a NUL-terminated option string.
+    if unsafe { *p_ambw.get() } as c_int == 'd' as c_int && prop.ambiguous_width {
+        return 2;
+    }
+    if p_emoji.get() != 0
+        && c >= FIRST_EMOJI_BLOCK
+        && !prop.ambiguous_width
+        && prop_is_emojilike(prop)
+    {
+        return 2;
+    }
+    1
+}
+
+/// Whether the character at `p` asks for emoji presentation by being followed
+/// by VS-16 — the one width question that needs to look past the character.
+///
+/// # Safety
+///
+/// `next` must point at the byte after the character, inside the same string.
+unsafe fn widened_by_vs16(cells: c_int, c: c_int, next: *const c_char) -> bool {
+    cells == 1
+        && p_emoji.get() != 0
+        && prop_is_emojilike(utf8proc_get_property(c))
+        // SAFETY: the caller's obligation.
+        && unsafe { utf_ptr2char(next) } == VS16
+}
+
+/// How many cells the character at `p` occupies.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
+pub unsafe fn utf_ptr2cells(p_in: *const c_char) -> c_int {
+    unsafe {
+        let p = p_in as *const u8;
+        if *p < 0x80 {
+            return 1;
         }
-        return 1 as ::core::ffi::c_int;
+        let len = utf8len_tab[*p as usize] as c_int;
+        let c = utf_ptr2CharInfo_impl(p, len as uintptr_t);
+        // An illegal byte is displayed as <xx>.
+        if c <= 0 {
+            return 4;
+        }
+        // An ASCII answer from a multibyte lead byte means an overlong
+        // sequence, which is displayed the way that ASCII character is.
+        if c < 0x80 {
+            return char2cells(c);
+        }
+        let cells = utf_char2cells(c);
+        if widened_by_vs16(cells, c, p_in.offset(len as isize)) {
+            return 2;
+        }
+        cells
     }
 }
 
-pub unsafe extern "C" fn utf_ptr2cells_len(
-    mut p: *const ::core::ffi::c_char,
-    mut size: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// [`utf_ptr2cells`] over a string that is `size` bytes long rather than
+/// NUL-terminated.
+///
+/// A sequence cut short by the end of the buffer is *not* an illegal byte: it
+/// answers 1, because the rest of it may still arrive.
+///
+/// # Safety
+///
+/// `p` must point at `size` readable bytes.
+pub unsafe fn utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int {
     unsafe {
-        if size > 0 as ::core::ffi::c_int
-            && *p as uint8_t as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int
+        if size <= 0 || (*p as u8) < 0x80 {
+            return 1;
+        }
+        let len = utf_ptr2len_len(p, size);
+        if len < utf8len_tab[*p as u8 as usize] as c_int {
+            return 1; // truncated
+        }
+        let c = utf_ptr2char(p);
+        // An illegal byte is displayed as <xx>.
+        if utf_ptr2len(p) == 1 || c == NUL {
+            return 4;
+        }
+        if c < 0x80 {
+            return char2cells(c);
+        }
+        let cells = utf_char2cells(c);
+        // The VS-16 has to be *complete* within `size`; a truncated one does
+        // not widen anything.
+        let next = p.offset(len as isize);
+        if size > len
+            && utf_ptr2len_len(next, size - len) == utf8len_tab[*next as u8 as usize] as c_int
+            && widened_by_vs16(cells, c, next)
         {
-            let mut len: ::core::ffi::c_int = utf_ptr2len_len(p, size);
-            if len < utf8len_tab[*p as uint8_t as usize] as ::core::ffi::c_int {
-                return 1 as ::core::ffi::c_int;
-            }
-            let mut c: ::core::ffi::c_int = utf_ptr2char(p);
-            if utf_ptr2len(p) == 1 as ::core::ffi::c_int || c == NUL {
-                return 4 as ::core::ffi::c_int;
-            }
-            if c < 0x80 as ::core::ffi::c_int {
-                return char2cells(c);
-            }
-            let mut cells: ::core::ffi::c_int = utf_char2cells(c);
-            if cells == 1 as ::core::ffi::c_int
-                && p_emoji.get() != 0
-                && size > len
-                && prop_is_emojilike(utf8proc_get_property(c as utf8proc_int32_t))
-                    as ::core::ffi::c_int
-                    != 0
-                && utf_ptr2len_len(p.offset(len as isize), size - len)
-                    == utf8len_tab[*p.offset(len as isize) as uint8_t as usize]
-                        as ::core::ffi::c_int
-            {
-                let mut c2: ::core::ffi::c_int = utf_ptr2char(p.offset(len as isize));
-                if c2 == 0xfe0f as ::core::ffi::c_int {
-                    return 2 as ::core::ffi::c_int;
-                }
-            }
-            return cells;
+            return 2;
         }
-        return 1 as ::core::ffi::c_int;
+        cells
     }
 }
 
-pub unsafe extern "C" fn mb_string2cells(mut str: *const ::core::ffi::c_char) -> size_t {
+/// The total width of a NUL-terminated string.
+///
+/// # Safety
+///
+/// `str` must point at a NUL-terminated string.
+pub unsafe fn mb_string2cells(str: *const c_char) -> size_t {
     unsafe {
-        let mut clen: size_t = 0 as size_t;
-        let mut p: *const ::core::ffi::c_char = str;
-        while *p as ::core::ffi::c_int != NUL {
-            clen = clen.wrapping_add(utf_ptr2cells(p) as size_t);
+        let mut cells: size_t = 0;
+        let mut p = str;
+        while *p != NUL as c_char {
+            cells += utf_ptr2cells(p) as size_t;
             p = p.offset(utfc_ptr2len(p) as isize);
         }
-        return clen;
+        cells
     }
 }
 
-pub unsafe extern "C" fn mb_string2cells_len(
-    mut str: *const ::core::ffi::c_char,
-    mut size: size_t,
-) -> size_t {
+/// The total width of at most `size` bytes, stopping early at a NUL.
+///
+/// # Safety
+///
+/// `str` must point at `size` readable bytes.
+pub unsafe fn mb_string2cells_len(str: *const c_char, size: size_t) -> size_t {
     unsafe {
-        let mut clen: size_t = 0 as size_t;
-        let mut p: *const ::core::ffi::c_char = str;
-        while *p as ::core::ffi::c_int != NUL && p < str.offset(size as isize) {
-            clen = clen.wrapping_add(utf_ptr2cells_len(
-                p,
-                size as ::core::ffi::c_int - p.offset_from(str) as ::core::ffi::c_int,
-            ) as size_t);
-            p = p.offset(utfc_ptr2len_len(
-                p,
-                size as ::core::ffi::c_int - p.offset_from(str) as ::core::ffi::c_int,
-            ) as isize);
+        let mut cells: size_t = 0;
+        let mut p = str;
+        while *p != NUL as c_char && p < str.add(size) {
+            let left = size as c_int - p.offset_from(str) as c_int;
+            cells += utf_ptr2cells_len(p, left) as size_t;
+            p = p.offset(utfc_ptr2len_len(p, left) as isize);
         }
-        return clen;
+        cells
     }
 }
 
-pub unsafe extern "C" fn utf_ambiguous_width(mut p: *const ::core::ffi::c_char) -> bool {
+/// Might the character at `p` be drawn at a width the grid did not predict?
+///
+/// The screen asks this to decide whether a cell needs re-measuring: an
+/// ambiguous-width character answers whatever `'ambiwidth'` currently says,
+/// an emoji whatever `'emoji'` says, and a VS-16 after any character turns it
+/// into an emoji.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
+pub unsafe fn utf_ambiguous_width(p: *const c_char) -> bool {
     unsafe {
-        if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-            || *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-        {
-            return false_0 != 0;
+        // Nothing to print, or a lone ASCII character: neither can move.
+        if *p == NUL as c_char || *p.offset(1) == NUL as c_char {
+            return false;
         }
-        let mut info: CharInfo = utf_ptr2CharInfo(p);
-        if info.value >= 0x80 as int32_t {
-            let mut prop: *const utf8proc_property_t =
-                utf8proc_get_property(info.value as utf8proc_int32_t);
-            if (*prop).ambiguous_width || prop_is_emojilike(&*prop) as ::core::ffi::c_int != 0 {
-                return true_0 != 0;
+        let info = utf_ptr2CharInfo(p);
+        if info.value >= 0x80 {
+            let prop = utf8proc_get_property(info.value);
+            if prop.ambiguous_width || prop_is_emojilike(prop) {
+                return true;
             }
         }
-        return memcmp(
-            p.offset(info.len as isize) as *const ::core::ffi::c_void,
-            b"\xEF\xB8\x8F\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-            3 as size_t,
-        ) == 0 as ::core::ffi::c_int;
+        // Safe against a NUL: `memcmp` stops at the first difference, and the
+        // NUL differs from VS-16's first byte.
+        memcmp(
+            p.offset(info.len as isize) as *const c_void,
+            c"\xef\xb8\x8f".as_ptr() as *const c_void,
+            3,
+        ) == 0
     }
 }
 
-static cw_table: GlobalCell<*mut cw_interval_T> =
-    GlobalCell::new(::core::ptr::null_mut::<cw_interval_T>());
-
-static cw_table_size: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-
-unsafe extern "C" fn cw_value(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    unsafe {
-        if (*cw_table.ptr()).is_null() {
-            return 0 as ::core::ffi::c_int;
-        }
-        if (c as int64_t) < (*(*cw_table.ptr()).offset(0 as ::core::ffi::c_int as isize)).first {
-            return 0 as ::core::ffi::c_int;
-        }
-        let mut bot: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut top: ::core::ffi::c_int =
-            cw_table_size.get() as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
-        while top >= bot {
-            let mut mid: ::core::ffi::c_int = (bot + top) / 2 as ::core::ffi::c_int;
-            if (*(*cw_table.ptr()).offset(mid as isize)).last < c as int64_t {
-                bot = mid + 1 as ::core::ffi::c_int;
-            } else if (*(*cw_table.ptr()).offset(mid as isize)).first > c as int64_t {
-                top = mid - 1 as ::core::ffi::c_int;
-            } else {
-                return (*(*cw_table.ptr()).offset(mid as isize)).width as ::core::ffi::c_int;
-            }
-        }
-        return 0 as ::core::ffi::c_int;
-    }
-}
-
-unsafe extern "C" fn tv_nr_compare(
-    mut a1: *const ::core::ffi::c_void,
-    mut a2: *const ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let li1: *const listitem_T = tv_list_first(*(a1 as *mut *const list_T));
-        let li2: *const listitem_T = tv_list_first(*(a2 as *mut *const list_T));
-        let n1: varnumber_T = (*li1).li_tv.vval.v_number;
-        let n2: varnumber_T = (*li2).li_tv.vval.v_number;
-        return if n1 == n2 {
-            0 as ::core::ffi::c_int
-        } else if n1 > n2 {
-            1 as ::core::ffi::c_int
-        } else {
-            -1 as ::core::ffi::c_int
-        };
-    }
-}
-
+/// `setcellwidths({list})` — override the width of chosen codepoint ranges.
+///
+/// Each entry is `[first, last, width]`; the whole list is validated before
+/// anything is installed, so a rejected call leaves the old table in place.
+/// The install is provisional even then: `'listchars'` and `'fillchars'` must
+/// still agree with the new widths, and the old table comes back if they do
+/// not.
 pub unsafe extern "C" fn f_setcellwidths(
-    mut argvars: *mut typval_T,
-    mut _rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    _rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        let mut ptrs: *mut *const list_T = ::core::ptr::null_mut::<*const list_T>();
-        let mut item: ::core::ffi::c_int = 0;
-        if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-            || (*argvars.offset(0 as ::core::ffi::c_int as isize))
-                .vval
-                .v_list
-                .is_null()
-        {
-            emsg(gettext(&raw const e_listreq as *const ::core::ffi::c_char));
+        if (*argvars).v_type as c_uint != VAR_LIST as c_uint || (*argvars).vval.v_list.is_null() {
+            emsg(gettext(&raw const e_listreq as *const c_char));
             return;
         }
-        let l: *const list_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
-            .vval
-            .v_list;
-        let mut table: *mut cw_interval_T = ::core::ptr::null_mut::<cw_interval_T>();
-        let table_size: size_t = tv_list_len(l) as size_t;
-        if table_size != 0 as size_t {
-            ptrs = xmalloc(::core::mem::size_of::<*const list_T>().wrapping_mul(table_size))
-                as *mut *const list_T;
-            item = 0 as ::core::ffi::c_int;
-            let l_: *const list_T = l;
-            if !l_.is_null() {
-                let mut li: *const listitem_T = (*l_).lv_first;
-                while !li.is_null() {
-                    let li_tv: *const typval_T = &raw const (*li).li_tv;
-                    if (*li_tv).v_type as ::core::ffi::c_uint
-                        != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-                        || (*li_tv).vval.v_list.is_null()
-                    {
-                        semsg(
-                            gettext(
-                                (e_list_item_nr_is_not_list.ptr() as *const _)
-                                    as *const ::core::ffi::c_char,
-                            ),
-                            item,
-                        );
-                        xfree(ptrs as *mut ::core::ffi::c_void);
-                        return;
-                    }
-                    let li_l: *const list_T = (*li_tv).vval.v_list;
-                    *ptrs.offset(item as isize) = li_l;
-                    let mut lili: *const listitem_T = tv_list_first(li_l);
-                    let mut i: ::core::ffi::c_int = 0;
-                    let mut n1: varnumber_T = 0;
-                    i = 0 as ::core::ffi::c_int;
-                    while !lili.is_null() {
-                        let lili_tv: *const typval_T = &raw const (*lili).li_tv;
-                        if (*lili_tv).v_type as ::core::ffi::c_uint
-                            != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            break;
-                        }
-                        if i == 0 as ::core::ffi::c_int {
-                            n1 = (*lili_tv).vval.v_number;
-                            if n1 < 0x80 as varnumber_T {
-                                emsg(gettext(
-                                    (e_only_values_of_0x80_and_higher_supported.ptr() as *const _)
-                                        as *const ::core::ffi::c_char,
-                                ));
-                                xfree(ptrs as *mut ::core::ffi::c_void);
-                                return;
-                            }
-                        } else if i == 1 as ::core::ffi::c_int && (*lili_tv).vval.v_number < n1 {
-                            semsg(
-                                gettext(
-                                    (e_list_item_nr_range_invalid.ptr() as *const _)
-                                        as *const ::core::ffi::c_char,
-                                ),
-                                item,
-                            );
-                            xfree(ptrs as *mut ::core::ffi::c_void);
-                            return;
-                        } else if i == 2 as ::core::ffi::c_int
-                            && ((*lili_tv).vval.v_number < 1 as varnumber_T
-                                || (*lili_tv).vval.v_number > 2 as varnumber_T)
-                        {
-                            semsg(
-                                gettext(
-                                    (e_list_item_nr_cell_width_invalid.ptr() as *const _)
-                                        as *const ::core::ffi::c_char,
-                                ),
-                                item,
-                            );
-                            xfree(ptrs as *mut ::core::ffi::c_void);
-                            return;
-                        }
-                        lili = (*lili).li_next;
-                        i += 1;
-                    }
-                    if i != 3 as ::core::ffi::c_int {
-                        semsg(
-                            gettext(
-                                (e_list_item_nr_does_not_contain_3_numbers.ptr() as *const _)
-                                    as *const ::core::ffi::c_char,
-                            ),
-                            item,
-                        );
-                        xfree(ptrs as *mut ::core::ffi::c_void);
-                        return;
-                    }
-                    item += 1;
-                    li = (*li).li_next;
-                }
-            }
-            qsort(
-                ptrs as *mut ::core::ffi::c_void,
-                table_size,
-                ::core::mem::size_of::<*const list_T>(),
-                Some(
-                    tv_nr_compare
-                        as unsafe extern "C" fn(
-                            *const ::core::ffi::c_void,
-                            *const ::core::ffi::c_void,
-                        ) -> ::core::ffi::c_int,
-                ),
-            );
-            table = xmalloc(::core::mem::size_of::<cw_interval_T>().wrapping_mul(table_size))
-                as *mut cw_interval_T;
-            item = 0 as ::core::ffi::c_int;
-            while (item as size_t) < table_size {
-                let li_l_0: *const list_T = *ptrs.offset(item as isize);
-                let mut lili_0: *const listitem_T = tv_list_first(li_l_0);
-                let n1_0: varnumber_T = (*lili_0).li_tv.vval.v_number;
-                if item > 0 as ::core::ffi::c_int
-                    && n1_0 <= (*table.offset((item - 1 as ::core::ffi::c_int) as isize)).last
-                {
-                    semsg(
-                        gettext(
-                            (e_overlapping_ranges_for_nr.ptr() as *const _)
-                                as *const ::core::ffi::c_char,
-                        ),
-                        n1_0 as size_t,
-                    );
-                    xfree(ptrs as *mut ::core::ffi::c_void);
-                    xfree(table as *mut ::core::ffi::c_void);
-                    return;
-                }
-                (*table.offset(item as isize)).first = n1_0 as int64_t;
-                lili_0 = (*lili_0).li_next;
-                (*table.offset(item as isize)).last = (*lili_0).li_tv.vval.v_number as int64_t;
-                lili_0 = (*lili_0).li_next;
-                (*table.offset(item as isize)).width =
-                    (*lili_0).li_tv.vval.v_number as ::core::ffi::c_char;
-                item += 1;
-            }
-            xfree(ptrs as *mut ::core::ffi::c_void);
-        }
-        let cw_table_save: *mut cw_interval_T = cw_table.get();
-        let cw_table_size_save: size_t = cw_table_size.get();
-        cw_table.set(table);
-        cw_table_size.set(table_size);
-        let error: *const ::core::ffi::c_char = check_chars_options();
+        let Some(table) = parse_cell_widths((*argvars).vval.v_list) else {
+            return;
+        };
+
+        let saved = CELL_WIDTHS.with_mut(|t| core::mem::replace(t, table));
+
+        // The new widths must not conflict with 'listchars' or 'fillchars'.
+        let error = check_chars_options();
         if !error.is_null() {
             emsg(gettext(error));
-            cw_table.set(cw_table_save);
-            cw_table_size.set(cw_table_size_save);
-            xfree(table as *mut ::core::ffi::c_void);
+            CELL_WIDTHS.with_mut(|t| *t = saved);
             return;
         }
-        xfree(cw_table_save as *mut ::core::ffi::c_void);
+
         changed_window_setting_all();
         redraw_all_later(UPD_NOT_VALID);
     }
 }
 
+/// Validate `setcellwidths()`'s argument into the sorted, disjoint table
+/// [`cw_value`] needs, or report why it cannot be one and answer `None`.
+///
+/// An empty list is a valid empty table — that is how the overrides are
+/// cleared.
+///
+/// # Safety
+///
+/// `l` must be a live list.
+unsafe fn parse_cell_widths(l: *const list_T) -> Option<Vec<CellWidthRange>> {
+    unsafe {
+        let mut rows: Vec<CellWidthRange> = Vec::with_capacity(tv_list_len(l) as usize);
+        let mut li = (*l).lv_first;
+        let mut item: c_int = 0;
+        while !li.is_null() {
+            let li_tv = &raw const (*li).li_tv;
+            if (*li_tv).v_type as c_uint != VAR_LIST as c_uint || (*li_tv).vval.v_list.is_null() {
+                semsg(gettext(c"E1109: List item %d is not a List".as_ptr()), item);
+                return None;
+            }
+            rows.push(parse_cell_width_row((*li_tv).vval.v_list, item)?);
+            li = (*li).li_next;
+            item += 1;
+        }
+
+        // Upstream sorts with qsort, which is unstable; two rows sharing a
+        // `first` overlap either way round and are rejected below with the
+        // same number, so a stable sort answers identically.
+        rows.sort_by_key(|r| r.first);
+        for i in 1..rows.len() {
+            if rows[i].first <= rows[i - 1].last {
+                semsg(
+                    gettext(c"E1113: Overlapping ranges for 0x%lx".as_ptr()),
+                    rows[i].first as size_t,
+                );
+                return None;
+            }
+        }
+        Some(rows)
+    }
+}
+
+/// One `[first, last, width]` entry, or `None` having reported the fault.
+///
+/// `item` is the entry's index in the outer list, which is what the messages
+/// name.
+///
+/// # Safety
+///
+/// `li_l` must be a live list.
+unsafe fn parse_cell_width_row(li_l: *const list_T, item: c_int) -> Option<CellWidthRange> {
+    unsafe {
+        let mut numbers = [0 as varnumber_T; 3];
+        let mut seen = 0;
+        let mut lili = tv_list_first(li_l);
+        while !lili.is_null() {
+            let tv = &raw const (*lili).li_tv;
+            if (*tv).v_type as c_uint != VAR_NUMBER as c_uint {
+                break;
+            }
+            let n = (*tv).vval.v_number;
+            match seen {
+                0 if n < 0x80 => {
+                    emsg(gettext(
+                        c"E1114: Only values of 0x80 and higher supported".as_ptr(),
+                    ));
+                    return None;
+                }
+                1 if n < numbers[0] => {
+                    semsg(gettext(c"E1111: List item %d range invalid".as_ptr()), item);
+                    return None;
+                }
+                2 if !(1..=2).contains(&n) => {
+                    semsg(
+                        gettext(c"E1112: List item %d cell width invalid".as_ptr()),
+                        item,
+                    );
+                    return None;
+                }
+                _ => {}
+            }
+            if seen < numbers.len() {
+                numbers[seen] = n;
+            }
+            seen += 1;
+            lili = (*lili).li_next;
+        }
+
+        // A fourth number, a non-number, or too few: all "not three numbers".
+        if seen != 3 {
+            semsg(
+                gettext(c"E1110: List item %d does not contain 3 numbers".as_ptr()),
+                item,
+            );
+            return None;
+        }
+        Some(CellWidthRange {
+            first: numbers[0],
+            last: numbers[1],
+            width: numbers[2] as c_int,
+        })
+    }
+}
+
+/// `getcellwidths()` — the table `setcellwidths()` installed, as a List of
+/// `[first, last, width]`.
 pub unsafe extern "C" fn f_getcellwidths(
-    mut _argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    _argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        tv_list_alloc_ret(rettv, cw_table_size.get() as ptrdiff_t);
-        let mut i: size_t = 0 as size_t;
-        while i < cw_table_size.get() {
-            let mut entry: *mut list_T = tv_list_alloc(3 as ptrdiff_t);
-            tv_list_append_number(entry, (*(*cw_table.ptr()).offset(i as isize)).first);
-            tv_list_append_number(entry, (*(*cw_table.ptr()).offset(i as isize)).last);
-            tv_list_append_number(
-                entry,
-                (*(*cw_table.ptr()).offset(i as isize)).width as varnumber_T,
-            );
+        let rows = CELL_WIDTHS.with(|t| t.clone());
+        tv_list_alloc_ret(rettv, rows.len() as ptrdiff_t);
+        for row in &rows {
+            let entry = tv_list_alloc(3);
+            tv_list_append_number(entry, row.first);
+            tv_list_append_number(entry, row.last);
+            tv_list_append_number(entry, row.width as varnumber_T);
             tv_list_append_list((*rettv).vval.v_list, entry);
-            i = i.wrapping_add(1);
         }
     }
 }

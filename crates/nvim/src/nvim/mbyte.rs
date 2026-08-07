@@ -26,17 +26,17 @@ use crate::src::nvim::optionstr::check_chars_options;
 use crate::src::nvim::os::env::os_getenv_noalloc;
 use crate::src::nvim::os::libc::{
     __ctype_b_loc, __errno_location, gettext, iconv, iconv_close, iconv_open, memcmp, memcpy,
-    memmove, qsort, setlocale, snprintf, strchr, strcmp, strcpy, strlen, strncasecmp, strncmp,
-    tolower, toupper,
+    memmove, setlocale, snprintf, strchr, strcmp, strcpy, strlen, strncasecmp, strncmp, tolower,
+    toupper,
 };
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
     CONV_9_TO_UTF8, CONV_ICONV, CONV_NONE, CONV_TO_LATIN1, CONV_TO_LATIN9, CONV_TO_UTF8,
     CharBoundsOff, CharInfo, EvalFuncData, GraphemeState, MB_MAXCHAR, StrCharInfo, VAR_LIST,
-    VAR_NUMBER, VAR_STRING, colnr_T, expand_T, iconv_t, int8_t, int32_t, int64_t, list_T,
-    listitem_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t, typval_T, uint8_t, uint32_t, uint64_t,
-    uintptr_t, utf8proc_int32_t, varnumber_T, vimconv_T, win_T,
+    VAR_NUMBER, VAR_STRING, colnr_T, expand_T, iconv_t, int8_t, int32_t, list_T, pos_T, ptrdiff_t,
+    schar_T, size_t, ssize_t, typval_T, uint8_t, uint32_t, uint64_t, uintptr_t, utf8proc_int32_t,
+    varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::utf8proc::{
     UTF8PROC_BOUNDCLASS_CONTROL, UTF8PROC_BOUNDCLASS_CR, UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC,

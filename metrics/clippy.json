@@ -58,7 +58,6 @@
     "crates/nvim/src/nvim/main/remote.rs": 3,
     "crates/nvim/src/nvim/map_glyph_cache.rs": 1,
     "crates/nvim/src/nvim/mbyte.rs": 13,
-    "crates/nvim/src/nvim/mbyte/cells.rs": 5,
     "crates/nvim/src/nvim/mbyte/convert.rs": 11,
     "crates/nvim/src/nvim/mbyte/encoding.rs": 19,
     "crates/nvim/src/nvim/mbyte/encoding/tables.rs": 122,
