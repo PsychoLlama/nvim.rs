@@ -163,14 +163,17 @@ pub(crate) const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_data: ::core::ptr::null_mut(),
 };
 
+/// An empty memory image: no bytes, no allocation.
+pub(crate) const MMFILE_INIT: mmfile_t = mmfile_t {
+    ptr: ::core::ptr::null_mut(),
+    size: 0,
+};
+
 /// One side of a diff before either the file name or the memory image is
 /// filled in; which one is used depends on `dio_internal`.
 pub(crate) const DIFFIN_INIT: diffin_T = diffin_T {
     din_fname: ::core::ptr::null_mut(),
-    din_mmfile: mmfile_t {
-        ptr: ::core::ptr::null_mut(),
-        size: 0,
-    },
+    din_mmfile: MMFILE_INIT,
 };
 
 #[derive(Copy, Clone)]

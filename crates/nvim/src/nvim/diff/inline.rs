@@ -339,9 +339,7 @@ pub unsafe extern "C" fn f_diff_hlID(
             let mut linestatus = 0;
             diff_check_with_linestatus(curwin.get(), lnum, &raw mut linestatus);
             hlID.set(match linestatus {
-                // -1 is "this line is changed"; any other negative is
-                // "changed, and the change is an insertion above".
-                -1 => {
+                LINE_CHANGED => {
                     change_start.set(MAXCOL as c_int);
                     change_end.set(-1);
                     if diff_find_change(curwin.get(), lnum, &raw mut diffline) {
@@ -357,6 +355,7 @@ pub unsafe extern "C" fn f_diff_hlID(
                         HLF_CHD
                     }
                 }
+                // `LINE_INSERTED`: the line has no counterpart at all.
                 n if n < 0 => HLF_ADD,
                 _ => HLF_NONE,
             });

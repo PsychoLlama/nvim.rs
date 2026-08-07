@@ -1,344 +1,340 @@
 //! Keeping the windows lined up, and moving between changes.
 //!
-//! `diff_set_topline` is what `'scrollbind'` calls in diff mode: given the
-//! partner window's topline and topfill, it computes this one's so that the same
-//! change is on the same screen row.  `diff_move_to` is `]c`/`[c`, and
-//! `diff_get_corresponding_line` the line-number mapping the two share.
+//! [`diff_set_topline`] is what `'scrollbind'` calls in diff mode: given the
+//! partner window's topline and topfill, it computes this one's so that the
+//! same change is on the same screen row.  [`diff_move_to`] is `]c`/`[c`, and
+//! [`diff_get_corresponding_line`] the line-number mapping the two share.
+//!
+//! The unit these all work in is the *virtual* line: a run of adjacent diff
+//! blocks occupies `get_max_diff_length` rows on screen whichever buffer is
+//! being looked at, because the shorter side is padded with filler.  Lining
+//! two windows up means counting virtual lines on one side and spending them
+//! on the other.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use ::core::ffi::c_int;
 
-unsafe extern "C" fn find_top_diff_block(
-    mut thistopdiff: *mut *mut diff_T,
-    mut next_adjacent_blocks: *mut *mut diff_T,
-    mut fromidx: ::core::ffi::c_int,
-    mut topline: ::core::ffi::c_int,
+/// The first block of the adjacent run containing `topline`, and the first
+/// block *after* that run.
+///
+/// Blocks are adjacent when one ends exactly where the next begins, and a run
+/// of them is one unbroken stretch of screen rows -- the unit both windows
+/// have to agree on.
+unsafe fn find_top_diff_block(
+    thistopdiff: *mut *mut diff_T,
+    next_adjacent_blocks: *mut *mut diff_T,
+    fromidx: usize,
+    topline: linenr_T,
 ) {
     unsafe {
-        let mut topdiff: *mut diff_T = ::core::ptr::null_mut::<diff_T>();
-        let mut localtopdiff: *mut diff_T = ::core::ptr::null_mut::<diff_T>();
-        let mut topdiffchange: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        topdiff = (*curtab.get()).tp_first_diff;
+        let mut runstart = ::core::ptr::null_mut::<diff_T>();
+        let mut start_next_run = true;
+        let mut topdiff = (*curtab.get()).tp_first_diff;
         while !topdiff.is_null() {
-            if localtopdiff.is_null() || topdiffchange != 0 {
-                localtopdiff = topdiff;
-                topdiffchange = 0 as ::core::ffi::c_int;
+            if runstart.is_null() || start_next_run {
+                runstart = topdiff;
+                start_next_run = false;
             }
-            if topline as linenr_T >= (*topdiff).df_lnum[fromidx as usize]
-                && topline as linenr_T
-                    <= (*topdiff).df_lnum[fromidx as usize] + (*topdiff).df_count[fromidx as usize]
+            if topline >= (*topdiff).df_lnum[fromidx]
+                && topline <= (*topdiff).df_lnum[fromidx] + (*topdiff).df_count[fromidx]
+                && (*thistopdiff).is_null()
             {
-                if (*thistopdiff).is_null() {
-                    *thistopdiff = localtopdiff;
-                }
+                *thistopdiff = runstart;
             }
-            if !(!(*topdiff).df_next.is_null()
-                && (*(*topdiff).df_next).df_lnum[fromidx as usize]
-                    == (*topdiff).df_lnum[fromidx as usize] + (*topdiff).df_count[fromidx as usize])
+            let next = (*topdiff).df_next;
+            if next.is_null()
+                || (*next).df_lnum[fromidx]
+                    != (*topdiff).df_lnum[fromidx] + (*topdiff).df_count[fromidx]
             {
-                topdiffchange = 1 as ::core::ffi::c_int;
+                start_next_run = true;
                 if !(*thistopdiff).is_null() {
-                    *next_adjacent_blocks = (*topdiff).df_next;
+                    *next_adjacent_blocks = next;
                     break;
                 }
             }
-            topdiff = (*topdiff).df_next;
+            topdiff = next;
         }
     }
 }
 
-unsafe extern "C" fn calculate_topfill_and_topline(
-    fromidx: ::core::ffi::c_int,
-    toidx: ::core::ffi::c_int,
-    from_topline: ::core::ffi::c_int,
-    from_topfill: ::core::ffi::c_int,
-    mut topfill: *mut ::core::ffi::c_int,
-    mut topline: *mut linenr_T,
+/// Where the other window's top belongs, given this one's.
+///
+/// Two steps: count how many virtual lines of the run `from_topline` sits in
+/// have scrolled past, then spend that many on the `toidx` side.  `topfill`
+/// is the remainder -- the virtual lines the destination has no real line
+/// for.
+unsafe fn calculate_topfill_and_topline(
+    fromidx: usize,
+    toidx: usize,
+    from_topline: linenr_T,
+    from_topfill: c_int,
+    topfill: *mut c_int,
+    topline: *mut linenr_T,
 ) {
     unsafe {
-        let mut thistopdiff: *mut diff_T = ::core::ptr::null_mut::<diff_T>();
-        let mut next_adjacent_blocks: *mut diff_T = ::core::ptr::null_mut::<diff_T>();
-        let mut virtual_lines_passed: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+        let mut thistopdiff = ::core::ptr::null_mut::<diff_T>();
+        let mut next_adjacent_blocks = ::core::ptr::null_mut::<diff_T>();
         find_top_diff_block(
             &raw mut thistopdiff,
             &raw mut next_adjacent_blocks,
             fromidx,
             from_topline,
         );
-        let mut curdif: *mut diff_T = thistopdiff;
+
+        // Whole blocks above the topline, plus the part of the block it sits
+        // inside; `from_topfill` rows of that were filler, not text.
+        let mut passed = 0;
+        let mut curdif = thistopdiff;
         while !curdif.is_null()
-            && (*curdif).df_lnum[fromidx as usize] + (*curdif).df_count[fromidx as usize]
-                <= from_topline as linenr_T
+            && (*curdif).df_lnum[fromidx] + (*curdif).df_count[fromidx] <= from_topline
         {
-            virtual_lines_passed += get_max_diff_length(curdif);
+            passed += get_max_diff_length(curdif);
             curdif = (*curdif).df_next;
         }
         if curdif != next_adjacent_blocks {
-            virtual_lines_passed += (from_topline as linenr_T - (*curdif).df_lnum[fromidx as usize])
-                as ::core::ffi::c_int;
+            passed += from_topline - (*curdif).df_lnum[fromidx];
         }
-        virtual_lines_passed -= from_topfill;
-        if virtual_lines_passed < 0 as ::core::ffi::c_int {
-            virtual_lines_passed = 0 as ::core::ffi::c_int;
-        }
-        let mut curlinenum_to: ::core::ffi::c_int = if !thistopdiff.is_null() {
-            (*thistopdiff).df_lnum[toidx as usize] as ::core::ffi::c_int
+        passed = (passed - from_topfill).max(0);
+
+        // Spend them on the other side, which runs out of real lines first
+        // wherever it is the shorter one.
+        let mut to_lnum = if thistopdiff.is_null() {
+            1
         } else {
-            1 as ::core::ffi::c_int
+            (*thistopdiff).df_lnum[toidx]
         };
-        let mut virt_lines_left: ::core::ffi::c_int = virtual_lines_passed;
+        let mut left = passed;
         curdif = thistopdiff;
-        while virt_lines_left > 0 as ::core::ffi::c_int
-            && !curdif.is_null()
-            && curdif != next_adjacent_blocks
-        {
-            curlinenum_to += (if (virt_lines_left as linenr_T) < (*curdif).df_count[toidx as usize]
-            {
-                virt_lines_left as linenr_T
-            } else {
-                (*curdif).df_count[toidx as usize]
-            }) as ::core::ffi::c_int;
-            virt_lines_left -= if virt_lines_left < get_max_diff_length(curdif) {
-                virt_lines_left
-            } else {
-                get_max_diff_length(curdif)
-            };
+        while left > 0 && !curdif.is_null() && curdif != next_adjacent_blocks {
+            to_lnum += left.min((*curdif).df_count[toidx]);
+            left -= left.min(get_max_diff_length(curdif));
             curdif = (*curdif).df_next;
         }
-        let mut max_virt_lines: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut dp: *mut diff_T = thistopdiff;
+
+        // How many virtual lines that landing place is worth, which is what
+        // the filler has to make up.
+        let mut max_virt_lines = 0;
+        let mut dp = thistopdiff;
         while !dp.is_null() {
-            if (*dp).df_lnum[toidx as usize] + (*dp).df_count[toidx as usize]
-                <= curlinenum_to as linenr_T
-            {
+            if (*dp).df_lnum[toidx] + (*dp).df_count[toidx] <= to_lnum {
                 max_virt_lines += get_max_diff_length(dp);
                 dp = (*dp).df_next;
             } else {
-                if (*dp).df_lnum[toidx as usize] <= curlinenum_to as linenr_T {
-                    max_virt_lines += (curlinenum_to as linenr_T - (*dp).df_lnum[toidx as usize])
-                        as ::core::ffi::c_int;
+                if (*dp).df_lnum[toidx] <= to_lnum {
+                    max_virt_lines += to_lnum - (*dp).df_lnum[toidx];
                 }
                 break;
             }
         }
         if diff_flags.get() & DIFF_FILLER != 0 {
-            *topfill = max_virt_lines - virtual_lines_passed;
+            *topfill = max_virt_lines - passed;
         }
-        *topline = curlinenum_to as linenr_T;
+        *topline = to_lnum;
     }
 }
 
-pub unsafe extern "C" fn diff_set_topline(mut fromwin: *mut win_T, mut towin: *mut win_T) {
+/// Set `towin`'s topline and topfill from `fromwin`'s.
+pub unsafe fn diff_set_topline(fromwin: *mut win_T, towin: *mut win_T) {
     unsafe {
-        let mut frombuf: *mut buf_T = (*fromwin).w_buffer;
-        let mut fromidx: ::core::ffi::c_int = diff_buf_idx(frombuf, curtab.get());
+        let tp = curtab.get();
+        let frombuf = (*fromwin).w_buffer;
+        let fromidx = diff_buf_idx(frombuf, tp);
         if fromidx == DB_COUNT {
             return;
         }
-        if (*curtab.get()).tp_diff_invalid != 0 {
-            ex_diffupdate(::core::ptr::null_mut::<exarg_T>());
+        if (*tp).tp_diff_invalid != 0 {
+            ex_diffupdate(::core::ptr::null_mut());
         }
-        let mut lnum: linenr_T = (*fromwin).w_topline;
-        (*towin).w_topfill = 0 as ::core::ffi::c_int;
-        let mut dp: *mut diff_T = ::core::ptr::null_mut::<diff_T>();
-        dp = (*curtab.get()).tp_first_diff;
-        while !dp.is_null() {
-            if lnum <= (*dp).df_lnum[fromidx as usize] + (*dp).df_count[fromidx as usize] {
-                break;
-            }
+        let fromidx = fromidx as usize;
+
+        let lnum = (*fromwin).w_topline;
+        (*towin).w_topfill = 0;
+        let mut dp = (*tp).tp_first_diff;
+        while !dp.is_null() && lnum > (*dp).df_lnum[fromidx] + (*dp).df_count[fromidx] {
             dp = (*dp).df_next;
         }
         if dp.is_null() {
+            // Below every block: the two buffers' tails line up by counting
+            // back from the end.
             (*towin).w_topline =
                 (*(*towin).w_buffer).b_ml.ml_line_count - ((*frombuf).b_ml.ml_line_count - lnum);
         } else {
-            let mut toidx: ::core::ffi::c_int = diff_buf_idx((*towin).w_buffer, curtab.get());
+            let toidx = diff_buf_idx((*towin).w_buffer, tp);
             if toidx == DB_COUNT {
                 return;
             }
-            (*towin).w_topline =
-                lnum + ((*dp).df_lnum[toidx as usize] - (*dp).df_lnum[fromidx as usize]);
-            if lnum >= (*dp).df_lnum[fromidx as usize] {
+            let toidx = toidx as usize;
+            (*towin).w_topline = lnum + ((*dp).df_lnum[toidx] - (*dp).df_lnum[fromidx]);
+            if lnum >= (*dp).df_lnum[fromidx] {
                 calculate_topfill_and_topline(
                     fromidx,
                     toidx,
-                    (*fromwin).w_topline as ::core::ffi::c_int,
+                    (*fromwin).w_topline,
                     (*fromwin).w_topfill,
                     &raw mut (*towin).w_topfill,
                     &raw mut (*towin).w_topline,
                 );
             }
         }
-        (*towin).w_botfill = false_0 != 0;
+
+        (*towin).w_botfill = false;
         if (*towin).w_topline > (*(*towin).w_buffer).b_ml.ml_line_count {
             (*towin).w_topline = (*(*towin).w_buffer).b_ml.ml_line_count;
-            (*towin).w_botfill = true_0 != 0;
+            (*towin).w_botfill = true;
         }
-        if (*towin).w_topline < 1 as linenr_T {
-            (*towin).w_topline = 1 as ::core::ffi::c_int as linenr_T;
-            (*towin).w_topfill = 0 as ::core::ffi::c_int;
+        if (*towin).w_topline < 1 {
+            (*towin).w_topline = 1;
+            (*towin).w_topfill = 0;
         }
         invalidate_botline_win(towin);
         changed_line_abv_curs_win(towin);
-        check_topfill(towin, false_0 != 0);
+        check_topfill(towin, false);
         hasFolding(
             towin,
             (*towin).w_topline,
             &raw mut (*towin).w_topline,
-            ::core::ptr::null_mut::<linenr_T>(),
+            ::core::ptr::null_mut(),
         );
     }
 }
 
-pub unsafe extern "C" fn diff_move_to(
-    mut dir: ::core::ffi::c_int,
-    mut count: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// `]c` / `[c`: move the cursor to the start of the `count`th next or
+/// previous change.
+pub unsafe fn diff_move_to(dir: c_int, mut count: c_int) -> c_int {
     unsafe {
-        let mut lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
-        let mut idx: ::core::ffi::c_int = diff_buf_idx(curbuf.get(), curtab.get());
-        if idx == DB_COUNT || (*curtab.get()).tp_first_diff.is_null() {
+        let tp = curtab.get();
+        let mut lnum = (*curwin.get()).w_cursor.lnum;
+        let idx = diff_buf_idx(curbuf.get(), tp);
+        if idx == DB_COUNT || (*tp).tp_first_diff.is_null() {
             return FAIL;
         }
-        if (*curtab.get()).tp_diff_invalid != 0 {
-            ex_diffupdate(::core::ptr::null_mut::<exarg_T>());
+        if (*tp).tp_diff_invalid != 0 {
+            ex_diffupdate(::core::ptr::null_mut());
         }
-        if (*curtab.get()).tp_first_diff.is_null() {
+        if (*tp).tp_first_diff.is_null() {
             return FAIL;
         }
-        loop {
+        let idx = idx as usize;
+
+        while count > 0 {
             count -= 1;
-            if count < 0 as ::core::ffi::c_int {
+            if dir == BACKWARD as c_int && lnum <= (*(*tp).tp_first_diff).df_lnum[idx] {
                 break;
             }
-            if dir == BACKWARD as ::core::ffi::c_int
-                && lnum <= (*(*curtab.get()).tp_first_diff).df_lnum[idx as usize]
-            {
-                break;
-            }
-            let mut dp: *mut diff_T = ::core::ptr::null_mut::<diff_T>();
-            dp = (*curtab.get()).tp_first_diff;
+            let mut dp = (*tp).tp_first_diff;
             while !dp.is_null() {
-                if dir == FORWARD as ::core::ffi::c_int && lnum < (*dp).df_lnum[idx as usize]
-                    || dir == BACKWARD as ::core::ffi::c_int
-                        && ((*dp).df_next.is_null()
-                            || lnum <= (*(*dp).df_next).df_lnum[idx as usize])
+                // Forwards: the first block starting below the cursor.
+                // Backwards: the last block starting at or above it, which is
+                // the one whose successor is already at or below the cursor.
+                if dir == FORWARD as c_int && lnum < (*dp).df_lnum[idx]
+                    || dir == BACKWARD as c_int
+                        && ((*dp).df_next.is_null() || lnum <= (*(*dp).df_next).df_lnum[idx])
                 {
-                    lnum = (*dp).df_lnum[idx as usize];
+                    lnum = (*dp).df_lnum[idx];
                     break;
-                } else {
-                    dp = (*dp).df_next;
                 }
+                dp = (*dp).df_next;
             }
         }
-        lnum = if lnum < (*curbuf.get()).b_ml.ml_line_count {
-            lnum
-        } else {
-            (*curbuf.get()).b_ml.ml_line_count
-        };
+
+        lnum = lnum.min((*curbuf.get()).b_ml.ml_line_count);
         if lnum == (*curwin.get()).w_cursor.lnum {
             return FAIL;
         }
         setpcmark();
         (*curwin.get()).w_cursor.lnum = lnum;
-        (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-        return OK;
+        (*curwin.get()).w_cursor.col = 0;
+        OK
     }
 }
 
-unsafe extern "C" fn diff_get_corresponding_line_int(
-    mut buf1: *mut buf_T,
-    mut lnum1: linenr_T,
-) -> linenr_T {
+/// The line of the current buffer matching `lnum1` of `buf1`.
+///
+/// `baseline` accumulates how far the two buffers have drifted apart over the
+/// blocks passed so far, which is the answer for any line outside a block.
+unsafe fn diff_get_corresponding_line_int(buf1: *mut buf_T, lnum1: linenr_T) -> linenr_T {
     unsafe {
-        let mut baseline: linenr_T = 0 as linenr_T;
-        let mut idx1: ::core::ffi::c_int = diff_buf_idx(buf1, curtab.get());
-        let mut idx2: ::core::ffi::c_int = diff_buf_idx(curbuf.get(), curtab.get());
-        if idx1 == DB_COUNT || idx2 == DB_COUNT || (*curtab.get()).tp_first_diff.is_null() {
+        let tp = curtab.get();
+        let idx1 = diff_buf_idx(buf1, tp);
+        let idx2 = diff_buf_idx(curbuf.get(), tp);
+        if idx1 == DB_COUNT || idx2 == DB_COUNT || (*tp).tp_first_diff.is_null() {
             return lnum1;
         }
-        if (*curtab.get()).tp_diff_invalid != 0 {
-            ex_diffupdate(::core::ptr::null_mut::<exarg_T>());
+        if (*tp).tp_diff_invalid != 0 {
+            ex_diffupdate(::core::ptr::null_mut());
         }
-        if (*curtab.get()).tp_first_diff.is_null() {
+        if (*tp).tp_first_diff.is_null() {
             return lnum1;
         }
-        let mut dp: *mut diff_T = (*curtab.get()).tp_first_diff;
+        let (idx1, idx2) = (idx1 as usize, idx2 as usize);
+
+        let mut baseline = 0;
+        let mut dp = (*tp).tp_first_diff;
         while !dp.is_null() {
-            if (*dp).df_lnum[idx1 as usize] > lnum1 {
+            if (*dp).df_lnum[idx1] > lnum1 {
                 return lnum1 - baseline;
             }
-            if (*dp).df_lnum[idx1 as usize] + (*dp).df_count[idx1 as usize] > lnum1 {
-                baseline = lnum1 - (*dp).df_lnum[idx1 as usize];
-                baseline = if baseline < (*dp).df_count[idx2 as usize] {
-                    baseline
-                } else {
-                    (*dp).df_count[idx2 as usize]
-                };
-                return (*dp).df_lnum[idx2 as usize] + baseline;
+            if (*dp).df_lnum[idx1] + (*dp).df_count[idx1] > lnum1 {
+                // Inside a block: the same offset into it, clamped to what
+                // the other side actually has.
+                let off = (lnum1 - (*dp).df_lnum[idx1]).min((*dp).df_count[idx2]);
+                return (*dp).df_lnum[idx2] + off;
             }
-            if (*dp).df_lnum[idx1 as usize] == lnum1
-                && (*dp).df_count[idx1 as usize] == 0 as linenr_T
-                && (*dp).df_lnum[idx2 as usize] <= (*curwin.get()).w_cursor.lnum
-                && (*dp).df_lnum[idx2 as usize] + (*dp).df_count[idx2 as usize]
-                    > (*curwin.get()).w_cursor.lnum
+            // A deletion right here, with the cursor inside the lines that
+            // were deleted: stay where the cursor is.
+            if (*dp).df_lnum[idx1] == lnum1
+                && (*dp).df_count[idx1] == 0
+                && (*dp).df_lnum[idx2] <= (*curwin.get()).w_cursor.lnum
+                && (*dp).df_lnum[idx2] + (*dp).df_count[idx2] > (*curwin.get()).w_cursor.lnum
             {
                 return (*curwin.get()).w_cursor.lnum;
             }
-            baseline = (*dp).df_lnum[idx1 as usize] + (*dp).df_count[idx1 as usize]
-                - ((*dp).df_lnum[idx2 as usize] + (*dp).df_count[idx2 as usize]);
+            baseline = (*dp).df_lnum[idx1] + (*dp).df_count[idx1]
+                - ((*dp).df_lnum[idx2] + (*dp).df_count[idx2]);
             dp = (*dp).df_next;
         }
-        return lnum1 - baseline;
+        lnum1 - baseline
     }
 }
 
-pub unsafe extern "C" fn diff_get_corresponding_line(
-    mut buf1: *mut buf_T,
-    mut lnum1: linenr_T,
-) -> linenr_T {
-    unsafe {
-        let mut lnum: linenr_T = diff_get_corresponding_line_int(buf1, lnum1);
-        return if lnum < (*curbuf.get()).b_ml.ml_line_count {
-            lnum
-        } else {
-            (*curbuf.get()).b_ml.ml_line_count
-        };
-    }
+/// [`diff_get_corresponding_line_int`], clamped to the buffer.
+pub unsafe fn diff_get_corresponding_line(buf1: *mut buf_T, lnum1: linenr_T) -> linenr_T {
+    unsafe { diff_get_corresponding_line_int(buf1, lnum1).min((*curbuf.get()).b_ml.ml_line_count) }
 }
 
-pub unsafe extern "C" fn diff_lnum_win(mut lnum: linenr_T, mut wp: *mut win_T) -> linenr_T {
+/// The line of `wp`'s buffer matching `lnum` of the current one.
+///
+/// Unlike [`diff_get_corresponding_line`] this clamps to the *block*, not the
+/// buffer: it is used to decide what a window shows beside a given line, and
+/// running past the block would point at the next change.
+pub unsafe fn diff_lnum_win(lnum: linenr_T, wp: *mut win_T) -> linenr_T {
     unsafe {
-        let mut dp: *mut diff_T = ::core::ptr::null_mut::<diff_T>();
-        let mut idx: ::core::ffi::c_int = diff_buf_idx(curbuf.get(), curtab.get());
+        let tp = curtab.get();
+        let idx = diff_buf_idx(curbuf.get(), tp);
         if idx == DB_COUNT {
-            return 0 as linenr_T;
+            return 0;
         }
-        if (*curtab.get()).tp_diff_invalid != 0 {
-            ex_diffupdate(::core::ptr::null_mut::<exarg_T>());
+        if (*tp).tp_diff_invalid != 0 {
+            ex_diffupdate(::core::ptr::null_mut());
         }
-        dp = (*curtab.get()).tp_first_diff;
-        while !dp.is_null() {
-            if lnum <= (*dp).df_lnum[idx as usize] + (*dp).df_count[idx as usize] {
-                break;
-            }
+        let idx = idx as usize;
+
+        let mut dp = (*tp).tp_first_diff;
+        while !dp.is_null() && lnum > (*dp).df_lnum[idx] + (*dp).df_count[idx] {
             dp = (*dp).df_next;
         }
         if dp.is_null() {
             return (*(*wp).w_buffer).b_ml.ml_line_count
                 - ((*curbuf.get()).b_ml.ml_line_count - lnum);
         }
-        let mut i: ::core::ffi::c_int = diff_buf_idx((*wp).w_buffer, curtab.get());
+        let i = diff_buf_idx((*wp).w_buffer, tp);
         if i == DB_COUNT {
-            return 0 as linenr_T;
+            return 0;
         }
-        let mut n: linenr_T = lnum + ((*dp).df_lnum[i as usize] - (*dp).df_lnum[idx as usize]);
-        return if n < (*dp).df_lnum[i as usize] + (*dp).df_count[i as usize] {
-            n
-        } else {
-            (*dp).df_lnum[i as usize] + (*dp).df_count[i as usize]
-        };
+        let i = i as usize;
+        (lnum + ((*dp).df_lnum[i] - (*dp).df_lnum[idx])).min((*dp).df_lnum[i] + (*dp).df_count[i])
     }
 }
