@@ -448,41 +448,41 @@ pub unsafe extern "C" fn set_indent(
     if orig_char_len != -1 as ::core::ffi::c_int {
         let mut newline_size: ::core::ffi::c_int = 0;
         let (c2rust_result, c2rust_overflowed) = orig_char_len.overflowing_add(size);
-        *&raw mut newline_size = c2rust_result;
+        newline_size = c2rust_result;
         if c2rust_overflowed {
             logmsg(
                 LOGLVL_ERR,
                 ::core::ptr::null::<::core::ffi::c_char>(),
-                b"set_indent\0".as_ptr() as *const ::core::ffi::c_char,
+                c"set_indent".as_ptr(),
                 598 as ::core::ffi::c_int,
                 true,
-                b"STRICT_ADD overflow\0".as_ptr() as *const ::core::ffi::c_char,
+                c"STRICT_ADD overflow".as_ptr(),
             );
             abort();
         }
         let (c2rust_result_0, c2rust_overflowed_0) = newline_size.overflowing_sub(ind_done);
-        *&raw mut newline_size = c2rust_result_0;
+        newline_size = c2rust_result_0;
         if c2rust_overflowed_0 {
             logmsg(
                 LOGLVL_ERR,
                 ::core::ptr::null::<::core::ffi::c_char>(),
-                b"set_indent\0".as_ptr() as *const ::core::ffi::c_char,
+                c"set_indent".as_ptr(),
                 599 as ::core::ffi::c_int,
                 true,
-                b"STRICT_SUB overflow\0".as_ptr() as *const ::core::ffi::c_char,
+                c"STRICT_SUB overflow".as_ptr(),
             );
             abort();
         }
         let (c2rust_result_1, c2rust_overflowed_1) = newline_size.overflowing_add(line_len);
-        *&raw mut newline_size = c2rust_result_1;
+        newline_size = c2rust_result_1;
         if c2rust_overflowed_1 {
             logmsg(
                 LOGLVL_ERR,
                 ::core::ptr::null::<::core::ffi::c_char>(),
-                b"set_indent\0".as_ptr() as *const ::core::ffi::c_char,
+                c"set_indent".as_ptr(),
                 600 as ::core::ffi::c_int,
                 true,
-                b"STRICT_ADD overflow\0".as_ptr() as *const ::core::ffi::c_char,
+                c"STRICT_ADD overflow".as_ptr(),
             );
             abort();
         }
@@ -511,15 +511,15 @@ pub unsafe extern "C" fn set_indent(
         let (c2rust_result_2, c2rust_overflowed_2) =
             (ind_len as i128).overflowing_add(line_len as i128);
         let c2rust_result_narrow = c2rust_result_2 as size_t;
-        *&raw mut newline_size_0 = c2rust_result_narrow;
+        newline_size_0 = c2rust_result_narrow;
         if c2rust_overflowed_2 || c2rust_result_narrow as i128 != c2rust_result_2 {
             logmsg(
                 LOGLVL_ERR,
                 ::core::ptr::null::<::core::ffi::c_char>(),
-                b"set_indent\0".as_ptr() as *const ::core::ffi::c_char,
+                c"set_indent".as_ptr(),
                 626 as ::core::ffi::c_int,
                 true,
-                b"STRICT_ADD overflow\0".as_ptr() as *const ::core::ffi::c_char,
+                c"STRICT_ADD overflow".as_ptr(),
             );
             abort();
         }

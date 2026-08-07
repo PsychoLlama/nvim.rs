@@ -802,7 +802,7 @@
     "crates/nvim/src/nvim/terminal/scrollback.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/terminal/termrequest.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/testing.rs": {"lines": 1339, "unsafe": 31},
-    "crates/nvim/src/nvim/textformat.rs": {"lines": 1153, "unsafe": 13},
+    "crates/nvim/src/nvim/textformat.rs": {"lines": 1141, "unsafe": 13},
     "crates/nvim/src/nvim/textobject/pair.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/textobject/para.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/textobject/quote.rs": {"unsafe": 3},

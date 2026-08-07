@@ -90,10 +90,10 @@ pub const COM_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
 pub const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
 pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;
 pub const COM_FIRST: ::core::ffi::c_int = 'f' as ::core::ffi::c_int;
-static did_add_space: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+static did_add_space: GlobalCell<bool> = GlobalCell::new(false);
 pub unsafe extern "C" fn has_format_option(mut x: ::core::ffi::c_int) -> bool {
     if p_paste.get() != 0 {
-        return false_0 != 0;
+        return false;
     }
     return !vim_strchr((*curbuf.get()).b_p_fo, x).is_null();
 }
@@ -106,14 +106,14 @@ pub unsafe extern "C" fn internal_format(
 ) {
     let mut cc: ::core::ffi::c_int = 0;
     let mut save_char: ::core::ffi::c_char = NUL as ::core::ffi::c_char;
-    let mut haveto_redraw: bool = false_0 != 0;
+    let mut haveto_redraw: bool = false;
     let fo_ins_blank: bool = has_format_option(FO_INS_BLANK);
     let fo_multibyte: bool = has_format_option(FO_MBYTE_BREAK);
     let fo_rigor_tw: bool = has_format_option(FO_RIGOROUS_TW);
     let fo_white_par: bool = has_format_option(FO_WHITE_PAR);
-    let mut first_line: bool = true_0 != 0;
+    let mut first_line: bool = true;
     let mut leader_len: colnr_T = 0;
-    let mut no_leader: bool = false_0 != 0;
+    let mut no_leader: bool = false;
     let mut do_comments: bool = flags & INSCHAR_DO_COM as ::core::ffi::c_int != 0;
     let mut has_lbr: ::core::ffi::c_int = (*curwin.get()).w_onebuf_opt.wo_lbr;
     (*curwin.get()).w_onebuf_opt.wo_lbr = false_0;
@@ -133,26 +133,26 @@ pub unsafe extern "C" fn internal_format(
         let mut saved_text: *mut ::core::ffi::c_char =
             ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut col: colnr_T = 0;
-        let mut did_do_comment: bool = false_0 != 0;
+        let mut did_do_comment: bool = false;
         let mut virtcol: colnr_T =
             get_nolist_virtcol() + char2cells(if c != NUL { c } else { gchar_cursor() });
         if virtcol <= textwidth {
             break;
         }
         if no_leader {
-            do_comments = false_0 != 0;
+            do_comments = false;
         } else if flags & INSCHAR_FORMAT as ::core::ffi::c_int == 0
             && has_format_option(FO_WRAP_COMS) as ::core::ffi::c_int != 0
         {
-            do_comments = true_0 != 0;
+            do_comments = true;
         }
         if do_comments {
             let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
             leader_len = get_leader_len(
                 line,
                 ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-                false_0 != 0,
-                true_0 != 0,
+                false,
+                true,
             ) as colnr_T;
             if leader_len == 0 as ::core::ffi::c_int && (*curbuf.get()).b_p_cin != 0 {
                 let mut comment_start: ::core::ffi::c_int = check_linecomment(line);
@@ -160,8 +160,8 @@ pub unsafe extern "C" fn internal_format(
                     leader_len = get_leader_len(
                         line.offset(comment_start as isize),
                         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-                        false_0 != 0,
-                        true_0 != 0,
+                        false,
+                        true,
                     ) as colnr_T;
                     if leader_len != 0 as ::core::ffi::c_int {
                         leader_len += comment_start;
@@ -172,7 +172,7 @@ pub unsafe extern "C" fn internal_format(
             leader_len = 0 as ::core::ffi::c_int as colnr_T;
         }
         if leader_len == 0 as ::core::ffi::c_int {
-            no_leader = true_0 != 0;
+            no_leader = true;
         }
         if flags & INSCHAR_FORMAT as ::core::ffi::c_int == 0
             && leader_len == 0 as ::core::ffi::c_int
@@ -418,7 +418,7 @@ pub unsafe extern "C" fn internal_format(
                 old_indent.set(0 as ::core::ffi::c_int);
             }
             if did_do_comment {
-                no_leader = false_0 != 0;
+                no_leader = false;
             }
             replace_offset.set(0 as ::core::ffi::c_int);
             if first_line {
@@ -435,7 +435,7 @@ pub unsafe extern "C" fn internal_format(
                                 INDENT_SET as ::core::ffi::c_int,
                                 second_indent,
                                 false_0,
-                                true_0 != 0,
+                                true,
                             );
                         } else if leader_len > 0 as ::core::ffi::c_int
                             && second_indent as colnr_T - leader_len > 0 as ::core::ffi::c_int
@@ -445,8 +445,7 @@ pub unsafe extern "C" fn internal_format(
                             let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                             while i < padding {
                                 ins_str(
-                                    b" \0".as_ptr() as *const ::core::ffi::c_char
-                                        as *mut ::core::ffi::c_char,
+                                    c" ".as_ptr() as *mut ::core::ffi::c_char,
                                     ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
                                         .wrapping_sub(1 as size_t),
                                 );
@@ -457,7 +456,7 @@ pub unsafe extern "C" fn internal_format(
                         }
                     }
                 }
-                first_line = false_0 != 0;
+                first_line = false;
             }
             if State.get() & VREPLACE_FLAG != 0 {
                 ins_bytes(saved_text);
@@ -471,12 +470,12 @@ pub unsafe extern "C" fn internal_format(
                     len
                 };
             }
-            haveto_redraw = true_0 != 0;
-            set_can_cindent(true_0 != 0);
-            did_ai.set(false_0 != 0);
-            did_si.set(false_0 != 0);
-            can_si.set(false_0 != 0);
-            can_si_back.set(false_0 != 0);
+            haveto_redraw = true;
+            set_can_cindent(true);
+            did_ai.set(false);
+            did_si.set(false);
+            can_si.set(false);
+            can_si_back.set(false);
             line_breakcheck();
         }
     }
@@ -498,7 +497,7 @@ unsafe extern "C" fn fmt_check_par(
     let mut flags: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut ptr: *mut ::core::ffi::c_char = ml_get(lnum);
     if do_comments {
-        *leader_len = get_leader_len(ptr, leader_flags, false_0 != 0, true_0 != 0);
+        *leader_len = get_leader_len(ptr, leader_flags, false, true);
     } else {
         *leader_len = 0 as ::core::ffi::c_int;
     }
@@ -513,13 +512,12 @@ unsafe extern "C" fn fmt_check_par(
     }
     return (*skipwhite(ptr.offset(*leader_len as isize)) as ::core::ffi::c_int == NUL
         || *leader_len > 0 as ::core::ffi::c_int && *flags as ::core::ffi::c_int == COM_END
-        || startPS(lnum, NUL, false_0 != 0) as ::core::ffi::c_int != 0)
-        as ::core::ffi::c_int;
+        || startPS(lnum, NUL, false) as ::core::ffi::c_int != 0) as ::core::ffi::c_int;
 }
 unsafe extern "C" fn ends_in_white(mut lnum: linenr_T) -> bool {
     let mut s: *mut ::core::ffi::c_char = ml_get(lnum);
     if *s as ::core::ffi::c_int == NUL {
-        return false_0 != 0;
+        return false;
     }
     let mut l: colnr_T = ml_get_len(lnum) - 1 as colnr_T;
     return ascii_iswhite(*s.offset(l as isize) as uint8_t as ::core::ffi::c_int);
@@ -544,26 +542,26 @@ unsafe extern "C" fn same_leader(
                 return leader2_len == 0 as ::core::ffi::c_int;
             }
             if *p as ::core::ffi::c_int == COM_END {
-                return false_0 != 0;
+                return false;
             }
             if *p as ::core::ffi::c_int == COM_START {
                 let mut line_len: ::core::ffi::c_int = ml_get_len(lnum);
                 if line_len <= leader1_len {
-                    return false_0 != 0;
+                    return false;
                 }
                 if leader2_flags.is_null() || leader2_len == 0 as ::core::ffi::c_int {
-                    return false_0 != 0;
+                    return false;
                 }
                 p = leader2_flags;
                 while *p as ::core::ffi::c_int != 0
                     && *p as ::core::ffi::c_int != ':' as ::core::ffi::c_int
                 {
                     if *p as ::core::ffi::c_int == COM_MIDDLE {
-                        return true_0 != 0;
+                        return true;
                     }
                     p = p.offset(1);
                 }
-                return false_0 != 0;
+                return false;
             }
             p = p.offset(1);
         }
@@ -601,11 +599,11 @@ unsafe extern "C" fn paragraph_start(mut lnum: linenr_T) -> bool {
     let mut next_leader_flags: *mut ::core::ffi::c_char =
         ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lnum <= 1 as linenr_T {
-        return true_0 != 0;
+        return true;
     }
     let mut p: *mut ::core::ffi::c_char = ml_get(lnum - 1 as linenr_T);
     if *p as ::core::ffi::c_int == NUL {
-        return true_0 != 0;
+        return true;
     }
     let do_comments: bool = has_format_option(FO_Q_COMS);
     if fmt_check_par(
@@ -615,7 +613,7 @@ unsafe extern "C" fn paragraph_start(mut lnum: linenr_T) -> bool {
         do_comments,
     ) != 0
     {
-        return true_0 != 0;
+        return true;
     }
     if fmt_check_par(
         lnum,
@@ -624,17 +622,17 @@ unsafe extern "C" fn paragraph_start(mut lnum: linenr_T) -> bool {
         do_comments,
     ) != 0
     {
-        return true_0 != 0;
+        return true;
     }
     if has_format_option(FO_WHITE_PAR) as ::core::ffi::c_int != 0
         && !ends_in_white(lnum - 1 as linenr_T)
     {
-        return true_0 != 0;
+        return true;
     }
     if has_format_option(FO_Q_NUMBER) as ::core::ffi::c_int != 0
         && get_number_indent(lnum) > 0 as ::core::ffi::c_int
     {
-        return true_0 != 0;
+        return true;
     }
     if !same_leader(
         lnum - 1 as linenr_T,
@@ -643,9 +641,9 @@ unsafe extern "C" fn paragraph_start(mut lnum: linenr_T) -> bool {
         next_leader_len,
         next_leader_flags,
     ) {
-        return true_0 != 0;
+        return true;
     }
-    return false_0 != 0;
+    return false;
 }
 pub unsafe extern "C" fn auto_format(mut trailblank: bool, mut prev_line: bool) {
     if !has_format_option(FO_AUTO) {
@@ -653,7 +651,7 @@ pub unsafe extern "C" fn auto_format(mut trailblank: bool, mut prev_line: bool) 
     }
     let mut pos: pos_T = (*curwin.get()).w_cursor;
     let mut old: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-    check_auto_format(false_0 != 0);
+    check_auto_format(false);
     let mut wasatend: bool = pos.col == get_cursor_line_len();
     if *old as ::core::ffi::c_int != NUL && !trailblank && wasatend as ::core::ffi::c_int != 0 {
         dec_cursor();
@@ -703,8 +701,8 @@ pub unsafe extern "C" fn auto_format(mut trailblank: bool, mut prev_line: bool) 
         && get_leader_len(
             old,
             ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-            false_0 != 0,
-            true_0 != 0,
+            false,
+            true,
         ) == 0 as ::core::ffi::c_int
     {
         return;
@@ -716,7 +714,7 @@ pub unsafe extern "C" fn auto_format(mut trailblank: bool, mut prev_line: bool) 
         }
     }
     saved_cursor.set(pos);
-    format_lines(-1 as linenr_T, false_0 != 0);
+    format_lines(-1 as linenr_T, false);
     (*curwin.get()).w_cursor = saved_cursor.get();
     (*saved_cursor.ptr()).lnum = 0 as ::core::ffi::c_int as linenr_T;
     if (*curwin.get()).w_cursor.lnum > (*curbuf.get()).b_ml.ml_line_count {
@@ -734,10 +732,10 @@ pub unsafe extern "C" fn auto_format(mut trailblank: bool, mut prev_line: bool) 
             *plinep.offset(len as isize) = ' ' as ::core::ffi::c_char;
             *plinep.offset((len as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize) =
                 NUL as ::core::ffi::c_char;
-            ml_replace((*curwin.get()).w_cursor.lnum, plinep, false_0 != 0);
-            did_add_space.set(true_0 != 0);
+            ml_replace((*curwin.get()).w_cursor.lnum, plinep, false);
+            did_add_space.set(true);
         } else {
-            check_auto_format(false_0 != 0);
+            check_auto_format(false);
         }
     }
     check_cursor(curwin.get());
@@ -752,7 +750,7 @@ pub unsafe extern "C" fn check_auto_format(mut end_insert: bool) {
             get_cursor_pos_ptr().offset(1 as ::core::ffi::c_int as isize),
         )))
     {
-        did_add_space.set(false_0 != 0);
+        did_add_space.set(false);
     } else {
         let mut c: ::core::ffi::c_int = ' ' as ::core::ffi::c_int;
         if !end_insert {
@@ -761,8 +759,8 @@ pub unsafe extern "C" fn check_auto_format(mut end_insert: bool) {
             dec_cursor();
         }
         if c != NUL {
-            del_char(false_0 != 0);
-            did_add_space.set(false_0 != 0);
+            del_char(false);
+            did_add_space.set(false);
         }
     };
 }
@@ -862,7 +860,7 @@ pub unsafe extern "C" fn op_formatexpr(mut oap: *mut oparg_T) {
         NUL,
     ) != 0 as ::core::ffi::c_int
     {
-        op_format(oap, false_0 != 0);
+        op_format(oap, false);
     }
 }
 pub unsafe extern "C" fn fex_format(
@@ -885,7 +883,7 @@ pub unsafe extern "C" fn fex_format(
     if use_sandbox {
         (*sandbox.ptr()) += 1;
     }
-    let mut r: ::core::ffi::c_int = eval_to_number(fex, true_0 != 0) as ::core::ffi::c_int;
+    let mut r: ::core::ffi::c_int = eval_to_number(fex, true) as ::core::ffi::c_int;
     if use_sandbox {
         (*sandbox.ptr()) -= 1;
     }
@@ -902,23 +900,23 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
     let mut is_not_par: bool = false;
     let mut next_is_not_par: bool = false;
     let mut is_end_par: bool = false;
-    let mut prev_is_end_par: bool = false_0 != 0;
-    let mut next_is_start_par: bool = false_0 != 0;
+    let mut prev_is_end_par: bool = false;
+    let mut next_is_start_par: bool = false;
     let mut leader_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut next_leader_len: ::core::ffi::c_int = 0;
     let mut leader_flags: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut next_leader_flags: *mut ::core::ffi::c_char =
         ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut advance: bool = true_0 != 0;
+    let mut advance: bool = true;
     let mut second_indent: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    let mut first_par_line: bool = true_0 != 0;
+    let mut first_par_line: bool = true;
     let mut smd_save: ::core::ffi::c_int = 0;
     let mut count: ::core::ffi::c_long = 0;
-    let mut need_set_indent: bool = true_0 != 0;
+    let mut need_set_indent: bool = true;
     let mut first_line: linenr_T = (*curwin.get()).w_cursor.lnum;
-    let mut force_format: bool = false_0 != 0;
+    let mut force_format: bool = false;
     let old_State: ::core::ffi::c_int = State.get();
-    let max_len: ::core::ffi::c_int = comp_textwidth(true_0 != 0) * 3 as ::core::ffi::c_int;
+    let max_len: ::core::ffi::c_int = comp_textwidth(true) * 3 as ::core::ffi::c_int;
     let do_comments: bool = has_format_option(FO_Q_COMS);
     let mut do_comments_list: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let do_second_indent: bool = has_format_option(FO_Q_SECOND);
@@ -932,7 +930,7 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
             do_comments,
         ) != 0;
     } else {
-        is_not_par = true_0 != 0;
+        is_not_par = true;
     }
     next_is_not_par = fmt_check_par(
         (*curwin.get()).w_cursor.lnum,
@@ -958,7 +956,7 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
         if count == 1 as ::core::ffi::c_long
             || (*curwin.get()).w_cursor.lnum == (*curbuf.get()).b_ml.ml_line_count
         {
-            next_is_not_par = true_0 != 0;
+            next_is_not_par = true;
             next_leader_len = 0 as ::core::ffi::c_int;
             next_leader_flags = ::core::ptr::null_mut::<::core::ffi::c_char>();
         } else {
@@ -974,7 +972,7 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
                         > 0 as ::core::ffi::c_int;
             }
         }
-        advance = true_0 != 0;
+        advance = true;
         is_end_par = is_not_par as ::core::ffi::c_int != 0
             || next_is_not_par as ::core::ffi::c_int != 0
             || next_is_start_par as ::core::ffi::c_int != 0;
@@ -1027,14 +1025,11 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
                 )
             {
                 if next_leader_flags.is_null()
-                    || strncmp(
-                        next_leader_flags,
-                        b"://\0".as_ptr() as *const ::core::ffi::c_char,
-                        3 as size_t,
-                    ) != 0 as ::core::ffi::c_int
+                    || strncmp(next_leader_flags, c"://".as_ptr(), 3 as size_t)
+                        != 0 as ::core::ffi::c_int
                     || check_linecomment(get_cursor_line_ptr()) == MAXCOL as ::core::ffi::c_int
                 {
-                    is_end_par = true_0 != 0;
+                    is_end_par = true;
                 }
             }
             if is_end_par as ::core::ffi::c_int != 0 || force_format as ::core::ffi::c_int != 0 {
@@ -1094,19 +1089,19 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
                     if line_count < 0 as linenr_T {
                         break;
                     }
-                    first_par_line = true_0 != 0;
+                    first_par_line = true;
                 }
-                force_format = false_0 != 0;
+                force_format = false;
             }
             if !is_end_par {
-                advance = false_0 != 0;
+                advance = false;
                 (*curwin.get()).w_cursor.lnum += 1;
                 (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
                 if line_count < 0 as linenr_T && u_save_cursor() == FAIL {
                     break;
                 }
                 if next_leader_len > 0 as ::core::ffi::c_int {
-                    del_bytes(next_leader_len as colnr_T, false_0 != 0, false_0 != 0);
+                    del_bytes(next_leader_len as colnr_T, false, false);
                     mark_col_adjust(
                         (*curwin.get()).w_cursor.lnum,
                         0 as colnr_T,
@@ -1118,7 +1113,7 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
                     let mut indent_0: ::core::ffi::c_int =
                         getwhitecols_curline() as ::core::ffi::c_int;
                     if indent_0 > 0 as ::core::ffi::c_int {
-                        del_bytes(indent_0 as colnr_T, false_0 != 0, false_0 != 0);
+                        del_bytes(indent_0 as colnr_T, false, false);
                         mark_col_adjust(
                             (*curwin.get()).w_cursor.lnum,
                             0 as colnr_T,
@@ -1129,18 +1124,11 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
                     }
                 }
                 (*curwin.get()).w_cursor.lnum -= 1;
-                if do_join(
-                    2 as size_t,
-                    true_0 != 0,
-                    false_0 != 0,
-                    false_0 != 0,
-                    false_0 != 0,
-                ) == FAIL
-                {
+                if do_join(2 as size_t, true, false, false, false) == FAIL {
                     beep_flush();
                     break;
                 } else {
-                    first_par_line = false_0 != 0;
+                    first_par_line = false;
                     force_format = get_cursor_line_len() > max_len;
                 }
             }

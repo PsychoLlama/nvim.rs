@@ -28,7 +28,7 @@ pub unsafe extern "C" fn findsent(
     let mut cpo_J: bool = false;
     let mut c: ::core::ffi::c_int = 0;
     let mut func: Option<unsafe fn(*mut pos_T) -> ::core::ffi::c_int> = None;
-    let mut noskip: bool = false_0 != 0;
+    let mut noskip: bool = false;
     let mut pos: pos_T = (*curwin.get()).w_cursor;
     if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int {
         func = Some(incl as unsafe fn(*mut pos_T) -> ::core::ffi::c_int);
@@ -44,8 +44,7 @@ pub unsafe extern "C" fn findsent(
         let prev_pos: pos_T = pos;
         '_found: {
             if gchar_pos(&raw mut pos) == NUL {
-                while Some(func.expect("non-null function pointer"))
-                    .expect("non-null function pointer")(&raw mut pos)
+                while func.expect("non-null function pointer")(&raw mut pos)
                     != -1 as ::core::ffi::c_int
                 {
                     if gchar_pos(&raw mut pos) != NUL {
@@ -57,7 +56,7 @@ pub unsafe extern "C" fn findsent(
                 }
             } else if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int
                 && pos.col == 0 as ::core::ffi::c_int
-                && startPS(pos.lnum, NUL, false_0 != 0) as ::core::ffi::c_int != 0
+                && startPS(pos.lnum, NUL, false) as ::core::ffi::c_int != 0
             {
                 if pos.lnum == (*curbuf.get()).b_ml.ml_line_count {
                     return FAIL;
@@ -67,12 +66,11 @@ pub unsafe extern "C" fn findsent(
             } else if dir as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int {
                 decl(&raw mut pos);
             }
-            found_dot = false_0 != 0;
+            found_dot = false;
             loop {
                 c = gchar_pos(&raw mut pos);
                 if !(ascii_iswhite(c) as ::core::ffi::c_int != 0
-                    || !vim_strchr(b".!?)]\"'\0".as_ptr() as *const ::core::ffi::c_char, c)
-                        .is_null())
+                    || !vim_strchr(c".!?)]\"'".as_ptr(), c).is_null())
                 {
                     break;
                 }
@@ -86,15 +84,11 @@ pub unsafe extern "C" fn findsent(
                 if found_dot {
                     break;
                 }
-                if !vim_strchr(b".!?\0".as_ptr() as *const ::core::ffi::c_char, c).is_null() {
-                    found_dot = true_0 != 0;
+                if !vim_strchr(c".!?".as_ptr(), c).is_null() {
+                    found_dot = true;
                 }
-                if !vim_strchr(b")]\"'\0".as_ptr() as *const ::core::ffi::c_char, c).is_null()
-                    && vim_strchr(
-                        b".!?)]\"'\0".as_ptr() as *const ::core::ffi::c_char,
-                        gchar_pos(&raw mut tpos),
-                    )
-                    .is_null()
+                if !vim_strchr(c")]\"'".as_ptr(), c).is_null()
+                    && vim_strchr(c".!?)]\"'".as_ptr(), gchar_pos(&raw mut tpos)).is_null()
                 {
                     break;
                 }
@@ -106,7 +100,7 @@ pub unsafe extern "C" fn findsent(
                 c = gchar_pos(&raw mut pos);
                 if c == NUL
                     || pos.col == 0 as ::core::ffi::c_int
-                        && startPS(pos.lnum, NUL, false_0 != 0) as ::core::ffi::c_int != 0
+                        && startPS(pos.lnum, NUL, false) as ::core::ffi::c_int != 0
                 {
                     if dir as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int
                         && pos.lnum != startlnum as linenr_T
@@ -126,9 +120,7 @@ pub unsafe extern "C" fn findsent(
                                 break;
                             }
                             c = gchar_pos(&raw mut tpos_0);
-                            if vim_strchr(b")]\"'\0".as_ptr() as *const ::core::ffi::c_char, c)
-                                .is_null()
-                            {
+                            if vim_strchr(c")]\"'".as_ptr(), c).is_null() {
                                 break;
                             }
                         }
@@ -149,8 +141,7 @@ pub unsafe extern "C" fn findsent(
                             break;
                         }
                     }
-                    if Some(func.expect("non-null function pointer"))
-                        .expect("non-null function pointer")(&raw mut pos)
+                    if func.expect("non-null function pointer")(&raw mut pos)
                         != -1 as ::core::ffi::c_int
                     {
                         continue;
@@ -158,7 +149,7 @@ pub unsafe extern "C" fn findsent(
                     if count != 0 {
                         return FAIL;
                     }
-                    noskip = true_0 != 0;
+                    noskip = true;
                     break;
                 }
             }
@@ -174,10 +165,7 @@ pub unsafe extern "C" fn findsent(
         if !equalpos(prev_pos, pos) {
             continue;
         }
-        if Some(func.expect("non-null function pointer")).expect("non-null function pointer")(
-            &raw mut pos,
-        ) == -1 as ::core::ffi::c_int
-        {
+        if func.expect("non-null function pointer")(&raw mut pos) == -1 as ::core::ffi::c_int {
             if count != 0 {
                 return FAIL;
             }
@@ -239,10 +227,10 @@ pub unsafe extern "C" fn current_sent(
                 incl(&raw mut pos);
             }
             if equalpos(pos, (*curwin.get()).w_cursor) {
-                start_blank = true_0 != 0;
+                start_blank = true;
                 find_first_blank(&raw mut start_pos);
             } else {
-                start_blank = false_0 != 0;
+                start_blank = false;
                 findsent(BACKWARD, 1 as ::core::ffi::c_int);
                 start_pos = (*curwin.get()).w_cursor;
             }
@@ -255,7 +243,7 @@ pub unsafe extern "C" fn current_sent(
                 }
             }
             if ncount > 0 as ::core::ffi::c_int {
-                findsent_forward(ncount, true_0 != 0);
+                findsent_forward(ncount, true);
             } else {
                 decl(&raw mut (*curwin.get()).w_cursor);
             }
@@ -282,15 +270,12 @@ pub unsafe extern "C" fn current_sent(
                     }
                     VIsual.set(start_pos);
                     VIsual_mode.set('v' as ::core::ffi::c_int);
-                    redraw_cmdline.set(true_0 != 0);
+                    redraw_cmdline.set(true);
                     redraw_curbuf_later(UPD_INVERTED);
                 }
             } else {
-                if incl(&raw mut (*curwin.get()).w_cursor) == -1 as ::core::ffi::c_int {
-                    (*oap).inclusive = true_0 != 0;
-                } else {
-                    (*oap).inclusive = false_0 != 0;
-                }
+                (*oap).inclusive =
+                    incl(&raw mut (*curwin.get()).w_cursor) == -1 as ::core::ffi::c_int;
                 (*oap).start = start_pos;
                 (*oap).motion_type = kMTCharWise;
             }
@@ -298,12 +283,12 @@ pub unsafe extern "C" fn current_sent(
         }
     }
     if lt(start_pos, VIsual.get()) {
-        at_start_sent = true_0 != 0;
+        at_start_sent = true;
         decl(&raw mut pos);
         while lt(pos, (*curwin.get()).w_cursor) {
             c = gchar_pos(&raw mut pos);
             if !ascii_iswhite(c) {
-                at_start_sent = false_0 != 0;
+                at_start_sent = false;
                 break;
             } else {
                 incl(&raw mut pos);
@@ -312,7 +297,7 @@ pub unsafe extern "C" fn current_sent(
         if !at_start_sent {
             findsent(BACKWARD, 1 as ::core::ffi::c_int);
             if equalpos((*curwin.get()).w_cursor, start_pos) {
-                at_start_sent = true_0 != 0;
+                at_start_sent = true;
             } else {
                 findsent(FORWARD, 1 as ::core::ffi::c_int);
             }
@@ -337,13 +322,13 @@ pub unsafe extern "C" fn current_sent(
         }
     } else {
         incl(&raw mut pos);
-        at_start_sent = true_0 != 0;
+        at_start_sent = true;
         if !equalpos(pos, (*curwin.get()).w_cursor) {
-            at_start_sent = false_0 != 0;
+            at_start_sent = false;
             while lt(pos, (*curwin.get()).w_cursor) {
                 c = gchar_pos(&raw mut pos);
                 if !ascii_iswhite(c) {
-                    at_start_sent = true_0 != 0;
+                    at_start_sent = true;
                     break;
                 } else {
                     incl(&raw mut pos);

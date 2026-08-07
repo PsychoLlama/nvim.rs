@@ -41,7 +41,7 @@ pub unsafe extern "C" fn current_block(
         coladd: 0,
     };
     let mut end_pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-    let mut sol: bool = false_0 != 0;
+    let mut sol: bool = false;
     let mut old_pos: pos_T = (*curwin.get()).w_cursor;
     let mut old_end: pos_T = (*curwin.get()).w_cursor;
     let mut old_start: pos_T = old_end;
@@ -68,9 +68,9 @@ pub unsafe extern "C" fn current_block(
     let mut save_cpo: *mut ::core::ffi::c_char = p_cpo.get();
     p_cpo.set(
         (if !vim_strchr(p_cpo.get(), CPO_MATCHBSL).is_null() {
-            b"%M\0".as_ptr() as *const ::core::ffi::c_char
+            c"%M".as_ptr()
         } else {
-            b"%\0".as_ptr() as *const ::core::ffi::c_char
+            c"%".as_ptr()
         }) as *mut ::core::ffi::c_char,
     );
     pos = findmatch(::core::ptr::null_mut::<oparg_T>(), what);
@@ -124,7 +124,7 @@ pub unsafe extern "C" fn current_block(
         sol = (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int;
         decl(&raw mut (*curwin.get()).w_cursor);
         while inindent(1 as ::core::ffi::c_int) {
-            sol = true_0 != 0;
+            sol = true;
             if decl(&raw mut (*curwin.get()).w_cursor) != 0 as ::core::ffi::c_int {
                 break;
             }
@@ -172,11 +172,11 @@ pub unsafe extern "C" fn current_block(
     } else {
         (*oap).start = start_pos;
         (*oap).motion_type = kMTCharWise;
-        (*oap).inclusive = false_0 != 0;
+        (*oap).inclusive = false;
         if sol {
             incl(&raw mut (*curwin.get()).w_cursor);
         } else if ltoreq(start_pos, (*curwin.get()).w_cursor) {
-            (*oap).inclusive = true_0 != 0;
+            (*oap).inclusive = true;
         } else {
             (*curwin.get()).w_cursor = start_pos;
         }
@@ -206,7 +206,7 @@ unsafe extern "C" fn in_html_tag(mut end_tag: bool) -> bool {
         }
     }
     if *p as ::core::ffi::c_int != '<' as ::core::ffi::c_int {
-        return false_0 != 0;
+        return false;
     }
     pos.lnum = (*curwin.get()).w_cursor.lnum;
     pos.col = p.offset_from(line) as colnr_T;
@@ -215,11 +215,11 @@ unsafe extern "C" fn in_html_tag(mut end_tag: bool) -> bool {
         return *p as ::core::ffi::c_int == '/' as ::core::ffi::c_int;
     }
     if *p as ::core::ffi::c_int == '/' as ::core::ffi::c_int {
-        return false_0 != 0;
+        return false;
     }
     loop {
         if inc(&raw mut pos) < 0 as ::core::ffi::c_int {
-            return false_0 != 0;
+            return false;
         }
         let mut c: ::core::ffi::c_int = *ml_get_pos(&raw mut pos) as uint8_t as ::core::ffi::c_int;
         if c == '>' as ::core::ffi::c_int {
@@ -256,7 +256,7 @@ pub unsafe extern "C" fn current_tagblock(
     let mut do_include: bool = include;
     let mut save_p_ws: bool = p_ws.get() != 0;
     let mut retval: ::core::ffi::c_int = FAIL;
-    let mut is_inclusive: bool = true_0 != 0;
+    let mut is_inclusive: bool = true;
     p_ws.set(false_0);
     let mut old_pos: pos_T = (*curwin.get()).w_cursor;
     let mut old_end: pos_T = (*curwin.get()).w_cursor;
@@ -273,13 +273,13 @@ pub unsafe extern "C" fn current_tagblock(
                 break;
             }
         }
-        if in_html_tag(false_0 != 0) {
+        if in_html_tag(false) {
             while *get_cursor_pos_ptr() as ::core::ffi::c_int != '>' as ::core::ffi::c_int {
                 if inc_cursor() < 0 as ::core::ffi::c_int {
                     break;
                 }
             }
-        } else if in_html_tag(true_0 != 0) {
+        } else if in_html_tag(true) {
             while *get_cursor_pos_ptr() as ::core::ffi::c_int != '<' as ::core::ffi::c_int {
                 if dec_cursor() < 0 as ::core::ffi::c_int {
                     break;
@@ -299,10 +299,9 @@ pub unsafe extern "C" fn current_tagblock(
             let mut n: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while n < count {
                 if do_searchpair(
-                    b"<[^ \t>/!]\\+\\%(\\_s\\_[^>]\\{-}[^/]>\\|$\\|\\_s\\=>\\)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                    b"\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"</[^>]*>\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"<[^ \t>/!]\\+\\%(\\_s\\_[^>]\\{-}[^/]>\\|$\\|\\_s\\=>\\)".as_ptr(),
+                    c"".as_ptr(),
+                    c"</[^>]*>".as_ptr(),
                     BACKWARD as ::core::ffi::c_int,
                     ::core::ptr::null::<typval_T>(),
                     0 as ::core::ffi::c_int,
@@ -339,21 +338,14 @@ pub unsafe extern "C" fn current_tagblock(
                 snprintf(
                     spat,
                     spat_len,
-                    b"<%.*s\\>\\%%(\\_s\\_[^>]\\{-}\\_[^/]>\\|\\_s\\?>\\)\\c\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    c"<%.*s\\>\\%%(\\_s\\_[^>]\\{-}\\_[^/]>\\|\\_s\\?>\\)\\c".as_ptr(),
                     len,
                     p,
                 );
-                snprintf(
-                    epat,
-                    epat_len,
-                    b"</%.*s>\\c\0".as_ptr() as *const ::core::ffi::c_char,
-                    len,
-                    p,
-                );
+                snprintf(epat, epat_len, c"</%.*s>\\c".as_ptr(), len, p);
                 r = do_searchpair(
                     spat,
-                    b"\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"".as_ptr(),
                     epat,
                     FORWARD as ::core::ffi::c_int,
                     ::core::ptr::null::<typval_T>(),
@@ -384,7 +376,7 @@ pub unsafe extern "C" fn current_tagblock(
                             && !VIsual_active.get()
                             && (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int
                         {
-                            is_inclusive = false_0 != 0;
+                            is_inclusive = false;
                         } else if *c as ::core::ffi::c_int == '<' as ::core::ffi::c_int {
                             dec_cursor();
                         }
@@ -393,7 +385,7 @@ pub unsafe extern "C" fn current_tagblock(
                     if do_include {
                         break;
                     }
-                    let mut in_quotes: bool = false_0 != 0;
+                    let mut in_quotes: bool = false;
                     (*curwin.get()).w_cursor = start_pos;
                     while inc_cursor() >= 0 as ::core::ffi::c_int {
                         p = get_cursor_pos_ptr();
@@ -414,7 +406,7 @@ pub unsafe extern "C" fn current_tagblock(
                     {
                         break;
                     }
-                    do_include = true_0 != 0;
+                    do_include = true;
                     (*curwin.get()).w_cursor = old_start;
                     count = count_arg;
                 }
@@ -435,7 +427,7 @@ pub unsafe extern "C" fn current_tagblock(
             (*oap).motion_type = kMTCharWise;
             if lt(end_pos, start_pos) {
                 (*curwin.get()).w_cursor = start_pos;
-                (*oap).inclusive = false_0 != 0;
+                (*oap).inclusive = false;
             } else {
                 (*oap).inclusive = is_inclusive;
             }

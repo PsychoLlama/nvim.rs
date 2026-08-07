@@ -144,7 +144,7 @@ pub unsafe extern "C" fn bck_word(
             }
             inc_cursor();
         }
-        stop = false_0 != 0;
+        stop = false;
     }
     adjust_skipcol();
     return OK;
@@ -205,7 +205,7 @@ pub unsafe extern "C" fn end_word(
             }
             dec_cursor();
         }
-        stop = false_0 != 0;
+        stop = false;
     }
     return OK;
 }
@@ -268,10 +268,10 @@ unsafe extern "C" fn skip_chars(
             dec_cursor()
         }) == -1 as ::core::ffi::c_int
         {
-            return true_0 != 0;
+            return true;
         }
     }
-    return false_0 != 0;
+    return false;
 }
 unsafe extern "C" fn back_in_line() {
     let mut sclass: ::core::ffi::c_int = cls();
@@ -295,8 +295,8 @@ pub unsafe extern "C" fn current_word(
         col: 0,
         coladd: 0,
     };
-    let mut inclusive: bool = true_0 != 0;
-    let mut include_white: bool = false_0 != 0;
+    let mut inclusive: bool = true;
+    let mut include_white: bool = false;
     cls_bigword.set(bigword);
     clearpos(&mut start_pos);
     if VIsual_active.get() as ::core::ffi::c_int != 0
@@ -312,18 +312,18 @@ pub unsafe extern "C" fn current_word(
         start_pos = (*curwin.get()).w_cursor;
         if (cls() == 0 as ::core::ffi::c_int) as ::core::ffi::c_int == include as ::core::ffi::c_int
         {
-            if end_word(1 as ::core::ffi::c_int, bigword, true_0 != 0, true_0 != 0) == FAIL {
+            if end_word(1 as ::core::ffi::c_int, bigword, true, true) == FAIL {
                 return FAIL;
             }
         } else {
-            fwd_word(1 as ::core::ffi::c_int, bigword, true_0 != 0);
+            fwd_word(1 as ::core::ffi::c_int, bigword, true);
             if (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int {
                 decl(&raw mut (*curwin.get()).w_cursor);
             } else {
                 oneleft();
             }
             if include {
-                include_white = true_0 != 0;
+                include_white = true;
             }
         }
         if VIsual_active.get() {
@@ -336,7 +336,7 @@ pub unsafe extern "C" fn current_word(
         count -= 1;
     }
     while count > 0 as ::core::ffi::c_int {
-        inclusive = true_0 != 0;
+        inclusive = true;
         if VIsual_active.get() as ::core::ffi::c_int != 0
             && lt((*curwin.get()).w_cursor, VIsual.get()) as ::core::ffi::c_int != 0
         {
@@ -346,11 +346,11 @@ pub unsafe extern "C" fn current_word(
             if include as ::core::ffi::c_int
                 != (cls() != 0 as ::core::ffi::c_int) as ::core::ffi::c_int
             {
-                if bck_word(1 as ::core::ffi::c_int, bigword, true_0 != 0) == FAIL {
+                if bck_word(1 as ::core::ffi::c_int, bigword, true) == FAIL {
                     return FAIL;
                 }
             } else {
-                if bckend_word(1 as ::core::ffi::c_int, bigword, true_0 != 0) == FAIL {
+                if bckend_word(1 as ::core::ffi::c_int, bigword, true) == FAIL {
                     return FAIL;
                 }
                 incl(&raw mut (*curwin.get()).w_cursor);
@@ -362,15 +362,15 @@ pub unsafe extern "C" fn current_word(
             if include as ::core::ffi::c_int
                 != (cls() == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
             {
-                if fwd_word(1 as ::core::ffi::c_int, bigword, true_0 != 0) == FAIL
+                if fwd_word(1 as ::core::ffi::c_int, bigword, true) == FAIL
                     && count > 1 as ::core::ffi::c_int
                 {
                     return FAIL;
                 }
                 if oneleft() == FAIL {
-                    inclusive = false_0 != 0;
+                    inclusive = false;
                 }
-            } else if end_word(1 as ::core::ffi::c_int, bigword, true_0 != 0, true_0 != 0) == FAIL {
+            } else if end_word(1 as ::core::ffi::c_int, bigword, true, true) == FAIL {
                 return FAIL;
             }
         }
@@ -405,7 +405,7 @@ pub unsafe extern "C" fn current_word(
         }
         if VIsual_mode.get() == 'V' as ::core::ffi::c_int {
             VIsual_mode.set('v' as ::core::ffi::c_int);
-            redraw_cmdline.set(true_0 != 0);
+            redraw_cmdline.set(true);
         }
     } else {
         (*oap).inclusive = inclusive;

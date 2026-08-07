@@ -82,35 +82,35 @@ pub unsafe extern "C" fn current_quote(
     let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
     let mut col_end: ::core::ffi::c_int = 0;
     let mut col_start: ::core::ffi::c_int = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-    let mut inclusive: bool = false_0 != 0;
-    let mut vis_empty: bool = true_0 != 0;
-    let mut vis_bef_curs: bool = false_0 != 0;
-    let mut did_exclusive_adj: bool = false_0 != 0;
-    let mut inside_quotes: bool = false_0 != 0;
-    let mut selected_quote: bool = false_0 != 0;
+    let mut inclusive: bool = false;
+    let mut vis_empty: bool = true;
+    let mut vis_bef_curs: bool = false;
+    let mut did_exclusive_adj: bool = false;
+    let mut inside_quotes: bool = false;
+    let mut selected_quote: bool = false;
     let mut i: ::core::ffi::c_int = 0;
-    let mut restore_vis_bef: bool = false_0 != 0;
+    let mut restore_vis_bef: bool = false;
     if VIsual_active.get() {
         if (*VIsual.ptr()).lnum != (*curwin.get()).w_cursor.lnum {
-            return false_0 != 0;
+            return false;
         }
         vis_bef_curs = lt(VIsual.get(), (*curwin.get()).w_cursor);
         vis_empty = equalpos(VIsual.get(), (*curwin.get()).w_cursor);
         if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
             if vis_bef_curs {
                 dec_cursor();
-                did_exclusive_adj = true_0 != 0;
+                did_exclusive_adj = true;
             } else if !vis_empty {
                 dec(VIsual.ptr());
-                did_exclusive_adj = true_0 != 0;
+                did_exclusive_adj = true;
             }
             vis_empty = equalpos(VIsual.get(), (*curwin.get()).w_cursor);
             if !vis_bef_curs && !vis_empty {
                 let mut t: pos_T = (*curwin.get()).w_cursor;
                 (*curwin.get()).w_cursor = VIsual.get();
                 VIsual.set(t);
-                vis_bef_curs = true_0 != 0;
-                restore_vis_bef = true_0 != 0;
+                vis_bef_curs = true;
+                restore_vis_bef = true;
             }
         }
     }
@@ -153,7 +153,7 @@ pub unsafe extern "C" fn current_quote(
             if *line.offset(c2rust_fresh7 as isize) as uint8_t as ::core::ffi::c_int != quotechar {
                 continue;
             }
-            selected_quote = true_0 != 0;
+            selected_quote = true;
             break;
         }
     }
@@ -330,7 +330,7 @@ pub unsafe extern "C" fn current_quote(
             || !vis_empty && inside_quotes as ::core::ffi::c_int != 0)
             && inc_cursor() == 2 as ::core::ffi::c_int
         {
-            inclusive = true_0 != 0;
+            inclusive = true;
         }
         if VIsual_active.get() {
             if vis_empty as ::core::ffi::c_int != 0 || vis_bef_curs as ::core::ffi::c_int != 0 {
@@ -358,12 +358,12 @@ pub unsafe extern "C" fn current_quote(
             }
             if VIsual_mode.get() == 'V' as ::core::ffi::c_int {
                 VIsual_mode.set('v' as ::core::ffi::c_int);
-                redraw_cmdline.set(true_0 != 0);
+                redraw_cmdline.set(true);
             }
         } else {
             (*oap).inclusive = inclusive;
         }
-        return true_0 != 0;
+        return true;
     }
     if VIsual_active.get() as ::core::ffi::c_int != 0
         && *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
@@ -377,5 +377,5 @@ pub unsafe extern "C" fn current_quote(
             VIsual.set(t_0);
         }
     }
-    return false_0 != 0;
+    return false;
 }

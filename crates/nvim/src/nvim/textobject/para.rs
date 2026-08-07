@@ -35,13 +35,13 @@ pub unsafe extern "C" fn findpar(
         if c2rust_fresh1 == 0 {
             break;
         }
-        let mut did_skip: bool = false_0 != 0;
-        first = true_0 != 0;
+        let mut did_skip: bool = false;
+        first = true;
         loop {
             if *ml_get(curr) as ::core::ffi::c_int != NUL {
-                did_skip = true_0 != 0;
+                did_skip = true;
             }
-            fold_skipped = false_0 != 0;
+            fold_skipped = false;
             if first as ::core::ffi::c_int != 0
                 && hasFolding(curwin.get(), curr, &raw mut fold_first, &raw mut fold_last)
                     as ::core::ffi::c_int
@@ -52,7 +52,7 @@ pub unsafe extern "C" fn findpar(
                 } else {
                     fold_first
                 }) + dir as linenr_T;
-                fold_skipped = true_0 != 0;
+                fold_skipped = true;
             }
             if !first
                 && did_skip as ::core::ffi::c_int != 0
@@ -66,12 +66,12 @@ pub unsafe extern "C" fn findpar(
             curr = (curr as ::core::ffi::c_int + dir) as linenr_T;
             if curr < 1 as linenr_T || curr > (*curbuf.get()).b_ml.ml_line_count {
                 if count != 0 {
-                    return false_0 != 0;
+                    return false;
                 }
                 curr = (curr as ::core::ffi::c_int - dir) as linenr_T;
                 break;
             } else {
-                first = false_0 != 0;
+                first = false;
             }
         }
     }
@@ -92,12 +92,12 @@ pub unsafe extern "C" fn findpar(
             (*curwin.get()).w_cursor.col -= 1;
             (*curwin.get()).w_cursor.col -=
                 utf_head_off(line, line.offset((*curwin.get()).w_cursor.col as isize));
-            *pincl = true_0 != 0;
+            *pincl = true;
         }
     } else {
         (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
     }
-    return true_0 != 0;
+    return true;
 }
 unsafe extern "C" fn inmacro(
     mut opt: *mut ::core::ffi::c_char,
@@ -144,7 +144,7 @@ pub unsafe extern "C" fn startPS(
         || *s as ::core::ffi::c_int == '\u{c}' as ::core::ffi::c_int
         || both as ::core::ffi::c_int != 0 && *s as ::core::ffi::c_int == '}' as ::core::ffi::c_int
     {
-        return true_0 != 0;
+        return true;
     }
     if *s as ::core::ffi::c_int == '.' as ::core::ffi::c_int
         && (inmacro(p_sections.get(), s.offset(1 as ::core::ffi::c_int as isize))
@@ -155,9 +155,9 @@ pub unsafe extern "C" fn startPS(
                     as ::core::ffi::c_int
                     != 0)
     {
-        return true_0 != 0;
+        return true;
     }
-    return false_0 != 0;
+    return false;
 }
 pub unsafe extern "C" fn current_par(
     mut oap: *mut oparg_T,
