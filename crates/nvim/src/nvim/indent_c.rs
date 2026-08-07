@@ -47,8 +47,8 @@ use crate::src::nvim::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    EvalFuncData, buf_T, colnr_T, int64_t, intptr_t, linenr_T, lpos_T, oparg_T, pos_T, size_t,
-    typval_T, uint8_t, varnumber_T,
+    EvalFuncData, buf_T, colnr_T, int64_t, linenr_T, lpos_T, oparg_T, pos_T, size_t, typval_T,
+    uint8_t, varnumber_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
