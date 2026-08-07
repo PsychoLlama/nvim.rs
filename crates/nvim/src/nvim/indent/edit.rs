@@ -259,7 +259,7 @@ pub unsafe extern "C" fn ins_try_si(mut c: ::core::ffi::c_int) {
                 (*curwin.get()).w_cursor = old_pos;
             }
             if temp {
-                shift_line(true, false, 1 as ::core::ffi::c_int, 1);
+                shift_line(true, false, 1 as ::core::ffi::c_int, true);
             }
         }
     }
@@ -323,7 +323,7 @@ pub unsafe extern "C" fn change_indent(
             type_0 == INDENT_DEC as ::core::ffi::c_int,
             round != 0,
             1 as ::core::ffi::c_int,
-            call_changed_bytes as ::core::ffi::c_int,
+            call_changed_bytes,
         );
         State.set(save_State);
     }

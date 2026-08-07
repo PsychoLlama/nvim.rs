@@ -600,7 +600,7 @@
     "crates/nvim/src/nvim/ops/optype.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/ops/pending.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/ops/replace.rs": {"unsafe": 3},
-    "crates/nvim/src/nvim/ops/shift.rs": {"unsafe": 7},
+    "crates/nvim/src/nvim/ops/shift.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/option.rs": {"unsafe": 13},
     "crates/nvim/src/nvim/option/check.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/option/context.rs": {"unsafe": 11},
