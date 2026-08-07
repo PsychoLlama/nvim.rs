@@ -205,7 +205,7 @@ pub(crate) fn infinity_str(
 }
 
 /// The scratch buffer `vim_vsnprintf_typval` renders one conversion into.
-pub const TMP_LEN: c_int = 350;
+const TMP_LEN: c_int = 350;
 
 /// `vsnprintf` into a `StringBuilder`, growing it to fit.
 ///

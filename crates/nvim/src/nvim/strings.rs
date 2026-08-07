@@ -26,14 +26,10 @@ pub use self::charindex::*;
 pub use self::escape::*;
 pub use self::eval::*;
 pub use self::printf::*;
-// Transpiled preamble the children still read through `use super::*`; each
-// goes as the child that spells it is rewritten.
-pub const NULL: *mut c_void = ptr::null_mut::<c_void>();
-pub const OK: c_int = 1;
+/// `FAIL`, as every transpiled module spells it. The whole tree carries a
+/// copy next to the code that reads one; consolidating them is a family of
+/// its own, not this slice's.
 pub const FAIL: c_int = 0;
-pub const NUL: c_int = 0;
-pub const true_0: c_int = 1;
-pub const false_0: c_int = 0;
 
 /// Was this optional builtin argument given?
 ///
