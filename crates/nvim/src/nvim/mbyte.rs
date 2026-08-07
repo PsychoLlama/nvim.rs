@@ -1,6 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::src::nvim::ascii::ascii_iswhite;
 use crate::src::nvim::charset::{char2cells, ptr2cells, vim_isprintc, vim_iswordc_tab};
 use crate::src::nvim::cursor::get_cursor_pos_ptr;
 use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_all_later};
@@ -18,7 +18,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::mark::mark_mb_adjustpos;
 use crate::src::nvim::memline::ml_get_buf;
-use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
+use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::src::nvim::message::{emsg, msg, semsg};
 use crate::src::nvim::r#move::changed_window_setting_all;
 use crate::src::nvim::options::{kOptCmpFlagInternal, kOptCmpFlagKeepascii};
@@ -26,7 +26,7 @@ use crate::src::nvim::optionstr::check_chars_options;
 use crate::src::nvim::os::env::os_getenv_noalloc;
 use crate::src::nvim::os::libc::{
     __ctype_b_loc, __errno_location, gettext, iconv, iconv_close, iconv_open, memcmp, memmove,
-    setlocale, snprintf, strchr, strcmp, strcpy, strlen, strncasecmp, strncmp, tolower, toupper,
+    setlocale, snprintf, strchr, strcmp, strcpy, strlen, strncasecmp, tolower, toupper,
 };
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::strings::vim_strchr;
