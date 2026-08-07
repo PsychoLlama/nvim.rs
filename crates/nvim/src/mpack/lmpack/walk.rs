@@ -376,11 +376,8 @@ unsafe fn pack_table(state: *mut lua_State, packer: *mut Packer, node: *mut mpac
 /// Run the ext handler registered for this table's metatable, if there is
 /// one; answer whether it fired.
 ///
-/// Stack in `[table, metatable]`. On a hit, out `[ext string]`.
-///
-/// On a miss this pops only the handler it looked up, leaving the handler
-/// *table* behind for the caller's `if has_meta` pop to take instead of the
-/// metatable — which is upstream's, and is one pop short. See O-B15-11.
+/// Stack in `[table, metatable]`. On a hit, out `[ext string]`; on a miss,
+/// unchanged — which takes **two** pops, not upstream's one. See O-B15-11.
 ///
 /// # Safety
 /// `packer` must be live with a table and its metatable on top.
@@ -390,7 +387,10 @@ unsafe fn pack_ext(state: *mut lua_State, packer: *mut Packer, node: *mut mpack_
         lua_pushvalue(state, -2); // [table, meta, handlers, meta]
         lua_gettable(state, -2); // [table, meta, handlers, handler?]
         if lua_type(state, -1) != LUA_TFUNCTION {
-            lua_pop(state, 1);
+            // The handler table has to go as well: the caller's `if has_meta`
+            // pop is for the metatable, and taking that off the top instead
+            // leaves the metatable where the table should be.
+            lua_pop(state, 2); // [table, meta]
             return false;
         }
 
