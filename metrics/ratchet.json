@@ -597,7 +597,7 @@
     "crates/nvim/src/nvim/ops/external.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/ops/insert.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/ops/join.rs": {"unsafe": 2},
-    "crates/nvim/src/nvim/ops/optype.rs": {"unsafe": 5},
+    "crates/nvim/src/nvim/ops/optype.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/ops/pending.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/ops/replace.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/ops/shift.rs": {"unsafe": 7},

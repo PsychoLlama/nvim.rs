@@ -390,7 +390,7 @@ pub unsafe extern "C" fn do_pending_operator(
                     {
                         (*oap).inclusive = false_0 != 0;
                         if *p_sel.get() as ::core::ffi::c_int != 'o' as ::core::ffi::c_int
-                            && op_on_lines((*oap).op_type) == 0
+                            && !op_on_lines((*oap).op_type)
                             && (*oap).end.lnum < (*curbuf.get()).b_ml.ml_line_count
                         {
                             (*oap).end.lnum += 1;

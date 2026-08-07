@@ -201,7 +201,7 @@ pub(crate) unsafe fn nv_operator(cap: *mut cmdarg_T) {
     unsafe {
         let op_type = get_op_type((*cap).cmdchar, (*cap).nchar);
         // A prompt buffer only lets its own last line be changed.
-        if bt_prompt(curbuf.get()) && op_is_change(op_type) != 0 && !prompt_curpos_editable() {
+        if bt_prompt(curbuf.get()) && op_is_change(op_type) && !prompt_curpos_editable() {
             clearopbeep((*cap).oap);
             return;
         }

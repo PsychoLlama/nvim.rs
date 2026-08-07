@@ -32,7 +32,7 @@ use crate::src::nvim::indent::{
     use_indentexpr_for_lisp,
 };
 use crate::src::nvim::indent_c::get_c_indent;
-use crate::src::nvim::keycodes::{Ctrl_A, Ctrl_V, Ctrl_X, KE_COMMAND, KE_LUA};
+use crate::src::nvim::keycodes::{Ctrl_V, KE_COMMAND, KE_LUA};
 use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::main::{
     IObuff, Insstart, KeyTyped, State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect,
@@ -54,7 +54,7 @@ use crate::src::nvim::memline::{
     ml_get_pos, ml_get_pos_len, ml_replace, ml_replace_len,
 };
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz};
-use crate::src::nvim::message::{emsg, internal_error, msg, msg_keep, msg_start, msgmore, smsg};
+use crate::src::nvim::message::{emsg, msg, msg_keep, msg_start, msgmore, smsg};
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::r#move::validate_virtcol;
 use crate::src::nvim::normal::{
@@ -83,11 +83,11 @@ use crate::src::nvim::types::{
     CMOD_LOCKMARKS, Callback, Callback_data as C2Rust_Unnamed_5, CharsizeArg, CharsizeKind,
     ExtmarkOp, MotionType, OP_APPEND, OP_CHANGE, OP_COLON, OP_DELETE, OP_FILTER, OP_FOLD,
     OP_FOLDCLOSE, OP_FOLDCLOSEREC, OP_FOLDDEL, OP_FOLDDELREC, OP_FOLDOPEN, OP_FOLDOPENREC,
-    OP_FORMAT, OP_FUNCTION, OP_INDENT, OP_INSERT, OP_JOIN, OP_LOWER, OP_LSHIFT, OP_NOP, OP_NR_ADD,
-    OP_NR_SUB, OP_REPLACE, OP_ROT13, OP_RSHIFT, OP_TILDE, OP_UPPER, OP_YANK, OptInt, StrCharInfo,
-    TriState, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, bcount_t, block_def, buf_T, cmdarg_T, colnr_T,
-    dict_T, ht_stack_T, int32_t, int64_t, kNone, linenr_T, list_stack_T, oparg_T, optset_T, pos_T,
-    size_t, ssize_t, typval_T, typval_vval_union, uint8_t, uvarnumber_T, varnumber_T, yankreg_T,
+    OP_FORMAT, OP_FUNCTION, OP_INDENT, OP_INSERT, OP_JOIN, OP_LOWER, OP_LSHIFT, OP_NOP, OP_NR_SUB,
+    OP_REPLACE, OP_ROT13, OP_RSHIFT, OP_UPPER, OP_YANK, OptInt, StrCharInfo, TriState, VAR_STRING,
+    VAR_UNKNOWN, VAR_UNLOCKED, bcount_t, block_def, buf_T, cmdarg_T, colnr_T, dict_T, ht_stack_T,
+    int32_t, int64_t, kNone, linenr_T, list_stack_T, oparg_T, optset_T, pos_T, size_t, ssize_t,
+    typval_T, typval_vval_union, uint8_t, uvarnumber_T, varnumber_T, yankreg_T,
 };
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::undo::{u_clearline, u_save, u_save_cursor};
