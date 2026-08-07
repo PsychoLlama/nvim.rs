@@ -19,6 +19,7 @@
 
 use core::ffi::{CStr, c_char, c_int, c_long};
 
+#[cfg(not(miri))]
 use crate::src::nvim::os::libc::__ctype_b_loc;
 use crate::src::nvim::types::{
     mmbuffer_t, mmfile_t, xdemitcb_t, xdemitconf_t, xdl_emit_hunk_consume_func_t, xpparam_t,
@@ -27,14 +28,26 @@ use crate::src::xdiff::xdiffi::diff;
 use crate::src::xdiff::xtypes::{Aborted, EmitConf, Params, XdResult};
 
 /// glibc's `_ISspace` bit in the `__ctype_b_loc` table.
+#[cfg(not(miri))]
 const IS_SPACE: u16 = 8192;
 
 /// `XDL_ISSPACE`: `isspace((unsigned char) c)`, locale and all.
 ///
 /// Safe to call: the table `__ctype_b_loc` returns is 384 entries wide and
 /// indexed `-128 ..= 255`, so every `u8` is in range.
+///
+/// Under Miri it is the `"C"` locale's answer spelled out — Miri cannot call
+/// a foreign function, and the lane runs with no locale set anyway, so this
+/// *is* what libc would say there.
 pub fn is_space(byte: u8) -> bool {
-    unsafe { *(*__ctype_b_loc()).offset(byte as isize) & IS_SPACE != 0 }
+    #[cfg(miri)]
+    {
+        matches!(byte, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r')
+    }
+    #[cfg(not(miri))]
+    unsafe {
+        *(*__ctype_b_loc()).offset(byte as isize) & IS_SPACE != 0
+    }
 }
 
 /// The `mmfile_t`'s bytes.
