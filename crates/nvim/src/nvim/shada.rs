@@ -71,8 +71,10 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::regexp::regtilde;
+use crate::src::nvim::register::op_global_reg_iter;
 use crate::src::nvim::register::op_reg_get;
 use crate::src::nvim::register::op_reg_index;
+use crate::src::nvim::register::op_reg_set;
 use crate::src::nvim::search::{
     get_search_pattern, get_substitute_pattern, search_was_last_used, set_last_used_pattern,
     set_search_pattern, set_substitute_pattern,
@@ -108,15 +110,6 @@ mod read;
 pub use self::read::*;
 mod write;
 pub(crate) use self::write::*;
-unsafe extern "C" {
-    fn op_global_reg_iter(
-        iter: *const ::core::ffi::c_void,
-        name: *mut ::core::ffi::c_char,
-        reg: *mut yankreg_T,
-        is_unnamed: *mut bool,
-    ) -> *const ::core::ffi::c_void;
-    fn op_reg_set(name: ::core::ffi::c_char, reg: yankreg_T, is_unnamed: bool) -> bool;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const UV_ENOENT: C2Rust_Unnamed = -2;
 pub const UV_ELOOP: C2Rust_Unnamed = -40;

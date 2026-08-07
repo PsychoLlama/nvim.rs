@@ -144,11 +144,7 @@ pub unsafe fn op_reg_iter(
 ///
 /// # Safety
 /// `name`, `reg` and `is_unnamed` must be writable.
-//
-// Still exported: `shada.rs` declares it in an `extern "C"` block, which the
-// de-export commit replaces with a plain import.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn op_global_reg_iter(
+pub unsafe fn op_global_reg_iter(
     iter: *const c_void,
     name: *mut c_char,
     reg: *mut yankreg_T,
@@ -163,10 +159,7 @@ pub unsafe extern "C" fn op_global_reg_iter(
 ///
 /// # Safety
 /// `reg` must own its `y_array` and additional data; the store takes them.
-//
-// Still exported: see `op_global_reg_iter`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn op_reg_set(name: c_char, reg: yankreg_T, is_unnamed: bool) -> bool {
+pub unsafe fn op_reg_set(name: c_char, reg: yankreg_T, is_unnamed: bool) -> bool {
     unsafe {
         let i = op_reg_index(c_int::from(name));
         if i == -1 {

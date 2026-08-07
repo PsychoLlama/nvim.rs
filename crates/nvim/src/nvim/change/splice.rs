@@ -465,8 +465,7 @@ pub unsafe fn inserted_bytes(lnum: linenr_T, start_col: colnr_T, old_col: c_int,
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn appended_lines_buf(buf: *mut buf_T, lnum: linenr_T, count: linenr_T) {
+pub unsafe fn appended_lines_buf(buf: *mut buf_T, lnum: linenr_T, count: linenr_T) {
     unsafe {
         changed_lines(buf, lnum + 1, 0, lnum + 1, count, true);
     }
@@ -499,8 +498,7 @@ pub unsafe fn appended_lines_mark(lnum: linenr_T, count: c_int) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn deleted_lines_buf(buf: *mut buf_T, lnum: linenr_T, count: linenr_T) {
+pub unsafe fn deleted_lines_buf(buf: *mut buf_T, lnum: linenr_T, count: linenr_T) {
     unsafe {
         changed_lines(buf, lnum, 0, lnum + count, -count, true);
     }
@@ -603,8 +601,7 @@ pub unsafe fn changed_lines_redraw_buf(
 ///
 /// # Safety
 /// `buf` must be a live buffer. May trigger autocommands that reload it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn changed_lines(
+pub unsafe fn changed_lines(
     buf: *mut buf_T,
     lnum: linenr_T,
     col: colnr_T,
