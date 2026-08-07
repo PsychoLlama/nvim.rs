@@ -78,16 +78,16 @@ pub(crate) unsafe fn nv_addsub(cap: *mut cmdarg_T) {
         if prompt_refuses(cap) {
             return;
         }
-        if !VIsual_active.get() && (*(*cap).oap).op_type == OP_NOP as c_int {
+        if !VIsual_active.get() && (*(*cap).oap).op_type == OP_NOP {
             // Not an operator: run it here and then put the operator back.
             prep_redo_cmd(cap);
             (*(*cap).oap).op_type = if (*cap).cmdchar == Ctrl_A {
-                OP_NR_ADD as c_int
+                OP_NR_ADD
             } else {
-                OP_NR_SUB as c_int
+                OP_NR_SUB
             };
             op_addsub((*cap).oap, (*cap).count1 as linenr_T, (*cap).arg != 0);
-            (*(*cap).oap).op_type = OP_NOP as c_int;
+            (*(*cap).oap).op_type = OP_NOP;
         } else if VIsual_active.get() {
             nv_operator(cap);
         } else {
@@ -494,7 +494,7 @@ pub(crate) unsafe fn n_opencmd(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_tilde(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if p_to.get() == 0 && !VIsual_active.get() && (*(*cap).oap).op_type != OP_TILDE as c_int {
+        if p_to.get() == 0 && !VIsual_active.get() && (*(*cap).oap).op_type != OP_TILDE {
             if prompt_refuses(cap) {
                 return;
             }
@@ -539,7 +539,7 @@ pub(crate) unsafe fn nv_edit(cap: *mut cmdarg_T) {
             return;
         }
         if ((*cap).cmdchar == 'a' as c_int || (*cap).cmdchar == 'i' as c_int)
-            && ((*(*cap).oap).op_type != OP_NOP as c_int || VIsual_active.get())
+            && ((*(*cap).oap).op_type != OP_NOP || VIsual_active.get())
         {
             nv_object(cap);
             return;
@@ -671,9 +671,9 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut cmdarg_T, fix_indent: bool) {
     unsafe {
         let win = curwin.get();
         let save_fen = (*win).w_onebuf_opt.wo_fen;
-        if (*(*cap).oap).op_type != OP_NOP as c_int {
+        if (*(*cap).oap).op_type != OP_NOP {
             // `dp` is not "delete, then put": it is the diff command.
-            if (*(*cap).oap).op_type == OP_DELETE as c_int && (*cap).cmdchar == 'p' as c_int {
+            if (*(*cap).oap).op_type == OP_DELETE && (*cap).cmdchar == 'p' as c_int {
                 clearop((*cap).oap);
                 debug_assert!((*cap).opcount >= 0);
                 nv_diffgetput(true, (*cap).opcount as size_t);
@@ -814,7 +814,7 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut cmdarg_T, fix_indent: bool) {
 pub(crate) unsafe fn nv_open(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if (*(*cap).oap).op_type == OP_DELETE as c_int && (*cap).cmdchar == 'o' as c_int {
+        if (*(*cap).oap).op_type == OP_DELETE && (*cap).cmdchar == 'o' as c_int {
             // `do` is `:diffget`, not "delete, then open".
             clearop((*cap).oap);
             debug_assert!((*cap).opcount >= 0);

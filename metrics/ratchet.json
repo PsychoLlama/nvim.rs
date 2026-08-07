@@ -565,7 +565,7 @@
     "crates/nvim/src/nvim/message/redir.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/message/scrollback.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/message_fmt.rs": {"unsafe": 3},
-    "crates/nvim/src/nvim/mouse.rs": {"lines": 2221, "no_mangle": 1, "unsafe": 30},
+    "crates/nvim/src/nvim/mouse.rs": {"lines": 2218, "no_mangle": 1, "unsafe": 30},
     "crates/nvim/src/nvim/move.rs": {"lines": 2830, "no_mangle": 5, "unsafe": 57},
     "crates/nvim/src/nvim/msgpack_rpc/channel.rs": {"unsafe": 26},
     "crates/nvim/src/nvim/msgpack_rpc/channel/envelope.rs": {"unsafe": 7},

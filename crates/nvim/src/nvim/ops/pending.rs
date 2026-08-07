@@ -52,7 +52,7 @@ pub unsafe extern "C" fn do_pending_operator(
         let mut old_cursor: pos_T = (*curwin.get()).w_cursor;
         if (finish_op.get() as ::core::ffi::c_int != 0
             || VIsual_active.get() as ::core::ffi::c_int != 0)
-            && (*oap).op_type != OP_NOP as ::core::ffi::c_int
+            && (*oap).op_type != OP_NOP
         {
             let mut empty_region_error: bool = false;
             let mut restart_edit_save: ::core::ffi::c_int = 0;
@@ -80,23 +80,22 @@ pub unsafe extern "C" fn do_pending_operator(
                 VIsual_select.set(false_0 != 0);
                 VIsual_reselect.set(false_0);
             }
-            if (redo_yank as ::core::ffi::c_int != 0
-                || (*oap).op_type != OP_YANK as ::core::ffi::c_int)
+            if (redo_yank as ::core::ffi::c_int != 0 || (*oap).op_type != OP_YANK)
                 && (!VIsual_active.get()
                     || (*oap).motion_force != 0
                     || (is_ex_cmdchar(cap) as ::core::ffi::c_int != 0
                         || (*cap).cmdchar
                             == -(253 as ::core::ffi::c_int
                                 + ((KE_LUA as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)))
-                        && (*oap).op_type != OP_COLON as ::core::ffi::c_int)
+                        && (*oap).op_type != OP_COLON)
                 && (*cap).cmdchar != 'D' as ::core::ffi::c_int
-                && (*oap).op_type != OP_FOLD as ::core::ffi::c_int
-                && (*oap).op_type != OP_FOLDOPEN as ::core::ffi::c_int
-                && (*oap).op_type != OP_FOLDOPENREC as ::core::ffi::c_int
-                && (*oap).op_type != OP_FOLDCLOSE as ::core::ffi::c_int
-                && (*oap).op_type != OP_FOLDCLOSEREC as ::core::ffi::c_int
-                && (*oap).op_type != OP_FOLDDEL as ::core::ffi::c_int
-                && (*oap).op_type != OP_FOLDDELREC as ::core::ffi::c_int
+                && (*oap).op_type != OP_FOLD
+                && (*oap).op_type != OP_FOLDOPEN
+                && (*oap).op_type != OP_FOLDOPENREC
+                && (*oap).op_type != OP_FOLDCLOSE
+                && (*oap).op_type != OP_FOLDCLOSEREC
+                && (*oap).op_type != OP_FOLDDEL
+                && (*oap).op_type != OP_FOLDDELREC
             {
                 prep_redo(
                     (*oap).regname,
@@ -187,7 +186,7 @@ pub unsafe extern "C" fn do_pending_operator(
                 }
                 if VIsual_select.get() as ::core::ffi::c_int != 0
                     && VIsual_mode.get() == 'V' as ::core::ffi::c_int
-                    && (*(*cap).oap).op_type != OP_DELETE as ::core::ffi::c_int
+                    && (*(*cap).oap).op_type != OP_DELETE
                 {
                     if lt(VIsual.get(), (*curwin.get()).w_cursor) {
                         (*VIsual.ptr()).col = 0 as ::core::ffi::c_int as colnr_T;
@@ -301,16 +300,15 @@ pub unsafe extern "C" fn do_pending_operator(
                     }
                     resel_VIsual_line_count.set((*oap).line_count);
                 }
-                if (redo_yank as ::core::ffi::c_int != 0
-                    || (*oap).op_type != OP_YANK as ::core::ffi::c_int)
-                    && (*oap).op_type != OP_COLON as ::core::ffi::c_int
-                    && (*oap).op_type != OP_FOLD as ::core::ffi::c_int
-                    && (*oap).op_type != OP_FOLDOPEN as ::core::ffi::c_int
-                    && (*oap).op_type != OP_FOLDOPENREC as ::core::ffi::c_int
-                    && (*oap).op_type != OP_FOLDCLOSE as ::core::ffi::c_int
-                    && (*oap).op_type != OP_FOLDCLOSEREC as ::core::ffi::c_int
-                    && (*oap).op_type != OP_FOLDDEL as ::core::ffi::c_int
-                    && (*oap).op_type != OP_FOLDDELREC as ::core::ffi::c_int
+                if (redo_yank as ::core::ffi::c_int != 0 || (*oap).op_type != OP_YANK)
+                    && (*oap).op_type != OP_COLON
+                    && (*oap).op_type != OP_FOLD
+                    && (*oap).op_type != OP_FOLDOPEN
+                    && (*oap).op_type != OP_FOLDOPENREC
+                    && (*oap).op_type != OP_FOLDCLOSE
+                    && (*oap).op_type != OP_FOLDCLOSEREC
+                    && (*oap).op_type != OP_FOLDDEL
+                    && (*oap).op_type != OP_FOLDDELREC
                     && (*oap).motion_force == NUL
                 {
                     if (*cap).cmdchar == 'g' as ::core::ffi::c_int
@@ -334,12 +332,11 @@ pub unsafe extern "C" fn do_pending_operator(
                         let mut opchar: ::core::ffi::c_int = get_op_char((*oap).op_type);
                         let mut extra_opchar: ::core::ffi::c_int =
                             get_extra_op_char((*oap).op_type);
-                        let mut nchar: ::core::ffi::c_int =
-                            if (*oap).op_type == OP_REPLACE as ::core::ffi::c_int {
-                                (*cap).nchar
-                            } else {
-                                NUL
-                            };
+                        let mut nchar: ::core::ffi::c_int = if (*oap).op_type == OP_REPLACE {
+                            (*cap).nchar
+                        } else {
+                            NUL
+                        };
                         if nchar == REPLACE_CR_NCHAR as ::core::ffi::c_int {
                             nchar = CAR;
                         } else if nchar == REPLACE_NL_NCHAR as ::core::ffi::c_int {
@@ -409,10 +406,10 @@ pub unsafe extern "C" fn do_pending_operator(
                     setmouse();
                     mouse_dragging.set(0 as ::core::ffi::c_int);
                     may_clear_cmdline();
-                    if ((*oap).op_type == OP_YANK as ::core::ffi::c_int
-                        || (*oap).op_type == OP_COLON as ::core::ffi::c_int
-                        || (*oap).op_type == OP_FUNCTION as ::core::ffi::c_int
-                        || (*oap).op_type == OP_FILTER as ::core::ffi::c_int)
+                    if ((*oap).op_type == OP_YANK
+                        || (*oap).op_type == OP_COLON
+                        || (*oap).op_type == OP_FUNCTION
+                        || (*oap).op_type == OP_FILTER)
                         && (*oap).motion_force == NUL
                     {
                         restore_lbr(lbr_saved != 0);
@@ -430,8 +427,7 @@ pub unsafe extern "C" fn do_pending_operator(
             (*oap).empty = (*oap).motion_type as ::core::ffi::c_int
                 != kMTLineWise as ::core::ffi::c_int
                 && (!(*oap).inclusive
-                    || (*oap).op_type == OP_YANK as ::core::ffi::c_int
-                        && gchar_pos(&raw mut (*oap).end) == NUL)
+                    || (*oap).op_type == OP_YANK && gchar_pos(&raw mut (*oap).end) == NUL)
                 && equalpos((*oap).start, (*oap).end) as ::core::ffi::c_int != 0
                 && !(virtual_op.get() as ::core::ffi::c_int != 0
                     && (*oap).start.coladd != (*oap).end.coladd);
@@ -440,7 +436,7 @@ pub unsafe extern "C" fn do_pending_operator(
             if (*oap).is_VIsual as ::core::ffi::c_int != 0
                 && ((*oap).empty as ::core::ffi::c_int != 0
                     || (*curbuf.get()).b_p_ma == 0
-                    || (*oap).op_type == OP_FOLD as ::core::ffi::c_int)
+                    || (*oap).op_type == OP_FOLD)
             {
                 restore_lbr(lbr_saved != 0);
                 redraw_curbuf_later(UPD_INVERTED);
@@ -496,7 +492,7 @@ pub unsafe extern "C" fn do_pending_operator(
                         } else {
                             do_join(
                                 (*oap).line_count as size_t,
-                                (*oap).op_type == OP_JOIN as ::core::ffi::c_int,
+                                (*oap).op_type == OP_JOIN,
                                 true_0 != 0,
                                 true_0 != 0,
                                 true_0 != 0,
@@ -656,11 +652,9 @@ pub unsafe extern "C" fn do_pending_operator(
                         opFoldRange(
                             (*oap).start,
                             (*oap).end,
-                            ((*oap).op_type == OP_FOLDOPEN as ::core::ffi::c_int
-                                || (*oap).op_type == OP_FOLDOPENREC as ::core::ffi::c_int)
+                            ((*oap).op_type == OP_FOLDOPEN || (*oap).op_type == OP_FOLDOPENREC)
                                 as ::core::ffi::c_int,
-                            ((*oap).op_type == OP_FOLDOPENREC as ::core::ffi::c_int
-                                || (*oap).op_type == OP_FOLDCLOSEREC as ::core::ffi::c_int)
+                            ((*oap).op_type == OP_FOLDOPENREC || (*oap).op_type == OP_FOLDCLOSEREC)
                                 as ::core::ffi::c_int,
                             (*oap).is_VIsual,
                         );
@@ -672,8 +666,7 @@ pub unsafe extern "C" fn do_pending_operator(
                             curwin.get(),
                             (*oap).start.lnum,
                             (*oap).end.lnum,
-                            ((*oap).op_type == OP_FOLDDELREC as ::core::ffi::c_int)
-                                as ::core::ffi::c_int,
+                            ((*oap).op_type == OP_FOLDDELREC) as ::core::ffi::c_int,
                             (*oap).is_VIsual,
                         );
                         break 's_1511;
@@ -702,9 +695,7 @@ pub unsafe extern "C" fn do_pending_operator(
                         break 's_1511;
                     }
                 }
-                if (*oap).op_type == OP_INDENT as ::core::ffi::c_int
-                    && *get_equalprg() as ::core::ffi::c_int == NUL
-                {
+                if (*oap).op_type == OP_INDENT && *get_equalprg() as ::core::ffi::c_int == NUL {
                     if (*curbuf.get()).b_p_lisp != 0 {
                         if use_indentexpr_for_lisp() {
                             op_reindent(
@@ -742,9 +733,9 @@ pub unsafe extern "C" fn do_pending_operator(
                 if p_sol.get() == 0
                     && (*oap).motion_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int
                     && !(*oap).end_adjusted
-                    && ((*oap).op_type == OP_LSHIFT as ::core::ffi::c_int
-                        || (*oap).op_type == OP_RSHIFT as ::core::ffi::c_int
-                        || (*oap).op_type == OP_DELETE as ::core::ffi::c_int)
+                    && ((*oap).op_type == OP_LSHIFT
+                        || (*oap).op_type == OP_RSHIFT
+                        || (*oap).op_type == OP_DELETE)
                 {
                     reset_lbr();
                     (*curwin.get()).w_curswant = old_col as colnr_T;

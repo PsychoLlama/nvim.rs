@@ -98,7 +98,7 @@ pub(crate) unsafe fn nv_z_get_count(cap: *mut cmdarg_T, nchar_arg: *mut c_int) -
                 break;
             }
         }
-        (*(*cap).oap).op_type = OP_NOP as c_int;
+        (*(*cap).oap).op_type = OP_NOP;
         false
     }
 }
@@ -268,7 +268,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                     (*cap).nchar = 'f' as c_int;
                     nv_operator(cap);
                     (*win).w_onebuf_opt.wo_fen = true_0;
-                    if nchar == 'F' as c_int && (*(*cap).oap).op_type == OP_FOLD as c_int {
+                    if nchar == 'F' as c_int && (*(*cap).oap).op_type == OP_FOLD {
                         nv_operator(cap);
                         finish_op.set(true);
                     }

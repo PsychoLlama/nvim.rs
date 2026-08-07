@@ -58,7 +58,7 @@ pub(crate) unsafe fn nv_search(cap: *mut cmdarg_T) {
         let oap = (*cap).oap;
         let save_cursor = (*curwin.get()).w_cursor;
         // `g?` is rot13; `?` after it is the operator, not a search.
-        if (*cap).cmdchar == '?' as c_int && (*oap).op_type == OP_ROT13 as c_int {
+        if (*cap).cmdchar == '?' as c_int && (*oap).op_type == OP_ROT13 {
             (*cap).cmdchar = 'g' as c_int;
             (*cap).nchar = '?' as c_int;
             nv_operator(cap);
@@ -170,7 +170,7 @@ pub(crate) unsafe fn normal_search(
                 (*oap).motion_type = kMTLineWise;
             }
             (*curwin.get()).w_cursor.coladd = 0;
-            if (*oap).op_type == OP_NOP as c_int
+            if (*oap).op_type == OP_NOP
                 && fdo_flags.get() & kOptFdoFlagSearch as c_int as c_uint != 0
                 && KeyTyped.get()
             {
@@ -244,7 +244,7 @@ fn view_flag() -> MarkMove {
 unsafe fn may_open_fold(cap: *mut cmdarg_T, moved: bool, old_key_typed: bool) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if (*(*cap).oap).op_type == OP_NOP as c_int
+        if (*(*cap).oap).op_type == OP_NOP
             && moved
             && fdo_flags.get() & kOptFdoFlagMark as c_int as c_uint != 0
             && old_key_typed
@@ -259,7 +259,7 @@ pub(crate) unsafe fn nv_gomark(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         // A mark used as an operator's motion must not restore the view.
-        let mut flags = if (*(*cap).oap).op_type != OP_NOP as c_int {
+        let mut flags = if (*(*cap).oap).op_type != OP_NOP {
             0
         } else {
             view_flag()

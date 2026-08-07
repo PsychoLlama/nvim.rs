@@ -327,13 +327,13 @@ pub(crate) unsafe fn nv_brackets(cap: *mut cmdarg_T) {
                 (*cap).arg,
                 (*cap).count1,
                 flag,
-                (*(*cap).oap).op_type != OP_NOP as c_int
+                (*(*cap).oap).op_type != OP_NOP
                     && (*cap).arg == FORWARD as c_int
                     && flag == '{' as c_int,
             ) {
                 clearopbeep((*cap).oap);
             } else {
-                if (*(*cap).oap).op_type == OP_NOP as c_int {
+                if (*(*cap).oap).op_type == OP_NOP {
                     beginline(BL_WHITE as c_int | BL_FIX as c_int);
                 }
                 may_fold_open(cap, kOptFdoFlagBlock as c_uint);

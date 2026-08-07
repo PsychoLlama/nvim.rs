@@ -157,24 +157,24 @@ unsafe extern "C" fn swapchars(
 pub unsafe extern "C" fn swapchar(mut op_type: ::core::ffi::c_int, mut pos: *mut pos_T) -> bool {
     unsafe {
         let c: ::core::ffi::c_int = gchar_pos(pos);
-        if c >= 0x80 as ::core::ffi::c_int && op_type == OP_ROT13 as ::core::ffi::c_int {
+        if c >= 0x80 as ::core::ffi::c_int && op_type == OP_ROT13 {
             return false_0 != 0;
         }
         let mut nc: ::core::ffi::c_int = c;
         if mb_islower(c) {
-            if op_type == OP_ROT13 as ::core::ffi::c_int {
+            if op_type == OP_ROT13 {
                 nc = (c - 'a' as ::core::ffi::c_int + 13 as ::core::ffi::c_int)
                     % 26 as ::core::ffi::c_int
                     + 'a' as ::core::ffi::c_int;
-            } else if op_type != OP_LOWER as ::core::ffi::c_int {
+            } else if op_type != OP_LOWER {
                 nc = mb_toupper(c);
             }
         } else if mb_isupper(c) {
-            if op_type == OP_ROT13 as ::core::ffi::c_int {
+            if op_type == OP_ROT13 {
                 nc = (c - 'A' as ::core::ffi::c_int + 13 as ::core::ffi::c_int)
                     % 26 as ::core::ffi::c_int
                     + 'A' as ::core::ffi::c_int;
-            } else if op_type != OP_UPPER as ::core::ffi::c_int {
+            } else if op_type != OP_UPPER {
                 nc = mb_tolower(c);
             }
         }

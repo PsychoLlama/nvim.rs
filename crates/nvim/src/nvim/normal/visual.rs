@@ -350,7 +350,7 @@ pub(crate) unsafe fn nv_visual(cap: *mut cmdarg_T) {
         }
         // After an operator these are not commands but a forced motion kind:
         // `dv`, `dV`, `d CTRL-V`.
-        if (*(*cap).oap).op_type != OP_NOP as c_int {
+        if (*(*cap).oap).op_type != OP_NOP {
             (*(*cap).oap).motion_force = (*cap).cmdchar;
             motion_force.set((*(*cap).oap).motion_force);
             finish_op.set(false);

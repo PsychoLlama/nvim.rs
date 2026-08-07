@@ -340,7 +340,7 @@ unsafe fn block_oparg(
         oparg_T {
             motion_type: kMTBlockWise,
             inclusive: true,
-            op_type: OP_NOP as c_int,
+            op_type: OP_NOP,
             start: p1,
             end: p2,
             start_vcol,

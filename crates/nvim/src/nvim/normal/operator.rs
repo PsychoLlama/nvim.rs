@@ -92,7 +92,7 @@ pub(crate) unsafe fn nv_at(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_undo(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if (*(*cap).oap).op_type == OP_LOWER as c_int || VIsual_active.get() {
+        if (*(*cap).oap).op_type == OP_LOWER || VIsual_active.get() {
             as_g_operator(cap, b'u');
         } else {
             nv_kundo(cap);
@@ -116,7 +116,7 @@ pub(crate) unsafe fn nv_kundo(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_Undo(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if (*(*cap).oap).op_type == OP_UPPER as c_int || VIsual_active.get() {
+        if (*(*cap).oap).op_type == OP_UPPER || VIsual_active.get() {
             as_g_operator(cap, b'U');
             return;
         }
@@ -217,7 +217,7 @@ pub(crate) unsafe fn nv_operator(cap: *mut cmdarg_T) {
 
 /// Publish the pending operator as `v:operator`.
 pub(crate) fn set_op_var(optype: c_int) {
-    if optype == OP_NOP as c_int {
+    if optype == OP_NOP {
         // SAFETY: a null string with length 0 clears the variable.
         unsafe { set_vim_var_string(VV_OP, ptr::null(), 0) };
         return;
@@ -243,18 +243,18 @@ pub(crate) unsafe fn nv_lineop(cap: *mut cmdarg_T) {
     unsafe {
         (*(*cap).oap).motion_type = kMTLineWise;
         let oap = (*cap).oap;
-        if cursor_down((*cap).count1 - 1, (*oap).op_type == OP_NOP as c_int) == false_0 {
+        if cursor_down((*cap).count1 - 1, (*oap).op_type == OP_NOP) == false_0 {
             clearopbeep(oap);
-        } else if ((*oap).op_type == OP_DELETE as c_int
+        } else if ((*oap).op_type == OP_DELETE
             && (*oap).motion_force != 'v' as c_int
             && (*oap).motion_force != Ctrl_V)
-            || (*oap).op_type == OP_LSHIFT as c_int
-            || (*oap).op_type == OP_RSHIFT as c_int
+            || (*oap).op_type == OP_LSHIFT
+            || (*oap).op_type == OP_RSHIFT
         {
             // A delete or a shift leaves the cursor at the start of the line,
             // on the first non-blank only if 'startofline' says so.
             beginline(BL_SOL as c_int | BL_FIX as c_int);
-        } else if (*oap).op_type != OP_YANK as c_int {
+        } else if (*oap).op_type != OP_YANK {
             beginline(BL_WHITE as c_int | BL_FIX as c_int);
         }
     }
@@ -265,7 +265,7 @@ pub(crate) unsafe fn nv_lineop(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_record(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if (*(*cap).oap).op_type == OP_FORMAT as c_int {
+        if (*(*cap).oap).op_type == OP_FORMAT {
             as_g_operator(cap, b'q');
             return;
         }

@@ -174,19 +174,19 @@ pub unsafe extern "C" fn get_op_type(
     unsafe {
         let mut i: ::core::ffi::c_int = 0;
         if char1 == 'r' as ::core::ffi::c_int {
-            return OP_REPLACE as ::core::ffi::c_int;
+            return OP_REPLACE;
         }
         if char1 == '~' as ::core::ffi::c_int {
-            return OP_TILDE as ::core::ffi::c_int;
+            return OP_TILDE;
         }
         if char1 == 'g' as ::core::ffi::c_int && char2 == Ctrl_A {
-            return OP_NR_ADD as ::core::ffi::c_int;
+            return OP_NR_ADD;
         }
         if char1 == 'g' as ::core::ffi::c_int && char2 == Ctrl_X {
-            return OP_NR_SUB as ::core::ffi::c_int;
+            return OP_NR_SUB;
         }
         if char1 == 'z' as ::core::ffi::c_int && char2 == 'y' as ::core::ffi::c_int {
-            return OP_YANK as ::core::ffi::c_int;
+            return OP_YANK;
         }
         i = 0 as ::core::ffi::c_int;
         while !((*opchars.ptr())[i as usize][0 as ::core::ffi::c_int as usize]

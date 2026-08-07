@@ -50,12 +50,12 @@ pub unsafe extern "C" fn op_insert(mut oap: *mut oparg_T, mut count1: ::core::ff
                 }
                 (*curwin.get()).w_onebuf_opt.wo_ve_flags =
                     kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint;
-                coladvance_force(if (*oap).op_type == OP_APPEND as ::core::ffi::c_int {
+                coladvance_force(if (*oap).op_type == OP_APPEND {
                     (*oap).end_vcol + 1 as colnr_T
                 } else {
                     getviscol()
                 });
-                if (*oap).op_type == OP_APPEND as ::core::ffi::c_int {
+                if (*oap).op_type == OP_APPEND {
                     (*curwin.get()).w_cursor.col -= 1;
                 }
                 (*curwin.get()).w_onebuf_opt.wo_ve_flags = old_ve_flags;
@@ -64,11 +64,11 @@ pub unsafe extern "C" fn op_insert(mut oap: *mut oparg_T, mut count1: ::core::ff
             ind_pre_col = getwhitecols_curline() as colnr_T;
             ind_pre_vcol = get_indent();
             pre_textlen = (ml_get_len((*oap).start.lnum) - bd.textcol) as ::core::ffi::c_int;
-            if (*oap).op_type == OP_APPEND as ::core::ffi::c_int {
+            if (*oap).op_type == OP_APPEND {
                 pre_textlen -= bd.textlen;
             }
         }
-        if (*oap).op_type == OP_APPEND as ::core::ffi::c_int {
+        if (*oap).op_type == OP_APPEND {
             if (*oap).motion_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int
                 && (*curwin.get()).w_cursor.coladd == 0 as ::core::ffi::c_int
             {
@@ -146,7 +146,7 @@ pub unsafe extern "C" fn op_insert(mut oap: *mut oparg_T, mut count1: ::core::ff
                     (*curbuf.get()).b_op_start_orig.col,
                     (*curbuf.get()).b_op_start_orig.coladd,
                 );
-                if (*oap).op_type == OP_INSERT as ::core::ffi::c_int
+                if (*oap).op_type == OP_INSERT
                     && (*oap).start.col + (*oap).start.coladd
                         != (*curbuf.get()).b_op_start_orig.col
                             + (*curbuf.get()).b_op_start_orig.coladd
@@ -154,7 +154,7 @@ pub unsafe extern "C" fn op_insert(mut oap: *mut oparg_T, mut count1: ::core::ff
                     (*oap).start.col = (*curbuf.get()).b_op_start_orig.col;
                     pre_textlen -= (t as colnr_T - (*oap).start_vcol) as ::core::ffi::c_int;
                     (*oap).start_vcol = t as colnr_T;
-                } else if (*oap).op_type == OP_APPEND as ::core::ffi::c_int
+                } else if (*oap).op_type == OP_APPEND
                     && (*oap).start.col + (*oap).start.coladd
                         >= (*curbuf.get()).b_op_start_orig.col
                             + (*curbuf.get()).b_op_start_orig.coladd
@@ -163,7 +163,7 @@ pub unsafe extern "C" fn op_insert(mut oap: *mut oparg_T, mut count1: ::core::ff
                     pre_textlen += bd.textlen;
                     pre_textlen -= (t as colnr_T - (*oap).start_vcol) as ::core::ffi::c_int;
                     (*oap).start_vcol = t as colnr_T;
-                    (*oap).op_type = OP_INSERT as ::core::ffi::c_int;
+                    (*oap).op_type = OP_INSERT;
                 }
             }
             if did_indent as ::core::ffi::c_int != 0
@@ -184,7 +184,7 @@ pub unsafe extern "C" fn op_insert(mut oap: *mut oparg_T, mut count1: ::core::ff
                 (*oap).end_vcol -= ind_post_vcol - ind_pre_vcol;
             }
             if bd.is_MAX == 0 || bd2.textlen < bd.textlen {
-                if (*oap).op_type == OP_APPEND as ::core::ffi::c_int {
+                if (*oap).op_type == OP_APPEND {
                     pre_textlen += bd2.textlen - bd.textlen;
                     if bd2.endspaces != 0 {
                         bd2.textlen -= 1;
@@ -197,7 +197,7 @@ pub unsafe extern "C" fn op_insert(mut oap: *mut oparg_T, mut count1: ::core::ff
             let mut len: colnr_T = ml_get_len((*oap).start.lnum);
             let mut add: colnr_T = bd.textcol;
             let mut offset: colnr_T = 0 as colnr_T;
-            if (*oap).op_type == OP_APPEND as ::core::ffi::c_int {
+            if (*oap).op_type == OP_APPEND {
                 add += bd.textlen;
                 if bd.is_MAX != 0
                     && start_insert.lnum == (*Insstart.ptr()).lnum
@@ -226,7 +226,7 @@ pub unsafe extern "C" fn op_insert(mut oap: *mut oparg_T, mut count1: ::core::ff
                         oap,
                         ins_text,
                         ins_len as size_t,
-                        (*oap).op_type == OP_INSERT as ::core::ffi::c_int,
+                        (*oap).op_type == OP_INSERT,
                         &raw mut bd,
                     );
                 }

@@ -133,7 +133,7 @@ pub(crate) fn op_pending() -> bool {
             && !finish_op.get()
             && (*oap).prev_opcount == 0
             && (*oap).prev_count0 == 0
-            && (*oap).op_type == OP_NOP as c_int
+            && (*oap).op_type == OP_NOP
             && (*oap).regname == NUL)
     }
 }
@@ -168,7 +168,7 @@ pub(crate) unsafe fn normal_prepare(s: *mut NormalState) {
 
         // 'finish_op' drives the cursor shape, so a change to it is a redraw.
         let was_finishing = finish_op.get();
-        finish_op.set((*s).oa.op_type != OP_NOP as c_int);
+        finish_op.set((*s).oa.op_type != OP_NOP);
         if finish_op.get() != was_finishing {
             ui_cursor_shape();
         }
@@ -239,7 +239,7 @@ pub(crate) unsafe fn normal_need_additional_char(s: *mut NormalState) -> bool {
     // SAFETY: `s` is the caller's live state and `s.idx` is a valid row.
     unsafe {
         let flags = (*nv_cmds.ptr())[(*s).idx as usize].cmd_flags as c_int;
-        let pending_op = (*s).oa.op_type != OP_NOP as c_int;
+        let pending_op = (*s).oa.op_type != OP_NOP;
         let cmdchar = (*s).ca.cmdchar;
         flags & NV_NCH != 0
             && (flags & NV_NCH_NOP == NV_NCH_NOP && !pending_op
@@ -283,7 +283,7 @@ pub(crate) unsafe fn normal_need_redraw_mode_message(s: *mut NormalState) -> boo
             && emsg_silent.get() == 0
             && !in_assert_fails.get()
             && !did_wait_return.get()
-            && (*s).oa.op_type == OP_NOP as c_int
+            && (*s).oa.op_type == OP_NOP
     }
 }
 

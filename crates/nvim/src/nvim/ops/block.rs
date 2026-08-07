@@ -246,7 +246,7 @@ pub unsafe extern "C" fn block_prep(
         if (*bdp).start_vcol < (*oap).start_vcol {
             (*bdp).end_vcol = (*bdp).start_vcol;
             (*bdp).is_short = true_0;
-            if !is_del || (*oap).op_type == OP_APPEND as ::core::ffi::c_int {
+            if !is_del || (*oap).op_type == OP_APPEND {
                 (*bdp).endspaces = (*oap).end_vcol as ::core::ffi::c_int
                     - (*oap).start_vcol as ::core::ffi::c_int
                     + 1 as ::core::ffi::c_int;
@@ -261,10 +261,10 @@ pub unsafe extern "C" fn block_prep(
             (*bdp).end_vcol = (*bdp).start_vcol;
             if (*bdp).end_vcol > (*oap).end_vcol {
                 (*bdp).is_oneChar = true_0;
-                if (*oap).op_type == OP_INSERT as ::core::ffi::c_int {
+                if (*oap).op_type == OP_INSERT {
                     (*bdp).endspaces =
                         (*bdp).start_char_vcols as ::core::ffi::c_int - (*bdp).startspaces;
-                } else if (*oap).op_type == OP_APPEND as ::core::ffi::c_int {
+                } else if (*oap).op_type == OP_APPEND {
                     (*bdp).startspaces += (*oap).end_vcol as ::core::ffi::c_int
                         - (*oap).start_vcol as ::core::ffi::c_int
                         + 1 as ::core::ffi::c_int;
@@ -274,9 +274,7 @@ pub unsafe extern "C" fn block_prep(
                     (*bdp).startspaces = (*oap).end_vcol as ::core::ffi::c_int
                         - (*oap).start_vcol as ::core::ffi::c_int
                         + 1 as ::core::ffi::c_int;
-                    if is_del as ::core::ffi::c_int != 0
-                        && (*oap).op_type != OP_LSHIFT as ::core::ffi::c_int
-                    {
+                    if is_del as ::core::ffi::c_int != 0 && (*oap).op_type != OP_LSHIFT {
                         (*bdp).startspaces = ((*bdp).start_char_vcols
                             - ((*bdp).start_vcol - (*oap).start_vcol))
                             as ::core::ffi::c_int;
@@ -299,14 +297,10 @@ pub unsafe extern "C" fn block_prep(
                 (*bdp).end_vcol = vcol as colnr_T;
                 pend = ci.ptr;
                 if (*bdp).end_vcol <= (*oap).end_vcol
-                    && (!is_del
-                        || (*oap).op_type == OP_APPEND as ::core::ffi::c_int
-                        || (*oap).op_type == OP_REPLACE as ::core::ffi::c_int)
+                    && (!is_del || (*oap).op_type == OP_APPEND || (*oap).op_type == OP_REPLACE)
                 {
                     (*bdp).is_short = true_0;
-                    if (*oap).op_type == OP_APPEND as ::core::ffi::c_int
-                        || virtual_op.get() as ::core::ffi::c_int != 0
-                    {
+                    if (*oap).op_type == OP_APPEND || virtual_op.get() as ::core::ffi::c_int != 0 {
                         (*bdp).endspaces = (*oap).end_vcol as ::core::ffi::c_int
                             - (*bdp).end_vcol as ::core::ffi::c_int
                             + (*oap).inclusive as ::core::ffi::c_int;

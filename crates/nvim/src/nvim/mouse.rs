@@ -529,7 +529,7 @@ pub unsafe extern "C" fn do_mouse(
     };
     if which_button == MOUSE_MIDDLE as ::core::ffi::c_int {
         if State.get() == MODE_NORMAL {
-            if !oap.is_null() && (*oap).op_type != OP_NOP as ::core::ffi::c_int {
+            if !oap.is_null() && (*oap).op_type != OP_NOP {
                 clearopbeep(oap);
                 return false_0 != 0;
             }
@@ -740,7 +740,7 @@ pub unsafe extern "C" fn do_mouse(
             jump_flags |= MOUSE_FOCUS as ::core::ffi::c_int;
         }
     }
-    if !is_drag && !oap.is_null() && (*oap).op_type != OP_NOP as ::core::ffi::c_int {
+    if !is_drag && !oap.is_null() && (*oap).op_type != OP_NOP {
         got_click.set(false_0 != 0);
         (*oap).motion_type = kMTCharWise;
     }
@@ -849,10 +849,7 @@ pub unsafe extern "C" fn do_mouse(
     } else if in_winbar as ::core::ffi::c_int != 0 || in_statuscol as ::core::ffi::c_int != 0 {
         return false_0 != 0;
     }
-    if curwin.get() != old_curwin
-        && !oap.is_null()
-        && (*oap).op_type != OP_NOP as ::core::ffi::c_int
-    {
+    if curwin.get() != old_curwin && !oap.is_null() && (*oap).op_type != OP_NOP {
         clearop(oap);
     }
     if mod_mask.get() == 0 as ::core::ffi::c_int

@@ -471,7 +471,7 @@ pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
 
         // CTRL-W takes the count read so far as its own, then a second count
         // for the window command after it.
-        if (*s).c == Ctrl_W && !(*s).ctrl_w && (*s).oa.op_type == OP_NOP as c_int {
+        if (*s).c == Ctrl_W && !(*s).ctrl_w && (*s).oa.op_type == OP_NOP {
             (*s).ctrl_w = true;
             (*s).ca.opcount = (*s).ca.count0;
             (*s).ca.count0 = 0;
@@ -512,9 +512,8 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
                 (*s).old_mapped_len = typebuf_maplen();
             }
             if (*s).ca.cmdchar != K_IGNORE && (*s).ca.cmdchar != K_MOUSEMOVE {
-                did_visual_op = VIsual_active.get()
-                    && (*s).oa.op_type != OP_NOP as c_int
-                    && (*s).oa.op_type != OP_COLON as c_int;
+                did_visual_op =
+                    VIsual_active.get() && (*s).oa.op_type != OP_NOP && (*s).oa.op_type != OP_COLON;
                 do_pending_operator(&raw mut (*s).ca, (*s).old_col, false);
             }
             if normal_need_redraw_mode_message(s) {
@@ -527,7 +526,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
             set_reg_var(get_default_register_name());
         }
         let prev_finish_op = finish_op.get();
-        if (*s).oa.op_type == OP_NOP as c_int {
+        if (*s).oa.op_type == OP_NOP {
             finish_op.set(false);
             may_trigger_modechanged();
         }
@@ -539,8 +538,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
         {
             ui_cursor_shape();
         }
-        if (*s).oa.op_type == OP_NOP as c_int && (*s).oa.regname == 0 && (*s).ca.cmdchar != K_EVENT
-        {
+        if (*s).oa.op_type == OP_NOP && (*s).oa.regname == 0 && (*s).ca.cmdchar != K_EVENT {
             clear_showcmd();
         }
         checkpcmark();
@@ -560,7 +558,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
         // resumed; neither happens until the command is completely done.
         let want_insert =
             restart_edit.get() != 0 && !VIsual_active.get() && (*s).old_mapped_len == 0;
-        if (*s).oa.op_type == OP_NOP as c_int
+        if (*s).oa.op_type == OP_NOP
             && (want_insert || restart_VIsual_select.get() == 1)
             && (*s).ca.retval & CA_COMMAND_BUSY as c_int == 0
             && stuff_empty()
@@ -818,7 +816,7 @@ pub(crate) fn prep_redo_num2(
 pub(crate) unsafe fn checkclearop(oap: *mut oparg_T) -> bool {
     // SAFETY: `oap` is the caller's live operator.
     unsafe {
-        if (*oap).op_type == OP_NOP as c_int {
+        if (*oap).op_type == OP_NOP {
             return false;
         }
         clearopbeep(oap);
@@ -831,7 +829,7 @@ pub(crate) unsafe fn checkclearop(oap: *mut oparg_T) -> bool {
 pub(crate) unsafe fn checkclearopq(oap: *mut oparg_T) -> bool {
     // SAFETY: `oap` is the caller's live operator.
     unsafe {
-        if (*oap).op_type == OP_NOP as c_int && !VIsual_active.get() {
+        if (*oap).op_type == OP_NOP && !VIsual_active.get() {
             return false;
         }
         clearopbeep(oap);
@@ -843,7 +841,7 @@ pub(crate) unsafe fn checkclearopq(oap: *mut oparg_T) -> bool {
 pub(crate) unsafe fn clearop(oap: *mut oparg_T) {
     // SAFETY: `oap` is the caller's live operator.
     unsafe {
-        (*oap).op_type = OP_NOP as c_int;
+        (*oap).op_type = OP_NOP;
         (*oap).regname = 0;
         (*oap).motion_force = NUL;
         (*oap).use_reg_one = false;
@@ -885,10 +883,7 @@ pub(crate) unsafe fn read_command_char() -> c_int {
 pub(crate) unsafe fn may_fold_open(cap: *mut cmdarg_T, fdo_flag: c_uint) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
-        if fdo_flags.get() & fdo_flag != 0
-            && KeyTyped.get()
-            && (*(*cap).oap).op_type == OP_NOP as c_int
-        {
+        if fdo_flags.get() & fdo_flag != 0 && KeyTyped.get() && (*(*cap).oap).op_type == OP_NOP {
             foldOpenCursor();
         }
     }

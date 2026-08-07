@@ -276,7 +276,7 @@ pub(crate) unsafe fn nv_gd(oap: *mut oparg_T, nchar: c_int, thisblock: c_int) {
         }
         if fdo_flags.get() & kOptFdoFlagSearch as c_uint != 0
             && KeyTyped.get()
-            && (*oap).op_type == OP_NOP as c_int
+            && (*oap).op_type == OP_NOP
         {
             foldOpenCursor();
         }

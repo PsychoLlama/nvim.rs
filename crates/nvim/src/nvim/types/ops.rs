@@ -4,19 +4,17 @@
 // One definition per logical name; every module imports from here.
 
 /// Operator ids — upstream's anonymous enum in `ops.h`, whose order must
-/// match `opchars` in `ops.rs`.
+/// match `opchars` in `ops/optype.rs`.
 ///
-/// c2rust typed this from what the C compiler picked (`c_uint`), not from
-/// what the consumers read, so nearly every use site is `OP_X as c_int`.
-/// Retyping it is the job of the slice that deletes those casts; see the
-/// `CMOD_*` entry in the ratchet traps for why doing it here would be
-/// clippy *growth*.
+/// The only consumer is `oparg_T::op_type`, which is a `c_int`, so that is
+/// what these are. c2rust typed the enum from what the C compiler happened
+/// to pick (`c_uint`) rather than from what anything reads, and all 150 use
+/// sites in the tree then had to spell themselves `OP_X as c_int`.
 ///
 /// Two of upstream's thirty names never reached the transpiled tree because
-/// nothing referenced them by name: `ops.rs` spells `OP_JOIN_NS` and
-/// `OP_FORMAT2` as the bare numbers 14 and 26 in a `match`. They are
-/// declared here so the rewrite has them.
-pub type OpType = ::core::ffi::c_uint;
+/// nothing referenced them by name: `do_pending_operator`'s `match` spells
+/// `OP_JOIN_NS` and `OP_FORMAT2` as the bare numbers 14 and 26.
+pub type OpType = ::core::ffi::c_int;
 
 /// no pending operation
 pub const OP_NOP: OpType = 0;

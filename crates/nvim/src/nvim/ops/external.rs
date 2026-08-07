@@ -53,13 +53,13 @@ pub(crate) unsafe extern "C" fn op_colon(mut oap: *mut oparg_T) {
                 }
             }
         }
-        if (*oap).op_type != OP_COLON as ::core::ffi::c_int {
+        if (*oap).op_type != OP_COLON {
             stuffReadbuff(b"!\0".as_ptr() as *const ::core::ffi::c_char);
         }
-        if (*oap).op_type == OP_INDENT as ::core::ffi::c_int {
+        if (*oap).op_type == OP_INDENT {
             stuffReadbuff(get_equalprg());
             stuffReadbuff(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-        } else if (*oap).op_type == OP_FORMAT as ::core::ffi::c_int {
+        } else if (*oap).op_type == OP_FORMAT {
             if *(*curbuf.get()).b_p_fp as ::core::ffi::c_int != NUL {
                 stuffReadbuff((*curbuf.get()).b_p_fp);
             } else if *p_fp.get() as ::core::ffi::c_int != NUL {

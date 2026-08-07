@@ -84,7 +84,7 @@ pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
             return;
         }
         let oap = (*cap).oap;
-        if (*oap).op_type != OP_NOP as c_int {
+        if (*oap).op_type != OP_NOP {
             (*oap).motion_type = kMTCharWise;
             (*oap).inclusive = false;
         } else if (*cap).count0 != 0 && !is_cmdkey && !is_lua {
@@ -115,7 +115,7 @@ pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
                 ptr::null_mut(),
                 getline,
                 NULL,
-                if (*oap).op_type != OP_NOP as c_int {
+                if (*oap).op_type != OP_NOP {
                     DOCMD_KEEPLINE as c_int
                 } else {
                     0
@@ -125,7 +125,7 @@ pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
         msg_ext_set_trigger(c"".as_ptr());
         if !cmd_result {
             clearop(oap);
-        } else if (*oap).op_type != OP_NOP as c_int
+        } else if (*oap).op_type != OP_NOP
             && ((*oap).start.lnum > (*curbuf.get()).b_ml.ml_line_count
                 || (*oap).start.col > ml_get_len((*oap).start.lnum)
                 || did_emsg.get() != 0)
@@ -279,7 +279,7 @@ pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
     unsafe {
         // Nothing was pending, so the key had no work to do and is worth a
         // beep or a hint.
-        let no_reason = (*(*cap).oap).op_type == OP_NOP as c_int
+        let no_reason = (*(*cap).oap).op_type == OP_NOP
             && (*cap).opcount == 0
             && (*cap).count0 == 0
             && (*(*cap).oap).regname == 0;

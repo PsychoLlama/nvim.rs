@@ -55,7 +55,7 @@ pub unsafe extern "C" fn op_delete(mut oap: *mut oparg_T) -> ::core::ffi::c_int 
             && !(*oap).is_VIsual
             && (*oap).line_count > 1 as linenr_T
             && (*oap).motion_force == NUL
-            && (*oap).op_type == OP_DELETE as ::core::ffi::c_int
+            && (*oap).op_type == OP_DELETE
         {
             let mut ptr: *mut ::core::ffi::c_char =
                 ml_get((*oap).end.lnum).offset((*oap).end.col as isize);
@@ -71,7 +71,7 @@ pub unsafe extern "C" fn op_delete(mut oap: *mut oparg_T) -> ::core::ffi::c_int 
         }
         if (*oap).motion_type as ::core::ffi::c_int != kMTLineWise as ::core::ffi::c_int
             && (*oap).line_count == 1 as linenr_T
-            && (*oap).op_type == OP_DELETE as ::core::ffi::c_int
+            && (*oap).op_type == OP_DELETE
             && *ml_get((*oap).start.lnum) as ::core::ffi::c_int == NUL
         {
             if virtual_op.get() as u64 == 0 {
@@ -187,7 +187,7 @@ pub unsafe extern "C" fn op_delete(mut oap: *mut oparg_T) -> ::core::ffi::c_int 
                 (*oap).line_count = 0 as ::core::ffi::c_int as linenr_T;
             } else if (*oap).motion_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int
             {
-                if (*oap).op_type == OP_CHANGE as ::core::ffi::c_int {
+                if (*oap).op_type == OP_CHANGE {
                     if (*oap).line_count > 1 as linenr_T {
                         lnum = (*curwin.get()).w_cursor.lnum;
                         (*curwin.get()).w_cursor.lnum += 1;
@@ -255,7 +255,7 @@ pub unsafe extern "C" fn op_delete(mut oap: *mut oparg_T) -> ::core::ffi::c_int 
                         return FAIL;
                     }
                     if !vim_strchr(p_cpo.get(), CPO_DOLLAR).is_null()
-                        && (*oap).op_type == OP_CHANGE as ::core::ffi::c_int
+                        && (*oap).op_type == OP_CHANGE
                         && (*oap).end.lnum == (*curwin.get()).w_cursor.lnum
                         && !(*oap).is_VIsual
                     {
@@ -286,7 +286,7 @@ pub unsafe extern "C" fn op_delete(mut oap: *mut oparg_T) -> ::core::ffi::c_int 
                     del_bytes(
                         n_0,
                         virtual_op.get() as u64 == 0,
-                        (*oap).op_type == OP_DELETE as ::core::ffi::c_int && !(*oap).is_VIsual,
+                        (*oap).op_type == OP_DELETE && !(*oap).is_VIsual,
                     );
                 } else {
                     let mut curpos: pos_T = pos_T {
@@ -321,7 +321,7 @@ pub unsafe extern "C" fn op_delete(mut oap: *mut oparg_T) -> ::core::ffi::c_int 
                     del_bytes(
                         n_1,
                         virtual_op.get() as u64 == 0,
-                        (*oap).op_type == OP_DELETE as ::core::ffi::c_int && !(*oap).is_VIsual,
+                        (*oap).op_type == OP_DELETE && !(*oap).is_VIsual,
                     );
                     (*curwin.get()).w_cursor = curpos;
                     do_join(
@@ -345,7 +345,7 @@ pub unsafe extern "C" fn op_delete(mut oap: *mut oparg_T) -> ::core::ffi::c_int 
                         kExtmarkUndo,
                     );
                 }
-                if (*oap).op_type == OP_DELETE as ::core::ffi::c_int {
+                if (*oap).op_type == OP_DELETE {
                     auto_format(false_0 != 0, true_0 != 0);
                 }
             }

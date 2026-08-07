@@ -385,7 +385,7 @@ pub unsafe extern "C" fn do_addsub(
                             || firstdigit as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
                                 && firstdigit as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint)
                     {
-                        if op_type == OP_NR_SUB as ::core::ffi::c_int {
+                        if op_type == OP_NR_SUB {
                             if (if (firstdigit as uint8_t as ::core::ffi::c_int)
                                 < 'a' as ::core::ffi::c_int
                             {
@@ -508,7 +508,7 @@ pub unsafe extern "C" fn do_addsub(
                             negative = false_0 != 0;
                         }
                         let mut subtract: bool = false_0 != 0;
-                        if op_type == OP_NR_SUB as ::core::ffi::c_int {
+                        if op_type == OP_NR_SUB {
                             subtract = subtract as ::core::ffi::c_int ^ true_0 != 0;
                         }
                         if negative {

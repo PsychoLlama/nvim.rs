@@ -42,7 +42,7 @@ pub unsafe extern "C" fn op_shift(
                 shift_block(oap, amount);
             } else if first_char != '#' as ::core::ffi::c_int || !preprocs_left() {
                 shift_line(
-                    (*oap).op_type == OP_LSHIFT as ::core::ffi::c_int,
+                    (*oap).op_type == OP_LSHIFT,
                     p_sr.get() != 0,
                     amount,
                     false_0,
@@ -62,12 +62,11 @@ pub unsafe extern "C" fn op_shift(
         }
         foldOpenCursor();
         if (*oap).line_count as OptInt > p_report.get() {
-            let mut op: *mut ::core::ffi::c_char =
-                (if (*oap).op_type == OP_RSHIFT as ::core::ffi::c_int {
-                    b">\0".as_ptr() as *const ::core::ffi::c_char
-                } else {
-                    b"<\0".as_ptr() as *const ::core::ffi::c_char
-                }) as *mut ::core::ffi::c_char;
+            let mut op: *mut ::core::ffi::c_char = (if (*oap).op_type == OP_RSHIFT {
+                b">\0".as_ptr() as *const ::core::ffi::c_char
+            } else {
+                b"<\0".as_ptr() as *const ::core::ffi::c_char
+            }) as *mut ::core::ffi::c_char;
             let mut msg_line_single: *mut ::core::ffi::c_char = ngettext(
                 b"%ld line %sed %d time\0".as_ptr() as *const ::core::ffi::c_char,
                 b"%ld line %sed %d times\0".as_ptr() as *const ::core::ffi::c_char,
@@ -278,7 +277,7 @@ pub unsafe extern "C" fn shift_line(
 
 unsafe extern "C" fn shift_block(mut oap: *mut oparg_T, mut amount: ::core::ffi::c_int) {
     unsafe {
-        let left: bool = (*oap).op_type == OP_LSHIFT as ::core::ffi::c_int;
+        let left: bool = (*oap).op_type == OP_LSHIFT;
         let oldstate: ::core::ffi::c_int = State.get();
         let mut newp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let oldcol: ::core::ffi::c_int = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;

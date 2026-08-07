@@ -289,7 +289,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
             (*win).w_cursor.lnum =
                 ((*win).w_topline + n as linenr_T).min((*curbuf.get()).b_ml.ml_line_count);
         }
-        if (*(*cap).oap).op_type == OP_NOP as c_int {
+        if (*(*cap).oap).op_type == OP_NOP {
             cursor_correct(win);
         }
         beginline(BL_SOL as c_int | BL_FIX as c_int);
@@ -341,7 +341,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
                 {
                     // A pending exclusive operator eats the line break by
                     // becoming inclusive instead of moving.
-                    if (*(*cap).oap).op_type != OP_NOP as c_int
+                    if (*(*cap).oap).op_type != OP_NOP
                         && !(*(*cap).oap).inclusive
                         && *ml_get((*win).w_cursor.lnum) as c_int != NUL
                     {
@@ -356,7 +356,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
                 } else {
                     // Only the *first* step failing is worth a beep; running
                     // out part-way through a count is not.
-                    if (*(*cap).oap).op_type == OP_NOP as c_int {
+                    if (*(*cap).oap).op_type == OP_NOP {
                         if n == (*cap).count1 {
                             beep_flush();
                         }
@@ -422,8 +422,7 @@ pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
                     // break must take the break with it, so put the cursor
                     // one past the last character and tell the caller not to
                     // pull it back.
-                    if ((*(*cap).oap).op_type == OP_DELETE as c_int
-                        || (*(*cap).oap).op_type == OP_CHANGE as c_int)
+                    if ((*(*cap).oap).op_type == OP_DELETE || (*(*cap).oap).op_type == OP_CHANGE)
                         && *ml_get((*win).w_cursor.lnum) as c_int != NUL
                     {
                         let cp = get_cursor_pos_ptr();
@@ -433,7 +432,7 @@ pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
                         (*cap).retval |= CA_NO_ADJ_OP_END as c_int;
                     }
                 } else {
-                    if (*(*cap).oap).op_type == OP_NOP as c_int && n == (*cap).count1 {
+                    if (*(*cap).oap).op_type == OP_NOP && n == (*cap).count1 {
                         beep_flush();
                     }
                     break;
@@ -457,11 +456,7 @@ pub(crate) unsafe fn nv_up(cap: *mut cmdarg_T) {
             return;
         }
         (*(*cap).oap).motion_type = kMTLineWise;
-        if cursor_up(
-            (*cap).count1 as linenr_T,
-            (*(*cap).oap).op_type == OP_NOP as c_int,
-        ) == false_0
-        {
+        if cursor_up((*cap).count1 as linenr_T, (*(*cap).oap).op_type == OP_NOP) == false_0 {
             clearopbeep((*cap).oap);
         } else if (*cap).arg != 0 {
             // `-` and `CTRL-P` land on the first non-blank; `k` does not.
@@ -501,7 +496,7 @@ pub(crate) unsafe fn nv_down(cap: *mut cmdarg_T) {
             }
         }
         (*(*cap).oap).motion_type = kMTLineWise;
-        if cursor_down((*cap).count1, (*(*cap).oap).op_type == OP_NOP as c_int) == false_0 {
+        if cursor_down((*cap).count1, (*(*cap).oap).op_type == OP_NOP) == false_0 {
             clearopbeep((*cap).oap);
         } else if (*cap).arg != 0 {
             // `+`, `<CR>` and `CTRL-N` land on the first non-blank; `j` does
@@ -534,13 +529,11 @@ pub(crate) unsafe fn nv_dollar(cap: *mut cmdarg_T) {
         (*(*cap).oap).inclusive = true;
         // Under 'virtualedit' an operator that starts past the end of the
         // line keeps the column it has rather than asking for the end again.
-        if !virtual_active(curwin.get())
-            || gchar_cursor() != NUL
-            || (*(*cap).oap).op_type == OP_NOP as c_int
+        if !virtual_active(curwin.get()) || gchar_cursor() != NUL || (*(*cap).oap).op_type == OP_NOP
         {
             (*curwin.get()).w_curswant = MAXCOL as colnr_T;
         }
-        if cursor_down((*cap).count1 - 1, (*(*cap).oap).op_type == OP_NOP as c_int) == false_0 {
+        if cursor_down((*cap).count1 - 1, (*(*cap).oap).op_type == OP_NOP) == false_0 {
             clearopbeep((*cap).oap);
         } else {
             may_fold_open(cap, kOptFdoFlagHor as c_uint);
@@ -579,7 +572,7 @@ pub(crate) unsafe fn nv_csearch(cap: *mut cmdarg_T) {
         if gchar_cursor() == TAB
             && virtual_active(curwin.get())
             && (*cap).arg == FORWARD as c_int
-            && (t_cmd || (*(*cap).oap).op_type != OP_NOP as c_int)
+            && (t_cmd || (*(*cap).oap).op_type != OP_NOP)
         {
             let mut scol: colnr_T = 0;
             let mut ecol: colnr_T = 0;
@@ -744,7 +737,7 @@ pub(crate) unsafe fn nv_wordcmd(cap: *mut cmdarg_T) {
         // `cw` on a non-blank is `ce`: it changes the word, not up to the next
         // one. 'cpoptions' with `_` extends that to trailing white space.
         let mut cw_on_word = false;
-        if !word_end && (*(*cap).oap).op_type == OP_CHANGE as c_int {
+        if !word_end && (*(*cap).oap).op_type == OP_CHANGE {
             let c = gchar_cursor();
             if c != NUL && !ascii_iswhite(c) {
                 if !vim_strchr(p_cpo.get(), CPO_CHANGEW).is_null() {
@@ -763,13 +756,13 @@ pub(crate) unsafe fn nv_wordcmd(cap: *mut cmdarg_T) {
             fwd_word(
                 (*cap).count1,
                 (*cap).arg != 0,
-                (*(*cap).oap).op_type != OP_NOP as c_int,
+                (*(*cap).oap).op_type != OP_NOP,
             )
         };
         if lt(startpos, (*curwin.get()).w_cursor) {
             adjust_cursor((*cap).oap);
         }
-        if moved == false_0 && (*(*cap).oap).op_type == OP_NOP as c_int {
+        if moved == false_0 && (*(*cap).oap).op_type == OP_NOP {
             clearopbeep((*cap).oap);
         } else {
             adjust_for_sel(cap);

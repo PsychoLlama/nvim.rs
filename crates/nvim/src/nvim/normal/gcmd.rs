@@ -128,7 +128,7 @@ pub(crate) unsafe fn nv_g_underscore_cmd(cap: *mut cmdarg_T) {
         (*(*cap).oap).motion_type = kMTCharWise;
         (*(*cap).oap).inclusive = true;
         (*win).w_curswant = MAXCOL as colnr_T;
-        if cursor_down((*cap).count1 - 1, (*(*cap).oap).op_type == OP_NOP as c_int) == false_0 {
+        if cursor_down((*cap).count1 - 1, (*(*cap).oap).op_type == OP_NOP) == false_0 {
             clearopbeep((*cap).oap);
             return;
         }
@@ -252,7 +252,7 @@ unsafe fn nv_g_screen_line(cap: *mut cmdarg_T, dir: c_int) {
         let oap = (*cap).oap;
         let moved = if (*curwin.get()).w_onebuf_opt.wo_wrap == 0 {
             (*oap).motion_type = kMTLineWise;
-            let stop_at_end = (*oap).op_type == OP_NOP as c_int;
+            let stop_at_end = (*oap).op_type == OP_NOP;
             if dir == FORWARD as c_int {
                 cursor_down((*cap).count1, stop_at_end) != 0
             } else {

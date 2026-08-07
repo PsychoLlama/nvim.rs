@@ -159,7 +159,7 @@ pub unsafe extern "C" fn cursor_pos_info(mut dict: *mut dict_T) {
                         empty_string_option.ptr() as *mut ::core::ffi::c_char;
                     oparg.is_VIsual = true_0 != 0;
                     oparg.motion_type = kMTBlockWise;
-                    oparg.op_type = OP_NOP as ::core::ffi::c_int;
+                    oparg.op_type = OP_NOP;
                     getvcols(
                         curwin.get(),
                         &raw mut min_pos,

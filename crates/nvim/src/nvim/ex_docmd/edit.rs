@@ -247,11 +247,11 @@ pub(crate) unsafe fn ex_operators(eap: *mut exarg_T) {
 
         match (*eap).cmdidx as c_int {
             c if c == CMD_delete as c_int => {
-                oa.op_type = OP_DELETE as c_int;
+                oa.op_type = OP_DELETE;
                 op_delete(&raw mut oa);
             }
             c if c == CMD_yank as c_int => {
-                oa.op_type = OP_YANK as c_int;
+                oa.op_type = OP_YANK;
                 op_yank(&raw mut oa, true);
             }
             _ => {
@@ -260,9 +260,9 @@ pub(crate) unsafe fn ex_operators(eap: *mut exarg_T) {
                     ^ (*curwin.get()).w_onebuf_opt.wo_rl
                     != 0
                 {
-                    OP_RSHIFT as c_int
+                    OP_RSHIFT
                 } else {
-                    OP_LSHIFT as c_int
+                    OP_LSHIFT
                 };
                 op_shift(&raw mut oa, false, (*eap).amount);
             }
