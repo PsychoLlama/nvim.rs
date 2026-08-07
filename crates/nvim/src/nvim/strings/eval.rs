@@ -227,7 +227,7 @@ pub unsafe extern "C" fn f_strlen(
 /// follows; without it each one counts on its own.
 unsafe fn strchar_common(argvars: *mut typval_T, rettv: *mut typval_T, skipcc: bool) {
     unsafe {
-        let next_char: unsafe extern "C" fn(*mut *const c_char) -> c_int = if skipcc {
+        let next_char: unsafe fn(*mut *const c_char) -> c_int = if skipcc {
             mb_ptr2char_adv
         } else {
             mb_cptr2char_adv

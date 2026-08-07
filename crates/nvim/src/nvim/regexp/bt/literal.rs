@@ -80,8 +80,7 @@ pub(crate) fn class_shorthand(flagp: &mut c_int, c: c_int, extra: c_int) -> *mut
 
     // `.` followed by a combining character is that grapheme, not the "any"
     // class — but only for the magic `.`; `\_.` stays the class.
-    // SAFETY: a pure function of the character `peekchr` decoded.
-    if c == magic(b'.') && unsafe { utf_iscomposing_legacy(peekchr()) } {
+    if c == magic(b'.') && utf_iscomposing_legacy(peekchr()) {
         return multibyte_node(flagp, getchr());
     }
 

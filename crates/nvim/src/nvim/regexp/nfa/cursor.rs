@@ -73,8 +73,7 @@ pub(crate) fn step_back(anchor: *mut c_char) {
 
 /// Is `c` a combining character?
 pub(crate) fn is_composing(c: c_int) -> bool {
-    // SAFETY: a pure test on a code point.
-    unsafe { utf_iscomposing_legacy(c) }
+    utf_iscomposing_legacy(c)
 }
 
 /// Move the cursor past the whole character it is on.

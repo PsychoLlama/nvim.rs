@@ -341,9 +341,8 @@ fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
     outtrans(&[dp.char1, dp.char2, b' '], 0);
     let mut buf = [0u8; 12];
     let mut len = 0;
-    // SAFETY: value check on the composing property; buf has room for the
-    // longest UTF-8 sequence plus the leading space.
-    if unsafe { utf_iscomposing_first(dp.result) } {
+    // buf has room for the longest UTF-8 sequence plus the leading space.
+    if utf_iscomposing_first(dp.result) {
         buf[0] = b' ';
         len = 1;
     }

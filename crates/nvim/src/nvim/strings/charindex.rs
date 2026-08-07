@@ -237,7 +237,7 @@ pub unsafe extern "C" fn f_strutf16len(
         }
         let countcc = given(&*argvars.add(1)) && tv_get_bool(argvars.add(1)) != 0;
 
-        let next_char: unsafe extern "C" fn(*mut *const c_char) -> c_int = if countcc {
+        let next_char: unsafe fn(*mut *const c_char) -> c_int = if countcc {
             mb_cptr2char_adv
         } else {
             mb_ptr2char_adv

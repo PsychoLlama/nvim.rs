@@ -61,7 +61,6 @@
     "crates/nvim/src/nvim/mbyte/convert.rs": 11,
     "crates/nvim/src/nvim/mbyte/encoding.rs": 19,
     "crates/nvim/src/nvim/mbyte/encoding/tables.rs": 122,
-    "crates/nvim/src/nvim/mbyte/utf8.rs": 1,
     "crates/nvim/src/nvim/mbyte/walk.rs": 12,
     "crates/nvim/src/nvim/memfile.rs": 1,
     "crates/nvim/src/nvim/memline.rs": 2,

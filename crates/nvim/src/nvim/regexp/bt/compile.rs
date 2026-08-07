@@ -71,10 +71,7 @@ pub(crate) fn regcomp_start(expr: *mut uint8_t, re_flags: c_int) {
 /// otherwise the multibyte character is just its bytes, and matching it
 /// byte-wise is faster.
 pub(crate) fn use_multibytecode(c: c_int) -> bool {
-    // SAFETY: both are pure functions of the code point.
-    unsafe {
-        utf_char2len(c) > 1 && (re_multi_type(peekchr()) != NOT_MULTI || utf_iscomposing_legacy(c))
-    }
+    utf_char2len(c) > 1 && (re_multi_type(peekchr()) != NOT_MULTI || utf_iscomposing_legacy(c))
 }
 
 /// Emit one byte of program.
