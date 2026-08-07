@@ -501,7 +501,7 @@
     "crates/nvim/src/nvim/mbyte.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/mbyte/case.rs": {"no_mangle": 1, "unsafe": 9},
     "crates/nvim/src/nvim/mbyte/cells.rs": {"unsafe": 17},
-    "crates/nvim/src/nvim/mbyte/class.rs": {"unsafe": 8},
+    "crates/nvim/src/nvim/mbyte/class.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/mbyte/convert.rs": {"no_mangle": 1, "unsafe": 7},
     "crates/nvim/src/nvim/mbyte/encoding.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/mbyte/linebreak.rs": {"unsafe": 3},

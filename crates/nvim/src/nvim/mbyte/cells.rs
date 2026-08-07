@@ -90,7 +90,7 @@ pub unsafe extern "C" fn utf_char2cells(mut c: ::core::ffi::c_int) -> ::core::ff
         if p_emoji.get() != 0
             && c >= 0x1f000 as ::core::ffi::c_int
             && !(*prop).ambiguous_width
-            && prop_is_emojilike(prop) as ::core::ffi::c_int != 0
+            && prop_is_emojilike(&*prop) as ::core::ffi::c_int != 0
         {
             return 2 as ::core::ffi::c_int;
         }
@@ -213,7 +213,7 @@ pub unsafe extern "C" fn utf_ambiguous_width(mut p: *const ::core::ffi::c_char) 
         if info.value >= 0x80 as int32_t {
             let mut prop: *const utf8proc_property_t =
                 utf8proc_get_property(info.value as utf8proc_int32_t);
-            if (*prop).ambiguous_width || prop_is_emojilike(prop) as ::core::ffi::c_int != 0 {
+            if (*prop).ambiguous_width || prop_is_emojilike(&*prop) as ::core::ffi::c_int != 0 {
                 return true_0 != 0;
             }
         }
