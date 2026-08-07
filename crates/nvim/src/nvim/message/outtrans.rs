@@ -9,6 +9,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::keycodes::{termcap_key, termcap_name};
+use crate::src::nvim::types::MB_MAXCHAR;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -44,10 +45,6 @@ pub unsafe fn msg_putchar_hl(c: c_int, hl_id: c_int) {
         msg_puts_hl(buf.as_ptr(), hl_id, false)
     }
 }
-
-/// The longest character `utf_char2bytes` writes, matching upstream's
-/// `MB_MAXCHAR`.
-const MB_MAXCHAR: usize = 6;
 
 /// Show a number in decimal.
 pub unsafe fn msg_outnum(n: c_int) {

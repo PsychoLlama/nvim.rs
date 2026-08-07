@@ -180,9 +180,9 @@ pub unsafe extern "C" fn f_iconv(
             &raw mut buf2 as *mut ::core::ffi::c_char,
         )
             as *mut ::core::ffi::c_char));
-        vimconv.vc_type = CONV_NONE as ::core::ffi::c_int;
+        vimconv.vc_type = CONV_NONE;
         convert_setup(&raw mut vimconv, from, to);
-        if vimconv.vc_type == CONV_NONE as ::core::ffi::c_int {
+        if vimconv.vc_type == CONV_NONE {
             (*rettv).vval.v_string = xstrdup(str);
         } else {
             (*rettv).vval.v_string = string_convert(
@@ -222,7 +222,7 @@ pub unsafe extern "C" fn convert_setup_ext(
     unsafe {
         let mut from_is_utf8: ::core::ffi::c_int = 0;
         let mut to_is_utf8: ::core::ffi::c_int = 0;
-        if (*vcp).vc_type == CONV_ICONV as ::core::ffi::c_int
+        if (*vcp).vc_type == CONV_ICONV
             && (*vcp).vc_fd
                 != ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                     -1 as ::core::ffi::c_int as usize,
@@ -231,7 +231,7 @@ pub unsafe extern "C" fn convert_setup_ext(
             iconv_close((*vcp).vc_fd);
         }
         *vcp = vimconv_T {
-            vc_type: CONV_NONE as ::core::ffi::c_int,
+            vc_type: CONV_NONE,
             vc_factor: 1 as ::core::ffi::c_int,
             vc_fd: ::core::ptr::null_mut::<::core::ffi::c_void>(),
             vc_fail: false_0 != 0,
@@ -247,25 +247,25 @@ pub unsafe extern "C" fn convert_setup_ext(
         let mut from_prop: ::core::ffi::c_int = enc_canon_props(from);
         let mut to_prop: ::core::ffi::c_int = enc_canon_props(to);
         if from_unicode_is_utf8 {
-            from_is_utf8 = from_prop & ENC_UNICODE as ::core::ffi::c_int;
+            from_is_utf8 = from_prop & ENC_UNICODE;
         } else {
-            from_is_utf8 = (from_prop == ENC_UNICODE as ::core::ffi::c_int) as ::core::ffi::c_int;
+            from_is_utf8 = (from_prop == ENC_UNICODE) as ::core::ffi::c_int;
         }
         if to_unicode_is_utf8 {
-            to_is_utf8 = to_prop & ENC_UNICODE as ::core::ffi::c_int;
+            to_is_utf8 = to_prop & ENC_UNICODE;
         } else {
-            to_is_utf8 = (to_prop == ENC_UNICODE as ::core::ffi::c_int) as ::core::ffi::c_int;
+            to_is_utf8 = (to_prop == ENC_UNICODE) as ::core::ffi::c_int;
         }
-        if from_prop & ENC_LATIN1 as ::core::ffi::c_int != 0 && to_is_utf8 != 0 {
-            (*vcp).vc_type = CONV_TO_UTF8 as ::core::ffi::c_int;
+        if from_prop & ENC_LATIN1 != 0 && to_is_utf8 != 0 {
+            (*vcp).vc_type = CONV_TO_UTF8;
             (*vcp).vc_factor = 2 as ::core::ffi::c_int;
-        } else if from_prop & ENC_LATIN9 as ::core::ffi::c_int != 0 && to_is_utf8 != 0 {
-            (*vcp).vc_type = CONV_9_TO_UTF8 as ::core::ffi::c_int;
+        } else if from_prop & ENC_LATIN9 != 0 && to_is_utf8 != 0 {
+            (*vcp).vc_type = CONV_9_TO_UTF8;
             (*vcp).vc_factor = 3 as ::core::ffi::c_int;
-        } else if from_is_utf8 != 0 && to_prop & ENC_LATIN1 as ::core::ffi::c_int != 0 {
-            (*vcp).vc_type = CONV_TO_LATIN1 as ::core::ffi::c_int;
-        } else if from_is_utf8 != 0 && to_prop & ENC_LATIN9 as ::core::ffi::c_int != 0 {
-            (*vcp).vc_type = CONV_TO_LATIN9 as ::core::ffi::c_int;
+        } else if from_is_utf8 != 0 && to_prop & ENC_LATIN1 != 0 {
+            (*vcp).vc_type = CONV_TO_LATIN1;
+        } else if from_is_utf8 != 0 && to_prop & ENC_LATIN9 != 0 {
+            (*vcp).vc_type = CONV_TO_LATIN9;
         } else {
             (*vcp).vc_fd = my_iconv_open(
                 (if to_is_utf8 != 0 {
@@ -284,11 +284,11 @@ pub unsafe extern "C" fn convert_setup_ext(
                     -1 as ::core::ffi::c_int as usize,
                 )
             {
-                (*vcp).vc_type = CONV_ICONV as ::core::ffi::c_int;
+                (*vcp).vc_type = CONV_ICONV;
                 (*vcp).vc_factor = 4 as ::core::ffi::c_int;
             }
         }
-        if (*vcp).vc_type == CONV_NONE as ::core::ffi::c_int {
+        if (*vcp).vc_type == CONV_NONE {
             return FAIL;
         }
         return OK;
@@ -428,7 +428,7 @@ pub unsafe extern "C" fn string_convert_ext(
                         }
                     } else {
                         c = utf_ptr2char(ptr.offset(i_1 as isize));
-                        if (*vcp).vc_type == CONV_TO_LATIN9 as ::core::ffi::c_int {
+                        if (*vcp).vc_type == CONV_TO_LATIN9 {
                             match c {
                                 8364 => {
                                     c = 0xa4 as ::core::ffi::c_int;

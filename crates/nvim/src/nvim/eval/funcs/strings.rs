@@ -69,7 +69,7 @@ const NUM_BUF: NumBuf = [0; 65];
 
 /// A conversion descriptor that has not been set up yet.
 const CONV_NONE_INIT: vimconv_T = vimconv_T {
-    vc_type: CONV_NONE as c_int,
+    vc_type: CONV_NONE,
     vc_factor: 0,
     vc_fd: ptr::null_mut(),
     vc_fail: false,
@@ -681,20 +681,20 @@ pub unsafe extern "C" fn f_strftime(
         let mut conv: vimconv_T = CONV_NONE_INIT;
         let enc = enc_locale();
         convert_setup(&raw mut conv, p_enc.get(), enc);
-        if conv.vc_type != CONV_NONE as c_int {
+        if conv.vc_type != CONV_NONE {
             p = string_convert(&raw mut conv, p, ptr::null_mut());
         }
         let mut out: [c_char; 256] = [0; 256];
         if p.is_null() || strftime(out.as_mut_ptr(), out.len(), p, &raw mut curtime) == 0 {
             out[0] = NUL as c_char;
         }
-        if conv.vc_type != CONV_NONE as c_int {
+        if conv.vc_type != CONV_NONE {
             xfree(p.cast::<c_void>());
         }
         // The reverse conversion reuses `conv`, so it must be set up again
         // in the other direction before the result is converted back.
         convert_setup(&raw mut conv, enc, p_enc.get());
-        rettv.vval.v_string = if conv.vc_type != CONV_NONE as c_int {
+        rettv.vval.v_string = if conv.vc_type != CONV_NONE {
             string_convert(&raw mut conv, out.as_mut_ptr(), ptr::null_mut())
         } else {
             xstrdup(out.as_mut_ptr())
@@ -727,7 +727,7 @@ pub unsafe extern "C" fn f_strptime(
         let mut conv: vimconv_T = CONV_NONE_INIT;
         let enc = enc_locale();
         convert_setup(&raw mut conv, p_enc.get(), enc);
-        if conv.vc_type != CONV_NONE as c_int {
+        if conv.vc_type != CONV_NONE {
             fmt = string_convert(&raw mut conv, fmt, ptr::null_mut());
         }
         // `mktime` reporting -1 is indistinguishable from a genuine
@@ -741,7 +741,7 @@ pub unsafe extern "C" fn f_strptime(
         if rettv.vval.v_number == -1 {
             rettv.vval.v_number = 0;
         }
-        if conv.vc_type != CONV_NONE as c_int {
+        if conv.vc_type != CONV_NONE {
             xfree(fmt.cast::<c_void>());
         }
         convert_setup(&raw mut conv, ptr::null_mut(), ptr::null_mut());

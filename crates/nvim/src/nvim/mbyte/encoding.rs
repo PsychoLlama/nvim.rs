@@ -17,47 +17,41 @@ mod tables;
 
 pub use self::tables::*;
 
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
+/// `<ctype.h>`'s class bits, as the rest of the tree already spells them.
+pub const _ISalnum: ::core::ffi::c_uint = 8;
 
-pub const _ISalnum: C2Rust_Unnamed = 8;
+/// What `enc_canon_props()` reports about an encoding name.
+///
+/// `c_int`, which is the type of `enc_canon_table`'s `prop` field and of
+/// every value compared against it; c2rust typed the anonymous enum from
+/// what the C compiler picked and cast at all 130 use sites.
+pub type EncProps = ::core::ffi::c_int;
 
-pub const _ISpunct: C2Rust_Unnamed = 4;
+pub const ENC_MACROMAN: EncProps = 2048;
 
-pub const _IScntrl: C2Rust_Unnamed = 2;
+pub const ENC_LATIN9: EncProps = 1024;
 
-pub const _ISgraph: C2Rust_Unnamed = 32768;
+pub const ENC_LATIN1: EncProps = 512;
 
-pub const _ISalpha: C2Rust_Unnamed = 1024;
+pub const ENC_2WORD: EncProps = 256;
 
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
+pub const ENC_4BYTE: EncProps = 128;
 
-pub const ENC_MACROMAN: C2Rust_Unnamed_19 = 2048;
+pub const ENC_2BYTE: EncProps = 64;
 
-pub const ENC_LATIN9: C2Rust_Unnamed_19 = 1024;
+pub const ENC_ENDIAN_L: EncProps = 32;
 
-pub const ENC_LATIN1: C2Rust_Unnamed_19 = 512;
+pub const ENC_ENDIAN_B: EncProps = 16;
 
-pub const ENC_2WORD: C2Rust_Unnamed_19 = 256;
+pub const ENC_UNICODE: EncProps = 4;
 
-pub const ENC_4BYTE: C2Rust_Unnamed_19 = 128;
+pub const ENC_DBCS: EncProps = 2;
 
-pub const ENC_2BYTE: C2Rust_Unnamed_19 = 64;
+pub const ENC_8BIT: EncProps = 1;
 
-pub const ENC_ENDIAN_L: C2Rust_Unnamed_19 = 32;
-
-pub const ENC_ENDIAN_B: C2Rust_Unnamed_19 = 16;
-
-pub const ENC_UNICODE: C2Rust_Unnamed_19 = 4;
-
-pub const ENC_DBCS: C2Rust_Unnamed_19 = 2;
-
-pub const ENC_8BIT: C2Rust_Unnamed_19 = 1;
-
-pub const CODESET: C2Rust_Unnamed_23 = 14;
+pub const CODESET: nl_item = 14;
 
 pub type nl_item = ::core::ffi::c_int;
-
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
 
 unsafe extern "C" fn enc_canon_search(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     unsafe {
@@ -85,7 +79,7 @@ pub unsafe extern "C" fn enc_canon_props(
             6 as size_t,
         ) == 0 as ::core::ffi::c_int
         {
-            return ENC_DBCS as ::core::ffi::c_int;
+            return ENC_DBCS;
         } else if strncmp(
             name,
             b"8bit-\0".as_ptr() as *const ::core::ffi::c_char,
@@ -97,7 +91,7 @@ pub unsafe extern "C" fn enc_canon_props(
                 9 as size_t,
             ) == 0 as ::core::ffi::c_int
         {
-            return ENC_8BIT as ::core::ffi::c_int;
+            return ENC_8BIT;
         }
         return 0 as ::core::ffi::c_int;
     }
@@ -310,7 +304,7 @@ pub unsafe extern "C" fn enc_locale() -> *mut ::core::ffi::c_char {
         let mut i: ::core::ffi::c_int = 0;
         let mut buf: [::core::ffi::c_char; 50] = [0; 50];
         let mut s: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        s = nl_langinfo(CODESET as ::core::ffi::c_int);
+        s = nl_langinfo(CODESET);
         if s.is_null() || *s as ::core::ffi::c_int == NUL {
             s = setlocale(LC_CTYPE, ::core::ptr::null::<::core::ffi::c_char>());
             if s.is_null() || *s as ::core::ffi::c_int == NUL {
@@ -339,8 +333,7 @@ pub unsafe extern "C" fn enc_locale() -> *mut ::core::ffi::c_char {
                         .offset(*p.offset(4 as ::core::ffi::c_int as isize) as uint8_t
                             as ::core::ffi::c_int as isize)
                         as ::core::ffi::c_int
-                        & _ISalnum as ::core::ffi::c_int as ::core::ffi::c_ushort
-                            as ::core::ffi::c_int
+                        & _ISalnum as ::core::ffi::c_int
                         == 0
                     && *p.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         != '-' as ::core::ffi::c_int

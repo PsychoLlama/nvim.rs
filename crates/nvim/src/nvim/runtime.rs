@@ -4051,7 +4051,7 @@ unsafe extern "C" fn do_source_ext(
                         (*si).sn_pr_children = profile_zero();
                     }
                 }
-                cookie.conv.vc_type = CONV_NONE as ::core::ffi::c_int;
+                cookie.conv.vc_type = CONV_NONE;
                 ts_lua = false_0 != 0;
                 if fname.is_null()
                     && !eap.is_null()
@@ -4736,7 +4736,7 @@ pub unsafe extern "C" fn getsourceline(
             line = ga.ga_data as *mut ::core::ffi::c_char;
         }
     }
-    if !line.is_null() && (*sp).conv.vc_type != CONV_NONE as ::core::ffi::c_int {
+    if !line.is_null() && (*sp).conv.vc_type != CONV_NONE {
         let mut s: *mut ::core::ffi::c_char =
             string_convert(&raw mut (*sp).conv, line, ::core::ptr::null_mut::<size_t>());
         if !s.is_null() {

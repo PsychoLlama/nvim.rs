@@ -40,7 +40,7 @@ use crate::src::nvim::charset::skiptowhite;
 use crate::src::nvim::hashtab::{hash_find, hash_removed};
 use crate::src::nvim::main::curwin;
 use crate::src::nvim::mbyte::{
-    MB_MAXCHAR, mb_cptr2char_adv, mb_isupper, utf_char2bytes, utf_fold, utf_ptr2char,
+    mb_cptr2char_adv, mb_isupper, utf_char2bytes, utf_fold, utf_ptr2char,
 };
 use crate::src::nvim::memory::xmemcpyz;
 use crate::src::nvim::os::libc::{strcpy, strlen};
@@ -50,7 +50,7 @@ use crate::src::nvim::spellsuggest::{
     SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, suggest_T,
     suginfo_T,
 };
-use crate::src::nvim::types::{hashitem_T, size_t, slang_T, wordcount_T};
+use crate::src::nvim::types::{MB_MAXCHAR, hashitem_T, size_t, slang_T, wordcount_T};
 use core::ffi::{c_char, c_int};
 
 /// Where the inline word sits inside a `wordcount_T`; the word-count table
@@ -134,7 +134,7 @@ fn map_class(slang: &slang_T, c: c_int) -> c_int {
     if c < 256 {
         return slang.sl_map_array[c as usize];
     }
-    let mut buf = [0 as c_char; MB_MAXCHAR as usize + 1];
+    let mut buf = [0 as c_char; MB_MAXCHAR + 1];
     // SAFETY: `buf` holds any single character plus a terminator, the hash
     // key is that NUL-terminated buffer, and the value stored with a key is
     // the string just past its terminator.

@@ -336,7 +336,7 @@ impl FindTags {
             mincount,
             linear: false,
             vimconv: vimconv_T {
-                vc_type: CONV_NONE as c_int,
+                vc_type: CONV_NONE,
                 vc_factor: 0,
                 vc_fd: ptr::null_mut(),
                 vc_fail: false,
@@ -476,7 +476,7 @@ impl FindTags {
 
     /// Read every matching tag out of the file named by `tag_fname`.
     fn in_file(&mut self, buf_ffname: *mut c_char) {
-        self.vimconv.vc_type = CONV_NONE as c_int;
+        self.vimconv.vc_type = CONV_NONE;
         self.tag_file_sorted = NUL;
         self.fp = ptr::null_mut();
         let mut margs = MatchArgs::new(self.flags);
@@ -511,7 +511,7 @@ impl FindTags {
 
             fclose(self.fp);
             self.fp = ptr::null_mut();
-            if self.vimconv.vc_type != CONV_NONE as c_int {
+            if self.vimconv.vc_type != CONV_NONE {
                 convert_setup(&raw mut self.vimconv, ptr::null_mut(), ptr::null_mut());
             }
             if margs.sort_error {
@@ -566,7 +566,7 @@ impl FindTags {
                     }
                 }
 
-                if self.vimconv.vc_type != CONV_NONE as c_int {
+                if self.vimconv.vc_type != CONV_NONE {
                     self.convert_line();
                 }
 

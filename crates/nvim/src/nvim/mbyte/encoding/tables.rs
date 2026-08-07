@@ -48,309 +48,297 @@ pub const DBCS_DEBUG: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub(crate) static enc_canon_table: GlobalCell<[C2Rust_Unnamed_21; 59]> = GlobalCell::new([
     C2Rust_Unnamed_21 {
         name: b"latin1\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int + ENC_LATIN1 as ::core::ffi::c_int,
+        prop: ENC_8BIT + ENC_LATIN1,
         codepage: 1252 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"iso-8859-2\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"iso-8859-3\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"iso-8859-4\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"iso-8859-5\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"iso-8859-6\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"iso-8859-7\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"iso-8859-8\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"iso-8859-9\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"iso-8859-10\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"iso-8859-11\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"iso-8859-13\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"iso-8859-14\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"iso-8859-15\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int + ENC_LATIN9 as ::core::ffi::c_int,
+        prop: ENC_8BIT + ENC_LATIN9,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"koi8-r\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"koi8-u\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"utf-8\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_UNICODE as ::core::ffi::c_int,
+        prop: ENC_UNICODE,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"ucs-2\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_UNICODE as ::core::ffi::c_int
-            + ENC_ENDIAN_B as ::core::ffi::c_int
-            + ENC_2BYTE as ::core::ffi::c_int,
+        prop: ENC_UNICODE + ENC_ENDIAN_B + ENC_2BYTE,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"ucs-2le\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_UNICODE as ::core::ffi::c_int
-            + ENC_ENDIAN_L as ::core::ffi::c_int
-            + ENC_2BYTE as ::core::ffi::c_int,
+        prop: ENC_UNICODE + ENC_ENDIAN_L + ENC_2BYTE,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"utf-16\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_UNICODE as ::core::ffi::c_int
-            + ENC_ENDIAN_B as ::core::ffi::c_int
-            + ENC_2WORD as ::core::ffi::c_int,
+        prop: ENC_UNICODE + ENC_ENDIAN_B + ENC_2WORD,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"utf-16le\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_UNICODE as ::core::ffi::c_int
-            + ENC_ENDIAN_L as ::core::ffi::c_int
-            + ENC_2WORD as ::core::ffi::c_int,
+        prop: ENC_UNICODE + ENC_ENDIAN_L + ENC_2WORD,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"ucs-4\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_UNICODE as ::core::ffi::c_int
-            + ENC_ENDIAN_B as ::core::ffi::c_int
-            + ENC_4BYTE as ::core::ffi::c_int,
+        prop: ENC_UNICODE + ENC_ENDIAN_B + ENC_4BYTE,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"ucs-4le\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_UNICODE as ::core::ffi::c_int
-            + ENC_ENDIAN_L as ::core::ffi::c_int
-            + ENC_4BYTE as ::core::ffi::c_int,
+        prop: ENC_UNICODE + ENC_ENDIAN_L + ENC_4BYTE,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"debug\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_DBCS as ::core::ffi::c_int,
+        prop: ENC_DBCS,
         codepage: DBCS_DEBUG,
     },
     C2Rust_Unnamed_21 {
         name: b"euc-jp\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_DBCS as ::core::ffi::c_int,
+        prop: ENC_DBCS,
         codepage: DBCS_JPNU,
     },
     C2Rust_Unnamed_21 {
         name: b"sjis\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_DBCS as ::core::ffi::c_int,
+        prop: ENC_DBCS,
         codepage: DBCS_JPN,
     },
     C2Rust_Unnamed_21 {
         name: b"euc-kr\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_DBCS as ::core::ffi::c_int,
+        prop: ENC_DBCS,
         codepage: DBCS_KORU,
     },
     C2Rust_Unnamed_21 {
         name: b"euc-cn\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_DBCS as ::core::ffi::c_int,
+        prop: ENC_DBCS,
         codepage: DBCS_CHSU,
     },
     C2Rust_Unnamed_21 {
         name: b"euc-tw\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_DBCS as ::core::ffi::c_int,
+        prop: ENC_DBCS,
         codepage: DBCS_CHTU,
     },
     C2Rust_Unnamed_21 {
         name: b"big5\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_DBCS as ::core::ffi::c_int,
+        prop: ENC_DBCS,
         codepage: DBCS_CHT,
     },
     C2Rust_Unnamed_21 {
         name: b"cp437\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 437 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp737\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 737 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp775\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 775 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp850\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 850 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp852\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 852 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp855\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 855 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp857\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 857 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp860\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 860 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp861\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 861 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp862\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 862 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp863\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 863 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp865\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 865 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp866\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 866 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp869\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 869 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp874\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 874 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp932\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_DBCS as ::core::ffi::c_int,
+        prop: ENC_DBCS,
         codepage: DBCS_JPN,
     },
     C2Rust_Unnamed_21 {
         name: b"cp936\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_DBCS as ::core::ffi::c_int,
+        prop: ENC_DBCS,
         codepage: DBCS_CHS,
     },
     C2Rust_Unnamed_21 {
         name: b"cp949\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_DBCS as ::core::ffi::c_int,
+        prop: ENC_DBCS,
         codepage: DBCS_KOR,
     },
     C2Rust_Unnamed_21 {
         name: b"cp950\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_DBCS as ::core::ffi::c_int,
+        prop: ENC_DBCS,
         codepage: DBCS_CHT,
     },
     C2Rust_Unnamed_21 {
         name: b"cp1250\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 1250 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp1251\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 1251 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp1253\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 1253 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp1254\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 1254 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp1255\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 1255 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp1256\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 1256 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp1257\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 1257 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"cp1258\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 1258 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"macroman\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int + ENC_MACROMAN as ::core::ffi::c_int,
+        prop: ENC_8BIT + ENC_MACROMAN,
         codepage: 0 as ::core::ffi::c_int,
     },
     C2Rust_Unnamed_21 {
         name: b"hp-roman8\0".as_ptr() as *const ::core::ffi::c_char,
-        prop: ENC_8BIT as ::core::ffi::c_int,
+        prop: ENC_8BIT,
         codepage: 0 as ::core::ffi::c_int,
     },
 ]);

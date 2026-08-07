@@ -160,7 +160,7 @@ pub unsafe fn ins_compl_addleader(c: c_int) {
         }
         let cc = utf_char2len(c);
         if cc > 1 {
-            let mut buf = [0 as c_char; MB_MAXCHAR as usize + 1];
+            let mut buf = [0 as c_char; MB_MAXCHAR + 1];
             utf_char2bytes(c, buf.as_mut_ptr());
             buf[cc as usize] = NUL as c_char;
             ins_char_bytes(buf.as_mut_ptr(), cc as size_t);

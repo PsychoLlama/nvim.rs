@@ -33,10 +33,10 @@ use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
     CONV_9_TO_UTF8, CONV_ICONV, CONV_NONE, CONV_TO_LATIN1, CONV_TO_LATIN9, CONV_TO_UTF8,
-    CharBoundsOff, CharInfo, EvalFuncData, GraphemeState, StrCharInfo, VAR_LIST, VAR_NUMBER,
-    VAR_STRING, colnr_T, expand_T, iconv_t, int8_t, int32_t, int64_t, list_T, listitem_T, pos_T,
-    ptrdiff_t, schar_T, size_t, ssize_t, typval_T, uint8_t, uint32_t, uint64_t, uintptr_t,
-    utf8proc_int32_t, varnumber_T, vimconv_T, win_T,
+    CharBoundsOff, CharInfo, EvalFuncData, GraphemeState, MB_MAXCHAR, StrCharInfo, VAR_LIST,
+    VAR_NUMBER, VAR_STRING, colnr_T, expand_T, iconv_t, int8_t, int32_t, int64_t, list_T,
+    listitem_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t, typval_T, uint8_t, uint32_t, uint64_t,
+    uintptr_t, utf8proc_int32_t, varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::utf8proc::{
     UTF8PROC_BOUNDCLASS_CONTROL, UTF8PROC_BOUNDCLASS_CR, UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC,
@@ -160,15 +160,15 @@ pub unsafe extern "C" fn utf_find_illegal() {
             vc_fail: false,
         };
         let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        vimconv.vc_type = CONV_NONE as ::core::ffi::c_int;
-        if enc_canon_props((*curbuf.get()).b_p_fenc) & ENC_8BIT as ::core::ffi::c_int != 0 {
+        vimconv.vc_type = CONV_NONE;
+        if enc_canon_props((*curbuf.get()).b_p_fenc) & ENC_8BIT != 0 {
             convert_setup(&raw mut vimconv, p_enc.get(), (*curbuf.get()).b_p_fenc);
         }
         (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
         '_theend: {
             loop {
                 let mut p: *mut ::core::ffi::c_char = get_cursor_pos_ptr();
-                if vimconv.vc_type != CONV_NONE as ::core::ffi::c_int {
+                if vimconv.vc_type != CONV_NONE {
                     xfree(tofree as *mut ::core::ffi::c_void);
                     tofree = string_convert(&raw mut vimconv, p, ::core::ptr::null_mut::<size_t>());
                     if tofree.is_null() {
@@ -181,7 +181,7 @@ pub unsafe extern "C" fn utf_find_illegal() {
                     if *p as uint8_t as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int
                         && (len == 1 as ::core::ffi::c_int || utf_char2len(utf_ptr2char(p)) != len)
                     {
-                        if vimconv.vc_type == CONV_NONE as ::core::ffi::c_int {
+                        if vimconv.vc_type == CONV_NONE {
                             (*curwin.get()).w_cursor.col +=
                                 p.offset_from(get_cursor_pos_ptr()) as colnr_T;
                         } else {

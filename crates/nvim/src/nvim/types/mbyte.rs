@@ -40,12 +40,20 @@ pub struct vimconv_T {
 /// spell the cast out.
 pub const MB_MAXBYTES: usize = 21;
 
+/// The most bytes one *character* — a base plus its composing marks — can
+/// occupy in the places that only need to round-trip a single character:
+/// six, one over the longest legal UTF-8 sequence `utf_char2bytes` writes.
+///
+/// `usize`, as `MB_MAXBYTES` is, because every use is an array length. Three
+/// modules had grown a private copy.
+pub const MB_MAXCHAR: usize = 6;
+
 /// `vimconv_T::vc_type` — upstream's `ConvFlags`.
 ///
-/// c2rust typed this `c_uint` while the field it is compared against is a
-/// `c_int`, so every use site casts. Retyping belongs to the slice that
-/// deletes those casts, not here.
-pub type ConvFlags = ::core::ffi::c_uint;
+/// `c_int`, which is what the `vc_type` field is: c2rust typed the anonymous
+/// enum `c_uint` from what the C compiler picked, and every one of the 55 use
+/// sites cast it back. B15-9 deleted the casts with the retype.
+pub type ConvFlags = ::core::ffi::c_int;
 
 pub const CONV_NONE: ConvFlags = 0;
 pub const CONV_TO_UTF8: ConvFlags = 1;

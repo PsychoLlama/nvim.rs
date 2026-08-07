@@ -544,7 +544,7 @@ pub unsafe extern "C" fn tv_dict_copy(
             if got_int.get() {
                 break;
             }
-            let new_di = if conv.is_null() || (*conv).vc_type == CONV_NONE as ::core::ffi::c_int {
+            let new_di = if conv.is_null() || (*conv).vc_type == CONV_NONE {
                 tv_dict_item_alloc(tv_dict_item_key(di))
             } else {
                 let di_key = tv_dict_item_key(di);

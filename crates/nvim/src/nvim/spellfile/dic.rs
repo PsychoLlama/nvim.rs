@@ -131,7 +131,7 @@ pub unsafe fn spell_read_dic(
             line[l] = NUL as c_char;
 
             let mut pc: *mut c_char = core::ptr::null_mut();
-            let w = if (*spin).si_conv.vc_type != CONV_NONE as c_int {
+            let w = if (*spin).si_conv.vc_type != CONV_NONE {
                 pc = string_convert(
                     &raw mut (*spin).si_conv,
                     line.as_mut_ptr(),

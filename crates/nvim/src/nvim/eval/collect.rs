@@ -653,9 +653,7 @@ pub unsafe fn var_item_copy(
         let mut ret = OK;
         match (*from).v_type {
             VAR_STRING => {
-                if conv.is_null()
-                    || (*conv).vc_type == CONV_NONE as c_int
-                    || (*from).vval.v_string.is_null()
+                if conv.is_null() || (*conv).vc_type == CONV_NONE || (*from).vval.v_string.is_null()
                 {
                     tv_copy(from, to);
                 } else {

@@ -74,10 +74,6 @@ pub const CPO_SEARCH: c_int = 'c' as c_int;
 /// argument into.
 pub(crate) const NUMBUFLEN: usize = 65;
 
-/// The longest byte sequence a single character can encode to, which is
-/// what the `conceal` character is rendered back into.
-pub(crate) const MB_MAXCHAR: usize = 6;
-
 /// `matchadd()`'s and `:match`'s default priority.
 const DEFAULT_PRIORITY: c_int = 10;
 

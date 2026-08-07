@@ -70,8 +70,8 @@ use crate::src::nvim::main::{
     textlock,
 };
 use crate::src::nvim::mbyte::{
-    MB_MAXCHAR, mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_ptr2char_adv, mb_tolower,
-    mb_toupper, utf_char2bytes, utf_char2len, utf_head_off, utf_ptr2char, utf_ptr2len, utf8len_tab,
+    mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_ptr2char_adv, mb_tolower, mb_toupper,
+    utf_char2bytes, utf_char2len, utf_head_off, utf_ptr2char, utf_ptr2len, utf8len_tab,
     utfc_ptr2len,
 };
 use crate::src::nvim::memline::{dec, ml_delete, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
@@ -120,10 +120,10 @@ use crate::src::nvim::tag::find_tags;
 use crate::src::nvim::textformat::auto_format;
 use crate::src::nvim::types::{
     Arena, BoolVarValue, Callback, Callback_data as C2Rust_Unnamed_5, Direction, EvalFuncData,
-    ExtmarkOp, OptInt, String_0, VAR_UNKNOWN, VAR_UNLOCKED, VV_COMPLETED_ITEM, buf_T, colnr_T,
-    dict_T, expand_T, extmark_undo_vec_t, garray_T, hashitem_T, hashtab_T, linenr_T, list_T,
-    optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T, sctx_T, size_t, typval_T,
-    typval_vval_union, uint8_t, uint64_t, varnumber_T, win_T, xp_prefix_T,
+    ExtmarkOp, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN, VAR_UNLOCKED, VV_COMPLETED_ITEM, buf_T,
+    colnr_T, dict_T, expand_T, extmark_undo_vec_t, garray_T, hashitem_T, hashtab_T, linenr_T,
+    list_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T, sctx_T, size_t,
+    typval_T, typval_vval_union, uint8_t, uint64_t, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::{ui_flush, vim_beep};
 use crate::src::nvim::undo::undo_allowed;

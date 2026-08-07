@@ -74,7 +74,7 @@ pub unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_char) ->
 
             xfree(pc.cast());
             pc = core::ptr::null_mut();
-            let mut line = if (*spin).si_conv.vc_type != CONV_NONE as c_int {
+            let mut line = if (*spin).si_conv.vc_type != CONV_NONE {
                 pc = string_convert(
                     &raw mut (*spin).si_conv,
                     rline.as_mut_ptr(),
@@ -199,7 +199,7 @@ unsafe fn read_wordfile_header(
     // only after its length has been checked against the array.
     unsafe {
         if strncmp(line, c"encoding=".as_ptr(), 9) == 0 {
-            if (*spin).si_conv.vc_type != CONV_NONE as c_int {
+            if (*spin).si_conv.vc_type != CONV_NONE {
                 smsg(
                     0,
                     gettext(c"Duplicate /encoding= line ignored in %s line %d: %s".as_ptr()),

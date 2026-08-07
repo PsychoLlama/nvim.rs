@@ -14,10 +14,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-
-pub const MB_MAXCHAR: C2Rust_Unnamed_18 = 6;
-
 pub unsafe extern "C" fn mb_utflen(
     mut s: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -285,13 +281,12 @@ pub unsafe extern "C" fn utf_cp_bounds_len(
                 end_off: 1 as int8_t,
             };
         }
-        let max_first_off: ::core::ffi::c_int = -if (p.offset_from(b) as ::core::ffi::c_int)
-            < MB_MAXCHAR as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-        {
-            p.offset_from(b) as ::core::ffi::c_int
-        } else {
-            MB_MAXCHAR as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-        };
+        let max_first_off: ::core::ffi::c_int =
+            -if (p.offset_from(b) as ::core::ffi::c_int) < MB_MAXCHAR as ::core::ffi::c_int - 1 {
+                p.offset_from(b) as ::core::ffi::c_int
+            } else {
+                MB_MAXCHAR as ::core::ffi::c_int - 1
+            };
         let mut first_off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while utf_is_trail_byte(*p.offset(first_off as isize)) {
             if first_off == max_first_off {

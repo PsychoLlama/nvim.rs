@@ -667,7 +667,7 @@ unsafe fn mkspell(
             }
             let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i_0 < incount && !error {
-                spin.si_conv.vc_type = CONV_NONE as ::core::ffi::c_int;
+                spin.si_conv.vc_type = CONV_NONE;
                 spin.si_region = (1 as ::core::ffi::c_int) << i_0;
                 vim_snprintf(
                     fname,

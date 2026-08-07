@@ -80,7 +80,7 @@ impl Drop for Reader {
             {
                 fclose(fd);
             }
-            if self.vc.vc_type != CONV_NONE as c_int {
+            if self.vc.vc_type != CONV_NONE {
                 convert_setup(&raw mut self.vc, ptr::null_mut(), ptr::null_mut());
             }
         }
@@ -115,7 +115,7 @@ impl Reader {
             len: 0,
             room: 0,
             vc: vimconv_T {
-                vc_type: CONV_NONE as c_int,
+                vc_type: CONV_NONE,
                 vc_factor: 0,
                 vc_fd: ptr::null_mut(),
                 vc_fail: false,
@@ -384,7 +384,7 @@ impl Reader {
     ///
     /// `len` bytes of the buffer must be initialised and NUL-terminated.
     unsafe fn convert(&mut self) -> Status {
-        if self.vc.vc_type == CONV_NONE as c_int {
+        if self.vc.vc_type == CONV_NONE {
             return Status::Ok;
         }
         // SAFETY: the line is NUL-terminated; `string_convert` answers a

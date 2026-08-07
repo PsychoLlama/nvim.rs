@@ -226,7 +226,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_iconv(lstate: *mut lua_State) -> c_i
         let to = enc_canonize(enc_skip(lua_tostring(lstate, 3).cast_mut()));
 
         let mut vimconv = vimconv_T {
-            vc_type: CONV_NONE as c_int,
+            vc_type: CONV_NONE,
             vc_factor: 0,
             vc_fd: ptr::null_mut(),
             vc_fail: false,
