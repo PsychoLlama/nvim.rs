@@ -1,1115 +1,523 @@
 //! `do_put` -- `p`, `P`, `gp`, `gP`, `]p`, `[p` and `zp`.
 //!
-//! Still one 1,094-line function here, and still over the file cap: a carve
-//! cannot split a single over-cap item, so this file is a holding pen until
-//! the rewrite decomposes it.
+//! The driver here does four things in order: work out what text is being
+//! put, get it into a shape the three inserters can use, save for undo, and
+//! then hand off by motion type:
+//!
+//! | register | where |
+//! | --- | --- |
+//! | blockwise | [`block`] |
+//! | charwise, one line | [`lines`]'s `charwise_one_line` |
+//! | charwise over several lines, or linewise | [`lines`]'s `multiline` |
+//!
+//! Two of the sources are not registers at all. `".` is handled by
+//! [`put_last_insert`], which does not put anything: it stuffs an Insert-mode
+//! command into the read buffer, because the last insert is *keys*, not text.
+//! And a computed register (`"%`, `":`, `"=`, ...) is turned into a
+//! one-element fake `yankreg_T` on the stack -- `"=` being the exception,
+//! since its result may hold newlines and has to be split.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use ::core::ffi::{c_char, c_int, c_uint, c_void};
+
 use super::*;
 
-pub unsafe extern "C" fn do_put(
-    mut regname: ::core::ffi::c_int,
-    mut reg: *mut yankreg_T,
-    mut dir: ::core::ffi::c_int,
-    mut count: ::core::ffi::c_int,
-    mut flags: ::core::ffi::c_int,
-) {
+mod block;
+mod lines;
+
+/// The state a put carries between its phases.
+///
+/// The four `y_*` fields are the text being put, which may come from a real
+/// register, from a computed one, or from a stack-allocated fake.
+pub(crate) struct Put {
+    /// `FORWARD` for `p`, `BACKWARD` for `P`. A `PUT_LINE_SPLIT` or
+    /// `PUT_LINE_FORWARD` put rewrites it to `FORWARD`.
+    dir: c_int,
+    count: c_int,
+    /// The `PUT_*` set.
+    flags: c_int,
+    /// 'virtualedit', read once because it does not change under the put.
+    ve_flags: c_uint,
+
+    y_type: MotionType,
+    y_size: size_t,
+    y_width: c_int,
+    y_array: *mut String_0,
+
+    /// Lines the put added, for `msgmore` and `mark_adjust`.
+    nr_lines: linenr_T,
+    /// Where a `PUT_LINE_SPLIT` broke the cursor line, for the extmark
+    /// splice.
+    split_pos: colnr_T,
+}
+
+/// `".p` -- putting the last inserted text.
+///
+/// Nothing is put here. The register holds the *keys* of the last insert,
+/// newlines and all, so the only way to reproduce it is to re-enter Insert
+/// mode and replay them: this stuffs a command into the read buffer and
+/// returns, and the main loop does the work.
+///
+/// # Safety
+/// The cursor must be on a valid line.
+unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint) {
     unsafe {
-        let mut split_pos: colnr_T = 0;
-        let mut col: colnr_T = 0;
-        let mut len_0: ::core::ffi::c_int = 0;
-        let mut totlen: size_t = 0 as size_t;
-        let mut lnum: linenr_T = 0 as linenr_T;
-        let mut y_type: MotionType = kMTCharWise;
-        let mut y_size: size_t = 0;
-        let mut y_width: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut vcol: colnr_T = 0 as colnr_T;
-        let mut y_array: *mut String_0 = ::core::ptr::null_mut::<String_0>();
-        let mut nr_lines: linenr_T = 0 as linenr_T;
-        let mut allocated: bool = false;
-        let orig_start: pos_T = (*curbuf.get()).b_op_start;
-        let orig_end: pos_T = (*curbuf.get()).b_op_end;
-        let mut cur_ve_flags: ::core::ffi::c_uint = get_ve_flags(curwin.get());
+        let non_linewise_vis = VIsual_active.get() && VIsual_mode.get() != 'V' as c_int;
+
+        // A Visual selection is replaced (`c`); `PUT_LINE` opens its own line
+        // below, so it inserts at the start of it.
+        let command_start_char = if non_linewise_vis {
+            'c' as c_int
+        } else if flags & PUT_LINE as c_int != 0 {
+            'i' as c_int
+        } else if dir == FORWARD {
+            'a' as c_int
+        } else {
+            'i' as c_int
+        };
+
+        if flags & PUT_LINE as c_int != 0 {
+            // Open the line with a black-hole `:put _`, so that 'autoindent'
+            // does not reach the text.
+            do_put(
+                '_' as c_int,
+                ::core::ptr::null_mut(),
+                dir,
+                1,
+                PUT_LINE as c_int,
+            );
+
+            stuffcharReadbuff(command_start_char);
+            while count > 0 {
+                stuff_inserted(NUL, 1, (count != 1) as c_int);
+                if count != 1 {
+                    // `<CR>` then CTRL-U, to take off the indent 'autoindent'
+                    // would add. CTRL-U on its own would go back to the
+                    // previous line under 'nobackspace'-`eol`, so it is given
+                    // a space to consume.
+                    stuffReadbuff(c"\n ".as_ptr());
+                    stuffcharReadbuff(Ctrl_U);
+                }
+                count -= 1;
+            }
+        } else {
+            stuff_inserted(command_start_char, count, false as c_int);
+        }
+
+        // The text goes in later, so the cursor cannot be moved past it here;
+        // motion commands stuffed after the insert do it instead.
+        if flags & PUT_CURSEND as c_int != 0 {
+            if flags & PUT_LINE as c_int != 0 {
+                stuffReadbuff(c"j0".as_ptr());
+            } else {
+                // Stuffing `l` would ring the bell at the end of a line, so
+                // only do it when the cursor can actually move right:
+                // 'virtualedit' allows it, or the cursor is neither at the
+                // end of the line nor one past the end of the last line. The
+                // last case is a Visual put over a selection reaching past
+                // the end of the line, which joins the line below.
+                let cursor_pos = get_cursor_pos_ptr();
+                let one_past_line = c_int::from(*cursor_pos) == NUL;
+                let eol = !one_past_line
+                    && c_int::from(*cursor_pos.offset(utfc_ptr2len(cursor_pos) as isize)) == NUL;
+                let ve_allows =
+                    ve_flags == kOptVeFlagAll as c_uint || ve_flags == kOptVeFlagOnemore as c_uint;
+                let eof = (*curbuf.get()).b_ml.ml_line_count == (*curwin.get()).w_cursor.lnum
+                    && one_past_line;
+                if ve_allows || !(eol || eof) {
+                    stuffcharReadbuff('l' as c_int);
+                }
+            }
+        } else if flags & PUT_LINE as c_int != 0 {
+            stuffReadbuff(c"g'[".as_ptr());
+        }
+
+        // Save the cursor position now (though no text), so that `u` after
+        // `".p` restores it.
+        if command_start_char == 'a' as c_int {
+            u_save(
+                (*curwin.get()).w_cursor.lnum,
+                (*curwin.get()).w_cursor.lnum + 1,
+            );
+        }
+    }
+}
+
+/// Split a `"=` result into lines in place, overwriting each `\n` with a NUL.
+///
+/// Answers the allocated line array and whether a trailing newline made the
+/// register linewise. `insert_string` is edited, not copied.
+///
+/// # Safety
+/// `insert_string.data` must be an allocated, NUL-terminated string of
+/// `insert_string.size` bytes.
+unsafe fn split_expr_result(insert_string: String_0) -> (*mut String_0, size_t, MotionType) {
+    unsafe {
+        // Two passes over the same walk: the first counts the lines, the
+        // second fills the array the count sized.
+        let mut y_array: *mut String_0 = ::core::ptr::null_mut();
+        let mut y_type = kMTCharWise;
+        loop {
+            let mut y_size: size_t = 0;
+            let mut ptr = insert_string.data;
+            let mut ptrlen = insert_string.size;
+            while !ptr.is_null() {
+                if !y_array.is_null() {
+                    (*y_array.add(y_size)).data = ptr;
+                }
+                y_size = y_size.wrapping_add(1);
+                let mut tmp = vim_strchr(ptr, '\n' as c_int);
+                if tmp.is_null() {
+                    if !y_array.is_null() {
+                        (*y_array.add(y_size.wrapping_sub(1))).size = ptrlen;
+                    }
+                } else {
+                    if !y_array.is_null() {
+                        *tmp = NUL as c_char;
+                        let len = tmp.offset_from(ptr) as size_t;
+                        (*y_array.add(y_size.wrapping_sub(1))).size = len;
+                        ptrlen = ptrlen.wrapping_sub(len.wrapping_add(1));
+                    }
+                    tmp = tmp.add(1);
+                    // A trailing newline makes the register linewise.
+                    if c_int::from(*tmp) == NUL {
+                        y_type = kMTLineWise;
+                        break;
+                    }
+                }
+                ptr = tmp;
+            }
+            if !y_array.is_null() {
+                return (y_array, y_size, y_type);
+            }
+            y_array =
+                xmalloc(y_size.wrapping_mul(::core::mem::size_of::<String_0>())) as *mut String_0;
+        }
+    }
+}
+
+impl Put {
+    /// `p`/`P` in Visual mode over a linewise register: break the cursor line
+    /// in two so that the text goes *between* the halves.
+    ///
+    /// Answers false when undo could not be saved.
+    ///
+    /// # Safety
+    /// The cursor must be on a valid line.
+    unsafe fn split_current_line(&mut self) -> bool {
+        unsafe {
+            if u_save_cursor() == FAIL {
+                return false;
+            }
+            let curline = get_cursor_line_ptr();
+            let p_orig = get_cursor_pos_ptr();
+            let plen = get_cursor_pos_len() as size_t;
+            let mut p = p_orig;
+            if self.dir == FORWARD && c_int::from(*p) != NUL {
+                p = p.offset(utfc_ptr2len(p) as isize);
+            }
+            // Kept for the extmark_splice() the multiline put emits.
+            self.split_pos = p.offset_from(curline) as colnr_T;
+
+            let ptr = xmemdupz(
+                p as *const c_void,
+                plen.wrapping_sub(p.offset_from(p_orig) as size_t),
+            ) as *mut c_char;
+            ml_append((*curwin.get()).w_cursor.lnum, ptr, 0, false);
+            xfree(ptr as *mut c_void);
+
+            let ptr = xmemdupz(
+                get_cursor_line_ptr() as *const c_void,
+                self.split_pos as size_t,
+            ) as *mut c_char;
+            ml_replace((*curwin.get()).w_cursor.lnum, ptr, false);
+            self.nr_lines += 1;
+            self.dir = FORWARD;
+
+            buf_updates_send_changes(curbuf.get(), (*curwin.get()).w_cursor.lnum, 1, 1);
+            true
+        }
+    }
+
+    /// Save for undo and put the cursor where the text goes.
+    ///
+    /// Answers false when undo could not be saved.
+    ///
+    /// # Safety
+    /// The cursor must be on a valid line.
+    unsafe fn save_for_undo(&self) -> bool {
+        unsafe {
+            if self.y_type == kMTBlockWise {
+                let mut lnum = (*curwin.get()).w_cursor.lnum + self.y_size as linenr_T + 1;
+                lnum = lnum.min((*curbuf.get()).b_ml.ml_line_count + 1);
+                return u_save((*curwin.get()).w_cursor.lnum - 1, lnum) != FAIL;
+            }
+
+            if self.y_type != kMTLineWise {
+                return u_save_cursor() != FAIL;
+            }
+
+            let mut lnum = (*curwin.get()).w_cursor.lnum;
+            // Correct for a closed fold. The cursor must not move yet:
+            // u_save() reads it.
+            if self.dir == BACKWARD {
+                hasFolding(curwin.get(), lnum, &raw mut lnum, ::core::ptr::null_mut());
+            } else {
+                hasFolding(curwin.get(), lnum, ::core::ptr::null_mut(), &raw mut lnum);
+            }
+            if self.dir == FORWARD {
+                lnum += 1;
+            }
+            // An empty buffer's one empty line is going to be replaced, so it
+            // has to be part of what is saved.
+            let saved = if buf_is_empty(curbuf.get()) {
+                u_save(0, 2)
+            } else {
+                u_save(lnum - 1, lnum)
+            };
+            if saved == FAIL {
+                return false;
+            }
+            (*curwin.get()).w_cursor.lnum = if self.dir == FORWARD { lnum - 1 } else { lnum };
+            (*curbuf.get()).b_op_start = (*curwin.get()).w_cursor; // for mark_adjust()
+            true
+        }
+    }
+
+    /// With 'virtualedit' "all", make the cursor a real position before the
+    /// text goes in: break a tab into spaces, or pad out past the end of the
+    /// line.
+    ///
+    /// # Safety
+    /// The cursor must be on a valid line.
+    unsafe fn make_room_for_virtualedit(&self) {
+        unsafe {
+            if self.ve_flags != kOptVeFlagAll as c_uint || self.y_type != kMTCharWise {
+                return;
+            }
+            if gchar_cursor() == TAB {
+                let viscol = getviscol();
+                let ts = (*curbuf.get()).b_p_ts;
+                // No spaces needed for `p` on the last position of a tab, or
+                // `P` on the first.
+                let splits_tab = if self.dir == FORWARD {
+                    tabstop_padding(viscol, ts, (*curbuf.get()).b_p_vts_array) != 1
+                } else {
+                    (*curwin.get()).w_cursor.coladd > 0
+                };
+                if splits_tab {
+                    coladvance_force(viscol);
+                } else {
+                    (*curwin.get()).w_cursor.coladd = 0;
+                }
+            } else if (*curwin.get()).w_cursor.coladd > 0 || gchar_cursor() == NUL {
+                coladvance_force(getviscol() + c_int::from(self.dir == FORWARD));
+            }
+        }
+    }
+}
+
+/// Put the contents of register `regname` into the text.
+///
+/// The caller must check that `regname` is valid. `reg` may be a register the
+/// caller already fetched -- Visual-mode replace does that, so that the text
+/// it just deleted is not what gets put back.
+///
+/// `dir` is `BACKWARD` for `P` and `FORWARD` for `p`; `flags` is the `PUT_*`
+/// set: `PUT_FIXINDENT` reindents (`]p`), `PUT_CURSEND` leaves the cursor
+/// after the new text, `PUT_LINE` forces a linewise put (`:put`), and
+/// `PUT_BLOCK_INNER` leaves a block's trailing spaces off.
+///
+/// # Safety
+/// The cursor must be on a valid line. May run the clipboard provider and, by
+/// way of `"=`, arbitrary Vimscript.
+pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_int, flags: c_int) {
+    unsafe {
+        let orig_start = (*curbuf.get()).b_op_start;
+        let orig_end = (*curbuf.get()).b_op_end;
+        let ve_flags = get_ve_flags(curwin.get());
+
+        // Remove any preinserted completion text (vim/vim#19329).
         if ins_compl_preinsert_effect() {
             ins_compl_delete(false);
         }
+
+        // Defaults for the `'[` and `']` marks.
         (*curbuf.get()).b_op_start = (*curwin.get()).w_cursor;
         (*curbuf.get()).b_op_end = (*curwin.get()).w_cursor;
-        if regname == '.' as ::core::ffi::c_int && reg.is_null() {
-            let mut non_linewise_vis: bool = VIsual_active.get() as ::core::ffi::c_int != 0
-                && VIsual_mode.get() != 'V' as ::core::ffi::c_int;
-            let mut command_start_char: ::core::ffi::c_char =
-                (if non_linewise_vis as ::core::ffi::c_int != 0 {
-                    'c' as ::core::ffi::c_int
-                } else if flags & PUT_LINE as ::core::ffi::c_int != 0 {
-                    'i' as ::core::ffi::c_int
-                } else if dir == FORWARD as ::core::ffi::c_int {
-                    'a' as ::core::ffi::c_int
-                } else {
-                    'i' as ::core::ffi::c_int
-                }) as ::core::ffi::c_char;
-            if flags & PUT_LINE as ::core::ffi::c_int != 0 {
-                do_put(
-                    '_' as ::core::ffi::c_int,
-                    ::core::ptr::null_mut::<yankreg_T>(),
-                    dir,
-                    1 as ::core::ffi::c_int,
-                    PUT_LINE as ::core::ffi::c_int,
-                );
-            }
-            if flags & PUT_LINE as ::core::ffi::c_int != 0 {
-                stuffcharReadbuff(command_start_char as ::core::ffi::c_int);
-                while count > 0 as ::core::ffi::c_int {
-                    stuff_inserted(
-                        NUL,
-                        1 as ::core::ffi::c_int,
-                        (count != 1 as ::core::ffi::c_int) as ::core::ffi::c_int,
-                    );
-                    if count != 1 as ::core::ffi::c_int {
-                        stuffReadbuff(c"\n ".as_ptr());
-                        stuffcharReadbuff(Ctrl_U);
-                    }
-                    count -= 1;
-                }
-            } else {
-                stuff_inserted(command_start_char as ::core::ffi::c_int, count, false_0);
-            }
-            if flags & PUT_CURSEND as ::core::ffi::c_int != 0 {
-                if flags & PUT_LINE as ::core::ffi::c_int != 0 {
-                    stuffReadbuff(c"j0".as_ptr());
-                } else {
-                    let mut cursor_pos: *mut ::core::ffi::c_char = get_cursor_pos_ptr();
-                    let mut one_past_line: bool = *cursor_pos as ::core::ffi::c_int == NUL;
-                    let mut eol: bool = false;
-                    if !one_past_line {
-                        eol = *cursor_pos.offset(utfc_ptr2len(cursor_pos) as isize)
-                            as ::core::ffi::c_int
-                            == NUL;
-                    }
-                    let mut ve_allows: bool = cur_ve_flags
-                        == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
-                        || cur_ve_flags
-                            == kOptVeFlagOnemore as ::core::ffi::c_int as ::core::ffi::c_uint;
-                    let mut eof: bool = (*curbuf.get()).b_ml.ml_line_count
-                        == (*curwin.get()).w_cursor.lnum
-                        && one_past_line as ::core::ffi::c_int != 0;
-                    if ve_allows as ::core::ffi::c_int != 0
-                        || !(eol as ::core::ffi::c_int != 0 || eof as ::core::ffi::c_int != 0)
-                    {
-                        stuffcharReadbuff('l' as ::core::ffi::c_int);
-                    }
-                }
-            } else if flags & PUT_LINE as ::core::ffi::c_int != 0 {
-                stuffReadbuff(c"g'[".as_ptr());
-            }
-            if command_start_char as ::core::ffi::c_int == 'a' as ::core::ffi::c_int {
-                if u_save(
-                    (*curwin.get()).w_cursor.lnum,
-                    (*curwin.get()).w_cursor.lnum + 1 as linenr_T,
-                ) == FAIL
-                {
-                    return;
-                }
-            }
+
+        if regname == '.' as c_int && reg.is_null() {
+            put_last_insert(dir, count, flags, ve_flags);
             return;
         }
-        let mut insert_string: String_0 = String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: 0 as size_t,
+
+        // A computed register becomes a fake one-line yankreg.
+        let mut insert_string = String_0 {
+            data: ::core::ptr::null_mut(),
+            size: 0,
         };
+        let mut allocated = false;
         if reg.is_null()
             && get_spec_reg(
                 regname,
                 &raw mut insert_string.data,
                 &raw mut allocated,
                 true,
-            ) as ::core::ffi::c_int
-                != 0
+            )
+            && insert_string.data.is_null()
         {
-            if insert_string.data.is_null() {
-                return;
-            }
+            return;
         }
+
         if (*curbuf.get()).terminal.is_null() {
+            // Saving for undo can run autocommands, which would invalidate
+            // `y_array`, so it happens before the register is read.
             if u_save(
                 (*curwin.get()).w_cursor.lnum,
-                (*curwin.get()).w_cursor.lnum + 1 as linenr_T,
+                (*curwin.get()).w_cursor.lnum + 1,
             ) == FAIL
             {
                 return;
             }
         }
+
+        let mut put = Put {
+            dir,
+            count,
+            flags,
+            ve_flags,
+            y_type: kMTCharWise,
+            y_size: 0,
+            y_width: 0,
+            y_array: ::core::ptr::null_mut(),
+            nr_lines: 0,
+            split_pos: 0,
+        };
+
         if !insert_string.data.is_null() {
             insert_string.size = strlen(insert_string.data);
-            y_type = kMTCharWise;
-            if regname == '=' as ::core::ffi::c_int {
-                loop {
-                    y_size = 0 as size_t;
-                    let mut ptr: *mut ::core::ffi::c_char = insert_string.data;
-                    let mut ptrlen: size_t = insert_string.size;
-                    while !ptr.is_null() {
-                        if !y_array.is_null() {
-                            (*y_array.add(y_size)).data = ptr;
-                        }
-                        y_size = y_size.wrapping_add(1);
-                        let mut tmp: *mut ::core::ffi::c_char =
-                            vim_strchr(ptr, '\n' as ::core::ffi::c_int);
-                        if tmp.is_null() {
-                            if !y_array.is_null() {
-                                (*y_array.add(y_size.wrapping_sub(1 as size_t))).size = ptrlen;
-                            }
-                        } else {
-                            if !y_array.is_null() {
-                                *tmp = NUL as ::core::ffi::c_char;
-                                (*y_array.add(y_size.wrapping_sub(1 as size_t))).size =
-                                    tmp.offset_from(ptr) as size_t;
-                                ptrlen = ptrlen.wrapping_sub(
-                                    (*y_array.add(y_size.wrapping_sub(1 as size_t)))
-                                        .size
-                                        .wrapping_add(1 as size_t),
-                                );
-                            }
-                            tmp = tmp.offset(1);
-                            if *tmp as ::core::ffi::c_int == NUL {
-                                y_type = kMTLineWise;
-                                break;
-                            }
-                        }
-                        ptr = tmp;
-                    }
-                    if !y_array.is_null() {
-                        break;
-                    }
-                    y_array = xmalloc(y_size.wrapping_mul(::core::mem::size_of::<String_0>()))
-                        as *mut String_0;
-                }
+            if regname == '=' as c_int {
+                // Only `"=` can produce more than one line.
+                (put.y_array, put.y_size, put.y_type) = split_expr_result(insert_string);
             } else {
-                y_size = 1 as size_t;
-                y_array = &raw mut insert_string;
+                put.y_size = 1;
+                put.y_array = &raw mut insert_string;
             }
         } else {
-            if reg.is_null() {
-                reg = get_yank_register(regname, YREG_PASTE);
-            }
-            y_type = (*reg).y_type;
-            y_width = (*reg).y_width as ::core::ffi::c_int;
-            y_size = (*reg).y_size;
-            y_array = (*reg).y_array;
-        }
-        '_end: {
-            if !(*curbuf.get()).terminal.is_null() {
-                terminal_paste(count, y_array, y_size);
+            // Visual-mode replace may have handed us the register already, so
+            // that the deleted text is not what comes back.
+            let reg = if reg.is_null() {
+                get_yank_register(regname, YREG_PASTE)
             } else {
-                split_pos = 0 as colnr_T;
-                if y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int {
-                    if flags & PUT_LINE_SPLIT as ::core::ffi::c_int != 0 {
-                        if u_save_cursor() == FAIL {
-                            break '_end;
-                        } else {
-                            let mut curline: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-                            let mut p: *mut ::core::ffi::c_char = get_cursor_pos_ptr();
-                            let p_orig: *mut ::core::ffi::c_char = p;
-                            let plen: size_t = get_cursor_pos_len() as size_t;
-                            if dir == FORWARD as ::core::ffi::c_int
-                                && *p as ::core::ffi::c_int != NUL
-                            {
-                                p = p.offset(utfc_ptr2len(p) as isize);
-                            }
-                            split_pos = p.offset_from(curline) as colnr_T;
-                            let mut ptr_0: *mut ::core::ffi::c_char = xmemdupz(
-                                p as *const ::core::ffi::c_void,
-                                plen.wrapping_sub(p.offset_from(p_orig) as size_t),
-                            )
-                                as *mut ::core::ffi::c_char;
-                            ml_append((*curwin.get()).w_cursor.lnum, ptr_0, 0 as colnr_T, false);
-                            xfree(ptr_0 as *mut ::core::ffi::c_void);
-                            ptr_0 = xmemdupz(
-                                get_cursor_line_ptr() as *const ::core::ffi::c_void,
-                                split_pos as size_t,
-                            ) as *mut ::core::ffi::c_char;
-                            ml_replace((*curwin.get()).w_cursor.lnum, ptr_0, false);
-                            nr_lines += 1;
-                            dir = FORWARD as ::core::ffi::c_int;
-                            buf_updates_send_changes(
-                                curbuf.get(),
-                                (*curwin.get()).w_cursor.lnum,
-                                1 as int64_t,
-                                1 as int64_t,
-                            );
+                reg
+            };
+            put.y_type = (*reg).y_type;
+            put.y_width = (*reg).y_width;
+            put.y_size = (*reg).y_size;
+            put.y_array = (*reg).y_array;
+        }
+
+        'end: {
+            if !(*curbuf.get()).terminal.is_null() {
+                terminal_paste(count, put.y_array, put.y_size);
+                break 'end;
+            }
+
+            if put.y_type == kMTLineWise {
+                if put.flags & PUT_LINE_SPLIT as c_int != 0 && !put.split_current_line() {
+                    break 'end;
+                }
+                if put.flags & PUT_LINE_FORWARD as c_int != 0 {
+                    // `p` over a Visual block puts the lines below the block.
+                    (*curwin.get()).w_cursor = (*curbuf.get()).b_visual.vi_end;
+                    put.dir = FORWARD;
+                }
+                (*curbuf.get()).b_op_start = (*curwin.get()).w_cursor;
+                (*curbuf.get()).b_op_end = (*curwin.get()).w_cursor;
+            }
+
+            if put.flags & PUT_LINE as c_int != 0 {
+                // `:put`, or `p` in Visual line mode.
+                put.y_type = kMTLineWise;
+            }
+
+            if put.y_size == 0 || put.y_array.is_null() {
+                semsg(
+                    gettext(c"E353: Nothing in register %s".as_ptr()),
+                    if regname == 0 {
+                        c"\"".as_ptr()
+                    } else {
+                        transchar(regname) as *const c_char
+                    },
+                );
+                break 'end;
+            }
+
+            if !put.save_for_undo() {
+                break 'end;
+            }
+            put.make_room_for_virtualedit();
+
+            let mut lnum = (*curwin.get()).w_cursor.lnum;
+            let mut col = (*curwin.get()).w_cursor.col;
+
+            if put.y_type == kMTBlockWise {
+                put.blockwise(lnum);
+            } else {
+                if put.y_type == kMTCharWise {
+                    // For charwise text, FORWARD is BACKWARD on the next
+                    // character.
+                    if put.dir == FORWARD && gchar_cursor() != NUL {
+                        let bytelen = utfc_ptr2len(get_cursor_pos_ptr());
+                        col += bytelen;
+                        if (*put.y_array).size != 0 {
+                            (*curwin.get()).w_cursor.col += bytelen;
+                            (*curbuf.get()).b_op_end.col += bytelen;
                         }
-                    }
-                    if flags & PUT_LINE_FORWARD as ::core::ffi::c_int != 0 {
-                        (*curwin.get()).w_cursor = (*curbuf.get()).b_visual.vi_end;
-                        dir = FORWARD as ::core::ffi::c_int;
                     }
                     (*curbuf.get()).b_op_start = (*curwin.get()).w_cursor;
-                    (*curbuf.get()).b_op_end = (*curwin.get()).w_cursor;
+                } else if put.dir == BACKWARD {
+                    // Linewise: BACKWARD is FORWARD on the previous line.
+                    lnum -= 1;
                 }
-                if flags & PUT_LINE as ::core::ffi::c_int != 0 {
-                    y_type = kMTLineWise;
-                }
-                if y_size == 0 as size_t || y_array.is_null() {
-                    semsg(
-                        gettext(c"E353: Nothing in register %s".as_ptr()),
-                        if regname == 0 as ::core::ffi::c_int {
-                            c"\"".as_ptr()
-                        } else {
-                            transchar(regname) as *const ::core::ffi::c_char
-                        },
-                    );
+                let new_cursor = (*curwin.get()).w_cursor;
+
+                if put.y_type == kMTCharWise && put.y_size == 1 {
+                    put.charwise_one_line(lnum, col);
                 } else {
-                    if y_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
-                        lnum = (*curwin.get()).w_cursor.lnum + y_size as linenr_T + 1 as linenr_T;
-                        lnum = if lnum < (*curbuf.get()).b_ml.ml_line_count + 1 as linenr_T {
-                            lnum
-                        } else {
-                            (*curbuf.get()).b_ml.ml_line_count + 1 as linenr_T
-                        };
-                        if u_save((*curwin.get()).w_cursor.lnum - 1 as linenr_T, lnum) == FAIL {
-                            break '_end;
-                        }
-                    } else if y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int {
-                        lnum = (*curwin.get()).w_cursor.lnum;
-                        if dir == BACKWARD as ::core::ffi::c_int {
-                            hasFolding(
-                                curwin.get(),
-                                lnum,
-                                &raw mut lnum,
-                                ::core::ptr::null_mut::<linenr_T>(),
-                            );
-                        } else {
-                            hasFolding(
-                                curwin.get(),
-                                lnum,
-                                ::core::ptr::null_mut::<linenr_T>(),
-                                &raw mut lnum,
-                            );
-                        }
-                        if dir == FORWARD as ::core::ffi::c_int {
-                            lnum += 1;
-                        }
-                        if (if buf_is_empty(curbuf.get()) as ::core::ffi::c_int != 0 {
-                            u_save(0 as linenr_T, 2 as linenr_T)
-                        } else {
-                            u_save(lnum - 1 as linenr_T, lnum)
-                        }) == FAIL
-                        {
-                            break '_end;
-                        } else {
-                            if dir == FORWARD as ::core::ffi::c_int {
-                                (*curwin.get()).w_cursor.lnum = lnum - 1 as linenr_T;
-                            } else {
-                                (*curwin.get()).w_cursor.lnum = lnum;
-                            }
-                            (*curbuf.get()).b_op_start = (*curwin.get()).w_cursor;
-                        }
-                    } else if u_save_cursor() == FAIL {
-                        break '_end;
-                    }
-                    if cur_ve_flags == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
-                        && y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
-                    {
-                        if gchar_cursor() == TAB {
-                            let mut viscol: ::core::ffi::c_int = getviscol();
-                            let mut ts: OptInt = (*curbuf.get()).b_p_ts;
-                            if if dir == FORWARD as ::core::ffi::c_int {
-                                (tabstop_padding(
-                                    viscol as colnr_T,
-                                    ts,
-                                    (*curbuf.get()).b_p_vts_array,
-                                ) != 1 as ::core::ffi::c_int)
-                                    as ::core::ffi::c_int
-                            } else {
-                                ((*curwin.get()).w_cursor.coladd > 0 as ::core::ffi::c_int)
-                                    as ::core::ffi::c_int
-                            } != 0
-                            {
-                                coladvance_force(viscol as colnr_T);
-                            } else {
-                                (*curwin.get()).w_cursor.coladd =
-                                    0 as ::core::ffi::c_int as colnr_T;
-                            }
-                        } else if (*curwin.get()).w_cursor.coladd > 0 as ::core::ffi::c_int
-                            || gchar_cursor() == NUL
-                        {
-                            coladvance_force(
-                                getviscol()
-                                    + (dir == FORWARD as ::core::ffi::c_int) as ::core::ffi::c_int,
-                            );
-                        }
-                    }
-                    lnum = (*curwin.get()).w_cursor.lnum;
-                    col = (*curwin.get()).w_cursor.col;
-                    if y_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
-                        let mut incr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                        let mut bd: block_def = block_def {
-                            startspaces: 0,
-                            endspaces: 0,
-                            textlen: 0,
-                            textstart: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            textcol: 0,
-                            start_vcol: 0,
-                            end_vcol: 0,
-                            is_short: 0,
-                            is_MAX: 0,
-                            is_oneChar: 0,
-                            pre_whitesp: 0,
-                            pre_whitesp_c: 0,
-                            end_char_vcols: 0,
-                            start_char_vcols: 0,
-                        };
-                        let mut c: ::core::ffi::c_int = gchar_cursor();
-                        let mut endcol2: colnr_T = 0 as colnr_T;
-                        if dir == FORWARD as ::core::ffi::c_int && c != NUL {
-                            if cur_ve_flags
-                                == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
-                            {
-                                getvcol(
-                                    curwin.get(),
-                                    &raw mut (*curwin.get()).w_cursor,
-                                    &raw mut col,
-                                    ::core::ptr::null_mut::<colnr_T>(),
-                                    &raw mut endcol2,
-                                );
-                            } else {
-                                getvcol(
-                                    curwin.get(),
-                                    &raw mut (*curwin.get()).w_cursor,
-                                    ::core::ptr::null_mut::<colnr_T>(),
-                                    ::core::ptr::null_mut::<colnr_T>(),
-                                    &raw mut col,
-                                );
-                            }
-                            (*curwin.get()).w_cursor.col += utfc_ptr2len(get_cursor_pos_ptr());
-                            col += 1;
-                        } else {
-                            getvcol(
-                                curwin.get(),
-                                &raw mut (*curwin.get()).w_cursor,
-                                &raw mut col,
-                                ::core::ptr::null_mut::<colnr_T>(),
-                                &raw mut endcol2,
-                            );
-                        }
-                        col += (*curwin.get()).w_cursor.coladd;
-                        if cur_ve_flags
-                            == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
-                            && ((*curwin.get()).w_cursor.coladd > 0 as ::core::ffi::c_int
-                                || endcol2 == (*curwin.get()).w_cursor.col)
-                        {
-                            if dir == FORWARD as ::core::ffi::c_int && c == NUL {
-                                col += 1;
-                            }
-                            if dir != FORWARD as ::core::ffi::c_int
-                                && c != NUL
-                                && (*curwin.get()).w_cursor.coladd > 0 as ::core::ffi::c_int
-                            {
-                                (*curwin.get()).w_cursor.col += 1;
-                            }
-                            if c == TAB {
-                                if dir == BACKWARD as ::core::ffi::c_int
-                                    && (*curwin.get()).w_cursor.col != 0
-                                {
-                                    (*curwin.get()).w_cursor.col -= 1;
-                                }
-                                if dir == FORWARD as ::core::ffi::c_int
-                                    && col as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-                                        == endcol2
-                                {
-                                    (*curwin.get()).w_cursor.col += 1;
-                                }
-                            }
-                        }
-                        (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
-                        bd.textcol = 0 as ::core::ffi::c_int as colnr_T;
-                        let mut i: size_t = 0 as size_t;
-                        while i < y_size {
-                            let mut spaces: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            let mut shortline: ::core::ffi::c_char = 0;
-                            let mut lines_appended: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            bd.startspaces = 0 as ::core::ffi::c_int;
-                            bd.endspaces = 0 as ::core::ffi::c_int;
-                            vcol = 0 as ::core::ffi::c_int as colnr_T;
-                            let mut delcount: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            if (*curwin.get()).w_cursor.lnum > (*curbuf.get()).b_ml.ml_line_count {
-                                if ml_append(
-                                    (*curbuf.get()).b_ml.ml_line_count,
-                                    c"".as_ptr() as *mut ::core::ffi::c_char,
-                                    1 as colnr_T,
-                                    false,
-                                ) == FAIL
-                                {
-                                    break;
-                                }
-                                nr_lines += 1;
-                                lines_appended = 1 as ::core::ffi::c_int;
-                            }
-                            let mut oldp: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-                            let mut oldlen: colnr_T = get_cursor_line_len();
-                            let mut csarg: CharsizeArg = CharsizeArg::default();
-                            let mut cstype: CharsizeKind = init_charsize_arg(
-                                &mut csarg,
-                                curwin.get(),
-                                (*curwin.get()).w_cursor.lnum,
-                                oldp,
-                            );
-                            let mut ci: StrCharInfo = utf_ptr2StrCharInfo(oldp);
-                            vcol = 0 as ::core::ffi::c_int as colnr_T;
-                            while vcol < col && *ci.ptr as ::core::ffi::c_int != NUL {
-                                incr = win_charsize(
-                                    cstype,
-                                    vcol as ::core::ffi::c_int,
-                                    ci.ptr,
-                                    ci.chr.value,
-                                    &mut csarg,
-                                )
-                                .width;
-                                vcol += incr;
-                                ci = utfc_next(ci);
-                            }
-                            let mut ptr_1: *mut ::core::ffi::c_char = ci.ptr;
-                            bd.textcol = ptr_1.offset_from(oldp) as colnr_T;
-                            shortline = (vcol < col || vcol == col && *ptr_1 == 0)
-                                as ::core::ffi::c_int
-                                as ::core::ffi::c_char;
-                            if vcol < col {
-                                bd.startspaces = (col - vcol) as ::core::ffi::c_int;
-                            } else if vcol > col {
-                                bd.endspaces = (vcol - col) as ::core::ffi::c_int;
-                                bd.startspaces = incr - bd.endspaces;
-                                bd.textcol -= 1;
-                                delcount = 1 as ::core::ffi::c_int;
-                                bd.textcol -= utf_head_off(oldp, oldp.offset(bd.textcol as isize));
-                                if *oldp.offset(bd.textcol as isize) as ::core::ffi::c_int != TAB {
-                                    delcount = 0 as ::core::ffi::c_int;
-                                    bd.endspaces = 0 as ::core::ffi::c_int;
-                                }
-                            }
-                            let yanklen: ::core::ffi::c_int =
-                                (*y_array.add(i)).size as ::core::ffi::c_int;
-                            if flags & PUT_BLOCK_INNER as ::core::ffi::c_int
-                                == 0 as ::core::ffi::c_int
-                            {
-                                spaces = y_width + 1 as ::core::ffi::c_int;
-                                cstype = init_charsize_arg(
-                                    &mut csarg,
-                                    curwin.get(),
-                                    0 as linenr_T,
-                                    (*y_array.add(i)).data,
-                                );
-                                ci = utf_ptr2StrCharInfo((*y_array.add(i)).data);
-                                while *ci.ptr as ::core::ffi::c_int != NUL {
-                                    spaces -= win_charsize(
-                                        cstype,
-                                        0 as ::core::ffi::c_int,
-                                        ci.ptr,
-                                        ci.chr.value,
-                                        &mut csarg,
-                                    )
-                                    .width;
-                                    ci = utfc_next(ci);
-                                }
-                                spaces = if spaces > 0 as ::core::ffi::c_int {
-                                    spaces
-                                } else {
-                                    0 as ::core::ffi::c_int
-                                };
-                            }
-                            if yanklen + spaces != 0 as ::core::ffi::c_int
-                                && count
-                                    > (INT_MAX - (bd.startspaces + bd.endspaces))
-                                        / (yanklen + spaces)
-                            {
-                                emsg(gettext(
-                                    &raw const e_resulting_text_too_long
-                                        as *const ::core::ffi::c_char,
-                                ));
-                                break;
-                            } else {
-                                totlen = (count as size_t)
-                                    .wrapping_mul((yanklen + spaces) as size_t)
-                                    .wrapping_add(bd.startspaces as size_t)
-                                    .wrapping_add(bd.endspaces as size_t);
-                                let mut newp: *mut ::core::ffi::c_char = xmalloc(
-                                    totlen
-                                        .wrapping_add(oldlen as size_t)
-                                        .wrapping_add(1 as size_t),
-                                )
-                                    as *mut ::core::ffi::c_char;
-                                ptr_1 = newp;
-                                memmove(
-                                    ptr_1 as *mut ::core::ffi::c_void,
-                                    oldp as *const ::core::ffi::c_void,
-                                    bd.textcol as size_t,
-                                );
-                                ptr_1 = ptr_1.offset(bd.textcol as isize);
-                                memset(
-                                    ptr_1 as *mut ::core::ffi::c_void,
-                                    ' ' as ::core::ffi::c_int,
-                                    bd.startspaces as size_t,
-                                );
-                                ptr_1 = ptr_1.offset(bd.startspaces as isize);
-                                let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                                while j < count {
-                                    memmove(
-                                        ptr_1 as *mut ::core::ffi::c_void,
-                                        (*y_array.add(i)).data as *const ::core::ffi::c_void,
-                                        yanklen as size_t,
-                                    );
-                                    ptr_1 = ptr_1.offset(yanklen as isize);
-                                    if (j < count - 1 as ::core::ffi::c_int || shortline == 0)
-                                        && spaces > 0 as ::core::ffi::c_int
-                                    {
-                                        memset(
-                                            ptr_1 as *mut ::core::ffi::c_void,
-                                            ' ' as ::core::ffi::c_int,
-                                            spaces as size_t,
-                                        );
-                                        ptr_1 = ptr_1.offset(spaces as isize);
-                                    } else {
-                                        totlen = totlen.wrapping_sub(spaces as size_t);
-                                    }
-                                    j += 1;
-                                }
-                                memset(
-                                    ptr_1 as *mut ::core::ffi::c_void,
-                                    ' ' as ::core::ffi::c_int,
-                                    bd.endspaces as size_t,
-                                );
-                                ptr_1 = ptr_1.offset(bd.endspaces as isize);
-                                let mut columns: ::core::ffi::c_int = oldlen as ::core::ffi::c_int
-                                    - bd.textcol as ::core::ffi::c_int
-                                    - delcount
-                                    + 1 as ::core::ffi::c_int;
-                                '_c2rust_label: {
-                                    if columns >= 0 as ::core::ffi::c_int {
-                                    } else {
-                                        __assert_fail(
-                                            c"columns >= 0".as_ptr(),
-                                            c"src/nvim/register.rs".as_ptr(),
-                                            1731 as ::core::ffi::c_uint,
-                                            c"void do_put(int, yankreg_T *, int, int, int)"
-                                                .as_ptr(),
-                                        );
-                                    }
-                                };
-                                memmove(
-                                    ptr_1 as *mut ::core::ffi::c_void,
-                                    oldp.offset(bd.textcol as isize).offset(delcount as isize)
-                                        as *const ::core::ffi::c_void,
-                                    columns as size_t,
-                                );
-                                ml_replace((*curwin.get()).w_cursor.lnum, newp, false);
-                                extmark_splice_cols(
-                                    curbuf.get(),
-                                    (*curwin.get()).w_cursor.lnum as ::core::ffi::c_int
-                                        - 1 as ::core::ffi::c_int,
-                                    bd.textcol,
-                                    delcount as colnr_T,
-                                    totlen as colnr_T + lines_appended as colnr_T,
-                                    kExtmarkUndo,
-                                );
-                                (*curwin.get()).w_cursor.lnum += 1;
-                                if i == 0 as size_t {
-                                    (*curwin.get()).w_cursor.col += bd.startspaces;
-                                }
-                                i = i.wrapping_add(1);
-                            }
-                        }
-                        changed_lines(
-                            curbuf.get(),
-                            lnum,
-                            0 as colnr_T,
-                            (*curbuf.get()).b_op_start.lnum + y_size as linenr_T - nr_lines,
-                            nr_lines,
-                            true,
-                        );
-                        (*curbuf.get()).b_op_start = (*curwin.get()).w_cursor;
-                        (*curbuf.get()).b_op_start.lnum = lnum;
-                        (*curbuf.get()).b_op_end.lnum =
-                            (*curwin.get()).w_cursor.lnum - 1 as linenr_T;
-                        (*curbuf.get()).b_op_end.col = (if bd.textcol as ::core::ffi::c_int
-                            + totlen as ::core::ffi::c_int
-                            - 1 as ::core::ffi::c_int
-                            > 0 as ::core::ffi::c_int
-                        {
-                            bd.textcol as ::core::ffi::c_int + totlen as ::core::ffi::c_int
-                                - 1 as ::core::ffi::c_int
-                        } else {
-                            0 as ::core::ffi::c_int
-                        }) as colnr_T;
-                        (*curbuf.get()).b_op_end.coladd = 0 as ::core::ffi::c_int as colnr_T;
-                        if flags & PUT_CURSEND as ::core::ffi::c_int != 0 {
-                            (*curwin.get()).w_cursor = (*curbuf.get()).b_op_end;
-                            (*curwin.get()).w_cursor.col += 1;
-                            let mut len: colnr_T = get_cursor_line_len();
-                            (*curwin.get()).w_cursor.col = if (*curwin.get()).w_cursor.col < len {
-                                (*curwin.get()).w_cursor.col
-                            } else {
-                                len
-                            };
-                        } else {
-                            (*curwin.get()).w_cursor.lnum = lnum;
-                        }
-                    } else {
-                        let yanklen_0: ::core::ffi::c_int =
-                            (*y_array.offset(0 as ::core::ffi::c_int as isize)).size
-                                as ::core::ffi::c_int;
-                        if y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int {
-                            if dir == FORWARD as ::core::ffi::c_int && gchar_cursor() != NUL {
-                                let mut bytelen: ::core::ffi::c_int =
-                                    utfc_ptr2len(get_cursor_pos_ptr());
-                                col += bytelen;
-                                if yanklen_0 != 0 {
-                                    (*curwin.get()).w_cursor.col += bytelen;
-                                    (*curbuf.get()).b_op_end.col += bytelen;
-                                }
-                            }
-                            (*curbuf.get()).b_op_start = (*curwin.get()).w_cursor;
-                        } else if dir == BACKWARD as ::core::ffi::c_int {
-                            lnum -= 1;
-                        }
-                        let mut new_cursor: pos_T = (*curwin.get()).w_cursor;
-                        if y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
-                            && y_size == 1 as size_t
-                        {
-                            let mut end_lnum: linenr_T = 0 as linenr_T;
-                            let mut start_lnum: linenr_T = lnum;
-                            let mut first_byte_off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            if VIsual_active.get() {
-                                end_lnum = if (*curbuf.get()).b_visual.vi_end.lnum
-                                    > (*curbuf.get()).b_visual.vi_start.lnum
-                                {
-                                    (*curbuf.get()).b_visual.vi_end.lnum
-                                } else {
-                                    (*curbuf.get()).b_visual.vi_start.lnum
-                                };
-                                if end_lnum > start_lnum {
-                                    let mut pos: pos_T = pos_T {
-                                        lnum: lnum,
-                                        col: col,
-                                        coladd: 0 as colnr_T,
-                                    };
-                                    getvcol(
-                                        curwin.get(),
-                                        &raw mut pos,
-                                        ::core::ptr::null_mut::<colnr_T>(),
-                                        &raw mut vcol,
-                                        ::core::ptr::null_mut::<colnr_T>(),
-                                    );
-                                }
-                            }
-                            if count == 0 as ::core::ffi::c_int
-                                || yanklen_0 == 0 as ::core::ffi::c_int
-                            {
-                                if VIsual_active.get() {
-                                    lnum = end_lnum;
-                                }
-                            } else if count > INT_MAX / yanklen_0 {
-                                emsg(gettext(
-                                    &raw const e_resulting_text_too_long
-                                        as *const ::core::ffi::c_char,
-                                ));
-                            } else {
-                                totlen = (count as size_t).wrapping_mul(yanklen_0 as size_t);
-                                loop {
-                                    let mut oldp_0: *mut ::core::ffi::c_char = ml_get(lnum);
-                                    let mut oldlen_0: colnr_T = ml_get_len(lnum);
-                                    if lnum > start_lnum {
-                                        let mut pos_0: pos_T = pos_T {
-                                            lnum: lnum,
-                                            col: 0,
-                                            coladd: 0,
-                                        };
-                                        if getvpos(curwin.get(), &raw mut pos_0, vcol) {
-                                            col = pos_0.col;
-                                        } else {
-                                            col = MAXCOL as ::core::ffi::c_int as colnr_T;
-                                        }
-                                    }
-                                    if VIsual_active.get() as ::core::ffi::c_int != 0
-                                        && col > oldlen_0
-                                    {
-                                        lnum += 1;
-                                    } else {
-                                        let mut newp_0: *mut ::core::ffi::c_char = xmalloc(
-                                            totlen
-                                                .wrapping_add(oldlen_0 as size_t)
-                                                .wrapping_add(1 as size_t),
-                                        )
-                                            as *mut ::core::ffi::c_char;
-                                        memmove(
-                                            newp_0 as *mut ::core::ffi::c_void,
-                                            oldp_0 as *const ::core::ffi::c_void,
-                                            col as size_t,
-                                        );
-                                        let mut ptr_2: *mut ::core::ffi::c_char =
-                                            newp_0.offset(col as isize);
-                                        let mut i_0: size_t = 0 as size_t;
-                                        while i_0 < count as size_t {
-                                            memmove(
-                                                ptr_2 as *mut ::core::ffi::c_void,
-                                                (*y_array.offset(0 as ::core::ffi::c_int as isize))
-                                                    .data
-                                                    as *const ::core::ffi::c_void,
-                                                yanklen_0 as size_t,
-                                            );
-                                            ptr_2 = ptr_2.offset(yanklen_0 as isize);
-                                            i_0 = i_0.wrapping_add(1);
-                                        }
-                                        memmove(
-                                            ptr_2 as *mut ::core::ffi::c_void,
-                                            oldp_0.offset(col as isize)
-                                                as *const ::core::ffi::c_void,
-                                            ((oldlen_0 - col) as size_t).wrapping_add(1 as size_t),
-                                        );
-                                        ml_replace(lnum, newp_0, false);
-                                        first_byte_off = utf_head_off(
-                                            newp_0,
-                                            ptr_2.offset(-(1 as ::core::ffi::c_int as isize)),
-                                        );
-                                        if lnum == (*curwin.get()).w_cursor.lnum {
-                                            changed_cline_bef_curs(curwin.get());
-                                            invalidate_botline_win(curwin.get());
-                                            (*curwin.get()).w_cursor.col +=
-                                                totlen.wrapping_sub(1 as size_t) as colnr_T;
-                                        }
-                                        changed_bytes(lnum, col);
-                                        extmark_splice_cols(
-                                            curbuf.get(),
-                                            lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                                            col,
-                                            0 as colnr_T,
-                                            totlen as colnr_T,
-                                            kExtmarkUndo,
-                                        );
-                                        if VIsual_active.get() {
-                                            lnum += 1;
-                                        }
-                                    }
-                                    if !(VIsual_active.get() as ::core::ffi::c_int != 0
-                                        && lnum <= end_lnum)
-                                    {
-                                        break;
-                                    }
-                                }
-                                if VIsual_active.get() {
-                                    lnum -= 1;
-                                }
-                            }
-                            (*curbuf.get()).b_op_end = (*curwin.get()).w_cursor;
-                            (*curbuf.get()).b_op_end.col -= first_byte_off;
-                            if totlen != 0
-                                && (restart_edit.get() != 0 as ::core::ffi::c_int
-                                    || flags & PUT_CURSEND as ::core::ffi::c_int != 0)
-                            {
-                                (*curwin.get()).w_cursor.col += 1;
-                            } else {
-                                (*curwin.get()).w_cursor.col -= first_byte_off;
-                            }
-                        } else {
-                            let mut new_lnum: linenr_T = new_cursor.lnum;
-                            let mut indent: ::core::ffi::c_int = 0;
-                            let mut orig_indent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            let mut indent_diff: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            let mut first_indent: bool = true;
-                            let mut lendiff: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            if flags & PUT_FIXINDENT as ::core::ffi::c_int != 0 {
-                                orig_indent = get_indent();
-                            }
-                            let mut cnt: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-                            '_error: while cnt <= count {
-                                let mut i_1: size_t = 0 as size_t;
-                                if y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
-                                {
-                                    lnum = new_cursor.lnum;
-                                    let mut ptr_3: *mut ::core::ffi::c_char =
-                                        ml_get(lnum).offset(col as isize);
-                                    let mut ptrlen_0: size_t =
-                                        (ml_get_len(lnum) as size_t).wrapping_sub(col as size_t);
-                                    totlen = (*y_array.add(y_size.wrapping_sub(1 as size_t))).size;
-                                    let mut newp_1: *mut ::core::ffi::c_char = xmalloc(
-                                        ptrlen_0.wrapping_add(totlen).wrapping_add(1 as size_t),
-                                    )
-                                        as *mut ::core::ffi::c_char;
-                                    strcpy(
-                                        newp_1,
-                                        (*y_array.add(y_size.wrapping_sub(1 as size_t))).data,
-                                    );
-                                    strcpy(newp_1.add(totlen), ptr_3);
-                                    ml_append(lnum, newp_1, 0 as colnr_T, false);
-                                    new_lnum += 1;
-                                    xfree(newp_1 as *mut ::core::ffi::c_void);
-                                    let mut oldp_1: *mut ::core::ffi::c_char = ml_get(lnum);
-                                    newp_1 = xmalloc(
-                                        (col as size_t)
-                                            .wrapping_add(yanklen_0 as size_t)
-                                            .wrapping_add(1 as size_t),
-                                    )
-                                        as *mut ::core::ffi::c_char;
-                                    memmove(
-                                        newp_1 as *mut ::core::ffi::c_void,
-                                        oldp_1 as *const ::core::ffi::c_void,
-                                        col as size_t,
-                                    );
-                                    memmove(
-                                        newp_1.offset(col as isize) as *mut ::core::ffi::c_void,
-                                        (*y_array.offset(0 as ::core::ffi::c_int as isize)).data
-                                            as *const ::core::ffi::c_void,
-                                        (yanklen_0 as size_t).wrapping_add(1 as size_t),
-                                    );
-                                    ml_replace(lnum, newp_1, false);
-                                    (*curwin.get()).w_cursor.lnum = lnum;
-                                    i_1 = 1 as size_t;
-                                }
-                                while i_1 < y_size {
-                                    if y_type as ::core::ffi::c_int
-                                        != kMTCharWise as ::core::ffi::c_int
-                                        || i_1 < y_size.wrapping_sub(1 as size_t)
-                                    {
-                                        if ml_append(
-                                            lnum,
-                                            (*y_array.add(i_1)).data,
-                                            0 as colnr_T,
-                                            false,
-                                        ) == FAIL
-                                        {
-                                            break '_error;
-                                        }
-                                        new_lnum += 1;
-                                    }
-                                    lnum += 1;
-                                    nr_lines += 1;
-                                    if flags & PUT_FIXINDENT as ::core::ffi::c_int != 0 {
-                                        let mut old_pos: pos_T = (*curwin.get()).w_cursor;
-                                        (*curwin.get()).w_cursor.lnum = lnum;
-                                        let mut ptr_4: *mut ::core::ffi::c_char = ml_get(lnum);
-                                        if cnt == count && i_1 == y_size.wrapping_sub(1 as size_t) {
-                                            lendiff = ml_get_len(lnum) as ::core::ffi::c_int;
-                                        }
-                                        if *ptr_4 as ::core::ffi::c_int == '#' as ::core::ffi::c_int
-                                            && preprocs_left() as ::core::ffi::c_int != 0
-                                        {
-                                            indent = 0 as ::core::ffi::c_int;
-                                        } else if *ptr_4 as ::core::ffi::c_int == NUL {
-                                            indent = 0 as ::core::ffi::c_int;
-                                        } else if first_indent {
-                                            indent_diff = orig_indent - get_indent();
-                                            indent = orig_indent;
-                                            first_indent = false;
-                                        } else {
-                                            indent = get_indent() + indent_diff;
-                                            if indent < 0 as ::core::ffi::c_int {
-                                                indent = 0 as ::core::ffi::c_int;
-                                            }
-                                        }
-                                        set_indent(indent, SIN_NOMARK);
-                                        (*curwin.get()).w_cursor = old_pos;
-                                        if cnt == count && i_1 == y_size.wrapping_sub(1 as size_t) {
-                                            lendiff -= ml_get_len(lnum) as ::core::ffi::c_int;
-                                        }
-                                    }
-                                    i_1 = i_1.wrapping_add(1);
-                                }
-                                let mut totsize: bcount_t = 0 as bcount_t;
-                                let mut lastsize: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                                if y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
-                                    || y_type as ::core::ffi::c_int
-                                        == kMTLineWise as ::core::ffi::c_int
-                                        && flags & PUT_LINE_SPLIT as ::core::ffi::c_int != 0
-                                {
-                                    i_1 = 0 as size_t;
-                                    while i_1 < y_size.wrapping_sub(1 as size_t) {
-                                        totsize +=
-                                            (*y_array.add(i_1)).size as bcount_t + 1 as bcount_t;
-                                        i_1 = i_1.wrapping_add(1);
-                                    }
-                                    lastsize = (*y_array.add(y_size.wrapping_sub(1 as size_t))).size
-                                        as ::core::ffi::c_int;
-                                    totsize += lastsize as bcount_t;
-                                }
-                                if y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
-                                {
-                                    extmark_splice(
-                                        curbuf.get(),
-                                        new_cursor.lnum as ::core::ffi::c_int
-                                            - 1 as ::core::ffi::c_int,
-                                        col,
-                                        0 as ::core::ffi::c_int,
-                                        0 as colnr_T,
-                                        0 as bcount_t,
-                                        y_size as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                                        lastsize as colnr_T,
-                                        totsize,
-                                        kExtmarkUndo,
-                                    );
-                                } else if y_type as ::core::ffi::c_int
-                                    == kMTLineWise as ::core::ffi::c_int
-                                    && flags & PUT_LINE_SPLIT as ::core::ffi::c_int != 0
-                                {
-                                    extmark_splice(
-                                        curbuf.get(),
-                                        new_cursor.lnum as ::core::ffi::c_int
-                                            - 1 as ::core::ffi::c_int,
-                                        split_pos,
-                                        0 as ::core::ffi::c_int,
-                                        0 as colnr_T,
-                                        0 as bcount_t,
-                                        y_size as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
-                                        0 as colnr_T,
-                                        totsize + 2 as bcount_t,
-                                        kExtmarkUndo,
-                                    );
-                                }
-                                if cnt == 1 as ::core::ffi::c_int {
-                                    new_lnum = lnum;
-                                }
-                                cnt += 1;
-                            }
-                            if y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int {
-                                (*curbuf.get()).b_op_start.col = 0 as ::core::ffi::c_int as colnr_T;
-                                if dir == FORWARD as ::core::ffi::c_int {
-                                    (*curbuf.get()).b_op_start.lnum += 1;
-                                }
-                            }
-                            let mut kind: ExtmarkOp = (if y_type as ::core::ffi::c_int
-                                == kMTLineWise as ::core::ffi::c_int
-                                && flags & PUT_LINE_SPLIT as ::core::ffi::c_int == 0
-                            {
-                                kExtmarkUndo as ::core::ffi::c_int
-                            } else {
-                                kExtmarkNOOP as ::core::ffi::c_int
-                            }) as ExtmarkOp;
-                            mark_adjust(
-                                (*curbuf.get()).b_op_start.lnum
-                                    + (y_type as ::core::ffi::c_int
-                                        == kMTCharWise as ::core::ffi::c_int)
-                                        as ::core::ffi::c_int,
-                                MAXLNUM as ::core::ffi::c_int as linenr_T,
-                                nr_lines,
-                                0 as linenr_T,
-                                kind,
-                            );
-                            if y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int {
-                                changed_lines(
-                                    curbuf.get(),
-                                    (*curwin.get()).w_cursor.lnum,
-                                    col,
-                                    (*curwin.get()).w_cursor.lnum + 1 as linenr_T,
-                                    nr_lines,
-                                    true,
-                                );
-                            } else {
-                                changed_lines(
-                                    curbuf.get(),
-                                    (*curbuf.get()).b_op_start.lnum,
-                                    0 as colnr_T,
-                                    (*curbuf.get()).b_op_start.lnum,
-                                    nr_lines,
-                                    true,
-                                );
-                            }
-                            (*curbuf.get()).b_op_end.lnum = new_lnum;
-                            col = (if 0 as ::core::ffi::c_int
-                                > (*y_array.add(y_size.wrapping_sub(1 as size_t))).size
-                                    as ::core::ffi::c_int
-                                    - lendiff
-                            {
-                                0 as ::core::ffi::c_int
-                            } else {
-                                (*y_array.add(y_size.wrapping_sub(1 as size_t))).size
-                                    as ::core::ffi::c_int
-                                    - lendiff
-                            }) as colnr_T;
-                            if col > 1 as ::core::ffi::c_int {
-                                (*curbuf.get()).b_op_end.col = (col as ::core::ffi::c_int
-                                    - 1 as ::core::ffi::c_int)
-                                    as colnr_T;
-                                if (*y_array.add(y_size.wrapping_sub(1 as size_t))).size
-                                    > 0 as size_t
-                                {
-                                    (*curbuf.get()).b_op_end.col -= utf_head_off(
-                                        (*y_array.add(y_size.wrapping_sub(1 as size_t))).data,
-                                        (*y_array.add(y_size.wrapping_sub(1 as size_t)))
-                                            .data
-                                            .add(
-                                                (*y_array.add(y_size.wrapping_sub(1 as size_t)))
-                                                    .size,
-                                            )
-                                            .offset(-(1 as ::core::ffi::c_int as isize)),
-                                    );
-                                }
-                            } else {
-                                (*curbuf.get()).b_op_end.col = 0 as ::core::ffi::c_int as colnr_T;
-                            }
-                            if flags & PUT_CURSLINE as ::core::ffi::c_int != 0 {
-                                (*curwin.get()).w_cursor.lnum = lnum;
-                                beginline(BL_WHITE | BL_FIX);
-                            } else if flags & PUT_CURSEND as ::core::ffi::c_int != 0 {
-                                if y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int
-                                {
-                                    if lnum >= (*curbuf.get()).b_ml.ml_line_count {
-                                        (*curwin.get()).w_cursor.lnum =
-                                            (*curbuf.get()).b_ml.ml_line_count;
-                                    } else {
-                                        (*curwin.get()).w_cursor.lnum = lnum + 1 as linenr_T;
-                                    }
-                                    (*curwin.get()).w_cursor.col =
-                                        0 as ::core::ffi::c_int as colnr_T;
-                                } else {
-                                    (*curwin.get()).w_cursor.lnum = new_lnum;
-                                    (*curwin.get()).w_cursor.col = col;
-                                    (*curbuf.get()).b_op_end = (*curwin.get()).w_cursor;
-                                    if col > 1 as ::core::ffi::c_int {
-                                        (*curbuf.get()).b_op_end.col = (col as ::core::ffi::c_int
-                                            - 1 as ::core::ffi::c_int)
-                                            as colnr_T;
-                                    }
-                                }
-                            } else if y_type as ::core::ffi::c_int
-                                == kMTLineWise as ::core::ffi::c_int
-                            {
-                                (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-                                if dir == FORWARD as ::core::ffi::c_int {
-                                    (*curwin.get()).w_cursor.lnum += 1;
-                                }
-                                beginline(BL_WHITE | BL_FIX);
-                            } else {
-                                (*curwin.get()).w_cursor = new_cursor;
-                            }
-                        }
-                    }
-                    msgmore(nr_lines as ::core::ffi::c_int);
-                    (*curwin.get()).w_set_curswant = true_0;
-                    len_0 = get_cursor_line_len();
-                    if (*curwin.get()).w_cursor.col > len_0 {
-                        if cur_ve_flags
-                            == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            (*curwin.get()).w_cursor.coladd =
-                                ((*curwin.get()).w_cursor.col as ::core::ffi::c_int - len_0)
-                                    as colnr_T;
-                        }
-                        (*curwin.get()).w_cursor.col = len_0 as colnr_T;
-                    }
+                    put.multiline(lnum, col, new_cursor);
                 }
             }
+
+            msgmore(put.nr_lines);
+            (*curwin.get()).w_set_curswant = true as c_int;
+
+            // Don't leave the cursor after the NUL.
+            let len = get_cursor_line_len();
+            if (*curwin.get()).w_cursor.col > len {
+                if ve_flags == kOptVeFlagAll as c_uint {
+                    (*curwin.get()).w_cursor.coladd = (*curwin.get()).w_cursor.col - len;
+                }
+                (*curwin.get()).w_cursor.col = len;
+            }
         }
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0 {
+
+        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int != 0 {
             (*curbuf.get()).b_op_start = orig_start;
             (*curbuf.get()).b_op_end = orig_end;
         }
         if allocated {
-            xfree(insert_string.data as *mut ::core::ffi::c_void);
+            xfree(insert_string.data as *mut c_void);
         }
-        if regname == '=' as ::core::ffi::c_int {
-            xfree(y_array as *mut ::core::ffi::c_void);
+        if regname == '=' as c_int {
+            xfree(put.y_array as *mut c_void);
         }
+
         if (*curbuf.get()).terminal.is_null() {
             VIsual_active.set(false);
         }
+
         adjust_cursor_eol();
     }
 }

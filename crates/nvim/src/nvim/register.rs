@@ -93,8 +93,7 @@ use crate::src::nvim::option::get_ve_flags;
 use crate::src::nvim::options::{kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, atoi, gettext, memcpy, memmove, memset, ngettext, snprintf, strcpy,
-    strlen, strncmp,
+    abort, atoi, gettext, memcpy, memmove, memset, ngettext, snprintf, strcpy, strlen, strncmp,
 };
 use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::plines::{getvcol, init_charsize_arg, win_charsize};
@@ -106,12 +105,11 @@ use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped_ex
 use crate::src::nvim::terminal::terminal_paste;
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    AdditionalData, CMOD_LOCKMARKS, CharsizeArg, CharsizeKind, ExtmarkOp, GRegFlags, MotionType,
-    OptInt, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD,
-    PUT_LINE_SPLIT, RemapValues, StrCharInfo, String_0, UndoObjectType, VAR_FIXED, bcount_t,
-    block_def, cmd_addr_T, colnr_T, exarg_T, garray_T, hashitem_T, hashtab_T, int64_t,
-    kBoolVarFalse, kBoolVarTrue, linenr_T, oparg_T, pos_T, ptrdiff_t, save_v_event_T, size_t,
-    ssize_t, yankreg_T,
+    AdditionalData, CMOD_LOCKMARKS, CharsizeArg, ExtmarkOp, GRegFlags, MotionType, PUT_BLOCK_INNER,
+    PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT,
+    RemapValues, String_0, UndoObjectType, VAR_FIXED, bcount_t, block_def, cmd_addr_T, colnr_T,
+    exarg_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, linenr_T,
+    oparg_T, pos_T, ptrdiff_t, save_v_event_T, size_t, ssize_t, yankreg_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::undo::{u_save, u_save_cursor};
