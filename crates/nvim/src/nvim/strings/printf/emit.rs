@@ -768,8 +768,11 @@ unsafe fn trim_float(c: &Conversion, tmp: &mut [c_char; TMP], mut len: size_t) -
         if matches!(c.fmt_spec, b'f' | b'F') {
             tp = tmp.as_mut_ptr().add(len).sub(1);
         } else {
+            // `as_mut_ptr`, not `as_ptr`: `delete_byte` writes through what
+            // this hands back, and a pointer derived from a *shared* borrow
+            // of `tmp` only grants read permission (Stacked Borrows).
             tp = vim_strchr(
-                tmp.as_ptr(),
+                tmp.as_mut_ptr().cast_const(),
                 if c.fmt_spec == b'e' { b'e' } else { b'E' } as c_int,
             );
             if tp.is_null() {
