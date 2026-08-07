@@ -33,7 +33,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
     let mut ap: ::core::ffi::VaList;
     let mut ap_types: *mut *const ::core::ffi::c_char =
         ::core::ptr::null_mut::<*const ::core::ffi::c_char>();
-    if parse_fmt_types(&raw mut ap_types, &raw mut num_posarg, fmt, tvs) == FAIL {
+    if parse_fmt_types(&mut ap_types, &mut num_posarg, fmt, tvs).is_err() {
         return 0 as ::core::ffi::c_int;
     }
     ap = ap_start.clone();
@@ -101,10 +101,9 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                 }
                 if *ptype as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
                     let mut digstart: *const ::core::ffi::c_char = p;
-                    let mut uj: ::core::ffi::c_uint = 0;
-                    if get_unsigned_int(digstart, &raw mut p, &raw mut uj, !tvs.is_null()) == FAIL {
+                    let Some(uj) = get_unsigned_int(digstart, &mut p, !tvs.is_null()) else {
                         break '_error;
-                    }
+                    };
                     pos_arg = uj as ::core::ffi::c_int;
                     p = p.offset(1);
                 }
@@ -144,12 +143,10 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                         p.offset(1 as ::core::ffi::c_int as isize);
                     p = p.offset(1);
                     if ascii_isdigit(*p as ::core::ffi::c_int) {
-                        let mut uj_0: ::core::ffi::c_uint = 0;
-                        if get_unsigned_int(digstart_0, &raw mut p, &raw mut uj_0, !tvs.is_null())
-                            == FAIL
-                        {
+                        let Some(uj_0) = get_unsigned_int(digstart_0, &mut p, !tvs.is_null())
+                        else {
                             break '_error;
-                        }
+                        };
                         arg_idx = uj_0 as ::core::ffi::c_int;
                         p = p.offset(1);
                     }
@@ -182,12 +179,9 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                     }
                 } else if ascii_isdigit(*p as ::core::ffi::c_int) {
                     let mut digstart_1: *const ::core::ffi::c_char = p;
-                    let mut uj_1: ::core::ffi::c_uint = 0;
-                    if get_unsigned_int(digstart_1, &raw mut p, &raw mut uj_1, !tvs.is_null())
-                        == FAIL
-                    {
+                    let Some(uj_1) = get_unsigned_int(digstart_1, &mut p, !tvs.is_null()) else {
                         break '_error;
-                    }
+                    };
                     min_field_width = uj_1 as size_t;
                 }
                 if *p as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
@@ -195,27 +189,19 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                     precision_specified = true_0 != 0;
                     if ascii_isdigit(*p as ::core::ffi::c_int) {
                         let mut digstart_2: *const ::core::ffi::c_char = p;
-                        let mut uj_2: ::core::ffi::c_uint = 0;
-                        if get_unsigned_int(digstart_2, &raw mut p, &raw mut uj_2, !tvs.is_null())
-                            == FAIL
-                        {
+                        let Some(uj_2) = get_unsigned_int(digstart_2, &mut p, !tvs.is_null())
+                        else {
                             break '_error;
-                        }
+                        };
                         precision = uj_2 as size_t;
                     } else if *p as ::core::ffi::c_int == '*' as ::core::ffi::c_int {
                         let mut digstart_3: *const ::core::ffi::c_char = p;
                         p = p.offset(1);
                         if ascii_isdigit(*p as ::core::ffi::c_int) {
-                            let mut uj_3: ::core::ffi::c_uint = 0;
-                            if get_unsigned_int(
-                                digstart_3,
-                                &raw mut p,
-                                &raw mut uj_3,
-                                !tvs.is_null(),
-                            ) == FAIL
-                            {
+                            let Some(uj_3) = get_unsigned_int(digstart_3, &mut p, !tvs.is_null())
+                            else {
                                 break '_error;
-                            }
+                            };
                             arg_idx = uj_3 as ::core::ffi::c_int;
                             p = p.offset(1);
                         }

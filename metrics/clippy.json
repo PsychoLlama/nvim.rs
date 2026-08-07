@@ -103,7 +103,6 @@
     "crates/nvim/src/nvim/statusline.rs": 73,
     "crates/nvim/src/nvim/strings/printf.rs": 17,
     "crates/nvim/src/nvim/strings/printf/emit.rs": 64,
-    "crates/nvim/src/nvim/strings/printf/spec.rs": 2,
     "crates/nvim/src/nvim/terminal.rs": 2,
     "crates/nvim/src/nvim/terminal/input.rs": 2,
     "crates/nvim/src/nvim/testing.rs": 45,

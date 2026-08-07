@@ -17,7 +17,7 @@ mod emit;
 mod spec;
 
 pub use self::emit::*;
-pub use self::spec::*;
+pub(crate) use self::spec::*;
 
 static e_printf: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
     b"E766: Insufficient arguments for printf()\0".as_ptr() as *const ::core::ffi::c_char,

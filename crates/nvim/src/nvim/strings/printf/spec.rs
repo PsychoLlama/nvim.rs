@@ -1,868 +1,536 @@
 //! Format specifiers: typing them, and the `%N$` positional pass.
 //!
 //! `format_typeof` reduces a conversion plus its length modifier to one of the
-//! `TYPE_*` classes, and `format_typename` names that class for an error
+//! `ArgType` classes, and `format_typename` names that class for an error
 //! message.  `parse_fmt_types` is the pre-pass positional arguments force: with
 //! `%N$` the arguments are not consumed in order, so the whole format has to be
 //! walked first to learn each position's type, `adjust_types` recording one and
 //! rejecting a position used at two incompatible types.  `skip_to_arg` is the
-//! lookup that pass exists to serve.
+//! lookup that pass exists to serve -- a `va_list` can only be walked forwards,
+//! so reaching argument N means rewinding to the start and stepping over N-1
+//! arguments *of the types this pass recorded*.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::super::*;
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{
+    CStr, VaList, c_char, c_double, c_int, c_long, c_longlong, c_uint, c_ulong, c_ulonglong, c_void,
+};
+use core::ptr;
 
-pub const TYPE_FLOAT: ::core::ffi::c_int = 12;
+use crate::src::nvim::ascii::ascii_isdigit;
+use crate::src::nvim::main::e_val_too_large_len;
+use crate::src::nvim::memory::{xcalloc, xfree, xrealloc, xstrchrnul};
+use crate::src::nvim::message::{semsg, siemsg};
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::types::{VAR_UNKNOWN, size_t, typval_T};
 
-pub const TYPE_SIZET: ::core::ffi::c_int = 7;
+const E_CANNOT_MIX: &CStr = c"E1500: Cannot mix positional and non-positional arguments: %s";
+const E_FMT_ARG_UNUSED: &CStr = c"E1501: format argument %d unused in $-style format: %s";
+const E_FIELD_WIDTH_REUSED: &CStr =
+    c"E1502: Positional argument %d used as field width reused as different type: %s/%s";
+const E_POS_OUT_OF_BOUNDS: &CStr = c"E1503: Positional argument %d out of bounds: %s";
+const E_POS_TYPE_INCONSISTENT: &CStr =
+    c"E1504: Positional argument %d type used inconsistently: %s/%s";
+const E_INVALID_FORMAT_SPECIFIER: &CStr = c"E1505: Invalid format specifier: %s";
+const E_APTYPES_IS_NULL: &CStr =
+    c"E1507: Internal error: ap_types or ap_types[idx] is NULL: %d: %s";
 
-pub const TYPE_UNSIGNEDLONGLONGINT: ::core::ffi::c_int = 6;
+/// A field width or precision may not exceed 1 MiB.
+pub(crate) const MAX_ALLOWED_STRING_WIDTH: c_int = 1048576;
 
-pub const TYPE_UNSIGNEDLONGINT: ::core::ffi::c_int = 5;
+/// The classes a conversion plus its length modifier reduces to.
+///
+/// This is the whole reason the positional pass exists: a `va_list` can
+/// only be stepped by *reading* an argument, and reading one needs its
+/// type, so `%2$s` cannot be served without first learning what `%1$` was.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ArgType {
+    Unknown,
+    Int,
+    LongInt,
+    LongLongInt,
+    SignedSizeT,
+    UnsignedInt,
+    UnsignedLongInt,
+    UnsignedLongLongInt,
+    SizeT,
+    Pointer,
+    Percent,
+    Char,
+    Str,
+    Float,
+}
 
-pub const TYPE_UNSIGNEDINT: ::core::ffi::c_int = 4;
-
-pub const TYPE_SIGNEDSIZET: ::core::ffi::c_int = 3;
-
-pub const TYPE_LONGLONGINT: ::core::ffi::c_int = 2;
-
-pub const TYPE_LONGINT: ::core::ffi::c_int = 1;
-
-pub const TYPE_INT: ::core::ffi::c_int = 0;
-
-pub const TYPE_POINTER: ::core::ffi::c_int = 8;
-
-pub const TYPE_STRING: ::core::ffi::c_int = 11;
-
-pub const TYPE_CHAR: ::core::ffi::c_int = 10;
-
-pub const TYPE_UNKNOWN: ::core::ffi::c_int = -1;
-
-pub const TYPE_PERCENT: ::core::ffi::c_int = 9;
-
-pub const MAX_ALLOWED_STRING_WIDTH: ::core::ffi::c_int = 1048576;
-
-static e_cannot_mix_positional_and_non_positional_str: GlobalCell<[::core::ffi::c_char; 62]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(
-            *b"E1500: Cannot mix positional and non-positional arguments: %s\0",
-        )
-    });
-
-static e_fmt_arg_nr_unused_str: GlobalCell<[::core::ffi::c_char; 55]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 55], [::core::ffi::c_char; 55]>(
-        *b"E1501: format argument %d unused in $-style format: %s\0",
-    )
-});
-
-static e_positional_num_field_spec_reused_str_str: GlobalCell<[::core::ffi::c_char; 82]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 82], [::core::ffi::c_char; 82]>(
-            *b"E1502: Positional argument %d used as field width reused as different type: %s/%s\0",
-        )
-    });
-
-static e_positional_nr_out_of_bounds_str: GlobalCell<[::core::ffi::c_char; 48]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
-            *b"E1503: Positional argument %d out of bounds: %s\0",
-        )
-    });
-
-static e_positional_arg_num_type_inconsistent_str_str: GlobalCell<[::core::ffi::c_char; 62]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(
-            *b"E1504: Positional argument %d type used inconsistently: %s/%s\0",
-        )
-    });
-
-static e_invalid_format_specifier_str: GlobalCell<[::core::ffi::c_char; 36]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
-            *b"E1505: Invalid format specifier: %s\0",
-        )
-    });
-
-static e_aptypes_is_null_nr_str: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 65], [::core::ffi::c_char; 65]>(
-        *b"E1507: Internal error: ap_types or ap_types[idx] is NULL: %d: %s\0",
-    )
-});
-
-static typename_unknown: GlobalCell<[::core::ffi::c_char; 8]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b"unknown\0")
-});
-
-static typename_int: GlobalCell<[::core::ffi::c_char; 4]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 4], [::core::ffi::c_char; 4]>(*b"int\0")
-});
-
-static typename_longint: GlobalCell<[::core::ffi::c_char; 9]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"long int\0")
-});
-
-static typename_longlongint: GlobalCell<[::core::ffi::c_char; 14]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 14], [::core::ffi::c_char; 14]>(*b"long long int\0")
-});
-
-static typename_signedsizet: GlobalCell<[::core::ffi::c_char; 14]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 14], [::core::ffi::c_char; 14]>(*b"signed size_t\0")
-});
-
-static typename_unsignedint: GlobalCell<[::core::ffi::c_char; 13]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 13], [::core::ffi::c_char; 13]>(*b"unsigned int\0")
-});
-
-static typename_unsignedlongint: GlobalCell<[::core::ffi::c_char; 18]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"unsigned long int\0")
-});
-
-static typename_unsignedlonglongint: GlobalCell<[::core::ffi::c_char; 23]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"unsigned long long int\0")
-    });
-
-static typename_sizet: GlobalCell<[::core::ffi::c_char; 7]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b"size_t\0")
-});
-
-static typename_pointer: GlobalCell<[::core::ffi::c_char; 8]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b"pointer\0")
-});
-
-static typename_percent: GlobalCell<[::core::ffi::c_char; 8]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b"percent\0")
-});
-
-static typename_char: GlobalCell<[::core::ffi::c_char; 5]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"char\0")
-});
-
-static typename_string: GlobalCell<[::core::ffi::c_char; 7]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b"string\0")
-});
-
-static typename_float: GlobalCell<[::core::ffi::c_char; 6]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b"float\0")
-});
-// ── The vim_str* family: safe cores + C-ABI shims ─────────────────────────
-//
-// Byte-level logic (unquoting, ASCII case mapping, comparison, scanning)
-// lives in safe functions; the shims confine the raw-pointer plumbing.
-// Multibyte-aware functions (vim_strsave_escaped_ext, shellescape,
-// strcase_save, vim_strchr) still call the transpiled mbyte/ex_docmd
-// machinery through raw pointers and remain shims throughout. Results are
-// allocated with the xmalloc family so ownership crosses the C ABI as
-// before.
-
-unsafe extern "C" fn format_typeof(mut type_0: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    unsafe {
-        let mut length_modifier: ::core::ffi::c_char = NUL as ::core::ffi::c_char;
-        let mut fmt_spec: ::core::ffi::c_char = NUL as ::core::ffi::c_char;
-        if *type_0 as ::core::ffi::c_int == 'h' as ::core::ffi::c_int
-            || *type_0 as ::core::ffi::c_int == 'l' as ::core::ffi::c_int
-            || *type_0 as ::core::ffi::c_int == 'z' as ::core::ffi::c_int
-        {
-            length_modifier = *type_0;
-            type_0 = type_0.offset(1);
-            if length_modifier as ::core::ffi::c_int == 'l' as ::core::ffi::c_int
-                && *type_0 as ::core::ffi::c_int == 'l' as ::core::ffi::c_int
-            {
-                length_modifier = 'L' as ::core::ffi::c_char;
-                type_0 = type_0.offset(1);
-            }
+impl ArgType {
+    /// The name this class is reported by in `E1502`/`E1504`.
+    fn name(self) -> &'static CStr {
+        match self {
+            ArgType::Int => c"int",
+            ArgType::LongInt => c"long int",
+            ArgType::LongLongInt => c"long long int",
+            ArgType::SignedSizeT => c"signed size_t",
+            ArgType::UnsignedInt => c"unsigned int",
+            ArgType::UnsignedLongInt => c"unsigned long int",
+            ArgType::UnsignedLongLongInt => c"unsigned long long int",
+            ArgType::SizeT => c"size_t",
+            ArgType::Pointer => c"pointer",
+            ArgType::Percent => c"percent",
+            ArgType::Char => c"char",
+            ArgType::Str => c"string",
+            ArgType::Float => c"float",
+            ArgType::Unknown => c"unknown",
         }
-        fmt_spec = *type_0;
-        match fmt_spec as ::core::ffi::c_int {
-            105 => {
-                fmt_spec = 'd' as ::core::ffi::c_char;
-            }
-            42 => {
-                fmt_spec = 'd' as ::core::ffi::c_char;
-                length_modifier = 'h' as ::core::ffi::c_char;
-            }
-            68 => {
-                fmt_spec = 'd' as ::core::ffi::c_char;
-                length_modifier = 'l' as ::core::ffi::c_char;
-            }
-            85 => {
-                fmt_spec = 'u' as ::core::ffi::c_char;
-                length_modifier = 'l' as ::core::ffi::c_char;
-            }
-            79 => {
-                fmt_spec = 'o' as ::core::ffi::c_char;
-                length_modifier = 'l' as ::core::ffi::c_char;
-            }
-            _ => {}
-        }
-        match fmt_spec as ::core::ffi::c_int {
-            37 => return TYPE_PERCENT,
-            99 => return TYPE_CHAR,
-            115 | 83 => return TYPE_STRING,
-            100 | 117 | 98 | 66 | 111 | 120 | 88 | 112 => {
-                if fmt_spec as ::core::ffi::c_int == 'p' as ::core::ffi::c_int {
-                    return TYPE_POINTER;
-                } else if fmt_spec as ::core::ffi::c_int == 'b' as ::core::ffi::c_int
-                    || fmt_spec as ::core::ffi::c_int == 'B' as ::core::ffi::c_int
-                {
-                    return TYPE_UNSIGNEDLONGLONGINT;
-                } else if fmt_spec as ::core::ffi::c_int == 'd' as ::core::ffi::c_int {
-                    match length_modifier as ::core::ffi::c_int {
-                        NUL | 104 => return TYPE_INT,
-                        108 => return TYPE_LONGINT,
-                        76 => return TYPE_LONGLONGINT,
-                        122 => return TYPE_SIGNEDSIZET,
-                        _ => {}
-                    }
-                } else {
-                    match length_modifier as ::core::ffi::c_int {
-                        NUL | 104 => return TYPE_UNSIGNEDINT,
-                        108 => return TYPE_UNSIGNEDLONGINT,
-                        76 => return TYPE_UNSIGNEDLONGLONGINT,
-                        122 => return TYPE_SIZET,
-                        _ => {}
-                    }
-                }
-            }
-            102 | 70 | 101 | 69 | 103 | 71 => return TYPE_FLOAT,
-            _ => {}
-        }
-        return TYPE_UNKNOWN;
     }
 }
 
-unsafe extern "C" fn format_typename(
-    mut type_0: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+/// The class of the conversion `spec` points at, length modifier included.
+///
+/// `spec` points *into* a format string, at the first character after the
+/// flags/width/precision — so it may be a length modifier, and it is never
+/// NUL-terminated at the end of the conversion.
+pub(crate) unsafe fn format_typeof(spec: *const c_char) -> ArgType {
     unsafe {
-        match format_typeof(type_0) {
-            0 => return gettext((typename_int.ptr() as *const _) as *const ::core::ffi::c_char),
-            1 => {
-                return gettext((typename_longint.ptr() as *const _) as *const ::core::ffi::c_char);
+        let mut spec = spec;
+        // Allowed length modifiers: none, h, l, ll (recorded as 'L'), z.
+        let mut length_modifier = 0;
+        if matches!(*spec as u8, b'h' | b'l' | b'z') {
+            length_modifier = *spec as u8;
+            spec = spec.add(1);
+            if length_modifier == b'l' && *spec as u8 == b'l' {
+                length_modifier = b'L';
+                spec = spec.add(1);
             }
-            2 => {
-                return gettext(
-                    (typename_longlongint.ptr() as *const _) as *const ::core::ffi::c_char,
-                );
-            }
-            4 => {
-                return gettext(
-                    (typename_unsignedint.ptr() as *const _) as *const ::core::ffi::c_char,
-                );
-            }
-            3 => {
-                return gettext(
-                    (typename_signedsizet.ptr() as *const _) as *const ::core::ffi::c_char,
-                );
-            }
-            5 => {
-                return gettext(
-                    (typename_unsignedlongint.ptr() as *const _) as *const ::core::ffi::c_char,
-                );
-            }
-            6 => {
-                return gettext(
-                    (typename_unsignedlonglongint.ptr() as *const _) as *const ::core::ffi::c_char,
-                );
-            }
-            7 => return gettext((typename_sizet.ptr() as *const _) as *const ::core::ffi::c_char),
-            8 => {
-                return gettext((typename_pointer.ptr() as *const _) as *const ::core::ffi::c_char);
-            }
-            9 => {
-                return gettext((typename_percent.ptr() as *const _) as *const ::core::ffi::c_char);
-            }
-            10 => return gettext((typename_char.ptr() as *const _) as *const ::core::ffi::c_char),
-            11 => {
-                return gettext((typename_string.ptr() as *const _) as *const ::core::ffi::c_char);
-            }
-            12 => return gettext((typename_float.ptr() as *const _) as *const ::core::ffi::c_char),
-            _ => {}
         }
-        return gettext((typename_unknown.ptr() as *const _) as *const ::core::ffi::c_char);
+
+        // Synonyms, each of which implies a length modifier of its own.
+        let (fmt_spec, length_modifier) = match *spec as u8 {
+            b'i' => (b'd', length_modifier),
+            b'*' => (b'd', b'h'),
+            b'D' => (b'd', b'l'),
+            b'U' => (b'u', b'l'),
+            b'O' => (b'o', b'l'),
+            other => (other, length_modifier),
+        };
+
+        match fmt_spec {
+            b'%' => ArgType::Percent,
+            b'c' => ArgType::Char,
+            b's' | b'S' => ArgType::Str,
+            b'f' | b'F' | b'e' | b'E' | b'g' | b'G' => ArgType::Float,
+            b'p' => ArgType::Pointer,
+            // `b`/`B` always read the widest unsigned type.
+            b'b' | b'B' => ArgType::UnsignedLongLongInt,
+            // `d` is the only signed one; `u o x X` are unsigned.
+            b'd' => match length_modifier {
+                // char and short arguments are promoted to int.
+                0 | b'h' => ArgType::Int,
+                b'l' => ArgType::LongInt,
+                b'L' => ArgType::LongLongInt,
+                b'z' => ArgType::SignedSizeT,
+                _ => ArgType::Unknown,
+            },
+            b'u' | b'o' | b'x' | b'X' => match length_modifier {
+                0 | b'h' => ArgType::UnsignedInt,
+                b'l' => ArgType::UnsignedLongInt,
+                b'L' => ArgType::UnsignedLongLongInt,
+                b'z' => ArgType::SizeT,
+                _ => ArgType::Unknown,
+            },
+            _ => ArgType::Unknown,
+        }
     }
 }
 
-unsafe extern "C" fn adjust_types(
-    mut ap_types: *mut *mut *const ::core::ffi::c_char,
-    mut arg: ::core::ffi::c_int,
-    mut num_posarg: *mut ::core::ffi::c_int,
-    mut type_0: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+/// The translated name of `spec`'s class, for an error message.
+unsafe fn format_typename(spec: *const c_char) -> *const c_char {
+    unsafe { gettext(format_typeof(spec).name().as_ptr()) }
+}
+
+/// Record that positional argument `arg` (one-based) is used at the type
+/// `spec` spells, growing `ap_types` to fit and rejecting a position used
+/// at two incompatible types.
+unsafe fn adjust_types(
+    ap_types: &mut *mut *const c_char,
+    arg: c_int,
+    num_posarg: &mut c_int,
+    spec: *const c_char,
+) -> Result<(), ()> {
     unsafe {
-        if arg <= 0 as ::core::ffi::c_int {
-            semsg(
-                gettext(
-                    (e_invalid_format_specifier_str.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ),
-                type_0,
-            );
-            return FAIL;
+        if arg <= 0 {
+            semsg(gettext(E_INVALID_FORMAT_SPECIFIER.as_ptr()), spec);
+            return Err(());
         }
-        if (*ap_types).is_null() || *num_posarg < arg {
-            let mut new_types: *mut *const ::core::ffi::c_char = (if (*ap_types).is_null() {
-                xcalloc(
-                    arg as size_t,
-                    ::core::mem::size_of::<*const ::core::ffi::c_char>(),
-                )
+
+        if ap_types.is_null() || *num_posarg < arg {
+            let entries = arg as size_t;
+            let bytes = entries * size_of::<*const c_char>();
+            let grown = if ap_types.is_null() {
+                xcalloc(entries, size_of::<*const c_char>())
             } else {
-                xrealloc(
-                    *ap_types as *mut ::core::ffi::c_void,
-                    (arg as size_t)
-                        .wrapping_mul(::core::mem::size_of::<*const ::core::ffi::c_char>()),
-                )
-            })
-                as *mut *const ::core::ffi::c_char;
-            let mut idx: ::core::ffi::c_int = *num_posarg;
-            while idx < arg {
-                *new_types.offset(idx as isize) = ::core::ptr::null::<::core::ffi::c_char>();
-                idx += 1;
+                xrealloc(*ap_types as *mut c_void, bytes)
+            } as *mut *const c_char;
+            // `xrealloc` does not zero, so the new tail must be.
+            for idx in *num_posarg..arg {
+                *grown.offset(idx as isize) = ptr::null();
             }
-            *ap_types = new_types;
+            *ap_types = grown;
             *num_posarg = arg;
         }
-        if !(*(*ap_types).offset((arg - 1 as ::core::ffi::c_int) as isize)).is_null() {
-            if *(*(*ap_types).offset((arg - 1 as ::core::ffi::c_int) as isize))
-                .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '*' as ::core::ffi::c_int
-                || *type_0.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '*' as ::core::ffi::c_int
-            {
-                let mut pt: *const ::core::ffi::c_char = type_0;
-                if *pt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '*' as ::core::ffi::c_int
-                {
-                    pt = *(*ap_types).offset((arg - 1 as ::core::ffi::c_int) as isize);
+
+        let slot = (*ap_types).offset(arg as isize - 1);
+        let seen = *slot;
+        if !seen.is_null() {
+            if *seen as u8 == b'*' || *spec as u8 == b'*' {
+                // One of the two uses this position as a `*` field width,
+                // so the *other* one has to be an integer. If both are,
+                // there is nothing left to check.
+                let other = if *spec as u8 == b'*' { seen } else { spec };
+                if *other as u8 != b'*' && !matches!(*other as u8, b'd' | b'i') {
+                    semsg(
+                        gettext(E_FIELD_WIDTH_REUSED.as_ptr()),
+                        arg,
+                        format_typename(seen),
+                        format_typename(spec),
+                    );
+                    return Err(());
                 }
-                if *pt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != '*' as ::core::ffi::c_int
-                {
-                    match *pt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                        100 | 105 => {}
-                        _ => {
-                            semsg(
-                                gettext(
-                                    (e_positional_num_field_spec_reused_str_str.ptr() as *const _)
-                                        as *const ::core::ffi::c_char,
-                                ),
-                                arg,
-                                format_typename(
-                                    *(*ap_types).offset((arg - 1 as ::core::ffi::c_int) as isize),
-                                ),
-                                format_typename(type_0),
-                            );
-                            return FAIL;
-                        }
-                    }
-                }
-            } else if format_typeof(type_0)
-                != format_typeof(*(*ap_types).offset((arg - 1 as ::core::ffi::c_int) as isize))
-            {
+            } else if format_typeof(spec) != format_typeof(seen) {
                 semsg(
-                    gettext(
-                        (e_positional_arg_num_type_inconsistent_str_str.ptr() as *const _)
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(E_POS_TYPE_INCONSISTENT.as_ptr()),
                     arg,
-                    format_typename(type_0),
-                    format_typename(*(*ap_types).offset((arg - 1 as ::core::ffi::c_int) as isize)),
+                    format_typename(spec),
+                    format_typename(seen),
                 );
-                return FAIL;
+                return Err(());
             }
         }
-        *(*ap_types).offset((arg - 1 as ::core::ffi::c_int) as isize) = type_0;
-        return OK;
+
+        *slot = spec;
+        Ok(())
     }
 }
 
-pub(crate) unsafe extern "C" fn format_overflow_error(mut pstart: *const ::core::ffi::c_char) {
+/// `E1510`, quoting only the digits that overflowed.
+pub(crate) unsafe fn format_overflow_error(pstart: *const c_char) {
     unsafe {
-        let mut p: *const ::core::ffi::c_char = pstart;
-        while ascii_isdigit(*p as ::core::ffi::c_int) {
-            p = p.offset(1);
+        let mut p = pstart;
+        while ascii_isdigit(*p as c_int) {
+            p = p.add(1);
         }
         semsg(
-            gettext(&raw const e_val_too_large_len as *const ::core::ffi::c_char),
-            p.offset_from(pstart) as ::core::ffi::c_int,
+            gettext(e_val_too_large_len.ptr().cast::<c_char>()),
+            p.offset_from(pstart) as c_int,
             pstart,
         );
     }
 }
 
-pub(crate) unsafe extern "C" fn get_unsigned_int(
-    mut pstart: *const ::core::ffi::c_char,
-    mut p: *mut *const ::core::ffi::c_char,
-    mut uj: *mut ::core::ffi::c_uint,
-    mut overflow_err: bool,
-) -> ::core::ffi::c_int {
+/// Read the decimal number at `*p`, advancing it past the digits.
+///
+/// The scan itself stops once the value passes `MAX_ALLOWED_STRING_WIDTH`,
+/// so an absurdly long run of digits cannot overflow the accumulator.
+/// `overflow_err` then decides between raising `E1510` and clamping —
+/// `printf()` raises, an internal `vim_snprintf` clamps.
+pub(crate) unsafe fn get_unsigned_int(
+    pstart: *const c_char,
+    p: &mut *const c_char,
+    overflow_err: bool,
+) -> Option<c_uint> {
     unsafe {
-        *uj = (**p as ::core::ffi::c_int - '0' as ::core::ffi::c_int) as ::core::ffi::c_uint;
-        *p = (*p).offset(1);
-        while ascii_isdigit(**p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-            && *uj < MAX_ALLOWED_STRING_WIDTH as ::core::ffi::c_uint
-        {
-            *uj = (10 as ::core::ffi::c_uint).wrapping_mul(*uj).wrapping_add(
-                (**p as ::core::ffi::c_int - '0' as ::core::ffi::c_int) as ::core::ffi::c_uint,
-            );
-            *p = (*p).offset(1);
+        let digit = |c: c_char| (c as c_int - '0' as c_int) as c_uint;
+        let mut uj = digit(**p);
+        *p = p.add(1);
+        while ascii_isdigit(**p as c_int) && uj < MAX_ALLOWED_STRING_WIDTH as c_uint {
+            uj = 10u32.wrapping_mul(uj).wrapping_add(digit(**p));
+            *p = p.add(1);
         }
-        if *uj > MAX_ALLOWED_STRING_WIDTH as ::core::ffi::c_uint {
+        if uj > MAX_ALLOWED_STRING_WIDTH as c_uint {
             if overflow_err {
                 format_overflow_error(pstart);
-                return FAIL;
-            } else {
-                *uj = MAX_ALLOWED_STRING_WIDTH as ::core::ffi::c_uint;
+                return None;
             }
+            uj = MAX_ALLOWED_STRING_WIDTH as c_uint;
         }
-        return OK;
+        Some(uj)
     }
 }
 
-pub(crate) unsafe extern "C" fn parse_fmt_types(
-    mut ap_types: *mut *mut *const ::core::ffi::c_char,
-    mut num_posarg: *mut ::core::ffi::c_int,
-    mut fmt: *const ::core::ffi::c_char,
-    mut tvs: *mut typval_T,
-) -> ::core::ffi::c_int {
+/// Walk `fmt` once, recording the type of every `%N$` position.
+///
+/// On failure `ap_types` is freed and both outputs are reset, so the
+/// caller may simply stop.
+pub(crate) unsafe fn parse_fmt_types(
+    ap_types: &mut *mut *const c_char,
+    num_posarg: &mut c_int,
+    fmt: *const c_char,
+    tvs: *mut typval_T,
+) -> Result<(), ()> {
+    if fmt.is_null() {
+        return Ok(());
+    }
+    let result = unsafe { scan_fmt_types(ap_types, num_posarg, fmt, tvs) };
+    if result.is_err() {
+        unsafe { xfree(*ap_types as *mut c_void) };
+        *ap_types = ptr::null_mut();
+        *num_posarg = 0;
+    }
+    result
+}
+
+/// `parse_fmt_types`' body; the caller owns the cleanup.
+unsafe fn scan_fmt_types(
+    ap_types: &mut *mut *const c_char,
+    num_posarg: &mut c_int,
+    fmt: *const c_char,
+    tvs: *mut typval_T,
+) -> Result<(), ()> {
     unsafe {
-        let mut p: *const ::core::ffi::c_char = fmt;
-        let mut arg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut any_pos: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut any_arg: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if p.is_null() {
-            return OK;
+        // A format may address its arguments positionally (`%2$s`) or in
+        // order, never both.
+        let mut any_pos = false;
+        let mut any_arg = false;
+        let mut p = fmt;
+
+        macro_rules! check_pos_arg {
+            () => {
+                if any_pos && any_arg {
+                    semsg(gettext(E_CANNOT_MIX.as_ptr()), fmt);
+                    return Err(());
+                }
+            };
         }
-        '_error: {
-            while *p as ::core::ffi::c_int != NUL {
-                if *p as ::core::ffi::c_int != '%' as ::core::ffi::c_int {
-                    let mut n: size_t = xstrchrnul(
-                        p.offset(1 as ::core::ffi::c_int as isize),
-                        '%' as ::core::ffi::c_char,
-                    )
-                    .offset_from(p) as size_t;
-                    p = p.offset(n as isize);
+        macro_rules! invalid_specifier {
+            () => {{
+                semsg(gettext(E_INVALID_FORMAT_SPECIFIER.as_ptr()), fmt);
+                return Err(());
+            }};
+        }
+
+        while *p != 0 {
+            if *p as u8 != b'%' {
+                // Skip to the next conversion in one step.
+                p = xstrchrnul(p.add(1), b'%' as c_char);
+                continue;
+            }
+
+            let pstart = p.add(1);
+            p = p.add(1); // step over the '%'
+
+            // A leading run of digits followed by '$' is a position.
+            let mut pos_arg = -1;
+            let mut ptype = p;
+            while ascii_isdigit(*ptype as c_int) {
+                ptype = ptype.add(1);
+            }
+            if *ptype as u8 == b'$' {
+                if *p as u8 == b'0' {
+                    invalid_specifier!(); // a '0' flag before the position
+                }
+                let uj = get_unsigned_int(pstart, &mut p, !tvs.is_null()).ok_or(())?;
+                pos_arg = uj as c_int;
+                any_pos = true;
+                check_pos_arg!();
+                p = p.add(1); // step over the '$'
+            }
+
+            // Flags. Which ones win over which is the emitter's problem;
+            // here they are only skipped.
+            while matches!(*p as u8, b'0' | b'-' | b'+' | b' ' | b'#' | b'\'') {
+                p = p.add(1);
+            }
+
+            // Field width, then precision: the same two shapes each time,
+            // `*` (an argument, possibly positional) or a literal number.
+            let mut arg = p;
+            if *arg as u8 == b'*' {
+                p = p.add(1);
+                if ascii_isdigit(*p as c_int) {
+                    let uj = get_unsigned_int(arg.add(1), &mut p, !tvs.is_null()).ok_or(())?;
+                    if *p as u8 != b'$' {
+                        invalid_specifier!();
+                    }
+                    p = p.add(1);
+                    any_pos = true;
+                    check_pos_arg!();
+                    adjust_types(ap_types, uj as c_int, num_posarg, arg)?;
                 } else {
-                    let mut length_modifier: ::core::ffi::c_char = NUL as ::core::ffi::c_char;
-                    let mut pos_arg: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-                    let mut pstart: *const ::core::ffi::c_char =
-                        p.offset(1 as ::core::ffi::c_int as isize);
-                    p = p.offset(1);
-                    let mut ptype: *const ::core::ffi::c_char = p;
-                    while ascii_isdigit(*ptype as ::core::ffi::c_int) {
-                        ptype = ptype.offset(1);
+                    any_arg = true;
+                    check_pos_arg!();
+                }
+            } else if ascii_isdigit(*p as c_int) {
+                // A literal width. Read it only to reject a `$` after it:
+                // that would be a position in a place one cannot appear.
+                let digstart = p;
+                get_unsigned_int(digstart, &mut p, !tvs.is_null()).ok_or(())?;
+                if *p as u8 == b'$' {
+                    invalid_specifier!();
+                }
+            }
+
+            if *p as u8 == b'.' {
+                p = p.add(1);
+                arg = p;
+                if *arg as u8 == b'*' {
+                    p = p.add(1);
+                    if ascii_isdigit(*p as c_int) {
+                        let uj = get_unsigned_int(arg.add(1), &mut p, !tvs.is_null()).ok_or(())?;
+                        if *p as u8 != b'$' {
+                            invalid_specifier!();
+                        }
+                        any_pos = true;
+                        check_pos_arg!();
+                        p = p.add(1);
+                        adjust_types(ap_types, uj as c_int, num_posarg, arg)?;
+                    } else {
+                        any_arg = true;
+                        check_pos_arg!();
                     }
-                    if *ptype as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
-                        if *p as ::core::ffi::c_int == '0' as ::core::ffi::c_int {
-                            semsg(
-                                gettext(
-                                    (e_invalid_format_specifier_str.ptr() as *const _)
-                                        as *const ::core::ffi::c_char,
-                                ),
-                                fmt,
-                            );
-                            break '_error;
-                        } else {
-                            let mut uj: ::core::ffi::c_uint = 0;
-                            if get_unsigned_int(pstart, &raw mut p, &raw mut uj, !tvs.is_null())
-                                == FAIL
-                            {
-                                break '_error;
-                            }
-                            pos_arg = uj as ::core::ffi::c_int;
-                            any_pos = 1 as ::core::ffi::c_int;
-                            if any_pos != 0 && any_arg != 0 {
-                                semsg(
-                                    gettext(
-                                        (e_cannot_mix_positional_and_non_positional_str.ptr()
-                                            as *const _)
-                                            as *const ::core::ffi::c_char,
-                                    ),
-                                    fmt,
-                                );
-                                break '_error;
-                            } else {
-                                p = p.offset(1);
-                            }
-                        }
-                    }
-                    while *p as ::core::ffi::c_int == '0' as ::core::ffi::c_int
-                        || *p as ::core::ffi::c_int == '-' as ::core::ffi::c_int
-                        || *p as ::core::ffi::c_int == '+' as ::core::ffi::c_int
-                        || *p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
-                        || *p as ::core::ffi::c_int == '#' as ::core::ffi::c_int
-                        || *p as ::core::ffi::c_int == '\'' as ::core::ffi::c_int
-                    {
-                        match *p as ::core::ffi::c_int {
-                            48 | 45 | 43 | 32 | 35 | 39 | _ => {}
-                        }
-                        p = p.offset(1);
-                    }
-                    arg = p;
-                    if *arg as ::core::ffi::c_int == '*' as ::core::ffi::c_int {
-                        p = p.offset(1);
-                        if ascii_isdigit(*p as ::core::ffi::c_int) {
-                            let mut uj_0: ::core::ffi::c_uint = 0;
-                            if get_unsigned_int(
-                                arg.offset(1 as ::core::ffi::c_int as isize),
-                                &raw mut p,
-                                &raw mut uj_0,
-                                !tvs.is_null(),
-                            ) == FAIL
-                            {
-                                break '_error;
-                            }
-                            if *p as ::core::ffi::c_int != '$' as ::core::ffi::c_int {
-                                semsg(
-                                    gettext(
-                                        (e_invalid_format_specifier_str.ptr() as *const _)
-                                            as *const ::core::ffi::c_char,
-                                    ),
-                                    fmt,
-                                );
-                                break '_error;
-                            } else {
-                                p = p.offset(1);
-                                any_pos = 1 as ::core::ffi::c_int;
-                                if any_pos != 0 && any_arg != 0 {
-                                    semsg(
-                                        gettext(
-                                            (e_cannot_mix_positional_and_non_positional_str.ptr()
-                                                as *const _)
-                                                as *const ::core::ffi::c_char,
-                                        ),
-                                        fmt,
-                                    );
-                                    break '_error;
-                                } else if adjust_types(
-                                    ap_types,
-                                    uj_0 as ::core::ffi::c_int,
-                                    num_posarg,
-                                    arg,
-                                ) == FAIL
-                                {
-                                    break '_error;
-                                }
-                            }
-                        } else {
-                            any_arg = 1 as ::core::ffi::c_int;
-                            if any_pos != 0 && any_arg != 0 {
-                                semsg(
-                                    gettext(
-                                        (e_cannot_mix_positional_and_non_positional_str.ptr()
-                                            as *const _)
-                                            as *const ::core::ffi::c_char,
-                                    ),
-                                    fmt,
-                                );
-                                break '_error;
-                            }
-                        }
-                    } else if ascii_isdigit(*p as ::core::ffi::c_int) {
-                        let mut digstart: *const ::core::ffi::c_char = p;
-                        let mut uj_1: ::core::ffi::c_uint = 0;
-                        if get_unsigned_int(digstart, &raw mut p, &raw mut uj_1, !tvs.is_null())
-                            == FAIL
-                        {
-                            break '_error;
-                        }
-                        if *p as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
-                            semsg(
-                                gettext(
-                                    (e_invalid_format_specifier_str.ptr() as *const _)
-                                        as *const ::core::ffi::c_char,
-                                ),
-                                fmt,
-                            );
-                            break '_error;
-                        }
-                    }
-                    if *p as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
-                        p = p.offset(1);
-                        arg = p;
-                        if *arg as ::core::ffi::c_int == '*' as ::core::ffi::c_int {
-                            p = p.offset(1);
-                            if ascii_isdigit(*p as ::core::ffi::c_int) {
-                                let mut uj_2: ::core::ffi::c_uint = 0;
-                                if get_unsigned_int(
-                                    arg.offset(1 as ::core::ffi::c_int as isize),
-                                    &raw mut p,
-                                    &raw mut uj_2,
-                                    !tvs.is_null(),
-                                ) == FAIL
-                                {
-                                    break '_error;
-                                }
-                                if *p as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
-                                    any_pos = 1 as ::core::ffi::c_int;
-                                    if any_pos != 0 && any_arg != 0 {
-                                        semsg(
-                                            gettext(
-                                                (e_cannot_mix_positional_and_non_positional_str
-                                                    .ptr()
-                                                    as *const _)
-                                                    as *const ::core::ffi::c_char,
-                                            ),
-                                            fmt,
-                                        );
-                                        break '_error;
-                                    } else {
-                                        p = p.offset(1);
-                                        if adjust_types(
-                                            ap_types,
-                                            uj_2 as ::core::ffi::c_int,
-                                            num_posarg,
-                                            arg,
-                                        ) == FAIL
-                                        {
-                                            break '_error;
-                                        }
-                                    }
-                                } else {
-                                    semsg(
-                                        gettext(
-                                            (e_invalid_format_specifier_str.ptr() as *const _)
-                                                as *const ::core::ffi::c_char,
-                                        ),
-                                        fmt,
-                                    );
-                                    break '_error;
-                                }
-                            } else {
-                                any_arg = 1 as ::core::ffi::c_int;
-                                if any_pos != 0 && any_arg != 0 {
-                                    semsg(
-                                        gettext(
-                                            (e_cannot_mix_positional_and_non_positional_str.ptr()
-                                                as *const _)
-                                                as *const ::core::ffi::c_char,
-                                        ),
-                                        fmt,
-                                    );
-                                    break '_error;
-                                }
-                            }
-                        } else if ascii_isdigit(*p as ::core::ffi::c_int) {
-                            let mut digstart_0: *const ::core::ffi::c_char = p;
-                            let mut uj_3: ::core::ffi::c_uint = 0;
-                            if get_unsigned_int(
-                                digstart_0,
-                                &raw mut p,
-                                &raw mut uj_3,
-                                !tvs.is_null(),
-                            ) == FAIL
-                            {
-                                break '_error;
-                            }
-                            if *p as ::core::ffi::c_int == '$' as ::core::ffi::c_int {
-                                semsg(
-                                    gettext(
-                                        (e_invalid_format_specifier_str.ptr() as *const _)
-                                            as *const ::core::ffi::c_char,
-                                    ),
-                                    fmt,
-                                );
-                                break '_error;
-                            }
-                        }
-                    }
-                    if pos_arg != -1 as ::core::ffi::c_int {
-                        any_pos = 1 as ::core::ffi::c_int;
-                        if any_pos != 0 && any_arg != 0 {
-                            semsg(
-                                gettext(
-                                    (e_cannot_mix_positional_and_non_positional_str.ptr()
-                                        as *const _)
-                                        as *const ::core::ffi::c_char,
-                                ),
-                                fmt,
-                            );
-                            break '_error;
-                        } else {
-                            ptype = p;
-                        }
-                    }
-                    if *p as ::core::ffi::c_int == 'h' as ::core::ffi::c_int
-                        || *p as ::core::ffi::c_int == 'l' as ::core::ffi::c_int
-                        || *p as ::core::ffi::c_int == 'z' as ::core::ffi::c_int
-                    {
-                        length_modifier = *p;
-                        p = p.offset(1);
-                        if length_modifier as ::core::ffi::c_int == 'l' as ::core::ffi::c_int
-                            && *p as ::core::ffi::c_int == 'l' as ::core::ffi::c_int
-                        {
-                            p = p.offset(1);
-                        }
-                    }
-                    match *p as ::core::ffi::c_int {
-                        105 | 42 | 100 | 117 | 111 | 68 | 85 | 79 | 120 | 88 | 98 | 66 | 99
-                        | 115 | 83 | 112 | 102 | 70 | 101 | 69 | 103 | 71 => {
-                            if pos_arg != -1 as ::core::ffi::c_int {
-                                if adjust_types(ap_types, pos_arg, num_posarg, ptype) == FAIL {
-                                    break '_error;
-                                }
-                            } else {
-                                any_arg = 1 as ::core::ffi::c_int;
-                                if any_pos != 0 && any_arg != 0 {
-                                    semsg(
-                                        gettext(
-                                            (e_cannot_mix_positional_and_non_positional_str.ptr()
-                                                as *const _)
-                                                as *const ::core::ffi::c_char,
-                                        ),
-                                        fmt,
-                                    );
-                                    break '_error;
-                                }
-                            }
-                        }
-                        _ => {
-                            if pos_arg != -1 as ::core::ffi::c_int {
-                                semsg(
-                                    gettext(
-                                        (e_cannot_mix_positional_and_non_positional_str.ptr()
-                                            as *const _)
-                                            as *const ::core::ffi::c_char,
-                                    ),
-                                    fmt,
-                                );
-                                break '_error;
-                            }
-                        }
-                    }
-                    if *p as ::core::ffi::c_int != NUL {
-                        p = p.offset(1);
+                } else if ascii_isdigit(*p as c_int) {
+                    let digstart = p;
+                    get_unsigned_int(digstart, &mut p, !tvs.is_null()).ok_or(())?;
+                    if *p as u8 == b'$' {
+                        invalid_specifier!();
                     }
                 }
             }
-            let mut arg_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while arg_idx < *num_posarg {
-                if (*(*ap_types).offset(arg_idx as isize)).is_null() {
-                    semsg(
-                        gettext(
-                            (e_fmt_arg_nr_unused_str.ptr() as *const _)
-                                as *const ::core::ffi::c_char,
-                        ),
-                        arg_idx + 1 as ::core::ffi::c_int,
-                        fmt,
-                    );
-                    break '_error;
-                } else if !tvs.is_null()
-                    && (*tvs.offset(arg_idx as isize)).v_type as ::core::ffi::c_uint
-                        == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    semsg(
-                        gettext(
-                            (e_positional_nr_out_of_bounds_str.ptr() as *const _)
-                                as *const ::core::ffi::c_char,
-                        ),
-                        arg_idx + 1 as ::core::ffi::c_int,
-                        fmt,
-                    );
-                    break '_error;
-                } else {
-                    arg_idx += 1;
+
+            if pos_arg != -1 {
+                any_pos = true;
+                check_pos_arg!();
+                // The recorded type starts after the flags and width, not
+                // at the '%': `%1$-8.3f` is typed as `f`, not as `-8.3f`.
+                ptype = p;
+            }
+
+            // Length modifiers. `format_typeof` re-reads them off `ptype`,
+            // so they are only stepped over here.
+            if matches!(*p as u8, b'h' | b'l' | b'z') {
+                let length_modifier = *p as u8;
+                p = p.add(1);
+                if length_modifier == b'l' && *p as u8 == b'l' {
+                    p = p.add(1);
                 }
             }
-            return OK;
+
+            const KNOWN: &[u8] = b"i*duoDUOxXbBcsSpfFeEgG";
+            if KNOWN.contains(&(*p as u8)) {
+                if pos_arg != -1 {
+                    adjust_types(ap_types, pos_arg, num_posarg, ptype)?;
+                } else {
+                    any_arg = true;
+                    check_pos_arg!();
+                }
+            } else if pos_arg != -1 {
+                // A position on something that is not a conversion.
+                semsg(gettext(E_CANNOT_MIX.as_ptr()), fmt);
+                return Err(());
+            }
+
+            if *p != 0 {
+                p = p.add(1); // step over the conversion
+            }
         }
-        xfree(*ap_types as *mut ::core::ffi::c_void);
-        *ap_types = ::core::ptr::null_mut::<*const ::core::ffi::c_char>();
-        *num_posarg = 0 as ::core::ffi::c_int;
-        return FAIL;
+
+        // Every position from 1 to the highest one used must have been
+        // typed, and must have an argument behind it.
+        for arg_idx in 0..*num_posarg {
+            if (*(*ap_types).offset(arg_idx as isize)).is_null() {
+                semsg(gettext(E_FMT_ARG_UNUSED.as_ptr()), arg_idx + 1, fmt);
+                return Err(());
+            }
+            if !tvs.is_null() && (*tvs.offset(arg_idx as isize)).v_type == VAR_UNKNOWN {
+                semsg(gettext(E_POS_OUT_OF_BOUNDS.as_ptr()), arg_idx + 1, fmt);
+                return Err(());
+            }
+        }
+        Ok(())
     }
 }
-// Hand-ported from neovim's static `skip_to_arg` in src/nvim/strings.c.
-// c2rust drops this definition (it takes `va_list` by value, which its
-// variadic support cannot translate) yet still emits the 17 call sites in
-// `vim_vsnprintf_typval` below. This faithful port keeps the positional
-// (`%N$`) printf path correct. The signature matches exactly what those call
-// sites pass: `ap_start` is a fresh `va_copy` (`ap_start.clone()`) of the
-// argument list's start, and `ap` is a pointer to the working `VaList`.
 
-pub(crate) unsafe extern "C" fn skip_to_arg<'f>(
-    ap_types: *mut *const ::core::ffi::c_char,
-    ap_start: ::core::ffi::VaList<'f>,
-    ap: *mut ::core::ffi::VaList<'f>,
-    arg_idx: *mut ::core::ffi::c_int,
-    arg_cur: *mut ::core::ffi::c_int,
-    fmt: *const ::core::ffi::c_char,
+/// Position `ap` on positional argument `*arg_idx`.
+///
+/// Hand-ported from neovim's static `skip_to_arg` in `src/nvim/strings.c`:
+/// c2rust drops the definition (it takes `va_list` by value, which its
+/// variadic support cannot translate) yet still emits the 17 call sites in
+/// `vim_vsnprintf_typval`.
+///
+/// A `va_list` only moves forwards, so reaching an argument that is behind
+/// the cursor means restarting from `ap_start` and *reading* every argument
+/// in between — at the types `parse_fmt_types` recorded, which is what
+/// `ap_types` is for. `arg_cur` tracks where the list actually is; the
+/// common case, the next argument in order, is the early return.
+pub(crate) unsafe fn skip_to_arg<'f>(
+    ap_types: *mut *const c_char,
+    ap_start: VaList<'f>,
+    ap: *mut VaList<'f>,
+    arg_idx: *mut c_int,
+    arg_cur: *mut c_int,
+    fmt: *const c_char,
 ) {
     unsafe {
-        let mut arg_min: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if *arg_cur + 1 as ::core::ffi::c_int == *arg_idx {
+        if *arg_cur + 1 == *arg_idx {
             *arg_cur += 1;
             *arg_idx += 1;
             return;
         }
-        if *arg_cur >= *arg_idx {
-            // Reset ap to ap_start and skip arg_idx - 1 types (va_end + va_copy).
+
+        let arg_min = if *arg_cur >= *arg_idx {
+            // Already past it: rewind (va_end + va_copy) and re-walk.
             *ap = ap_start.clone();
+            0
         } else {
-            // Skip over any we should skip.
-            arg_min = *arg_cur;
-        }
+            *arg_cur
+        };
+
         *arg_cur = arg_min;
-        while *arg_cur < *arg_idx - 1 as ::core::ffi::c_int {
+        while *arg_cur < *arg_idx - 1 {
             if ap_types.is_null() || (*ap_types.offset(*arg_cur as isize)).is_null() {
-                siemsg(
-                    (*e_aptypes_is_null_nr_str.ptr()).as_ptr() as *const ::core::ffi::c_char,
-                    fmt,
-                    *arg_cur,
-                );
+                siemsg(E_APTYPES_IS_NULL.as_ptr(), fmt, *arg_cur);
                 return;
             }
-            let p: *const ::core::ffi::c_char = *ap_types.offset(*arg_cur as isize);
-            let fmt_type: ::core::ffi::c_int = format_typeof(p);
-            // get parameter value, do initial processing (consume one va_arg)
-            match fmt_type {
-                TYPE_PERCENT | TYPE_UNKNOWN => {}
-                TYPE_CHAR => {
-                    (*ap).next_arg::<::core::ffi::c_int>();
+            // Consume one argument at its recorded width.
+            match format_typeof(*ap_types.offset(*arg_cur as isize)) {
+                ArgType::Percent | ArgType::Unknown => {}
+                ArgType::Char | ArgType::Int => {
+                    (*ap).next_arg::<c_int>();
                 }
-                TYPE_STRING => {
-                    (*ap).next_arg::<*const ::core::ffi::c_char>();
+                ArgType::Str => {
+                    (*ap).next_arg::<*const c_char>();
                 }
-                TYPE_POINTER => {
-                    (*ap).next_arg::<*mut ::core::ffi::c_void>();
+                ArgType::Pointer => {
+                    (*ap).next_arg::<*mut c_void>();
                 }
-                TYPE_INT => {
-                    (*ap).next_arg::<::core::ffi::c_int>();
+                ArgType::LongInt => {
+                    (*ap).next_arg::<c_long>();
                 }
-                TYPE_LONGINT => {
-                    (*ap).next_arg::<::core::ffi::c_long>();
+                ArgType::LongLongInt => {
+                    (*ap).next_arg::<c_longlong>();
                 }
-                TYPE_LONGLONGINT => {
-                    (*ap).next_arg::<::core::ffi::c_longlong>();
-                }
-                TYPE_SIGNEDSIZET => {
-                    // implementation-defined, usually ptrdiff_t
+                // Implementation-defined, usually ptrdiff_t.
+                ArgType::SignedSizeT => {
                     (*ap).next_arg::<isize>();
                 }
-                TYPE_UNSIGNEDINT => {
-                    (*ap).next_arg::<::core::ffi::c_uint>();
+                ArgType::UnsignedInt => {
+                    (*ap).next_arg::<c_uint>();
                 }
-                TYPE_UNSIGNEDLONGINT => {
-                    (*ap).next_arg::<::core::ffi::c_ulong>();
+                ArgType::UnsignedLongInt => {
+                    (*ap).next_arg::<c_ulong>();
                 }
-                TYPE_UNSIGNEDLONGLONGINT => {
-                    (*ap).next_arg::<::core::ffi::c_ulonglong>();
+                ArgType::UnsignedLongLongInt => {
+                    (*ap).next_arg::<c_ulonglong>();
                 }
-                TYPE_SIZET => {
+                ArgType::SizeT => {
                     (*ap).next_arg::<size_t>();
                 }
-                TYPE_FLOAT => {
-                    (*ap).next_arg::<::core::ffi::c_double>();
+                ArgType::Float => {
+                    (*ap).next_arg::<c_double>();
                 }
-                _ => {}
             }
             *arg_cur += 1;
         }
-        // Because we know that after we return from this call, a va_arg() call is
-        // made, we can pre-emptively increment the current argument index.
+
+        // The caller reads an argument right after this returns, so the
+        // cursor is moved on pre-emptively.
         *arg_cur += 1;
         *arg_idx += 1;
     }
