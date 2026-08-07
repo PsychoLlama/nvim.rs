@@ -155,7 +155,7 @@
 {"symbol":"os_setenv_append_path","kind":"fn","file":"crates/nvim/src/nvim/os/env.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_setperm","kind":"fn","file":"crates/nvim/src/nvim/os/fs.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_shell_is_cmdexe","kind":"fn","file":"crates/nvim/src/nvim/os/env.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"os_system","kind":"fn","file":"crates/nvim/src/nvim/os/shell.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"os_system","kind":"fn","file":"crates/nvim/src/nvim/os/shell/system.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_unsetenv","kind":"fn","file":"crates/nvim/src/nvim/os/env.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_write","kind":"fn","file":"crates/nvim/src/nvim/os/fs.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"p_arshape","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs"]}
