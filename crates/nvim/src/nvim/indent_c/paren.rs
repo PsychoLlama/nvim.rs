@@ -21,7 +21,7 @@ unsafe extern "C" fn cin_skip2pos(mut trypos: *mut pos_T) -> ::core::ffi::c_int 
         line = ml_get((*trypos).lnum);
         p = line;
         while *p as ::core::ffi::c_int != 0 && (p.offset_from(line) as colnr_T) < (*trypos).col {
-            if cin_iscomment(p) != 0 {
+            if cin_iscomment(p) {
                 p = cin_skipcomment(p);
             } else {
                 new_p = skip_string(p);
@@ -66,7 +66,7 @@ pub(crate) unsafe extern "C" fn find_start_brace() -> *mut pos_T {
             (*curwin.get()).w_cursor = *trypos;
             pos = ::core::ptr::null_mut::<pos_T>();
             if cin_skip2pos(trypos) == (*trypos).col && {
-                pos = ind_find_start_CORS(::core::ptr::null_mut::<linenr_T>());
+                pos = ind_find_start_CORS(None);
                 pos.is_null()
             } {
                 break;
@@ -132,7 +132,7 @@ pub(crate) unsafe extern "C" fn find_match_char(
                 pos_copy.set(*trypos);
                 trypos = pos_copy.ptr();
                 (*curwin.get()).w_cursor = *trypos;
-                trypos_wk = ind_find_start_CORS(::core::ptr::null_mut::<linenr_T>());
+                trypos_wk = ind_find_start_CORS(None);
                 if trypos_wk.is_null() {
                     break;
                 }

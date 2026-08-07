@@ -40,7 +40,7 @@ pub(crate) unsafe extern "C" fn cin_islabel() -> bool {
         if !cin_islabel_skip(&raw mut s) {
             return false;
         }
-        if !ind_find_start_CORS(::core::ptr::null_mut::<linenr_T>()).is_null() {
+        if !ind_find_start_CORS(None).is_null() {
             return false;
         }
         let mut cursor_save: pos_T = pos_T {
@@ -54,7 +54,7 @@ pub(crate) unsafe extern "C" fn cin_islabel() -> bool {
         while (*curwin.get()).w_cursor.lnum > 1 as linenr_T {
             (*curwin.get()).w_cursor.lnum -= 1;
             (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-            trypos = ind_find_start_CORS(::core::ptr::null_mut::<linenr_T>());
+            trypos = ind_find_start_CORS(None);
             if !trypos.is_null() {
                 (*curwin.get()).w_cursor = *trypos;
             }
@@ -70,8 +70,7 @@ pub(crate) unsafe extern "C" fn cin_islabel() -> bool {
             if cin_isterminated(line, true_0, false_0) as ::core::ffi::c_int != 0
                 || cin_isscopedecl(line) as ::core::ffi::c_int != 0
                 || cin_iscase(line, true) as ::core::ffi::c_int != 0
-                || cin_islabel_skip(&raw mut line) as ::core::ffi::c_int != 0
-                    && cin_nocode(line) != 0
+                || cin_islabel_skip(&raw mut line) as ::core::ffi::c_int != 0 && cin_nocode(line)
             {
                 return true;
             }
@@ -108,7 +107,7 @@ unsafe extern "C" fn cin_is_compound_init(mut s: *const ::core::ffi::c_char) -> 
             return false;
         }
         p = r;
-        if cin_nocode(p) != 0 {
+        if cin_nocode(p) {
             return true;
         }
         if *p as ::core::ffi::c_int == '&' as ::core::ffi::c_int {
@@ -118,7 +117,7 @@ unsafe extern "C" fn cin_is_compound_init(mut s: *const ::core::ffi::c_char) -> 
             let mut open_count: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
             loop {
                 p = cin_skip_comment_and_string(p.offset(1 as ::core::ffi::c_int as isize));
-                if cin_nocode(p) != 0 {
+                if cin_nocode(p) {
                     return true;
                 }
                 open_count += (*p as ::core::ffi::c_int == '(' as ::core::ffi::c_int)
@@ -129,14 +128,14 @@ unsafe extern "C" fn cin_is_compound_init(mut s: *const ::core::ffi::c_char) -> 
                 }
             }
             p = cin_skipcomment(p.offset(1 as ::core::ffi::c_int as isize));
-            if cin_nocode(p) != 0 {
+            if cin_nocode(p) {
                 return true;
             }
         }
         while *p as ::core::ffi::c_int == '{' as ::core::ffi::c_int {
             p = cin_skipcomment(p.offset(1 as ::core::ffi::c_int as isize));
         }
-        return cin_nocode(p) != 0;
+        return cin_nocode(p);
     }
 }
 
@@ -279,7 +278,7 @@ pub(crate) unsafe extern "C" fn cin_isfuncdecl(
             && *s as ::core::ffi::c_int != '\'' as ::core::ffi::c_int
             && *s as ::core::ffi::c_int != '"' as ::core::ffi::c_int
         {
-            if cin_iscomment(s) != 0 {
+            if cin_iscomment(s) {
                 s = cin_skipcomment(s);
             } else if *s as ::core::ffi::c_int == ':' as ::core::ffi::c_int {
                 if *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -302,7 +301,7 @@ pub(crate) unsafe extern "C" fn cin_isfuncdecl(
             && *s as ::core::ffi::c_int != '"' as ::core::ffi::c_int
         {
             if *s as ::core::ffi::c_int == ')' as ::core::ffi::c_int
-                && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize)) != 0
+                && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize))
             {
                 lnum = first_lnum - 1 as linenr_T;
                 s = ml_get(lnum);
@@ -314,9 +313,9 @@ pub(crate) unsafe extern "C" fn cin_isfuncdecl(
                 }
                 break;
             } else if *s as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-                && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize)) != 0
+                && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize))
                 || *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-                || cin_nocode(s) != 0
+                || cin_nocode(s)
             {
                 let mut comma: ::core::ffi::c_int =
                     (*s as ::core::ffi::c_int == ',' as ::core::ffi::c_int) as ::core::ffi::c_int;
@@ -339,7 +338,7 @@ pub(crate) unsafe extern "C" fn cin_isfuncdecl(
                     break;
                 }
                 just_started = false_0;
-            } else if cin_iscomment(s) != 0 {
+            } else if cin_iscomment(s) {
                 s = cin_skipcomment(s);
             } else {
                 s = s.offset(1);

@@ -405,7 +405,7 @@
     "crates/nvim/src/nvim/indent_c/comment.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/indent_c/cpp.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/indent_c/decl.rs": {"unsafe": 7},
-    "crates/nvim/src/nvim/indent_c/engine.rs": {"lines": 1916, "unsafe": 1},
+    "crates/nvim/src/nvim/indent_c/engine.rs": {"lines": 1907, "unsafe": 1},
     "crates/nvim/src/nvim/indent_c/keys.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/indent_c/label.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/indent_c/paren.rs": {"unsafe": 8},

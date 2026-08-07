@@ -171,7 +171,7 @@ pub(crate) unsafe extern "C" fn cin_first_id_amount() -> ::core::ffi::c_int {
         }
         if len == 0 as ::core::ffi::c_int
             || !ascii_iswhite(*p.offset(len as isize) as ::core::ffi::c_int)
-            || cin_nocode(p) != 0
+            || cin_nocode(p)
         {
             return 0 as ::core::ffi::c_int;
         }
@@ -214,7 +214,7 @@ pub(crate) unsafe extern "C" fn cin_get_equal_amount(mut lnum: linenr_T) -> ::co
         while *s as ::core::ffi::c_int != NUL
             && vim_strchr(c"=;{}\"'".as_ptr(), *s as uint8_t as ::core::ffi::c_int).is_null()
         {
-            if cin_iscomment(s) != 0 {
+            if cin_iscomment(s) {
                 s = cin_skipcomment(s);
             } else {
                 s = s.offset(1);
@@ -224,7 +224,7 @@ pub(crate) unsafe extern "C" fn cin_get_equal_amount(mut lnum: linenr_T) -> ::co
             return 0 as ::core::ffi::c_int;
         }
         s = skipwhite(s.offset(1 as ::core::ffi::c_int as isize));
-        if cin_nocode(s) != 0 {
+        if cin_nocode(s) {
             return 0 as ::core::ffi::c_int;
         }
         if *s as ::core::ffi::c_int == '"' as ::core::ffi::c_int {

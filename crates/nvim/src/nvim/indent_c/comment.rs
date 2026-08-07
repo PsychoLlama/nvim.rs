@@ -1,347 +1,439 @@
 //! Where a comment or a string starts, and how to step over one.
 //!
-//! Every recogniser in this family has to answer over *code*, so each one opens
-//! by calling `cin_skipcomment`, and the ones that walk a whole line call
-//! `skip_string` too.  The `find_start_*` half is the other direction: given the
-//! cursor, `findmatchlimit` backwards for the `/*` or the `R"delim(` that
-//! encloses it, bounded by 'cinoptions' `*N` (`b_ind_maxcomment`).
-//! `ind_find_start_CORS` is the pair asked at once -- Comment Or Raw String --
-//! and answers whichever starts later.
+//! Every recogniser in this family has to answer over *code*, so each one
+//! opens by calling [`cin_skipcomment`], and the ones that walk a whole line
+//! call [`skip_string`] too.  The `find_start_*` half is the other direction:
+//! given the cursor, `findmatchlimit` backwards for the `/*` or the
+//! `R"delim(` that encloses it, bounded by 'cinoptions' `*N`
+//! (`b_ind_maxcomment`).  [`ind_find_start_CORS`] is the pair asked at once --
+//! Comment Or Raw String -- and answers whichever starts later.
+//!
+//! The scanners here are written over `&[u8]` and answer a byte *index*, so
+//! they are ordinary safe code with tests; the pointer forms the rest of the
+//! family calls are one-line wrappers over them.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+use ::core::ffi::{CStr, c_char, c_int};
 
-pub(crate) unsafe extern "C" fn ind_find_start_comment() -> *mut pos_T {
-    unsafe {
-        return find_start_comment((*curbuf.get()).b_ind_maxcomment);
-    }
+/// The byte at `i` of a NUL-terminated line held as a slice.
+///
+/// Past the end is the terminator: `to_bytes()` drops it, but the memory is
+/// still there and every reader in this file is one that upstream reaches
+/// through the NUL rather than a length.
+fn at(s: &[u8], i: usize) -> u8 {
+    s.get(i).copied().unwrap_or(0)
 }
 
-pub unsafe extern "C" fn find_start_comment(mut ind_maxcomment: ::core::ffi::c_int) -> *mut pos_T {
+/// Where the comment enclosing the cursor starts, bounded by 'cinoptions'
+/// `*N`.
+///
+/// # Safety
+/// Reads the current buffer and window; the current line may be unlocked.
+pub(crate) unsafe fn ind_find_start_comment() -> *mut pos_T {
+    unsafe { find_start_comment((*curbuf.get()).b_ind_maxcomment) }
+}
+
+/// Search backwards from the cursor for the `/*` that opens the comment it is
+/// inside, giving up `ind_maxcomment` lines back.
+///
+/// A `/*` that is itself inside a string does not open a comment, so on
+/// finding one the search restarts *below* that line -- which is what the
+/// shrinking `cur_maxcomment` expresses.
+///
+/// # Safety
+/// Reads the current buffer and window; the current line may be unlocked.
+pub unsafe fn find_start_comment(ind_maxcomment: c_int) -> *mut pos_T {
     unsafe {
-        let mut pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-        let mut cur_maxcomment: int64_t = ind_maxcomment as int64_t;
+        let mut cur_maxcomment = int64_t::from(ind_maxcomment);
         loop {
-            pos = findmatchlimit(
+            let pos = findmatchlimit(
                 ::core::ptr::null_mut::<oparg_T>(),
-                '*' as ::core::ffi::c_int,
+                c_int::from(b'*'),
                 FM_BACKWARD,
                 cur_maxcomment,
             );
-            if pos.is_null() {
-                break;
+            if pos.is_null() || !is_pos_in_string(ml_get((*pos).lnum), (*pos).col) {
+                return pos;
             }
-            if is_pos_in_string(ml_get((*pos).lnum), (*pos).col) == 0 {
-                break;
+            cur_maxcomment = int64_t::from((*curwin.get()).w_cursor.lnum - (*pos).lnum - 1);
+            if cur_maxcomment <= 0 {
+                return ::core::ptr::null_mut::<pos_T>();
             }
-            cur_maxcomment =
-                ((*curwin.get()).w_cursor.lnum - (*pos).lnum - 1 as linenr_T) as int64_t;
-            if cur_maxcomment > 0 as int64_t {
-                continue;
-            }
-            pos = ::core::ptr::null_mut::<pos_T>();
-            break;
         }
-        return pos;
     }
 }
 
-pub(crate) unsafe extern "C" fn ind_find_start_CORS(mut is_raw: *mut linenr_T) -> *mut pos_T {
+/// [`find_start_comment`] for a raw string literal's `R"delim(` instead.
+///
+/// # Safety
+/// Reads the current buffer and window; the current line may be unlocked.
+pub(crate) unsafe fn find_start_rawstring(ind_maxcomment: c_int) -> *mut pos_T {
     unsafe {
-        static comment_pos_copy: GlobalCell<pos_T> = GlobalCell::new(pos_T {
+        let mut cur_maxcomment = ind_maxcomment;
+        loop {
+            let pos = findmatchlimit(
+                ::core::ptr::null_mut::<oparg_T>(),
+                c_int::from(b'R'),
+                FM_BACKWARD,
+                int64_t::from(cur_maxcomment),
+            );
+            if pos.is_null() || !is_pos_in_string(ml_get((*pos).lnum), (*pos).col) {
+                return pos;
+            }
+            cur_maxcomment = ((*curwin.get()).w_cursor.lnum - (*pos).lnum - 1) as c_int;
+            if cur_maxcomment <= 0 {
+                return ::core::ptr::null_mut::<pos_T>();
+            }
+        }
+    }
+}
+
+/// Comment Or Raw String: whichever of the two encloses the cursor.
+///
+/// If both answer, the later one wins -- the earlier one contains it, so the
+/// cursor is really inside the later.  `is_raw` is set to the line number
+/// when the answer is a raw string, which is how `get_c_indent` knows not to
+/// treat that line as an unterminated statement.
+///
+/// # Safety
+/// Reads the current buffer and window; the current line may be unlocked.
+pub(crate) unsafe fn ind_find_start_CORS(is_raw: Option<&mut linenr_T>) -> *mut pos_T {
+    unsafe {
+        // `findmatchlimit` answers out of one static, and the raw-string
+        // search below is another call into it, so the comment answer has to
+        // be copied before it is overwritten.
+        static COMMENT_POS_COPY: GlobalCell<pos_T> = GlobalCell::new(pos_T {
             lnum: 0,
             col: 0,
             coladd: 0,
         });
-        let mut comment_pos: *mut pos_T = find_start_comment((*curbuf.get()).b_ind_maxcomment);
+
+        let mut comment_pos = find_start_comment((*curbuf.get()).b_ind_maxcomment);
         if !comment_pos.is_null() {
-            comment_pos_copy.set(*comment_pos);
-            comment_pos = comment_pos_copy.ptr();
+            COMMENT_POS_COPY.set(*comment_pos);
+            comment_pos = COMMENT_POS_COPY.ptr();
         }
-        let mut rs_pos: *mut pos_T = find_start_rawstring((*curbuf.get()).b_ind_maxcomment);
-        if comment_pos.is_null()
-            || !rs_pos.is_null() && lt(*rs_pos, *comment_pos) as ::core::ffi::c_int != 0
-        {
-            if !is_raw.is_null() && !rs_pos.is_null() {
+        let rs_pos = find_start_rawstring((*curbuf.get()).b_ind_maxcomment);
+
+        if comment_pos.is_null() || (!rs_pos.is_null() && lt(*rs_pos, *comment_pos)) {
+            if let Some(is_raw) = is_raw
+                && !rs_pos.is_null()
+            {
                 *is_raw = (*rs_pos).lnum;
             }
             return rs_pos;
         }
-        return comment_pos;
+        comment_pos
     }
 }
 
-pub(crate) unsafe extern "C" fn find_start_rawstring(
-    mut ind_maxcomment: ::core::ffi::c_int,
-) -> *mut pos_T {
+/// Step over the run of `"string"`s and `'c'` constants starting at `s[0]`,
+/// answering the index upstream's pointer walk ends on.
+///
+/// Strings concatenate (`"date""time"`), which is why this is a loop, and the
+/// walk deliberately ends one byte *past* the closing quote -- upstream's
+/// `for (;; p++)` runs its increment on every `continue`.  Ending on the NUL
+/// steps back one, so the answer is always inside `s`.
+///
+/// The answer is *signed* because upstream backs up off the NUL
+/// unconditionally: over an empty tail that is the byte before `s`, which
+/// `find_last_paren` genuinely reaches and depends on.
+fn string_end(s: &[u8]) -> isize {
+    let mut p = 0usize;
+    loop {
+        if at(s, p) == b'\'' {
+            // 'c', '\n' or '\000'.
+            if at(s, p + 1) == 0 {
+                break; // ' at end of line
+            }
+            let mut i = 2;
+            if at(s, p + 1) == b'\\' && at(s, p + 2) != 0 {
+                i += 1;
+                while at(s, p + i - 1).is_ascii_digit() {
+                    i += 1;
+                }
+            }
+            // Check for the trailing '.
+            if at(s, p + i - 1) == 0 || at(s, p + i) != b'\'' {
+                break;
+            }
+            p += i;
+        } else if at(s, p) == b'"' {
+            p += 1;
+            while at(s, p) != 0 {
+                if at(s, p) == b'\\' && at(s, p + 1) != 0 {
+                    p += 1;
+                } else if at(s, p) == b'"' {
+                    break; // end of string
+                }
+                p += 1;
+            }
+            if at(s, p) != b'"' {
+                break;
+            }
+        } else if at(s, p) == b'R' && at(s, p + 1) == b'"' {
+            // Raw string: R"[delim](...)[delim]"
+            let delim = p + 2;
+            let Some(delim_len) = s
+                .get(delim..)
+                .and_then(|t| t.iter().position(|&b| b == b'('))
+            else {
+                break;
+            };
+            p += 3;
+            while at(s, p) != 0 {
+                if at(s, p) == b')'
+                    && s[p + 1..].starts_with(&s[delim..delim + delim_len])
+                    && at(s, p + delim_len + 1) == b'"'
+                {
+                    p += delim_len + 1;
+                    break;
+                }
+                p += 1;
+            }
+            if at(s, p) != b'"' {
+                break;
+            }
+        } else {
+            break; // no string found
+        }
+        p += 1;
+    }
+    // Back up off the NUL, as upstream does -- to -1 when `s` is empty.
+    if at(s, p) == 0 {
+        p as isize - 1
+    } else {
+        p as isize
+    }
+}
+
+/// [`string_end`] over a pointer: past the run of strings starting at `p`.
+///
+/// # Safety
+/// `p` must point at a NUL-terminated string, and -- because an empty one
+/// answers the byte *before* it -- must not be the start of its allocation
+/// when it is empty.  `find_last_paren` is the only caller that reaches
+/// that, and only from `p >= line + 1`.
+pub(crate) unsafe fn skip_string(p: *const c_char) -> *const c_char {
+    unsafe { p.offset(string_end(CStr::from_ptr(p).to_bytes())) }
+}
+
+/// Whether `line[col]` is inside a C string.
+///
+/// # Safety
+/// `line` must point at a NUL-terminated string.
+pub unsafe fn is_pos_in_string(line: *const c_char, col: colnr_T) -> bool {
+    let s = unsafe { CStr::from_ptr(line).to_bytes() };
+    let mut p = 0usize;
+    while p < s.len() && (p as colnr_T) < col {
+        // `p < s.len()` is upstream's `*p`, so the tail is non-empty and the
+        // signed answer is non-negative.
+        p = (p as isize + string_end(&s[p..]) + 1) as usize;
+    }
+    p as colnr_T > col
+}
+
+/// Step over white space and C comments -- and, with 'cinoptions' `#N`, over
+/// Perl/shell `#` comments too.
+///
+/// The `#` form requires a space in front of it, so that `$#array` is not
+/// read as a comment.
+///
+/// # Safety
+/// `s` must point at a NUL-terminated string.
+pub(crate) unsafe fn cin_skipcomment(s: *const c_char) -> *const c_char {
     unsafe {
-        let mut pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-        let mut cur_maxcomment: ::core::ffi::c_int = ind_maxcomment;
-        loop {
-            pos = findmatchlimit(
-                ::core::ptr::null_mut::<oparg_T>(),
-                'R' as ::core::ffi::c_int,
-                FM_BACKWARD,
-                cur_maxcomment as int64_t,
-            );
-            if pos.is_null() {
-                break;
-            }
-            if is_pos_in_string(ml_get((*pos).lnum), (*pos).col) == 0 {
-                break;
-            }
-            cur_maxcomment =
-                ((*curwin.get()).w_cursor.lnum - (*pos).lnum - 1 as linenr_T) as ::core::ffi::c_int;
-            if cur_maxcomment > 0 as ::core::ffi::c_int {
-                continue;
-            }
-            pos = ::core::ptr::null_mut::<pos_T>();
+        let hash_comment = (*curbuf.get()).b_ind_hash_comment != 0;
+        s.add(skip_comment(CStr::from_ptr(s).to_bytes(), hash_comment))
+    }
+}
+
+/// [`cin_skipcomment`] over a slice: the index of the first byte of code.
+fn skip_comment(s: &[u8], hash_comment: bool) -> usize {
+    let mut p = 0usize;
+    while at(s, p) != 0 {
+        let prev = p;
+        while ascii_iswhite(c_int::from(at(s, p))) {
+            p += 1;
+        }
+        // A Perl/shell `#` comment runs to end of line.
+        if hash_comment && p != prev && at(s, p) == b'#' {
+            return s.len();
+        }
+        if at(s, p) != b'/' {
             break;
         }
-        return pos;
-    }
-}
-
-pub(crate) unsafe extern "C" fn skip_string(
-    mut p: *const ::core::ffi::c_char,
-) -> *const ::core::ffi::c_char {
-    unsafe {
-        let mut i: ::core::ffi::c_int = 0;
-        loop {
-            if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '\'' as ::core::ffi::c_int
-            {
-                if *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL {
-                    break;
-                }
-                i = 2 as ::core::ffi::c_int;
-                if *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '\\' as ::core::ffi::c_int
-                    && *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-                {
-                    i += 1;
-                    while ascii_isdigit(
-                        *p.offset((i - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
-                    ) {
-                        i += 1;
-                    }
-                }
-                if !(*p.offset((i - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int != NUL
-                    && *p.offset(i as isize) as ::core::ffi::c_int == '\'' as ::core::ffi::c_int)
-                {
-                    break;
-                }
-                p = p.offset(i as isize);
-            } else if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '"' as ::core::ffi::c_int
-            {
-                p = p.offset(1);
-                while *p.offset(0 as ::core::ffi::c_int as isize) != 0 {
-                    if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == '\\' as ::core::ffi::c_int
-                        && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-                    {
-                        p = p.offset(1);
-                    } else if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == '"' as ::core::ffi::c_int
-                    {
-                        break;
-                    }
-                    p = p.offset(1);
-                }
-                if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != '"' as ::core::ffi::c_int
-                {
-                    break;
-                }
-            } else {
-                if !(*p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == 'R' as ::core::ffi::c_int
-                    && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == '"' as ::core::ffi::c_int)
-                {
-                    break;
-                }
-                let mut delim: *const ::core::ffi::c_char =
-                    p.offset(2 as ::core::ffi::c_int as isize);
-                let mut paren: *const ::core::ffi::c_char =
-                    vim_strchr(delim, '(' as ::core::ffi::c_int);
-                if paren.is_null() {
-                    break;
-                }
-                let delim_len: ptrdiff_t = paren.offset_from(delim);
-                p = p.offset(3 as ::core::ffi::c_int as isize);
-                while *p != 0 {
-                    if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == ')' as ::core::ffi::c_int
-                        && strncmp(
-                            p.offset(1 as ::core::ffi::c_int as isize),
-                            delim,
-                            delim_len as size_t,
-                        ) == 0 as ::core::ffi::c_int
-                        && *p.offset((delim_len + 1 as ptrdiff_t) as isize) as ::core::ffi::c_int
-                            == '"' as ::core::ffi::c_int
-                    {
-                        p = p.offset((delim_len + 1 as ptrdiff_t) as isize);
-                        break;
-                    } else {
-                        p = p.offset(1);
-                    }
-                }
-                if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != '"' as ::core::ffi::c_int
-                {
-                    break;
-                }
-            }
-            p = p.offset(1);
+        p += 1;
+        if at(s, p) == b'/' {
+            // A `//` comment runs to end of line.
+            return s.len();
         }
-        if *p == 0 {
-            p = p.offset(-1);
+        if at(s, p) != b'*' {
+            break;
         }
-        return p;
-    }
-}
-
-pub unsafe extern "C" fn is_pos_in_string(
-    mut line: *const ::core::ffi::c_char,
-    mut col: colnr_T,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        p = line;
-        while *p as ::core::ffi::c_int != 0 && (p.offset_from(line) as colnr_T) < col {
-            p = skip_string(p);
-            p = p.offset(1);
-        }
-        return !(p.offset_from(line) as colnr_T <= col) as ::core::ffi::c_int;
-    }
-}
-
-pub(crate) unsafe extern "C" fn cin_skipcomment(
-    mut s: *const ::core::ffi::c_char,
-) -> *const ::core::ffi::c_char {
-    unsafe {
-        while *s != 0 {
-            let mut prev_s: *const ::core::ffi::c_char = s;
-            s = skipwhite(s);
-            if (*curbuf.get()).b_ind_hash_comment != 0 as ::core::ffi::c_int
-                && s != prev_s
-                && *s as ::core::ffi::c_int == '#' as ::core::ffi::c_int
-            {
-                s = s.offset(strlen(s) as isize);
+        p += 1;
+        while at(s, p) != 0 {
+            if at(s, p) == b'*' && at(s, p + 1) == b'/' {
+                p += 2;
                 break;
-            } else {
-                if *s as ::core::ffi::c_int != '/' as ::core::ffi::c_int {
-                    break;
-                }
-                s = s.offset(1);
-                if *s as ::core::ffi::c_int == '/' as ::core::ffi::c_int {
-                    s = s.offset(strlen(s) as isize);
-                    break;
-                } else {
-                    if *s as ::core::ffi::c_int != '*' as ::core::ffi::c_int {
-                        break;
-                    }
-                    s = s.offset(1);
-                    while *s != 0 {
-                        if *s.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            == '*' as ::core::ffi::c_int
-                            && *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                                == '/' as ::core::ffi::c_int
-                        {
-                            s = s.offset(2 as ::core::ffi::c_int as isize);
-                            break;
-                        } else {
-                            s = s.offset(1);
-                        }
-                    }
-                }
             }
+            p += 1;
         }
-        return s;
     }
+    p
 }
 
-pub(crate) unsafe extern "C" fn cin_nocode(
-    mut s: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        return (*cin_skipcomment(s) as ::core::ffi::c_int == NUL) as ::core::ffi::c_int;
-    }
+/// Whether there is no code at `s`: white space and comments are not code.
+///
+/// # Safety
+/// `s` must point at a NUL-terminated string.
+pub(crate) unsafe fn cin_nocode(s: *const c_char) -> bool {
+    unsafe { *cin_skipcomment(s) as c_int == NUL }
 }
 
-pub(crate) unsafe extern "C" fn find_line_comment() -> *mut pos_T {
+/// The nearest `//` comment above the cursor, skipping blank lines.
+///
+/// # Safety
+/// Reads the current buffer and window.
+pub(crate) unsafe fn find_line_comment() -> *mut pos_T {
     unsafe {
-        static pos: GlobalCell<pos_T> = GlobalCell::new(pos_T {
+        static POS: GlobalCell<pos_T> = GlobalCell::new(pos_T {
             lnum: 0,
             col: 0,
             coladd: 0,
         });
-        let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        pos.set((*curwin.get()).w_cursor);
+        POS.set((*curwin.get()).w_cursor);
         loop {
-            (*pos.ptr()).lnum -= 1;
-            if (*pos.ptr()).lnum <= 0 as linenr_T {
-                break;
+            (*POS.ptr()).lnum -= 1;
+            if (*POS.ptr()).lnum <= 0 {
+                return ::core::ptr::null_mut::<pos_T>();
             }
-            line = ml_get((*pos.ptr()).lnum);
-            p = skipwhite(line);
-            if cin_islinecomment(p) != 0 {
-                (*pos.ptr()).col = p.offset_from(line) as ::core::ffi::c_int as colnr_T;
-                return pos.ptr();
+            let line = ml_get((*POS.ptr()).lnum);
+            let p = skipwhite(line);
+            if cin_islinecomment(p) {
+                (*POS.ptr()).col = p.offset_from(line) as colnr_T;
+                return POS.ptr();
             }
-            if *p as ::core::ffi::c_int != NUL {
-                break;
+            if *p as c_int != NUL {
+                return ::core::ptr::null_mut::<pos_T>();
             }
         }
-        return ::core::ptr::null_mut::<pos_T>();
     }
 }
 
-pub(crate) unsafe extern "C" fn cin_skip_comment_and_string(
-    mut s: *const ::core::ffi::c_char,
-) -> *const ::core::ffi::c_char {
+/// Step over comments *and* strings together, in either order.
+///
+/// They interleave: `"string0" /*comment*/ "string1"` is one run, and neither
+/// skipper alone gets past it.
+///
+/// # Safety
+/// `s` must point at a NUL-terminated string.
+pub(crate) unsafe fn cin_skip_comment_and_string(s: *const c_char) -> *const c_char {
     unsafe {
-        let mut r: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut p: *const ::core::ffi::c_char = s;
+        let mut p = s;
         loop {
-            r = p;
+            let r = p;
             p = cin_skipcomment(p);
             if *p != 0 {
                 p = skip_string(p);
             }
             if p == r {
-                break;
+                return p;
             }
         }
-        return p;
     }
 }
 
-pub(crate) unsafe extern "C" fn cin_iscomment(
-    mut p: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        return (*p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '/' as ::core::ffi::c_int
-            && (*p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '*' as ::core::ffi::c_int
-                || *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '/' as ::core::ffi::c_int)) as ::core::ffi::c_int;
-    }
+/// The start of a C or C++ comment.
+///
+/// # Safety
+/// `p` must point at a NUL-terminated string.
+pub(crate) unsafe fn cin_iscomment(p: *const c_char) -> bool {
+    unsafe { *p == b'/' as c_char && (*p.add(1) == b'*' as c_char || *p.add(1) == b'/' as c_char) }
 }
 
-pub(crate) unsafe extern "C" fn cin_islinecomment(
-    mut p: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        return (*p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '/' as ::core::ffi::c_int
-            && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '/' as ::core::ffi::c_int) as ::core::ffi::c_int;
+/// The start of a `//` comment.
+///
+/// # Safety
+/// `p` must point at a NUL-terminated string.
+pub(crate) unsafe fn cin_islinecomment(p: *const c_char) -> bool {
+    unsafe { *p == b'/' as c_char && *p.add(1) == b'/' as c_char }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn skip(s: &str) -> isize {
+        string_end(s.as_bytes())
+    }
+
+    #[test]
+    fn skip_string_stops_past_a_closing_quote() {
+        // Upstream's loop increment runs on every continue, so the walk ends
+        // one byte past the string -- unless that byte is the terminator, in
+        // which case it steps back onto the quote.
+        assert_eq!(skip("\"abc\" x"), 5);
+        assert_eq!(skip("\"abc\""), 4);
+        assert_eq!(skip("plain"), 0);
+        // The empty tail: upstream steps off the NUL onto the byte *before*
+        // the argument, which `find_last_paren` reaches after a trailing
+        // comment and which makes it revisit the line's last byte.
+        assert_eq!(skip(""), -1);
+    }
+
+    #[test]
+    fn skip_string_concatenates() {
+        assert_eq!(skip("\"date\"\"time\"!"), 12);
+    }
+
+    #[test]
+    fn skip_string_takes_escapes_and_char_constants() {
+        assert_eq!(skip("\"a\\\"b\" "), 6);
+        assert_eq!(skip("'c' "), 3);
+        assert_eq!(skip("'\\n' "), 4);
+        // An *octal* escape is not recognised: upstream's digit scan opens
+        // at `i = 3` and then adds one per digit, so it looks for the
+        // closing quote one byte past where it is (O-B15-18).  Reproduced.
+        assert_eq!(skip("'\\0' "), 0);
+        assert_eq!(skip("'\\000' "), 0);
+        // No digit count works: the closing quote of `'\\<k digits>'` is at
+        // `2 + k` and the scan always looks at `3 + k`.  A non-digit escape
+        // is fine, which is what localises the defect to the digit loop.
+        assert_eq!(skip("'\\0000' "), 0);
+        assert_eq!(skip("'\\\\' "), 4);
+        // An unterminated char constant is not one.
+        assert_eq!(skip("'abc"), 0);
+        assert_eq!(skip("'"), 0);
+    }
+
+    #[test]
+    fn skip_string_takes_raw_strings() {
+        assert_eq!(skip("R\"d(x)d\" "), 8);
+        assert_eq!(skip("R\"(x)\" "), 6);
+        // No `(` after the delimiter: not a raw string at all.
+        assert_eq!(skip("R\"nope"), 0);
+        // The closing delimiter never arrives.
+        assert_eq!(skip("R\"d(xxx"), 6);
+    }
+
+    #[test]
+    fn skip_comment_takes_white_space_and_both_comment_forms() {
+        assert_eq!(skip_comment(b"  code", false), 2);
+        assert_eq!(skip_comment(b"/* c */x", false), 7);
+        assert_eq!(skip_comment(b"/* a */ /* b */x", false), 15);
+        assert_eq!(skip_comment(b"// c", false), 4);
+        // An unterminated /* eats the rest of the line.
+        assert_eq!(skip_comment(b"/* c", false), 4);
+    }
+
+    #[test]
+    fn skip_comment_needs_a_space_before_a_hash() {
+        assert_eq!(skip_comment(b" # c", true), 4);
+        assert_eq!(skip_comment(b" # c", false), 1);
+        // `$#array` has no space in front of the `#`, so it is code.
+        assert_eq!(skip_comment(b"$#array", true), 0);
     }
 }

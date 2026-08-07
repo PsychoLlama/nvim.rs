@@ -199,11 +199,11 @@ pub(crate) unsafe extern "C" fn cin_isterminated(
                 && (*s as ::core::ffi::c_int == ';' as ::core::ffi::c_int
                     || *s as ::core::ffi::c_int == '}' as ::core::ffi::c_int
                     || incl_comma != 0 && *s as ::core::ffi::c_int == ',' as ::core::ffi::c_int)
-                && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize)) != 0
+                && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize))
             {
                 return *s;
             } else if *s as ::core::ffi::c_int == '{' as ::core::ffi::c_int {
-                if incl_open != 0 && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize)) != 0 {
+                if incl_open != 0 && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize)) {
                     return *s;
                 } else {
                     n_open = n_open.wrapping_add(1);
@@ -364,7 +364,7 @@ pub(crate) unsafe extern "C" fn cin_iswhileofdo_end(
             if *p as ::core::ffi::c_int == ')' as ::core::ffi::c_int {
                 s = skipwhite(p.offset(1 as ::core::ffi::c_int as isize));
                 if *s as ::core::ffi::c_int == ';' as ::core::ffi::c_int
-                    && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize)) != 0
+                    && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize))
                 {
                     i = p.offset_from(line) as ::core::ffi::c_int;
                     (*curwin.get()).w_cursor.col = i as colnr_T;
@@ -414,7 +414,7 @@ pub(crate) unsafe extern "C" fn cin_ends_in(
             p = cin_skipcomment(p);
             if strncmp(p, find, len as size_t) == 0 as ::core::ffi::c_int {
                 r = skipwhite(p.offset(len as isize));
-                if cin_nocode(r) != 0 {
+                if cin_nocode(r) {
                     return true_0;
                 }
             }

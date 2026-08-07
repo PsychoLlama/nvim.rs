@@ -111,7 +111,7 @@ pub(crate) unsafe extern "C" fn cin_is_cpp_baseclass(
                 if *s as ::core::ffi::c_int == '{' as ::core::ffi::c_int
                     || *s as ::core::ffi::c_int == '}' as ::core::ffi::c_int
                     || *s as ::core::ffi::c_int == ';' as ::core::ffi::c_int
-                        && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize)) != 0
+                        && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize))
                 {
                     break;
                 }
@@ -218,7 +218,7 @@ pub(crate) unsafe extern "C" fn cin_is_cpp_baseclass(
                 }
                 if lnum == (*curwin.get()).w_cursor.lnum
                     && *s as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-                    && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize)) != 0
+                    && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize))
                 {
                     (*pos).col = 0 as ::core::ffi::c_int as colnr_T;
                 }

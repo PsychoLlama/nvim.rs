@@ -110,7 +110,7 @@ pub unsafe extern "C" fn check_linecomment(line: *const c_char) -> c_int {
                     && (p.offset_from(line) < 2
                         || (*p.offset(-1) as c_int != '\\' as c_int
                             && *p.offset(-2) as c_int != '#' as c_int))
-                    && is_pos_in_string(line, p.offset_from(line) as colnr_T) == 0
+                    && !is_pos_in_string(line, p.offset_from(line) as colnr_T)
                 {
                     break; // found!
                 }
@@ -130,7 +130,7 @@ pub unsafe extern "C" fn check_linecomment(line: *const c_char) -> c_int {
                     && (p == line
                         || *p.offset(-1) as c_int != '*' as c_int
                         || *p.offset(2) as c_int != '*' as c_int)
-                    && is_pos_in_string(line, p.offset_from(line) as colnr_T) == 0
+                    && !is_pos_in_string(line, p.offset_from(line) as colnr_T)
                 {
                     break;
                 }
