@@ -384,6 +384,8 @@ const fn sint_len(hi: u32, lo: u32) -> u32 {
 
 /// 2^32, the boundary between `lo` and `hi`.
 const POW2_32: f64 = 4294967296.0;
+/// 2^64: one past the largest msgpack integer.
+const POW2_64: f64 = 18446744073709551616.0;
 
 /// `mpack_pack_uint`.
 pub const fn pack_uint(v: u64) -> Tok {
@@ -507,10 +509,22 @@ pub fn unpack_number(tok: &Tok) -> f64 {
 /// The round trip through [`unpack_number`] is the whole safety net: any `v`
 /// the halves cannot represent — a fraction, an infinity, a NaN, anything at
 /// or past 2^64 — fails it and falls through to [`pack_float`].
+///
+/// Upstream opens with `assert(v <= 9007199254740991. && v >= -9007…)`, a
+/// double's exact-integer range. It is a C `assert`, dropped from a release
+/// build, and the round trip below is what actually decides — so there is no
+/// assertion here: the range is not an input contract, it is one of the
+/// cases the fallback exists for. See O-B15-3.
 pub fn pack_number(v: f64) -> Tok {
-    assert!(v <= 9007199254740991., "value too large to pack");
-    assert!(v >= -9007199254740991., "value too small to pack");
     let vabs = if v < 0.0 { -v } else { v };
+    // Past the integer types the halves cannot be computed at all: `f64 as
+    // u32` saturates, and for `v == 2^64` exactly the saturated pair rounds
+    // back to `v`, so the round trip below would accept a token that is one
+    // short. Rule the range out first. (NaN is not excluded here — it fails
+    // the round trip, since it compares equal to nothing.)
+    if vabs >= POW2_64 {
+        return pack_float(v);
+    }
     let mut tok = Tok::new(
         Kind::Uint,
         0,
@@ -679,6 +693,53 @@ mod tests {
             assert_eq!(pack_number(v).kind, Some(Kind::Float), "{v}");
             assert_eq!(unpack_number(&pack_number(v)), v, "{v}");
         }
+    }
+
+    /// O-B15-3: upstream's `assert()` claimed 2^53 - 1 as the ceiling, but
+    /// every double past it is already an integer and the msgpack integer
+    /// types run to 2^64 - 1. None of these needs the float fallback.
+    #[test]
+    fn pack_number_keeps_integers_integral_past_2_53() {
+        for v in [
+            9007199254740991.0f64,
+            9007199254740992.0,
+            1e16,
+            1e18,
+            -1e16,
+            -9.2e18,
+        ] {
+            let tok = pack_number(v);
+            assert!(
+                matches!(tok.kind, Some(Kind::Uint | Kind::Sint)),
+                "{v} should pack as an integer, got {:?}",
+                tok.kind
+            );
+            assert_eq!(unpack_number(&dec(&enc(&tok))), v, "{v} round trip");
+        }
+        // 1e16 is 0x2386F26FC10000, a uint 64 on the wire.
+        assert_eq!(
+            enc(&pack_number(1e16)),
+            [0xcf, 0, 0x23, 0x86, 0xf2, 0x6f, 0xc1, 0, 0]
+        );
+    }
+
+    /// Past 2^64, and for the values that are not finite integers at all,
+    /// the round trip fails and a float token carries them instead.
+    #[test]
+    fn pack_number_falls_back_to_float_past_the_integer_types() {
+        for v in [
+            1e300f64,
+            -1e300,
+            1.9e19,
+            -1.9e19,
+            POW2_64,
+            -POW2_64,
+            f64::INFINITY,
+        ] {
+            assert_eq!(pack_number(v).kind, Some(Kind::Float), "{v}");
+            assert_eq!(unpack_number(&dec(&enc(&pack_number(v)))), v, "{v}");
+        }
+        assert!(unpack_number(&dec(&enc(&pack_number(f64::NAN)))).is_nan());
     }
 
     /// O-B15-10: a negative whose magnitude spans both halves may not use a
