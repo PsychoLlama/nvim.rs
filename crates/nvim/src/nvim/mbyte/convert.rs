@@ -233,14 +233,6 @@ pub unsafe extern "C" fn f_iconv(
     }
 }
 
-/// A `vimconv_T` that converts nothing.
-const CONV_NONE_INIT: vimconv_T = vimconv_T {
-    vc_type: CONV_NONE,
-    vc_factor: 1,
-    vc_fd: core::ptr::null_mut(),
-    vc_fail: false,
-};
-
 /// Plan a conversion from `from` to `to`, replacing whatever `vcp` held.
 ///
 /// # Safety

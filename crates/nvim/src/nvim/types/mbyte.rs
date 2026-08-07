@@ -61,3 +61,12 @@ pub const CONV_9_TO_UTF8: ConvFlags = 2;
 pub const CONV_TO_LATIN1: ConvFlags = 3;
 pub const CONV_TO_LATIN9: ConvFlags = 4;
 pub const CONV_ICONV: ConvFlags = 5;
+
+/// A `vimconv_T` that converts nothing — what `convert_setup` starts from and
+/// what a caller with no conversion to do passes around.
+pub const CONV_NONE_INIT: vimconv_T = vimconv_T {
+    vc_type: CONV_NONE,
+    vc_factor: 1,
+    vc_fd: ::core::ptr::null_mut(),
+    vc_fail: false,
+};
