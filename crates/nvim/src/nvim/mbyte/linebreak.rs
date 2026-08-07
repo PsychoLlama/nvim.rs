@@ -6,7 +6,7 @@
 //! about the character before the break and [`utf_allow_break_before`] about
 //! the character after it — and [`utf_allow_break`] asks both.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 #[allow(unused_imports)]
 use super::*;
