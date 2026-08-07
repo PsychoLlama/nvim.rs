@@ -17,6 +17,12 @@ and this project adheres to [CalVer](https://calver.org/).
 - Rewrote the JSON codec behind `vim.json`, including its float formatting,
   which is what decides the exact text `vim.json.encode()` produces for a
   number.
+- Rewrote text formatting and the text objects, covering auto-wrap at
+  `'textwidth'`, `gq`/`gw` and `'formatexpr'`, the `'formatoptions'` and
+  `'comments'` rules that decide where a paragraph ends, every `i`/`a`
+  object and the word, sentence and paragraph motions they share their
+  rules with, and the indent-width arithmetic behind `'shiftwidth'`,
+  `'softtabstop'` and `'vartabstop'`.
 
 ### Fixed
 
