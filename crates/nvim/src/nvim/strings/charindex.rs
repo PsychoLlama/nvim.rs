@@ -5,84 +5,123 @@
 //! `byteidx()`/`byteidxcomp()`/`charidx()`/`utf16idx()` and the `strutf16len()`
 //! that counts them.  `strgetchar()`, `strcharpart()` and `strpart()` are the
 //! substring extractors that take their bounds in those units.
+//!
+//! Two axes recur.  **Composing characters** either belong to the base
+//! character (`utfc_ptr2len`) or count on their own (`utf_ptr2len`), which is
+//! the difference between `byteidx()` and `byteidxcomp()` and the meaning of
+//! every `countcc`/`skipcc` argument.  **A code point above U+FFFF is two
+//! UTF-16 units**, which is the only reason the utf16 walks differ from the
+//! character walks at all.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{c_char, c_int, c_void};
+use core::ptr;
 
-unsafe extern "C" fn byteidx_common(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut comp: bool,
-) {
+use super::{FAIL, given};
+use crate::src::nvim::eval::typval::{
+    tv_check_for_number_arg, tv_check_for_opt_bool_arg, tv_check_for_opt_number_arg,
+    tv_check_for_string_arg, tv_get_bool, tv_get_bool_chk, tv_get_number, tv_get_number_chk,
+    tv_get_string, tv_get_string_chk,
+};
+use crate::src::nvim::main::e_using_number_as_bool_nr;
+use crate::src::nvim::mbyte::{
+    mb_cptr2char_adv, mb_ptr2char_adv, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
+};
+use crate::src::nvim::memory::xmemdupz;
+use crate::src::nvim::message::semsg;
+use crate::src::nvim::os::libc::{gettext, strlen};
+use crate::src::nvim::types::{EvalFuncData, VAR_STRING, int64_t, size_t, typval_T, varnumber_T};
+
+/// The character-length function a `countcc`/`comp` flag selects: with
+/// composing characters counted separately, or folded into their base.
+type Ptr2Len = unsafe extern "C" fn(*const c_char) -> c_int;
+
+fn char_len_fn(count_composing: bool) -> Ptr2Len {
+    if count_composing {
+        utf_ptr2len
+    } else {
+        utfc_ptr2len
+    }
+}
+
+/// The code point at `p`, as the C reads it: through `utf_ptr2char` for a
+/// multi-byte character and as a **signed** `char` otherwise, so a stray
+/// byte over 0x7f is negative and never counts as a surrogate pair.
+unsafe fn code_point(p: *const c_char, char_len: c_int) -> c_int {
     unsafe {
-        (*rettv).vval.v_number = -1 as varnumber_T;
-        let str: *const ::core::ffi::c_char =
-            tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let mut idx: varnumber_T = tv_get_number_chk(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-            ::core::ptr::null_mut::<bool>(),
-        );
-        if str.is_null() || idx < 0 as varnumber_T {
+        if char_len > 1 {
+            utf_ptr2char(p)
+        } else {
+            *p as c_int
+        }
+    }
+}
+
+/// Read an optional boolean argument that must be spelled `0` or `1`.
+///
+/// Returns `None` after raising the error, which both callers turn into a
+/// silent `-1` result.
+unsafe fn strict_bool_arg(tv: *mut typval_T) -> Option<bool> {
+    unsafe {
+        let mut error = false;
+        let value = tv_get_bool_chk(tv, &raw mut error);
+        if error {
+            return None;
+        }
+        if !(0..=1).contains(&value) {
+            semsg(
+                gettext(e_using_number_as_bool_nr.ptr().cast::<c_char>()),
+                value,
+            );
+            return None;
+        }
+        Some(value != 0)
+    }
+}
+
+/// `byteidx()` and `byteidxcomp()`: the byte offset of the `idx`-th
+/// character, or with the third argument set, of the `idx`-th UTF-16 unit.
+///
+/// `comp` is the `byteidxcomp()` spelling, which counts a composing
+/// character as one of its own.
+unsafe fn byteidx_common(argvars: *mut typval_T, rettv: *mut typval_T, comp: bool) {
+    unsafe {
+        (*rettv).vval.v_number = -1;
+
+        let str = tv_get_string_chk(argvars);
+        let mut idx = tv_get_number_chk(argvars.add(1), ptr::null_mut());
+        if str.is_null() || idx < 0 {
             return;
         }
-        let mut utf16idx: varnumber_T = false_0 as varnumber_T;
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut error: bool = false_0 != 0;
-            utf16idx = tv_get_bool_chk(
-                argvars.offset(2 as ::core::ffi::c_int as isize),
-                &raw mut error,
-            );
-            if error {
-                return;
+
+        let utf16idx = if given(&*argvars.add(2)) {
+            match strict_bool_arg(argvars.add(2)) {
+                Some(flag) => flag,
+                None => return,
             }
-            if utf16idx < 0 as varnumber_T || utf16idx > 1 as varnumber_T {
-                semsg(
-                    gettext(&raw const e_using_number_as_bool_nr as *const ::core::ffi::c_char),
-                    utf16idx,
-                );
-                return;
-            }
-        }
-        let mut ptr2len: Option<
-            unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int,
-        > = None;
-        if comp {
-            ptr2len = Some(
-                utf_ptr2len
-                    as unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int,
-            )
-                as Option<unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int>;
         } else {
-            ptr2len = Some(
-                utfc_ptr2len
-                    as unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int,
-            )
-                as Option<unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int>;
-        }
-        let mut t: *const ::core::ffi::c_char = str;
-        while idx > 0 as varnumber_T {
-            if *t as ::core::ffi::c_int == NUL {
-                return;
+            false
+        };
+
+        let char_len = char_len_fn(comp);
+        let mut t = str;
+        while idx > 0 {
+            if *t == 0 {
+                return; // End of string before the index was reached.
             }
-            if utf16idx != 0 {
-                let clen: ::core::ffi::c_int = ptr2len.expect("non-null function pointer")(t);
-                let c: ::core::ffi::c_int = if clen > 1 as ::core::ffi::c_int {
-                    utf_ptr2char(t)
-                } else {
-                    *t as ::core::ffi::c_int
-                };
-                if c > 0xffff as ::core::ffi::c_int {
+            if utf16idx {
+                let clen = char_len(t);
+                if code_point(t, clen) > 0xffff {
                     idx -= 1;
                 }
-                if idx > 0 as varnumber_T {
+                // The last unit of a surrogate pair leaves `t` on the
+                // character it belongs to, which is the answer.
+                if idx > 0 {
                     t = t.offset(clen as isize);
                 }
-            } else if idx > 0 as varnumber_T {
-                t = t.offset(ptr2len.expect("non-null function pointer")(t) as isize);
+            } else {
+                t = t.offset(char_len(t) as isize);
             }
             idx -= 1;
         }
@@ -90,442 +129,343 @@ unsafe extern "C" fn byteidx_common(
     }
 }
 
+/// "byteidx()" function
 pub unsafe extern "C" fn f_byteidx(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        byteidx_common(argvars, rettv, false_0 != 0);
-    }
+    unsafe { byteidx_common(argvars, rettv, false) }
 }
 
+/// "byteidxcomp()" function
 pub unsafe extern "C" fn f_byteidxcomp(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        byteidx_common(argvars, rettv, true_0 != 0);
-    }
+    unsafe { byteidx_common(argvars, rettv, true) }
 }
 
+/// "charidx()" function: the character index of a byte (or UTF-16) offset.
 pub unsafe extern "C" fn f_charidx(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        (*rettv).vval.v_number = -1 as varnumber_T;
-        if tv_check_for_string_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
-            || tv_check_for_number_arg(argvars, 1 as ::core::ffi::c_int) == FAIL
-            || tv_check_for_opt_bool_arg(argvars, 2 as ::core::ffi::c_int) == FAIL
-            || (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                && tv_check_for_opt_bool_arg(argvars, 3 as ::core::ffi::c_int) == FAIL
+        (*rettv).vval.v_number = -1;
+
+        if tv_check_for_string_arg(argvars, 0) == FAIL
+            || tv_check_for_number_arg(argvars, 1) == FAIL
+            || tv_check_for_opt_bool_arg(argvars, 2) == FAIL
+            || (given(&*argvars.add(2)) && tv_check_for_opt_bool_arg(argvars, 3) == FAIL)
         {
             return;
         }
-        let str: *const ::core::ffi::c_char =
-            tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let mut idx: varnumber_T = tv_get_number_chk(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-            ::core::ptr::null_mut::<bool>(),
-        );
-        if str.is_null() || idx < 0 as varnumber_T {
+
+        let str = tv_get_string_chk(argvars);
+        let mut idx = tv_get_number_chk(argvars.add(1), ptr::null_mut());
+        if str.is_null() || idx < 0 {
             return;
         }
-        let mut countcc: varnumber_T = false_0 as varnumber_T;
-        let mut utf16idx: varnumber_T = false_0 as varnumber_T;
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            countcc = tv_get_bool(argvars.offset(2 as ::core::ffi::c_int as isize));
-            if (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                utf16idx = tv_get_bool(argvars.offset(3 as ::core::ffi::c_int as isize));
+
+        let mut countcc = false;
+        let mut utf16idx = false;
+        if given(&*argvars.add(2)) {
+            countcc = tv_get_bool(argvars.add(2)) != 0;
+            if given(&*argvars.add(3)) {
+                utf16idx = tv_get_bool(argvars.add(3)) != 0;
             }
         }
-        let mut ptr2len: Option<
-            unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int,
-        > = None;
-        if countcc != 0 {
-            ptr2len = Some(
-                utf_ptr2len
-                    as unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int,
-            )
-                as Option<unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int>;
+
+        let char_len = char_len_fn(countcc);
+        let mut p = str;
+        let mut len: c_int = 0;
+        while if utf16idx {
+            idx >= 0
         } else {
-            ptr2len = Some(
-                utfc_ptr2len
-                    as unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int,
-            )
-                as Option<unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int>;
-        }
-        let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut len: ::core::ffi::c_int = 0;
-        p = str;
-        len = 0 as ::core::ffi::c_int;
-        while if utf16idx != 0 {
-            (idx >= 0 as varnumber_T) as ::core::ffi::c_int
-        } else {
-            (p <= str.offset(idx as isize)) as ::core::ffi::c_int
-        } != 0
-        {
-            if *p as ::core::ffi::c_int == NUL {
-                if if utf16idx != 0 {
-                    (idx == 0 as varnumber_T) as ::core::ffi::c_int
+            p <= str.offset(idx as isize)
+        } {
+            if *p == 0 {
+                // An index of exactly the string's length in bytes (or
+                // UTF-16 units) answers the string's length in characters.
+                if if utf16idx {
+                    idx == 0
                 } else {
-                    (p == str.offset(idx as isize)) as ::core::ffi::c_int
-                } != 0
-                {
+                    p == str.offset(idx as isize)
+                } {
                     (*rettv).vval.v_number = len as varnumber_T;
                 }
                 return;
             }
-            if utf16idx != 0 {
+            if utf16idx {
                 idx -= 1;
-                let clen: ::core::ffi::c_int = ptr2len.expect("non-null function pointer")(p);
-                let c: ::core::ffi::c_int = if clen > 1 as ::core::ffi::c_int {
-                    utf_ptr2char(p)
-                } else {
-                    *p as ::core::ffi::c_int
-                };
-                if c > 0xffff as ::core::ffi::c_int {
+                if code_point(p, char_len(p)) > 0xffff {
                     idx -= 1;
                 }
             }
-            p = p.offset(ptr2len.expect("non-null function pointer")(p) as isize);
+            p = p.offset(char_len(p) as isize);
             len += 1;
         }
-        (*rettv).vval.v_number = (if len > 0 as ::core::ffi::c_int {
-            len - 1 as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        }) as varnumber_T;
+
+        (*rettv).vval.v_number = (len - 1).max(0) as varnumber_T;
     }
 }
 
+/// "strgetchar()" function: the code point of the `idx`-th character.
 pub unsafe extern "C" fn f_strgetchar(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        (*rettv).vval.v_number = -1 as varnumber_T;
-        let str: *const ::core::ffi::c_char =
-            tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
+        (*rettv).vval.v_number = -1;
+
+        let str = tv_get_string_chk(argvars);
         if str.is_null() {
             return;
         }
-        let mut error: bool = false_0 != 0;
-        let mut charidx: varnumber_T = tv_get_number_chk(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-            &raw mut error,
-        );
+        let mut error = false;
+        let mut charidx = tv_get_number_chk(argvars.add(1), &raw mut error);
         if error {
             return;
         }
-        let len: size_t = strlen(str);
-        let mut byteidx: size_t = 0 as size_t;
-        while charidx >= 0 as varnumber_T && byteidx < len {
-            if charidx == 0 as varnumber_T {
-                (*rettv).vval.v_number = utf_ptr2char(str.offset(byteidx as isize)) as varnumber_T;
+
+        let len = strlen(str);
+        let mut byteidx: size_t = 0;
+        while charidx >= 0 && byteidx < len {
+            if charidx == 0 {
+                (*rettv).vval.v_number = utf_ptr2char(str.add(byteidx)) as varnumber_T;
                 break;
-            } else {
-                charidx -= 1;
-                byteidx = byteidx.wrapping_add(utf_ptr2len(str.offset(byteidx as isize)) as size_t);
             }
+            charidx -= 1;
+            byteidx += utf_ptr2len(str.add(byteidx)) as size_t;
         }
     }
 }
 
+/// "strutf16len()" function: the string's length in UTF-16 code units.
 pub unsafe extern "C" fn f_strutf16len(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        (*rettv).vval.v_number = -1 as varnumber_T;
-        if tv_check_for_string_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
-            || tv_check_for_opt_bool_arg(argvars, 1 as ::core::ffi::c_int) == FAIL
+        (*rettv).vval.v_number = -1;
+
+        if tv_check_for_string_arg(argvars, 0) == FAIL
+            || tv_check_for_opt_bool_arg(argvars, 1) == FAIL
         {
             return;
         }
-        let mut countcc: varnumber_T = false_0 as varnumber_T;
-        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            countcc = tv_get_bool(argvars.offset(1 as ::core::ffi::c_int as isize));
-        }
-        let mut s: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let mut len: varnumber_T = 0 as varnumber_T;
-        let mut func_mb_ptr2char_adv: Option<
-            unsafe extern "C" fn(*mut *const ::core::ffi::c_char) -> ::core::ffi::c_int,
-        > = None;
-        func_mb_ptr2char_adv = (if countcc != 0 {
-            Some(
-                mb_cptr2char_adv
-                    as unsafe extern "C" fn(*mut *const ::core::ffi::c_char) -> ::core::ffi::c_int,
-            )
+        let countcc = given(&*argvars.add(1)) && tv_get_bool(argvars.add(1)) != 0;
+
+        let next_char: unsafe extern "C" fn(*mut *const c_char) -> c_int = if countcc {
+            mb_cptr2char_adv
         } else {
-            Some(
-                mb_ptr2char_adv
-                    as unsafe extern "C" fn(*mut *const ::core::ffi::c_char) -> ::core::ffi::c_int,
-            )
-        })
-            as Option<unsafe extern "C" fn(*mut *const ::core::ffi::c_char) -> ::core::ffi::c_int>;
-        while *s as ::core::ffi::c_int != NUL {
-            let ch: ::core::ffi::c_int =
-                func_mb_ptr2char_adv.expect("non-null function pointer")(&raw mut s);
-            if ch > 0xffff as ::core::ffi::c_int {
-                len += 1;
-            }
-            len += 1;
+            mb_ptr2char_adv
+        };
+
+        let mut s = tv_get_string(argvars);
+        let mut len: varnumber_T = 0;
+        while *s != 0 {
+            // Anything over U+FFFF is a surrogate pair: two units.
+            len += 1 + varnumber_T::from(next_char(&raw mut s) > 0xffff);
         }
         (*rettv).vval.v_number = len;
     }
 }
 
+/// "strcharpart()" function: a substring measured in characters.
 pub unsafe extern "C" fn f_strcharpart(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        let p: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let slen: size_t = strlen(p);
-        let mut nbyte: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut skipcc: varnumber_T = false_0 as varnumber_T;
-        let mut error: bool = false_0 != 0;
-        let mut nchar: varnumber_T = tv_get_number_chk(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-            &raw mut error,
-        );
+        let p = tv_get_string(argvars);
+        let slen = strlen(p);
+
+        let mut nbyte: c_int = 0;
+        let mut skipcc = false;
+        let mut error = false;
+        let mut nchar = tv_get_number_chk(argvars.add(1), &raw mut error);
         if !error {
-            if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                    != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                skipcc = tv_get_bool_chk(
-                    argvars.offset(3 as ::core::ffi::c_int as isize),
-                    &raw mut error,
-                );
-                if error {
-                    return;
-                }
-                if skipcc < 0 as varnumber_T || skipcc > 1 as varnumber_T {
-                    semsg(
-                        gettext(&raw const e_using_number_as_bool_nr as *const ::core::ffi::c_char),
-                        skipcc,
-                    );
-                    return;
+            if given(&*argvars.add(2)) && given(&*argvars.add(3)) {
+                match strict_bool_arg(argvars.add(3)) {
+                    Some(flag) => skipcc = flag,
+                    None => return,
                 }
             }
-            if nchar > 0 as varnumber_T {
-                while nchar > 0 as varnumber_T && (nbyte as size_t) < slen {
-                    if skipcc != 0 {
-                        nbyte += utfc_ptr2len(p.offset(nbyte as isize));
-                    } else {
-                        nbyte += utf_ptr2len(p.offset(nbyte as isize));
-                    }
+            if nchar > 0 {
+                // Walk `nchar` characters in to find the byte offset.
+                while nchar > 0 && (nbyte as size_t) < slen {
+                    nbyte += char_len_fn(!skipcc)(p.offset(nbyte as isize));
                     nchar -= 1;
                 }
             } else {
-                nbyte = nchar as ::core::ffi::c_int;
+                // A negative start is already a byte offset, and stays
+                // negative until the overlap is taken below.
+                nbyte = nchar as c_int;
             }
         }
-        let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut charlen: ::core::ffi::c_int =
-                tv_get_number(argvars.offset(2 as ::core::ffi::c_int as isize))
-                    as ::core::ffi::c_int;
-            while charlen > 0 as ::core::ffi::c_int && nbyte + len < slen as ::core::ffi::c_int {
-                let mut off: ::core::ffi::c_int = nbyte + len;
-                if off < 0 as ::core::ffi::c_int {
-                    len += 1 as ::core::ffi::c_int;
-                } else if skipcc != 0 {
-                    len += utfc_ptr2len(p.offset(off as isize));
+
+        let mut len: c_int = if given(&*argvars.add(2)) {
+            let mut charlen = tv_get_number(argvars.add(2)) as c_int;
+            let mut len = 0;
+            while charlen > 0 && nbyte + len < slen as c_int {
+                let off = nbyte + len;
+                // Offsets before the string count one byte each, so a
+                // negative start still consumes its share of `charlen`.
+                len += if off < 0 {
+                    1
                 } else {
-                    len += utf_ptr2len(p.offset(off as isize));
-                }
+                    char_len_fn(!skipcc)(p.offset(off as isize))
+                };
                 charlen -= 1;
             }
+            len
         } else {
-            len = slen as ::core::ffi::c_int - nbyte;
-        }
-        if nbyte < 0 as ::core::ffi::c_int {
+            slen as c_int - nbyte // Default: everything from `nbyte` on.
+        };
+
+        // Only the overlap between the requested part and the string.
+        if nbyte < 0 {
             len += nbyte;
-            nbyte = 0 as ::core::ffi::c_int;
+            nbyte = 0;
         } else if nbyte as size_t > slen {
-            nbyte = slen as ::core::ffi::c_int;
+            nbyte = slen as c_int;
         }
-        if len < 0 as ::core::ffi::c_int {
-            len = 0 as ::core::ffi::c_int;
-        } else if nbyte + len > slen as ::core::ffi::c_int {
-            len = slen as ::core::ffi::c_int - nbyte;
+        if len < 0 {
+            len = 0;
+        } else if nbyte + len > slen as c_int {
+            len = slen as c_int - nbyte;
         }
+
         (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = xmemdupz(
-            p.offset(nbyte as isize) as *const ::core::ffi::c_void,
-            len as size_t,
-        ) as *mut ::core::ffi::c_char;
+        (*rettv).vval.v_string =
+            xmemdupz(p.offset(nbyte as isize) as *const c_void, len as size_t) as *mut c_char;
     }
 }
 
+/// "strpart()" function: a substring measured in bytes, or -- with the
+/// fourth argument -- in characters starting from a byte offset.
 pub unsafe extern "C" fn f_strpart(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        let mut error: bool = false_0 != 0;
-        let p: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let slen: size_t = strlen(p);
-        let mut n: varnumber_T = tv_get_number_chk(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-            &raw mut error,
-        );
-        let mut len: varnumber_T = 0;
-        if error {
-            len = 0 as varnumber_T;
-        } else if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            len = tv_get_number(argvars.offset(2 as ::core::ffi::c_int as isize));
+        let mut error = false;
+        let p = tv_get_string(argvars);
+        let slen = strlen(p) as varnumber_T;
+
+        let mut n = tv_get_number_chk(argvars.add(1), &raw mut error);
+        let mut len = if error {
+            0
+        } else if given(&*argvars.add(2)) {
+            tv_get_number(argvars.add(2))
         } else {
-            len = slen as varnumber_T - n;
-        }
-        if n < 0 as varnumber_T {
+            slen - n // Default: everything from `n` on.
+        };
+
+        // Only the overlap between the requested part and the string.
+        if n < 0 {
             len += n;
-            n = 0 as varnumber_T;
-        } else if n > slen as varnumber_T {
-            n = slen as varnumber_T;
+            n = 0;
+        } else if n > slen {
+            n = slen;
         }
-        if len < 0 as varnumber_T {
-            len = 0 as varnumber_T;
-        } else if n + len > slen as varnumber_T {
-            len = slen as varnumber_T - n;
+        if len < 0 {
+            len = 0;
+        } else if n + len > slen {
+            len = slen - n;
         }
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut off: int64_t = 0;
-            off = n as int64_t;
-            while off < slen as int64_t && len > 0 as varnumber_T {
+
+        if given(&*argvars.add(2)) && given(&*argvars.add(3)) {
+            // `len` was a character count after all: re-measure it.
+            let mut off = n as int64_t;
+            while off < slen as int64_t && len > 0 {
                 off += utfc_ptr2len(p.offset(off as isize)) as int64_t;
                 len -= 1;
             }
             len = (off - n as int64_t) as varnumber_T;
         }
+
         (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = xmemdupz(
-            p.offset(n as isize) as *const ::core::ffi::c_void,
-            len as size_t,
-        ) as *mut ::core::ffi::c_char;
+        (*rettv).vval.v_string =
+            xmemdupz(p.offset(n as isize) as *const c_void, len as size_t) as *mut c_char;
     }
 }
 
+/// "utf16idx()" function: the UTF-16 index of a byte (or character) offset.
 pub unsafe extern "C" fn f_utf16idx(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        (*rettv).vval.v_number = -1 as varnumber_T;
-        if tv_check_for_string_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
-            || tv_check_for_opt_number_arg(argvars, 1 as ::core::ffi::c_int) == FAIL
-            || tv_check_for_opt_bool_arg(argvars, 2 as ::core::ffi::c_int) == FAIL
-            || (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                && tv_check_for_opt_bool_arg(argvars, 3 as ::core::ffi::c_int) == FAIL
+        (*rettv).vval.v_number = -1;
+
+        if tv_check_for_string_arg(argvars, 0) == FAIL
+            || tv_check_for_opt_number_arg(argvars, 1) == FAIL
+            || tv_check_for_opt_bool_arg(argvars, 2) == FAIL
+            || (given(&*argvars.add(2)) && tv_check_for_opt_bool_arg(argvars, 3) == FAIL)
         {
             return;
         }
-        let str: *const ::core::ffi::c_char =
-            tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let mut idx: varnumber_T = tv_get_number_chk(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-            ::core::ptr::null_mut::<bool>(),
-        );
-        if str.is_null() || idx < 0 as varnumber_T {
+
+        let str = tv_get_string_chk(argvars);
+        let mut idx = tv_get_number_chk(argvars.add(1), ptr::null_mut());
+        if str.is_null() || idx < 0 {
             return;
         }
-        let mut countcc: varnumber_T = false_0 as varnumber_T;
-        let mut charidx: varnumber_T = false_0 as varnumber_T;
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            countcc = tv_get_bool(argvars.offset(2 as ::core::ffi::c_int as isize));
-            if (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                charidx = tv_get_bool(argvars.offset(3 as ::core::ffi::c_int as isize));
+
+        let mut countcc = false;
+        let mut charidx = false;
+        if given(&*argvars.add(2)) {
+            countcc = tv_get_bool(argvars.add(2)) != 0;
+            if given(&*argvars.add(3)) {
+                charidx = tv_get_bool(argvars.add(3)) != 0;
             }
         }
-        let mut ptr2len: Option<
-            unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int,
-        > = None;
-        if countcc != 0 {
-            ptr2len = Some(
-                utf_ptr2len
-                    as unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int,
-            )
-                as Option<unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int>;
+
+        let char_len = char_len_fn(countcc);
+        let mut p = str;
+        let mut len: c_int = 0;
+        // The answer is the index of the *start* of the character the offset
+        // lands in, so it trails `len` by one iteration.
+        let mut utf16idx: c_int = 0;
+        while if charidx {
+            idx >= 0
         } else {
-            ptr2len = Some(
-                utfc_ptr2len
-                    as unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int,
-            )
-                as Option<unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int>;
-        }
-        let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut len: ::core::ffi::c_int = 0;
-        let mut utf16idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        p = str;
-        len = 0 as ::core::ffi::c_int;
-        while if charidx != 0 {
-            (idx >= 0 as varnumber_T) as ::core::ffi::c_int
-        } else {
-            (p <= str.offset(idx as isize)) as ::core::ffi::c_int
-        } != 0
-        {
-            if *p as ::core::ffi::c_int == NUL {
-                if if charidx != 0 {
-                    (idx == 0 as varnumber_T) as ::core::ffi::c_int
+            p <= str.offset(idx as isize)
+        } {
+            if *p == 0 {
+                // An index of exactly the string's length in bytes (or
+                // characters) answers its length in UTF-16 units.
+                if if charidx {
+                    idx == 0
                 } else {
-                    (p == str.offset(idx as isize)) as ::core::ffi::c_int
-                } != 0
-                {
+                    p == str.offset(idx as isize)
+                } {
                     (*rettv).vval.v_number = len as varnumber_T;
                 }
                 return;
             }
             utf16idx = len;
-            let clen: ::core::ffi::c_int = ptr2len.expect("non-null function pointer")(p);
-            let c: ::core::ffi::c_int = if clen > 1 as ::core::ffi::c_int {
-                utf_ptr2char(p)
-            } else {
-                *p as ::core::ffi::c_int
-            };
-            if c > 0xffff as ::core::ffi::c_int {
+            let clen = char_len(p);
+            if code_point(p, clen) > 0xffff {
                 len += 1;
             }
             p = p.offset(clen as isize);
-            if charidx != 0 {
+            if charidx {
                 idx -= 1;
             }
             len += 1;
         }
+
         (*rettv).vval.v_number = utf16idx as varnumber_T;
     }
 }

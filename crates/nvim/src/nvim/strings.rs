@@ -4,10 +4,9 @@ use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::charset::{skipwhite, transstr, vim_str2nr};
 use crate::src::nvim::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::src::nvim::eval::typval::{
-    tv_check_for_number_arg, tv_check_for_opt_bool_arg, tv_check_for_opt_number_arg,
-    tv_check_for_opt_string_arg, tv_check_for_string_arg, tv_get_bool, tv_get_bool_chk,
-    tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_buf_chk, tv_get_string_chk,
-    tv_list_alloc_ret, tv_list_append_number,
+    tv_check_for_opt_string_arg, tv_get_bool, tv_get_bool_chk, tv_get_number, tv_get_number_chk,
+    tv_get_string, tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc_ret,
+    tv_list_append_number,
 };
 use crate::src::nvim::garray::{ga_append, ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
@@ -18,8 +17,8 @@ use crate::src::nvim::mbyte::{
     utf_ptr2cells, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::src::nvim::memory::{
-    arena_alloc, arena_alloc_block, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xmemscan,
-    xrealloc, xstrchrnul, xstrlcpy,
+    arena_alloc, arena_alloc_block, xcalloc, xfree, xmalloc, xmallocz, xmemscan, xrealloc,
+    xstrchrnul, xstrlcpy,
 };
 use crate::src::nvim::message::{emsg, semsg, siemsg};
 use crate::src::nvim::os::libc::{
@@ -29,8 +28,8 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::plines::linetabsize_col;
 use crate::src::nvim::types::{
     Arena, EvalFuncData, String_0, StringBuilder, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    float_T, garray_T, int16_t, int64_t, intmax_t, kListLenUnknown, keyvalue_T, ptrdiff_t, size_t,
-    typval_T, uint8_t, uint16_t, uintmax_t, uvarnumber_T, varnumber_T,
+    float_T, garray_T, int16_t, intmax_t, kListLenUnknown, keyvalue_T, ptrdiff_t, size_t, typval_T,
+    uint8_t, uint16_t, uintmax_t, uvarnumber_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -56,6 +55,16 @@ pub const FAIL: c_int = 0;
 pub const NUL: c_int = 0;
 pub const true_0: c_int = 1;
 pub const false_0: c_int = 0;
+
+/// Was this optional builtin argument given?
+///
+/// A Vimscript builtin's argument array is terminated by a `VAR_UNKNOWN`
+/// entry rather than by a count, so an absent argument is readable and the
+/// question is a type test. Taking a reference keeps this safe — the
+/// caller's own block already had to produce one.
+pub(crate) fn given(tv: &typval_T) -> bool {
+    tv.v_type != VAR_UNKNOWN
+}
 
 /// `strnlen`: bytes before the terminator, reading at most `maxlen` bytes.
 unsafe fn strnlen(s: *const c_char, maxlen: size_t) -> size_t {
