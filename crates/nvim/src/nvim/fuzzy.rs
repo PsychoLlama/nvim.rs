@@ -150,9 +150,7 @@ fn has_match(needle: &CStr, haystack: &CStr) -> bool {
         return false;
     }
     let mut haystack = Chars::new(haystack);
-    // SAFETY: `mb_toupper` is a lookup on a codepoint, reading nothing else.
-    // The closures below inherit this block.
-    unsafe { Chars::new(needle).all(|(_, n)| haystack.any(|(_, h)| n == h || mb_toupper(n) == h)) }
+    Chars::new(needle).all(|(_, n)| haystack.any(|(_, h)| n == h || mb_toupper(n) == h))
 }
 
 /// What a haystack character earns for the character in front of it: the
@@ -188,18 +186,16 @@ struct Match {
 
 impl Match {
     fn new(needle: &CStr, haystack: &CStr) -> Self {
-        // SAFETY: `mb_tolower` is a lookup on a codepoint.
         let lower_needle = Chars::new(needle)
             .take(FUZZY_MATCH_MAX_LEN)
-            .map(|(_, c)| unsafe { mb_tolower(c) })
+            .map(|(_, c)| mb_tolower(c))
             .collect();
         let mut lower_haystack = Vec::new();
         let mut match_bonus = Vec::new();
         // The first character is treated as if a path separator preceded it.
         let mut last_c = b'/' as c_int;
         for (_, c) in Chars::new(haystack).take(FUZZY_MATCH_MAX_LEN) {
-            // SAFETY: as above.
-            lower_haystack.push(unsafe { mb_tolower(c) });
+            lower_haystack.push(mb_tolower(c));
             match_bonus.push(compute_bonus(last_c, c));
             last_c = c;
         }

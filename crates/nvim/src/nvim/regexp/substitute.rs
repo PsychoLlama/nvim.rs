@@ -86,16 +86,6 @@ const FUNCEXE_INIT: funcexe_T = funcexe_T {
 /// replacement.
 type CaseFolder = fn(c_int) -> c_int;
 
-fn to_upper(c: c_int) -> c_int {
-    // SAFETY: `mb_toupper` is a pure table lookup over a code point.
-    unsafe { mb_toupper(c) }
-}
-
-fn to_lower(c: c_int) -> c_int {
-    // SAFETY: `mb_tolower` is a pure table lookup over a code point.
-    unsafe { mb_tolower(c) }
-}
-
 /// The case hooks in force: `\u` and `\l` fold one character, `\U` and `\L`
 /// fold every character until `\e` or `\E`.
 #[derive(Clone, Copy, Default)]
@@ -633,10 +623,10 @@ unsafe fn expand_replacement(source: *mut c_char, flags: c_int, out: &mut Out) -
                     let hook = *src as u8;
                     src = src.offset(1);
                     match hook {
-                        b'u' => case.once = Some(to_upper),
-                        b'U' => case.rest = Some(to_upper),
-                        b'l' => case.once = Some(to_lower),
-                        b'L' => case.rest = Some(to_lower),
+                        b'u' => case.once = Some(mb_toupper),
+                        b'U' => case.rest = Some(mb_toupper),
+                        b'l' => case.once = Some(mb_tolower),
+                        b'L' => case.rest = Some(mb_tolower),
                         // `\e` and `\E`, the only other members of the set
                         // the lookup above accepted, end both.
                         _ => case = Case::default(),

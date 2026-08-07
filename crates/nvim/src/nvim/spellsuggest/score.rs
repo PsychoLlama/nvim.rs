@@ -72,9 +72,7 @@ const SOUND_VOWEL: c_char = b'*' as c_char;
 /// Unicode fold.
 pub fn spell_tofold(c: c_int) -> c_int {
     if c >= 128 {
-        // SAFETY: a pure table lookup; the `unsafe` is only there because
-        // the fold tables have not been rewritten yet.
-        unsafe { utf_fold(c) }
+        utf_fold(c)
     } else {
         // SAFETY: `spelltab` is main-thread editor state and this reads one
         // byte out of it without keeping a reference (see `GlobalCell`).
@@ -87,8 +85,7 @@ pub fn spell_tofold(c: c_int) -> c_int {
 /// everything above it goes through Unicode.
 pub fn spell_isupper(c: c_int) -> bool {
     if c >= 128 {
-        // SAFETY: a pure table lookup; see `spell_tofold`.
-        unsafe { mb_isupper(c) }
+        mb_isupper(c)
     } else {
         // SAFETY: reads one byte of main-thread editor state without
         // keeping a reference.

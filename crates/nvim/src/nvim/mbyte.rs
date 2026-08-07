@@ -75,13 +75,21 @@ unsafe extern "C" {
 
 // Miri cannot call libc. The tests never call setlocale, so glibc would run
 // these in the C locale, where they fold ASCII only — which is exactly what
-// these definitions do.
+// these definitions do. Declared unsafe, exactly as the real ones are, so a
+// caller's block does not become `unused_unsafe` under `cargo miri`.
+///
+/// # Safety
+///
+/// None; the declaration only mirrors the foreign one it stands in for.
 #[cfg(miri)]
-fn towlower(__wc: wint_t) -> wint_t {
+unsafe fn towlower(__wc: wint_t) -> wint_t {
     u8::try_from(__wc).map_or(__wc, |b| b.to_ascii_lowercase() as wint_t)
 }
+/// # Safety
+///
+/// None; the declaration only mirrors the foreign one it stands in for.
 #[cfg(miri)]
-fn towupper(__wc: wint_t) -> wint_t {
+unsafe fn towupper(__wc: wint_t) -> wint_t {
     u8::try_from(__wc).map_or(__wc, |b| b.to_ascii_uppercase() as wint_t)
 }
 pub type wint_t = ::core::ffi::c_uint;
