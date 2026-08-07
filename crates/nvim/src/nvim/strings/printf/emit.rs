@@ -151,7 +151,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                         p = p.offset(1);
                     }
                     let mut j: ::core::ffi::c_int = if !tvs.is_null() {
-                        tv_nr(tvs, &raw mut arg_idx) as ::core::ffi::c_int
+                        tv_nr(tvs, &mut arg_idx) as ::core::ffi::c_int
                     } else {
                         skip_to_arg(
                             ap_types,
@@ -206,7 +206,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             p = p.offset(1);
                         }
                         let mut j_0: ::core::ffi::c_int = if !tvs.is_null() {
-                            tv_nr(tvs, &raw mut arg_idx) as ::core::ffi::c_int
+                            tv_nr(tvs, &mut arg_idx) as ::core::ffi::c_int
                         } else {
                             skip_to_arg(
                                 ap_types,
@@ -286,7 +286,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             }
                             99 => {
                                 let j_1: ::core::ffi::c_int = if !tvs.is_null() {
-                                    tv_nr(tvs, &raw mut arg_idx) as ::core::ffi::c_int
+                                    tv_nr(tvs, &mut arg_idx) as ::core::ffi::c_int
                                 } else {
                                     skip_to_arg(
                                         ap_types,
@@ -303,7 +303,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             }
                             115 | 83 => {
                                 str_arg = if !tvs.is_null() {
-                                    tv_str(tvs, &raw mut arg_idx, &raw mut tofree)
+                                    tv_str(tvs, &mut arg_idx, &mut tofree)
                                 } else {
                                     skip_to_arg(
                                         ap_types,
@@ -370,7 +370,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             ::core::ptr::null::<::core::ffi::c_void>();
                         if fmt_spec as ::core::ffi::c_int == 'p' as ::core::ffi::c_int {
                             ptr_arg = if !tvs.is_null() {
-                                tv_ptr(tvs, &raw mut arg_idx)
+                                tv_ptr(tvs, &mut arg_idx)
                             } else {
                                 skip_to_arg(
                                     ap_types,
@@ -390,7 +390,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             || fmt_spec as ::core::ffi::c_int == 'B' as ::core::ffi::c_int
                         {
                             uarg = (if !tvs.is_null() {
-                                tv_nr(tvs, &raw mut arg_idx) as ::core::ffi::c_ulonglong
+                                tv_nr(tvs, &mut arg_idx) as ::core::ffi::c_ulonglong
                             } else {
                                 skip_to_arg(
                                     ap_types,
@@ -407,7 +407,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             match length_modifier as ::core::ffi::c_int {
                                 NUL => {
                                     arg = (if !tvs.is_null() {
-                                        tv_nr(tvs, &raw mut arg_idx) as ::core::ffi::c_int
+                                        tv_nr(tvs, &mut arg_idx) as ::core::ffi::c_int
                                     } else {
                                         skip_to_arg(
                                             ap_types,
@@ -422,7 +422,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                 }
                                 104 => {
                                     arg = (if !tvs.is_null() {
-                                        tv_nr(tvs, &raw mut arg_idx) as ::core::ffi::c_int
+                                        tv_nr(tvs, &mut arg_idx) as ::core::ffi::c_int
                                     } else {
                                         skip_to_arg(
                                             ap_types,
@@ -438,7 +438,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                 }
                                 108 => {
                                     arg = (if !tvs.is_null() {
-                                        tv_nr(tvs, &raw mut arg_idx) as ::core::ffi::c_long
+                                        tv_nr(tvs, &mut arg_idx) as ::core::ffi::c_long
                                     } else {
                                         skip_to_arg(
                                             ap_types,
@@ -453,7 +453,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                 }
                                 76 => {
                                     arg = (if !tvs.is_null() {
-                                        tv_nr(tvs, &raw mut arg_idx) as ::core::ffi::c_longlong
+                                        tv_nr(tvs, &mut arg_idx) as ::core::ffi::c_longlong
                                     } else {
                                         skip_to_arg(
                                             ap_types,
@@ -468,7 +468,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                 }
                                 122 => {
                                     arg = (if !tvs.is_null() {
-                                        tv_nr(tvs, &raw mut arg_idx) as ptrdiff_t
+                                        tv_nr(tvs, &mut arg_idx) as ptrdiff_t
                                     } else {
                                         skip_to_arg(
                                             ap_types,
@@ -492,7 +492,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                             match length_modifier as ::core::ffi::c_int {
                                 NUL => {
                                     uarg = (if !tvs.is_null() {
-                                        tv_nr(tvs, &raw mut arg_idx) as ::core::ffi::c_uint
+                                        tv_nr(tvs, &mut arg_idx) as ::core::ffi::c_uint
                                     } else {
                                         skip_to_arg(
                                             ap_types,
@@ -507,7 +507,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                 }
                                 104 => {
                                     uarg = (if !tvs.is_null() {
-                                        tv_nr(tvs, &raw mut arg_idx) as ::core::ffi::c_uint
+                                        tv_nr(tvs, &mut arg_idx) as ::core::ffi::c_uint
                                     } else {
                                         skip_to_arg(
                                             ap_types,
@@ -523,7 +523,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                 }
                                 108 => {
                                     uarg = (if !tvs.is_null() {
-                                        tv_nr(tvs, &raw mut arg_idx) as ::core::ffi::c_ulong
+                                        tv_nr(tvs, &mut arg_idx) as ::core::ffi::c_ulong
                                     } else {
                                         skip_to_arg(
                                             ap_types,
@@ -538,7 +538,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                 }
                                 76 => {
                                     uarg = (if !tvs.is_null() {
-                                        tv_nr(tvs, &raw mut arg_idx) as ::core::ffi::c_ulonglong
+                                        tv_nr(tvs, &mut arg_idx) as ::core::ffi::c_ulonglong
                                     } else {
                                         skip_to_arg(
                                             ap_types,
@@ -553,7 +553,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                 }
                                 122 => {
                                     uarg = (if !tvs.is_null() {
-                                        tv_nr(tvs, &raw mut arg_idx) as size_t
+                                        tv_nr(tvs, &mut arg_idx) as size_t
                                     } else {
                                         skip_to_arg(
                                             ap_types,
@@ -785,7 +785,7 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                         let mut format: [::core::ffi::c_char; 40] = [0; 40];
                         let mut remove_trailing_zeroes: bool = false_0 != 0;
                         let mut f_0: ::core::ffi::c_double = if !tvs.is_null() {
-                            tv_float(tvs, &raw mut arg_idx)
+                            tv_float(tvs, &mut arg_idx)
                         } else {
                             skip_to_arg(
                                 ap_types,
@@ -840,24 +840,23 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                 infinity_str(
                                     f_0 > 0.0f64,
                                     fmt_spec,
-                                    force_sign as ::core::ffi::c_int,
-                                    space_for_positive,
-                                ),
+                                    force_sign,
+                                    space_for_positive != 0,
+                                )
+                                .as_ptr(),
                                 ::core::mem::size_of::<[::core::ffi::c_char; 350]>(),
                             );
                             str_arg_l = strlen(&raw mut tmp as *mut ::core::ffi::c_char);
                             zero_padding = false_0 != 0;
                         } else if f_0.is_nan() {
+                            let nan = if (fmt_spec as u8).is_ascii_uppercase() {
+                                c"NAN"
+                            } else {
+                                c"nan"
+                            };
                             memmove(
-                                &raw mut tmp as *mut ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_void,
-                                (if fmt_spec as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-                                    && fmt_spec as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-                                {
-                                    b"NAN\0".as_ptr() as *const ::core::ffi::c_char
-                                } else {
-                                    b"nan\0".as_ptr() as *const ::core::ffi::c_char
-                                }) as *const ::core::ffi::c_void,
+                                &raw mut tmp as *mut ::core::ffi::c_void,
+                                nan.as_ptr().cast(),
                                 4 as size_t,
                             );
                             str_arg_l = 3 as size_t;
