@@ -20,7 +20,7 @@ pub unsafe extern "C" fn get_expr_register() -> ::core::ffi::c_int {
             '=' as ::core::ffi::c_int,
             0 as ::core::ffi::c_int,
             0 as ::core::ffi::c_int,
-            true_0 != 0,
+            true,
         );
         if new_line.is_null() {
             return NUL;
@@ -52,7 +52,7 @@ pub unsafe extern "C" fn get_expr_line() -> *mut ::core::ffi::c_char {
             return expr_copy;
         }
         (*nested.ptr()) += 1;
-        let mut rv: *mut ::core::ffi::c_char = eval_to_string(expr_copy, true_0 != 0, false_0 != 0);
+        let mut rv: *mut ::core::ffi::c_char = eval_to_string(expr_copy, true, false);
         (*nested.ptr()) -= 1;
         xfree(expr_copy as *mut ::core::ffi::c_void);
         return rv;
@@ -76,7 +76,7 @@ pub unsafe extern "C" fn get_spec_reg(
 ) -> bool {
     unsafe {
         *argp = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        *allocated = false_0 != 0;
+        *allocated = false;
         let mut cnt: size_t = 0;
         match regname {
             37 => {
@@ -84,16 +84,16 @@ pub unsafe extern "C" fn get_spec_reg(
                     check_fname();
                 }
                 *argp = (*curbuf.get()).b_fname;
-                return true_0 != 0;
+                return true;
             }
             35 => {
                 *argp = getaltfname(errmsg);
-                return true_0 != 0;
+                return true;
             }
             61 => {
                 *argp = get_expr_line();
-                *allocated = true_0 != 0;
-                return true_0 != 0;
+                *allocated = true;
+                return true;
             }
             58 => {
                 if (*last_cmdline.ptr()).is_null() && errmsg as ::core::ffi::c_int != 0 {
@@ -102,53 +102,53 @@ pub unsafe extern "C" fn get_spec_reg(
                     ));
                 }
                 *argp = last_cmdline.get();
-                return true_0 != 0;
+                return true;
             }
             47 => {
                 if last_search_pat().is_null() && errmsg as ::core::ffi::c_int != 0 {
                     emsg(gettext(&raw const e_noprevre as *const ::core::ffi::c_char));
                 }
                 *argp = last_search_pat();
-                return true_0 != 0;
+                return true;
             }
             46 => {
                 *argp = get_last_insert_save();
-                *allocated = true_0 != 0;
+                *allocated = true;
                 if (*argp).is_null() && errmsg as ::core::ffi::c_int != 0 {
                     emsg(gettext(
                         &raw const e_noinstext as *const ::core::ffi::c_char,
                     ));
                 }
-                return true_0 != 0;
+                return true;
             }
             Ctrl_F | Ctrl_P => {
                 if !errmsg {
-                    return false_0 != 0;
+                    return false;
                 }
                 *argp = file_name_at_cursor(
-                    FNAME_MESS as ::core::ffi::c_int
-                        | FNAME_HYP as ::core::ffi::c_int
+                    FNAME_MESS
+                        | FNAME_HYP
                         | (if regname == Ctrl_P {
-                            FNAME_EXP as ::core::ffi::c_int
+                            FNAME_EXP
                         } else {
                             0 as ::core::ffi::c_int
                         }),
                     1 as ::core::ffi::c_int,
                     ::core::ptr::null_mut::<linenr_T>(),
                 );
-                *allocated = true_0 != 0;
-                return true_0 != 0;
+                *allocated = true;
+                return true;
             }
             Ctrl_W | Ctrl_A => {
                 if !errmsg {
-                    return false_0 != 0;
+                    return false;
                 }
                 cnt = find_ident_under_cursor(
                     argp,
                     if regname == Ctrl_W {
-                        FIND_IDENT as ::core::ffi::c_int | FIND_STRING as ::core::ffi::c_int
+                        FIND_IDENT | FIND_STRING
                     } else {
-                        FIND_STRING as ::core::ffi::c_int
+                        FIND_STRING
                     },
                     ::core::ptr::null_mut::<::core::ffi::c_int>(),
                 );
@@ -157,22 +157,22 @@ pub unsafe extern "C" fn get_spec_reg(
                 } else {
                     NULL_0
                 }) as *mut ::core::ffi::c_char;
-                *allocated = true_0 != 0;
-                return true_0 != 0;
+                *allocated = true;
+                return true;
             }
             Ctrl_L => {
                 if !errmsg {
-                    return false_0 != 0;
+                    return false;
                 }
                 *argp = ml_get_buf((*curwin.get()).w_buffer, (*curwin.get()).w_cursor.lnum);
-                return true_0 != 0;
+                return true;
             }
             95 => {
-                *argp = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-                return true_0 != 0;
+                *argp = c"".as_ptr() as *mut ::core::ffi::c_char;
+                return true;
             }
             _ => {}
         }
-        return false_0 != 0;
+        return false;
     }
 }

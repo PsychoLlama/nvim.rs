@@ -20,7 +20,7 @@ unsafe extern "C" fn stuff_yank(
     mut p: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if regname != 0 as ::core::ffi::c_int && !valid_yank_reg(regname, true_0 != 0) {
+        if regname != 0 as ::core::ffi::c_int && !valid_yank_reg(regname, true) {
             xfree(p as *mut ::core::ffi::c_void);
             return FAIL;
         }
@@ -29,7 +29,7 @@ unsafe extern "C" fn stuff_yank(
             return OK;
         }
         let plen: size_t = strlen(p);
-        let mut reg: *mut yankreg_T = get_yank_register(regname, YREG_YANK as ::core::ffi::c_int);
+        let mut reg: *mut yankreg_T = get_yank_register(regname, YREG_YANK);
         if is_append_register(regname) as ::core::ffi::c_int != 0 && !(*reg).y_array.is_null() {
             let mut pp: *mut String_0 = (*reg)
                 .y_array
@@ -93,7 +93,7 @@ pub unsafe extern "C" fn do_record(mut c: ::core::ffi::c_int) -> ::core::ffi::c_
                     EVENT_RECORDINGENTER,
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    false_0 != 0,
+                    false,
                     curbuf.get(),
                 );
             }
@@ -119,7 +119,7 @@ pub unsafe extern "C" fn do_record(mut c: ::core::ffi::c_int) -> ::core::ffi::c_
                 vim_unescape_ks(p);
                 tv_dict_add_str(
                     dict,
-                    b"regcontents\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"regcontents".as_ptr(),
                     ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
                     p,
                 );
@@ -129,7 +129,7 @@ pub unsafe extern "C" fn do_record(mut c: ::core::ffi::c_int) -> ::core::ffi::c_
             buf[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
             tv_dict_add_str(
                 dict,
-                b"regname\0".as_ptr() as *const ::core::ffi::c_char,
+                c"regname".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
                 &raw mut buf as *mut ::core::ffi::c_char,
             );
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn do_record(mut c: ::core::ffi::c_int) -> ::core::ffi::c_
                 EVENT_RECORDINGLEAVE,
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
+                false,
                 curbuf.get(),
             );
             restore_v_event(dict, &raw mut save_v_event);
@@ -147,10 +147,7 @@ pub unsafe extern "C" fn do_record(mut c: ::core::ffi::c_int) -> ::core::ffi::c_
             if p_ch.get() == 0 as OptInt || ui_has(kUIMessages) as ::core::ffi::c_int != 0 {
                 showmode();
             } else {
-                msg(
-                    b"\0".as_ptr() as *const ::core::ffi::c_char,
-                    0 as ::core::ffi::c_int,
-                );
+                msg(c"".as_ptr(), 0 as ::core::ffi::c_int);
             }
             if p.is_null() {
                 retval = FAIL;
@@ -175,10 +172,10 @@ unsafe extern "C" fn put_in_typebuf(
         put_reedit_in_typebuf(silent);
         if colon {
             retval = ins_typebuf(
-                b"\n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                c"\n".as_ptr() as *mut ::core::ffi::c_char,
                 REMAP_NONE as ::core::ffi::c_int,
                 0 as ::core::ffi::c_int,
-                true_0 != 0,
+                true,
                 silent != 0,
             );
         }
@@ -200,7 +197,7 @@ unsafe extern "C" fn put_in_typebuf(
                         REMAP_YES as ::core::ffi::c_int
                     },
                     0 as ::core::ffi::c_int,
-                    true_0 != 0,
+                    true,
                     silent != 0,
                 );
             }
@@ -210,10 +207,10 @@ unsafe extern "C" fn put_in_typebuf(
         }
         if colon as ::core::ffi::c_int != 0 && retval == OK {
             retval = ins_typebuf(
-                b":\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                c":".as_ptr() as *mut ::core::ffi::c_char,
                 REMAP_NONE as ::core::ffi::c_int,
                 0 as ::core::ffi::c_int,
-                true_0 != 0,
+                true,
                 silent != 0,
             );
         }
@@ -244,7 +241,7 @@ unsafe extern "C" fn put_reedit_in_typebuf(mut silent: ::core::ffi::c_int) {
             &raw mut buf as *mut uint8_t as *mut ::core::ffi::c_char,
             REMAP_NONE as ::core::ffi::c_int,
             0 as ::core::ffi::c_int,
-            true_0 != 0,
+            true,
             silent != 0,
         ) == OK
         {
@@ -263,11 +260,10 @@ unsafe extern "C" fn execreg_line_continuation(
             if cmd_start > 0 as size_t {
             } else {
                 __assert_fail(
-                    b"cmd_start > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/register.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"cmd_start > 0".as_ptr(),
+                    c"src/nvim/register.rs".as_ptr(),
                     575 as ::core::ffi::c_uint,
-                    b"char *execreg_line_continuation(String *, size_t *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    c"char *execreg_line_continuation(String *, size_t *)".as_ptr(),
                 );
             }
         };
@@ -347,16 +343,14 @@ pub unsafe extern "C" fn do_execreg(
         let mut retval: ::core::ffi::c_int = OK;
         if regname == '@' as ::core::ffi::c_int {
             if execreg_lastc.get() == NUL {
-                emsg(gettext(
-                    b"E748: No previously used register\0".as_ptr() as *const ::core::ffi::c_char
-                ));
+                emsg(gettext(c"E748: No previously used register".as_ptr()));
                 return FAIL;
             }
             regname = execreg_lastc.get();
         }
         if regname == '%' as ::core::ffi::c_int
             || regname == '#' as ::core::ffi::c_int
-            || !valid_yank_reg(regname, false_0 != 0)
+            || !valid_yank_reg(regname, false)
         {
             emsg_invreg(regname);
             return FAIL;
@@ -379,26 +373,21 @@ pub unsafe extern "C" fn do_execreg(
             let _ = *ptr_;
             let mut p: *mut ::core::ffi::c_char = vim_strsave_escaped_ext(
             last_cmdline.get(),
-            b"\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0B\x0C\r\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F\0"
-                .as_ptr() as *const ::core::ffi::c_char,
+            c"\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0B\x0C\r\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F".as_ptr(),
             Ctrl_V as ::core::ffi::c_char,
-            false_0 != 0,
+            false,
         );
             if VIsual_active.get() as ::core::ffi::c_int != 0
-                && strncmp(
-                    p,
-                    b"'<,'>\0".as_ptr() as *const ::core::ffi::c_char,
-                    5 as size_t,
-                ) == 0 as ::core::ffi::c_int
+                && strncmp(p, c"'<,'>".as_ptr(), 5 as size_t) == 0 as ::core::ffi::c_int
             {
                 retval = put_in_typebuf(
                     p.offset(5 as ::core::ffi::c_int as isize),
-                    true_0 != 0,
-                    true_0 != 0,
+                    true,
+                    true,
                     silent,
                 );
             } else {
-                retval = put_in_typebuf(p, true_0 != 0, true_0 != 0, silent);
+                retval = put_in_typebuf(p, true, true, silent);
             }
             xfree(p as *mut ::core::ffi::c_void);
         } else if regname == '=' as ::core::ffi::c_int {
@@ -406,7 +395,7 @@ pub unsafe extern "C" fn do_execreg(
             if p_0.is_null() {
                 return FAIL;
             }
-            retval = put_in_typebuf(p_0, true_0 != 0, colon != 0, silent);
+            retval = put_in_typebuf(p_0, true, colon != 0, silent);
             xfree(p_0 as *mut ::core::ffi::c_void);
         } else if regname == '.' as ::core::ffi::c_int {
             let mut p_1: *mut ::core::ffi::c_char = get_last_insert_save();
@@ -416,11 +405,10 @@ pub unsafe extern "C" fn do_execreg(
                 ));
                 return FAIL;
             }
-            retval = put_in_typebuf(p_1, false_0 != 0, colon != 0, silent);
+            retval = put_in_typebuf(p_1, false, colon != 0, silent);
             xfree(p_1 as *mut ::core::ffi::c_void);
         } else {
-            let mut reg: *mut yankreg_T =
-                get_yank_register(regname, YREG_PASTE as ::core::ffi::c_int);
+            let mut reg: *mut yankreg_T = get_yank_register(regname, YREG_PASTE);
             if (*reg).y_array.is_null() {
                 return FAIL;
             }
@@ -442,10 +430,10 @@ pub unsafe extern "C" fn do_execreg(
                     || addcr != 0
                 {
                     if ins_typebuf(
-                        b"\n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                        c"\n".as_ptr() as *mut ::core::ffi::c_char,
                         remap,
                         0 as ::core::ffi::c_int,
-                        true_0 != 0,
+                        true,
                         silent != 0,
                     ) == FAIL
                     {
@@ -453,7 +441,7 @@ pub unsafe extern "C" fn do_execreg(
                     }
                 }
                 let mut str: *mut ::core::ffi::c_char = (*(*reg).y_array.offset(i as isize)).data;
-                let mut free_str: bool = false_0 != 0;
+                let mut free_str: bool = false;
                 if colon != 0 && i > 0 as size_t {
                     let mut p_2: *mut ::core::ffi::c_char = skipwhite(str);
                     if *p_2 as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
@@ -465,30 +453,24 @@ pub unsafe extern "C" fn do_execreg(
                                 == ' ' as ::core::ffi::c_int
                     {
                         str = execreg_line_continuation((*reg).y_array, &raw mut i);
-                        free_str = true_0 != 0;
+                        free_str = true;
                     }
                 }
                 let mut escaped: *mut ::core::ffi::c_char = vim_strsave_escape_ks(str);
                 if free_str {
                     xfree(str as *mut ::core::ffi::c_void);
                 }
-                retval = ins_typebuf(
-                    escaped,
-                    remap,
-                    0 as ::core::ffi::c_int,
-                    true_0 != 0,
-                    silent != 0,
-                );
+                retval = ins_typebuf(escaped, remap, 0 as ::core::ffi::c_int, true, silent != 0);
                 xfree(escaped as *mut ::core::ffi::c_void);
                 if retval == FAIL {
                     return FAIL;
                 }
                 if colon != 0
                     && ins_typebuf(
-                        b":\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                        c":".as_ptr() as *mut ::core::ffi::c_char,
                         remap,
                         0 as ::core::ffi::c_int,
-                        true_0 != 0,
+                        true,
                         silent != 0,
                     ) == FAIL
                 {
@@ -500,7 +482,7 @@ pub unsafe extern "C" fn do_execreg(
             } else {
                 regname
             });
-            pending_end_reg_executing.set(false_0 != 0);
+            pending_end_reg_executing.set(false);
         }
         return retval;
     }
@@ -520,13 +502,13 @@ pub unsafe extern "C" fn insert_reg(
         if got_int.get() {
             return FAIL;
         }
-        if regname != NUL && !valid_yank_reg(regname, false_0 != 0) {
+        if regname != NUL && !valid_yank_reg(regname, false) {
             return FAIL;
         }
         let mut arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if regname == '.' as ::core::ffi::c_int {
             retval = stuff_inserted(NUL, 1 as ::core::ffi::c_int, true_0);
-        } else if get_spec_reg(regname, &raw mut arg, &raw mut allocated, true_0 != 0) {
+        } else if get_spec_reg(regname, &raw mut arg, &raw mut allocated, true) {
             if arg.is_null() {
                 return FAIL;
             }
@@ -536,7 +518,7 @@ pub unsafe extern "C" fn insert_reg(
             }
         } else {
             if reg.is_null() {
-                reg = get_yank_register(regname, YREG_PASTE as ::core::ffi::c_int);
+                reg = get_yank_register(regname, YREG_PASTE);
             }
             if (*reg).y_array.is_null() {
                 retval = FAIL;
@@ -601,7 +583,7 @@ pub unsafe extern "C" fn cmdline_paste_reg(
     unsafe {
         let literally: bool = literally_arg as ::core::ffi::c_int != 0
             || is_literal_register(regname) as ::core::ffi::c_int != 0;
-        let mut reg: *mut yankreg_T = get_yank_register(regname, YREG_PASTE as ::core::ffi::c_int);
+        let mut reg: *mut yankreg_T = get_yank_register(regname, YREG_PASTE);
         if (*reg).y_array.is_null() {
             return FAIL != 0;
         }
@@ -609,7 +591,7 @@ pub unsafe extern "C" fn cmdline_paste_reg(
         while i < (*reg).y_size {
             cmdline_paste_str((*(*reg).y_array.offset(i as isize)).data, literally);
             if i < (*reg).y_size.wrapping_sub(1 as size_t) && !remcr {
-                cmdline_paste_str(b"\r\0".as_ptr() as *const ::core::ffi::c_char, literally);
+                cmdline_paste_str(c"\r".as_ptr(), literally);
             }
             os_breakcheck();
             if got_int.get() {

@@ -28,8 +28,8 @@ pub unsafe extern "C" fn open_line(
         };
         let mut newcol: colnr_T = 0 as colnr_T;
         let mut newindent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut trunc_line: bool = false_0 != 0;
-        let mut retval: bool = false_0 != 0;
+        let mut trunc_line: bool = false;
+        let mut retval: bool = false;
         let mut extra_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut lead_len: ::core::ffi::c_int = 0;
         let mut comment_start: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -42,7 +42,7 @@ pub unsafe extern "C" fn open_line(
         let mut saved_char: ::core::ffi::c_char = NUL as ::core::ffi::c_char;
         let mut pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
         let mut do_si: bool = may_do_si();
-        let mut no_si: bool = false_0 != 0;
+        let mut no_si: bool = false;
         let mut first_char: ::core::ffi::c_int = NUL;
         let mut vreplace_mode: ::core::ffi::c_int = 0;
         let mut did_append: bool = false;
@@ -58,7 +58,7 @@ pub unsafe extern "C" fn open_line(
                     ml_get_len((*curwin.get()).w_cursor.lnum + 1 as linenr_T) as size_t,
                 );
             } else {
-                next_line = xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);
+                next_line = xstrdup(c"".as_ptr());
             }
             replace_push_nul();
             replace_push_nul();
@@ -78,12 +78,12 @@ pub unsafe extern "C" fn open_line(
             *p_extra = NUL as ::core::ffi::c_char;
         }
         u_clearline(curbuf.get());
-        did_si.set(false_0 != 0);
+        did_si.set(false);
         ai_col.set(0 as ::core::ffi::c_int as colnr_T);
         if dir == FORWARD as ::core::ffi::c_int && did_ai.get() as ::core::ffi::c_int != 0 {
-            trunc_line = true_0 != 0;
+            trunc_line = true;
         }
-        if flags & OPENLINE_FORCE_INDENT as ::core::ffi::c_int != 0 {
+        if flags & OPENLINE_FORCE_INDENT != 0 {
             newindent = second_line_indent;
         } else if (*curbuf.get()).b_p_ai != 0 || do_si as ::core::ffi::c_int != 0 {
             newindent = indent_size_ts(
@@ -91,9 +91,7 @@ pub unsafe extern "C" fn open_line(
                 (*curbuf.get()).b_p_ts,
                 (*curbuf.get()).b_p_vts_array,
             );
-            if newindent == 0 as ::core::ffi::c_int
-                && flags & OPENLINE_COM_LIST as ::core::ffi::c_int == 0
-            {
+            if newindent == 0 as ::core::ffi::c_int && flags & OPENLINE_COM_LIST == 0 {
                 newindent = second_line_indent;
             }
             if !trunc_line
@@ -103,12 +101,12 @@ pub unsafe extern "C" fn open_line(
             {
                 old_cursor = (*curwin.get()).w_cursor;
                 let mut ptr: *mut ::core::ffi::c_char = saved_line;
-                if flags & OPENLINE_DO_COM as ::core::ffi::c_int != 0 {
+                if flags & OPENLINE_DO_COM != 0 {
                     lead_len = get_leader_len(
                         ptr,
                         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-                        false_0 != 0,
-                        true_0 != 0,
+                        false,
+                        true,
                     );
                 } else {
                     lead_len = 0 as ::core::ffi::c_int;
@@ -127,12 +125,12 @@ pub unsafe extern "C" fn open_line(
                         }
                         newindent = get_indent();
                     }
-                    if flags & OPENLINE_DO_COM as ::core::ffi::c_int != 0 {
+                    if flags & OPENLINE_DO_COM != 0 {
                         lead_len = get_leader_len(
                             ptr,
                             ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-                            false_0 != 0,
-                            true_0 != 0,
+                            false,
+                            true,
                         );
                     } else {
                         lead_len = 0 as ::core::ffi::c_int;
@@ -207,13 +205,13 @@ pub unsafe extern "C" fn open_line(
                             }
                         }
                         if last_char as ::core::ffi::c_int == '{' as ::core::ffi::c_int {
-                            did_si.set(true_0 != 0);
-                            no_si = true_0 != 0;
+                            did_si.set(true);
+                            no_si = true;
                         } else if last_char as ::core::ffi::c_int != ';' as ::core::ffi::c_int
                             && last_char as ::core::ffi::c_int != '}' as ::core::ffi::c_int
                             && cin_is_cinword(ptr) as ::core::ffi::c_int != 0
                         {
-                            did_si.set(true_0 != 0);
+                            did_si.set(true);
                         }
                     }
                 } else {
@@ -221,7 +219,7 @@ pub unsafe extern "C" fn open_line(
                         && *ptr.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                             == '#' as ::core::ffi::c_int
                     {
-                        let mut was_backslashed: bool = false_0 != 0;
+                        let mut was_backslashed: bool = false;
                         while (*ptr.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                             == '#' as ::core::ffi::c_int
                             || was_backslashed as ::core::ffi::c_int != 0)
@@ -232,9 +230,9 @@ pub unsafe extern "C" fn open_line(
                                     as ::core::ffi::c_int
                                     == '\\' as ::core::ffi::c_int
                             {
-                                was_backslashed = true_0 != 0;
+                                was_backslashed = true;
                             } else {
-                                was_backslashed = false_0 != 0;
+                                was_backslashed = false;
                             }
                             (*curwin.get()).w_cursor.lnum += 1;
                             ptr = ml_get((*curwin.get()).w_cursor.lnum);
@@ -247,59 +245,58 @@ pub unsafe extern "C" fn open_line(
                     }
                     p = skipwhite(ptr);
                     if *p as ::core::ffi::c_int == '}' as ::core::ffi::c_int {
-                        did_si.set(true_0 != 0);
+                        did_si.set(true);
                     } else {
-                        can_si_back.set(true_0 != 0);
+                        can_si_back.set(true);
                     }
                 }
                 (*curwin.get()).w_cursor = old_cursor;
             }
             if do_si {
-                can_si.set(true_0 != 0);
+                can_si.set(true);
             }
-            did_ai.set(true_0 != 0);
+            did_ai.set(true);
         }
         let mut do_cindent: bool = p_paste.get() == 0
             && ((*curbuf.get()).b_p_cin != 0
                 || *(*curbuf.get()).b_p_inde as ::core::ffi::c_int != NUL)
             && in_cinkeys(
                 if dir == FORWARD as ::core::ffi::c_int {
-                    KEY_OPEN_FORW as ::core::ffi::c_int
+                    KEY_OPEN_FORW
                 } else {
-                    KEY_OPEN_BACK as ::core::ffi::c_int
+                    KEY_OPEN_BACK
                 },
                 ' ' as ::core::ffi::c_int,
                 linewhite((*curwin.get()).w_cursor.lnum),
             ) as ::core::ffi::c_int
                 != 0
-            && flags & OPENLINE_FORCE_INDENT as ::core::ffi::c_int == 0;
+            && flags & OPENLINE_FORCE_INDENT == 0;
         end_comment_pending.set(NUL);
-        if flags & OPENLINE_DO_COM as ::core::ffi::c_int != 0 {
+        if flags & OPENLINE_DO_COM != 0 {
             lead_len = get_leader_len(
                 saved_line,
                 &raw mut lead_flags,
                 dir == BACKWARD as ::core::ffi::c_int,
-                true_0 != 0,
+                true,
             );
             if lead_len == 0 as ::core::ffi::c_int
                 && (*curbuf.get()).b_p_cin != 0
                 && do_cindent as ::core::ffi::c_int != 0
                 && dir == FORWARD as ::core::ffi::c_int
-                && (!has_format_option(FO_NO_OPEN_COMS)
-                    || flags & OPENLINE_FORMAT as ::core::ffi::c_int != 0)
+                && (!has_format_option(FO_NO_OPEN_COMS) || flags & OPENLINE_FORMAT != 0)
             {
                 comment_start = check_linecomment(saved_line);
                 if comment_start != MAXCOL as ::core::ffi::c_int {
                     lead_len = get_leader_len(
                         saved_line.offset(comment_start as isize),
                         &raw mut lead_flags,
-                        false_0 != 0,
-                        true_0 != 0,
+                        false,
+                        true,
                     );
                     if lead_len != 0 as ::core::ffi::c_int {
                         lead_len += comment_start;
                         if !did_do_comment.is_null() {
-                            *did_do_comment = true_0 != 0;
+                            *did_do_comment = true;
                         }
                     }
                 }
@@ -317,14 +314,14 @@ pub unsafe extern "C" fn open_line(
             let mut comment_end: *mut ::core::ffi::c_char =
                 ::core::ptr::null_mut::<::core::ffi::c_char>();
             let mut extra_space: ::core::ffi::c_int = false_0;
-            let mut require_blank: bool = false_0 != 0;
+            let mut require_blank: bool = false;
             let mut p2: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
             p = lead_flags;
             while *p as ::core::ffi::c_int != 0
                 && *p as ::core::ffi::c_int != ':' as ::core::ffi::c_int
             {
                 if *p as ::core::ffi::c_int == COM_BLANK {
-                    require_blank = true_0 != 0;
+                    require_blank = true;
                 } else if *p as ::core::ffi::c_int == COM_START
                     || *p as ::core::ffi::c_int == COM_MIDDLE
                 {
@@ -339,10 +336,9 @@ pub unsafe extern "C" fn open_line(
                                 &raw mut p,
                                 &raw mut lead_middle as *mut ::core::ffi::c_char,
                                 COM_MAX_LEN as size_t,
-                                b",\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
+                                c",".as_ptr() as *mut ::core::ffi::c_char,
                             );
-                            require_blank = false_0 != 0;
+                            require_blank = false;
                         }
                     }
                     while *p as ::core::ffi::c_int != 0
@@ -350,7 +346,7 @@ pub unsafe extern "C" fn open_line(
                             != ':' as ::core::ffi::c_int
                     {
                         if *p as ::core::ffi::c_int == COM_BLANK {
-                            require_blank = true_0 != 0;
+                            require_blank = true;
                         }
                         p = p.offset(1);
                     }
@@ -358,7 +354,7 @@ pub unsafe extern "C" fn open_line(
                         &raw mut p,
                         &raw mut lead_middle as *mut ::core::ffi::c_char,
                         COM_MAX_LEN as size_t,
-                        b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                        c",".as_ptr() as *mut ::core::ffi::c_char,
                     ) as ::core::ffi::c_int;
                     while *p as ::core::ffi::c_int != 0
                         && *p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -373,7 +369,7 @@ pub unsafe extern "C" fn open_line(
                         &raw mut p,
                         &raw mut lead_end as *mut ::core::ffi::c_char,
                         COM_MAX_LEN as size_t,
-                        b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                        c",".as_ptr() as *mut ::core::ffi::c_char,
                     );
                     if end_comment_pending.get() == -1 as ::core::ffi::c_int {
                         end_comment_pending.set(
@@ -459,8 +455,7 @@ pub unsafe extern "C" fn open_line(
                     if dir == BACKWARD as ::core::ffi::c_int {
                         lead_len = 0 as ::core::ffi::c_int;
                     } else {
-                        lead_repl = b"\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char;
+                        lead_repl = c"".as_ptr() as *mut ::core::ffi::c_char;
                         lead_repl_len = 0 as ::core::ffi::c_int;
                     }
                     break;
@@ -482,11 +477,10 @@ pub unsafe extern "C" fn open_line(
                     if bytes >= 0 as ::core::ffi::c_int {
                     } else {
                         __assert_fail(
-                            b"bytes >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/change.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"bytes >= 0".as_ptr(),
+                            c"src/nvim/change.rs".as_ptr(),
                             1386 as ::core::ffi::c_uint,
-                            b"_Bool open_line(int, int, int, _Bool *)\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            c"_Bool open_line(int, int, int, _Bool *)".as_ptr(),
                         );
                     }
                 };
@@ -520,7 +514,7 @@ pub unsafe extern "C" fn open_line(
                         } else if ascii_isdigit(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
                             || *p as ::core::ffi::c_int == '-' as ::core::ffi::c_int
                         {
-                            off = getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int);
+                            off = getdigits_int(&raw mut p, true, 0 as ::core::ffi::c_int);
                         } else {
                             p = p.offset(1);
                         }
@@ -717,7 +711,7 @@ pub unsafe extern "C" fn open_line(
                         leader = leader.offset(1);
                     }
                 }
-                can_si.set(false_0 != 0);
+                can_si.set(false);
                 did_si.set(can_si.get());
             } else if !comment_end.is_null() {
                 if *comment_end.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -742,8 +736,7 @@ pub unsafe extern "C" fn open_line(
             if State.get() & REPLACE_FLAG != 0 && State.get() & VREPLACE_FLAG == 0 {
                 replace_push_nul();
             }
-            if (*curbuf.get()).b_p_ai != 0 || flags & OPENLINE_DELSPACES as ::core::ffi::c_int != 0
-            {
+            if (*curbuf.get()).b_p_ai != 0 || flags & OPENLINE_DELSPACES != 0 {
                 while (*p_extra as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
                     || *p_extra as ::core::ffi::c_int == '\t' as ::core::ffi::c_int)
                     && !utf_iscomposing_first(utf_ptr2char(
@@ -760,17 +753,15 @@ pub unsafe extern "C" fn open_line(
             less_cols = p_extra.offset_from(saved_line) as ::core::ffi::c_int as colnr_T;
         }
         if p_extra.is_null() {
-            p_extra = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            p_extra = c"".as_ptr() as *mut ::core::ffi::c_char;
         }
         if lead_len > 0 as ::core::ffi::c_int {
-            if flags & OPENLINE_COM_LIST as ::core::ffi::c_int != 0
-                && second_line_indent > 0 as ::core::ffi::c_int
-            {
+            if flags & OPENLINE_COM_LIST != 0 && second_line_indent > 0 as ::core::ffi::c_int {
                 let mut padding: ::core::ffi::c_int =
                     second_line_indent - (newindent + strlen(leader) as ::core::ffi::c_int);
                 let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 while i_0 < padding {
-                    strcat(leader, b" \0".as_ptr() as *const ::core::ffi::c_char);
+                    strcat(leader, c" ".as_ptr());
                     less_cols -= 1;
                     newcol += 1;
                     i_0 += 1;
@@ -778,7 +769,7 @@ pub unsafe extern "C" fn open_line(
             }
             strcat(leader, p_extra);
             p_extra = leader;
-            did_ai.set(true_0 != 0);
+            did_ai.set(true);
             less_cols -= lead_len;
         } else {
             end_comment_pending.set(NUL);
@@ -804,7 +795,7 @@ pub unsafe extern "C" fn open_line(
                     );
                     (*cmdmod.ptr()).cmod_flags =
                         (*cmdmod.ptr()).cmod_flags | CMOD_LOCKMARKS as ::core::ffi::c_int;
-                    ml_replace((*curwin.get()).w_cursor.lnum, prompt_line, true_0 != 0);
+                    ml_replace((*curwin.get()).w_cursor.lnum, prompt_line, true);
                     prompt_moved = concat_str(prompt, p_extra);
                     p_extra = prompt_moved;
                 }
@@ -815,13 +806,7 @@ pub unsafe extern "C" fn open_line(
             if State.get() & VREPLACE_FLAG == 0 as ::core::ffi::c_int
                 || old_cursor.lnum >= orig_line_count.get()
             {
-                if ml_append(
-                    (*curwin.get()).w_cursor.lnum,
-                    p_extra,
-                    0 as colnr_T,
-                    false_0 != 0,
-                ) == FAIL
-                {
+                if ml_append((*curwin.get()).w_cursor.lnum, p_extra, 0 as colnr_T, false) == FAIL {
                     break '_theend;
                 } else {
                     mark_adjust(
@@ -831,7 +816,7 @@ pub unsafe extern "C" fn open_line(
                         0 as linenr_T,
                         kExtmarkNOOP,
                     );
-                    did_append = true_0 != 0;
+                    did_append = true;
                 }
             } else {
                 (*curwin.get()).w_cursor.lnum += 1;
@@ -841,10 +826,10 @@ pub unsafe extern "C" fn open_line(
                     u_save_cursor();
                     (*vr_lines_changed.ptr()) += 1;
                 }
-                ml_replace((*curwin.get()).w_cursor.lnum, p_extra, true_0 != 0);
+                ml_replace((*curwin.get()).w_cursor.lnum, p_extra, true);
                 changed_bytes((*curwin.get()).w_cursor.lnum, 0 as colnr_T);
                 (*curwin.get()).w_cursor.lnum -= 1;
-                did_append = false_0 != 0;
+                did_append = false;
             }
             (*inhibit_delete_count.ptr()) += 1;
             if newindent != 0 || did_si.get() as ::core::ffi::c_int != 0 {
@@ -860,10 +845,7 @@ pub unsafe extern "C" fn open_line(
                     copy_indent(newindent, saved_line);
                     (*curbuf.get()).b_p_pi = true_0;
                 } else {
-                    set_indent(
-                        newindent,
-                        SIN_INSERT as ::core::ffi::c_int | SIN_NOMARK as ::core::ffi::c_int,
-                    );
+                    set_indent(newindent, SIN_INSERT | SIN_NOMARK);
                 }
                 less_cols -= (*curwin.get()).w_cursor.col;
                 ai_col.set((*curwin.get()).w_cursor.col);
@@ -876,7 +858,7 @@ pub unsafe extern "C" fn open_line(
                 }
                 newcol += (*curwin.get()).w_cursor.col;
                 if no_si {
-                    did_si.set(false_0 != 0);
+                    did_si.set(false);
                 }
             }
             (*inhibit_delete_count.ptr()) -= 1;
@@ -895,12 +877,10 @@ pub unsafe extern "C" fn open_line(
                 if trunc_line as ::core::ffi::c_int != 0 || State.get() & MODE_INSERT != 0 {
                     *saved_line.offset((*curwin.get()).w_cursor.col as isize) =
                         NUL as ::core::ffi::c_char;
-                    if trunc_line as ::core::ffi::c_int != 0
-                        && flags & OPENLINE_KEEPTRAIL as ::core::ffi::c_int == 0
-                    {
+                    if trunc_line as ::core::ffi::c_int != 0 && flags & OPENLINE_KEEPTRAIL == 0 {
                         truncate_spaces(saved_line, (*curwin.get()).w_cursor.col as size_t);
                     }
-                    ml_replace((*curwin.get()).w_cursor.lnum, saved_line, false_0 != 0);
+                    ml_replace((*curwin.get()).w_cursor.lnum, saved_line, false);
                     let mut new_len: ::core::ffi::c_int = strlen(saved_line) as ::core::ffi::c_int;
                     let mut cols_spliced: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                     if new_len < (*curwin.get()).w_cursor.col {
@@ -939,10 +919,10 @@ pub unsafe extern "C" fn open_line(
                             (*curwin.get()).w_cursor.col,
                             (*curwin.get()).w_cursor.lnum + 1 as linenr_T,
                             1 as linenr_T,
-                            true_0 != 0,
+                            true,
                         );
-                        did_append = false_0 != 0;
-                        if flags & OPENLINE_MARKFIX as ::core::ffi::c_int != 0 {
+                        did_append = false;
+                        if flags & OPENLINE_MARKFIX != 0 {
                             mark_col_adjust(
                                 (*curwin.get()).w_cursor.lnum,
                                 (*curwin.get()).w_cursor.col + less_cols_off,
@@ -977,7 +957,7 @@ pub unsafe extern "C" fn open_line(
                     0 as colnr_T,
                     (*curwin.get()).w_cursor.lnum,
                     1 as linenr_T,
-                    true_0 != 0,
+                    true,
                 );
             }
             (*curbuf_splice_pending.ptr()) -= 1;
@@ -1012,14 +992,14 @@ pub unsafe extern "C" fn open_line(
             }
             if State.get() & VREPLACE_FLAG != 0 {
                 p_extra = xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t);
-                ml_replace((*curwin.get()).w_cursor.lnum, next_line, false_0 != 0);
+                ml_replace((*curwin.get()).w_cursor.lnum, next_line, false);
                 (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
                 (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
                 ins_bytes(p_extra);
                 xfree(p_extra as *mut ::core::ffi::c_void);
                 next_line = ::core::ptr::null_mut::<::core::ffi::c_char>();
             }
-            retval = true_0 != 0;
+            retval = true;
         }
         (*curbuf.get()).b_p_pi = saved_pi;
         xfree(saved_line as *mut ::core::ffi::c_void);

@@ -28,12 +28,12 @@ pub unsafe extern "C" fn do_put(
         let mut vcol: colnr_T = 0 as colnr_T;
         let mut y_array: *mut String_0 = ::core::ptr::null_mut::<String_0>();
         let mut nr_lines: linenr_T = 0 as linenr_T;
-        let mut allocated: bool = false_0 != 0;
+        let mut allocated: bool = false;
         let orig_start: pos_T = (*curbuf.get()).b_op_start;
         let orig_end: pos_T = (*curbuf.get()).b_op_end;
         let mut cur_ve_flags: ::core::ffi::c_uint = get_ve_flags(curwin.get());
         if ins_compl_preinsert_effect() {
-            ins_compl_delete(false_0 != 0);
+            ins_compl_delete(false);
         }
         (*curbuf.get()).b_op_start = (*curwin.get()).w_cursor;
         (*curbuf.get()).b_op_end = (*curwin.get()).w_cursor;
@@ -68,7 +68,7 @@ pub unsafe extern "C" fn do_put(
                         (count != 1 as ::core::ffi::c_int) as ::core::ffi::c_int,
                     );
                     if count != 1 as ::core::ffi::c_int {
-                        stuffReadbuff(b"\n \0".as_ptr() as *const ::core::ffi::c_char);
+                        stuffReadbuff(c"\n ".as_ptr());
                         stuffcharReadbuff(Ctrl_U);
                     }
                     count -= 1;
@@ -78,11 +78,11 @@ pub unsafe extern "C" fn do_put(
             }
             if flags & PUT_CURSEND as ::core::ffi::c_int != 0 {
                 if flags & PUT_LINE as ::core::ffi::c_int != 0 {
-                    stuffReadbuff(b"j0\0".as_ptr() as *const ::core::ffi::c_char);
+                    stuffReadbuff(c"j0".as_ptr());
                 } else {
                     let mut cursor_pos: *mut ::core::ffi::c_char = get_cursor_pos_ptr();
                     let mut one_past_line: bool = *cursor_pos as ::core::ffi::c_int == NUL;
-                    let mut eol: bool = false_0 != 0;
+                    let mut eol: bool = false;
                     if !one_past_line {
                         eol = *cursor_pos.offset(utfc_ptr2len(cursor_pos) as isize)
                             as ::core::ffi::c_int
@@ -102,7 +102,7 @@ pub unsafe extern "C" fn do_put(
                     }
                 }
             } else if flags & PUT_LINE as ::core::ffi::c_int != 0 {
-                stuffReadbuff(b"g'[\0".as_ptr() as *const ::core::ffi::c_char);
+                stuffReadbuff(c"g'[".as_ptr());
             }
             if command_start_char as ::core::ffi::c_int == 'a' as ::core::ffi::c_int {
                 if u_save(
@@ -124,7 +124,7 @@ pub unsafe extern "C" fn do_put(
                 regname,
                 &raw mut insert_string.data,
                 &raw mut allocated,
-                true_0 != 0,
+                true,
             ) as ::core::ffi::c_int
                 != 0
         {
@@ -192,7 +192,7 @@ pub unsafe extern "C" fn do_put(
             }
         } else {
             if reg.is_null() {
-                reg = get_yank_register(regname, YREG_PASTE as ::core::ffi::c_int);
+                reg = get_yank_register(regname, YREG_PASTE);
             }
             y_type = (*reg).y_type;
             y_width = (*reg).y_width as ::core::ffi::c_int;
@@ -224,18 +224,13 @@ pub unsafe extern "C" fn do_put(
                                 plen.wrapping_sub(p.offset_from(p_orig) as size_t),
                             )
                                 as *mut ::core::ffi::c_char;
-                            ml_append(
-                                (*curwin.get()).w_cursor.lnum,
-                                ptr_0,
-                                0 as colnr_T,
-                                false_0 != 0,
-                            );
+                            ml_append((*curwin.get()).w_cursor.lnum, ptr_0, 0 as colnr_T, false);
                             xfree(ptr_0 as *mut ::core::ffi::c_void);
                             ptr_0 = xmemdupz(
                                 get_cursor_line_ptr() as *const ::core::ffi::c_void,
                                 split_pos as size_t,
                             ) as *mut ::core::ffi::c_char;
-                            ml_replace((*curwin.get()).w_cursor.lnum, ptr_0, false_0 != 0);
+                            ml_replace((*curwin.get()).w_cursor.lnum, ptr_0, false);
                             nr_lines += 1;
                             dir = FORWARD as ::core::ffi::c_int;
                             buf_updates_send_changes(
@@ -258,10 +253,9 @@ pub unsafe extern "C" fn do_put(
                 }
                 if y_size == 0 as size_t || y_array.is_null() {
                     semsg(
-                        gettext(b"E353: Nothing in register %s\0".as_ptr()
-                            as *const ::core::ffi::c_char),
+                        gettext(c"E353: Nothing in register %s".as_ptr()),
                         if regname == 0 as ::core::ffi::c_int {
-                            b"\"\0".as_ptr() as *const ::core::ffi::c_char
+                            c"\"".as_ptr()
                         } else {
                             transchar(regname) as *const ::core::ffi::c_char
                         },
@@ -443,10 +437,9 @@ pub unsafe extern "C" fn do_put(
                             if (*curwin.get()).w_cursor.lnum > (*curbuf.get()).b_ml.ml_line_count {
                                 if ml_append(
                                     (*curbuf.get()).b_ml.ml_line_count,
-                                    b"\0".as_ptr() as *const ::core::ffi::c_char
-                                        as *mut ::core::ffi::c_char,
+                                    c"".as_ptr() as *mut ::core::ffi::c_char,
                                     1 as colnr_T,
-                                    false_0 != 0,
+                                    false,
                                 ) == FAIL
                                 {
                                     break;
@@ -596,14 +589,11 @@ pub unsafe extern "C" fn do_put(
                                     if columns >= 0 as ::core::ffi::c_int {
                                     } else {
                                         __assert_fail(
-                                            b"columns >= 0\0".as_ptr()
-                                                as *const ::core::ffi::c_char,
-                                            b"src/nvim/register.rs\0".as_ptr()
-                                                as *const ::core::ffi::c_char,
+                                            c"columns >= 0".as_ptr(),
+                                            c"src/nvim/register.rs".as_ptr(),
                                             1731 as ::core::ffi::c_uint,
-                                            b"void do_put(int, yankreg_T *, int, int, int)\0"
-                                                .as_ptr()
-                                                as *const ::core::ffi::c_char,
+                                            c"void do_put(int, yankreg_T *, int, int, int)"
+                                                .as_ptr(),
                                         );
                                     }
                                 };
@@ -613,7 +603,7 @@ pub unsafe extern "C" fn do_put(
                                         as *const ::core::ffi::c_void,
                                     columns as size_t,
                                 );
-                                ml_replace((*curwin.get()).w_cursor.lnum, newp, false_0 != 0);
+                                ml_replace((*curwin.get()).w_cursor.lnum, newp, false);
                                 extmark_splice_cols(
                                     curbuf.get(),
                                     (*curwin.get()).w_cursor.lnum as ::core::ffi::c_int
@@ -636,7 +626,7 @@ pub unsafe extern "C" fn do_put(
                             0 as colnr_T,
                             (*curbuf.get()).b_op_start.lnum + y_size as linenr_T - nr_lines,
                             nr_lines,
-                            true_0 != 0,
+                            true,
                         );
                         (*curbuf.get()).b_op_start = (*curwin.get()).w_cursor;
                         (*curbuf.get()).b_op_start.lnum = lnum;
@@ -777,7 +767,7 @@ pub unsafe extern "C" fn do_put(
                                                 as *const ::core::ffi::c_void,
                                             ((oldlen_0 - col) as size_t).wrapping_add(1 as size_t),
                                         );
-                                        ml_replace(lnum, newp_0, false_0 != 0);
+                                        ml_replace(lnum, newp_0, false);
                                         first_byte_off = utf_head_off(
                                             newp_0,
                                             ptr_2.offset(-(1 as ::core::ffi::c_int as isize)),
@@ -826,7 +816,7 @@ pub unsafe extern "C" fn do_put(
                             let mut indent: ::core::ffi::c_int = 0;
                             let mut orig_indent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                             let mut indent_diff: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            let mut first_indent: bool = true_0 != 0;
+                            let mut first_indent: bool = true;
                             let mut lendiff: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                             if flags & PUT_FIXINDENT as ::core::ffi::c_int != 0 {
                                 orig_indent = get_indent();
@@ -855,7 +845,7 @@ pub unsafe extern "C" fn do_put(
                                         .data,
                                     );
                                     strcpy(newp_1.offset(totlen as isize), ptr_3);
-                                    ml_append(lnum, newp_1, 0 as colnr_T, false_0 != 0);
+                                    ml_append(lnum, newp_1, 0 as colnr_T, false);
                                     new_lnum += 1;
                                     xfree(newp_1 as *mut ::core::ffi::c_void);
                                     let mut oldp_1: *mut ::core::ffi::c_char = ml_get(lnum);
@@ -876,7 +866,7 @@ pub unsafe extern "C" fn do_put(
                                             as *const ::core::ffi::c_void,
                                         (yanklen_0 as size_t).wrapping_add(1 as size_t),
                                     );
-                                    ml_replace(lnum, newp_1, false_0 != 0);
+                                    ml_replace(lnum, newp_1, false);
                                     (*curwin.get()).w_cursor.lnum = lnum;
                                     i_1 = 1 as size_t;
                                 }
@@ -889,7 +879,7 @@ pub unsafe extern "C" fn do_put(
                                             lnum,
                                             (*y_array.offset(i_1 as isize)).data,
                                             0 as colnr_T,
-                                            false_0 != 0,
+                                            false,
                                         ) == FAIL
                                         {
                                             break '_error;
@@ -914,14 +904,14 @@ pub unsafe extern "C" fn do_put(
                                         } else if first_indent {
                                             indent_diff = orig_indent - get_indent();
                                             indent = orig_indent;
-                                            first_indent = false_0 != 0;
+                                            first_indent = false;
                                         } else {
                                             indent = get_indent() + indent_diff;
                                             if indent < 0 as ::core::ffi::c_int {
                                                 indent = 0 as ::core::ffi::c_int;
                                             }
                                         }
-                                        set_indent(indent, SIN_NOMARK as ::core::ffi::c_int);
+                                        set_indent(indent, SIN_NOMARK);
                                         (*curwin.get()).w_cursor = old_pos;
                                         if cnt == count && i_1 == y_size.wrapping_sub(1 as size_t) {
                                             lendiff -= ml_get_len(lnum) as ::core::ffi::c_int;
@@ -1017,7 +1007,7 @@ pub unsafe extern "C" fn do_put(
                                     col,
                                     (*curwin.get()).w_cursor.lnum + 1 as linenr_T,
                                     nr_lines,
-                                    true_0 != 0,
+                                    true,
                                 );
                             } else {
                                 changed_lines(
@@ -1026,7 +1016,7 @@ pub unsafe extern "C" fn do_put(
                                     0 as colnr_T,
                                     (*curbuf.get()).b_op_start.lnum,
                                     nr_lines,
-                                    true_0 != 0,
+                                    true,
                                 );
                             }
                             (*curbuf.get()).b_op_end.lnum = new_lnum;
@@ -1069,9 +1059,7 @@ pub unsafe extern "C" fn do_put(
                             }
                             if flags & PUT_CURSLINE as ::core::ffi::c_int != 0 {
                                 (*curwin.get()).w_cursor.lnum = lnum;
-                                beginline(
-                                    BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int,
-                                );
+                                beginline(BL_WHITE | BL_FIX);
                             } else if flags & PUT_CURSEND as ::core::ffi::c_int != 0 {
                                 if y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int
                                 {
@@ -1100,9 +1088,7 @@ pub unsafe extern "C" fn do_put(
                                 if dir == FORWARD as ::core::ffi::c_int {
                                     (*curwin.get()).w_cursor.lnum += 1;
                                 }
-                                beginline(
-                                    BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int,
-                                );
+                                beginline(BL_WHITE | BL_FIX);
                             } else {
                                 (*curwin.get()).w_cursor = new_cursor;
                             }
@@ -1135,7 +1121,7 @@ pub unsafe extern "C" fn do_put(
             xfree(y_array as *mut ::core::ffi::c_void);
         }
         if (*curbuf.get()).terminal.is_null() {
-            VIsual_active.set(false_0 != 0);
+            VIsual_active.set(false);
         }
         adjust_cursor_eol();
     }

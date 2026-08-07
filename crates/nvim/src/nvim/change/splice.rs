@@ -61,14 +61,14 @@ unsafe extern "C" fn changed_lines_invalidate_win(
                     if i_0 == 0 as ::core::ffi::c_int
                         || (*(*wp).w_lines.offset(i_0 as isize)).wl_lnum < lnume
                     {
-                        (*(*wp).w_lines.offset(i_0 as isize)).wl_valid = false_0 != 0;
+                        (*(*wp).w_lines.offset(i_0 as isize)).wl_valid = false;
                     } else if xtra != 0 as linenr_T {
                         (*(*wp).w_lines.offset(i_0 as isize)).wl_lnum += xtra;
                         (*(*wp).w_lines.offset(i_0 as isize)).wl_foldend += xtra;
                         (*(*wp).w_lines.offset(i_0 as isize)).wl_lastlnum += xtra;
                     }
                 } else if (*(*wp).w_lines.offset(i_0 as isize)).wl_lastlnum >= lnum {
-                    (*(*wp).w_lines.offset(i_0 as isize)).wl_valid = false_0 != 0;
+                    (*(*wp).w_lines.offset(i_0 as isize)).wl_valid = false;
                 }
             }
             i_0 += 1;
@@ -152,16 +152,16 @@ unsafe extern "C" fn changed_common(
             {
                 let mut add: bool = false;
                 if (*buf).b_changelistlen == 0 as ::core::ffi::c_int {
-                    add = true_0 != 0;
+                    add = true;
                 } else {
                     let mut p: *mut pos_T = &raw mut (*(&raw mut (*buf).b_changelist
                         as *mut fmark_T)
                         .offset(((*buf).b_changelistlen - 1 as ::core::ffi::c_int) as isize))
                     .mark;
                     if (*p).lnum != lnum {
-                        add = true_0 != 0;
+                        add = true;
                     } else {
-                        let mut cols: ::core::ffi::c_int = comp_textwidth(false_0 != 0);
+                        let mut cols: ::core::ffi::c_int = comp_textwidth(false);
                         if cols == 0 as ::core::ffi::c_int {
                             cols = 79 as ::core::ffi::c_int;
                         }
@@ -170,7 +170,7 @@ unsafe extern "C" fn changed_common(
                     }
                 }
                 if add {
-                    (*buf).b_new_change = false_0 != 0;
+                    (*buf).b_new_change = false;
                     if (*buf).b_changelistlen == JUMPLISTSIZE {
                         (*buf).b_changelistlen = JUMPLISTSIZE - 1 as ::core::ffi::c_int;
                         memmove(
@@ -261,7 +261,7 @@ unsafe extern "C" fn changed_common(
                         lnum,
                         &raw mut lnum,
                         ::core::ptr::null_mut::<linenr_T>(),
-                        false_0 != 0,
+                        false,
                         ::core::ptr::null_mut::<foldinfo_T>(),
                     );
                     if (*wp_1).w_cursor.lnum == lnum {
@@ -272,7 +272,7 @@ unsafe extern "C" fn changed_common(
                         last,
                         ::core::ptr::null_mut::<linenr_T>(),
                         &raw mut last,
-                        false_0 != 0,
+                        false,
                         ::core::ptr::null_mut::<foldinfo_T>(),
                     );
                     if (*wp_1).w_cursor.lnum == last {
@@ -385,7 +385,7 @@ pub unsafe extern "C" fn appended_lines_buf(
             0 as colnr_T,
             lnum + 1 as linenr_T,
             count,
-            true_0 != 0,
+            true,
         );
     }
 }
@@ -411,7 +411,7 @@ pub unsafe extern "C" fn appended_lines_mark(mut lnum: linenr_T, mut count: ::co
             0 as colnr_T,
             lnum + 1 as linenr_T,
             count as linenr_T,
-            true_0 != 0,
+            true,
         );
     }
 }
@@ -423,7 +423,7 @@ pub unsafe extern "C" fn deleted_lines_buf(
     mut count: linenr_T,
 ) {
     unsafe {
-        changed_lines(buf, lnum, 0 as colnr_T, lnum + count, -count, true_0 != 0);
+        changed_lines(buf, lnum, 0 as colnr_T, lnum + count, -count, true);
     }
 }
 
@@ -463,7 +463,7 @@ pub unsafe extern "C" fn deleted_lines_mark(mut lnum: linenr_T, mut count: ::cor
             0 as colnr_T,
             lnum + count as linenr_T,
             -count as linenr_T,
-            true_0 != 0,
+            true,
         );
     }
 }
@@ -504,7 +504,7 @@ pub unsafe extern "C" fn changed_lines_redraw_buf(
             };
             (*buf).b_mod_xlines += xtra;
         } else {
-            (*buf).b_mod_set = true_0 != 0;
+            (*buf).b_mod_set = true;
             (*buf).b_mod_top = lnum;
             (*buf).b_mod_bot = lnume + xtra;
             (*buf).b_mod_xlines = xtra;

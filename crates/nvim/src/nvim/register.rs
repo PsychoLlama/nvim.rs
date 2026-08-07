@@ -143,37 +143,53 @@ pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const NUM_REGISTERS: C2Rust_Unnamed_21 = 39;
-pub const PLUS_REGISTER: C2Rust_Unnamed_21 = 38;
-pub const STAR_REGISTER: C2Rust_Unnamed_21 = 37;
-pub const NUM_SAVED_REGISTERS: C2Rust_Unnamed_21 = 37;
-pub const DELETION_REGISTER: C2Rust_Unnamed_21 = 36;
+/// The layout of `y_regs`, and the slots with a fixed meaning.  Upstream's
+/// anonymous enum in `register_defs.h`; `c_int` because every use is an
+/// index compared against or assigned to one.
+pub const NUM_REGISTERS: ::core::ffi::c_int = 39;
+/// `"+`, the system clipboard.
+pub const PLUS_REGISTER: ::core::ffi::c_int = 38;
+/// `"*`, the X11 primary selection.
+pub const STAR_REGISTER: ::core::ffi::c_int = 37;
+/// How many of the slots shada saves: everything below `"*`.
+pub const NUM_SAVED_REGISTERS: ::core::ffi::c_int = 37;
+/// `"-`, the small-delete register.
+pub const DELETION_REGISTER: ::core::ffi::c_int = 36;
 pub const kGRegList: GRegFlags = 4;
 pub const kGRegExprSrc: GRegFlags = 2;
 pub const kGRegNoExpr: GRegFlags = 1;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const YREG_PUT: C2Rust_Unnamed_22 = 2;
-pub const YREG_YANK: C2Rust_Unnamed_22 = 1;
-pub const YREG_PASTE: C2Rust_Unnamed_22 = 0;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub const BL_FIX: C2Rust_Unnamed_23 = 4;
-pub const BL_SOL: C2Rust_Unnamed_23 = 2;
-pub const BL_WHITE: C2Rust_Unnamed_23 = 1;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
-pub const FNAME_HYP: C2Rust_Unnamed_24 = 4;
-pub const FNAME_EXP: C2Rust_Unnamed_24 = 2;
-pub const FNAME_MESS: C2Rust_Unnamed_24 = 1;
+
+/// What `get_yank_register()` is being asked for.  `YREG_PASTE` may query
+/// the clipboard provider, `YREG_YANK` moves `y_previous`, and `YREG_PUT`
+/// only reports where a paste would read from.
+pub const YREG_PUT: ::core::ffi::c_int = 2;
+pub const YREG_YANK: ::core::ffi::c_int = 1;
+pub const YREG_PASTE: ::core::ffi::c_int = 0;
+
+/// `beginline()` flags: land on the first non-blank, on the start of the
+/// line, and clamp into a valid column.
+pub const BL_FIX: ::core::ffi::c_int = 4;
+pub const BL_SOL: ::core::ffi::c_int = 2;
+pub const BL_WHITE: ::core::ffi::c_int = 1;
+
+/// `file_name_at_cursor()` flags: expand `~`/`$VAR`, report an error when
+/// there is no file name, and follow 'includeexpr'-style hypertext.
+pub const FNAME_HYP: ::core::ffi::c_int = 4;
+pub const FNAME_EXP: ::core::ffi::c_int = 2;
+pub const FNAME_MESS: ::core::ffi::c_int = 1;
 pub const REMAP_NONE: RemapValues = -1;
 pub const REMAP_YES: RemapValues = 0;
-pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
-pub const SIN_NOMARK: C2Rust_Unnamed_26 = 8;
-pub const SIN_UNDO: C2Rust_Unnamed_26 = 4;
-pub const SIN_INSERT: C2Rust_Unnamed_26 = 2;
-pub const SIN_CHANGED: C2Rust_Unnamed_26 = 1;
-pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub const FIND_STRING: C2Rust_Unnamed_27 = 2;
-pub const FIND_IDENT: C2Rust_Unnamed_27 = 1;
+/// `set_indent()` flags: leave the marks alone, save for undo, this is an
+/// Insert-mode indent, mark the buffer changed.
+pub const SIN_NOMARK: ::core::ffi::c_int = 8;
+pub const SIN_UNDO: ::core::ffi::c_int = 4;
+pub const SIN_INSERT: ::core::ffi::c_int = 2;
+pub const SIN_CHANGED: ::core::ffi::c_int = 1;
+
+/// `find_ident_under_cursor()` flags: accept a non-keyword run as well as
+/// an identifier.
+pub const FIND_STRING: ::core::ffi::c_int = 2;
+pub const FIND_IDENT: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

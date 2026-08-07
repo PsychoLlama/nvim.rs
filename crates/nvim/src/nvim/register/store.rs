@@ -47,8 +47,7 @@ pub unsafe extern "C" fn valid_yank_reg(
                 || regname as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
                     && regname as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
                 || ascii_isdigit(regname) as ::core::ffi::c_int != 0)
-            || !writing
-                && !vim_strchr(b"/.%:=\0".as_ptr() as *const ::core::ffi::c_char, regname).is_null()
+            || !writing && !vim_strchr(c"/.%:=".as_ptr(), regname).is_null()
             || regname == '#' as ::core::ffi::c_int
             || regname == '"' as ::core::ffi::c_int
             || regname == '-' as ::core::ffi::c_int
@@ -56,9 +55,9 @@ pub unsafe extern "C" fn valid_yank_reg(
             || regname == '*' as ::core::ffi::c_int
             || regname == '+' as ::core::ffi::c_int
         {
-            return true_0 != 0;
+            return true;
         }
-        return false_0 != 0;
+        return false;
     }
 }
 
@@ -85,13 +84,13 @@ pub unsafe extern "C" fn op_reg_iter(
             iter as *const yankreg_T
         };
         while iter_reg.offset_from(regs.offset(0 as ::core::ffi::c_int as isize))
-            < NUM_SAVED_REGISTERS as ::core::ffi::c_int as isize
+            < NUM_SAVED_REGISTERS as isize
             && reg_empty(iter_reg) as ::core::ffi::c_int != 0
         {
             iter_reg = iter_reg.offset(1);
         }
         if iter_reg.offset_from(regs.offset(0 as ::core::ffi::c_int as isize))
-            == NUM_SAVED_REGISTERS as ::core::ffi::c_int as isize
+            == NUM_SAVED_REGISTERS as isize
             || reg_empty(iter_reg) as ::core::ffi::c_int != 0
         {
             return ::core::ptr::null::<::core::ffi::c_void>();
@@ -105,7 +104,7 @@ pub unsafe extern "C" fn op_reg_iter(
         loop {
             iter_reg = iter_reg.offset(1);
             if iter_reg.offset_from(regs.offset(0 as ::core::ffi::c_int as isize))
-                >= NUM_SAVED_REGISTERS as ::core::ffi::c_int as isize
+                >= NUM_SAVED_REGISTERS as isize
             {
                 break;
             }
@@ -138,14 +137,14 @@ pub unsafe extern "C" fn op_reg_set(
     unsafe {
         let mut i: ::core::ffi::c_int = op_reg_index(name as ::core::ffi::c_int);
         if i == -1 as ::core::ffi::c_int {
-            return false_0 != 0;
+            return false;
         }
         free_register((y_regs.ptr() as *mut yankreg_T).offset(i as isize));
         (*y_regs.ptr())[i as usize] = reg;
         if is_unnamed {
             y_previous.set((y_regs.ptr() as *mut yankreg_T).offset(i as isize));
         }
-        return true_0 != 0;
+        return true;
     }
 }
 
@@ -163,10 +162,10 @@ pub unsafe extern "C" fn op_reg_set_previous(name: ::core::ffi::c_char) -> bool 
     unsafe {
         let mut i: ::core::ffi::c_int = op_reg_index(name as ::core::ffi::c_int);
         if i == -1 as ::core::ffi::c_int {
-            return false_0 != 0;
+            return false;
         }
         y_previous.set((y_regs.ptr() as *mut yankreg_T).offset(i as isize));
-        return true_0 != 0;
+        return true;
     }
 }
 
@@ -187,11 +186,10 @@ pub unsafe extern "C" fn update_yankreg_width(mut reg: *mut yankreg_T) {
                 if maxlen <= 2147483647 as ::core::ffi::c_int as size_t {
                 } else {
                     __assert_fail(
-                        b"maxlen <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/register.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"maxlen <= INT_MAX".as_ptr(),
+                        c"src/nvim/register.rs".as_ptr(),
                         295 as ::core::ffi::c_uint,
-                        b"void update_yankreg_width(yankreg_T *)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        c"void update_yankreg_width(yankreg_T *)".as_ptr(),
                     );
                 }
             };
@@ -211,11 +209,11 @@ pub unsafe extern "C" fn get_yank_register(
 ) -> *mut yankreg_T {
     unsafe {
         let mut reg: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
-        if (mode == YREG_PASTE as ::core::ffi::c_int || mode == YREG_PUT as ::core::ffi::c_int)
+        if (mode == YREG_PASTE || mode == YREG_PUT)
             && clipboard::get_clipboard(regname, &mut reg, false)
         {
             return reg;
-        } else if mode == YREG_PUT as ::core::ffi::c_int
+        } else if mode == YREG_PUT
             && (regname == '*' as ::core::ffi::c_int || regname == '+' as ::core::ffi::c_int)
         {
             static empty_reg: GlobalCell<yankreg_T> = GlobalCell::new(yankreg_T {
@@ -227,7 +225,7 @@ pub unsafe extern "C" fn get_yank_register(
                 additional_data: ::core::ptr::null_mut::<AdditionalData>(),
             });
             return empty_reg.ptr();
-        } else if mode != YREG_YANK as ::core::ffi::c_int
+        } else if mode != YREG_YANK
             && (regname == 0 as ::core::ffi::c_int
                 || regname == '"' as ::core::ffi::c_int
                 || regname == '*' as ::core::ffi::c_int
@@ -241,7 +239,7 @@ pub unsafe extern "C" fn get_yank_register(
             i = 0 as ::core::ffi::c_int;
         }
         reg = (y_regs.ptr() as *mut yankreg_T).offset(i as isize);
-        if mode == YREG_YANK as ::core::ffi::c_int {
+        if mode == YREG_YANK {
             y_previous.set(reg);
         }
         return reg;
@@ -254,20 +252,20 @@ pub unsafe extern "C" fn yank_register_mline(
 ) -> bool {
     unsafe {
         *reg = ::core::ptr::null_mut::<yankreg_T>();
-        if regname != 0 as ::core::ffi::c_int && !valid_yank_reg(regname, false_0 != 0) {
-            return false_0 != 0;
+        if regname != 0 as ::core::ffi::c_int && !valid_yank_reg(regname, false) {
+            return false;
         }
         if regname == '_' as ::core::ffi::c_int {
-            return false_0 != 0;
+            return false;
         }
-        *reg = get_yank_register(regname, YREG_PASTE as ::core::ffi::c_int);
+        *reg = get_yank_register(regname, YREG_PASTE);
         return (**reg).y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int;
     }
 }
 
 pub unsafe extern "C" fn copy_register(mut name: ::core::ffi::c_int) -> *mut yankreg_T {
     unsafe {
-        let mut reg: *mut yankreg_T = get_yank_register(name, YREG_PASTE as ::core::ffi::c_int);
+        let mut reg: *mut yankreg_T = get_yank_register(name, YREG_PASTE);
         let mut copy: *mut yankreg_T =
             xmalloc(::core::mem::size_of::<yankreg_T>()) as *mut yankreg_T;
         *copy = *reg;
@@ -364,11 +362,11 @@ pub unsafe fn op_reg_index(regname: ::core::ffi::c_int) -> ::core::ffi::c_int {
         return regname as uint8_t as ::core::ffi::c_int - 'A' as ::core::ffi::c_int
             + 10 as ::core::ffi::c_int;
     } else if regname == '-' as ::core::ffi::c_int {
-        return DELETION_REGISTER as ::core::ffi::c_int;
+        return DELETION_REGISTER;
     } else if regname == '*' as ::core::ffi::c_int {
-        return STAR_REGISTER as ::core::ffi::c_int;
+        return STAR_REGISTER;
     } else if regname == '+' as ::core::ffi::c_int {
-        return PLUS_REGISTER as ::core::ffi::c_int;
+        return PLUS_REGISTER;
     } else {
         return -1 as ::core::ffi::c_int;
     };
@@ -386,11 +384,11 @@ pub unsafe fn get_register_name(mut num: ::core::ffi::c_int) -> ::core::ffi::c_i
         return '"' as ::core::ffi::c_int;
     } else if num < 10 as ::core::ffi::c_int {
         return num + '0' as ::core::ffi::c_int;
-    } else if num == DELETION_REGISTER as ::core::ffi::c_int {
+    } else if num == DELETION_REGISTER {
         return '-' as ::core::ffi::c_int;
-    } else if num == STAR_REGISTER as ::core::ffi::c_int {
+    } else if num == STAR_REGISTER {
         return '*' as ::core::ffi::c_int;
-    } else if num == PLUS_REGISTER as ::core::ffi::c_int {
+    } else if num == PLUS_REGISTER {
         return '+' as ::core::ffi::c_int;
     } else {
         return num + 'a' as ::core::ffi::c_int - 10 as ::core::ffi::c_int;

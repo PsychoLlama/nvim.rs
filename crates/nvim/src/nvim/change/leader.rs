@@ -20,7 +20,7 @@ pub unsafe extern "C" fn get_leader_len(
 ) -> ::core::ffi::c_int {
     unsafe {
         let mut j: ::core::ffi::c_int = 0;
-        let mut got_com: bool = false_0 != 0;
+        let mut got_com: bool = false;
         let mut part_buf: [::core::ffi::c_char; 50] = [0; 50];
         let mut string: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut middle_match_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -32,7 +32,7 @@ pub unsafe extern "C" fn get_leader_len(
             i += 1;
         }
         while *line.offset(i as isize) as ::core::ffi::c_int != NUL {
-            let mut found_one: bool = false_0 != 0;
+            let mut found_one: bool = false;
             let mut list: *mut ::core::ffi::c_char = (*curbuf.get()).b_p_com;
             while *list != 0 {
                 if !got_com && !flags.is_null() {
@@ -43,7 +43,7 @@ pub unsafe extern "C" fn get_leader_len(
                     &raw mut list,
                     &raw mut part_buf as *mut ::core::ffi::c_char,
                     COM_MAX_LEN as size_t,
-                    b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                    c",".as_ptr() as *mut ::core::ffi::c_char,
                 );
                 string = vim_strchr(
                     &raw mut part_buf as *mut ::core::ffi::c_char,
@@ -120,7 +120,7 @@ pub unsafe extern "C" fn get_leader_len(
                         if middle_match_len == 0 as ::core::ffi::c_int {
                             i += j;
                         }
-                        found_one = true_0 != 0;
+                        found_one = true;
                         break;
                     }
                 }
@@ -130,7 +130,7 @@ pub unsafe extern "C" fn get_leader_len(
                     *flags = saved_flags;
                 }
                 i += middle_match_len;
-                found_one = true_0 != 0;
+                found_one = true;
             }
             if !found_one {
                 break;
@@ -142,7 +142,7 @@ pub unsafe extern "C" fn get_leader_len(
             if include_space {
                 result = i;
             }
-            got_com = true_0 != 0;
+            got_com = true;
             if vim_strchr(&raw mut part_buf as *mut ::core::ffi::c_char, COM_NEST).is_null() {
                 break;
             }
@@ -170,7 +170,7 @@ pub unsafe extern "C" fn get_last_leader_offset(
             if i < lower_check_bound {
                 break;
             }
-            let mut found_one: bool = false_0 != 0;
+            let mut found_one: bool = false;
             let mut list: *mut ::core::ffi::c_char = (*curbuf.get()).b_p_com;
             while *list != 0 {
                 let mut flags_save: *mut ::core::ffi::c_char = list;
@@ -178,7 +178,7 @@ pub unsafe extern "C" fn get_last_leader_offset(
                     &raw mut list,
                     &raw mut part_buf as *mut ::core::ffi::c_char,
                     COM_MAX_LEN as size_t,
-                    b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                    c",".as_ptr() as *mut ::core::ffi::c_char,
                 );
                 let mut string: *mut ::core::ffi::c_char = vim_strchr(
                     &raw mut part_buf as *mut ::core::ffi::c_char,
@@ -234,7 +234,7 @@ pub unsafe extern "C" fn get_last_leader_offset(
                         continue;
                     }
                 }
-                found_one = true_0 != 0;
+                found_one = true;
                 if !flags.is_null() {
                     *flags = flags_save;
                 }
@@ -261,7 +261,7 @@ pub unsafe extern "C" fn get_last_leader_offset(
                     &raw mut list_0,
                     &raw mut part_buf2 as *mut ::core::ffi::c_char,
                     COM_MAX_LEN as size_t,
-                    b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                    c",".as_ptr() as *mut ::core::ffi::c_char,
                 );
                 if flags_save_0 == com_flags {
                     continue;

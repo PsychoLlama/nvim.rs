@@ -27,11 +27,10 @@ unsafe extern "C" fn yank_copy_line(
             if size >= 0 as ::core::ffi::c_int {
             } else {
                 __assert_fail(
-                    b"size >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/register.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"size >= 0".as_ptr(),
+                    c"src/nvim/register.rs".as_ptr(),
                     985 as ::core::ffi::c_uint,
-                    b"void yank_copy_line(yankreg_T *, struct block_def *, size_t, _Bool)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    c"void yank_copy_line(yankreg_T *, struct block_def *, size_t, _Bool)".as_ptr(),
                 );
             }
         };
@@ -157,7 +156,7 @@ pub unsafe extern "C" fn op_yank_reg(
             let mut tmp: ::core::ffi::c_int = 0;
             match (*reg).y_type as ::core::ffi::c_int {
                 2 => {
-                    block_prep(oap, &raw mut bd, lnum, false_0 != 0);
+                    block_prep(oap, &raw mut bd, lnum, false);
                     yank_copy_line(reg, &raw mut bd, y_idx, (*oap).excl_tr_ws);
                 }
                 1 => {
@@ -176,7 +175,7 @@ pub unsafe extern "C" fn op_yank_reg(
                     if tmp < bd.textlen {
                         bd.textlen = tmp;
                     }
-                    yank_copy_line(reg, &raw mut bd, y_idx, false_0 != 0);
+                    yank_copy_line(reg, &raw mut bd, y_idx, false);
                 }
                 -1 => {
                     abort();
@@ -264,7 +263,7 @@ pub unsafe extern "C" fn op_yank_reg(
                     vim_snprintf(
                         &raw mut namebuf as *mut ::core::ffi::c_char,
                         ::core::mem::size_of::<[::core::ffi::c_char; 100]>(),
-                        gettext(b" into \"%c\0".as_ptr() as *const ::core::ffi::c_char),
+                        gettext(c" into \"%c".as_ptr()),
                         (*oap).regname,
                     );
                 }
@@ -276,8 +275,8 @@ pub unsafe extern "C" fn op_yank_reg(
                     smsg(
                         0 as ::core::ffi::c_int,
                         ngettext(
-                            b"block of %ld line yanked%s\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"block of %ld lines yanked%s\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"block of %ld line yanked%s".as_ptr(),
+                            c"block of %ld lines yanked%s".as_ptr(),
                             yanklines as ::core::ffi::c_ulong,
                         ),
                         yanklines as int64_t,
@@ -287,8 +286,8 @@ pub unsafe extern "C" fn op_yank_reg(
                     smsg(
                         0 as ::core::ffi::c_int,
                         ngettext(
-                            b"%ld line yanked%s\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"%ld lines yanked%s\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"%ld line yanked%s".as_ptr(),
+                            c"%ld lines yanked%s".as_ptr(),
                             yanklines as ::core::ffi::c_ulong,
                         ),
                         yanklines as int64_t,
@@ -326,11 +325,10 @@ pub unsafe extern "C" fn format_reg_type(
             if buf_len > 1 as size_t {
             } else {
                 __assert_fail(
-                    b"buf_len > 1\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/register.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"buf_len > 1".as_ptr(),
+                    c"src/nvim/register.rs".as_ptr(),
                     1176 as ::core::ffi::c_uint,
-                    b"void format_reg_type(MotionType, colnr_T, char *, size_t)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    c"void format_reg_type(MotionType, colnr_T, char *, size_t)".as_ptr(),
                 );
             }
         };
@@ -347,7 +345,7 @@ pub unsafe extern "C" fn format_reg_type(
                 snprintf(
                     buf,
                     buf_len,
-                    b"\x16%d\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"\x16%d".as_ptr(),
                     reg_width as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
                 );
             }
@@ -361,11 +359,11 @@ pub unsafe extern "C" fn format_reg_type(
 
 pub unsafe extern "C" fn do_autocmd_textyankpost(mut oap: *mut oparg_T, mut reg: *mut yankreg_T) {
     unsafe {
-        static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+        static recursive: GlobalCell<bool> = GlobalCell::new(false);
         if recursive.get() as ::core::ffi::c_int != 0 || !has_event(EVENT_TEXTYANKPOST) {
             return;
         }
-        recursive.set(true_0 != 0);
+        recursive.set(true);
         let mut save_v_event: save_v_event_T = save_v_event_T {
             sve_did_save: false,
             sve_hashtab: hashtab_T {
@@ -395,7 +393,7 @@ pub unsafe extern "C" fn do_autocmd_textyankpost(mut oap: *mut oparg_T, mut reg:
         tv_list_set_lock(list, VAR_FIXED);
         tv_dict_add_list(
             dict,
-            b"regcontents\0".as_ptr() as *const ::core::ffi::c_char,
+            c"regcontents".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
             list,
         );
@@ -414,7 +412,7 @@ pub unsafe extern "C" fn do_autocmd_textyankpost(mut oap: *mut oparg_T, mut reg:
         );
         tv_dict_add_str(
             dict,
-            b"regtype\0".as_ptr() as *const ::core::ffi::c_char,
+            c"regtype".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
             &raw mut buf as *mut ::core::ffi::c_char,
         );
@@ -422,13 +420,13 @@ pub unsafe extern "C" fn do_autocmd_textyankpost(mut oap: *mut oparg_T, mut reg:
         buf[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
         tv_dict_add_str(
             dict,
-            b"regname\0".as_ptr() as *const ::core::ffi::c_char,
+            c"regname".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
             &raw mut buf as *mut ::core::ffi::c_char,
         );
         tv_dict_add_bool(
             dict,
-            b"inclusive\0".as_ptr() as *const ::core::ffi::c_char,
+            c"inclusive".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
             (if (*oap).inclusive as ::core::ffi::c_int != 0 {
                 kBoolVarTrue as ::core::ffi::c_int
@@ -440,13 +438,13 @@ pub unsafe extern "C" fn do_autocmd_textyankpost(mut oap: *mut oparg_T, mut reg:
         buf[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
         tv_dict_add_str(
             dict,
-            b"operator\0".as_ptr() as *const ::core::ffi::c_char,
+            c"operator".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
             &raw mut buf as *mut ::core::ffi::c_char,
         );
         tv_dict_add_bool(
             dict,
-            b"visual\0".as_ptr() as *const ::core::ffi::c_char,
+            c"visual".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
             (if (*oap).is_VIsual as ::core::ffi::c_int != 0 {
                 kBoolVarTrue as ::core::ffi::c_int
@@ -460,30 +458,28 @@ pub unsafe extern "C" fn do_autocmd_textyankpost(mut oap: *mut oparg_T, mut reg:
             EVENT_TEXTYANKPOST,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            false_0 != 0,
+            false,
             curbuf.get(),
         );
         (*textlock.ptr()) -= 1;
         restore_v_event(dict, &raw mut save_v_event);
-        recursive.set(false_0 != 0);
+        recursive.set(false);
     }
 }
 
 pub unsafe extern "C" fn op_yank(mut oap: *mut oparg_T, mut message: bool) -> bool {
     unsafe {
-        if (*oap).regname != 0 as ::core::ffi::c_int && !valid_yank_reg((*oap).regname, true_0 != 0)
-        {
+        if (*oap).regname != 0 as ::core::ffi::c_int && !valid_yank_reg((*oap).regname, true) {
             beep_flush();
-            return false_0 != 0;
+            return false;
         }
         if (*oap).regname == '_' as ::core::ffi::c_int {
-            return true_0 != 0;
+            return true;
         }
-        let mut reg: *mut yankreg_T =
-            get_yank_register((*oap).regname, YREG_YANK as ::core::ffi::c_int);
+        let mut reg: *mut yankreg_T = get_yank_register((*oap).regname, YREG_YANK);
         op_yank_reg(oap, message, reg, is_append_register((*oap).regname));
         clipboard::set_clipboard((*oap).regname, reg);
         do_autocmd_textyankpost(oap, reg);
-        return true_0 != 0;
+        return true;
     }
 }

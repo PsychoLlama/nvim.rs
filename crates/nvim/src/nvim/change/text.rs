@@ -128,7 +128,7 @@ pub unsafe extern "C" fn ins_char_bytes(mut buf: *mut ::core::ffi::c_char, mut c
             *p.offset(i as isize) = ' ' as ::core::ffi::c_char;
             i = i.wrapping_add(1);
         }
-        ml_replace(lnum, newp, false_0 != 0);
+        ml_replace(lnum, newp, false);
         inserted_bytes(
             lnum,
             col as colnr_T,
@@ -182,10 +182,10 @@ pub unsafe extern "C" fn ins_str(mut s: *mut ::core::ffi::c_char, mut slen: size
             if bytes >= 0 as ::core::ffi::c_int {
             } else {
                 __assert_fail(
-                    b"bytes >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/change.rs\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"bytes >= 0".as_ptr(),
+                    c"src/nvim/change.rs".as_ptr(),
                     836 as ::core::ffi::c_uint,
-                    b"void ins_str(char *, size_t)\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"void ins_str(char *, size_t)".as_ptr(),
                 );
             }
         };
@@ -194,7 +194,7 @@ pub unsafe extern "C" fn ins_str(mut s: *mut ::core::ffi::c_char, mut slen: size
             oldp.offset(col as isize) as *const ::core::ffi::c_void,
             bytes as size_t,
         );
-        ml_replace(lnum, newp, false_0 != 0);
+        ml_replace(lnum, newp, false);
         inserted_bytes(
             lnum,
             col,
@@ -229,7 +229,7 @@ pub unsafe extern "C" fn del_chars(
             p = p.offset(l as isize);
             i += 1;
         }
-        return del_bytes(bytes as colnr_T, fixpos != 0, true_0 != 0);
+        return del_bytes(bytes as colnr_T, fixpos != 0, true);
     }
 }
 
@@ -252,8 +252,7 @@ pub unsafe extern "C" fn del_bytes(
         }
         if count < 1 as ::core::ffi::c_int {
             siemsg(
-                b"E292: Invalid count for del_bytes(): %ld\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"E292: Invalid count for del_bytes(): %ld".as_ptr(),
                 count as int64_t,
             );
             return FAIL;
@@ -278,7 +277,7 @@ pub unsafe extern "C" fn del_bytes(
                         break;
                     }
                 }
-                fixpos = false_0 != 0;
+                fixpos = false;
             }
         }
         let mut movelen: ::core::ffi::c_int =
@@ -320,7 +319,7 @@ pub unsafe extern "C" fn del_bytes(
             movelen as size_t,
         );
         if alloc_newp {
-            ml_replace(lnum, newp, false_0 != 0);
+            ml_replace(lnum, newp, false);
         } else {
             (*curbuf.get()).b_ml.ml_line_textlen =
                 (newlen as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as colnr_T;
@@ -341,12 +340,12 @@ pub unsafe extern "C" fn truncate_line(mut fixpos: ::core::ffi::c_int) {
         let mut col: colnr_T = (*curwin.get()).w_cursor.col;
         let mut old_line: *mut ::core::ffi::c_char = ml_get(lnum);
         let mut newp: *mut ::core::ffi::c_char = if col == 0 as ::core::ffi::c_int {
-            xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char)
+            xstrdup(c"".as_ptr())
         } else {
             xstrnsave(old_line, col as size_t)
         };
         let mut deleted: ::core::ffi::c_int = ml_get_len(lnum) - col as ::core::ffi::c_int;
-        ml_replace(lnum, newp, false_0 != 0);
+        ml_replace(lnum, newp, false);
         inserted_bytes(
             lnum,
             (*curwin.get()).w_cursor.col,
@@ -374,7 +373,7 @@ pub unsafe extern "C" fn del_lines(mut nlines: linenr_T, mut undo: bool) {
             if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
                 break;
             }
-            ml_delete_flags(first, ML_DEL_MESSAGE as ::core::ffi::c_int);
+            ml_delete_flags(first, ML_DEL_MESSAGE);
             n += 1;
             if first > (*curbuf.get()).b_ml.ml_line_count {
                 break;

@@ -114,22 +114,36 @@ pub use self::text::*;
 
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const OPENLINE_FORCE_INDENT: C2Rust_Unnamed_18 = 64;
-pub const OPENLINE_FORMAT: C2Rust_Unnamed_18 = 32;
-pub const OPENLINE_COM_LIST: C2Rust_Unnamed_18 = 16;
-pub const OPENLINE_MARKFIX: C2Rust_Unnamed_18 = 8;
-pub const OPENLINE_KEEPTRAIL: C2Rust_Unnamed_18 = 4;
-pub const OPENLINE_DO_COM: C2Rust_Unnamed_18 = 2;
-pub const OPENLINE_DELSPACES: C2Rust_Unnamed_18 = 1;
-pub const KEY_OPEN_BACK: C2Rust_Unnamed_21 = 258;
-pub const KEY_OPEN_FORW: C2Rust_Unnamed_21 = 257;
-pub const SIN_NOMARK: C2Rust_Unnamed_23 = 8;
-pub const SIN_INSERT: C2Rust_Unnamed_23 = 2;
-pub const ML_DEL_MESSAGE: C2Rust_Unnamed_24 = 1;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
+
+/// `open_line()`'s `flags` argument -- upstream's anonymous enum in
+/// `change.h`.  Every one is passed in a `c_int` parameter, so `c_int` is
+/// the type that avoids a cast at each use.
+pub const OPENLINE_FORCE_INDENT: ::core::ffi::c_int = 64;
+/// Format the new line with 'textwidth'.
+pub const OPENLINE_FORMAT: ::core::ffi::c_int = 32;
+/// `second_indent` is a comment-leader length, not an indent.
+pub const OPENLINE_COM_LIST: ::core::ffi::c_int = 16;
+/// Move marks that were on the old line to the new one.
+pub const OPENLINE_MARKFIX: ::core::ffi::c_int = 8;
+/// Keep trailing white space on the old line.
+pub const OPENLINE_KEEPTRAIL: ::core::ffi::c_int = 4;
+/// Copy the 'comments' leader onto the new line.
+pub const OPENLINE_DO_COM: ::core::ffi::c_int = 2;
+/// Delete the white space the split left behind.
+pub const OPENLINE_DELSPACES: ::core::ffi::c_int = 1;
+
+/// The pseudo-keys `in_cinkeys()` matches `o`/`O` against, compared to a
+/// `c_int` `keytyped`.
+pub const KEY_OPEN_BACK: ::core::ffi::c_int = 258;
+pub const KEY_OPEN_FORW: ::core::ffi::c_int = 257;
+
+/// `set_indent()` flags: do not move the marks, and this indent is being
+/// set from Insert mode.
+pub const SIN_NOMARK: ::core::ffi::c_int = 8;
+pub const SIN_INSERT: ::core::ffi::c_int = 2;
+
+/// `ml_delete_flags()`: report "N fewer lines".
+pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
