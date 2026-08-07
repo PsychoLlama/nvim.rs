@@ -146,7 +146,7 @@ unsafe extern "C" fn process_hunk(
                 > (*dp).df_lnum[idx_orig as usize] + (*dp).df_count[idx_orig as usize]
         {
             if *notsetp {
-                diff_copy_entry(dprev, dp, idx_orig, idx_new);
+                diff_copy_entry(dprev, dp, idx_orig as usize, idx_new as usize);
             }
             dprev = dp;
             dp = (*dp).df_next;
@@ -238,7 +238,7 @@ unsafe extern "C" fn process_hunk(
             let mut i_1: ::core::ffi::c_int = idx_orig + 1 as ::core::ffi::c_int;
             while i_1 < idx_new {
                 if !(*curtab.get()).tp_diffbuf[i_1 as usize].is_null() {
-                    diff_copy_entry(dprev, dp, idx_orig, i_1);
+                    diff_copy_entry(dprev, dp, idx_orig as usize, i_1 as usize);
                 }
                 i_1 += 1;
             }
@@ -301,7 +301,7 @@ pub(crate) unsafe extern "C" fn diff_read(
         }
         while !dp.is_null() {
             if notset {
-                diff_copy_entry(dprev, dp, idx_orig, idx_new);
+                diff_copy_entry(dprev, dp, idx_orig as usize, idx_new as usize);
             }
             dprev = dp;
             dp = (*dp).df_next;
