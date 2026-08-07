@@ -424,15 +424,25 @@ fn scale_to_f64(significand: u128, sticky: bool, scale: i32) -> f64 {
     let mut value = kept as f64;
     while power > 0 {
         let step = power.min(500);
-        value *= 2f64.powi(step);
+        value *= power_of_two(step);
         power -= step;
     }
     while power < 0 {
         let step = (-power).min(500);
-        value /= 2f64.powi(step);
+        value /= power_of_two(step);
         power += step;
     }
     value
+}
+
+/// `2^exponent`, exactly, for an `exponent` a normal f64 can hold.
+///
+/// Built out of the bit pattern rather than `powi`, which is not required
+/// to be exact and under Miri deliberately is not — `0x10` came back as
+/// `16.000000000000007`, which is a real warning about relying on it.
+fn power_of_two(exponent: i32) -> f64 {
+    debug_assert!((-1022..=1023).contains(&exponent));
+    f64::from_bits(((exponent + 1023) as u64) << 52)
 }
 
 #[cfg(test)]
