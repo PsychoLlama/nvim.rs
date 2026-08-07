@@ -46,34 +46,30 @@ pub unsafe extern "C" fn os_rename(
     mut path: *const ::core::ffi::c_char,
     mut new_path: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    let mut r: ::core::ffi::c_int = 0;
-    let mut req: uv_fs_t = UV_FS_T_INIT;
-    r = uv_fs_rename(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut req,
-        path,
-        new_path,
-        None,
-    );
-    uv_fs_req_cleanup(&raw mut req);
-    return if r == kLibuvSuccess.get() { OK } else { FAIL };
+    fs_ok(|req| {
+        uv_fs_rename(
+            ::core::ptr::null_mut::<uv_loop_t>(),
+            req,
+            path,
+            new_path,
+            None,
+        )
+    })
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_mkdir(
     mut path: *const ::core::ffi::c_char,
     mut mode: int32_t,
 ) -> ::core::ffi::c_int {
-    let mut r: ::core::ffi::c_int = 0;
-    let mut req: uv_fs_t = UV_FS_T_INIT;
-    r = uv_fs_mkdir(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut req,
-        path,
-        mode as ::core::ffi::c_int,
-        None,
-    );
-    uv_fs_req_cleanup(&raw mut req);
-    return r;
+    fs_result(|req| {
+        uv_fs_mkdir(
+            ::core::ptr::null_mut::<uv_loop_t>(),
+            req,
+            path,
+            mode as ::core::ffi::c_int,
+            None,
+        )
+    })
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_mkdir_recurse(
@@ -166,31 +162,20 @@ pub unsafe extern "C" fn os_mkdtemp(
     mut templ: *const ::core::ffi::c_char,
     mut path: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    let mut request: uv_fs_t = UV_FS_T_INIT;
-    let mut result: ::core::ffi::c_int = uv_fs_mkdtemp(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut request,
-        templ,
-        None,
-    );
-    if result == kLibuvSuccess.get() {
-        xstrlcpy(path, request.path, TEMP_FILE_PATH_MAXLEN as size_t);
-    }
-    uv_fs_req_cleanup(&raw mut request);
-    return result;
+    // `request.path` is the directory libuv made, and cleanup frees it.
+    fs_request(
+        |request| uv_fs_mkdtemp(::core::ptr::null_mut::<uv_loop_t>(), request, templ, None),
+        |result, request| {
+            if result == kLibuvSuccess.get() {
+                xstrlcpy(path, request.path, TEMP_FILE_PATH_MAXLEN as size_t);
+            }
+            result
+        },
+    )
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_rmdir(mut path: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    let mut r: ::core::ffi::c_int = 0;
-    let mut req: uv_fs_t = UV_FS_T_INIT;
-    r = uv_fs_rmdir(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut req,
-        path,
-        None,
-    );
-    uv_fs_req_cleanup(&raw mut req);
-    return r;
+    fs_result(|req| uv_fs_rmdir(::core::ptr::null_mut::<uv_loop_t>(), req, path, None))
 }
 pub unsafe extern "C" fn os_scandir(
     mut dir: *mut Directory,
@@ -222,14 +207,5 @@ pub unsafe extern "C" fn os_closedir(mut dir: *mut Directory) {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_remove(mut path: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    let mut r: ::core::ffi::c_int = 0;
-    let mut req: uv_fs_t = UV_FS_T_INIT;
-    r = uv_fs_unlink(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut req,
-        path,
-        None,
-    );
-    uv_fs_req_cleanup(&raw mut req);
-    return r;
+    fs_result(|req| uv_fs_unlink(::core::ptr::null_mut::<uv_loop_t>(), req, path, None))
 }

@@ -589,7 +589,7 @@
     "crates/nvim/src/nvim/os/env/dirs.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/os/env/expand.rs": {"no_mangle": 1, "unsafe": 6},
     "crates/nvim/src/nvim/os/fileio.rs": {"no_mangle": 8, "unsafe": 11},
-    "crates/nvim/src/nvim/os/fs.rs": {"no_mangle": 11, "unsafe": 24},
+    "crates/nvim/src/nvim/os/fs.rs": {"no_mangle": 11, "unsafe": 22},
     "crates/nvim/src/nvim/os/fs/dir.rs": {"no_mangle": 6, "unsafe": 11},
     "crates/nvim/src/nvim/os/fs/meta.rs": {"no_mangle": 17, "unsafe": 25},
     "crates/nvim/src/nvim/os/input.rs": {"unsafe": 19},

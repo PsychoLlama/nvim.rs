@@ -17,18 +17,15 @@ pub(crate) unsafe extern "C" fn os_stat(
     if name.is_null() {
         return UV_EINVAL as ::core::ffi::c_int;
     }
-    let mut request: uv_fs_t = UV_FS_T_INIT;
-    let mut result: ::core::ffi::c_int = uv_fs_stat(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut request,
-        name,
-        None,
-    );
-    if result == kLibuvSuccess.get() {
-        *statbuf = request.statbuf;
-    }
-    uv_fs_req_cleanup(&raw mut request);
-    return result;
+    fs_request(
+        |request| uv_fs_stat(::core::ptr::null_mut::<uv_loop_t>(), request, name, None),
+        |result, request| {
+            if result == kLibuvSuccess.get() {
+                *statbuf = request.statbuf;
+            }
+            result
+        },
+    )
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_getperm(mut name: *const ::core::ffi::c_char) -> int32_t {
@@ -73,17 +70,7 @@ pub unsafe extern "C" fn os_setperm(
     name: *const ::core::ffi::c_char,
     mut perm: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    let mut r: ::core::ffi::c_int = 0;
-    let mut req: uv_fs_t = UV_FS_T_INIT;
-    r = uv_fs_chmod(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut req,
-        name,
-        perm,
-        None,
-    );
-    uv_fs_req_cleanup(&raw mut req);
-    return if r == kLibuvSuccess.get() { OK } else { FAIL };
+    fs_ok(|req| uv_fs_chmod(::core::ptr::null_mut::<uv_loop_t>(), req, name, perm, None))
 }
 pub unsafe extern "C" fn os_copy_xattr(
     mut from_file: *const ::core::ffi::c_char,
@@ -138,19 +125,16 @@ pub unsafe extern "C" fn os_copy_xattr(
                 if *__errno_location() != 0 {
                     match *__errno_location() {
                         E2BIG => {
-                            errmsg =
-                                (e_xattr_e2big.ptr() as *const _) as *const ::core::ffi::c_char;
+                            errmsg = E_XATTR_E2BIG.as_ptr();
                             break '_error_exit;
                         }
                         ENOTSUP | EACCES | EPERM => {}
                         ERANGE => {
-                            errmsg =
-                                (e_xattr_erange.ptr() as *const _) as *const ::core::ffi::c_char;
+                            errmsg = E_XATTR_ERANGE.as_ptr();
                             break '_error_exit;
                         }
                         _ => {
-                            errmsg =
-                                (e_xattr_other.ptr() as *const _) as *const ::core::ffi::c_char;
+                            errmsg = E_XATTR_OTHER.as_ptr();
                             break '_error_exit;
                         }
                     }
@@ -175,20 +159,17 @@ pub unsafe extern "C" fn os_copy_xattr(
         emsg(gettext(errmsg));
     }
 }
-pub unsafe extern "C" fn os_get_acl(mut _fname: *const ::core::ffi::c_char) -> vim_acl_T {
-    let mut ret: vim_acl_T = NULL;
-    return ret;
+/// Access control lists, which nvim does not implement on any platform:
+/// upstream's `os_get_acl` answers NULL and the other two are `if (aclent
+/// == NULL) return;` followed by nothing. Kept because `fileio.c` calls all
+/// three around every write.
+pub unsafe extern "C" fn os_get_acl(_fname: *const ::core::ffi::c_char) -> vim_acl_T {
+    NULL
 }
-pub unsafe extern "C" fn os_set_acl(mut _fname: *const ::core::ffi::c_char, mut aclent: vim_acl_T) {
-    if aclent.is_null() {
-        return;
-    }
-}
-pub unsafe extern "C" fn os_free_acl(mut aclent: vim_acl_T) {
-    if aclent.is_null() {
-        return;
-    }
-}
+
+pub unsafe extern "C" fn os_set_acl(_fname: *const ::core::ffi::c_char, _aclent: vim_acl_T) {}
+
+pub unsafe extern "C" fn os_free_acl(_aclent: vim_acl_T) {}
 pub unsafe extern "C" fn os_file_owned(mut fname: *const ::core::ffi::c_char) -> bool {
     let mut uid: uid_t = getuid();
     let mut finfo: FileInfo = FileInfo {
@@ -234,18 +215,16 @@ pub unsafe extern "C" fn os_chown(
     mut owner: uv_uid_t,
     mut group: uv_gid_t,
 ) -> ::core::ffi::c_int {
-    let mut r: ::core::ffi::c_int = 0;
-    let mut req: uv_fs_t = UV_FS_T_INIT;
-    r = uv_fs_chown(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut req,
-        path,
-        owner,
-        group,
-        None,
-    );
-    uv_fs_req_cleanup(&raw mut req);
-    return r;
+    fs_result(|req| {
+        uv_fs_chown(
+            ::core::ptr::null_mut::<uv_loop_t>(),
+            req,
+            path,
+            owner,
+            group,
+            None,
+        )
+    })
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_fchown(
@@ -253,65 +232,43 @@ pub unsafe extern "C" fn os_fchown(
     mut owner: uv_uid_t,
     mut group: uv_gid_t,
 ) -> ::core::ffi::c_int {
-    let mut r: ::core::ffi::c_int = 0;
-    let mut req: uv_fs_t = UV_FS_T_INIT;
-    r = uv_fs_fchown(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut req,
-        fd as uv_file,
-        owner,
-        group,
-        None,
-    );
-    uv_fs_req_cleanup(&raw mut req);
-    return r;
+    fs_result(|req| {
+        uv_fs_fchown(
+            ::core::ptr::null_mut::<uv_loop_t>(),
+            req,
+            fd as uv_file,
+            owner,
+            group,
+            None,
+        )
+    })
 }
 pub unsafe extern "C" fn os_file_settime(
     mut path: *const ::core::ffi::c_char,
     mut atime: ::core::ffi::c_double,
     mut mtime: ::core::ffi::c_double,
 ) -> ::core::ffi::c_int {
-    let mut r: ::core::ffi::c_int = 0;
-    let mut req: uv_fs_t = UV_FS_T_INIT;
-    r = uv_fs_utime(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut req,
-        path,
-        atime,
-        mtime,
-        None,
-    );
-    uv_fs_req_cleanup(&raw mut req);
-    return r;
+    fs_result(|req| {
+        uv_fs_utime(
+            ::core::ptr::null_mut::<uv_loop_t>(),
+            req,
+            path,
+            atime,
+            mtime,
+            None,
+        )
+    })
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_file_is_readable(mut name: *const ::core::ffi::c_char) -> bool {
-    let mut r: ::core::ffi::c_int = 0;
-    let mut req: uv_fs_t = UV_FS_T_INIT;
-    r = uv_fs_access(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut req,
-        name,
-        4 as ::core::ffi::c_int,
-        None,
-    );
-    uv_fs_req_cleanup(&raw mut req);
-    return r == 0 as ::core::ffi::c_int;
+    fs_result(|req| uv_fs_access(::core::ptr::null_mut::<uv_loop_t>(), req, name, R_OK, None)) == 0
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_file_is_writable(
     mut name: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    let mut r: ::core::ffi::c_int = 0;
-    let mut req: uv_fs_t = UV_FS_T_INIT;
-    r = uv_fs_access(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut req,
-        name,
-        2 as ::core::ffi::c_int,
-        None,
-    );
-    uv_fs_req_cleanup(&raw mut req);
+    let r =
+        fs_result(|req| uv_fs_access(::core::ptr::null_mut::<uv_loop_t>(), req, name, W_OK, None));
     if r == 0 as ::core::ffi::c_int {
         return if os_isdir(name) as ::core::ffi::c_int != 0 {
             2 as ::core::ffi::c_int
@@ -346,41 +303,44 @@ pub unsafe extern "C" fn os_fileinfo_link(
     if path.is_null() {
         return false_0 != 0;
     }
-    let mut request: uv_fs_t = UV_FS_T_INIT;
-    let mut ok: bool = uv_fs_lstat(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut request,
-        path,
-        None,
-    ) == kLibuvSuccess.get();
-    if ok {
-        (*file_info).stat = request.statbuf;
-    }
-    uv_fs_req_cleanup(&raw mut request);
-    return ok;
+    fs_request(
+        |request| uv_fs_lstat(::core::ptr::null_mut::<uv_loop_t>(), request, path, None),
+        |result, request| {
+            let ok = result == kLibuvSuccess.get();
+            if ok {
+                (*file_info).stat = request.statbuf;
+            }
+            ok
+        },
+    )
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_fileinfo_fd(
     mut file_descriptor: ::core::ffi::c_int,
     mut file_info: *mut FileInfo,
 ) -> bool {
-    let mut request: uv_fs_t = UV_FS_T_INIT;
     memset(
         file_info as *mut ::core::ffi::c_void,
         0 as ::core::ffi::c_int,
         ::core::mem::size_of::<FileInfo>(),
     );
-    let mut ok: bool = uv_fs_fstat(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut request,
-        file_descriptor as uv_file,
-        None,
-    ) == kLibuvSuccess.get();
-    if ok {
-        (*file_info).stat = request.statbuf;
-    }
-    uv_fs_req_cleanup(&raw mut request);
-    return ok;
+    fs_request(
+        |request| {
+            uv_fs_fstat(
+                ::core::ptr::null_mut::<uv_loop_t>(),
+                request,
+                file_descriptor as uv_file,
+                None,
+            )
+        },
+        |result, request| {
+            let ok = result == kLibuvSuccess.get();
+            if ok {
+                (*file_info).stat = request.statbuf;
+            }
+            ok
+        },
+    )
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_fileinfo_id_equal(

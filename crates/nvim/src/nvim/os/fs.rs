@@ -1,3 +1,27 @@
+//! The filesystem layer: everything nvim asks the OS about a path, a
+//! directory or an open file descriptor.
+//!
+//! Almost all of it is libuv's synchronous `uv_fs_*` family, and almost
+//! every function here is the same shape around it — fill a `uv_fs_t`, run
+//! it, read `result` back, clean the request up, answer `OK`/`FAIL`. That
+//! shape is [`fs_request`] and its two shorthands, written once; upstream
+//! writes it out per function and c2rust wrote the zero initialiser out
+//! with it, which is where 1,386 of this file's original 2,726 lines went.
+//!
+//! Metadata is in [`meta`] and directories in [`dir`]; what is left here is
+//! the current directory, executability, and the read/write/copy calls that
+//! are libc rather than libuv.
+//!
+//! This family is still on `allow(unsafe_op_in_unsafe_fn)`, and
+//! deliberately so. **57 of its 60 ratcheted units are the export
+//! declarations themselves**, which the deny discounts and an equal number
+//! of blanket-wrapped bodies then puts straight back: measured both ways
+//! round, 60 before and 60 after, at a cost of 113 lines and not one
+//! narrower obligation. Adopting the deny here means rewriting the bodies,
+//! which is Cargo.toml's own rule and a slice of its own.
+
+#![allow(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::event::libuv::{
     uv_chdir, uv_cwd, uv_exepath, uv_fs_access, uv_fs_chmod, uv_fs_chown, uv_fs_close,
@@ -50,6 +74,10 @@ pub const UV_EAGAIN: C2Rust_Unnamed_5 = -11;
 pub const UV_UNKNOWN_REQ: uv_req_type = 0;
 pub const UV_FS_CUSTOM: uv_fs_type = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+/// `access(2)`'s mode bits, which `uv_fs_access` takes as they are.
+const R_OK: ::core::ffi::c_int = 4;
+const W_OK: ::core::ffi::c_int = 2;
+const X_OK: ::core::ffi::c_int = 1;
 pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const O_WRONLY: ::core::ffi::c_int = 0o1 as ::core::ffi::c_int;
 pub const O_RDWR: ::core::ffi::c_int = 0o2 as ::core::ffi::c_int;
@@ -62,21 +90,14 @@ pub const FD_CLOEXEC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NODE_NORMAL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NODE_WRITABLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NODE_OTHER: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static e_xattr_erange: GlobalCell<[::core::ffi::c_char; 51]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 51], [::core::ffi::c_char; 51]>(
-        *b"E1506: Buffer too small to copy xattr value or key\0",
-    )
-});
-static e_xattr_e2big: GlobalCell<[::core::ffi::c_char; 84]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 84], [::core::ffi::c_char; 84]>(
-        *b"E1508: Size of the extended attribute value is larger than the maximum size allowed\0",
-    )
-});
-static e_xattr_other: GlobalCell<[::core::ffi::c_char; 65]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 65], [::core::ffi::c_char; 65]>(
-        *b"E1509: Error occurred when reading or writing extended attribute\0",
-    )
-});
+/// The three `E15xx` messages `os_copy_xattr` reports. Read-only text, so
+/// `CStr` constants rather than the mutable `[c_char; N]` statics c2rust
+/// transmuted the C string literals into.
+const E_XATTR_ERANGE: &::core::ffi::CStr = c"E1506: Buffer too small to copy xattr value or key";
+const E_XATTR_E2BIG: &::core::ffi::CStr =
+    c"E1508: Size of the extended attribute value is larger than the maximum size allowed";
+const E_XATTR_OTHER: &::core::ffi::CStr =
+    c"E1509: Error occurred when reading or writing extended attribute";
 static kLibuvSuccess: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 /// `uv_fs_t req = { 0 }`. c2rust wrote all sixty-six fields out at each of
 /// the twenty-one sites that need one -- 1,386 of this file's lines -- and
@@ -147,6 +168,50 @@ const UV_FS_T_INIT: uv_fs_t = uv_fs_t {
     }; 4],
 };
 
+/// Run one synchronous `uv_fs_*` request and answer whatever `read` makes
+/// of it.
+///
+/// Every `uv_fs_*` call in this family is made with a null loop and a null
+/// callback, which is libuv's "do it now, on this thread" spelling. Under
+/// that spelling the starter's return value and `request.result` are the
+/// same number, and `read` is handed both so each caller keeps testing the
+/// one upstream tested. Cleanup runs whatever the answer was — which is the
+/// point of writing this once, because `request.ptr` and `request.path` do
+/// not survive it and `read` is the last place they can be read.
+///
+/// This is a *safe* function: the request is one it owns and fully
+/// initialises, and `start` and `read` are safe closures, so a caller who
+/// puts a raw pointer in one is the one carrying that obligation.
+fn fs_request<T>(
+    start: impl FnOnce(*mut uv_fs_t) -> ::core::ffi::c_int,
+    read: impl FnOnce(::core::ffi::c_int, &uv_fs_t) -> T,
+) -> T {
+    let mut request: uv_fs_t = UV_FS_T_INIT;
+    let result = start(&raw mut request);
+    let answer = read(result, &request);
+    // SAFETY: `request` is a fully initialised `uv_fs_t` this frame owns,
+    // and libuv accepts a cleanup on any request, started or not — an
+    // untouched one has a null `path` and `ptr` and the call is a no-op.
+    unsafe { uv_fs_req_cleanup(&raw mut request) };
+    answer
+}
+
+/// [`fs_request`] for the common case: the starter's own answer, with
+/// nothing read out of the request.
+fn fs_result(start: impl FnOnce(*mut uv_fs_t) -> ::core::ffi::c_int) -> ::core::ffi::c_int {
+    fs_request(start, |result, _| result)
+}
+
+/// [`fs_request`] answering `OK`/`FAIL`, which is what most of this
+/// family's callers want.
+fn fs_ok(start: impl FnOnce(*mut uv_fs_t) -> ::core::ffi::c_int) -> ::core::ffi::c_int {
+    if fs_result(start) == kLibuvSuccess.get() {
+        OK
+    } else {
+        FAIL
+    }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_chdir(mut path: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if p_verbose.get() >= 5 as OptInt {
@@ -174,20 +239,14 @@ pub unsafe extern "C" fn os_dirname(
     return OK;
 }
 pub unsafe extern "C" fn os_isrealdir(mut name: *const ::core::ffi::c_char) -> bool {
-    let mut request: uv_fs_t = UV_FS_T_INIT;
-    if uv_fs_lstat(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut request,
-        name,
-        None,
-    ) != kLibuvSuccess.get()
-    {
-        return false_0 != 0;
-    }
-    if request.statbuf.st_mode & __S_IFMT as uint64_t == 0o120000 as uint64_t {
-        return false_0 != 0;
-    }
-    return request.statbuf.st_mode & __S_IFMT as uint64_t == 0o40000 as uint64_t;
+    // A symlink to a directory is not one; `os_isdir` says it is.
+    fs_request(
+        |request| uv_fs_lstat(::core::ptr::null_mut::<uv_loop_t>(), request, name, None),
+        |result, request| {
+            let mode = request.statbuf.st_mode & __S_IFMT as uint64_t;
+            result == kLibuvSuccess.get() && mode == 0o40000 as uint64_t
+        },
+    )
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_isdir(mut name: *const ::core::ffi::c_char) -> bool {
@@ -270,15 +329,9 @@ unsafe extern "C" fn is_executable(
     }
     let mut r: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     if mode & __S_IFMT as int32_t == 0o100000 as int32_t {
-        let mut req: uv_fs_t = UV_FS_T_INIT;
-        r = uv_fs_access(
-            ::core::ptr::null_mut::<uv_loop_t>(),
-            &raw mut req,
-            name,
-            1 as ::core::ffi::c_int,
-            None,
-        );
-        uv_fs_req_cleanup(&raw mut req);
+        r = fs_result(|req| {
+            uv_fs_access(::core::ptr::null_mut::<uv_loop_t>(), req, name, X_OK, None)
+        });
     }
     let ok: bool = r == 0 as ::core::ffi::c_int;
     if ok as ::core::ffi::c_int != 0 && !abspath.is_null() {
@@ -333,18 +386,16 @@ pub unsafe extern "C" fn os_open(
     if path.is_null() {
         return UV_EINVAL as ::core::ffi::c_int;
     }
-    let mut r: ::core::ffi::c_int = 0;
-    let mut req: uv_fs_t = UV_FS_T_INIT;
-    r = uv_fs_open(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut req,
-        path,
-        flags,
-        mode,
-        None,
-    );
-    uv_fs_req_cleanup(&raw mut req);
-    return r;
+    fs_result(|req| {
+        uv_fs_open(
+            ::core::ptr::null_mut::<uv_loop_t>(),
+            req,
+            path,
+            flags,
+            mode,
+            None,
+        )
+    })
 }
 pub unsafe extern "C" fn os_fopen(
     mut path: *const ::core::ffi::c_char,
@@ -435,16 +486,14 @@ pub unsafe extern "C" fn os_set_cloexec(fd: ::core::ffi::c_int) -> ::core::ffi::
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_close(fd: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    let mut r: ::core::ffi::c_int = 0;
-    let mut req: uv_fs_t = UV_FS_T_INIT;
-    r = uv_fs_close(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut req,
-        fd as uv_file,
-        None,
-    );
-    uv_fs_req_cleanup(&raw mut req);
-    return r;
+    fs_result(|req| {
+        uv_fs_close(
+            ::core::ptr::null_mut::<uv_loop_t>(),
+            req,
+            fd as uv_file,
+            None,
+        )
+    })
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_dup(fd: ::core::ffi::c_int) -> ::core::ffi::c_int {
@@ -616,56 +665,49 @@ pub unsafe extern "C" fn os_copy(
     mut new_path: *const ::core::ffi::c_char,
     mut flags: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    let mut r: ::core::ffi::c_int = 0;
-    let mut req: uv_fs_t = UV_FS_T_INIT;
-    r = uv_fs_copyfile(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut req,
-        path,
-        new_path,
-        flags,
-        None,
-    );
-    uv_fs_req_cleanup(&raw mut req);
-    return r;
+    fs_result(|req| {
+        uv_fs_copyfile(
+            ::core::ptr::null_mut::<uv_loop_t>(),
+            req,
+            path,
+            new_path,
+            flags,
+            None,
+        )
+    })
 }
 pub unsafe extern "C" fn os_fsync(mut fd: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    let mut r: ::core::ffi::c_int = 0;
-    let mut req: uv_fs_t = UV_FS_T_INIT;
-    r = uv_fs_fsync(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut req,
-        fd as uv_file,
-        None,
-    );
-    uv_fs_req_cleanup(&raw mut req);
+    let r = fs_result(|req| {
+        uv_fs_fsync(
+            ::core::ptr::null_mut::<uv_loop_t>(),
+            req,
+            fd as uv_file,
+            None,
+        )
+    });
     (*g_stats.ptr()).fsync += 1;
-    return r;
+    r
 }
 pub unsafe extern "C" fn os_realpath(
     mut name: *const ::core::ffi::c_char,
     mut buf: *mut ::core::ffi::c_char,
     mut len: size_t,
 ) -> *mut ::core::ffi::c_char {
-    let mut request: uv_fs_t = UV_FS_T_INIT;
-    let mut result: ::core::ffi::c_int = uv_fs_realpath(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut request,
-        name,
-        None,
-    );
-    if result == kLibuvSuccess.get() {
-        if buf.is_null() {
-            buf = xmalloc(len) as *mut ::core::ffi::c_char;
-        }
-        xstrlcpy(buf, request.ptr as *const ::core::ffi::c_char, len);
-    }
-    uv_fs_req_cleanup(&raw mut request);
-    return if result == kLibuvSuccess.get() {
-        buf
-    } else {
-        ::core::ptr::null_mut::<::core::ffi::c_char>()
-    };
+    // `request.ptr` is the resolved path and `uv_fs_req_cleanup` frees
+    // it, so the copy has to happen inside the read.
+    fs_request(
+        |request| uv_fs_realpath(::core::ptr::null_mut::<uv_loop_t>(), request, name, None),
+        |result, request| {
+            if result != kLibuvSuccess.get() {
+                return ::core::ptr::null_mut::<::core::ffi::c_char>();
+            }
+            if buf.is_null() {
+                buf = xmalloc(len) as *mut ::core::ffi::c_char;
+            }
+            xstrlcpy(buf, request.ptr as *const ::core::ffi::c_char, len);
+            buf
+        },
+    )
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
