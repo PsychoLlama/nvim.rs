@@ -1,178 +1,216 @@
 //! Registers whose contents are computed, not stored.
 //!
-//! `"=` is an expression: `get_expr_register` prompts for it, `set_expr_line`
-//! keeps the source for a repeat, and `get_expr_line` evaluates it -- so
-//! reading this register runs arbitrary Vimscript, which is why every caller
-//! has to cope with the buffer having changed underneath it.  `get_spec_reg`
-//! is the rest of the read-only set: `".` the last insert, `"%` the file name,
-//! `"#` the alternate file, `":` the last command line, `"/` the last search
-//! pattern, and the `"<cword>"`-shaped answers CTRL-R CTRL-W and friends
-//! want.
+//! `"=` is an expression: [`get_expr_register`] prompts for it,
+//! [`set_expr_line`] keeps the source for a repeat, and [`get_expr_line`]
+//! evaluates it -- so *reading* this register runs arbitrary Vimscript, which
+//! is why every caller has to cope with the buffer having changed underneath
+//! it, and why the evaluation is depth-limited.
+//!
+//! [`get_spec_reg`] is the rest of the read-only set: `"%` the file name, `"#`
+//! the alternate file, `":` the last command line, `"/` the last search
+//! pattern, `".` the last insert, `"_` the black hole -- plus the four that
+//! read the *buffer* around the cursor, which are what CTRL-R CTRL-W and its
+//! friends insert.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use ::core::ffi::{c_char, c_int, c_void};
+
 use super::*;
 
-pub unsafe extern "C" fn get_expr_register() -> ::core::ffi::c_int {
+/// Prompt for the `"=` expression on the command line.
+///
+/// Answers `'='` once it is stored, or `NUL` if the prompt was abandoned. An
+/// empty answer leaves the previous expression in place, so that `"=<CR>`
+/// repeats it.
+///
+/// # Safety
+/// Runs the command line, and so arbitrary autocommands.
+pub unsafe fn get_expr_register() -> c_int {
     unsafe {
-        let mut new_line: *mut ::core::ffi::c_char = getcmdline(
-            '=' as ::core::ffi::c_int,
-            0 as ::core::ffi::c_int,
-            0 as ::core::ffi::c_int,
-            true,
-        );
+        let new_line = getcmdline('=' as c_int, 0, 0, true);
         if new_line.is_null() {
-            return NUL;
+            return NUL; // cancelled
         }
-        if *new_line as ::core::ffi::c_int == NUL {
-            xfree(new_line as *mut ::core::ffi::c_void);
+        if c_int::from(*new_line) == NUL {
+            xfree(new_line as *mut c_void); // keep the previous expression
         } else {
             set_expr_line(new_line);
         }
-        return '=' as ::core::ffi::c_int;
+        '=' as c_int
     }
 }
 
-pub unsafe extern "C" fn set_expr_line(mut new_line: *mut ::core::ffi::c_char) {
+/// Set the `"=` expression, taking ownership of `new_line`.
+///
+/// # Safety
+/// `new_line` must be an allocated, NUL-terminated string.
+pub unsafe fn set_expr_line(new_line: *mut c_char) {
     unsafe {
-        xfree(expr_line.get() as *mut ::core::ffi::c_void);
+        xfree(expr_line.get() as *mut c_void);
         expr_line.set(new_line);
     }
 }
 
-pub unsafe extern "C" fn get_expr_line() -> *mut ::core::ffi::c_char {
+/// Evaluate the `"=` expression and answer the result, allocated.
+///
+/// Null when no expression has been set. The evaluation is nested at most ten
+/// deep: past that the *source* is answered instead, which is what stops
+/// `let @= = '@='` from recursing forever.
+///
+/// # Safety
+/// Runs arbitrary Vimscript.
+pub unsafe fn get_expr_line() -> *mut c_char {
     unsafe {
-        static nested: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-        if (*expr_line.ptr()).is_null() {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        static nested: GlobalCell<c_int> = GlobalCell::new(0);
+
+        if expr_line.get().is_null() {
+            return ::core::ptr::null_mut();
         }
-        let mut expr_copy: *mut ::core::ffi::c_char = xstrdup(expr_line.get());
-        if nested.get() >= 10 as ::core::ffi::c_int {
+        // Evaluating may set `expr_line` again, so work on a copy.
+        let expr_copy = xstrdup(expr_line.get());
+        if nested.get() >= 10 {
             return expr_copy;
         }
-        (*nested.ptr()) += 1;
-        let mut rv: *mut ::core::ffi::c_char = eval_to_string(expr_copy, true, false);
-        (*nested.ptr()) -= 1;
-        xfree(expr_copy as *mut ::core::ffi::c_void);
-        return rv;
+        *nested.ptr() += 1;
+        let rv = eval_to_string(expr_copy, true, false);
+        *nested.ptr() -= 1;
+        xfree(expr_copy as *mut c_void);
+        rv
     }
 }
 
-pub unsafe extern "C" fn get_expr_line_src() -> *mut ::core::ffi::c_char {
+/// The `"=` expression itself, allocated, without evaluating it.
+///
+/// # Safety
+/// Reads the register store; main thread only.
+pub unsafe fn get_expr_line_src() -> *mut c_char {
     unsafe {
-        if (*expr_line.ptr()).is_null() {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        if expr_line.get().is_null() {
+            return ::core::ptr::null_mut();
         }
-        return xstrdup(expr_line.get());
+        xstrdup(expr_line.get())
     }
 }
 
-pub unsafe extern "C" fn get_spec_reg(
-    mut regname: ::core::ffi::c_int,
-    mut argp: *mut *mut ::core::ffi::c_char,
-    mut allocated: *mut bool,
-    mut errmsg: bool,
+/// The contents of a computed register.
+///
+/// Answers false when `regname` is not one of them (or when a buffer-reading
+/// one is asked for without `errmsg`, which is the caller saying it only
+/// wants an answer it can get without side effects). `*allocated` says
+/// whether the caller must free `*argp`.
+///
+/// `errmsg` also turns on the error messages for a register that has nothing
+/// in it -- E29 for `".`, E30 for `":`, E35 for `"/`.
+///
+/// # Safety
+/// `argp` and `allocated` must be writable. `"=` runs arbitrary Vimscript.
+pub unsafe fn get_spec_reg(
+    regname: c_int,
+    argp: *mut *mut c_char,
+    allocated: *mut bool,
+    errmsg: bool,
 ) -> bool {
     unsafe {
-        *argp = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        *argp = ::core::ptr::null_mut();
         *allocated = false;
-        let mut cnt: size_t = 0;
+
         match regname {
-            37 => {
+            // `"%` -- the current file name.
+            c if c == '%' as c_int => {
                 if errmsg {
-                    check_fname();
+                    check_fname(); // will give an error message
                 }
                 *argp = (*curbuf.get()).b_fname;
-                return true;
+                true
             }
-            35 => {
+            // `"#` -- the alternate file name.
+            c if c == '#' as c_int => {
                 *argp = getaltfname(errmsg);
-                return true;
+                true
             }
-            61 => {
+            // `"=` -- the expression, evaluated.
+            c if c == '=' as c_int => {
                 *argp = get_expr_line();
                 *allocated = true;
-                return true;
+                true
             }
-            58 => {
-                if (*last_cmdline.ptr()).is_null() && errmsg as ::core::ffi::c_int != 0 {
-                    emsg(gettext(
-                        &raw const e_nolastcmd as *const ::core::ffi::c_char,
-                    ));
+            // `":` -- the last command line.
+            c if c == ':' as c_int => {
+                if last_cmdline.get().is_null() && errmsg {
+                    emsg(gettext(&raw const e_nolastcmd as *const c_char));
                 }
                 *argp = last_cmdline.get();
-                return true;
+                true
             }
-            47 => {
-                if last_search_pat().is_null() && errmsg as ::core::ffi::c_int != 0 {
-                    emsg(gettext(&raw const e_noprevre as *const ::core::ffi::c_char));
+            // `"/` -- the last search pattern.
+            c if c == '/' as c_int => {
+                if last_search_pat().is_null() && errmsg {
+                    emsg(gettext(&raw const e_noprevre as *const c_char));
                 }
                 *argp = last_search_pat();
-                return true;
+                true
             }
-            46 => {
+            // `".` -- the last inserted text.
+            c if c == '.' as c_int => {
                 *argp = get_last_insert_save();
                 *allocated = true;
-                if (*argp).is_null() && errmsg as ::core::ffi::c_int != 0 {
-                    emsg(gettext(
-                        &raw const e_noinstext as *const ::core::ffi::c_char,
-                    ));
+                if (*argp).is_null() && errmsg {
+                    emsg(gettext(&raw const e_noinstext as *const c_char));
                 }
-                return true;
+                true
             }
+            // CTRL-R CTRL-F / CTRL-P -- the file name under the cursor, the
+            // second form expanded to a full path.
             Ctrl_F | Ctrl_P => {
                 if !errmsg {
                     return false;
                 }
                 *argp = file_name_at_cursor(
-                    FNAME_MESS
-                        | FNAME_HYP
-                        | (if regname == Ctrl_P {
-                            FNAME_EXP
-                        } else {
-                            0 as ::core::ffi::c_int
-                        }),
-                    1 as ::core::ffi::c_int,
-                    ::core::ptr::null_mut::<linenr_T>(),
+                    FNAME_MESS | FNAME_HYP | if regname == Ctrl_P { FNAME_EXP } else { 0 },
+                    1,
+                    ::core::ptr::null_mut(),
                 );
                 *allocated = true;
-                return true;
+                true
             }
+            // CTRL-R CTRL-W / CTRL-A -- the word, or the WORD, under the
+            // cursor.
             Ctrl_W | Ctrl_A => {
                 if !errmsg {
                     return false;
                 }
-                cnt = find_ident_under_cursor(
+                let cnt = find_ident_under_cursor(
                     argp,
                     if regname == Ctrl_W {
                         FIND_IDENT | FIND_STRING
                     } else {
                         FIND_STRING
                     },
-                    ::core::ptr::null_mut::<::core::ffi::c_int>(),
+                    ::core::ptr::null_mut(),
                 );
-                *argp = (if cnt != 0 {
-                    xmemdupz(*argp as *const ::core::ffi::c_void, cnt)
+                *argp = if cnt != 0 {
+                    xmemdupz(*argp as *const c_void, cnt) as *mut c_char
                 } else {
-                    NULL_0
-                }) as *mut ::core::ffi::c_char;
+                    ::core::ptr::null_mut()
+                };
                 *allocated = true;
-                return true;
+                true
             }
+            // CTRL-R CTRL-L -- the whole cursor line.
             Ctrl_L => {
                 if !errmsg {
                     return false;
                 }
                 *argp = ml_get_buf((*curwin.get()).w_buffer, (*curwin.get()).w_cursor.lnum);
-                return true;
+                true
             }
-            95 => {
-                *argp = c"".as_ptr() as *mut ::core::ffi::c_char;
-                return true;
+            // `"_` -- the black hole, which reads as empty.
+            c if c == '_' as c_int => {
+                *argp = c"".as_ptr().cast_mut();
+                true
             }
-            _ => {}
+            _ => false,
         }
-        return false;
     }
 }

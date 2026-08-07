@@ -106,12 +106,12 @@ use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped_ex
 use crate::src::nvim::terminal::terminal_paste;
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    AdditionalData, Arena, BoolVarValue, CMOD_LOCKMARKS, CharsizeArg, CharsizeKind, Direction,
-    ExtmarkOp, GRegFlags, MotionType, OptInt, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE,
-    PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, RemapValues, StrCharInfo, String_0,
-    Timestamp, UndoObjectType, VAR_FIXED, bcount_t, block_def, buf_T, cmd_addr_T, colnr_T, dict_T,
-    exarg_T, garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, linenr_T,
-    list_T, oparg_T, pos_T, ptrdiff_t, save_v_event_T, size_t, ssize_t, uint8_t, yankreg_T,
+    AdditionalData, CMOD_LOCKMARKS, CharsizeArg, CharsizeKind, ExtmarkOp, GRegFlags, MotionType,
+    OptInt, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD,
+    PUT_LINE_SPLIT, RemapValues, StrCharInfo, String_0, UndoObjectType, VAR_FIXED, bcount_t,
+    block_def, cmd_addr_T, colnr_T, exarg_T, garray_T, hashitem_T, hashtab_T, int64_t,
+    kBoolVarFalse, kBoolVarTrue, linenr_T, oparg_T, pos_T, ptrdiff_t, save_v_event_T, size_t,
+    ssize_t, yankreg_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::undo::{u_save, u_save_cursor};

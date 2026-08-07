@@ -151,23 +151,22 @@ pub unsafe extern "C" fn do_put(
                     let mut ptrlen: size_t = insert_string.size;
                     while !ptr.is_null() {
                         if !y_array.is_null() {
-                            (*y_array.offset(y_size as isize)).data = ptr;
+                            (*y_array.add(y_size)).data = ptr;
                         }
                         y_size = y_size.wrapping_add(1);
                         let mut tmp: *mut ::core::ffi::c_char =
                             vim_strchr(ptr, '\n' as ::core::ffi::c_int);
                         if tmp.is_null() {
                             if !y_array.is_null() {
-                                (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize)).size =
-                                    ptrlen;
+                                (*y_array.add(y_size.wrapping_sub(1 as size_t))).size = ptrlen;
                             }
                         } else {
                             if !y_array.is_null() {
                                 *tmp = NUL as ::core::ffi::c_char;
-                                (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize)).size =
+                                (*y_array.add(y_size.wrapping_sub(1 as size_t))).size =
                                     tmp.offset_from(ptr) as size_t;
                                 ptrlen = ptrlen.wrapping_sub(
-                                    (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize))
+                                    (*y_array.add(y_size.wrapping_sub(1 as size_t)))
                                         .size
                                         .wrapping_add(1 as size_t),
                                 );
@@ -489,7 +488,7 @@ pub unsafe extern "C" fn do_put(
                                 }
                             }
                             let yanklen: ::core::ffi::c_int =
-                                (*y_array.offset(i as isize)).size as ::core::ffi::c_int;
+                                (*y_array.add(i)).size as ::core::ffi::c_int;
                             if flags & PUT_BLOCK_INNER as ::core::ffi::c_int
                                 == 0 as ::core::ffi::c_int
                             {
@@ -498,9 +497,9 @@ pub unsafe extern "C" fn do_put(
                                     &mut csarg,
                                     curwin.get(),
                                     0 as linenr_T,
-                                    (*y_array.offset(i as isize)).data,
+                                    (*y_array.add(i)).data,
                                 );
-                                ci = utf_ptr2StrCharInfo((*y_array.offset(i as isize)).data);
+                                ci = utf_ptr2StrCharInfo((*y_array.add(i)).data);
                                 while *ci.ptr as ::core::ffi::c_int != NUL {
                                     spaces -= win_charsize(
                                         cstype,
@@ -556,8 +555,7 @@ pub unsafe extern "C" fn do_put(
                                 while j < count {
                                     memmove(
                                         ptr_1 as *mut ::core::ffi::c_void,
-                                        (*y_array.offset(i as isize)).data
-                                            as *const ::core::ffi::c_void,
+                                        (*y_array.add(i)).data as *const ::core::ffi::c_void,
                                         yanklen as size_t,
                                     );
                                     ptr_1 = ptr_1.offset(yanklen as isize);
@@ -831,20 +829,16 @@ pub unsafe extern "C" fn do_put(
                                         ml_get(lnum).offset(col as isize);
                                     let mut ptrlen_0: size_t =
                                         (ml_get_len(lnum) as size_t).wrapping_sub(col as size_t);
-                                    totlen = (*y_array
-                                        .offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                    .size;
+                                    totlen = (*y_array.add(y_size.wrapping_sub(1 as size_t))).size;
                                     let mut newp_1: *mut ::core::ffi::c_char = xmalloc(
                                         ptrlen_0.wrapping_add(totlen).wrapping_add(1 as size_t),
                                     )
                                         as *mut ::core::ffi::c_char;
                                     strcpy(
                                         newp_1,
-                                        (*y_array
-                                            .offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                        .data,
+                                        (*y_array.add(y_size.wrapping_sub(1 as size_t))).data,
                                     );
-                                    strcpy(newp_1.offset(totlen as isize), ptr_3);
+                                    strcpy(newp_1.add(totlen), ptr_3);
                                     ml_append(lnum, newp_1, 0 as colnr_T, false);
                                     new_lnum += 1;
                                     xfree(newp_1 as *mut ::core::ffi::c_void);
@@ -877,7 +871,7 @@ pub unsafe extern "C" fn do_put(
                                     {
                                         if ml_append(
                                             lnum,
-                                            (*y_array.offset(i_1 as isize)).data,
+                                            (*y_array.add(i_1)).data,
                                             0 as colnr_T,
                                             false,
                                         ) == FAIL
@@ -928,13 +922,11 @@ pub unsafe extern "C" fn do_put(
                                 {
                                     i_1 = 0 as size_t;
                                     while i_1 < y_size.wrapping_sub(1 as size_t) {
-                                        totsize += (*y_array.offset(i_1 as isize)).size as bcount_t
-                                            + 1 as bcount_t;
+                                        totsize +=
+                                            (*y_array.add(i_1)).size as bcount_t + 1 as bcount_t;
                                         i_1 = i_1.wrapping_add(1);
                                     }
-                                    lastsize = (*y_array
-                                        .offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                    .size
+                                    lastsize = (*y_array.add(y_size.wrapping_sub(1 as size_t))).size
                                         as ::core::ffi::c_int;
                                     totsize += lastsize as bcount_t;
                                 }
@@ -1021,13 +1013,13 @@ pub unsafe extern "C" fn do_put(
                             }
                             (*curbuf.get()).b_op_end.lnum = new_lnum;
                             col = (if 0 as ::core::ffi::c_int
-                                > (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize)).size
+                                > (*y_array.add(y_size.wrapping_sub(1 as size_t))).size
                                     as ::core::ffi::c_int
                                     - lendiff
                             {
                                 0 as ::core::ffi::c_int
                             } else {
-                                (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize)).size
+                                (*y_array.add(y_size.wrapping_sub(1 as size_t))).size
                                     as ::core::ffi::c_int
                                     - lendiff
                             }) as colnr_T;
@@ -1035,23 +1027,18 @@ pub unsafe extern "C" fn do_put(
                                 (*curbuf.get()).b_op_end.col = (col as ::core::ffi::c_int
                                     - 1 as ::core::ffi::c_int)
                                     as colnr_T;
-                                if (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize)).size
+                                if (*y_array.add(y_size.wrapping_sub(1 as size_t))).size
                                     > 0 as size_t
                                 {
                                     (*curbuf.get()).b_op_end.col -= utf_head_off(
-                                        (*y_array
-                                            .offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                        .data,
-                                        (*y_array
-                                            .offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                        .data
-                                        .offset(
-                                            (*y_array
-                                                .offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                            .size
-                                                as isize,
-                                        )
-                                        .offset(-(1 as ::core::ffi::c_int as isize)),
+                                        (*y_array.add(y_size.wrapping_sub(1 as size_t))).data,
+                                        (*y_array.add(y_size.wrapping_sub(1 as size_t)))
+                                            .data
+                                            .add(
+                                                (*y_array.add(y_size.wrapping_sub(1 as size_t)))
+                                                    .size,
+                                            )
+                                            .offset(-(1 as ::core::ffi::c_int as isize)),
                                     );
                                 }
                             } else {

@@ -1,112 +1,202 @@
 //! Yanking text into a register.
 //!
-//! `op_yank_reg` is the whole of `y`: it copies the operator's region into a
-//! `yankreg_T` line by line, with the blockwise case going through
-//! `block_prep` per line so that a short line is padded and a tab straddling
-//! the edge is split.  `format_reg_type` renders the `v`/`V`/`CTRL-V width`
-//! string the API and `:registers` both show, and `do_autocmd_textyankpost`
-//! builds the `v:event` dictionary TextYankPost sees.
+//! [`op_yank_reg`] is the whole of `y`: it copies the operator's region into a
+//! `yankreg_T` line by line. The blockwise case goes through `block_prep` per
+//! line, so that a short line is padded out and a tab straddling the edge of
+//! the block is split into spaces; the charwise case is the same walk with
+//! `charwise_block_prep`, which is how the first and last lines of a charwise
+//! yank get their partial extents.
+//!
+//! [`format_reg_type`] renders the `v` / `V` / `CTRL-V width` string the API
+//! and `:registers` both show, and [`do_autocmd_textyankpost`] builds the
+//! `v:event` dictionary TextYankPost sees.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use ::core::ffi::{c_char, c_int, c_ulong, c_void};
+
 use super::*;
 
-unsafe extern "C" fn yank_copy_line(
-    mut reg: *mut yankreg_T,
-    mut bd: *mut block_def,
-    mut y_idx: size_t,
-    mut exclude_trailing_space: bool,
+/// Copy one line of a block into slot `y_idx` of `reg`, padding both ends
+/// with the spaces `block_prep` measured.
+///
+/// With `exclude_trailing_space` -- 'formatoptions' `y`'s blockwise yank --
+/// the padding at the end is dropped and any white space the text itself ends
+/// with is trimmed off.
+///
+/// # Safety
+/// `bd` must describe a region of the current line, and `reg.y_array` hold at
+/// least `y_idx + 1` slots.
+unsafe fn yank_copy_line(
+    reg: *mut yankreg_T,
+    bd: *mut block_def,
+    y_idx: size_t,
+    exclude_trailing_space: bool,
 ) {
     unsafe {
         if exclude_trailing_space {
-            (*bd).endspaces = 0 as ::core::ffi::c_int;
+            (*bd).endspaces = 0;
         }
-        let mut size: ::core::ffi::c_int = (*bd).startspaces + (*bd).endspaces + (*bd).textlen;
-        '_c2rust_label: {
-            if size >= 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    c"size >= 0".as_ptr(),
-                    c"src/nvim/register.rs".as_ptr(),
-                    985 as ::core::ffi::c_uint,
-                    c"void yank_copy_line(yankreg_T *, struct block_def *, size_t, _Bool)".as_ptr(),
-                );
-            }
-        };
-        let mut pnew: *mut ::core::ffi::c_char =
-            xmallocz(size as size_t) as *mut ::core::ffi::c_char;
-        (*(*reg).y_array.offset(y_idx as isize)).data = pnew;
+        let size = (*bd).startspaces + (*bd).endspaces + (*bd).textlen;
+        assert!(size >= 0);
+        let start = xmallocz(size as size_t) as *mut c_char;
+        (*(*reg).y_array.add(y_idx)).data = start;
+
+        let mut pnew = start;
         memset(
-            pnew as *mut ::core::ffi::c_void,
-            ' ' as ::core::ffi::c_int,
+            pnew as *mut c_void,
+            ' ' as c_int,
             (*bd).startspaces as size_t,
         );
         pnew = pnew.offset((*bd).startspaces as isize);
         memmove(
-            pnew as *mut ::core::ffi::c_void,
-            (*bd).textstart as *const ::core::ffi::c_void,
+            pnew as *mut c_void,
+            (*bd).textstart as *const c_void,
             (*bd).textlen as size_t,
         );
         pnew = pnew.offset((*bd).textlen as isize);
-        memset(
-            pnew as *mut ::core::ffi::c_void,
-            ' ' as ::core::ffi::c_int,
-            (*bd).endspaces as size_t,
-        );
+        memset(pnew as *mut c_void, ' ' as c_int, (*bd).endspaces as size_t);
         pnew = pnew.offset((*bd).endspaces as isize);
+
         if exclude_trailing_space {
-            let mut s: ::core::ffi::c_int = (*bd).textlen + (*bd).endspaces;
-            while s > 0 as ::core::ffi::c_int
-                && ascii_iswhite(
-                    *(*bd)
-                        .textstart
-                        .offset(s as isize)
-                        .offset(-(1 as ::core::ffi::c_int as isize))
-                        as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int
-                    != 0
-            {
-                s =
-                    s - utf_head_off(
-                        (*bd).textstart,
-                        (*bd)
-                            .textstart
-                            .offset(s as isize)
-                            .offset(-(1 as ::core::ffi::c_int as isize)),
-                    ) - 1 as ::core::ffi::c_int;
+            // Walk back over the trailing white space, a character at a time
+            // so that a multi-byte character is not cut in half.
+            let mut s = (*bd).textlen + (*bd).endspaces;
+            while s > 0 && ascii_iswhite(c_int::from(*(*bd).textstart.offset((s - 1) as isize))) {
+                s -= utf_head_off((*bd).textstart, (*bd).textstart.offset((s - 1) as isize)) + 1;
                 pnew = pnew.offset(-1);
             }
         }
-        *pnew = NUL as ::core::ffi::c_char;
-        (*(*reg).y_array.offset(y_idx as isize)).size =
-            pnew.offset_from((*(*reg).y_array.offset(y_idx as isize)).data) as size_t;
+        *pnew = NUL as c_char;
+        (*(*reg).y_array.add(y_idx)).size = pnew.offset_from(start) as size_t;
     }
 }
 
-pub unsafe extern "C" fn op_yank_reg(
-    mut oap: *mut oparg_T,
-    mut message: bool,
-    mut reg: *mut yankreg_T,
-    mut append: bool,
-) {
+/// Move the lines of `reg` onto the end of `curr`, and free `reg`'s array.
+///
+/// This is what an uppercase register name does. A charwise append joins the
+/// last old line and the first new one into a single line, unless 'cpoptions'
+/// has `>`.
+///
+/// # Safety
+/// Both registers must own their arrays; `reg` must hold at least one line
+/// when the charwise join runs.
+unsafe fn append_to_register(curr: *mut yankreg_T, reg: *mut yankreg_T, yank_type: MotionType) {
     unsafe {
-        let mut newreg: yankreg_T = yankreg_T {
-            y_array: ::core::ptr::null_mut::<String_0>(),
-            y_size: 0,
-            y_type: kMTCharWise,
-            y_width: 0,
-            timestamp: 0,
-            additional_data: ::core::ptr::null_mut::<AdditionalData>(),
+        let new_ptr = xmalloc(
+            ::core::mem::size_of::<String_0>()
+                .wrapping_mul((*curr).y_size.wrapping_add((*reg).y_size)),
+        ) as *mut String_0;
+        let mut j: size_t = 0;
+        while j < (*curr).y_size {
+            *new_ptr.add(j) = *(*curr).y_array.add(j);
+            j = j.wrapping_add(1);
+        }
+        xfree((*curr).y_array as *mut c_void);
+        (*curr).y_array = new_ptr;
+
+        // Appending linewise text makes the whole register linewise.
+        if yank_type == kMTLineWise {
+            (*curr).y_type = kMTLineWise;
+        }
+
+        let mut y_idx: size_t = 0;
+        if (*curr).y_type == kMTCharWise && vim_strchr(p_cpo.get(), CPO_REGAPPEND).is_null() {
+            // Join the last old line and the first new one.
+            let first_new = *(*reg).y_array;
+            j = j.wrapping_sub(1);
+            let last_old = &mut *(*curr).y_array.add(j);
+            let joined_size = last_old.size.wrapping_add(first_new.size);
+            let pnew = xmalloc(joined_size.wrapping_add(1)) as *mut c_char;
+            strcpy(pnew, last_old.data);
+            strcpy(pnew.add(last_old.size), first_new.data);
+            xfree(last_old.data as *mut c_void);
+            *last_old = String_0 {
+                data: pnew,
+                size: joined_size,
+            };
+            j = j.wrapping_add(1);
+
+            xfree(first_new.data as *mut c_void);
+            (*(*reg).y_array).data = ::core::ptr::null_mut();
+            (*(*reg).y_array).size = 0;
+            y_idx = 1;
+        }
+
+        while y_idx < (*reg).y_size {
+            *(*curr).y_array.add(j) = *(*reg).y_array.add(y_idx);
+            y_idx = y_idx.wrapping_add(1);
+            j = j.wrapping_add(1);
+        }
+        (*curr).y_size = j;
+        xfree((*reg).y_array as *mut c_void);
+    }
+}
+
+/// The "N lines yanked" message.
+///
+/// # Safety
+/// `oap` must be the operator that was just applied.
+unsafe fn report_yank(oap: *mut oparg_T, yank_type: MotionType, yanklines: size_t) {
+    unsafe {
+        let mut namebuf: [c_char; 100] = [0; 100];
+        if (*oap).regname == NUL {
+            namebuf[0] = NUL as c_char;
+        } else {
+            vim_snprintf(
+                namebuf.as_mut_ptr(),
+                namebuf.len(),
+                gettext(c" into \"%c".as_ptr()),
+                (*oap).regname,
+            );
+        }
+
+        // The message may be the first thing that scrolls, so make sure the
+        // window is up to date before it is written.
+        update_topline(curwin.get());
+        if must_redraw.get() != 0 {
+            update_screen();
+        }
+
+        let (one, many) = if yank_type == kMTBlockWise {
+            (
+                c"block of %ld line yanked%s".as_ptr(),
+                c"block of %ld lines yanked%s".as_ptr(),
+            )
+        } else {
+            (
+                c"%ld line yanked%s".as_ptr(),
+                c"%ld lines yanked%s".as_ptr(),
+            )
         };
-        let mut yank_type: MotionType = (*oap).motion_type;
-        let mut yanklines: size_t = (*oap).line_count as size_t;
-        let mut yankendlnum: linenr_T = (*oap).end.lnum;
-        let mut bd: block_def = block_def {
+        smsg(
+            0,
+            ngettext(one, many, yanklines as c_ulong),
+            yanklines as int64_t,
+            namebuf.as_mut_ptr(),
+        );
+    }
+}
+
+/// Yank the operator's region into `reg`.
+///
+/// With `append`, the new text goes onto the end of whatever `reg` already
+/// holds; with `message`, the "N lines yanked" report is given.
+///
+/// # Safety
+/// `oap` must describe a region of the current buffer and `reg` be a live
+/// register.
+pub unsafe fn op_yank_reg(oap: *mut oparg_T, message: bool, mut reg: *mut yankreg_T, append: bool) {
+    unsafe {
+        let mut newreg = EMPTY_YANKREG;
+        let mut yank_type = (*oap).motion_type;
+        let mut yanklines = (*oap).line_count as size_t;
+        let mut yankendlnum = (*oap).end.lnum;
+        let mut bd = block_def {
             startspaces: 0,
             endspaces: 0,
             textlen: 0,
-            textstart: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            textstart: ::core::ptr::null_mut(),
             textcol: 0,
             start_vcol: 0,
             end_vcol: 0,
@@ -118,52 +208,57 @@ pub unsafe extern "C" fn op_yank_reg(
             end_char_vcols: 0,
             start_char_vcols: 0,
         };
-        let mut curr: *mut yankreg_T = reg;
-        if append as ::core::ffi::c_int != 0 && !(*reg).y_array.is_null() {
+
+        // Appending yanks into a scratch register first, then merges.
+        let curr = reg;
+        if append && !(*reg).y_array.is_null() {
             reg = &raw mut newreg;
         } else {
             free_register(reg);
         }
-        if (*oap).motion_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
-            && (*oap).start.col == 0 as ::core::ffi::c_int
+
+        // A charwise yank that starts in column 0 and ends before column 0 of
+        // a later line is really a linewise one.
+        if (*oap).motion_type == kMTCharWise
+            && (*oap).start.col == 0
             && !(*oap).inclusive
-            && (!(*oap).is_VIsual
-                || *p_sel.get() as ::core::ffi::c_int == 'o' as ::core::ffi::c_int)
-            && (*oap).end.col == 0 as ::core::ffi::c_int
-            && yanklines > 1 as size_t
+            && (!(*oap).is_VIsual || c_int::from(*p_sel.get()) == 'o' as c_int)
+            && (*oap).end.col == 0
+            && yanklines > 1
         {
             yank_type = kMTLineWise;
             yankendlnum -= 1;
             yanklines = yanklines.wrapping_sub(1);
         }
+
         (*reg).y_size = yanklines;
         (*reg).y_type = yank_type;
-        (*reg).y_width = 0 as ::core::ffi::c_int as colnr_T;
+        (*reg).y_width = 0;
         (*reg).y_array = xcalloc(yanklines, ::core::mem::size_of::<String_0>()) as *mut String_0;
-        (*reg).additional_data = ::core::ptr::null_mut::<AdditionalData>();
+        (*reg).additional_data = ::core::ptr::null_mut();
         (*reg).timestamp = os_time();
-        let mut y_idx: size_t = 0 as size_t;
-        let mut lnum: linenr_T = (*oap).start.lnum;
-        if yank_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
+
+        if yank_type == kMTBlockWise {
             (*reg).y_width = (*oap).end_vcol - (*oap).start_vcol;
-            if (*curwin.get()).w_curswant == MAXCOL as ::core::ffi::c_int
-                && (*reg).y_width > 0 as ::core::ffi::c_int
-            {
+            // A `$`-extended block has no fixed width.
+            if (*curwin.get()).w_curswant == MAXCOL && (*reg).y_width > 0 {
                 (*reg).y_width -= 1;
             }
         }
+
+        let mut y_idx: size_t = 0;
+        let mut lnum = (*oap).start.lnum;
         while lnum <= yankendlnum {
-            let mut tmp: ::core::ffi::c_int = 0;
-            match (*reg).y_type as ::core::ffi::c_int {
-                2 => {
+            match (*reg).y_type {
+                kMTBlockWise => {
                     block_prep(oap, &raw mut bd, lnum, false);
                     yank_copy_line(reg, &raw mut bd, y_idx, (*oap).excl_tr_ws);
                 }
-                1 => {
-                    *(*reg).y_array.offset(y_idx as isize) =
+                kMTLineWise => {
+                    *(*reg).y_array.add(y_idx) =
                         cbuf_to_string(ml_get(lnum), ml_get_len(lnum) as size_t);
                 }
-                0 => {
+                kMTCharWise => {
                     charwise_block_prep(
                         (*oap).start,
                         (*oap).end,
@@ -171,200 +266,100 @@ pub unsafe extern "C" fn op_yank_reg(
                         lnum,
                         (*oap).inclusive,
                     );
-                    tmp = strlen(bd.textstart) as ::core::ffi::c_int;
+                    // The region may reach past the end of a short line.
+                    let tmp = strlen(bd.textstart) as c_int;
                     if tmp < bd.textlen {
                         bd.textlen = tmp;
                     }
                     yank_copy_line(reg, &raw mut bd, y_idx, false);
                 }
-                -1 => {
-                    abort();
-                }
+                kMTUnknown => abort(),
                 _ => {}
             }
             lnum += 1;
             y_idx = y_idx.wrapping_add(1);
         }
+
         if curr != reg {
-            let mut j: size_t = 0;
-            let mut new_ptr: *mut String_0 = xmalloc(
-                ::core::mem::size_of::<String_0>()
-                    .wrapping_mul((*curr).y_size.wrapping_add((*reg).y_size)),
-            ) as *mut String_0;
-            j = 0 as size_t;
-            while j < (*curr).y_size {
-                *new_ptr.offset(j as isize) = *(*curr).y_array.offset(j as isize);
-                j = j.wrapping_add(1);
-            }
-            xfree((*curr).y_array as *mut ::core::ffi::c_void);
-            (*curr).y_array = new_ptr;
-            if yank_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int {
-                (*curr).y_type = kMTLineWise;
-            }
-            if (*curr).y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
-                && vim_strchr(p_cpo.get(), CPO_REGAPPEND).is_null()
-            {
-                let mut pnew: *mut ::core::ffi::c_char = xmalloc(
-                    (*(*curr)
-                        .y_array
-                        .offset((*curr).y_size.wrapping_sub(1 as size_t) as isize))
-                    .size
-                    .wrapping_add((*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).size)
-                    .wrapping_add(1 as size_t),
-                )
-                    as *mut ::core::ffi::c_char;
-                j = j.wrapping_sub(1);
-                strcpy(pnew, (*(*curr).y_array.offset(j as isize)).data);
-                strcpy(
-                    pnew.offset((*(*curr).y_array.offset(j as isize)).size as isize),
-                    (*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).data,
-                );
-                xfree((*(*curr).y_array.offset(j as isize)).data as *mut ::core::ffi::c_void);
-                *(*curr).y_array.offset(j as isize) = String_0 {
-                    data: pnew,
-                    size: (*(*curr).y_array.offset(j as isize)).size.wrapping_add(
-                        (*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).size,
-                    ),
-                };
-                j = j.wrapping_add(1);
-                let mut ptr_: *mut *mut ::core::ffi::c_void =
-                    &raw mut (*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).data
-                        as *mut *mut ::core::ffi::c_void;
-                xfree(*ptr_);
-                *ptr_ = NULL_0;
-                let _ = *ptr_;
-                (*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).size = 0 as size_t;
-                y_idx = 1 as size_t;
-            } else {
-                y_idx = 0 as size_t;
-            }
-            while y_idx < (*reg).y_size {
-                let c2rust_fresh2 = y_idx;
-                y_idx = y_idx.wrapping_add(1);
-                let c2rust_fresh3 = j;
-                j = j.wrapping_add(1);
-                *(*curr).y_array.offset(c2rust_fresh3 as isize) =
-                    *(*reg).y_array.offset(c2rust_fresh2 as isize);
-            }
-            (*curr).y_size = j;
-            xfree((*reg).y_array as *mut ::core::ffi::c_void);
+            append_to_register(curr, reg, yank_type);
         }
+
         if message {
-            if yank_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
-                && yanklines == 1 as size_t
-            {
-                yanklines = 0 as size_t;
+            // A single charwise line is not worth reporting.
+            if yank_type == kMTCharWise && yanklines == 1 {
+                yanklines = 0;
             }
             if yanklines > p_report.get() as size_t {
-                let mut namebuf: [::core::ffi::c_char; 100] = [0; 100];
-                if (*oap).regname == NUL {
-                    *(&raw mut namebuf as *mut ::core::ffi::c_char) = NUL as ::core::ffi::c_char;
-                } else {
-                    vim_snprintf(
-                        &raw mut namebuf as *mut ::core::ffi::c_char,
-                        ::core::mem::size_of::<[::core::ffi::c_char; 100]>(),
-                        gettext(c" into \"%c".as_ptr()),
-                        (*oap).regname,
-                    );
-                }
-                update_topline(curwin.get());
-                if must_redraw.get() != 0 {
-                    update_screen();
-                }
-                if yank_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
-                    smsg(
-                        0 as ::core::ffi::c_int,
-                        ngettext(
-                            c"block of %ld line yanked%s".as_ptr(),
-                            c"block of %ld lines yanked%s".as_ptr(),
-                            yanklines as ::core::ffi::c_ulong,
-                        ),
-                        yanklines as int64_t,
-                        &raw mut namebuf as *mut ::core::ffi::c_char,
-                    );
-                } else {
-                    smsg(
-                        0 as ::core::ffi::c_int,
-                        ngettext(
-                            c"%ld line yanked%s".as_ptr(),
-                            c"%ld lines yanked%s".as_ptr(),
-                            yanklines as ::core::ffi::c_ulong,
-                        ),
-                        yanklines as int64_t,
-                        &raw mut namebuf as *mut ::core::ffi::c_char,
-                    );
-                }
+                report_yank(oap, yank_type, yanklines);
             }
         }
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
-            == 0 as ::core::ffi::c_int
-        {
+
+        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
             (*curbuf.get()).b_op_start = (*oap).start;
             (*curbuf.get()).b_op_end = (*oap).end;
-            if yank_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int {
-                (*curbuf.get()).b_op_start.col = 0 as ::core::ffi::c_int as colnr_T;
-                (*curbuf.get()).b_op_end.col = MAXCOL as ::core::ffi::c_int as colnr_T;
+            if yank_type == kMTLineWise {
+                (*curbuf.get()).b_op_start.col = 0;
+                (*curbuf.get()).b_op_end.col = MAXCOL;
             }
-            if yank_type as ::core::ffi::c_int != kMTLineWise as ::core::ffi::c_int
-                && !(*oap).inclusive
-            {
+            if yank_type != kMTLineWise && !(*oap).inclusive {
+                // An exclusive region's `']` is the character *before* the end.
                 decl(&raw mut (*curbuf.get()).b_op_end);
             }
         }
     }
 }
 
-pub unsafe extern "C" fn format_reg_type(
-    mut reg_type: MotionType,
-    mut reg_width: colnr_T,
-    mut buf: *mut ::core::ffi::c_char,
-    mut buf_len: size_t,
+/// Render a register's type as the string `getregtype()` and `:registers`
+/// show: `v`, `V`, or `CTRL-V` followed by the block width.
+///
+/// # Safety
+/// `buf` must hold at least `buf_len` bytes, and `buf_len` be more than 1.
+pub unsafe fn format_reg_type(
+    reg_type: MotionType,
+    reg_width: colnr_T,
+    buf: *mut c_char,
+    buf_len: size_t,
 ) {
     unsafe {
-        '_c2rust_label: {
-            if buf_len > 1 as size_t {
-            } else {
-                __assert_fail(
-                    c"buf_len > 1".as_ptr(),
-                    c"src/nvim/register.rs".as_ptr(),
-                    1176 as ::core::ffi::c_uint,
-                    c"void format_reg_type(MotionType, colnr_T, char *, size_t)".as_ptr(),
-                );
+        assert!(buf_len > 1);
+        match reg_type {
+            kMTLineWise => {
+                *buf = 'V' as c_char;
+                *buf.add(1) = NUL as c_char;
             }
-        };
-        match reg_type as ::core::ffi::c_int {
-            1 => {
-                *buf.offset(0 as ::core::ffi::c_int as isize) = 'V' as ::core::ffi::c_char;
-                *buf.offset(1 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
+            kMTCharWise => {
+                *buf = 'v' as c_char;
+                *buf.add(1) = NUL as c_char;
             }
-            0 => {
-                *buf.offset(0 as ::core::ffi::c_int as isize) = 'v' as ::core::ffi::c_char;
-                *buf.offset(1 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
+            kMTBlockWise => {
+                snprintf(buf, buf_len, c"\x16%d".as_ptr(), reg_width + 1);
             }
-            2 => {
-                snprintf(
-                    buf,
-                    buf_len,
-                    c"\x16%d".as_ptr(),
-                    reg_width as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
-                );
-            }
-            -1 => {
-                *buf.offset(0 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
+            kMTUnknown => {
+                *buf = NUL as c_char;
             }
             _ => {}
-        };
+        }
     }
 }
 
-pub unsafe extern "C" fn do_autocmd_textyankpost(mut oap: *mut oparg_T, mut reg: *mut yankreg_T) {
+/// Fire TextYankPost with the `v:event` dictionary describing the yank.
+///
+/// Guarded against recursion: an autocommand that yanks would otherwise fire
+/// this again.
+///
+/// # Safety
+/// `oap` and `reg` must describe the yank that just happened. Runs arbitrary
+/// autocommands, under `textlock`.
+pub unsafe fn do_autocmd_textyankpost(oap: *mut oparg_T, reg: *mut yankreg_T) {
     unsafe {
         static recursive: GlobalCell<bool> = GlobalCell::new(false);
-        if recursive.get() as ::core::ffi::c_int != 0 || !has_event(EVENT_TEXTYANKPOST) {
+
+        if recursive.get() || !has_event(EVENT_TEXTYANKPOST) {
             return;
         }
         recursive.set(true);
-        let mut save_v_event: save_v_event_T = save_v_event_T {
+
+        let mut save_v_event = save_v_event_T {
             sve_did_save: false,
             sve_hashtab: hashtab_T {
                 ht_mask: 0,
@@ -372,114 +367,95 @@ pub unsafe extern "C" fn do_autocmd_textyankpost(mut oap: *mut oparg_T, mut reg:
                 ht_filled: 0,
                 ht_changed: 0,
                 ht_locked: 0,
-                ht_array: ::core::ptr::null_mut::<hashitem_T>(),
+                ht_array: ::core::ptr::null_mut(),
                 ht_smallarray: [hashitem_T {
                     hi_hash: 0,
-                    hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                    hi_key: ::core::ptr::null_mut(),
                 }; 16],
             },
         };
-        let mut dict: *mut dict_T = get_v_event(&raw mut save_v_event);
-        let list: *mut list_T = tv_list_alloc((*reg).y_size as ptrdiff_t);
-        let mut i: size_t = 0 as size_t;
-        while i < (*reg).y_size {
-            tv_list_append_string(
-                list,
-                (*(*reg).y_array.offset(i as isize)).data,
-                (*(*reg).y_array.offset(i as isize)).size as ::core::ffi::c_int as ssize_t,
-            );
-            i = i.wrapping_add(1);
+        let dict = get_v_event(&raw mut save_v_event);
+
+        let list = tv_list_alloc((*reg).y_size as ptrdiff_t);
+        for i in 0..(*reg).y_size {
+            let line = *(*reg).y_array.add(i);
+            tv_list_append_string(list, line.data, line.size as c_int as ssize_t);
         }
         tv_list_set_lock(list, VAR_FIXED);
-        tv_dict_add_list(
-            dict,
-            c"regcontents".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
-            list,
-        );
-        let mut buf: [::core::ffi::c_char; 67] = [0; 67];
-        format_reg_type(
-            (*reg).y_type,
-            (*reg).y_width,
-            &raw mut buf as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 67]>()
-                .wrapping_div(::core::mem::size_of::<::core::ffi::c_char>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[::core::ffi::c_char; 67]>()
-                        .wrapping_rem(::core::mem::size_of::<::core::ffi::c_char>())
-                        == 0) as ::core::ffi::c_int as size_t,
-                ),
-        );
-        tv_dict_add_str(
-            dict,
-            c"regtype".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-            &raw mut buf as *mut ::core::ffi::c_char,
-        );
-        buf[0 as ::core::ffi::c_int as usize] = (*oap).regname as ::core::ffi::c_char;
-        buf[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-        tv_dict_add_str(
-            dict,
-            c"regname".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-            &raw mut buf as *mut ::core::ffi::c_char,
-        );
+        tv_dict_add_list(dict, c"regcontents".as_ptr(), 11, list);
+
+        let mut buf: [c_char; 67] = [0; 67];
+        format_reg_type((*reg).y_type, (*reg).y_width, buf.as_mut_ptr(), buf.len());
+        tv_dict_add_str(dict, c"regtype".as_ptr(), 7, buf.as_mut_ptr());
+
+        buf[0] = (*oap).regname as c_char;
+        buf[1] = NUL as c_char;
+        tv_dict_add_str(dict, c"regname".as_ptr(), 7, buf.as_mut_ptr());
+
         tv_dict_add_bool(
             dict,
             c"inclusive".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
-            (if (*oap).inclusive as ::core::ffi::c_int != 0 {
-                kBoolVarTrue as ::core::ffi::c_int
+            9,
+            if (*oap).inclusive {
+                kBoolVarTrue
             } else {
-                kBoolVarFalse as ::core::ffi::c_int
-            }) as BoolVarValue,
+                kBoolVarFalse
+            },
         );
-        buf[0 as ::core::ffi::c_int as usize] = get_op_char((*oap).op_type) as ::core::ffi::c_char;
-        buf[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-        tv_dict_add_str(
-            dict,
-            c"operator".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
-            &raw mut buf as *mut ::core::ffi::c_char,
-        );
+
+        buf[0] = get_op_char((*oap).op_type) as c_char;
+        buf[1] = NUL as c_char;
+        tv_dict_add_str(dict, c"operator".as_ptr(), 8, buf.as_mut_ptr());
+
         tv_dict_add_bool(
             dict,
             c"visual".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-            (if (*oap).is_VIsual as ::core::ffi::c_int != 0 {
-                kBoolVarTrue as ::core::ffi::c_int
+            6,
+            if (*oap).is_VIsual {
+                kBoolVarTrue
             } else {
-                kBoolVarFalse as ::core::ffi::c_int
-            }) as BoolVarValue,
+                kBoolVarFalse
+            },
         );
         tv_dict_set_keys_readonly(dict);
-        (*textlock.ptr()) += 1;
+
+        // The buffer must not change under the yank that is still in flight.
+        *textlock.ptr() += 1;
         apply_autocmds(
             EVENT_TEXTYANKPOST,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            ::core::ptr::null_mut(),
+            ::core::ptr::null_mut(),
             false,
             curbuf.get(),
         );
-        (*textlock.ptr()) -= 1;
+        *textlock.ptr() -= 1;
+
         restore_v_event(dict, &raw mut save_v_event);
         recursive.set(false);
     }
 }
 
-pub unsafe extern "C" fn op_yank(mut oap: *mut oparg_T, mut message: bool) -> bool {
+/// `y`: yank the operator's region into the register it names.
+///
+/// Answers false for an invalid register name, having beeped.
+///
+/// # Safety
+/// `oap` must describe a region of the current buffer. Runs the clipboard
+/// provider and TextYankPost, and so arbitrary Lua.
+pub unsafe fn op_yank(oap: *mut oparg_T, message: bool) -> bool {
     unsafe {
-        if (*oap).regname != 0 as ::core::ffi::c_int && !valid_yank_reg((*oap).regname, true) {
+        if (*oap).regname != 0 && !valid_yank_reg((*oap).regname, true) {
             beep_flush();
             return false;
         }
-        if (*oap).regname == '_' as ::core::ffi::c_int {
-            return true;
+        if (*oap).regname == '_' as c_int {
+            return true; // black hole: nothing to do
         }
-        let mut reg: *mut yankreg_T = get_yank_register((*oap).regname, YREG_YANK);
+
+        let reg = get_yank_register((*oap).regname, YREG_YANK);
         op_yank_reg(oap, message, reg, is_append_register((*oap).regname));
         clipboard::set_clipboard((*oap).regname, reg);
         do_autocmd_textyankpost(oap, reg);
-        return true;
+        true
     }
 }

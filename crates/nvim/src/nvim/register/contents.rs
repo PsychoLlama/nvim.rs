@@ -1,453 +1,453 @@
 //! A register as text: the API's way in and out.
 //!
-//! `get_reg_contents` and `write_reg_contents*` are what `getreg()`,
-//! `setreg()`, `nvim_paste`, the clipboard provider and shada all use, so
-//! these are the functions that have to turn a `yankreg_T` into lines or a
-//! string and back.  `str_to_reg` is the interesting direction: it splits an
-//! incoming string on newlines, treats an embedded NUL as a newline the way
-//! the rest of the editor does, and for a blockwise write has to measure the
-//! widest line in *cells* rather than bytes.
+//! [`get_reg_contents`] and the `write_reg_contents*` family are what
+//! `getreg()`, `setreg()`, `nvim_paste`, the clipboard provider and shada all
+//! use, so these are the functions that turn a `yankreg_T` into lines or one
+//! string and back.
+//!
+//! [`str_to_reg`] is the interesting direction. It splits an incoming string
+//! on newlines; an embedded **NUL is a newline** the way the rest of the
+//! editor spells one, so it is translated on the way in; a charwise register
+//! written to again *appends to its last line* rather than starting a new
+//! one; and a blockwise write has to measure the widest line in **cells**
+//! rather than bytes.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use ::core::ffi::{c_char, c_int, c_void};
+
 use super::*;
 
-pub unsafe extern "C" fn get_reg_type(
-    mut regname: ::core::ffi::c_int,
-    mut reg_width: *mut colnr_T,
-) -> MotionType {
+/// The motion type of register `regname`, and its width if blockwise.
+///
+/// `kMTUnknown` for an invalid or empty register.
+///
+/// # Safety
+/// `reg_width` must be null or writable. May run the clipboard provider.
+pub unsafe fn get_reg_type(regname: c_int, reg_width: *mut colnr_T) -> MotionType {
     unsafe {
-        's_19: {
-            'c_46756: {
-                'c_46754: {
-                    'c_46752: {
-                        'c_46750: {
-                            'c_46748: {
-                                'c_46746: {
-                                    'c_46744: {
-                                        'c_46742: {
-                                            match regname {
-                                                35 => {}
-                                                61 => {}
-                                                58 => {
-                                                    break 'c_46742;
-                                                }
-                                                47 => {
-                                                    break 'c_46744;
-                                                }
-                                                46 => {
-                                                    break 'c_46746;
-                                                }
-                                                Ctrl_F => {
-                                                    break 'c_46748;
-                                                }
-                                                Ctrl_P => {
-                                                    break 'c_46750;
-                                                }
-                                                Ctrl_W => {
-                                                    break 'c_46752;
-                                                }
-                                                Ctrl_A => {
-                                                    break 'c_46754;
-                                                }
-                                                37 | 95 => {
-                                                    break 'c_46756;
-                                                }
-                                                _ => {
-                                                    break 's_19;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+        // Every computed register reads as charwise.
+        match regname {
+            Ctrl_F | Ctrl_P | Ctrl_W | Ctrl_A => return kMTCharWise,
+            c if c == '#' as c_int
+                || c == '=' as c_int
+                || c == ':' as c_int
+                || c == '/' as c_int
+                || c == '.' as c_int
+                || c == '%' as c_int
+                || c == '_' as c_int =>
+            {
+                return kMTCharWise;
             }
-            return kMTCharWise;
+            _ => {}
         }
+
         if regname != NUL && !valid_yank_reg(regname, false) {
             return kMTUnknown;
         }
-        let mut reg: *mut yankreg_T = get_yank_register(regname, YREG_PASTE);
-        if !(*reg).y_array.is_null() {
-            if !reg_width.is_null()
-                && (*reg).y_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int
-            {
-                *reg_width = (*reg).y_width;
-            }
-            return (*reg).y_type;
+        let reg = get_yank_register(regname, YREG_PASTE);
+        if (*reg).y_array.is_null() {
+            return kMTUnknown;
         }
-        return kMTUnknown;
+        if !reg_width.is_null() && (*reg).y_type == kMTBlockWise {
+            *reg_width = (*reg).y_width;
+        }
+        (*reg).y_type
     }
 }
 
-unsafe extern "C" fn get_reg_wrap_one_line(
-    mut s: *mut ::core::ffi::c_char,
-    mut flags: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_void {
+/// Hand back `s` as either the string itself or a one-element list, depending
+/// on `kGRegList`.
+///
+/// Takes ownership of `s` either way.
+///
+/// # Safety
+/// `s` must be an allocated, NUL-terminated string.
+unsafe fn get_reg_wrap_one_line(s: *mut c_char, flags: c_int) -> *mut c_void {
     unsafe {
-        if flags & kGRegList as ::core::ffi::c_int == 0 {
-            return s as *mut ::core::ffi::c_void;
+        if flags & kGRegList as c_int == 0 {
+            return s as *mut c_void;
         }
-        let list: *mut list_T = tv_list_alloc(1 as ptrdiff_t);
+        let list = tv_list_alloc(1);
         tv_list_append_allocated_string(list, s);
-        return list as *mut ::core::ffi::c_void;
+        list as *mut c_void
     }
 }
 
-pub unsafe extern "C" fn get_reg_contents(
-    mut regname: ::core::ffi::c_int,
-    mut flags: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_void {
+/// The contents of register `regname`, as an allocated string or -- with
+/// `kGRegList` -- a `list_T` of lines.
+///
+/// `kGRegNoExpr` refuses `"=` outright and `kGRegExprSrc` answers its source
+/// rather than evaluating it, which is what `getreg('=', 1, ...)` wants.
+///
+/// # Safety
+/// May run arbitrary Vimscript through `"=`.
+pub unsafe fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
     unsafe {
-        if regname == '=' as ::core::ffi::c_int {
-            if flags & kGRegNoExpr as ::core::ffi::c_int != 0 {
-                return NULL_0;
+        let mut regname = regname;
+        if regname == '=' as c_int {
+            if flags & kGRegNoExpr as c_int != 0 {
+                return ::core::ptr::null_mut();
             }
-            if flags & kGRegExprSrc as ::core::ffi::c_int != 0 {
+            if flags & kGRegExprSrc as c_int != 0 {
                 return get_reg_wrap_one_line(get_expr_line_src(), flags);
             }
             return get_reg_wrap_one_line(get_expr_line(), flags);
         }
-        if regname == '@' as ::core::ffi::c_int {
-            regname = '"' as ::core::ffi::c_int;
+        if regname == '@' as c_int {
+            regname = '"' as c_int; // `getreg('@')` means the unnamed register
         }
         if regname != NUL && !valid_yank_reg(regname, false) {
-            return NULL_0;
+            return ::core::ptr::null_mut();
         }
-        let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut allocated: bool = false;
+
+        let mut retval: *mut c_char = ::core::ptr::null_mut();
+        let mut allocated = false;
         if get_spec_reg(regname, &raw mut retval, &raw mut allocated, false) {
             if retval.is_null() {
-                return NULL_0;
+                return ::core::ptr::null_mut();
             }
-            if allocated {
-                return get_reg_wrap_one_line(retval, flags);
-            }
-            return get_reg_wrap_one_line(xstrdup(retval), flags);
+            // The caller always owns the answer.
+            let owned = if allocated { retval } else { xstrdup(retval) };
+            return get_reg_wrap_one_line(owned, flags);
         }
-        let mut reg: *mut yankreg_T = get_yank_register(regname, YREG_PUT);
+
+        let reg = get_yank_register(regname, YREG_PUT);
         if (*reg).y_array.is_null() {
-            return NULL_0;
+            return ::core::ptr::null_mut();
         }
-        if flags & kGRegList as ::core::ffi::c_int != 0 {
-            let list: *mut list_T = tv_list_alloc((*reg).y_size as ptrdiff_t);
-            let mut i: size_t = 0 as size_t;
-            while i < (*reg).y_size {
-                tv_list_append_string(
-                    list,
-                    (*(*reg).y_array.offset(i as isize)).data,
-                    (*(*reg).y_array.offset(i as isize)).size as ::core::ffi::c_int as ssize_t,
-                );
-                i = i.wrapping_add(1);
+
+        if flags & kGRegList as c_int != 0 {
+            let list = tv_list_alloc((*reg).y_size as ptrdiff_t);
+            for i in 0..(*reg).y_size {
+                let line = *(*reg).y_array.add(i);
+                tv_list_append_string(list, line.data, line.size as c_int as ssize_t);
             }
-            return list as *mut ::core::ffi::c_void;
+            return list as *mut c_void;
         }
-        let mut len: size_t = 0 as size_t;
-        let mut i_0: size_t = 0 as size_t;
-        while i_0 < (*reg).y_size {
-            len = len.wrapping_add((*(*reg).y_array.offset(i_0 as isize)).size);
-            if (*reg).y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int
-                || i_0 < (*reg).y_size.wrapping_sub(1 as size_t)
-            {
+
+        // One string, with a newline between lines and after the last one if
+        // the register is linewise.
+        let needs_nl =
+            |i: size_t| (*reg).y_type == kMTLineWise || i < (*reg).y_size.wrapping_sub(1);
+        let mut len: size_t = 0;
+        for i in 0..(*reg).y_size {
+            len = len.wrapping_add((*(*reg).y_array.add(i)).size);
+            if needs_nl(i) {
                 len = len.wrapping_add(1);
             }
-            i_0 = i_0.wrapping_add(1);
         }
-        retval = xmalloc(len.wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
-        len = 0 as size_t;
-        let mut i_1: size_t = 0 as size_t;
-        while i_1 < (*reg).y_size {
-            strcpy(
-                retval.offset(len as isize),
-                (*(*reg).y_array.offset(i_1 as isize)).data,
-            );
-            len = len.wrapping_add((*(*reg).y_array.offset(i_1 as isize)).size);
-            if (*reg).y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int
-                || i_1 < (*reg).y_size.wrapping_sub(1 as size_t)
-            {
-                let c2rust_fresh5 = len;
-                len = len.wrapping_add(1);
-                *retval.offset(c2rust_fresh5 as isize) = '\n' as ::core::ffi::c_char;
+        let retval = xmalloc(len.wrapping_add(1)) as *mut c_char;
+        let mut at: size_t = 0;
+        for i in 0..(*reg).y_size {
+            let line = *(*reg).y_array.add(i);
+            strcpy(retval.add(at), line.data);
+            at = at.wrapping_add(line.size);
+            if needs_nl(i) {
+                *retval.add(at) = '\n' as c_char;
+                at = at.wrapping_add(1);
             }
-            i_1 = i_1.wrapping_add(1);
         }
-        *retval.offset(len as isize) = NUL as ::core::ffi::c_char;
-        return retval as *mut ::core::ffi::c_void;
+        *retval.add(at) = NUL as c_char;
+        retval as *mut c_void
     }
 }
 
-unsafe extern "C" fn init_write_reg(
-    mut name: ::core::ffi::c_int,
-    mut old_y_previous: *mut *mut yankreg_T,
-    mut must_append: bool,
+/// Prepare register `name` to be written: check the name, remember `""`, and
+/// empty the register unless the write is an append.
+///
+/// Answers null for an invalid name, having given E354.
+///
+/// # Safety
+/// `old_y_previous` must be writable.
+unsafe fn init_write_reg(
+    name: c_int,
+    old_y_previous: *mut *mut yankreg_T,
+    must_append: bool,
 ) -> *mut yankreg_T {
     unsafe {
         if !valid_yank_reg(name, true) {
             emsg_invreg(name);
-            return ::core::ptr::null_mut::<yankreg_T>();
+            return ::core::ptr::null_mut();
         }
+        // `get_yank_register` moves `""`, which a write to a *named* register
+        // must not do; `finish_write_reg` puts it back.
         *old_y_previous = y_previous.get();
-        let mut reg: *mut yankreg_T = get_yank_register(name, YREG_YANK);
+        let reg = get_yank_register(name, YREG_YANK);
         if !is_append_register(name) && !must_append {
             free_register(reg);
         }
-        return reg;
+        reg
     }
 }
 
-unsafe extern "C" fn str_to_reg(
-    mut y_ptr: *mut yankreg_T,
+/// How many lines `str` will become, and whether the first of them joins the
+/// register's current last line.
+///
+/// `extraline` is the line a string not ending in a newline still contributes.
+///
+/// # Safety
+/// `str` must hold `len` bytes, or -- with `str_list` -- be a
+/// null-terminated array of NUL-terminated strings.
+unsafe fn count_lines(
+    y_ptr: *mut yankreg_T,
+    yank_type: MotionType,
+    str: *const c_char,
+    len: size_t,
+    str_list: bool,
+) -> (size_t, bool, bool) {
+    unsafe {
+        if str_list {
+            let mut newlines: size_t = 0;
+            let mut ss = str as *mut *mut c_char;
+            while !(*ss).is_null() {
+                newlines = newlines.wrapping_add(1);
+                ss = ss.add(1);
+            }
+            return (newlines, false, false);
+        }
+
+        let mut newlines = memcnt(str as *const c_void, '\n' as c_char, len);
+        let mut extraline = false;
+        if yank_type == kMTCharWise
+            || len == 0
+            || c_int::from(*str.add(len.wrapping_sub(1))) != '\n' as c_int
+        {
+            extraline = true;
+            newlines = newlines.wrapping_add(1);
+        }
+        // A charwise register's last line has no newline of its own, so the
+        // first new line continues it.
+        let append = (*y_ptr).y_size > 0 && (*y_ptr).y_type == kMTCharWise;
+        if append {
+            newlines = newlines.wrapping_sub(1);
+        }
+        (newlines, extraline, append)
+    }
+}
+
+/// Put `str` in `y_ptr`, appending to whatever is already there.
+///
+/// `yank_type` may be `kMTUnknown`, in which case it is worked out from the
+/// text: a trailing newline (or carriage return) means linewise. `blocklen`
+/// is the block width, or -1 to measure it.
+///
+/// # Safety
+/// `str` must hold `len` bytes, or -- with `str_list` -- be a
+/// null-terminated array of NUL-terminated strings.
+unsafe fn str_to_reg(
+    y_ptr: *mut yankreg_T,
     mut yank_type: MotionType,
-    mut str: *const ::core::ffi::c_char,
-    mut len: size_t,
-    mut blocklen: colnr_T,
-    mut str_list: bool,
+    str: *const c_char,
+    len: size_t,
+    blocklen: colnr_T,
+    str_list: bool,
 ) {
     unsafe {
         if (*y_ptr).y_array.is_null() {
-            (*y_ptr).y_size = 0 as size_t;
+            (*y_ptr).y_size = 0;
         }
-        if yank_type as ::core::ffi::c_int == kMTUnknown as ::core::ffi::c_int {
-            yank_type = (if str_list as ::core::ffi::c_int != 0
-                || len > 0 as size_t
-                    && (*str.offset(len.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
-                        == NL
-                        || *str.offset(len.wrapping_sub(1 as size_t) as isize)
-                            as ::core::ffi::c_int
-                            == CAR)
+        if yank_type == kMTUnknown {
+            yank_type = if str_list
+                || len > 0
+                    && (c_int::from(*str.add(len.wrapping_sub(1))) == NL
+                        || c_int::from(*str.add(len.wrapping_sub(1))) == CAR)
             {
-                kMTLineWise as ::core::ffi::c_int
+                kMTLineWise
             } else {
-                kMTCharWise as ::core::ffi::c_int
-            }) as MotionType;
+                kMTCharWise
+            };
         }
-        let mut newlines: size_t = 0 as size_t;
-        let mut extraline: bool = false;
-        let mut append: bool = false;
-        if str_list {
-            let mut ss: *mut *mut ::core::ffi::c_char = str as *mut *mut ::core::ffi::c_char;
-            while !(*ss).is_null() {
-                newlines = newlines.wrapping_add(1);
-                ss = ss.offset(1);
-            }
-        } else {
-            newlines = memcnt(
-                str as *const ::core::ffi::c_void,
-                '\n' as ::core::ffi::c_char,
-                len,
-            );
-            if yank_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
-                || len == 0 as size_t
-                || *str.offset(len.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
-                    != '\n' as ::core::ffi::c_int
-            {
-                extraline = true;
-                newlines = newlines.wrapping_add(1);
-            }
-            if (*y_ptr).y_size > 0 as size_t
-                && (*y_ptr).y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
-            {
-                append = true;
-                newlines = newlines.wrapping_sub(1);
-            }
-        }
-        if (*y_ptr).y_size.wrapping_add(newlines) == 0 as size_t {
-            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                &raw mut (*y_ptr).y_array as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr_);
-            *ptr_ = NULL_0;
-            let _ = *ptr_;
+
+        let (newlines, extraline, mut append) = count_lines(y_ptr, yank_type, str, len, str_list);
+        if (*y_ptr).y_size.wrapping_add(newlines) == 0 {
+            xfree((*y_ptr).y_array as *mut c_void);
+            (*y_ptr).y_array = ::core::ptr::null_mut();
             return;
         }
-        let mut pp: *mut String_0 = xrealloc(
-            (*y_ptr).y_array as *mut ::core::ffi::c_void,
+
+        let pp = xrealloc(
+            (*y_ptr).y_array as *mut c_void,
             (*y_ptr)
                 .y_size
                 .wrapping_add(newlines)
                 .wrapping_mul(::core::mem::size_of::<String_0>()),
         ) as *mut String_0;
         (*y_ptr).y_array = pp;
-        let mut lnum: size_t = (*y_ptr).y_size;
-        let mut maxlen: size_t = 0 as size_t;
+
+        let mut lnum = (*y_ptr).y_size;
+        let mut maxlen: size_t = 0;
         if str_list {
-            let mut ss_0: *mut *mut ::core::ffi::c_char = str as *mut *mut ::core::ffi::c_char;
-            while !(*ss_0).is_null() {
-                *pp.offset(lnum as isize) = cstr_to_string(*ss_0);
-                if yank_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
-                    let mut charlen: size_t = mb_string2cells(*ss_0);
-                    maxlen = if maxlen > charlen { maxlen } else { charlen };
+            let mut ss = str as *mut *mut c_char;
+            while !(*ss).is_null() {
+                *pp.add(lnum) = cstr_to_string(*ss);
+                if yank_type == kMTBlockWise {
+                    maxlen = maxlen.max(mb_string2cells(*ss));
                 }
-                ss_0 = ss_0.offset(1);
+                ss = ss.add(1);
                 lnum = lnum.wrapping_add(1);
             }
         } else {
-            let mut line_len: size_t = 0;
-            let mut start: *const ::core::ffi::c_char = str;
-            let mut end: *const ::core::ffi::c_char = str.offset(len as isize);
-            while start < end.offset(extraline as ::core::ffi::c_int as isize) {
-                let mut charlen_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                let mut line_end: *const ::core::ffi::c_char = start;
+            let mut start = str;
+            let end = str.add(len);
+            // `+ extraline` so that a string with no trailing newline still
+            // produces its last (possibly empty) line.
+            while start < end.offset(extraline as c_int as isize) {
+                let mut charlen = 0;
+                let mut line_end = start;
                 while line_end < end {
-                    if *line_end as ::core::ffi::c_int == '\n' as ::core::ffi::c_int {
+                    if c_int::from(*line_end) == '\n' as c_int {
                         break;
                     }
-                    if yank_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
-                        charlen_0 += utf_ptr2cells_len(
-                            line_end,
-                            end.offset_from(line_end) as ::core::ffi::c_int,
-                        );
+                    if yank_type == kMTBlockWise {
+                        charlen += utf_ptr2cells_len(line_end, end.offset_from(line_end) as c_int);
                     }
-                    if *line_end as ::core::ffi::c_int == NUL {
-                        line_end = line_end.offset(1);
+                    // A NUL is one byte and is translated below, so it must
+                    // not be handed to the UTF-8 length.
+                    if c_int::from(*line_end) == NUL {
+                        line_end = line_end.add(1);
                     } else {
                         line_end = line_end.offset(utf_ptr2len_len(
                             line_end,
-                            end.offset_from(line_end) as ::core::ffi::c_int,
+                            end.offset_from(line_end) as c_int,
                         ) as isize);
                     }
                 }
-                '_c2rust_label: {
-                    if line_end.offset_from(start) >= 0 as isize {
-                    } else {
-                        __assert_fail(
-                        c"line_end - start >= 0".as_ptr(),
-                        c"src/nvim/register.rs".as_ptr(),
-                        2491 as ::core::ffi::c_uint,
-                        c"void str_to_reg(yankreg_T *, MotionType, const char *, size_t, colnr_T, _Bool)".as_ptr(),
-                    );
-                    }
-                };
-                line_len = line_end.offset_from(start) as size_t;
-                maxlen = if maxlen > charlen_0 as size_t {
-                    maxlen
-                } else {
-                    charlen_0 as size_t
-                };
-                let mut extra: size_t = if append as ::core::ffi::c_int != 0 {
+                assert!(line_end.offset_from(start) >= 0);
+                let line_len = line_end.offset_from(start) as size_t;
+                maxlen = maxlen.max(charlen as size_t);
+
+                // Appending continues the register's current last line.
+                let extra = if append {
                     lnum = lnum.wrapping_sub(1);
-                    (*pp.offset(lnum as isize)).size
+                    (*pp.add(lnum)).size
                 } else {
-                    0 as size_t
+                    0
                 };
-                let mut s: *mut ::core::ffi::c_char =
-                    xmallocz(line_len.wrapping_add(extra)) as *mut ::core::ffi::c_char;
-                if extra > 0 as size_t {
+                let s = xmallocz(line_len.wrapping_add(extra)) as *mut c_char;
+                if extra > 0 {
                     memcpy(
-                        s as *mut ::core::ffi::c_void,
-                        (*pp.offset(lnum as isize)).data as *const ::core::ffi::c_void,
+                        s as *mut c_void,
+                        (*pp.add(lnum)).data as *const c_void,
                         extra,
                     );
                 }
-                if line_len > 0 as size_t {
+                if line_len > 0 {
                     memcpy(
-                        s.offset(extra as isize) as *mut ::core::ffi::c_void,
-                        start as *const ::core::ffi::c_void,
+                        s.add(extra) as *mut c_void,
+                        start as *const c_void,
                         line_len,
                     );
                 }
-                let mut s_len: size_t = extra.wrapping_add(line_len);
+                let s_len = extra.wrapping_add(line_len);
                 if append {
-                    xfree((*pp.offset(lnum as isize)).data as *mut ::core::ffi::c_void);
+                    xfree((*pp.add(lnum)).data as *mut c_void);
                     append = false;
                 }
-                *pp.offset(lnum as isize) = String_0 {
+                *pp.add(lnum) = String_0 {
                     data: s,
                     size: s_len,
                 };
-                memchrsub(
-                    (*pp.offset(lnum as isize)).data as *mut ::core::ffi::c_void,
-                    NUL as ::core::ffi::c_char,
-                    '\n' as ::core::ffi::c_char,
-                    s_len,
-                );
-                start = start.offset(line_len.wrapping_add(1 as size_t) as isize);
+                // A NUL in the text is how the editor spells a newline.
+                memchrsub(s as *mut c_void, NUL as c_char, '\n' as c_char, s_len);
+
+                start = start.add(line_len.wrapping_add(1));
                 lnum = lnum.wrapping_add(1);
             }
         }
+
         (*y_ptr).y_type = yank_type;
         (*y_ptr).y_size = lnum;
-        let mut ptr__0: *mut *mut ::core::ffi::c_void =
-            &raw mut (*y_ptr).additional_data as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr__0);
-        *ptr__0 = NULL_0;
-        let _ = *ptr__0;
+        xfree((*y_ptr).additional_data as *mut c_void);
+        (*y_ptr).additional_data = ::core::ptr::null_mut();
         (*y_ptr).timestamp = os_time();
-        if yank_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
-            (*y_ptr).y_width = (if blocklen == -1 as ::core::ffi::c_int {
-                maxlen as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+        (*y_ptr).y_width = if yank_type == kMTBlockWise {
+            if blocklen == -1 {
+                maxlen as c_int - 1
             } else {
-                blocklen as ::core::ffi::c_int
-            }) as colnr_T;
+                blocklen
+            }
         } else {
-            (*y_ptr).y_width = 0 as ::core::ffi::c_int as colnr_T;
+            0
         };
     }
 }
 
-unsafe extern "C" fn finish_write_reg(
-    mut name: ::core::ffi::c_int,
-    mut reg: *mut yankreg_T,
-    mut old_y_previous: *mut yankreg_T,
-) {
+/// Push the write out to the clipboard and put `""` back where it was.
+///
+/// # Safety
+/// `reg` must be the register [`init_write_reg`] answered.
+unsafe fn finish_write_reg(name: c_int, reg: *mut yankreg_T, old_y_previous: *mut yankreg_T) {
     unsafe {
         clipboard::set_clipboard(name, reg);
-        if name != '"' as ::core::ffi::c_int {
+        // Only an explicit write to `""` moves it.
+        if name != '"' as c_int {
             y_previous.set(old_y_previous);
         }
     }
 }
 
-pub unsafe extern "C" fn write_reg_contents(
-    mut name: ::core::ffi::c_int,
-    mut str: *const ::core::ffi::c_char,
-    mut len: ssize_t,
-    mut must_append: ::core::ffi::c_int,
+/// Write `str` to register `name`, working out the motion type from the text.
+///
+/// `len` may be -1 for a NUL-terminated string.
+///
+/// # Safety
+/// `str` must hold `len` bytes, or be NUL-terminated when `len` is negative.
+pub unsafe fn write_reg_contents(
+    name: c_int,
+    str: *const c_char,
+    len: ssize_t,
+    must_append: c_int,
 ) {
     unsafe {
-        write_reg_contents_ex(name, str, len, must_append != 0, kMTUnknown, 0 as colnr_T);
+        write_reg_contents_ex(name, str, len, must_append != 0, kMTUnknown, 0);
     }
 }
 
-pub unsafe extern "C" fn write_reg_contents_lst(
-    mut name: ::core::ffi::c_int,
-    mut strings: *mut *mut ::core::ffi::c_char,
-    mut must_append: bool,
-    mut yank_type: MotionType,
-    mut block_len: colnr_T,
+/// Write a null-terminated array of lines to register `name`.
+///
+/// # Safety
+/// `strings` must be a null-terminated array of NUL-terminated strings.
+pub unsafe fn write_reg_contents_lst(
+    name: c_int,
+    strings: *mut *mut c_char,
+    must_append: bool,
+    yank_type: MotionType,
+    block_len: colnr_T,
 ) {
     unsafe {
-        if name == '/' as ::core::ffi::c_int || name == '=' as ::core::ffi::c_int {
-            let mut s: *mut ::core::ffi::c_char = *strings.offset(0 as ::core::ffi::c_int as isize);
-            if (*strings.offset(0 as ::core::ffi::c_int as isize)).is_null() {
-                s = c"".as_ptr() as *mut ::core::ffi::c_char;
-            } else if !(*strings.offset(1 as ::core::ffi::c_int as isize)).is_null() {
+        if name == '/' as c_int || name == '=' as c_int {
+            // Neither register can hold more than one line.
+            let s = if (*strings).is_null() {
+                c"".as_ptr().cast_mut()
+            } else if !(*strings.add(1)).is_null() {
                 emsg(gettext(
-                    (e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines
-                        .ptr() as *const _) as *const ::core::ffi::c_char,
+                    e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines.ptr()
+                        as *const c_char,
                 ));
                 return;
-            }
-            write_reg_contents_ex(name, s, -1 as ssize_t, must_append, yank_type, block_len);
+            } else {
+                *strings
+            };
+            write_reg_contents_ex(name, s, -1, must_append, yank_type, block_len);
             return;
         }
-        if name == '_' as ::core::ffi::c_int {
-            return;
+        if name == '_' as c_int {
+            return; // black hole
         }
-        let mut old_y_previous: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
-        let mut reg: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
-        reg = init_write_reg(name, &raw mut old_y_previous, must_append);
+
+        let mut old_y_previous: *mut yankreg_T = ::core::ptr::null_mut();
+        let reg = init_write_reg(name, &raw mut old_y_previous, must_append);
         if reg.is_null() {
             return;
         }
+        // The length is meaningless for a list write and `str_to_reg` ignores
+        // it; upstream passes `strlen((char *)strings)` all the same.
         str_to_reg(
             reg,
             yank_type,
-            strings as *mut ::core::ffi::c_char,
-            strlen(strings as *mut ::core::ffi::c_char),
+            strings as *mut c_char,
+            strlen(strings as *mut c_char),
             block_len,
             true,
         );
@@ -455,74 +455,84 @@ pub unsafe extern "C" fn write_reg_contents_lst(
     }
 }
 
-pub unsafe extern "C" fn write_reg_contents_ex(
-    mut name: ::core::ffi::c_int,
-    mut str: *const ::core::ffi::c_char,
-    mut len: ssize_t,
-    mut must_append: bool,
-    mut yank_type: MotionType,
-    mut block_len: colnr_T,
+/// Write `str` to register `name` as `yank_type`.
+///
+/// `"/`, `"#` and `"=` are not real registers and are handled here: the first
+/// sets the last search pattern, the second the alternate file, and the third
+/// the expression source.
+///
+/// # Safety
+/// `str` must hold `len` bytes, or be NUL-terminated when `len` is negative.
+pub unsafe fn write_reg_contents_ex(
+    name: c_int,
+    str: *const c_char,
+    len: ssize_t,
+    must_append: bool,
+    yank_type: MotionType,
+    block_len: colnr_T,
 ) {
     unsafe {
-        if len < 0 as ssize_t {
-            len = strlen(str) as ssize_t;
-        }
-        if name == '/' as ::core::ffi::c_int {
-            set_last_search_pat(str, RE_SEARCH as ::core::ffi::c_int, true, true);
+        let len = if len < 0 { strlen(str) as ssize_t } else { len };
+
+        if name == '/' as c_int {
+            set_last_search_pat(str, RE_SEARCH as c_int, true, true);
             return;
         }
-        if name == '#' as ::core::ffi::c_int {
-            let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-            if ascii_isdigit(*str as ::core::ffi::c_int) {
-                let mut num: ::core::ffi::c_int = atoi(str);
-                buf = buflist_findnr(num);
+
+        if name == '#' as c_int {
+            // The alternate file, by number or by name.
+            let buf = if ascii_isdigit(c_int::from(*str)) {
+                let num = atoi(str);
+                let buf = buflist_findnr(num);
                 if buf.is_null() {
                     semsg(
-                        gettext(&raw const e_nobufnr as *const ::core::ffi::c_char),
-                        num as int64_t,
+                        gettext(&raw const e_nobufnr as *const c_char),
+                        int64_t::from(num),
                     );
                 }
+                buf
             } else {
-                buf = buflist_findnr(buflist_findpat(
+                buflist_findnr(buflist_findpat(
                     str,
                     str.offset(len as isize),
                     true,
                     false,
                     false,
-                ));
+                ))
+            };
+            if !buf.is_null() {
+                (*curwin.get()).w_alt_fnum = (*buf).handle;
             }
-            if buf.is_null() {
-                return;
-            }
-            (*curwin.get()).w_alt_fnum = (*buf).handle as ::core::ffi::c_int;
             return;
         }
-        if name == '=' as ::core::ffi::c_int {
-            let mut offset: size_t = 0 as size_t;
-            let mut totlen: size_t = len as size_t;
-            if must_append as ::core::ffi::c_int != 0 && !(*expr_line.ptr()).is_null() {
-                let mut exprlen: size_t = strlen(expr_line.get());
+
+        if name == '=' as c_int {
+            // The expression register keeps its source, not a yankreg.
+            let mut offset: size_t = 0;
+            let mut totlen = len as size_t;
+            if must_append && !expr_line.get().is_null() {
+                let exprlen = strlen(expr_line.get());
                 totlen = totlen.wrapping_add(exprlen);
                 offset = exprlen;
             }
-            expr_line.set(xrealloc(
-                expr_line.get() as *mut ::core::ffi::c_void,
-                totlen.wrapping_add(1 as size_t),
-            ) as *mut ::core::ffi::c_char);
+            expr_line.set(
+                xrealloc(expr_line.get() as *mut c_void, totlen.wrapping_add(1)) as *mut c_char,
+            );
             memcpy(
-                (*expr_line.ptr()).offset(offset as isize) as *mut ::core::ffi::c_void,
-                str as *const ::core::ffi::c_void,
+                expr_line.get().add(offset) as *mut c_void,
+                str as *const c_void,
                 len as size_t,
             );
-            *(*expr_line.ptr()).offset(totlen as isize) = NUL as ::core::ffi::c_char;
+            *expr_line.get().add(totlen) = NUL as c_char;
             return;
         }
-        if name == '_' as ::core::ffi::c_int {
-            return;
+
+        if name == '_' as c_int {
+            return; // black hole
         }
-        let mut old_y_previous: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
-        let mut reg: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
-        reg = init_write_reg(name, &raw mut old_y_previous, must_append);
+
+        let mut old_y_previous: *mut yankreg_T = ::core::ptr::null_mut();
+        let reg = init_write_reg(name, &raw mut old_y_previous, must_append);
         if reg.is_null() {
             return;
         }
@@ -531,82 +541,76 @@ pub unsafe extern "C" fn write_reg_contents_ex(
     }
 }
 
-pub unsafe extern "C" fn prepare_yankreg_from_object(
-    mut reg: *mut yankreg_T,
-    mut regtype: String_0,
-    mut _lines: size_t,
+/// Set `reg`'s type from an API `regtype` string (`""`, `v`/`c`, `V`/`l`,
+/// `b`/CTRL-V, optionally followed by a block width).
+///
+/// Answers false for a `regtype` that does not parse.
+///
+/// # Safety
+/// `reg` must be writable and `regtype` describe readable bytes.
+pub unsafe fn prepare_yankreg_from_object(
+    reg: *mut yankreg_T,
+    regtype: String_0,
+    _lines: size_t,
 ) -> bool {
     unsafe {
-        let mut type_0: ::core::ffi::c_char = (if !regtype.data.is_null() {
-            *regtype.data.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        } else {
+        let type_0 = if regtype.data.is_null() {
             NUL
-        }) as ::core::ffi::c_char;
-        match type_0 as ::core::ffi::c_int {
-            0 => {
-                (*reg).y_type = kMTUnknown;
-            }
-            118 | 99 => {
-                (*reg).y_type = kMTCharWise;
-            }
-            86 | 108 => {
-                (*reg).y_type = kMTLineWise;
-            }
-            98 | Ctrl_V => {
-                (*reg).y_type = kMTBlockWise;
-            }
+        } else {
+            c_int::from(*regtype.data)
+        };
+        (*reg).y_type = match type_0 {
+            0 => kMTUnknown, // "" means "work it out from the text"
+            c if c == 'v' as c_int || c == 'c' as c_int => kMTCharWise,
+            c if c == 'V' as c_int || c == 'l' as c_int => kMTLineWise,
+            c if c == 'b' as c_int || c == Ctrl_V => kMTBlockWise,
             _ => return false,
-        }
-        (*reg).y_width = 0 as ::core::ffi::c_int as colnr_T;
-        if regtype.size > 1 as size_t {
-            if (*reg).y_type as ::core::ffi::c_int != kMTBlockWise as ::core::ffi::c_int {
+        };
+
+        (*reg).y_width = 0;
+        if regtype.size > 1 {
+            // A width only means something for a block.
+            if (*reg).y_type != kMTBlockWise {
                 return false;
             }
-            if !ascii_isdigit(
-                *regtype.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            ) {
+            if !ascii_isdigit(c_int::from(*regtype.data.add(1))) {
                 return false;
             }
-            let mut p: *const ::core::ffi::c_char =
-                regtype.data.offset(1 as ::core::ffi::c_int as isize);
-            (*reg).y_width = (getdigits_int(
-                &raw mut p as *mut *mut ::core::ffi::c_char,
-                false,
-                1 as ::core::ffi::c_int,
-            ) - 1 as ::core::ffi::c_int) as colnr_T;
+            let mut p: *const c_char = regtype.data.add(1);
+            (*reg).y_width = getdigits_int(&raw mut p as *mut *mut c_char, false, 1) - 1;
+            // Nothing may follow the width.
             if regtype.size > p.offset_from(regtype.data) as size_t {
                 return false;
             }
         }
-        (*reg).additional_data = ::core::ptr::null_mut::<AdditionalData>();
-        (*reg).timestamp = 0 as Timestamp;
-        return true;
+        (*reg).additional_data = ::core::ptr::null_mut();
+        (*reg).timestamp = 0;
+        true
     }
 }
 
-pub unsafe extern "C" fn finish_yankreg_from_object(
-    mut reg: *mut yankreg_T,
-    mut clipboard_adjust: bool,
-) {
+/// Settle a register built from an API object: drop the empty last line a
+/// linewise write ends with, and decide the type when it was left unknown.
+///
+/// `clipboard_adjust` is for the clipboard provider, whose lists always carry
+/// that trailing empty line.
+///
+/// # Safety
+/// `reg` must own an array of `y_size` lines.
+pub unsafe fn finish_yankreg_from_object(reg: *mut yankreg_T, clipboard_adjust: bool) {
     unsafe {
-        if (*reg).y_size > 0 as size_t
-            && (*(*reg)
-                .y_array
-                .offset((*reg).y_size.wrapping_sub(1 as size_t) as isize))
-            .size
-                == 0 as size_t
-        {
-            if (*reg).y_type as ::core::ffi::c_int != kMTCharWise as ::core::ffi::c_int {
-                if (*reg).y_type as ::core::ffi::c_int == kMTUnknown as ::core::ffi::c_int
-                    || clipboard_adjust as ::core::ffi::c_int != 0
-                {
+        let ends_empty =
+            (*reg).y_size > 0 && (*(*reg).y_array.add((*reg).y_size.wrapping_sub(1))).size == 0;
+        if ends_empty {
+            if (*reg).y_type != kMTCharWise {
+                if (*reg).y_type == kMTUnknown || clipboard_adjust {
                     (*reg).y_size = (*reg).y_size.wrapping_sub(1);
                 }
-                if (*reg).y_type as ::core::ffi::c_int == kMTUnknown as ::core::ffi::c_int {
+                if (*reg).y_type == kMTUnknown {
                     (*reg).y_type = kMTLineWise;
                 }
             }
-        } else if (*reg).y_type as ::core::ffi::c_int == kMTUnknown as ::core::ffi::c_int {
+        } else if (*reg).y_type == kMTUnknown {
             (*reg).y_type = kMTCharWise;
         }
         update_yankreg_width(reg);
