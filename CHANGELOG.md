@@ -7,6 +7,13 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote the OS layer, covering environment variables and `$VAR`/`~`
+  expansion, running the shell for `:!`, `system()` and wildcard expansion,
+  the locale and `:language`, and the input buffer every keystroke arrives
+  in. File-system access was reorganised but not rewritten.
+
 ## [2026.08.06-eb75350b02]
 
 Ongoing migration of the transpiled code toward safe, idiomatic Rust.
