@@ -11,6 +11,7 @@ mod cmdhist;
 mod digraph;
 mod expressions;
 mod fold;
+mod fpconv;
 mod garray;
 mod hashtab;
 mod keycodes;

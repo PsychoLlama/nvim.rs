@@ -1,6 +1,5 @@
 {
   "files": {
-    "crates/nvim/src/cjson/fpconv.rs": 5,
     "crates/nvim/src/cjson/lua_cjson.rs": 141,
     "crates/nvim/src/cjson/strbuf.rs": 4,
     "crates/nvim/src/nvim/base64.rs": 2,

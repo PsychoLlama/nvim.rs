@@ -1,4 +1,4 @@
-use crate::src::cjson::fpconv::{fpconv_g_fmt, fpconv_init, fpconv_strtod};
+use crate::src::cjson::fpconv::{append_g_fmt, strtod};
 use crate::src::cjson::strbuf::{
     strbuf_append_string, strbuf_free, strbuf_init, strbuf_new, strbuf_resize,
 };
@@ -746,7 +746,6 @@ unsafe extern "C-unwind" fn json_append_number(
     mut lindex: ::core::ffi::c_int,
     mut use_keybuf: ::core::ffi::c_int,
 ) {
-    let mut len: ::core::ffi::c_int = 0;
     let mut num: ::core::ffi::c_double = lua_tonumber(l, lindex);
     let mut cfg: *mut json_config_t = (*ctx).cfg;
     let mut json: *mut strbuf_t = (*ctx).json;
@@ -812,9 +811,9 @@ unsafe extern "C-unwind" fn json_append_number(
         );
         return;
     }
-    strbuf_ensure_empty_length(json, FPCONV_G_FMT_BUFSIZE as size_t);
-    len = fpconv_g_fmt(strbuf_empty_ptr(json), num, (*cfg).encode_number_precision);
-    strbuf_extend_length(json, len as size_t);
+    let mut rendered: Vec<u8> = Vec::new();
+    append_g_fmt(&mut rendered, num, (*cfg).encode_number_precision as u32);
+    strbuf_append_mem(json, rendered.as_ptr().cast(), rendered.len());
 }
 unsafe extern "C" fn cmp_key_entries(
     mut a: *const ::core::ffi::c_void,
@@ -1850,7 +1849,10 @@ unsafe extern "C-unwind" fn json_next_number_token(
         || *endptr as ::core::ffi::c_int == 'x' as ::core::ffi::c_int
     {
         (*token).type_0 = T_NUMBER;
-        (*token).value.number = fpconv_strtod((*json).ptr, &raw mut endptr);
+        let text = ::core::ffi::CStr::from_ptr((*json).ptr).to_bytes();
+        let (value, used) = strtod(text);
+        (*token).value.number = value;
+        endptr = ((*json).ptr).add(used) as *mut ::core::ffi::c_char;
         if (*json).ptr == endptr as *const ::core::ffi::c_char {
             json_set_token_error(
                 token,
@@ -2409,11 +2411,7 @@ pub unsafe extern "C-unwind" fn lua_cjson_new(mut l: *mut lua_State) -> ::core::
         LUA_REGISTRYINDEX,
         b"nvim.thread\0".as_ptr() as *const ::core::ffi::c_char,
     );
-    let mut is_thread: bool = lua_toboolean(l, -1 as ::core::ffi::c_int) != 0;
     lua_settop(l, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-    if !is_thread {
-        fpconv_init();
-    }
     lua_pushlightuserdata(
         l,
         ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
@@ -2603,6 +2601,5 @@ unsafe extern "C-unwind" fn strbuf_string(
     }
     return (*s).buf;
 }
-pub const FPCONV_G_FMT_BUFSIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
