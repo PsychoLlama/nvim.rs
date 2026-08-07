@@ -27,7 +27,7 @@ pub unsafe extern "C" fn find_start_comment(mut ind_maxcomment: ::core::ffi::c_i
             pos = findmatchlimit(
                 ::core::ptr::null_mut::<oparg_T>(),
                 '*' as ::core::ffi::c_int,
-                FM_BACKWARD as ::core::ffi::c_int,
+                FM_BACKWARD,
                 cur_maxcomment,
             );
             if pos.is_null() {
@@ -83,7 +83,7 @@ pub(crate) unsafe extern "C" fn find_start_rawstring(
             pos = findmatchlimit(
                 ::core::ptr::null_mut::<oparg_T>(),
                 'R' as ::core::ffi::c_int,
-                FM_BACKWARD as ::core::ffi::c_int,
+                FM_BACKWARD,
                 cur_maxcomment as int64_t,
             );
             if pos.is_null() {

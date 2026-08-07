@@ -15,7 +15,7 @@ use super::*;
 unsafe extern "C" fn cin_islabel_skip(mut s: *mut *const ::core::ffi::c_char) -> bool {
     unsafe {
         if !vim_isIDc(**s as uint8_t as ::core::ffi::c_int) {
-            return false_0 != 0;
+            return false;
         }
         while vim_isIDc(**s as uint8_t as ::core::ffi::c_int) {
             *s = (*s).offset(utfc_ptr2len(*s) as isize);
@@ -32,16 +32,16 @@ pub(crate) unsafe extern "C" fn cin_islabel() -> bool {
     unsafe {
         let mut s: *const ::core::ffi::c_char = cin_skipcomment(get_cursor_line_ptr());
         if cin_isdefault(s) != 0 {
-            return false_0 != 0;
+            return false;
         }
         if cin_isscopedecl(s) {
-            return false_0 != 0;
+            return false;
         }
         if !cin_islabel_skip(&raw mut s) {
-            return false_0 != 0;
+            return false;
         }
         if !ind_find_start_CORS(::core::ptr::null_mut::<linenr_T>()).is_null() {
-            return false_0 != 0;
+            return false;
         }
         let mut cursor_save: pos_T = pos_T {
             lnum: 0,
@@ -69,16 +69,16 @@ pub(crate) unsafe extern "C" fn cin_islabel() -> bool {
             (*curwin.get()).w_cursor = cursor_save;
             if cin_isterminated(line, true_0, false_0) as ::core::ffi::c_int != 0
                 || cin_isscopedecl(line) as ::core::ffi::c_int != 0
-                || cin_iscase(line, true_0 != 0) as ::core::ffi::c_int != 0
+                || cin_iscase(line, true) as ::core::ffi::c_int != 0
                 || cin_islabel_skip(&raw mut line) as ::core::ffi::c_int != 0
                     && cin_nocode(line) != 0
             {
-                return true_0 != 0;
+                return true;
             }
-            return false_0 != 0;
+            return false;
         }
         (*curwin.get()).w_cursor = cursor_save;
-        return true_0 != 0;
+        return true;
     }
 }
 
@@ -90,11 +90,7 @@ unsafe extern "C" fn cin_is_compound_init(mut s: *const ::core::ffi::c_char) -> 
             if *p as ::core::ffi::c_int == '=' as ::core::ffi::c_int {
                 r = cin_skipcomment(p.offset(1 as ::core::ffi::c_int as isize));
                 p = r;
-            } else if strncmp(
-                p,
-                b"return\0".as_ptr() as *const ::core::ffi::c_char,
-                6 as size_t,
-            ) == 0
+            } else if strncmp(p, c"return".as_ptr(), 6 as size_t) == 0
                 && !vim_isIDc(*p.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
                 && (p == s
                     || p > s
@@ -109,11 +105,11 @@ unsafe extern "C" fn cin_is_compound_init(mut s: *const ::core::ffi::c_char) -> 
             }
         }
         if r.is_null() {
-            return false_0 != 0;
+            return false;
         }
         p = r;
         if cin_nocode(p) != 0 {
-            return true_0 != 0;
+            return true;
         }
         if *p as ::core::ffi::c_int == '&' as ::core::ffi::c_int {
             p = cin_skipcomment(p.offset(1 as ::core::ffi::c_int as isize));
@@ -123,7 +119,7 @@ unsafe extern "C" fn cin_is_compound_init(mut s: *const ::core::ffi::c_char) -> 
             loop {
                 p = cin_skip_comment_and_string(p.offset(1 as ::core::ffi::c_int as isize));
                 if cin_nocode(p) != 0 {
-                    return true_0 != 0;
+                    return true;
                 }
                 open_count += (*p as ::core::ffi::c_int == '(' as ::core::ffi::c_int)
                     as ::core::ffi::c_int
@@ -134,7 +130,7 @@ unsafe extern "C" fn cin_is_compound_init(mut s: *const ::core::ffi::c_char) -> 
             }
             p = cin_skipcomment(p.offset(1 as ::core::ffi::c_int as isize));
             if cin_nocode(p) != 0 {
-                return true_0 != 0;
+                return true;
             }
         }
         while *p as ::core::ffi::c_int == '{' as ::core::ffi::c_int {
@@ -148,13 +144,13 @@ pub(crate) unsafe extern "C" fn cin_isinit() -> bool {
     unsafe {
         let mut s: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         static skip: GlobalCell<[*mut ::core::ffi::c_char; 4]> = GlobalCell::new([
-            b"static\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            b"public\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            b"protected\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            b"private\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"static".as_ptr() as *mut ::core::ffi::c_char,
+            c"public".as_ptr() as *mut ::core::ffi::c_char,
+            c"protected".as_ptr() as *mut ::core::ffi::c_char,
+            c"private".as_ptr() as *mut ::core::ffi::c_char,
         ]);
         s = cin_skipcomment(get_cursor_line_ptr());
-        if cin_starts_with(s, b"typedef\0".as_ptr() as *const ::core::ffi::c_char) != 0 {
+        if cin_starts_with(s, c"typedef".as_ptr()) != 0 {
             s = cin_skipcomment(s.offset(7 as ::core::ffi::c_int as isize));
         }
         loop {
@@ -182,8 +178,8 @@ pub(crate) unsafe extern "C" fn cin_isinit() -> bool {
                 break;
             }
         }
-        if cin_starts_with(s, b"enum\0".as_ptr() as *const ::core::ffi::c_char) != 0 {
-            return true_0 != 0;
+        if cin_starts_with(s, c"enum".as_ptr()) != 0 {
+            return true;
         }
         return cin_is_compound_init(s);
     }

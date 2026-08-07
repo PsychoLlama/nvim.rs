@@ -22,7 +22,7 @@ pub(crate) unsafe extern "C" fn after_label(
                     == ':' as ::core::ffi::c_int
                 {
                     l = l.offset(1);
-                } else if !cin_iscase(l.offset(1 as ::core::ffi::c_int as isize), false_0 != 0) {
+                } else if !cin_iscase(l.offset(1 as ::core::ffi::c_int as isize), false) {
                     break;
                 }
             } else if *l as ::core::ffi::c_int == '\'' as ::core::ffi::c_int
@@ -88,7 +88,7 @@ pub(crate) unsafe extern "C" fn skip_label(
         cursor_save = (*curwin.get()).w_cursor;
         (*curwin.get()).w_cursor.lnum = lnum;
         l = get_cursor_line_ptr();
-        if cin_iscase(l, false_0 != 0) as ::core::ffi::c_int != 0
+        if cin_iscase(l, false) as ::core::ffi::c_int != 0
             || cin_isscopedecl(l) as ::core::ffi::c_int != 0
             || cin_islabel() as ::core::ffi::c_int != 0
         {
@@ -123,76 +123,40 @@ pub(crate) unsafe extern "C" fn cin_first_id_amount() -> ::core::ffi::c_int {
         p = skipwhite(line);
         len = skiptowhite(p).offset_from(p) as ::core::ffi::c_int;
         if len == 6 as ::core::ffi::c_int
-            && strncmp(
-                p,
-                b"static\0".as_ptr() as *const ::core::ffi::c_char,
-                6 as size_t,
-            ) == 0 as ::core::ffi::c_int
+            && strncmp(p, c"static".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int
         {
             p = skipwhite(p.offset(6 as ::core::ffi::c_int as isize));
             len = skiptowhite(p).offset_from(p) as ::core::ffi::c_int;
         }
         if len == 6 as ::core::ffi::c_int
-            && strncmp(
-                p,
-                b"struct\0".as_ptr() as *const ::core::ffi::c_char,
-                6 as size_t,
-            ) == 0 as ::core::ffi::c_int
+            && strncmp(p, c"struct".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int
         {
             p = skipwhite(p.offset(6 as ::core::ffi::c_int as isize));
         } else if len == 4 as ::core::ffi::c_int
-            && strncmp(
-                p,
-                b"enum\0".as_ptr() as *const ::core::ffi::c_char,
-                4 as size_t,
-            ) == 0 as ::core::ffi::c_int
+            && strncmp(p, c"enum".as_ptr(), 4 as size_t) == 0 as ::core::ffi::c_int
         {
             p = skipwhite(p.offset(4 as ::core::ffi::c_int as isize));
         } else if len == 8 as ::core::ffi::c_int
-            && strncmp(
-                p,
-                b"unsigned\0".as_ptr() as *const ::core::ffi::c_char,
-                8 as size_t,
-            ) == 0 as ::core::ffi::c_int
+            && strncmp(p, c"unsigned".as_ptr(), 8 as size_t) == 0 as ::core::ffi::c_int
             || len == 6 as ::core::ffi::c_int
-                && strncmp(
-                    p,
-                    b"signed\0".as_ptr() as *const ::core::ffi::c_char,
-                    6 as size_t,
-                ) == 0 as ::core::ffi::c_int
+                && strncmp(p, c"signed".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int
         {
             s = skipwhite(p.offset(len as isize));
-            if strncmp(
-                s,
-                b"int\0".as_ptr() as *const ::core::ffi::c_char,
-                3 as size_t,
-            ) == 0 as ::core::ffi::c_int
+            if strncmp(s, c"int".as_ptr(), 3 as size_t) == 0 as ::core::ffi::c_int
                 && ascii_iswhite(*s.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
                     as ::core::ffi::c_int
                     != 0
-                || strncmp(
-                    s,
-                    b"long\0".as_ptr() as *const ::core::ffi::c_char,
-                    4 as size_t,
-                ) == 0 as ::core::ffi::c_int
+                || strncmp(s, c"long".as_ptr(), 4 as size_t) == 0 as ::core::ffi::c_int
                     && ascii_iswhite(
                         *s.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     ) as ::core::ffi::c_int
                         != 0
-                || strncmp(
-                    s,
-                    b"short\0".as_ptr() as *const ::core::ffi::c_char,
-                    5 as size_t,
-                ) == 0 as ::core::ffi::c_int
+                || strncmp(s, c"short".as_ptr(), 5 as size_t) == 0 as ::core::ffi::c_int
                     && ascii_iswhite(
                         *s.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     ) as ::core::ffi::c_int
                         != 0
-                || strncmp(
-                    s,
-                    b"char\0".as_ptr() as *const ::core::ffi::c_char,
-                    4 as size_t,
-                ) == 0 as ::core::ffi::c_int
+                || strncmp(s, c"char".as_ptr(), 4 as size_t) == 0 as ::core::ffi::c_int
                     && ascii_iswhite(
                         *s.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     ) as ::core::ffi::c_int
@@ -248,11 +212,7 @@ pub(crate) unsafe extern "C" fn cin_get_equal_amount(mut lnum: linenr_T) -> ::co
         s = ml_get(lnum);
         line = s;
         while *s as ::core::ffi::c_int != NUL
-            && vim_strchr(
-                b"=;{}\"'\0".as_ptr() as *const ::core::ffi::c_char,
-                *s as uint8_t as ::core::ffi::c_int,
-            )
-            .is_null()
+            && vim_strchr(c"=;{}\"'".as_ptr(), *s as uint8_t as ::core::ffi::c_int).is_null()
         {
             if cin_iscomment(s) != 0 {
                 s = cin_skipcomment(s);

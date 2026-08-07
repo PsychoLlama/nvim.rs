@@ -65,7 +65,7 @@ pub unsafe extern "C" fn parse_cino(mut buf: *mut buf_T) {
             }
             let mut digits_start: *mut ::core::ffi::c_char = p;
             let mut n: int64_t =
-                getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int) as int64_t;
+                getdigits_int(&raw mut p, true, 0 as ::core::ffi::c_int) as int64_t;
             divider = 0 as ::core::ffi::c_int;
             if *p as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
                 p = p.offset(1);

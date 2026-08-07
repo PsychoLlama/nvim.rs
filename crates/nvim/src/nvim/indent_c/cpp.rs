@@ -16,19 +16,11 @@ use super::*;
 pub(crate) unsafe extern "C" fn cin_is_cpp_namespace(mut s: *const ::core::ffi::c_char) -> bool {
     unsafe {
         let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut has_name: bool = false_0 != 0;
-        let mut has_name_start: bool = false_0 != 0;
+        let mut has_name: bool = false;
+        let mut has_name_start: bool = false;
         s = cin_skipcomment(s);
-        while (strncmp(
-            s,
-            b"inline\0".as_ptr() as *const ::core::ffi::c_char,
-            6 as size_t,
-        ) == 0 as ::core::ffi::c_int
-            || strncmp(
-                s,
-                b"export\0".as_ptr() as *const ::core::ffi::c_char,
-                6 as size_t,
-            ) == 0 as ::core::ffi::c_int)
+        while (strncmp(s, c"inline".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int
+            || strncmp(s, c"export".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int)
             && (*s.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
                 || !vim_iswordc(
                     *s.offset(6 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
@@ -36,11 +28,7 @@ pub(crate) unsafe extern "C" fn cin_is_cpp_namespace(mut s: *const ::core::ffi::
         {
             s = cin_skipcomment(skipwhite(s.offset(6 as ::core::ffi::c_int as isize)));
         }
-        if strncmp(
-            s,
-            b"namespace\0".as_ptr() as *const ::core::ffi::c_char,
-            9 as size_t,
-        ) == 0 as ::core::ffi::c_int
+        if strncmp(s, c"namespace".as_ptr(), 9 as size_t) == 0 as ::core::ffi::c_int
             && (*s.offset(9 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
                 || !vim_iswordc(
                     *s.offset(9 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
@@ -49,16 +37,16 @@ pub(crate) unsafe extern "C" fn cin_is_cpp_namespace(mut s: *const ::core::ffi::
             p = cin_skipcomment(skipwhite(s.offset(9 as ::core::ffi::c_int as isize)));
             while *p as ::core::ffi::c_int != NUL {
                 if ascii_iswhite(*p as ::core::ffi::c_int) {
-                    has_name = true_0 != 0;
+                    has_name = true;
                     p = cin_skipcomment(skipwhite(p));
                 } else {
                     if *p as ::core::ffi::c_int == '{' as ::core::ffi::c_int {
                         break;
                     }
                     if vim_iswordc(*p as uint8_t as ::core::ffi::c_int) {
-                        has_name_start = true_0 != 0;
+                        has_name_start = true;
                         if has_name {
-                            return false_0 != 0;
+                            return false;
                         }
                         p = p.offset(1);
                     } else if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -70,17 +58,17 @@ pub(crate) unsafe extern "C" fn cin_is_cpp_namespace(mut s: *const ::core::ffi::
                             != 0
                     {
                         if !has_name_start || has_name as ::core::ffi::c_int != 0 {
-                            return false_0 != 0;
+                            return false;
                         }
                         p = p.offset(3 as ::core::ffi::c_int as isize);
                     } else {
-                        return false_0 != 0;
+                        return false;
                     }
                 }
             }
-            return true_0 != 0;
+            return true;
         }
-        return false_0 != 0;
+        return false;
     }
 }
 
@@ -149,7 +137,7 @@ pub(crate) unsafe extern "C" fn cin_is_cpp_baseclass(
                 s = line;
             }
             if s == line {
-                if cin_iscase(s, false_0 != 0) {
+                if cin_iscase(s, false) {
                     break;
                 }
                 s = cin_skipcomment(line);
@@ -182,19 +170,11 @@ pub(crate) unsafe extern "C" fn cin_is_cpp_baseclass(
                 } else {
                     s = cin_skipcomment(s.offset(1 as ::core::ffi::c_int as isize));
                 }
-            } else if strncmp(
-                s,
-                b"class\0".as_ptr() as *const ::core::ffi::c_char,
-                5 as size_t,
-            ) == 0 as ::core::ffi::c_int
+            } else if strncmp(s, c"class".as_ptr(), 5 as size_t) == 0 as ::core::ffi::c_int
                 && !vim_isIDc(
                     *s.offset(5 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
                 )
-                || strncmp(
-                    s,
-                    b"struct\0".as_ptr() as *const ::core::ffi::c_char,
-                    6 as size_t,
-                ) == 0 as ::core::ffi::c_int
+                || strncmp(s, c"struct".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int
                     && !vim_isIDc(*s.offset(6 as ::core::ffi::c_int as isize) as uint8_t
                         as ::core::ffi::c_int)
             {
@@ -274,11 +254,7 @@ pub(crate) unsafe extern "C" fn get_baseclass_amount(
             {
                 amount = get_indent_lnum((*trypos).lnum);
             }
-            if cin_ends_in(
-                get_cursor_line_ptr(),
-                b",\0".as_ptr() as *const ::core::ffi::c_char,
-            ) == 0
-            {
+            if cin_ends_in(get_cursor_line_ptr(), c",".as_ptr()) == 0 {
                 amount += (*curbuf.get()).b_ind_cpp_baseclass;
             }
         } else {
@@ -306,11 +282,7 @@ pub(crate) unsafe extern "C" fn cin_is_cpp_extern_c(
         let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         let mut has_string_literal: ::core::ffi::c_int = false_0;
         s = cin_skipcomment(s);
-        if strncmp(
-            s,
-            b"extern\0".as_ptr() as *const ::core::ffi::c_char,
-            6 as size_t,
-        ) == 0 as ::core::ffi::c_int
+        if strncmp(s, c"extern".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int
             && (*s.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
                 || !vim_iswordc(
                     *s.offset(6 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int

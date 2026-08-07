@@ -55,7 +55,7 @@ pub(crate) unsafe extern "C" fn find_start_brace() -> *mut pos_T {
             trypos = findmatchlimit(
                 ::core::ptr::null_mut::<oparg_T>(),
                 '{' as ::core::ffi::c_int,
-                FM_BLOCKSTOP as ::core::ffi::c_int,
+                FM_BLOCKSTOP,
                 0 as int64_t,
             );
             if trypos.is_null() {

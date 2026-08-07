@@ -72,19 +72,17 @@ pub(crate) use self::label::*;
 pub(crate) use self::paren::*;
 pub use self::recog::*;
 
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const KEY_COMPLETE: C2Rust_Unnamed_14 = 259;
-pub const KEY_OPEN_BACK: C2Rust_Unnamed_14 = 258;
-pub const KEY_OPEN_FORW: C2Rust_Unnamed_14 = 257;
-pub const FM_BACKWARD: C2Rust_Unnamed_16 = 1;
+pub const KEY_COMPLETE: ::core::ffi::c_int = 259;
+pub const KEY_OPEN_BACK: ::core::ffi::c_int = 258;
+pub const KEY_OPEN_FORW: ::core::ffi::c_int = 257;
+pub const FM_BACKWARD: ::core::ffi::c_int = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct cpp_baseclass_cache_T {
     pub found: ::core::ffi::c_int,
     pub lpos: lpos_T,
 }
-pub const FM_BLOCKSTOP: C2Rust_Unnamed_16 = 4;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
+pub const FM_BLOCKSTOP: ::core::ffi::c_int = 4;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

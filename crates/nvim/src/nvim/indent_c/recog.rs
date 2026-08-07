@@ -15,7 +15,7 @@ use super::*;
 
 pub unsafe extern "C" fn cin_is_cinword(mut line: *const ::core::ffi::c_char) -> bool {
     unsafe {
-        let mut retval: bool = false_0 != 0;
+        let mut retval: bool = false;
         let mut cinw_len: size_t = strlen((*curbuf.get()).b_p_cinw).wrapping_add(1 as size_t);
         let mut cinw_buf: *mut ::core::ffi::c_char = xmalloc(cinw_len) as *mut ::core::ffi::c_char;
         line = skipwhite(line);
@@ -25,7 +25,7 @@ pub unsafe extern "C" fn cin_is_cinword(mut line: *const ::core::ffi::c_char) ->
                 &raw mut cinw,
                 cinw_buf,
                 cinw_len,
-                b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                c",".as_ptr() as *mut ::core::ffi::c_char,
             );
             if !(strncmp(line, cinw_buf, len) == 0 as ::core::ffi::c_int
                 && (!vim_iswordc(*line.offset(len as isize) as uint8_t as ::core::ffi::c_int)
@@ -36,7 +36,7 @@ pub unsafe extern "C" fn cin_is_cinword(mut line: *const ::core::ffi::c_char) ->
             {
                 continue;
             }
-            retval = true_0 != 0;
+            retval = true;
             break;
         }
         xfree(cinw_buf as *mut ::core::ffi::c_void);
@@ -55,7 +55,7 @@ pub(crate) unsafe extern "C" fn cin_has_js_key(mut text: *const ::core::ffi::c_c
             s = s.offset(1);
         }
         if !vim_isIDc(*s as uint8_t as ::core::ffi::c_int) {
-            return false_0 != 0;
+            return false;
         }
         while vim_isIDc(*s as uint8_t as ::core::ffi::c_int) {
             s = s.offset(1);
@@ -77,7 +77,7 @@ pub(crate) unsafe extern "C" fn cin_iscase(
 ) -> bool {
     unsafe {
         s = cin_skipcomment(s);
-        if cin_starts_with(s, b"case\0".as_ptr() as *const ::core::ffi::c_char) != 0 {
+        if cin_starts_with(s, c"case".as_ptr()) != 0 {
             s = s.offset(4 as ::core::ffi::c_int as isize);
             while *s != 0 {
                 s = cin_skipcomment(s);
@@ -90,7 +90,7 @@ pub(crate) unsafe extern "C" fn cin_iscase(
                     {
                         s = s.offset(1);
                     } else {
-                        return true_0 != 0;
+                        return true;
                     }
                 }
                 if *s as ::core::ffi::c_int == '\'' as ::core::ffi::c_int
@@ -105,21 +105,21 @@ pub(crate) unsafe extern "C" fn cin_iscase(
                         || *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                             == '/' as ::core::ffi::c_int)
                 {
-                    return false_0 != 0;
+                    return false;
                 } else if *s as ::core::ffi::c_int == '"' as ::core::ffi::c_int {
                     if strict {
-                        return false_0 != 0;
+                        return false;
                     }
-                    return true_0 != 0;
+                    return true;
                 }
                 s = s.offset(1);
             }
-            return false_0 != 0;
+            return false;
         }
         if cin_isdefault(s) != 0 {
-            return true_0 != 0;
+            return true;
         }
-        return false_0 != 0;
+        return false;
     }
 }
 
@@ -127,11 +127,7 @@ pub(crate) unsafe extern "C" fn cin_isdefault(
     mut s: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     unsafe {
-        return (strncmp(
-            s,
-            b"default\0".as_ptr() as *const ::core::ffi::c_char,
-            7 as size_t,
-        ) == 0 as ::core::ffi::c_int
+        return (strncmp(s, c"default".as_ptr(), 7 as size_t) == 0 as ::core::ffi::c_int
             && {
                 s = cin_skipcomment(s.offset(7 as ::core::ffi::c_int as isize));
                 *s as ::core::ffi::c_int == ':' as ::core::ffi::c_int
@@ -147,14 +143,14 @@ pub(crate) unsafe extern "C" fn cin_isscopedecl(mut p: *const ::core::ffi::c_cha
         let cinsd_len: size_t = strlen((*curbuf.get()).b_p_cinsd).wrapping_add(1 as size_t);
         let mut cinsd_buf: *mut ::core::ffi::c_char =
             xmalloc(cinsd_len) as *mut ::core::ffi::c_char;
-        let mut found: bool = false_0 != 0;
+        let mut found: bool = false;
         let mut cinsd: *mut ::core::ffi::c_char = (*curbuf.get()).b_p_cinsd;
         while *cinsd != 0 {
             let len: size_t = copy_option_part(
                 &raw mut cinsd,
                 cinsd_buf,
                 cinsd_len,
-                b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                c",".as_ptr() as *mut ::core::ffi::c_char,
             );
             if strncmp(s, cinsd_buf, len) != 0 as ::core::ffi::c_int {
                 continue;
@@ -166,7 +162,7 @@ pub(crate) unsafe extern "C" fn cin_isscopedecl(mut p: *const ::core::ffi::c_cha
             {
                 continue;
             }
-            found = true_0 != 0;
+            found = true;
             break;
         }
         xfree(cinsd_buf as *mut ::core::ffi::c_void);
@@ -223,11 +219,7 @@ pub(crate) unsafe extern "C" fn cin_isterminated(
 
 pub(crate) unsafe extern "C" fn cin_isif(mut p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     unsafe {
-        return (strncmp(
-            p,
-            b"if\0".as_ptr() as *const ::core::ffi::c_char,
-            2 as size_t,
-        ) == 0 as ::core::ffi::c_int
+        return (strncmp(p, c"if".as_ptr(), 2 as size_t) == 0 as ::core::ffi::c_int
             && !vim_isIDc(
                 *p.offset(2 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
             )) as ::core::ffi::c_int;
@@ -241,11 +233,7 @@ pub(crate) unsafe extern "C" fn cin_iselse(
         if *p as ::core::ffi::c_int == '}' as ::core::ffi::c_int {
             p = cin_skipcomment(p.offset(1 as ::core::ffi::c_int as isize));
         }
-        return (strncmp(
-            p,
-            b"else\0".as_ptr() as *const ::core::ffi::c_char,
-            4 as size_t,
-        ) == 0 as ::core::ffi::c_int
+        return (strncmp(p, c"else".as_ptr(), 4 as size_t) == 0 as ::core::ffi::c_int
             && !vim_isIDc(
                 *p.offset(4 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
             )) as ::core::ffi::c_int;
@@ -254,11 +242,7 @@ pub(crate) unsafe extern "C" fn cin_iselse(
 
 pub(crate) unsafe extern "C" fn cin_isdo(mut p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     unsafe {
-        return (strncmp(
-            p,
-            b"do\0".as_ptr() as *const ::core::ffi::c_char,
-            2 as size_t,
-        ) == 0 as ::core::ffi::c_int
+        return (strncmp(p, c"do".as_ptr(), 2 as size_t) == 0 as ::core::ffi::c_int
             && !vim_isIDc(
                 *p.offset(2 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
             )) as ::core::ffi::c_int;
@@ -281,7 +265,7 @@ pub(crate) unsafe extern "C" fn cin_iswhileofdo(
         if *p as ::core::ffi::c_int == '}' as ::core::ffi::c_int {
             p = cin_skipcomment(p.offset(1 as ::core::ffi::c_int as isize));
         }
-        if cin_starts_with(p, b"while\0".as_ptr() as *const ::core::ffi::c_char) != 0 {
+        if cin_starts_with(p, c"while".as_ptr()) != 0 {
             cursor_save = (*curwin.get()).w_cursor;
             (*curwin.get()).w_cursor.lnum = lnum;
             (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
@@ -331,28 +315,15 @@ pub(crate) unsafe extern "C" fn cin_is_if_for_while_before_offset(
         }
         offset -= 1 as ::core::ffi::c_int;
         '_probablyFound: {
-            if strncmp(
-                line.offset(offset as isize),
-                b"if\0".as_ptr() as *const ::core::ffi::c_char,
-                2 as size_t,
-            ) != 0
-            {
+            if strncmp(line.offset(offset as isize), c"if".as_ptr(), 2 as size_t) != 0 {
                 if offset >= 1 as ::core::ffi::c_int {
                     offset -= 1 as ::core::ffi::c_int;
-                    if strncmp(
-                        line.offset(offset as isize),
-                        b"for\0".as_ptr() as *const ::core::ffi::c_char,
-                        3 as size_t,
-                    ) == 0
-                    {
+                    if strncmp(line.offset(offset as isize), c"for".as_ptr(), 3 as size_t) == 0 {
                         break '_probablyFound;
                     } else if offset >= 2 as ::core::ffi::c_int {
                         offset -= 2 as ::core::ffi::c_int;
-                        if strncmp(
-                            line.offset(offset as isize),
-                            b"while\0".as_ptr() as *const ::core::ffi::c_char,
-                            5 as size_t,
-                        ) == 0
+                        if strncmp(line.offset(offset as isize), c"while".as_ptr(), 5 as size_t)
+                            == 0
                         {
                             break '_probablyFound;
                         }
@@ -403,9 +374,7 @@ pub(crate) unsafe extern "C" fn cin_iswhileofdo_end(
                         if *s as ::core::ffi::c_int == '}' as ::core::ffi::c_int {
                             s = cin_skipcomment(s.offset(1 as ::core::ffi::c_int as isize));
                         }
-                        if cin_starts_with(s, b"while\0".as_ptr() as *const ::core::ffi::c_char)
-                            != 0
-                        {
+                        if cin_starts_with(s, c"while".as_ptr()) != 0 {
                             (*curwin.get()).w_cursor.lnum = (*trypos).lnum;
                             return true_0;
                         }
@@ -426,11 +395,7 @@ pub(crate) unsafe extern "C" fn cin_isbreak(
     mut p: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     unsafe {
-        return (strncmp(
-            p,
-            b"break\0".as_ptr() as *const ::core::ffi::c_char,
-            5 as size_t,
-        ) == 0 as ::core::ffi::c_int
+        return (strncmp(p, c"break".as_ptr(), 5 as size_t) == 0 as ::core::ffi::c_int
             && !vim_isIDc(
                 *p.offset(5 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
             )) as ::core::ffi::c_int;

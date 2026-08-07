@@ -32,7 +32,7 @@ pub unsafe extern "C" fn in_cinkeys(
         let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut icase: bool = false;
         if keytyped == NUL {
-            return false_0 != 0;
+            return false;
         }
         if *(*curbuf.get()).b_p_inde as ::core::ffi::c_int != NUL {
             look = (*curbuf.get()).b_p_indk;
@@ -59,11 +59,11 @@ pub unsafe extern "C" fn in_cinkeys(
             if *look as ::core::ffi::c_int == '0' as ::core::ffi::c_int {
                 try_match_word = try_match;
                 if !line_is_empty {
-                    try_match = false_0 != 0;
+                    try_match = false;
                 }
                 look = look.offset(1);
             } else {
-                try_match_word = false_0 != 0;
+                try_match_word = false;
             }
             if *look as ::core::ffi::c_int == '^' as ::core::ffi::c_int
                 && *look.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -85,21 +85,17 @@ pub unsafe extern "C" fn in_cinkeys(
                                 - ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
                         }) ^ 0x40 as ::core::ffi::c_int
                 {
-                    return true_0 != 0;
+                    return true;
                 }
                 look = look.offset(2 as ::core::ffi::c_int as isize);
             } else if *look as ::core::ffi::c_int == 'o' as ::core::ffi::c_int {
-                if try_match as ::core::ffi::c_int != 0
-                    && keytyped == KEY_OPEN_FORW as ::core::ffi::c_int
-                {
-                    return true_0 != 0;
+                if try_match as ::core::ffi::c_int != 0 && keytyped == KEY_OPEN_FORW {
+                    return true;
                 }
                 look = look.offset(1);
             } else if *look as ::core::ffi::c_int == 'O' as ::core::ffi::c_int {
-                if try_match as ::core::ffi::c_int != 0
-                    && keytyped == KEY_OPEN_BACK as ::core::ffi::c_int
-                {
-                    return true_0 != 0;
+                if try_match as ::core::ffi::c_int != 0 && keytyped == KEY_OPEN_BACK {
+                    return true;
                 }
                 look = look.offset(1);
             } else if *look as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
@@ -114,22 +110,22 @@ pub unsafe extern "C" fn in_cinkeys(
                         && strncmp(
                             p.offset((*curwin.get()).w_cursor.col as isize)
                                 .offset(-(4 as ::core::ffi::c_int as isize)),
-                            b"else\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"else".as_ptr(),
                             4 as size_t,
                         ) == 0 as ::core::ffi::c_int
                     {
-                        return true_0 != 0;
+                        return true;
                     }
                 }
                 look = look.offset(1);
             } else if *look as ::core::ffi::c_int == ':' as ::core::ffi::c_int {
                 if try_match as ::core::ffi::c_int != 0 && keytyped == ':' as ::core::ffi::c_int {
                     p = get_cursor_line_ptr();
-                    if cin_iscase(p, false_0 != 0) as ::core::ffi::c_int != 0
+                    if cin_iscase(p, false) as ::core::ffi::c_int != 0
                         || cin_isscopedecl(p) as ::core::ffi::c_int != 0
                         || cin_islabel() as ::core::ffi::c_int != 0
                     {
-                        return true_0 != 0;
+                        return true;
                     }
                     p = get_cursor_line_ptr();
                     if (*curwin.get()).w_cursor.col > 2 as ::core::ffi::c_int
@@ -148,7 +144,7 @@ pub unsafe extern "C" fn in_cinkeys(
                             ((*curwin.get()).w_cursor.col as ::core::ffi::c_int
                                 - 1 as ::core::ffi::c_int) as isize,
                         ) = ' ' as ::core::ffi::c_char;
-                        let i: bool = cin_iscase(p, false_0 != 0) as ::core::ffi::c_int != 0
+                        let i: bool = cin_iscase(p, false) as ::core::ffi::c_int != 0
                             || cin_isscopedecl(p) as ::core::ffi::c_int != 0
                             || cin_islabel() as ::core::ffi::c_int != 0;
                         p = get_cursor_line_ptr();
@@ -157,7 +153,7 @@ pub unsafe extern "C" fn in_cinkeys(
                                 - 1 as ::core::ffi::c_int) as isize,
                         ) = ':' as ::core::ffi::c_char;
                         if i {
-                            return true_0 != 0;
+                            return true;
                         }
                     }
                 }
@@ -165,7 +161,7 @@ pub unsafe extern "C" fn in_cinkeys(
             } else if *look as ::core::ffi::c_int == '<' as ::core::ffi::c_int {
                 if try_match {
                     if !vim_strchr(
-                        b"<>!*oOe0:\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"<>!*oOe0:".as_ptr(),
                         *look.offset(1 as ::core::ffi::c_int as isize) as uint8_t
                             as ::core::ffi::c_int,
                     )
@@ -173,12 +169,12 @@ pub unsafe extern "C" fn in_cinkeys(
                         && keytyped
                             == *look.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     {
-                        return true_0 != 0;
+                        return true;
                     }
                     if keytyped
                         == get_special_key_code(look.offset(1 as ::core::ffi::c_int as isize))
                     {
-                        return true_0 != 0;
+                        return true;
                     }
                 }
                 while *look as ::core::ffi::c_int != 0
@@ -196,10 +192,10 @@ pub unsafe extern "C" fn in_cinkeys(
             {
                 look = look.offset(1);
                 if *look as ::core::ffi::c_int == '~' as ::core::ffi::c_int {
-                    icase = true_0 != 0;
+                    icase = true;
                     look = look.offset(1);
                 } else {
-                    icase = false_0 != 0;
+                    icase = false;
                 }
                 p = vim_strchr(look, ',' as ::core::ffi::c_int);
                 if p.is_null() {
@@ -209,8 +205,8 @@ pub unsafe extern "C" fn in_cinkeys(
                     || try_match_word as ::core::ffi::c_int != 0)
                     && (*curwin.get()).w_cursor.col >= p.offset_from(look) as colnr_T
                 {
-                    let mut match_0: bool = false_0 != 0;
-                    if keytyped == KEY_COMPLETE as ::core::ffi::c_int {
+                    let mut match_0: bool = false;
+                    if keytyped == KEY_COMPLETE {
                         let mut n: *mut ::core::ffi::c_char =
                             ::core::ptr::null_mut::<::core::ffi::c_char>();
                         let mut s: *mut ::core::ffi::c_char =
@@ -231,10 +227,8 @@ pub unsafe extern "C" fn in_cinkeys(
                             {
                             } else {
                                 __assert_fail(
-                                    b"p >= look && (uintmax_t)(p - look) <= SIZE_MAX\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                    b"src/nvim/indent_c.rs\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    c"p >= look && (uintmax_t)(p - look) <= SIZE_MAX".as_ptr(),
+                                    c"src/nvim/indent_c.rs".as_ptr(),
                                     3933 as ::core::ffi::c_uint,
                                     __ASSERT_FUNCTION.as_ptr(),
                                 );
@@ -248,7 +242,7 @@ pub unsafe extern "C" fn in_cinkeys(
                                 strncmp(s, look, p.offset_from(look) as size_t)
                             }) == 0 as ::core::ffi::c_int
                         {
-                            match_0 = true_0 != 0;
+                            match_0 = true;
                         }
                     } else if keytyped
                         == *p.offset(-1 as ::core::ffi::c_int as isize) as uint8_t
@@ -268,10 +262,8 @@ pub unsafe extern "C" fn in_cinkeys(
                             {
                             } else {
                                 __assert_fail(
-                                    b"p >= look && (uintmax_t)(p - look) <= SIZE_MAX\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                    b"src/nvim/indent_c.rs\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    c"p >= look && (uintmax_t)(p - look) <= SIZE_MAX".as_ptr(),
+                                    c"src/nvim/indent_c.rs".as_ptr(),
                                     3946 as ::core::ffi::c_uint,
                                     __ASSERT_FUNCTION.as_ptr(),
                                 );
@@ -297,7 +289,7 @@ pub unsafe extern "C" fn in_cinkeys(
                                 )
                             }) == 0 as ::core::ffi::c_int
                         {
-                            match_0 = true_0 != 0;
+                            match_0 = true;
                         }
                     }
                     if match_0 as ::core::ffi::c_int != 0
@@ -308,11 +300,11 @@ pub unsafe extern "C" fn in_cinkeys(
                             != ((*curwin.get()).w_cursor.col as isize - p.offset_from(look))
                                 as ::core::ffi::c_int as intptr_t
                         {
-                            match_0 = false_0 != 0;
+                            match_0 = false;
                         }
                     }
                     if match_0 {
-                        return true_0 != 0;
+                        return true;
                     }
                 }
                 look = p;
@@ -320,7 +312,7 @@ pub unsafe extern "C" fn in_cinkeys(
                 if try_match as ::core::ffi::c_int != 0
                     && *look as uint8_t as ::core::ffi::c_int == keytyped
                 {
-                    return true_0 != 0;
+                    return true;
                 }
                 if *look as ::core::ffi::c_int != NUL {
                     look = look.offset(1);
@@ -328,7 +320,7 @@ pub unsafe extern "C" fn in_cinkeys(
             }
             look = skip_to_option_part(look);
         }
-        return false_0 != 0;
+        return false;
     }
 }
 
