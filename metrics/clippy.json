@@ -101,7 +101,6 @@
     "crates/nvim/src/nvim/spellsuggest/collect.rs": 2,
     "crates/nvim/src/nvim/state.rs": 12,
     "crates/nvim/src/nvim/statusline.rs": 73,
-    "crates/nvim/src/nvim/strings.rs": 8,
     "crates/nvim/src/nvim/strings/charindex.rs": 2,
     "crates/nvim/src/nvim/strings/eval.rs": 1,
     "crates/nvim/src/nvim/strings/printf.rs": 17,

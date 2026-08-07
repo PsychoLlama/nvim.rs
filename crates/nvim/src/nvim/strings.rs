@@ -1,7 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::ascii::ascii_isdigit;
-use crate::src::nvim::charset::{rem_backslash, skipwhite, transstr, vim_str2nr};
+use crate::src::nvim::charset::{skipwhite, transstr, vim_str2nr};
 use crate::src::nvim::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::src::nvim::eval::typval::{
     tv_check_for_number_arg, tv_check_for_opt_bool_arg, tv_check_for_opt_number_arg,
@@ -9,25 +9,22 @@ use crate::src::nvim::eval::typval::{
     tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_buf_chk, tv_get_string_chk,
     tv_list_alloc_ret, tv_list_append_number,
 };
-use crate::src::nvim::ex_docmd::find_cmdline_var;
 use crate::src::nvim::garray::{ga_append, ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::main::{e_invarg, e_invarg2, e_using_number_as_bool_nr, e_val_too_large_len};
 use crate::src::nvim::mbyte::{
-    mb_copy_char, mb_cptr2char_adv, mb_ptr2char_adv, mb_string2cells, mb_tolower, mb_toupper,
-    utf_char2bytes, utf_char2len, utf_head_off, utf_ptr2CharInfo, utf_ptr2cells, utf_ptr2char,
-    utf_ptr2len, utfc_ptr2len,
+    mb_cptr2char_adv, mb_ptr2char_adv, mb_string2cells, utf_char2bytes, utf_head_off,
+    utf_ptr2cells, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::src::nvim::memory::{
     arena_alloc, arena_alloc_block, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xmemscan,
     xrealloc, xstrchrnul, xstrlcpy,
 };
 use crate::src::nvim::message::{emsg, semsg, siemsg};
-use crate::src::nvim::option::{csh_like_shell, fish_like_shell};
 use crate::src::nvim::os::libc::{
-    __assert_fail, gettext, log10, memcpy, memmove, memset, qsort, snprintf, strcasecmp, strchr,
-    strcmp, strcpy, strlen, strncmp, strstr, vsnprintf,
+    __assert_fail, gettext, log10, memmove, memset, qsort, snprintf, strcasecmp, strchr, strcmp,
+    strlen, strncmp, strstr, vsnprintf,
 };
 use crate::src::nvim::plines::linetabsize_col;
 use crate::src::nvim::types::{
@@ -35,7 +32,7 @@ use crate::src::nvim::types::{
     float_T, garray_T, int16_t, int64_t, intmax_t, kListLenUnknown, keyvalue_T, ptrdiff_t, size_t,
     typval_T, uint8_t, uint16_t, uintmax_t, uvarnumber_T, varnumber_T,
 };
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::slice;
 
@@ -51,10 +48,15 @@ pub use self::charindex::*;
 pub use self::escape::*;
 pub use self::eval::*;
 pub use self::printf::*;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
+// Transpiled preamble the children still read through `use super::*`; each
+// goes as the child that spells it is rewritten.
+pub const NULL: *mut c_void = ptr::null_mut::<c_void>();
+pub const OK: c_int = 1;
+pub const FAIL: c_int = 0;
+pub const NUL: c_int = 0;
+pub const true_0: c_int = 1;
+pub const false_0: c_int = 0;
+
 /// `strnlen`: bytes before the terminator, reading at most `maxlen` bytes.
 unsafe fn strnlen(s: *const c_char, maxlen: size_t) -> size_t {
     unsafe {
@@ -212,96 +214,99 @@ pub unsafe extern "C" fn concat_str(str1: *const c_char, str2: *const c_char) ->
         dest
     }
 }
+/// Reverse `s` character by character into freshly allocated memory.
+///
+/// Composing sequences move as a unit — `utfc_ptr2len` gives the length of
+/// the whole character at each position — so the source is walked forwards
+/// while the destination is filled from the back.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn reverse_text(mut s: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn reverse_text(s: *mut c_char) -> *mut c_char {
     unsafe {
-        let mut len: size_t = strlen(s);
-        let mut rev: *mut ::core::ffi::c_char =
-            xmalloc(len.wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
-        let mut s_i: size_t = 0 as size_t;
-        let mut rev_i: size_t = len;
-        while s_i < len {
-            let mb_len: ::core::ffi::c_int = utfc_ptr2len(s.offset(s_i as isize));
-            rev_i = rev_i.wrapping_sub(mb_len as size_t);
-            memmove(
-                rev.offset(rev_i as isize) as *mut ::core::ffi::c_void,
-                s.offset(s_i as isize) as *const ::core::ffi::c_void,
-                mb_len as size_t,
-            );
-            s_i = s_i.wrapping_add((mb_len as size_t).wrapping_sub(1 as size_t));
-            s_i = s_i.wrapping_add(1);
+        let len = CStr::from_ptr(s).to_bytes().len();
+        // `xmallocz` writes the terminator the C wrote by hand.
+        let rev = xmallocz(len) as *mut c_char;
+        let src = slice::from_raw_parts(s as *const u8, len);
+        let dst = slice::from_raw_parts_mut(rev as *mut u8, len);
+        let mut at = len;
+        let mut i = 0;
+        while i < len {
+            // Never past the terminator: `utfc_ptr2len` stops there.
+            let char_len = utfc_ptr2len(s.add(i)) as usize;
+            at -= char_len;
+            dst[at..at + char_len].copy_from_slice(&src[i..i + char_len]);
+            i += char_len;
         }
-        *rev.offset(len as isize) = NUL as ::core::ffi::c_char;
-        return rev;
+        rev
     }
 }
+
+/// Every occurrence of `what` in `src` replaced by `rep`, freshly
+/// allocated, or NULL when `what` does not occur at all.
 pub unsafe extern "C" fn strrep(
-    mut src: *const ::core::ffi::c_char,
-    mut what: *const ::core::ffi::c_char,
-    mut rep: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+    src: *const c_char,
+    what: *const c_char,
+    rep: *const c_char,
+) -> *mut c_char {
     unsafe {
-        let mut pos: *const ::core::ffi::c_char = src;
-        let mut whatlen: size_t = strlen(what);
-        let mut count: size_t = 0 as size_t;
+        let what_len = strlen(what);
+
+        let mut count: size_t = 0;
+        let mut pos = src;
         loop {
             pos = strstr(pos, what);
             if pos.is_null() {
                 break;
             }
-            count = count.wrapping_add(1);
-            pos = pos.offset(whatlen as isize);
+            count += 1;
+            pos = pos.add(what_len);
         }
-        if count == 0 as size_t {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        if count == 0 {
+            return ptr::null_mut();
         }
-        let mut replen: size_t = strlen(rep);
-        let mut ret: *mut ::core::ffi::c_char = xmalloc(
-            strlen(src)
-                .wrapping_add(count.wrapping_mul(replen.wrapping_sub(whatlen)))
-                .wrapping_add(1 as size_t),
-        ) as *mut ::core::ffi::c_char;
-        let mut ptr: *mut ::core::ffi::c_char = ret;
+
+        // `replen - whatlen` underflows when the replacement is shorter;
+        // the product then wraps back to the right (smaller) total.
+        let rep_len = strlen(rep);
+        let size = strlen(src)
+            .wrapping_add(count.wrapping_mul(rep_len.wrapping_sub(what_len)))
+            .wrapping_add(1);
+        let ret = xmalloc(size) as *mut c_char;
+
+        let mut src = src;
+        let mut out = ret;
         loop {
             pos = strstr(src, what);
             if pos.is_null() {
                 break;
             }
-            let mut idx: size_t = pos.offset_from(src) as size_t;
-            memcpy(
-                ptr as *mut ::core::ffi::c_void,
-                src as *const ::core::ffi::c_void,
-                idx,
-            );
-            ptr = ptr.offset(idx as isize);
-            strcpy(ptr, rep as *mut ::core::ffi::c_char);
-            ptr = ptr.offset(replen as isize);
-            src = pos.offset(whatlen as isize);
+            let prefix = pos.offset_from(src) as size_t;
+            ptr::copy_nonoverlapping(src, out, prefix);
+            out = out.add(prefix);
+            ptr::copy_nonoverlapping(rep, out, rep_len);
+            out = out.add(rep_len);
+            src = pos.add(what_len);
         }
-        strcpy(ptr, src as *mut ::core::ffi::c_char);
-        return ret;
+        let tail = strlen(src);
+        ptr::copy_nonoverlapping(src, out, tail + 1);
+        ret
     }
 }
+
+/// `qsort` comparator: two `keyvalue_T` by value, case-sensitively.
+///
+/// The comparison length is the *longer* of the two, so a prefix sorts
+/// before the string it prefixes — `strncmp` stops at the shorter one's
+/// terminator either way.
 pub unsafe extern "C" fn cmp_keyvalue_value_n(
-    mut a: *const ::core::ffi::c_void,
-    mut b: *const ::core::ffi::c_void,
+    a: *const c_void,
+    b: *const c_void,
 ) -> ::core::ffi::c_int {
     unsafe {
-        let mut kv1: *mut keyvalue_T = a as *mut keyvalue_T;
-        let mut kv2: *mut keyvalue_T = b as *mut keyvalue_T;
-        return strncmp(
-            (*kv1).value,
-            (*kv2).value,
-            if (*kv1).length > (*kv2).length {
-                (*kv1).length
-            } else {
-                (*kv2).length
-            },
-        );
+        let kv1 = &*(a as *const keyvalue_T);
+        let kv2 = &*(b as *const keyvalue_T);
+        strncmp(kv1.value, kv2.value, kv1.length.max(kv2.length))
     }
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[cfg(test)]
 mod tests {
     use super::{any_non_ascii, ascii_upcase, strnicmp_asc, trailing_spaces_start, unquote};

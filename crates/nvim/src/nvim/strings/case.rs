@@ -9,8 +9,16 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::slice;
+
+use super::strnlen;
+use crate::src::nvim::mbyte::{
+    mb_tolower, mb_toupper, utf_char2bytes, utf_char2len, utf_ptr2CharInfo,
+};
+use crate::src::nvim::memory::{xmalloc, xrealloc};
+use crate::src::nvim::os::libc::strlen;
+use crate::src::nvim::types::size_t;
 
 /// ASCII-uppercase `s` in place (bytes ≥ 0x80 untouched).
 pub(crate) fn ascii_upcase(s: &mut [u8]) {
@@ -102,7 +110,7 @@ pub unsafe extern "C" fn strcase_save(orig: *const c_char, upper: bool) -> *mut 
             let newl = utf_char2len(newc) as size_t;
             if res_index.wrapping_add(newl) > orig_len {
                 let new_size = res_index.wrapping_add(newl).wrapping_add(1);
-                res = xrealloc(res as *mut ::core::ffi::c_void, new_size) as *mut c_char;
+                res = xrealloc(res as *mut c_void, new_size) as *mut c_char;
                 orig_len = new_size.wrapping_sub(1);
             }
             utf_char2bytes(newc, res.add(res_index));

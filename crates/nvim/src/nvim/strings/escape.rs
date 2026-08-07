@@ -10,8 +10,17 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{c_char, c_int};
+use core::{ptr, slice};
+
+use super::vim_strchr;
+use crate::src::nvim::charset::rem_backslash;
+use crate::src::nvim::ex_docmd::find_cmdline_var;
+use crate::src::nvim::mbyte::{mb_copy_char, utfc_ptr2len};
+use crate::src::nvim::memory::{xmalloc, xmallocz};
+use crate::src::nvim::option::{csh_like_shell, fish_like_shell};
+use crate::src::nvim::os::libc::strlen;
+use crate::src::nvim::types::size_t;
 
 /// Walk `src` as `vim_strnsave_unquoted` reads it, feeding kept bytes to
 /// `emit`: unescaped double quotes toggle quote mode and vanish; inside
