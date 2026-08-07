@@ -106,8 +106,8 @@
 {"symbol":"multiqueue_new_child","kind":"fn","file":"crates/nvim/src/nvim/event/multiqueue.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"multiqueue_put_event","kind":"fn","file":"crates/nvim/src/nvim/event/multiqueue.rs","class":"test","refs":["unit-fixtures.so"]}
 {"symbol":"multiqueue_size","kind":"fn","file":"crates/nvim/src/nvim/event/multiqueue.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"op_global_reg_iter","kind":"fn","file":"crates/nvim/src/nvim/register.rs","class":"internal","refs":[]}
-{"symbol":"op_reg_set","kind":"fn","file":"crates/nvim/src/nvim/register.rs","class":"internal","refs":[]}
+{"symbol":"op_global_reg_iter","kind":"fn","file":"crates/nvim/src/nvim/register/store.rs","class":"internal","refs":[]}
+{"symbol":"op_reg_set","kind":"fn","file":"crates/nvim/src/nvim/register/store.rs","class":"internal","refs":[]}
 {"symbol":"os_can_exe","kind":"fn","file":"crates/nvim/src/nvim/os/fs.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_chdir","kind":"fn","file":"crates/nvim/src/nvim/os/fs.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"os_close","kind":"fn","file":"crates/nvim/src/nvim/os/fs.rs","class":"test","refs":["unit-specs"]}
