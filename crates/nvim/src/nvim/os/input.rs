@@ -1,3 +1,22 @@
+//! Reading OS input, and the buffer it lands in.
+//!
+//! # Boundary
+//!
+//! stdin is read by libuv through [`RStream`], which calls
+//! [`input_read_cb`] with whatever arrived; everything else here is bytes
+//! moving between that callback, a fixed buffer, and `getchar.c`'s typeahead.
+//!
+//! The buffer is a plain array plus a read and a write offset into it. It is
+//! never a ring: [`input_enqueue_raw`] compacts what is unread back to the
+//! front when it needs the room, which is why the two offsets only ever move
+//! forward between compactions.
+//!
+//! This file also owns the CursorHold timer (there is nowhere better for it
+//! yet — upstream's TODO wants it to become a `state_check` timer) and the
+//! `<`*col*`,`*row*`>` suffix that a mouse key sequence may carry.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::autocmd::{
     EVENT_CURSORHOLD, EVENT_CURSORHOLDI, apply_autocmds, trigger_cursorhold,
 };
@@ -12,9 +31,10 @@ use crate::src::nvim::event::rstream::{
 use crate::src::nvim::getchar::{before_blocking, typebuf_changed};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::keycodes::{
-    Ctrl_C, K_SPECIAL, KE_EVENT, KE_FILLER, KE_LEFTMOUSE, KE_MIDDLEMOUSE, KE_MOUSEDOWN,
-    KE_MOUSEMOVE, KE_MOUSERIGHT, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1MOUSE, KE_X2MOUSE,
-    KE_X2RELEASE, trans_special,
+    Ctrl_C, FSK_KEYCODE, K_SPECIAL, KE_EVENT, KE_FILLER, KE_LEFTMOUSE, KE_MIDDLEMOUSE,
+    KE_MOUSEDOWN, KE_MOUSEMOVE, KE_MOUSERIGHT, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1MOUSE,
+    KE_X2MOUSE, KE_X2RELEASE, KS_EXTRA, KS_MODIFIER, KS_SPECIAL, MOD_MASK_2CLICK, MOD_MASK_3CLICK,
+    MOD_MASK_4CLICK, MOD_MASK_CTRL, trans_special,
 };
 use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
 use crate::src::nvim::main::{
@@ -22,836 +42,822 @@ use crate::src::nvim::main::{
     did_cursorhold, do_profiling, getout, got_int, main_loop, mapped_ctrl_c, mouse_col, mouse_grid,
     mouse_row, p_mouset, p_ut, preserve_exit, silent_mode, typebuf_was_filled, used_stdin,
 };
-use crate::src::nvim::os::libc::{__assert_fail, gettext, memcpy, memmove, sscanf};
+use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::profile::{prof_input_end, prof_input_start};
 use crate::src::nvim::state::{MODE_INSERT, get_real_state};
 use crate::src::nvim::types::libc::STDIN_FILENO;
 use crate::src::nvim::types::{
-    Event, MultiQueue, ProcType, RStream, String_0, TriState, event_T, int64_t, kFalse, kNone,
-    kTrue, rstream, size_t, ssize_t, stream, stream_uv as C2Rust_Unnamed_25, uint8_t, uint64_t,
-    uv__io_t, uv__queue, uv_buf_t, uv_connect_t, uv_file, uv_handle_t, uv_handle_type, uv_loop_t,
-    uv_pipe_s_u as C2Rust_Unnamed_7, uv_pipe_t, uv_shutdown_t, uv_stream_t,
+    Event, MultiQueue, RStream, Stream, String_0, TriState, event_T, kFalse, kNone, kTrue,
+    key_extra, size_t, uint8_t, uint64_t, uv_handle_type,
 };
-pub const UV_TTY: uv_handle_type = 14;
-pub const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
-pub const kProcTypePty: ProcType = 1;
-pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub const FSK_KEYCODE: C2Rust_Unnamed_27 = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
-pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
-pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
-pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-pub const MOD_MASK_2CLICK: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
-pub const MOD_MASK_3CLICK: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
-pub const MOD_MASK_4CLICK: ::core::ffi::c_int = 0x60 as ::core::ffi::c_int;
-pub const MAX_KEY_CODE_LEN: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
-pub const READ_BUFFER_SIZE: ::core::ffi::c_int = 0xfff as ::core::ffi::c_int;
-pub const INPUT_BUFFER_SIZE: ::core::ffi::c_int =
-    READ_BUFFER_SIZE * 4 as ::core::ffi::c_int + MAX_KEY_CODE_LEN;
-static read_stream: GlobalCell<RStream> = GlobalCell::new(rstream {
-    s: stream {
-        closed: true_0 != 0,
-        uv: C2Rust_Unnamed_25 {
-            pipe: uv_pipe_t {
-                data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
-                type_0: UV_UNKNOWN_HANDLE,
-                close_cb: None,
-                handle_queue: uv__queue {
-                    next: ::core::ptr::null_mut::<uv__queue>(),
-                    prev: ::core::ptr::null_mut::<uv__queue>(),
-                },
-                u: C2Rust_Unnamed_7 { fd: 0 },
-                next_closing: ::core::ptr::null_mut::<uv_handle_t>(),
-                flags: 0,
-                write_queue_size: 0,
-                alloc_cb: None,
-                read_cb: None,
-                connect_req: ::core::ptr::null_mut::<uv_connect_t>(),
-                shutdown_req: ::core::ptr::null_mut::<uv_shutdown_t>(),
-                io_watcher: uv__io_t {
-                    cb: None,
-                    pending_queue: uv__queue {
-                        next: ::core::ptr::null_mut::<uv__queue>(),
-                        prev: ::core::ptr::null_mut::<uv__queue>(),
-                    },
-                    watcher_queue: uv__queue {
-                        next: ::core::ptr::null_mut::<uv__queue>(),
-                        prev: ::core::ptr::null_mut::<uv__queue>(),
-                    },
-                    pevents: 0,
-                    events: 0,
-                    fd: 0,
-                },
-                write_queue: uv__queue {
-                    next: ::core::ptr::null_mut::<uv__queue>(),
-                    prev: ::core::ptr::null_mut::<uv__queue>(),
-                },
-                write_completed_queue: uv__queue {
-                    next: ::core::ptr::null_mut::<uv__queue>(),
-                    prev: ::core::ptr::null_mut::<uv__queue>(),
-                },
-                connection_cb: None,
-                delayed_error: 0,
-                accepted_fd: 0,
-                queued_fds: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ipc: 0,
-                pipe_fname: ::core::ptr::null::<::core::ffi::c_char>(),
-            },
-        },
-        uvstream: ::core::ptr::null_mut::<uv_stream_t>(),
-        fd: 0,
-        fpos: 0,
-        cb_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        before_close_cb: None,
-        close_cb: None,
-        internal_close_cb: None,
-        close_cb_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        internal_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        pending_reqs: 0,
-        events: ::core::ptr::null_mut::<MultiQueue>(),
-        write_cb: None,
-        curmem: 0,
-        maxmem: 0,
+use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::mem::MaybeUninit;
+use core::ptr;
+
+const UV_TTY: uv_handle_type = 14;
+const PROF_YES: c_int = 1;
+/// The longest byte sequence one key can become: `K_SPECIAL KS_MODIFIER mod`
+/// plus `K_SPECIAL KS_EXTRA code`.
+const MAX_KEY_CODE_LEN: usize = 6;
+const READ_BUFFER_SIZE: usize = 0xfff;
+const INPUT_BUFFER_SIZE: usize = READ_BUFFER_SIZE * 4 + MAX_KEY_CODE_LEN;
+
+/// Upstream writes `{ .s.closed = true }`, which C defines as zero-filling
+/// every other field — eighty lines of `NULL`/`None`/`0` if transcribed.
+///
+/// SAFETY: every field of an [`RStream`] is a raw pointer, an integer, a
+/// `bool`, an `Option<fn>` or a `#[repr(C)]` union of those, and the all-zero
+/// bit pattern is a valid value of each (null, 0, false, and `None` by the
+/// null-pointer optimisation).
+const ZEROED_RSTREAM: RStream = unsafe { MaybeUninit::zeroed().assume_init() };
+
+/// stdin. Starts closed, because nothing is read until a UI attaches.
+static read_stream: GlobalCell<RStream> = GlobalCell::new(RStream {
+    s: Stream {
+        closed: true,
+        ..ZEROED_RSTREAM.s
     },
-    did_eof: false,
-    want_read: false,
-    pending_read: false,
-    paused_full: false,
-    buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    read_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    write_pos: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    uvbuf: uv_buf_t {
-        base: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        len: 0,
-    },
-    read_cb: None,
-    num_bytes: 0,
+    ..ZEROED_RSTREAM
 });
-static input_buffer: GlobalCell<[::core::ffi::c_char; 16386]> = GlobalCell::new([0; 16386]);
-static input_read_pos: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new((input_buffer.as_raw() as *const _) as *mut ::core::ffi::c_char);
-static input_write_pos: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new((input_buffer.as_raw() as *const _) as *mut ::core::ffi::c_char);
-static input_eof: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static blocking: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static cursorhold_time: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static cursorhold_tb_change_cnt: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(0 as ::core::ffi::c_int);
-pub unsafe extern "C" fn input_start() {
-    if !(*read_stream.ptr()).s.closed {
-        return;
-    }
-    used_stdin.set(true_0 != 0);
-    rstream_init_fd(main_loop.ptr(), read_stream.ptr(), STDIN_FILENO);
-    rstream_start(
-        read_stream.ptr(),
-        Some(
-            input_read_cb
-                as unsafe extern "C" fn(
-                    *mut RStream,
-                    *const ::core::ffi::c_char,
-                    size_t,
-                    *mut ::core::ffi::c_void,
-                    bool,
-                ) -> size_t,
-        ),
-        NULL,
-    );
-}
-pub unsafe extern "C" fn input_stop() {
-    if (*read_stream.ptr()).s.closed {
-        return;
-    }
-    rstream_stop(read_stream.ptr());
-    rstream_may_close(read_stream.ptr());
-}
-unsafe extern "C" fn cursorhold_event(mut _argv: *mut *mut ::core::ffi::c_void) {
-    let mut event: event_T = (if State.get() & MODE_INSERT != 0 {
-        EVENT_CURSORHOLDI as ::core::ffi::c_int
-    } else {
-        EVENT_CURSORHOLD as ::core::ffi::c_int
-    }) as event_T;
-    apply_autocmds(
-        event,
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        false_0 != 0,
-        curbuf.get(),
-    );
-    did_cursorhold.set(true_0 != 0);
-}
-unsafe extern "C" fn create_cursorhold_event(mut events_enabled: bool) {
-    '_c2rust_label: {
-        if !events_enabled || multiqueue_empty((*main_loop.ptr()).events) as ::core::ffi::c_int != 0
-        {
-        } else {
-            __assert_fail(
-                b"!events_enabled || multiqueue_empty(main_loop.events)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/os/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                83 as ::core::ffi::c_uint,
-                b"void create_cursorhold_event(_Bool)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+
+/// Bytes read from the OS and not yet handed to the typeahead.
+///
+/// `input_buffer[read_pos..write_pos]` is the unread run; see the module docs
+/// for why those are offsets and not pointers.
+static input_buffer: GlobalCell<[u8; INPUT_BUFFER_SIZE]> = GlobalCell::new([0; INPUT_BUFFER_SIZE]);
+static input_read_pos: GlobalCell<usize> = GlobalCell::new(0);
+static input_write_pos: GlobalCell<usize> = GlobalCell::new(0);
+
+static input_eof: GlobalCell<bool> = GlobalCell::new(false);
+static blocking: GlobalCell<bool> = GlobalCell::new(false);
+/// Time already spent waiting for a CursorHold, and the `tb_change_cnt` that
+/// wait started under — a change to the typeahead restarts the clock.
+static cursorhold_time: GlobalCell<c_int> = GlobalCell::new(0);
+static cursorhold_tb_change_cnt: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// Start reading stdin.
+pub fn input_start() {
+    // SAFETY: `read_stream` is this module's own static and libuv only ever
+    // touches it from the main thread; `input_read_cb` has the signature
+    // `rstream_start` demands and takes no data pointer.
+    unsafe {
+        if !(*read_stream.ptr()).s.closed {
+            return;
         }
-    };
-    multiqueue_put_event(
-        (*main_loop.ptr()).events,
-        Event {
-            handler: Some(
-                cursorhold_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
-            ),
-            argv: [
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            ],
-        },
-    );
+        used_stdin.set(true);
+        rstream_init_fd(main_loop.ptr(), read_stream.ptr(), STDIN_FILENO);
+        rstream_start(read_stream.ptr(), Some(input_read_cb), ptr::null_mut());
+    }
 }
-unsafe extern "C" fn reset_cursorhold_wait(mut tb_change_cnt: ::core::ffi::c_int) {
-    cursorhold_time.set(0 as ::core::ffi::c_int);
+
+/// Stop reading stdin.
+pub fn input_stop() {
+    // SAFETY: as `input_start`.
+    unsafe {
+        if (*read_stream.ptr()).s.closed {
+            return;
+        }
+        rstream_stop(read_stream.ptr());
+        rstream_may_close(read_stream.ptr());
+    }
+}
+
+/// The queued CursorHold, fired once the event loop gets to it.
+///
+/// # Safety
+/// An `argv_callback`; reads no argument.
+unsafe extern "C" fn cursorhold_event(_argv: *mut *mut c_void) {
+    let event = if State.get() & MODE_INSERT != 0 {
+        EVENT_CURSORHOLDI
+    } else {
+        EVENT_CURSORHOLD
+    } as event_T;
+    // SAFETY: no pattern and no filename, which `apply_autocmds` documents as
+    // "match on the current buffer's name"; `curbuf` is always live.
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, curbuf.get()) };
+    did_cursorhold.set(true);
+}
+
+fn create_cursorhold_event(events_enabled: bool) {
+    // SAFETY: `main_loop.events` is the process's event queue.
+    unsafe {
+        // If events are enabled and the queue has any items, this should not
+        // have been reached — `inbuf_poll` would have answered `kTrue`.
+        debug_assert!(!events_enabled || multiqueue_empty((*main_loop.ptr()).events));
+        multiqueue_put_event(
+            (*main_loop.ptr()).events,
+            Event::new(Some(cursorhold_event), []),
+        );
+    }
+}
+
+fn reset_cursorhold_wait(tb_change_cnt: c_int) {
+    cursorhold_time.set(0);
     cursorhold_tb_change_cnt.set(tb_change_cnt);
 }
-pub unsafe extern "C" fn input_get(
-    mut buf: *mut uint8_t,
-    mut maxlen: ::core::ffi::c_int,
-    mut ms: ::core::ffi::c_int,
-    mut tb_change_cnt: ::core::ffi::c_int,
-    mut events: *mut MultiQueue,
-) -> ::core::ffi::c_int {
+
+/// Move up to `maxlen` buffered bytes into `buf`, or 0 if there are none.
+///
+/// # Safety
+/// `buf` must be writable for `maxlen` bytes.
+unsafe fn try_read(buf: *mut uint8_t, maxlen: c_int, tb_change_cnt: c_int) -> Option<c_int> {
+    if maxlen == 0 || input_available() == 0 {
+        return None;
+    }
+    reset_cursorhold_wait(tb_change_cnt);
+    debug_assert!(maxlen >= 0);
+    let to_read = (maxlen as usize).min(input_available() as usize);
+    let from = input_read_pos.get();
+    input_buffer.with(|input| {
+        // SAFETY: the caller's contract, and `to_read` is bounded by both
+        // `maxlen` and the unread run, so the source range is in bounds.
+        unsafe { ptr::copy_nonoverlapping(input[from..].as_ptr(), buf, to_read) };
+    });
+    input_read_pos.set(from + to_read);
+    // Safe because INPUT_BUFFER_SIZE fits in an int.
+    Some(to_read as c_int)
+}
+
+/// Read OS input into `buf`, consuming pending events while waiting (when
+/// `ms != 0`).
+///
+/// Consumes available OS input and pending events, manages CursorHold, and
+/// handles EOF. Originally based on Vim's `mch_inchar`.
+///
+/// `ms` is a timeout in milliseconds: -1 waits indefinitely, 0 does not wait.
+/// `tb_change_cnt` is how typeahead changes are detected, and `events` is an
+/// optional queue to process.
+///
+/// # Safety
+/// `buf` must be writable for `maxlen` bytes, and `events` NULL or a live
+/// queue.
+pub unsafe fn input_get(
+    buf: *mut uint8_t,
+    maxlen: c_int,
+    ms: c_int,
+    tb_change_cnt: c_int,
+    events: *mut MultiQueue,
+) -> c_int {
+    // Needed so that feeding typeahead over RPC can prevent CursorHold.
     if tb_change_cnt != cursorhold_tb_change_cnt.get() {
         reset_cursorhold_wait(tb_change_cnt);
     }
-    if maxlen != 0 && input_available() != 0 {
-        reset_cursorhold_wait(tb_change_cnt);
-        '_c2rust_label: {
-            if maxlen >= 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"maxlen >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/os/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    129 as ::core::ffi::c_uint,
-                    b"int input_get(uint8_t *, int, int, int, MultiQueue *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        let mut to_read: size_t = if (maxlen as size_t) < input_available() {
-            maxlen as size_t
-        } else {
-            input_available()
-        };
-        memcpy(
-            buf as *mut ::core::ffi::c_void,
-            input_read_pos.get() as *const ::core::ffi::c_void,
-            to_read,
-        );
-        input_read_pos.set((*input_read_pos.ptr()).offset(to_read as isize));
-        '_c2rust_label_0: {
-            if to_read <= 2147483647 as ::core::ffi::c_int as size_t {
-            } else {
-                __assert_fail(
-                    b"to_read <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/os/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    129 as ::core::ffi::c_uint,
-                    b"int input_get(uint8_t *, int, int, int, MultiQueue *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        return to_read as ::core::ffi::c_int;
-    }
-    if (mapped_ctrl_c.get() | (*curbuf.get()).b_mapped_ctrl_c) & get_real_state() != 0 {
-        ctrl_c_interrupts.set(false_0 != 0);
-    }
-    let mut result: TriState = kFalse;
-    if ms >= 0 as ::core::ffi::c_int {
-        result = inbuf_poll(ms, events);
-        if result as ::core::ffi::c_int == kFalse as ::core::ffi::c_int {
-            return 0 as ::core::ffi::c_int;
+
+    // SAFETY: the caller's contract on `buf` and `events`; `curbuf`,
+    // `read_stream` and `main_loop` are always-live globals, and the
+    // getchar/autocmd entry points below take no pointer of ours.
+    unsafe {
+        if let Some(n) = try_read(buf, maxlen, tb_change_cnt) {
+            return n;
         }
-    } else {
-        let mut wait_start: uint64_t = os_hrtime();
-        cursorhold_time.set(
-            if cursorhold_time.get() < p_ut.get() as ::core::ffi::c_int {
-                cursorhold_time.get()
-            } else {
-                p_ut.get() as ::core::ffi::c_int
-            },
-        );
-        result = inbuf_poll(
-            p_ut.get() as ::core::ffi::c_int - cursorhold_time.get(),
-            events,
-        );
-        if result as ::core::ffi::c_int == kFalse as ::core::ffi::c_int {
-            if (*read_stream.ptr()).s.closed as ::core::ffi::c_int != 0
-                && silent_mode.get() as ::core::ffi::c_int != 0
-            {
-                read_error_exit();
-            }
-            reset_cursorhold_wait(tb_change_cnt);
-            if trigger_cursorhold() as ::core::ffi::c_int != 0 && !typebuf_changed(tb_change_cnt) {
-                create_cursorhold_event(events == (*main_loop.ptr()).events);
-            } else {
-                before_blocking();
-                result = inbuf_poll(-1 as ::core::ffi::c_int, events);
+
+        // No risk of a UI flood, so disable CTRL-C "interrupt" behaviour if
+        // it is mapped.
+        if (mapped_ctrl_c.get() | (*curbuf.get()).b_mapped_ctrl_c) & get_real_state() != 0 {
+            ctrl_c_interrupts.set(false);
+        }
+
+        let mut result = kFalse;
+        if ms >= 0 {
+            result = inbuf_poll(ms, events);
+            if result == kFalse {
+                return 0;
             }
         } else {
-            (*cursorhold_time.ptr()) += os_hrtime()
-                .wrapping_sub(wait_start)
-                .wrapping_div(1000000 as uint64_t)
-                as ::core::ffi::c_int;
+            let wait_start = os_hrtime();
+            cursorhold_time.set(cursorhold_time.get().min(p_ut.get() as c_int));
+            result = inbuf_poll(p_ut.get() as c_int - cursorhold_time.get(), events);
+            if result == kFalse {
+                if (*read_stream.ptr()).s.closed && silent_mode.get() {
+                    // Drained event loop and initial input; exit `-es`/`-Es`.
+                    read_error_exit();
+                }
+                reset_cursorhold_wait(tb_change_cnt);
+                if trigger_cursorhold() && !typebuf_changed(tb_change_cnt) {
+                    create_cursorhold_event(events == (*main_loop.ptr()).events);
+                } else {
+                    before_blocking();
+                    result = inbuf_poll(-1, events);
+                }
+            } else {
+                let waited = os_hrtime().wrapping_sub(wait_start) / 1_000_000;
+                cursorhold_time.set(cursorhold_time.get().wrapping_add(waited as c_int));
+            }
+        }
+
+        ctrl_c_interrupts.set(true);
+
+        // If input went straight into the typeahead buffer, bail out here.
+        if typebuf_changed(tb_change_cnt) {
+            return 0;
+        }
+
+        if let Some(n) = try_read(buf, maxlen, tb_change_cnt) {
+            return n;
+        }
+
+        // With events pending, hand back the keys directly.
+        if maxlen != 0 && pending_events(events) {
+            return push_event_key(buf, maxlen);
+        }
+
+        if result == kNone && ms != 0 {
+            read_error_exit();
         }
     }
-    ctrl_c_interrupts.set(true_0 != 0);
-    if typebuf_changed(tb_change_cnt) {
-        return 0 as ::core::ffi::c_int;
-    }
-    if maxlen != 0 && input_available() != 0 {
-        reset_cursorhold_wait(tb_change_cnt);
-        '_c2rust_label_1: {
-            if maxlen >= 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"maxlen >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/os/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    168 as ::core::ffi::c_uint,
-                    b"int input_get(uint8_t *, int, int, int, MultiQueue *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        let mut to_read_0: size_t = if (maxlen as size_t) < input_available() {
-            maxlen as size_t
-        } else {
-            input_available()
-        };
-        memcpy(
-            buf as *mut ::core::ffi::c_void,
-            input_read_pos.get() as *const ::core::ffi::c_void,
-            to_read_0,
-        );
-        input_read_pos.set((*input_read_pos.ptr()).offset(to_read_0 as isize));
-        '_c2rust_label_2: {
-            if to_read_0 <= 2147483647 as ::core::ffi::c_int as size_t {
-            } else {
-                __assert_fail(
-                    b"to_read <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/os/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    168 as ::core::ffi::c_uint,
-                    b"int input_get(uint8_t *, int, int, int, MultiQueue *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        return to_read_0 as ::core::ffi::c_int;
-    }
-    if maxlen != 0 && pending_events(events) as ::core::ffi::c_int != 0 {
-        return push_event_key(buf, maxlen);
-    }
-    if result as ::core::ffi::c_int == kNone as ::core::ffi::c_int && ms != 0 as ::core::ffi::c_int
-    {
-        read_error_exit();
-    }
-    return 0 as ::core::ffi::c_int;
+    0
 }
-pub unsafe extern "C" fn os_char_avail() -> bool {
-    return inbuf_poll(
-        0 as ::core::ffi::c_int,
-        ::core::ptr::null_mut::<MultiQueue>(),
-    ) as ::core::ffi::c_int
-        == kTrue as ::core::ffi::c_int;
+
+/// Whether a character is available for reading.
+pub fn os_char_avail() -> bool {
+    inbuf_poll(0, ptr::null_mut()) == kTrue
 }
-pub unsafe extern "C" fn os_breakcheck() {
+
+/// Poll for fast events; sets `got_int` if CTRL-C was typed.
+///
+/// This runs a full libuv loop iteration, which is expensive — prefer
+/// [`line_breakcheck`] in a busy inner loop. The caller must at least check
+/// `got_int` before calling again, and often wants `input_available()` too,
+/// to throttle idle processing while there is user input waiting.
+pub fn os_breakcheck() {
     if got_int.get() {
         return;
     }
-    loop_poll_events(main_loop.ptr(), 0 as int64_t);
+    // SAFETY: `main_loop` is the process's event loop, always live.
+    unsafe { loop_poll_events(main_loop.ptr(), 0) };
 }
-pub const BREAKCHECK_SKIP: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
-static breakcheck_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-pub unsafe extern "C" fn line_breakcheck() {
-    (*breakcheck_count.ptr()) += 1;
-    if breakcheck_count.get() >= BREAKCHECK_SKIP {
-        breakcheck_count.set(0 as ::core::ffi::c_int);
+
+const BREAKCHECK_SKIP: c_int = 1000;
+static breakcheck_count: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// [`os_breakcheck`], but only once every `every` calls.
+fn breakcheck_every(every: c_int) {
+    let count = breakcheck_count.get() + 1;
+    if count >= every {
+        breakcheck_count.set(0);
         os_breakcheck();
-    }
-}
-pub unsafe extern "C" fn fast_breakcheck() {
-    (*breakcheck_count.ptr()) += 1;
-    if breakcheck_count.get() >= BREAKCHECK_SKIP * 10 as ::core::ffi::c_int {
-        breakcheck_count.set(0 as ::core::ffi::c_int);
-        os_breakcheck();
-    }
-}
-pub unsafe extern "C" fn veryfast_breakcheck() {
-    (*breakcheck_count.ptr()) += 1;
-    if breakcheck_count.get() >= BREAKCHECK_SKIP * 100 as ::core::ffi::c_int {
-        breakcheck_count.set(0 as ::core::ffi::c_int);
-        os_breakcheck();
-    }
-}
-pub unsafe extern "C" fn os_isatty(mut fd: ::core::ffi::c_int) -> bool {
-    return uv_guess_handle(fd as uv_file) as ::core::ffi::c_uint
-        == UV_TTY as ::core::ffi::c_int as ::core::ffi::c_uint;
-}
-pub unsafe extern "C" fn input_available() -> size_t {
-    return (*input_write_pos.ptr()).offset_from(input_read_pos.get()) as size_t;
-}
-unsafe extern "C" fn input_space() -> size_t {
-    return (input_buffer.ptr() as *mut ::core::ffi::c_char)
-        .offset(INPUT_BUFFER_SIZE as isize)
-        .offset_from(input_write_pos.get()) as size_t;
-}
-pub unsafe extern "C" fn input_enqueue_raw(mut data: *const ::core::ffi::c_char, mut size: size_t) {
-    if input_read_pos.get() > input_buffer.ptr() as *mut ::core::ffi::c_char {
-        let mut available: size_t = input_available();
-        memmove(
-            input_buffer.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
-            input_read_pos.get() as *const ::core::ffi::c_void,
-            available,
-        );
-        input_read_pos.set(input_buffer.ptr() as *mut ::core::ffi::c_char);
-        input_write_pos
-            .set((input_buffer.ptr() as *mut ::core::ffi::c_char).offset(available as isize));
-    }
-    let mut to_write: size_t = if size < input_space() {
-        size
     } else {
-        input_space()
-    };
-    memcpy(
-        input_write_pos.get() as *mut ::core::ffi::c_void,
-        data as *const ::core::ffi::c_void,
-        to_write,
-    );
-    input_write_pos.set((*input_write_pos.ptr()).offset(to_write as isize));
+        breakcheck_count.set(count);
+    }
 }
-pub unsafe extern "C" fn input_enqueue(mut chan_id: uint64_t, mut keys: String_0) -> size_t {
+
+/// Check for CTRL-C, but only once in a while.
+///
+/// Use this rather than [`os_breakcheck`] in anything that runs per line of a
+/// file: `os_breakcheck` makes system calls and is far too slow to do that
+/// often.
+pub fn line_breakcheck() {
+    breakcheck_every(BREAKCHECK_SKIP);
+}
+
+/// [`line_breakcheck`], checking ten times less often.
+pub fn fast_breakcheck() {
+    breakcheck_every(BREAKCHECK_SKIP * 10);
+}
+
+/// [`line_breakcheck`], checking a hundred times less often.
+pub fn veryfast_breakcheck() {
+    breakcheck_every(BREAKCHECK_SKIP * 100);
+}
+
+/// Whether file descriptor `fd` refers to a terminal.
+pub fn os_isatty(fd: c_int) -> bool {
+    // SAFETY: libuv classifies a descriptor without dereferencing anything.
+    unsafe { uv_guess_handle(fd) == UV_TTY }
+}
+
+/// How many bytes are buffered and unread.
+pub fn input_available() -> size_t {
+    (input_write_pos.get() - input_read_pos.get()) as size_t
+}
+
+/// How much room is left at the end of the buffer.
+fn input_space() -> usize {
+    INPUT_BUFFER_SIZE - input_write_pos.get()
+}
+
+/// Append `data` to the input buffer, dropping whatever does not fit.
+///
+/// # Safety
+/// `data` must be readable for `size` bytes.
+pub unsafe fn input_enqueue_raw(data: *const c_char, size: size_t) {
+    // SAFETY: the caller's contract.
+    let data = unsafe { core::slice::from_raw_parts(data.cast::<u8>(), size) };
+    enqueue(data);
+}
+
+/// The safe half of [`input_enqueue_raw`].
+fn enqueue(data: &[u8]) {
+    input_buffer.with_mut(|input| {
+        let (read, write) = (input_read_pos.get(), input_write_pos.get());
+        // Reclaim the room already consumed by moving the unread run to the
+        // front. The buffer is a window, not a ring.
+        let write = if read > 0 {
+            input.copy_within(read..write, 0);
+            input_read_pos.set(0);
+            write - read
+        } else {
+            write
+        };
+        let to_write = data.len().min(INPUT_BUFFER_SIZE - write);
+        input[write..write + to_write].copy_from_slice(&data[..to_write]);
+        input_write_pos.set(write + to_write);
+    });
+}
+
+/// A `<x>` form takes at least one character and produces at most nineteen
+/// (one plus five times three for the character, three for a modifier).
+const MAX_TRANS_SPECIAL: usize = 19;
+
+/// Feed `keys` — key *notation*, not raw bytes — from channel `chan_id`.
+///
+/// Returns how many bytes of `keys` were consumed; an incomplete trailing
+/// `<...>` is left for the next call.
+///
+/// # Safety
+/// `keys` must describe a live, readable byte run.
+pub unsafe fn input_enqueue(chan_id: uint64_t, keys: String_0) -> size_t {
     current_ui.set(chan_id);
-    let mut ptr: *const ::core::ffi::c_char = keys.data;
-    let mut end: *const ::core::ffi::c_char = ptr.offset(keys.size as isize);
-    while input_space() >= 19 as size_t && ptr < end {
-        let mut buf: [uint8_t; 19] = [
-            0 as uint8_t,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-        ];
-        let mut new_size: ::core::ffi::c_uint = trans_special(
-            &raw mut ptr,
-            end.offset_from(ptr) as size_t,
-            &raw mut buf as *mut uint8_t as *mut ::core::ffi::c_char,
-            FSK_KEYCODE as ::core::ffi::c_int,
-            true_0 != 0,
-            ::core::ptr::null_mut::<bool>(),
-        );
-        if new_size > 0 as ::core::ffi::c_uint {
-            new_size = handle_mouse_event(&raw mut ptr, &raw mut buf as *mut uint8_t, new_size);
-            if new_size > 0 as ::core::ffi::c_uint {
-                input_enqueue_raw(
-                    &raw mut buf as *mut uint8_t as *mut ::core::ffi::c_char,
-                    new_size as size_t,
-                );
+
+    // SAFETY: the caller's contract. Every pointer below is derived from
+    // `keys.data` and the loop never lets `ptr` past `end`, except for the
+    // one-past-the-end read of the `'<'` skip — which lands on the NUL that
+    // terminates every `String` nvim builds, exactly as upstream's does.
+    // `buf` is sized for the longest sequence `trans_special` can produce,
+    // and no `did_simplify` answer is wanted: simplification happens later,
+    // in the typeahead.
+    unsafe {
+        let mut ptr = keys.data as *const c_char;
+        let end = ptr.add(keys.size);
+
+        while input_space() >= MAX_TRANS_SPECIAL && ptr < end {
+            let mut buf = [0u8; MAX_TRANS_SPECIAL];
+            let new_size = trans_special(
+                &raw mut ptr,
+                end.offset_from(ptr) as size_t,
+                buf.as_mut_ptr().cast::<c_char>(),
+                FSK_KEYCODE,
+                true,
+                ptr::null_mut(),
+            );
+
+            if new_size > 0 {
+                let new_size = handle_mouse_event(&mut ptr, end, &mut buf, new_size);
+                if new_size > 0 {
+                    enqueue(&buf[..new_size as usize]);
+                }
+                continue;
             }
-        } else if *ptr as ::core::ffi::c_int == '<' as ::core::ffi::c_int {
-            let mut old_ptr: *const ::core::ffi::c_char = ptr;
-            loop {
-                ptr = ptr.offset(1);
-                if !(ptr < end && *ptr as ::core::ffi::c_int != '>' as ::core::ffi::c_int) {
+
+            let byte = *ptr as u8;
+            if byte == b'<' {
+                // An invalid or incomplete key sequence: skip to the next '>'.
+                let old_ptr = ptr;
+                loop {
+                    ptr = ptr.add(1);
+                    if ptr >= end || *ptr == b'>' as c_char {
+                        break;
+                    }
+                }
+                if *ptr != b'>' as c_char {
+                    // Incomplete: hand it back unconsumed.
+                    ptr = old_ptr;
                     break;
                 }
+                ptr = ptr.add(1);
+                continue;
             }
-            if *ptr as ::core::ffi::c_int != '>' as ::core::ffi::c_int {
-                ptr = old_ptr;
-                break;
+
+            // Copy the character across, escaping K_SPECIAL.
+            if byte as c_int == K_SPECIAL {
+                enqueue(&[K_SPECIAL as u8, KS_SPECIAL as u8, KE_FILLER as u8]);
             } else {
-                ptr = ptr.offset(1);
+                enqueue(&[byte]);
             }
-        } else {
-            if *ptr as uint8_t as ::core::ffi::c_int == K_SPECIAL {
-                let mut c2rust_lvalue: uint8_t = K_SPECIAL as uint8_t;
-                input_enqueue_raw(
-                    &raw mut c2rust_lvalue as *mut ::core::ffi::c_char,
-                    1 as size_t,
-                );
-                let mut c2rust_lvalue_0: uint8_t = KS_SPECIAL as uint8_t;
-                input_enqueue_raw(
-                    &raw mut c2rust_lvalue_0 as *mut ::core::ffi::c_char,
-                    1 as size_t,
-                );
-                let mut c2rust_lvalue_1: uint8_t = KE_FILLER as uint8_t;
-                input_enqueue_raw(
-                    &raw mut c2rust_lvalue_1 as *mut ::core::ffi::c_char,
-                    1 as size_t,
-                );
-            } else {
-                input_enqueue_raw(ptr, 1 as size_t);
-            }
-            ptr = ptr.offset(1);
+            ptr = ptr.add(1);
         }
+
+        let consumed = ptr.offset_from(keys.data as *const c_char) as size_t;
+        process_ctrl_c();
+        consumed
     }
-    let mut rv: size_t = ptr.offset_from(keys.data) as size_t;
-    process_ctrl_c();
-    return rv;
 }
-unsafe extern "C" fn check_multiclick(
-    mut code: ::core::ffi::c_int,
-    mut grid: ::core::ffi::c_int,
-    mut row: ::core::ffi::c_int,
-    mut col: ::core::ffi::c_int,
-    mut skip_event: *mut bool,
-) -> uint8_t {
-    static orig_num_clicks: GlobalCell<::core::ffi::c_int> =
-        GlobalCell::new(0 as ::core::ffi::c_int);
-    static orig_mouse_code: GlobalCell<::core::ffi::c_int> =
-        GlobalCell::new(0 as ::core::ffi::c_int);
-    static orig_mouse_grid: GlobalCell<::core::ffi::c_int> =
-        GlobalCell::new(0 as ::core::ffi::c_int);
-    static orig_mouse_col: GlobalCell<::core::ffi::c_int> =
-        GlobalCell::new(0 as ::core::ffi::c_int);
-    static orig_mouse_row: GlobalCell<::core::ffi::c_int> =
-        GlobalCell::new(0 as ::core::ffi::c_int);
-    static orig_mouse_time: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
-    if code >= KE_MOUSEDOWN as ::core::ffi::c_int && code <= KE_MOUSERIGHT as ::core::ffi::c_int {
-        return 0 as uint8_t;
+
+/// How many clicks in a row, and where the last one was.
+static orig_num_clicks: GlobalCell<c_int> = GlobalCell::new(0);
+static orig_mouse_code: GlobalCell<c_int> = GlobalCell::new(0);
+static orig_mouse_grid: GlobalCell<c_int> = GlobalCell::new(0);
+static orig_mouse_col: GlobalCell<c_int> = GlobalCell::new(0);
+static orig_mouse_row: GlobalCell<c_int> = GlobalCell::new(0);
+/// When the previous click was, in nanoseconds.
+static orig_mouse_time: GlobalCell<uint64_t> = GlobalCell::new(0);
+
+/// The `MOD_MASK_*CLICK` modifier this mouse event carries, or `None` when the
+/// event should be dropped entirely — which happens for a mouse *move* that
+/// did not move.
+fn check_multiclick(code: c_int, grid: c_int, row: c_int, col: c_int) -> Option<uint8_t> {
+    if (KE_MOUSEDOWN as c_int..=KE_MOUSERIGHT as c_int).contains(&code) {
+        return Some(0);
     }
-    let mut no_move: bool =
+
+    let no_move =
         orig_mouse_grid.get() == grid && orig_mouse_col.get() == col && orig_mouse_row.get() == row;
-    if code == KE_MOUSEMOVE as ::core::ffi::c_int {
+
+    if code == KE_MOUSEMOVE as c_int {
         if no_move {
-            *skip_event = true_0 != 0;
-            return 0 as uint8_t;
+            return None;
         }
-    } else if code == KE_LEFTMOUSE as ::core::ffi::c_int
-        || code == KE_RIGHTMOUSE as ::core::ffi::c_int
-        || code == KE_MIDDLEMOUSE as ::core::ffi::c_int
-        || code == KE_X1MOUSE as ::core::ffi::c_int
-        || code == KE_X2MOUSE as ::core::ffi::c_int
+    } else if [
+        KE_LEFTMOUSE,
+        KE_RIGHTMOUSE,
+        KE_MIDDLEMOUSE,
+        KE_X1MOUSE,
+        KE_X2MOUSE,
+    ]
+    .contains(&(code as key_extra))
     {
-        let mut mouse_time: uint64_t = os_hrtime();
-        let mut timediff: uint64_t = mouse_time.wrapping_sub(orig_mouse_time.get());
-        let mut mouset: uint64_t = (p_mouset.get() as uint64_t).wrapping_mul(1000000 as uint64_t);
-        if code == orig_mouse_code.get()
-            && no_move as ::core::ffi::c_int != 0
+        // For a click event the run length is updated; a drag or a release
+        // keeps whatever the click before it established.
+        let mouse_time = os_hrtime();
+        let timediff = mouse_time.wrapping_sub(orig_mouse_time.get());
+        // 'mousetime' is in milliseconds, `os_hrtime` in nanoseconds.
+        let mouset = (p_mouset.get() as uint64_t).wrapping_mul(1_000_000);
+        let same_click = code == orig_mouse_code.get()
+            && no_move
             && timediff < mouset
-            && orig_num_clicks.get() != 4 as ::core::ffi::c_int
-        {
-            (*orig_num_clicks.ptr()) += 1;
+            && orig_num_clicks.get() != 4;
+        orig_num_clicks.set(if same_click {
+            orig_num_clicks.get() + 1
         } else {
-            orig_num_clicks.set(1 as ::core::ffi::c_int);
-        }
+            1
+        });
         orig_mouse_code.set(code);
         orig_mouse_time.set(mouse_time);
     }
+
     orig_mouse_grid.set(grid);
     orig_mouse_col.set(col);
     orig_mouse_row.set(row);
-    let mut modifiers: uint8_t = 0 as uint8_t;
-    if code != KE_MOUSEMOVE as ::core::ffi::c_int {
-        if orig_num_clicks.get() == 2 as ::core::ffi::c_int {
-            modifiers = (modifiers as ::core::ffi::c_int | MOD_MASK_2CLICK) as uint8_t;
-        } else if orig_num_clicks.get() == 3 as ::core::ffi::c_int {
-            modifiers = (modifiers as ::core::ffi::c_int | MOD_MASK_3CLICK) as uint8_t;
-        } else if orig_num_clicks.get() == 4 as ::core::ffi::c_int {
-            modifiers = (modifiers as ::core::ffi::c_int | MOD_MASK_4CLICK) as uint8_t;
-        }
+
+    if code == KE_MOUSEMOVE as c_int {
+        return Some(0);
     }
-    return modifiers;
+    Some(match orig_num_clicks.get() {
+        2 => MOD_MASK_2CLICK as uint8_t,
+        3 => MOD_MASK_3CLICK as uint8_t,
+        4 => MOD_MASK_4CLICK as uint8_t,
+        _ => 0,
+    })
 }
-unsafe extern "C" fn handle_mouse_event(
-    mut ptr: *mut *const ::core::ffi::c_char,
-    mut buf: *mut uint8_t,
-    mut bufsize: ::core::ffi::c_uint,
-) -> ::core::ffi::c_uint {
-    let mut mouse_code: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut type_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if bufsize == 3 as ::core::ffi::c_uint {
-        mouse_code = *buf.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
-        type_0 = *buf.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
-    } else if bufsize == 6 as ::core::ffi::c_uint {
-        mouse_code = *buf.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
-        type_0 = *buf.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
+
+/// The `<`*col*`,`*row*`>` suffix a mouse key sequence may carry, and how many
+/// bytes it took — upstream's `sscanf(*ptr, "<%d,%d>%n", …)`, with `%d`'s
+/// leading whitespace and optional sign.
+///
+/// `None` means the format did not match, which upstream distinguishes only
+/// by `%n` never being reached.
+fn scan_mouse_pos(s: &[u8]) -> Option<(c_int, c_int, usize)> {
+    /// `%d`: whitespace, an optional sign, then at least one digit. Saturates
+    /// rather than wrapping, which is the one place this is *not* `sscanf`:
+    /// C leaves an out-of-range conversion undefined.
+    fn scan_int(s: &[u8]) -> Option<(c_int, usize)> {
+        let mut at = 0;
+        while s.get(at).is_some_and(u8::is_ascii_whitespace) {
+            at += 1;
+        }
+        let negative = match s.get(at) {
+            Some(b'-') => {
+                at += 1;
+                true
+            }
+            Some(b'+') => {
+                at += 1;
+                false
+            }
+            _ => false,
+        };
+        let digits = at;
+        let mut value: i64 = 0;
+        while let Some(d) = s.get(at).filter(|b| b.is_ascii_digit()) {
+            value = value.saturating_mul(10).saturating_add((d - b'0') as i64);
+            at += 1;
+        }
+        if at == digits {
+            return None;
+        }
+        let value = if negative { -value } else { value };
+        Some((
+            value.clamp(c_int::MIN as i64, c_int::MAX as i64) as c_int,
+            at,
+        ))
     }
-    if type_0 != KS_EXTRA
-        || !(mouse_code >= KE_LEFTMOUSE as ::core::ffi::c_int
-            && mouse_code <= KE_RIGHTRELEASE as ::core::ffi::c_int
-            || mouse_code >= KE_X1MOUSE as ::core::ffi::c_int
-                && mouse_code <= KE_X2RELEASE as ::core::ffi::c_int
-            || mouse_code >= KE_MOUSEDOWN as ::core::ffi::c_int
-                && mouse_code <= KE_MOUSERIGHT as ::core::ffi::c_int
-            || mouse_code == KE_MOUSEMOVE as ::core::ffi::c_int)
-    {
+
+    let after_lt = s.strip_prefix(b"<")?;
+    let (col, col_len) = scan_int(after_lt)?;
+    let after_comma = after_lt[col_len..].strip_prefix(b",")?;
+    let (row, row_len) = scan_int(after_comma)?;
+    // What `%n` records: how far into `s` — not into whatever the last step
+    // stripped — the whole format reached.
+    let rest = after_comma[row_len..].strip_prefix(b">")?;
+    Some((col, row, s.len() - rest.len()))
+}
+
+/// Extract a mouse event's row and column, and detect multiple clicks.
+///
+/// Answers the new length of `buf`, which is zero when the event is to be
+/// dropped.
+///
+/// # Safety
+/// `*ptr` must be inside a run ending at `end`.
+unsafe fn handle_mouse_event(
+    ptr: &mut *const c_char,
+    end: *const c_char,
+    buf: &mut [u8; MAX_TRANS_SPECIAL],
+    bufsize: c_uint,
+) -> c_uint {
+    // A modifier prefix, if there is one, pushes the event three bytes along.
+    let (mouse_code, kind) = match bufsize {
+        3 => (buf[2] as c_int, buf[1] as c_int),
+        6 => (buf[5] as c_int, buf[4] as c_int),
+        _ => (0, 0),
+    };
+
+    let is_mouse = (KE_LEFTMOUSE as c_int..=KE_RIGHTRELEASE as c_int).contains(&mouse_code)
+        || (KE_X1MOUSE as c_int..=KE_X2RELEASE as c_int).contains(&mouse_code)
+        || (KE_MOUSEDOWN as c_int..=KE_MOUSERIGHT as c_int).contains(&mouse_code)
+        || mouse_code == KE_MOUSEMOVE as c_int;
+    if kind != KS_EXTRA || !is_mouse {
         return bufsize;
     }
-    let mut col: ::core::ffi::c_int = 0;
-    let mut row: ::core::ffi::c_int = 0;
-    let mut advance: ::core::ffi::c_int = 0;
-    if sscanf(
-        *ptr,
-        b"<%d,%d>%n\0".as_ptr() as *const ::core::ffi::c_char,
-        &raw mut col,
-        &raw mut row,
-        &raw mut advance,
-    ) != EOF
-        && advance != 0
-    {
-        if col >= 0 as ::core::ffi::c_int && row >= 0 as ::core::ffi::c_int {
-            if col >= Columns.get() {
-                col = Columns.get() - 1 as ::core::ffi::c_int;
-            }
-            if row >= Rows.get() {
-                row = Rows.get() - 1 as ::core::ffi::c_int;
-            }
-            mouse_grid.set(0 as ::core::ffi::c_int);
-            mouse_row.set(row);
-            mouse_col.set(col);
+
+    // A `<col,row>` sequence can follow, and sets the mouse_row/mouse_col
+    // globals. That is ugly, but it is how the rest of the code expects to
+    // find mouse coordinates.
+    // SAFETY: the caller's contract puts `*ptr` inside the run ending at
+    // `end`.
+    let rest =
+        unsafe { core::slice::from_raw_parts(ptr.cast::<u8>(), end.offset_from(*ptr) as usize) };
+    if let Some((col, row, advance)) = scan_mouse_pos(rest) {
+        if col >= 0 && row >= 0 {
+            // Some terminals report positions off the screen.
+            mouse_grid.set(0);
+            mouse_row.set(row.min(Rows.get() - 1));
+            mouse_col.set(col.min(Columns.get() - 1));
         }
-        *ptr = (*ptr).offset(advance as isize);
+        // SAFETY: `advance` counts bytes of `rest`, so it stays within `end`.
+        *ptr = unsafe { ptr.add(advance) };
     }
-    let mut skip_event: bool = false_0 != 0;
-    let mut modifiers: uint8_t = check_multiclick(
+
+    let Some(modifiers) = check_multiclick(
         mouse_code,
         mouse_grid.get(),
         mouse_row.get(),
         mouse_col.get(),
-        &raw mut skip_event,
-    );
-    if skip_event {
-        return 0 as ::core::ffi::c_uint;
+    ) else {
+        return 0;
+    };
+
+    if modifiers == 0 {
+        return bufsize;
     }
-    if modifiers != 0 {
-        if *buf.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != KS_MODIFIER {
-            memcpy(
-                buf.offset(3 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-                buf as *const ::core::ffi::c_void,
-                3 as size_t,
-            );
-            *buf.offset(0 as ::core::ffi::c_int as isize) = K_SPECIAL as uint8_t;
-            *buf.offset(1 as ::core::ffi::c_int as isize) = KS_MODIFIER as uint8_t;
-            *buf.offset(2 as ::core::ffi::c_int as isize) = modifiers;
-            bufsize = bufsize.wrapping_add(3 as ::core::ffi::c_uint);
-        } else {
-            *buf.offset(2 as ::core::ffi::c_int as isize) =
-                (*buf.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    | modifiers as ::core::ffi::c_int) as uint8_t;
-        }
+    if buf[1] as c_int == KS_MODIFIER {
+        buf[2] |= modifiers;
+        return bufsize;
     }
-    return bufsize;
+    // No modifiers in the buffer yet: shift the event three bytes along and
+    // write the modifier sequence in front of it.
+    buf.copy_within(0..3, 3);
+    buf[0] = K_SPECIAL as u8;
+    buf[1] = KS_MODIFIER as u8;
+    buf[2] = modifiers;
+    bufsize + 3
 }
-pub unsafe extern "C" fn input_enqueue_mouse(
-    mut code: ::core::ffi::c_int,
-    mut modifier: uint8_t,
-    mut grid: ::core::ffi::c_int,
-    mut row: ::core::ffi::c_int,
-    mut col: ::core::ffi::c_int,
-) {
-    let mut skip_event: bool = false_0 != 0;
-    modifier = (modifier as ::core::ffi::c_int
-        | check_multiclick(code, grid, row, col, &raw mut skip_event) as ::core::ffi::c_int)
-        as uint8_t;
-    if skip_event {
+
+/// Feed a mouse event that arrived already decoded — over RPC, rather than as
+/// key notation.
+pub fn input_enqueue_mouse(code: c_int, modifier: uint8_t, grid: c_int, row: c_int, col: c_int) {
+    let Some(clicks) = check_multiclick(code, grid, row, col) else {
         return;
-    }
-    let mut buf: [uint8_t; 7] = [0; 7];
-    let mut p: *mut uint8_t = &raw mut buf as *mut uint8_t;
-    if modifier != 0 {
-        *p.offset(0 as ::core::ffi::c_int as isize) = K_SPECIAL as uint8_t;
-        *p.offset(1 as ::core::ffi::c_int as isize) = KS_MODIFIER as uint8_t;
-        *p.offset(2 as ::core::ffi::c_int as isize) = modifier;
-        p = p.offset(3 as ::core::ffi::c_int as isize);
-    }
-    *p.offset(0 as ::core::ffi::c_int as isize) = K_SPECIAL as uint8_t;
-    *p.offset(1 as ::core::ffi::c_int as isize) = KS_EXTRA as uint8_t;
-    *p.offset(2 as ::core::ffi::c_int as isize) = code as uint8_t;
+    };
+    let modifier = modifier | clicks;
+
+    let mut buf = [0u8; 6];
+    let at = if modifier != 0 {
+        buf[..3].copy_from_slice(&[K_SPECIAL as u8, KS_MODIFIER as u8, modifier]);
+        3
+    } else {
+        0
+    };
+    buf[at..at + 3].copy_from_slice(&[K_SPECIAL as u8, KS_EXTRA as u8, code as u8]);
+
     mouse_grid.set(grid);
     mouse_row.set(row);
     mouse_col.set(col);
-    let mut written: size_t =
-        (3 as size_t).wrapping_add(p.offset_from(&raw mut buf as *mut uint8_t) as size_t);
-    input_enqueue_raw(
-        &raw mut buf as *mut uint8_t as *mut ::core::ffi::c_char,
-        written,
-    );
+
+    enqueue(&buf[..at + 3]);
 }
-pub unsafe extern "C" fn input_blocking() -> bool {
-    return blocking.get();
+
+/// Whether the main loop is blocked waiting for input.
+pub fn input_blocking() -> bool {
+    blocking.get()
 }
-unsafe extern "C" fn inbuf_poll(
-    mut ms: ::core::ffi::c_int,
-    mut events: *mut MultiQueue,
-) -> TriState {
-    if os_input_ready(events) {
-        return kTrue;
-    }
-    if do_profiling.get() == PROF_YES && ms != 0 {
-        prof_input_start();
-    }
-    if (ms == -1 as ::core::ffi::c_int || ms > 0 as ::core::ffi::c_int)
-        && events != (*main_loop.ptr()).events
-        && !input_eof.get()
-    {
-        blocking.set(true_0 != 0);
-        multiqueue_process_events(ch_before_blocking_events.get());
-    }
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"inbuf_poll\0".as_ptr() as *const ::core::ffi::c_char,
-        514 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"blocking... events=%s\0".as_ptr() as *const ::core::ffi::c_char,
-        if !events.is_null() {
-            b"true\0".as_ptr() as *const ::core::ffi::c_char
+
+/// Check for (but do not read) available input, consuming `main_loop.events`
+/// while waiting.
+///
+/// `ms` is a timeout in milliseconds; -1 waits indefinitely and 0 does not
+/// wait. `events` is an optional queue to check for pending events. Answers
+/// `kTrue` for input or events available, `kFalse` for neither, and `kNone`
+/// once the input stream has reached EOF.
+fn inbuf_poll(ms: c_int, events: *mut MultiQueue) -> TriState {
+    // SAFETY: `events` is NULL or a live queue, and `main_loop` is the
+    // process's event loop.
+    unsafe {
+        if os_input_ready(events) {
+            return kTrue;
+        }
+
+        if do_profiling.get() == PROF_YES && ms != 0 {
+            prof_input_start();
+        }
+
+        if (ms == -1 || ms > 0) && events != (*main_loop.ptr()).events && !input_eof.get() {
+            // The pending input provoked a blocking wait. Do special events
+            // now. #6247
+            blocking.set(true);
+            multiqueue_process_events(ch_before_blocking_events.get());
+        }
+        logmsg(
+            LOGLVL_DBG,
+            ptr::null(),
+            c"inbuf_poll".as_ptr(),
+            514,
+            true,
+            c"blocking... events=%s".as_ptr(),
+            if events.is_null() {
+                c"false".as_ptr()
+            } else {
+                c"true".as_ptr()
+            },
+        );
+        // Upstream polls with a NULL queue here, so the macro's "drain this
+        // queue instead" branch is dead: `events` is only read by
+        // `os_input_ready`.
+        process_events_until(main_loop.ptr(), ptr::null_mut(), ms as i64, || {
+            os_input_ready(events) || input_eof.get()
+        });
+        blocking.set(false);
+
+        if do_profiling.get() == PROF_YES && ms != 0 {
+            prof_input_end();
+        }
+
+        if os_input_ready(events) {
+            kTrue
+        } else if input_eof.get() {
+            kNone
         } else {
-            b"false\0".as_ptr() as *const ::core::ffi::c_char
-        },
-    );
-    // Upstream polls with a NULL queue here, so the macro's "drain this queue
-    // instead" branch is dead: `events` is only read by `os_input_ready`.
-    process_events_until(
-        main_loop.ptr(),
-        ::core::ptr::null_mut(),
-        ms as int64_t,
-        || os_input_ready(events) || input_eof.get(),
-    );
-    blocking.set(false_0 != 0);
-    if do_profiling.get() == PROF_YES && ms != 0 {
-        prof_input_end();
+            kFalse
+        }
     }
-    if os_input_ready(events) {
-        return kTrue;
-    }
-    return (if input_eof.get() as ::core::ffi::c_int != 0 {
-        kNone as ::core::ffi::c_int
-    } else {
-        kFalse as ::core::ffi::c_int
-    }) as TriState;
 }
+
+/// libuv's read callback: everything that arrives on stdin lands here.
+///
+/// # Safety
+/// An `stream_read_cb`; `buf` must be readable for `count` bytes.
 unsafe extern "C" fn input_read_cb(
-    mut _stream: *mut RStream,
-    mut buf: *const ::core::ffi::c_char,
-    mut c: size_t,
-    mut _data: *mut ::core::ffi::c_void,
-    mut at_eof: bool,
+    _stream: *mut RStream,
+    buf: *const c_char,
+    count: size_t,
+    _data: *mut c_void,
+    at_eof: bool,
 ) -> size_t {
     if at_eof {
-        input_eof.set(true_0 != 0);
+        input_eof.set(true);
     }
-    '_c2rust_label: {
-        if input_space() >= c {
-        } else {
-            __assert_fail(
-                b"input_space() >= c\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/os/input.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                534 as ::core::ffi::c_uint,
-                b"size_t input_read_cb(RStream *, const char *, size_t, void *, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    input_enqueue_raw(buf, c);
-    return c;
+    // The stream's own buffer is smaller than ours, so a read always fits.
+    debug_assert!(input_space() >= count);
+    // SAFETY: the caller's contract.
+    unsafe { input_enqueue_raw(buf, count) };
+    count
 }
-unsafe extern "C" fn process_ctrl_c() {
+
+/// Reverse-search the buffered input for a CTRL-C, and discard everything
+/// typed before it.
+fn process_ctrl_c() {
     if !ctrl_c_interrupts.get() {
         return;
     }
-    let mut available: size_t = input_available();
-    let mut i: ssize_t = 0;
-    i = available as ssize_t - 1 as ssize_t;
-    while i >= 0 as ssize_t {
-        let mut c: uint8_t = *(*input_read_pos.ptr()).offset(i as isize) as uint8_t;
-        if c as ::core::ffi::c_int == Ctrl_C
-            || c as ::core::ffi::c_int == 'C' as ::core::ffi::c_int
-                && i >= 3 as ssize_t
-                && *(*input_read_pos.ptr()).offset((i - 3 as ssize_t) as isize) as uint8_t
-                    as ::core::ffi::c_int
-                    == K_SPECIAL
-                && *(*input_read_pos.ptr()).offset((i - 2 as ssize_t) as isize) as uint8_t
-                    as ::core::ffi::c_int
-                    == KS_MODIFIER
-                && *(*input_read_pos.ptr()).offset((i - 1 as ssize_t) as isize) as uint8_t
-                    as ::core::ffi::c_int
-                    == MOD_MASK_CTRL
-        {
-            *(*input_read_pos.ptr()).offset(i as isize) = Ctrl_C as ::core::ffi::c_char;
-            got_int.set(true_0 != 0);
-            break;
-        } else {
-            i -= 1;
-        }
-    }
-    if got_int.get() as ::core::ffi::c_int != 0 && i > 0 as ssize_t {
-        input_read_pos.set((*input_read_pos.ptr()).offset(i as isize));
+    let read = input_read_pos.get();
+    let write = input_write_pos.get();
+    let Some(at) = input_buffer.with_mut(|input| {
+        let unread = &mut input[read..write];
+        let at = (0..unread.len()).rev().find(|&i| {
+            unread[i] == Ctrl_C as u8
+                || (unread[i] == b'C'
+                    && i >= 3
+                    && unread[i - 3] == K_SPECIAL as u8
+                    && unread[i - 2] == KS_MODIFIER as u8
+                    && unread[i - 1] == MOD_MASK_CTRL as u8)
+        })?;
+        unread[at] = Ctrl_C as u8;
+        Some(at)
+    }) else {
+        return;
+    };
+    got_int.set(true);
+    if at > 0 {
+        // Drop the unprocessed typeahead in front of the CTRL-C.
+        input_read_pos.set(read + at);
     }
 }
-unsafe extern "C" fn push_event_key(
-    mut buf: *mut uint8_t,
-    mut maxlen: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    static key: GlobalCell<[uint8_t; 3]> = GlobalCell::new([
+
+/// Push bytes of the `KE_EVENT` key sequence, a partial one at a time when
+/// `maxlen < 3`.
+///
+/// # Safety
+/// `buf` must be writable for `maxlen` bytes, which must be at least one.
+unsafe fn push_event_key(buf: *mut uint8_t, maxlen: c_int) -> c_int {
+    const KEY: [uint8_t; 3] = [
         K_SPECIAL as uint8_t,
         KS_EXTRA as uint8_t,
-        KE_EVENT as ::core::ffi::c_int as uint8_t,
-    ]);
-    static key_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-    let mut buf_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+        KE_EVENT as uint8_t,
+    ];
+    static key_idx: GlobalCell<usize> = GlobalCell::new(0);
+
+    let mut buf_idx = 0;
     loop {
-        let c2rust_fresh0 = key_idx.get();
-        key_idx.set(key_idx.get() + 1);
-        let c2rust_fresh1 = buf_idx;
-        buf_idx = buf_idx + 1;
-        *buf.offset(c2rust_fresh1 as isize) = (*key.ptr())[c2rust_fresh0 as usize];
-        (*key_idx.ptr()) %= 3 as ::core::ffi::c_int;
-        if !(key_idx.get() > 0 as ::core::ffi::c_int && buf_idx < maxlen) {
+        // SAFETY: the caller's contract, and `buf_idx < maxlen` below.
+        unsafe { *buf.add(buf_idx) = KEY[key_idx.get()] };
+        key_idx.set((key_idx.get() + 1) % KEY.len());
+        buf_idx += 1;
+        if key_idx.get() == 0 || buf_idx >= maxlen as usize {
             break;
         }
     }
-    return buf_idx;
+    buf_idx as c_int
 }
-pub unsafe extern "C" fn os_input_ready(mut events: *mut MultiQueue) -> bool {
-    return typebuf_was_filled.get() as ::core::ffi::c_int != 0
-        || input_available() != 0
-        || pending_events(events) as ::core::ffi::c_int != 0;
+
+/// Whether there is input waiting, in the typeahead, the buffer or `events`.
+///
+/// # Safety
+/// `events` must be NULL or a live queue.
+pub unsafe fn os_input_ready(events: *mut MultiQueue) -> bool {
+    typebuf_was_filled.get()          // an API call filled the typeahead
+        || input_available() != 0     // the input buffer holds something
+        || unsafe { pending_events(events) } // events must be processed
 }
-unsafe extern "C" fn read_error_exit() -> ! {
-    if silent_mode.get() {
-        getout(0 as ::core::ffi::c_int);
+
+/// Exit because of an input read error.
+fn read_error_exit() -> ! {
+    // SAFETY: a static message, and neither exit path returns.
+    unsafe {
+        if silent_mode.get() {
+            // The normal way out for `nvim -es`.
+            getout(0);
+        }
+        preserve_exit(gettext(c"Nvim: Error reading input, exiting...\n".as_ptr()))
     }
-    preserve_exit(gettext(
-        b"Nvim: Error reading input, exiting...\n\0".as_ptr() as *const ::core::ffi::c_char,
-    ));
 }
-unsafe extern "C" fn pending_events(mut events: *mut MultiQueue) -> bool {
-    return !events.is_null() && !multiqueue_empty(events);
+
+/// # Safety
+/// `events` must be NULL or a live queue.
+unsafe fn pending_events(events: *mut MultiQueue) -> bool {
+    // SAFETY: the caller's contract.
+    !events.is_null() && unsafe { !multiqueue_empty(events) }
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_mouse_position_suffix_is_col_then_row() {
+        assert_eq!(scan_mouse_pos(b"<10,20>rest"), Some((10, 20, 7)));
+        assert_eq!(scan_mouse_pos(b"<0,0>"), Some((0, 0, 5)));
+        assert_eq!(scan_mouse_pos(b"<-1,-2>"), Some((-1, -2, 7)));
+    }
+
+    #[test]
+    fn a_mouse_position_suffix_takes_percent_d_verbatim() {
+        // `%d` skips leading whitespace and accepts a sign, so `sscanf` does
+        // too, however unlikely a terminal is to send it.
+        assert_eq!(scan_mouse_pos(b"< 10, +20>"), Some((10, 20, 10)));
+        // Out of range saturates rather than wrapping.
+        assert_eq!(
+            scan_mouse_pos(b"<99999999999,0>"),
+            Some((c_int::MAX, 0, 15))
+        );
+    }
+
+    #[test]
+    fn anything_else_is_not_a_mouse_position() {
+        assert_eq!(scan_mouse_pos(b""), None);
+        assert_eq!(scan_mouse_pos(b"<10,20"), None);
+        assert_eq!(scan_mouse_pos(b"<10;20>"), None);
+        assert_eq!(scan_mouse_pos(b"<,20>"), None);
+        assert_eq!(scan_mouse_pos(b"10,20>"), None);
+    }
+}

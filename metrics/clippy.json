@@ -77,7 +77,6 @@
     "crates/nvim/src/nvim/optionstr/flags.rs": 1,
     "crates/nvim/src/nvim/os/env.rs": 90,
     "crates/nvim/src/nvim/os/fs.rs": 34,
-    "crates/nvim/src/nvim/os/input.rs": 29,
     "crates/nvim/src/nvim/os/shell.rs": 104,
     "crates/nvim/src/nvim/path.rs": 3,
     "crates/nvim/src/nvim/path/names.rs": 3,

@@ -456,7 +456,7 @@ impl Walk {
         if self.breakcheckcount == 0 {
             // SAFETY: reads the pending-input queue, which is main-thread
             // editor state.
-            unsafe { os_breakcheck() };
+            os_breakcheck();
             self.breakcheckcount = 1000;
             if spell_suggest_timeout.get() > 0 && profile_passed_limit(self.time_limit) {
                 got_int.set(true);

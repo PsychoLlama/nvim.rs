@@ -380,7 +380,7 @@ pub fn listdigraphs(use_headers: bool) {
             printdigraph(&tmp, previous);
         }
         // SAFETY: may set got_int; no digraph state is borrowed.
-        unsafe { fast_breakcheck() };
+        fast_breakcheck();
     }
     let users = USER_DIGRAPHS.with(|user| user.clone());
     for dp in &users {
@@ -393,7 +393,7 @@ pub fn listdigraphs(use_headers: bool) {
         previous = -1;
         printdigraph(dp, None);
         // SAFETY: may set got_int; no digraph state is borrowed.
-        unsafe { fast_breakcheck() };
+        fast_breakcheck();
     }
 }
 
