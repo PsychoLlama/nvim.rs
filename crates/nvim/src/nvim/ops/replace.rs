@@ -1,359 +1,383 @@
 //! `r` -- overwriting every character in the region with one character.
 //!
-//! `op_replace` walks the region and `pbyte` writes one byte at a time
-//! through the undo layer.  Two things make it more than a memset: a
-//! multi-byte replacement character is a different width from what it
-//! replaces, so the line has to be rebuilt rather than patched, and a
-//! blockwise replace has to pad short lines out to the block's right edge
-//! first.  `replace_character` is the Insert-mode Replace-mode entry.
+//! Three things make this more than a memset:
+//!
+//! * the replacement can be a *different width* from what it replaces, in
+//!   bytes and in screen cells, so a line often has to be rebuilt rather than
+//!   patched -- [`pbyte`] is the fast path that only applies when both sides
+//!   are one byte, and [`replace_character`] the general one;
+//! * a blockwise replace has to pad short lines out to the block's edge and
+//!   re-lay any TAB the block splits, which is why [`replace_block_line`]
+//!   builds a whole new line;
+//! * `r<CR>` does not replace with a character at all, it *splits* the line,
+//!   and `CTRL-V <CR>` (`REPLACE_CR_NCHAR`) asks for the literal carriage
+//!   return instead -- which is the whole job of the `had_ctrl_v_cr` flag.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use ::core::ffi::{c_char, c_int, c_void};
+
 use super::*;
 
-pub(crate) unsafe extern "C" fn pbyte(mut lp: pos_T, mut c: ::core::ffi::c_int) {
+/// Overwrite the single byte at `lp` with `c`.
+///
+/// Only for a one-byte character replacing a one-byte character; anything else
+/// changes the line's length and has to go through [`replace_character`].
+///
+/// # Safety
+/// `lp` must name a line of the current buffer.
+pub(crate) unsafe fn pbyte(mut lp: pos_T, c: c_int) {
     unsafe {
-        '_c2rust_label: {
-            if c <= 127 as ::core::ffi::c_int * 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"c <= UCHAR_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/ops.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1054 as ::core::ffi::c_uint,
-                    b"void pbyte(pos_T, int)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        let mut p: *mut ::core::ffi::c_char = ml_get_buf_mut(curbuf.get(), lp.lnum);
-        let mut len: colnr_T = (*curbuf.get()).b_ml.ml_line_textlen;
+        assert!(c <= c_int::from(u8::MAX));
+        let p = ml_get_buf_mut(curbuf.get(), lp.lnum);
+        let len = (*curbuf.get()).b_ml.ml_line_textlen;
+
+        // Safety check: the caller's column may be past the line.
         if lp.col >= len {
-            lp.col = (if len > 1 as ::core::ffi::c_int {
-                len as ::core::ffi::c_int - 2 as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            }) as colnr_T;
+            lp.col = if len > 1 { len - 2 } else { 0 };
         }
-        *p.offset(lp.col as isize) = c as ::core::ffi::c_char;
+        *p.offset(lp.col as isize) = c as c_char;
         if curbuf_splice_pending.get() == 0 {
             extmark_splice_cols(
                 curbuf.get(),
-                lp.lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+                lp.lnum as c_int - 1,
                 lp.col,
-                1 as colnr_T,
-                1 as colnr_T,
+                1,
+                1,
                 kExtmarkUndo,
             );
         }
     }
 }
 
-unsafe extern "C" fn replace_character(mut c: ::core::ffi::c_int) {
+/// Replace the character under the cursor with `c`, whatever the two widths.
+///
+/// Goes through Replace mode's own insert so that a multi-byte character on
+/// either side is handled; leaves the cursor back on the replaced character.
+///
+/// # Safety
+/// The cursor must name a valid position in the current buffer.
+unsafe fn replace_character(c: c_int) {
     unsafe {
-        let n: ::core::ffi::c_int = State.get();
+        let saved = State.get();
         State.set(MODE_REPLACE);
         ins_char(c);
-        State.set(n);
+        State.set(saved);
+        // Back up onto the character just replaced.
         dec_cursor();
     }
 }
 
-pub(crate) unsafe extern "C" fn op_replace(
-    mut oap: *mut oparg_T,
-    mut c: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// `r` over the operator's region.
+///
+/// `c` is the replacement, or `REPLACE_CR_NCHAR`/`REPLACE_NL_NCHAR` for the
+/// `CTRL-V <CR>`/`CTRL-V <NL>` spellings that mean the literal byte rather
+/// than a line split.
+///
+/// # Safety
+/// `oap` must point to a live `oparg_T` describing a region of the current
+/// buffer.
+pub(crate) unsafe fn op_replace(oap: *mut oparg_T, mut c: c_int) -> c_int {
     unsafe {
-        let mut n: ::core::ffi::c_int = 0;
-        let mut bd: block_def = block_def {
-            startspaces: 0,
-            endspaces: 0,
-            textlen: 0,
-            textstart: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            textcol: 0,
-            start_vcol: 0,
-            end_vcol: 0,
-            is_short: 0,
-            is_MAX: 0,
-            is_oneChar: 0,
-            pre_whitesp: 0,
-            pre_whitesp_c: 0,
-            end_char_vcols: 0,
-            start_char_vcols: 0,
-        };
-        let mut after_p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut had_ctrl_v_cr: bool = false_0 != 0;
-        if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 || (*oap).empty as ::core::ffi::c_int != 0
-        {
+        if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 || (*oap).empty {
             return OK;
         }
-        if c == REPLACE_CR_NCHAR as ::core::ffi::c_int {
-            had_ctrl_v_cr = true_0 != 0;
+
+        // CTRL-V CR / CTRL-V NL: put the byte in, do not split the line.
+        let mut had_ctrl_v_cr = false;
+        if c == REPLACE_CR_NCHAR {
+            had_ctrl_v_cr = true;
             c = CAR;
-        } else if c == REPLACE_NL_NCHAR as ::core::ffi::c_int {
-            had_ctrl_v_cr = true_0 != 0;
+        } else if c == REPLACE_NL_NCHAR {
+            had_ctrl_v_cr = true;
             c = NL;
         }
+
         mb_adjust_opend(oap);
-        if u_save(
-            (*oap).start.lnum - 1 as linenr_T,
-            (*oap).end.lnum + 1 as linenr_T,
-        ) == FAIL
-        {
+
+        if u_save((*oap).start.lnum - 1, (*oap).end.lnum + 1) == FAIL {
             return FAIL;
         }
-        if (*oap).motion_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
-            bd.is_MAX =
-                ((*curwin.get()).w_curswant == MAXCOL as ::core::ffi::c_int) as ::core::ffi::c_int;
-            while (*curwin.get()).w_cursor.lnum <= (*oap).end.lnum {
-                (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-                block_prep(oap, &raw mut bd, (*curwin.get()).w_cursor.lnum, true_0 != 0);
-                if !(bd.textlen == 0 as ::core::ffi::c_int
-                    && (virtual_op.get() as u64 == 0 || bd.is_MAX != 0))
-                {
-                    if virtual_op.get() as ::core::ffi::c_int != 0
-                        && bd.is_short != 0
-                        && *bd.textstart as ::core::ffi::c_int == NUL
-                    {
-                        let mut vpos: pos_T = pos_T {
-                            lnum: 0,
-                            col: 0,
-                            coladd: 0,
-                        };
-                        vpos.lnum = (*curwin.get()).w_cursor.lnum;
-                        getvpos(curwin.get(), &raw mut vpos, (*oap).start_vcol);
-                        bd.startspaces += vpos.coladd as ::core::ffi::c_int;
-                        n = bd.startspaces;
-                    } else {
-                        n = if bd.startspaces != 0 {
-                            bd.start_char_vcols as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-                        } else {
-                            0 as ::core::ffi::c_int
-                        };
-                    }
-                    n += if bd.endspaces != 0
-                        && bd.is_oneChar == 0
-                        && bd.end_char_vcols > 0 as ::core::ffi::c_int
-                    {
-                        bd.end_char_vcols as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    };
-                    let mut numc: ::core::ffi::c_int = (*oap).end_vcol as ::core::ffi::c_int
-                        - (*oap).start_vcol as ::core::ffi::c_int
-                        + 1 as ::core::ffi::c_int;
-                    if bd.is_short != 0 && (virtual_op.get() as u64 == 0 || bd.is_MAX != 0) {
-                        numc -= (*oap).end_vcol as ::core::ffi::c_int
-                            - bd.end_vcol as ::core::ffi::c_int
-                            + 1 as ::core::ffi::c_int;
-                    }
-                    if utf_char2cells(c) > 1 as ::core::ffi::c_int {
-                        if numc & 1 as ::core::ffi::c_int != 0 && bd.is_short == 0 {
-                            bd.endspaces += 1;
-                            n += 1;
-                        }
-                        numc = numc / 2 as ::core::ffi::c_int;
-                    }
-                    let mut num_chars: ::core::ffi::c_int = numc;
-                    numc *= utf_char2len(c);
-                    let mut oldp: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-                    let mut oldlen: colnr_T = get_cursor_line_len();
-                    let mut newp_size: size_t =
-                        (bd.textcol as size_t).wrapping_add(bd.startspaces as size_t);
-                    if had_ctrl_v_cr as ::core::ffi::c_int != 0
-                        || c != '\r' as ::core::ffi::c_int && c != '\n' as ::core::ffi::c_int
-                    {
-                        newp_size = newp_size.wrapping_add(numc as size_t);
-                        if bd.is_short == 0 {
-                            newp_size = newp_size.wrapping_add(
-                                (bd.endspaces + oldlen as ::core::ffi::c_int
-                                    - bd.textcol as ::core::ffi::c_int
-                                    - bd.textlen) as size_t,
-                            );
-                        }
-                    }
-                    let mut newp: *mut ::core::ffi::c_char =
-                        xmallocz(newp_size) as *mut ::core::ffi::c_char;
-                    memmove(
-                        newp as *mut ::core::ffi::c_void,
-                        oldp as *const ::core::ffi::c_void,
-                        bd.textcol as size_t,
-                    );
-                    oldp = oldp.offset((bd.textcol as ::core::ffi::c_int + bd.textlen) as isize);
-                    memset(
-                        newp.offset(bd.textcol as isize) as *mut ::core::ffi::c_void,
-                        ' ' as ::core::ffi::c_int,
-                        bd.startspaces as size_t,
-                    );
-                    let mut after_p_len: size_t = 0 as size_t;
-                    let mut col: ::core::ffi::c_int = oldlen as ::core::ffi::c_int
-                        - bd.textcol as ::core::ffi::c_int
-                        - bd.textlen
-                        + 1 as ::core::ffi::c_int;
-                    '_c2rust_label: {
-                        if col >= 0 as ::core::ffi::c_int {
-                        } else {
-                            __assert_fail(
-                                b"col >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"src/nvim/ops.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                1179 as ::core::ffi::c_uint,
-                                b"int op_replace(oparg_T *, int)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
-                    let mut newrows: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    let mut newcols: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    if had_ctrl_v_cr as ::core::ffi::c_int != 0
-                        || c != '\r' as ::core::ffi::c_int && c != '\n' as ::core::ffi::c_int
-                    {
-                        let mut newp_len: ::core::ffi::c_int =
-                            bd.textcol as ::core::ffi::c_int + bd.startspaces;
-                        loop {
-                            num_chars -= 1;
-                            if num_chars < 0 as ::core::ffi::c_int {
-                                break;
-                            }
-                            newp_len += utf_char2bytes(c, newp.offset(newp_len as isize));
-                        }
-                        if bd.is_short == 0 {
-                            memset(
-                                newp.offset(newp_len as isize) as *mut ::core::ffi::c_void,
-                                ' ' as ::core::ffi::c_int,
-                                bd.endspaces as size_t,
-                            );
-                            newp_len += bd.endspaces;
-                            memmove(
-                                newp.offset(newp_len as isize) as *mut ::core::ffi::c_void,
-                                oldp as *const ::core::ffi::c_void,
-                                col as size_t,
-                            );
-                        }
-                        newcols = (newp_len as colnr_T - bd.textcol) as ::core::ffi::c_int;
-                    } else {
-                        after_p_len = col as size_t;
-                        after_p = xmalloc(after_p_len) as *mut ::core::ffi::c_char;
-                        memmove(
-                            after_p as *mut ::core::ffi::c_void,
-                            oldp as *const ::core::ffi::c_void,
-                            after_p_len,
-                        );
-                        newrows = 1 as ::core::ffi::c_int;
-                    }
-                    ml_replace((*curwin.get()).w_cursor.lnum, newp, false_0 != 0);
-                    (*curbuf_splice_pending.ptr()) += 1;
-                    let mut baselnum: linenr_T = (*curwin.get()).w_cursor.lnum;
-                    if !after_p.is_null() {
-                        let c2rust_fresh7 = (*curwin.get()).w_cursor.lnum;
-                        (*curwin.get()).w_cursor.lnum = (*curwin.get()).w_cursor.lnum + 1;
-                        ml_append(c2rust_fresh7, after_p, after_p_len as colnr_T, false_0 != 0);
-                        appended_lines_mark((*curwin.get()).w_cursor.lnum, 1 as ::core::ffi::c_int);
-                        (*oap).end.lnum += 1;
-                        xfree(after_p as *mut ::core::ffi::c_void);
-                    }
-                    (*curbuf_splice_pending.ptr()) -= 1;
-                    extmark_splice(
-                        curbuf.get(),
-                        baselnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                        bd.textcol,
-                        0 as ::core::ffi::c_int,
-                        bd.textlen as colnr_T,
-                        bd.textlen as bcount_t,
-                        newrows,
-                        newcols as colnr_T,
-                        (newrows + newcols) as bcount_t,
-                        kExtmarkUndo,
-                    );
-                }
-                (*curwin.get()).w_cursor.lnum += 1;
-            }
+
+        if (*oap).motion_type == kMTBlockWise {
+            replace_block(oap, c, had_ctrl_v_cr);
         } else {
-            if (*oap).motion_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int {
-                (*oap).start.col = 0 as ::core::ffi::c_int as colnr_T;
-                (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-                (*oap).end.col = ml_get_len((*oap).end.lnum);
-                if (*oap).end.col != 0 {
-                    (*oap).end.col -= 1;
-                }
-            } else if !(*oap).inclusive {
-                dec(&raw mut (*oap).end);
-            }
-            while ltoreq((*curwin.get()).w_cursor, (*oap).end) {
-                let mut done: bool = false_0 != 0;
-                n = gchar_cursor();
-                if n != NUL {
-                    let mut new_byte_len: ::core::ffi::c_int = utf_char2len(c);
-                    let mut old_byte_len: ::core::ffi::c_int = utfc_ptr2len(get_cursor_pos_ptr());
-                    if new_byte_len > 1 as ::core::ffi::c_int
-                        || old_byte_len > 1 as ::core::ffi::c_int
-                    {
-                        if (*curwin.get()).w_cursor.lnum == (*oap).end.lnum {
-                            (*oap).end.col += new_byte_len - old_byte_len;
-                        }
-                        replace_character(c);
-                        done = true_0 != 0;
-                    } else {
-                        if n == TAB {
-                            let mut end_vcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            if (*curwin.get()).w_cursor.lnum == (*oap).end.lnum {
-                                end_vcol = getviscol2((*oap).end.col, (*oap).end.coladd);
-                            }
-                            coladvance_force(getviscol());
-                            if (*curwin.get()).w_cursor.lnum == (*oap).end.lnum {
-                                getvpos(curwin.get(), &raw mut (*oap).end, end_vcol as colnr_T);
-                            }
-                        }
-                        if gchar_cursor() != NUL {
-                            pbyte((*curwin.get()).w_cursor, c);
-                            done = true_0 != 0;
-                        }
-                    }
-                }
-                if !done
-                    && virtual_op.get() as ::core::ffi::c_int != 0
-                    && (*curwin.get()).w_cursor.lnum == (*oap).end.lnum
-                {
-                    let mut virtcols: ::core::ffi::c_int = (*oap).end.coladd as ::core::ffi::c_int;
-                    if (*curwin.get()).w_cursor.lnum == (*oap).start.lnum
-                        && (*oap).start.col == (*oap).end.col
-                        && (*oap).start.coladd != 0
-                    {
-                        virtcols -= (*oap).start.coladd as ::core::ffi::c_int;
-                    }
-                    coladvance_force(getviscol2((*oap).end.col, (*oap).end.coladd) + 1 as colnr_T);
-                    (*curwin.get()).w_cursor.col -= virtcols + 1 as ::core::ffi::c_int;
-                    while virtcols >= 0 as ::core::ffi::c_int {
-                        if utf_char2len(c) > 1 as ::core::ffi::c_int {
-                            replace_character(c);
-                        } else {
-                            pbyte((*curwin.get()).w_cursor, c);
-                        }
-                        if inc(&raw mut (*curwin.get()).w_cursor) == -1 as ::core::ffi::c_int {
-                            break;
-                        }
-                        virtcols -= 1;
-                    }
-                }
-                if inc_cursor() == -1 as ::core::ffi::c_int {
-                    break;
-                }
-            }
+            replace_chars(oap, c);
         }
+
         (*curwin.get()).w_cursor = (*oap).start;
         check_cursor(curwin.get());
         changed_lines(
             curbuf.get(),
             (*oap).start.lnum,
             (*oap).start.col,
-            (*oap).end.lnum + 1 as linenr_T,
-            0 as linenr_T,
-            true_0 != 0,
+            (*oap).end.lnum + 1,
+            0,
+            true,
         );
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
-            == 0 as ::core::ffi::c_int
-        {
+
+        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
             (*curbuf.get()).b_op_start = (*oap).start;
             (*curbuf.get()).b_op_end = (*oap).end;
         }
-        return OK;
+        OK
+    }
+}
+
+/// The blockwise arm: one rebuilt line per line the block reaches.
+///
+/// # Safety
+/// `oap` must point to a live blockwise `oparg_T`.
+unsafe fn replace_block(oap: *mut oparg_T, c: c_int, had_ctrl_v_cr: bool) {
+    unsafe {
+        let mut bd = block_def::ZERO;
+        bd.is_MAX = c_int::from((*curwin.get()).w_curswant == MAXCOL);
+        while (*curwin.get()).w_cursor.lnum <= (*oap).end.lnum {
+            // Make sure the cursor position is valid for `block_prep`.
+            (*curwin.get()).w_cursor.col = 0;
+            block_prep(oap, &raw mut bd, (*curwin.get()).w_cursor.lnum, true);
+            if bd.textlen != 0 || (virtual_op.get() != 0 && bd.is_MAX == 0) {
+                replace_block_line(oap, &mut bd, c, had_ctrl_v_cr);
+            }
+            (*curwin.get()).w_cursor.lnum += 1;
+        }
+    }
+}
+
+/// One line of the blockwise arm.
+///
+/// Splitting a TAB the block only partly covers can make the line *longer*, so
+/// the line is rebuilt: the text before the block, `startspaces` pad, the
+/// replacement repeated, `endspaces` pad, and the text after. With `\r` or
+/// `\n` and no CTRL-V there is no "after": the tail becomes a new line.
+///
+/// # Safety
+/// `oap` and `bd` must describe the cursor line, as [`block_prep`] left them.
+unsafe fn replace_block_line(oap: *mut oparg_T, bd: &mut block_def, c: c_int, had_ctrl_v_cr: bool) {
+    unsafe {
+        // Replacing with `\r`/`\n` splits the line rather than overwriting.
+        let splits_line = !had_ctrl_v_cr && (c == '\r' as c_int || c == '\n' as c_int);
+
+        // When the block starts in virtual space, that offset counts as
+        // pre-padding. (Upstream also keeps a running count `n` of the extra
+        // characters a split TAB needs, here and just below; nothing reads it,
+        // so only this side effect on `startspaces` is carried over.)
+        if virtual_op.get() != 0 && bd.is_short != 0 && *bd.textstart as c_int == NUL {
+            let mut vpos = pos_T {
+                lnum: (*curwin.get()).w_cursor.lnum,
+                col: 0,
+                coladd: 0,
+            };
+            getvpos(curwin.get(), &raw mut vpos, (*oap).start_vcol);
+            bd.startspaces += vpos.coladd;
+        }
+
+        // How many characters to replace.
+        let mut numc = (*oap).end_vcol - (*oap).start_vcol + 1;
+        if bd.is_short != 0 && (virtual_op.get() == 0 || bd.is_MAX != 0) {
+            numc -= ((*oap).end_vcol - bd.end_vcol) + 1;
+        }
+        // A double-wide character only fits half as many times.
+        if utf_char2cells(c) > 1 {
+            if numc & 1 != 0 && bd.is_short == 0 {
+                bd.endspaces += 1;
+            }
+            numc /= 2;
+        }
+
+        let mut num_chars = numc;
+        numc *= utf_char2len(c);
+
+        let mut oldp = get_cursor_line_ptr();
+        let oldlen = get_cursor_line_len();
+
+        let mut newp_size = bd.textcol as size_t + bd.startspaces as size_t;
+        if !splits_line {
+            newp_size += numc as size_t;
+            if bd.is_short == 0 {
+                newp_size += (bd.endspaces + oldlen - bd.textcol - bd.textlen) as size_t;
+            }
+        }
+        let newp = xmallocz(newp_size) as *mut c_char;
+
+        // Up to the replaced part, then the pre-spaces.
+        memmove(
+            newp as *mut c_void,
+            oldp as *const c_void,
+            bd.textcol as size_t,
+        );
+        oldp = oldp.offset((bd.textcol + bd.textlen) as isize);
+        memset(
+            newp.offset(bd.textcol as isize) as *mut c_void,
+            ' ' as c_int,
+            bd.startspaces as size_t,
+        );
+
+        // What is left of the line after the block, NUL included.
+        let col = oldlen - bd.textcol - bd.textlen + 1;
+        assert!(col >= 0);
+
+        let mut after_p: *mut c_char = ::core::ptr::null_mut();
+        let mut after_p_len: size_t = 0;
+        let mut newrows = 0;
+        let mut newcols = 0;
+        if !splits_line {
+            let mut newp_len = bd.textcol + bd.startspaces;
+            while num_chars > 0 {
+                num_chars -= 1;
+                newp_len += utf_char2bytes(c, newp.offset(newp_len as isize));
+            }
+            if bd.is_short == 0 {
+                memset(
+                    newp.offset(newp_len as isize) as *mut c_void,
+                    ' ' as c_int,
+                    bd.endspaces as size_t,
+                );
+                newp_len += bd.endspaces;
+                memmove(
+                    newp.offset(newp_len as isize) as *mut c_void,
+                    oldp as *const c_void,
+                    col as size_t,
+                );
+            }
+            newcols = newp_len - bd.textcol;
+        } else {
+            // The tail becomes the next line.
+            after_p_len = col as size_t;
+            after_p = xmalloc(after_p_len) as *mut c_char;
+            memmove(after_p as *mut c_void, oldp as *const c_void, after_p_len);
+            newrows = 1;
+        }
+
+        ml_replace((*curwin.get()).w_cursor.lnum, newp, false);
+        *curbuf_splice_pending.ptr() += 1;
+        let baselnum = (*curwin.get()).w_cursor.lnum;
+        if !after_p.is_null() {
+            ml_append(
+                (*curwin.get()).w_cursor.lnum,
+                after_p,
+                after_p_len as colnr_T,
+                false,
+            );
+            (*curwin.get()).w_cursor.lnum += 1;
+            appended_lines_mark((*curwin.get()).w_cursor.lnum, 1);
+            (*oap).end.lnum += 1;
+            xfree(after_p as *mut c_void);
+        }
+        *curbuf_splice_pending.ptr() -= 1;
+        extmark_splice(
+            curbuf.get(),
+            baselnum as c_int - 1,
+            bd.textcol,
+            0,
+            bd.textlen,
+            bd.textlen as bcount_t,
+            newrows,
+            newcols,
+            (newrows + newcols) as bcount_t,
+            kExtmarkUndo,
+        );
+    }
+}
+
+/// The charwise and linewise arm: walk the region a character at a time.
+///
+/// # Safety
+/// `oap` must point to a live charwise or linewise `oparg_T`.
+unsafe fn replace_chars(oap: *mut oparg_T, c: c_int) {
+    unsafe {
+        if (*oap).motion_type == kMTLineWise {
+            (*oap).start.col = 0;
+            (*curwin.get()).w_cursor.col = 0;
+            (*oap).end.col = ml_get_len((*oap).end.lnum);
+            if (*oap).end.col != 0 {
+                (*oap).end.col -= 1;
+            }
+        } else if !(*oap).inclusive {
+            dec(&raw mut (*oap).end);
+        }
+
+        while ltoreq((*curwin.get()).w_cursor, (*oap).end) {
+            let mut done = false;
+
+            let under_cursor = gchar_cursor();
+            if under_cursor != NUL {
+                let new_byte_len = utf_char2len(c);
+                let old_byte_len = utfc_ptr2len(get_cursor_pos_ptr());
+
+                if new_byte_len > 1 || old_byte_len > 1 {
+                    // Slow, but it handles a single-byte character replacing a
+                    // multi-byte one and the other way around.
+                    if (*curwin.get()).w_cursor.lnum == (*oap).end.lnum {
+                        (*oap).end.col += new_byte_len - old_byte_len;
+                    }
+                    replace_character(c);
+                    done = true;
+                } else {
+                    if under_cursor == TAB {
+                        // Breaking the TAB moves the end, so remember where it
+                        // was in columns first.
+                        let mut end_vcol = 0;
+                        if (*curwin.get()).w_cursor.lnum == (*oap).end.lnum {
+                            end_vcol = getviscol2((*oap).end.col, (*oap).end.coladd);
+                        }
+                        coladvance_force(getviscol());
+                        if (*curwin.get()).w_cursor.lnum == (*oap).end.lnum {
+                            getvpos(curwin.get(), &raw mut (*oap).end, end_vcol);
+                        }
+                    }
+                    // With `coladd` set the cursor may now be just past a TAB.
+                    if gchar_cursor() != NUL {
+                        pbyte((*curwin.get()).w_cursor, c);
+                        done = true;
+                    }
+                }
+            }
+
+            if !done && virtual_op.get() != 0 && (*curwin.get()).w_cursor.lnum == (*oap).end.lnum {
+                replace_virtual_tail(oap, c);
+            }
+
+            // On to the next character; stop at the end of the file.
+            if inc_cursor() == -1 {
+                break;
+            }
+        }
+    }
+}
+
+/// 'virtualedit' only: replace the columns past the end of the last line.
+///
+/// Reached when the region extends into virtual space, where there is no
+/// character to overwrite; `coladvance_force` fills the line out with spaces
+/// first and those are then replaced.
+///
+/// # Safety
+/// `oap` must point to a live `oparg_T`; the cursor must be on `oap.end.lnum`.
+unsafe fn replace_virtual_tail(oap: *mut oparg_T, c: c_int) {
+    unsafe {
+        let mut virtcols = (*oap).end.coladd;
+        if (*curwin.get()).w_cursor.lnum == (*oap).start.lnum
+            && (*oap).start.col == (*oap).end.col
+            && (*oap).start.coladd != 0
+        {
+            virtcols -= (*oap).start.coladd;
+        }
+
+        // `oap.end` has been trimmed, so it is effectively inclusive: the extra
+        // +1 is what keeps the NUL byte from being trampled.
+        coladvance_force(getviscol2((*oap).end.col, (*oap).end.coladd) + 1);
+        (*curwin.get()).w_cursor.col -= virtcols + 1;
+        while virtcols >= 0 {
+            if utf_char2len(c) > 1 {
+                replace_character(c);
+            } else {
+                pbyte((*curwin.get()).w_cursor, c);
+            }
+            if inc(&raw mut (*curwin.get()).w_cursor) == -1 {
+                break;
+            }
+            virtcols -= 1;
+        }
     }
 }

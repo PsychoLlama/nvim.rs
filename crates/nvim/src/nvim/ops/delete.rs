@@ -1,363 +1,116 @@
 //! `d` -- deleting the operator's region.
 //!
-//! One function with three arms (linewise, blockwise, charwise) and a long
-//! prologue they share: yank into the register first unless 'cpoptions'
-//! says otherwise, decide whether a linewise delete should really become a
-//! charwise one ('cpoptions' `E`, the empty-region rule), and honour
-//! `oap->excl_tr_ws`.  The charwise arm is the delicate one, because a
-//! region may span lines and the join at the seam has to preserve the
-//! cursor's virtual column.
+//! [`op_delete`] is a prologue that all three region shapes share followed by
+//! one of three arms. The prologue is where the surprises are:
+//!
+//! * the region is *yanked* first, into as many as three registers -- the
+//!   named one, the shift of `"1`..`"9` when the delete crosses a line, and
+//!   the small-delete `"-` when it does not -- and only then deleted, which is
+//!   why [`save_deleted_text`] runs before any of the arms;
+//! * a charwise delete of more than one line that would leave a blank line
+//!   becomes a *linewise* one, which is upstream's "strange Vi behaviour";
+//! * deleting an empty region is an error under 'cpoptions' `E`, except in
+//!   'virtualedit', where nothing is deleted but the marks are set anyway.
+//!
+//! Of the three arms [`delete_chars`] is the delicate one: a charwise region
+//! that spans lines is deleted as a truncate, a line delete, a byte delete and
+//! a join, with `curbuf_splice_pending` held over the lot so that the four
+//! edits reach extmarks and the buffer-update RPC as the single splice
+//! [`get_region_bytecount`] measured up front.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use ::core::ffi::{c_char, c_int, c_void};
 
-pub unsafe extern "C" fn op_delete(mut oap: *mut oparg_T) -> ::core::ffi::c_int {
+use super::*;
+use crate::src::nvim::register::is_append_register;
+
+/// `d` (and the delete half of `c`) over the operator's region.
+///
+/// Answers `FAIL` only when undo could not be prepared; an empty or refused
+/// region is `OK`.
+///
+/// # Safety
+/// `oap` must point to a live `oparg_T` describing a region of the current
+/// buffer.
+pub unsafe fn op_delete(oap: *mut oparg_T) -> c_int {
     unsafe {
-        let mut lnum: linenr_T = 0;
-        let mut bd: block_def = block_def {
-            startspaces: 0 as ::core::ffi::c_int,
-            endspaces: 0,
-            textlen: 0,
-            textstart: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            textcol: 0,
-            start_vcol: 0,
-            end_vcol: 0,
-            is_short: 0,
-            is_MAX: 0,
-            is_oneChar: 0,
-            pre_whitesp: 0,
-            pre_whitesp_c: 0,
-            end_char_vcols: 0,
-            start_char_vcols: 0,
-        };
-        let mut old_lcount: linenr_T = (*curbuf.get()).b_ml.ml_line_count;
+        let old_lcount = (*curbuf.get()).b_ml.ml_line_count;
+
         if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
             return OK;
         }
+        // Nothing to delete -- but still prepare undo, for `op_change`.
         if (*oap).empty {
             return u_save_cursor();
         }
         if (*curbuf.get()).b_p_ma == 0 {
-            emsg(gettext(
-                &raw const e_modifiable as *const ::core::ffi::c_char,
-            ));
+            emsg(gettext(&raw const e_modifiable as *const c_char));
             return FAIL;
         }
-        if VIsual_select.get() as ::core::ffi::c_int != 0
-            && (*oap).is_VIsual as ::core::ffi::c_int != 0
-        {
+        if VIsual_select.get() && (*oap).is_VIsual {
+            // The register given with CTRL-R, zero by default.
             (*oap).regname = VIsual_select_reg.get();
         }
+
         mb_adjust_opend(oap);
-        if (*oap).motion_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
+
+        // Imitate the strange Vi behaviour: a charwise delete spanning more
+        // than one line whose result would be a blank line becomes linewise.
+        // Not for `c`, and not in Visual mode.
+        if (*oap).motion_type == kMTCharWise
             && !(*oap).is_VIsual
-            && (*oap).line_count > 1 as linenr_T
+            && (*oap).line_count > 1
             && (*oap).motion_force == NUL
             && (*oap).op_type == OP_DELETE
         {
-            let mut ptr: *mut ::core::ffi::c_char =
-                ml_get((*oap).end.lnum).offset((*oap).end.col as isize);
-            if *ptr as ::core::ffi::c_int != NUL {
-                ptr = ptr.offset((*oap).inclusive as ::core::ffi::c_int as isize);
+            let mut ptr = ml_get((*oap).end.lnum).offset((*oap).end.col as isize);
+            if *ptr as c_int != NUL {
+                ptr = ptr.offset((*oap).inclusive as isize);
             }
             ptr = skipwhite(ptr);
-            if *ptr as ::core::ffi::c_int == NUL
-                && inindent(0 as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-            {
+            if *ptr as c_int == NUL && inindent(0) {
                 (*oap).motion_type = kMTLineWise;
             }
         }
-        if (*oap).motion_type as ::core::ffi::c_int != kMTLineWise as ::core::ffi::c_int
-            && (*oap).line_count == 1 as linenr_T
+
+        // Trying to delete (e.g. `D`) in an empty line. For `c` that is fine.
+        let empty_region = (*oap).motion_type != kMTLineWise
+            && (*oap).line_count == 1
             && (*oap).op_type == OP_DELETE
-            && *ml_get((*oap).start.lnum) as ::core::ffi::c_int == NUL
-        {
-            if virtual_op.get() as u64 == 0 {
-                if !vim_strchr(p_cpo.get(), CPO_EMPTYREGION).is_null() {
-                    beep_flush();
-                }
+            && *ml_get((*oap).start.lnum) as c_int == NUL;
+
+        if !empty_region {
+            // Yank whatever is about to be deleted. `"_` takes nothing.
+            if (*oap).regname != '_' as c_int && !save_deleted_text(oap) {
                 return OK;
             }
-        } else {
-            if (*oap).regname != '_' as ::core::ffi::c_int {
-                let mut reg: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
-                let mut did_yank: bool = false_0 != 0;
-                if (*oap).regname != 0 as ::core::ffi::c_int {
-                    if !valid_yank_reg((*oap).regname, true_0 != 0) {
-                        beep_flush();
-                        return OK;
-                    }
-                    reg = get_yank_register((*oap).regname, YREG_YANK as ::core::ffi::c_int);
-                    op_yank_reg(oap, false_0 != 0, reg, is_append_register((*oap).regname));
-                    did_yank = true_0 != 0;
-                }
-                if (*oap).motion_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int
-                    || (*oap).line_count > 1 as linenr_T
-                    || (*oap).use_reg_one as ::core::ffi::c_int != 0
-                {
-                    shift_delete_registers(is_append_register((*oap).regname));
-                    reg = get_y_register(1 as ::core::ffi::c_int);
-                    op_yank_reg(oap, false_0 != 0, reg, false_0 != 0);
-                    did_yank = true_0 != 0;
-                }
-                if (*oap).regname == 0 as ::core::ffi::c_int
-                    && (*oap).motion_type as ::core::ffi::c_int != kMTLineWise as ::core::ffi::c_int
-                    && (*oap).line_count == 1 as linenr_T
-                {
-                    reg = get_yank_register(
-                        '-' as ::core::ffi::c_int,
-                        YREG_YANK as ::core::ffi::c_int,
-                    );
-                    op_yank_reg(oap, false_0 != 0, reg, false_0 != 0);
-                    did_yank = true_0 != 0;
-                }
-                if did_yank as ::core::ffi::c_int != 0 || (*oap).regname == 0 as ::core::ffi::c_int
-                {
-                    if reg.is_null() {
-                        abort();
-                    }
-                    crate::src::nvim::clipboard::set_clipboard((*oap).regname, reg as *mut _);
-                    do_autocmd_textyankpost(oap, reg);
-                }
-            }
-            if (*oap).motion_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
-                if u_save(
-                    (*oap).start.lnum - 1 as linenr_T,
-                    (*oap).end.lnum + 1 as linenr_T,
-                ) == FAIL
-                {
-                    return FAIL;
-                }
-                lnum = (*curwin.get()).w_cursor.lnum;
-                while lnum <= (*oap).end.lnum {
-                    block_prep(oap, &raw mut bd, lnum, true_0 != 0);
-                    if bd.textlen != 0 as ::core::ffi::c_int {
-                        if lnum == (*curwin.get()).w_cursor.lnum {
-                            (*curwin.get()).w_cursor.col =
-                                (bd.textcol as ::core::ffi::c_int + bd.startspaces) as colnr_T;
-                            (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
-                        }
-                        let mut n: ::core::ffi::c_int = bd.textlen - bd.startspaces - bd.endspaces;
-                        let mut oldp: *mut ::core::ffi::c_char = ml_get(lnum);
-                        let mut newp: *mut ::core::ffi::c_char = xmalloc(
-                            (ml_get_len(lnum) as size_t)
-                                .wrapping_sub(n as size_t)
-                                .wrapping_add(1 as size_t),
-                        )
-                            as *mut ::core::ffi::c_char;
-                        memmove(
-                            newp as *mut ::core::ffi::c_void,
-                            oldp as *const ::core::ffi::c_void,
-                            bd.textcol as size_t,
-                        );
-                        memset(
-                            newp.offset(bd.textcol as isize) as *mut ::core::ffi::c_void,
-                            ' ' as ::core::ffi::c_int,
-                            (bd.startspaces as size_t).wrapping_add(bd.endspaces as size_t),
-                        );
-                        strcpy(
-                            newp.offset(bd.textcol as isize)
-                                .offset(bd.startspaces as isize)
-                                .offset(bd.endspaces as isize),
-                            oldp.offset(bd.textcol as isize).offset(bd.textlen as isize),
-                        );
-                        ml_replace(lnum, newp, false_0 != 0);
-                        extmark_splice_cols(
-                            curbuf.get(),
-                            lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                            bd.textcol,
-                            bd.textlen as colnr_T,
-                            bd.startspaces as colnr_T + bd.endspaces as colnr_T,
-                            kExtmarkUndo,
-                        );
-                    }
-                    lnum += 1;
-                }
-                check_cursor_col(curwin.get());
-                changed_lines(
-                    curbuf.get(),
-                    (*curwin.get()).w_cursor.lnum,
-                    (*curwin.get()).w_cursor.col,
-                    (*oap).end.lnum + 1 as linenr_T,
-                    0 as linenr_T,
-                    true_0 != 0,
-                );
-                (*oap).line_count = 0 as ::core::ffi::c_int as linenr_T;
-            } else if (*oap).motion_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int
-            {
-                if (*oap).op_type == OP_CHANGE {
-                    if (*oap).line_count > 1 as linenr_T {
-                        lnum = (*curwin.get()).w_cursor.lnum;
-                        (*curwin.get()).w_cursor.lnum += 1;
-                        del_lines((*oap).line_count - 1 as linenr_T, true_0 != 0);
-                        (*curwin.get()).w_cursor.lnum = lnum;
-                    }
-                    if u_save_cursor() == FAIL {
-                        return FAIL;
-                    }
-                    if (*curbuf.get()).b_p_ai != 0 {
-                        beginline(BL_WHITE as ::core::ffi::c_int);
-                        did_ai.set(true_0 != 0);
-                        ai_col.set((*curwin.get()).w_cursor.col);
-                    } else {
-                        beginline(0 as ::core::ffi::c_int);
-                    }
-                    truncate_line(false_0);
-                    if (*oap).line_count > 1 as linenr_T {
-                        u_clearline(curbuf.get());
-                    }
-                } else {
-                    del_lines((*oap).line_count, true_0 != 0);
-                    beginline(BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
-                    u_clearline(curbuf.get());
-                }
+
+            let deleted = if (*oap).motion_type == kMTBlockWise {
+                delete_block(oap)
+            } else if (*oap).motion_type == kMTLineWise {
+                delete_whole_lines(oap)
             } else {
-                if virtual_op.get() as u64 != 0 {
-                    if gchar_pos(&raw mut (*oap).start) == '\t' as ::core::ffi::c_int {
-                        let mut endcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                        if u_save_cursor() == FAIL {
-                            return FAIL;
-                        }
-                        if (*oap).line_count == 1 as linenr_T {
-                            endcol = getviscol2((*oap).end.col, (*oap).end.coladd);
-                        }
-                        coladvance_force(getviscol2((*oap).start.col, (*oap).start.coladd));
-                        (*oap).start = (*curwin.get()).w_cursor;
-                        if (*oap).line_count == 1 as linenr_T {
-                            coladvance(curwin.get(), endcol as colnr_T);
-                            (*oap).end.col = (*curwin.get()).w_cursor.col;
-                            (*oap).end.coladd = (*curwin.get()).w_cursor.coladd;
-                            (*curwin.get()).w_cursor = (*oap).start;
-                        }
-                    }
-                    if gchar_pos(&raw mut (*oap).end) == '\t' as ::core::ffi::c_int
-                        && (*oap).end.coladd == 0 as ::core::ffi::c_int
-                        && (*oap).inclusive as ::core::ffi::c_int != 0
-                    {
-                        if u_save(
-                            (*oap).end.lnum - 1 as linenr_T,
-                            (*oap).end.lnum + 1 as linenr_T,
-                        ) == FAIL
-                        {
-                            return FAIL;
-                        }
-                        (*curwin.get()).w_cursor = (*oap).end;
-                        coladvance_force(getviscol2((*oap).end.col, (*oap).end.coladd));
-                        (*oap).end = (*curwin.get()).w_cursor;
-                        (*curwin.get()).w_cursor = (*oap).start;
-                    }
-                    mb_adjust_opend(oap);
-                }
-                if (*oap).line_count == 1 as linenr_T {
-                    if u_save_cursor() == FAIL {
-                        return FAIL;
-                    }
-                    if !vim_strchr(p_cpo.get(), CPO_DOLLAR).is_null()
-                        && (*oap).op_type == OP_CHANGE
-                        && (*oap).end.lnum == (*curwin.get()).w_cursor.lnum
-                        && !(*oap).is_VIsual
-                    {
-                        display_dollar((*oap).end.col - !(*oap).inclusive as ::core::ffi::c_int);
-                    }
-                    let mut n_0: ::core::ffi::c_int = (*oap).end.col as ::core::ffi::c_int
-                        - (*oap).start.col as ::core::ffi::c_int
-                        + 1 as ::core::ffi::c_int
-                        - !(*oap).inclusive as ::core::ffi::c_int;
-                    if virtual_op.get() as u64 != 0 {
-                        let mut len: ::core::ffi::c_int = get_cursor_line_len();
-                        if (*oap).end.coladd != 0 as ::core::ffi::c_int
-                            && (*oap).end.col >= len - 1 as ::core::ffi::c_int
-                            && !((*oap).start.coladd != 0
-                                && (*oap).end.col >= len - 1 as ::core::ffi::c_int)
-                        {
-                            n_0 += 1;
-                        }
-                        if n_0 == 0 as ::core::ffi::c_int
-                            && (*oap).start.coladd != (*oap).end.coladd
-                        {
-                            n_0 = 1 as ::core::ffi::c_int;
-                        }
-                        if gchar_cursor() != NUL {
-                            (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
-                        }
-                    }
-                    del_bytes(
-                        n_0,
-                        virtual_op.get() as u64 == 0,
-                        (*oap).op_type == OP_DELETE && !(*oap).is_VIsual,
-                    );
-                } else {
-                    let mut curpos: pos_T = pos_T {
-                        lnum: 0,
-                        col: 0,
-                        coladd: 0,
-                    };
-                    if u_save(
-                        (*curwin.get()).w_cursor.lnum - 1 as linenr_T,
-                        (*curwin.get()).w_cursor.lnum + (*oap).line_count,
-                    ) == FAIL
-                    {
-                        return FAIL;
-                    }
-                    (*curbuf_splice_pending.ptr()) += 1;
-                    let mut startpos: pos_T = (*curwin.get()).w_cursor;
-                    let mut deleted_bytes: bcount_t = get_region_bytecount(
-                        curbuf.get(),
-                        startpos.lnum,
-                        (*oap).end.lnum,
-                        startpos.col,
-                        (*oap).end.col,
-                    ) + (*oap).inclusive as bcount_t;
-                    truncate_line(true_0);
-                    curpos = (*curwin.get()).w_cursor;
-                    (*curwin.get()).w_cursor.lnum += 1;
-                    del_lines((*oap).line_count - 2 as linenr_T, false_0 != 0);
-                    let mut n_1: ::core::ffi::c_int = (*oap).end.col as ::core::ffi::c_int
-                        + 1 as ::core::ffi::c_int
-                        - !(*oap).inclusive as ::core::ffi::c_int;
-                    (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-                    del_bytes(
-                        n_1,
-                        virtual_op.get() as u64 == 0,
-                        (*oap).op_type == OP_DELETE && !(*oap).is_VIsual,
-                    );
-                    (*curwin.get()).w_cursor = curpos;
-                    do_join(
-                        2 as size_t,
-                        false_0 != 0,
-                        false_0 != 0,
-                        false_0 != 0,
-                        false_0 != 0,
-                    );
-                    (*curbuf_splice_pending.ptr()) -= 1;
-                    extmark_splice(
-                        curbuf.get(),
-                        startpos.lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                        startpos.col,
-                        (*oap).line_count as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                        n_1 as colnr_T,
-                        deleted_bytes,
-                        0 as ::core::ffi::c_int,
-                        0 as colnr_T,
-                        0 as bcount_t,
-                        kExtmarkUndo,
-                    );
-                }
-                if (*oap).op_type == OP_DELETE {
-                    auto_format(false_0 != 0, true_0 != 0);
-                }
+                delete_chars(oap)
+            };
+            if deleted == FAIL {
+                return FAIL;
             }
-            msgmore(
-                (*curbuf.get()).b_ml.ml_line_count as ::core::ffi::c_int
-                    - old_lcount as ::core::ffi::c_int,
-            );
+
+            msgmore((*curbuf.get()).b_ml.ml_line_count as c_int - old_lcount as c_int);
+        } else if virtual_op.get() == 0 {
+            // Operating on an empty region is an error when 'cpoptions'
+            // contains 'E' (Vi compatible).
+            if !vim_strchr(p_cpo.get(), CPO_EMPTYREGION).is_null() {
+                beep_flush();
+            }
+            return OK;
         }
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
-            == 0 as ::core::ffi::c_int
-        {
-            if (*oap).motion_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
+        // In 'virtualedit' an empty region deletes nothing, but the marks are
+        // set as if it had.
+
+        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as c_int == 0 {
+            if (*oap).motion_type == kMTBlockWise {
                 (*curbuf.get()).b_op_end.lnum = (*oap).end.lnum;
                 (*curbuf.get()).b_op_end.col = (*oap).start.col;
             } else {
@@ -365,27 +118,402 @@ pub unsafe extern "C" fn op_delete(mut oap: *mut oparg_T) -> ::core::ffi::c_int 
             }
             (*curbuf.get()).b_op_start = (*oap).start;
         }
-        return OK;
+
+        OK
     }
 }
 
-pub(crate) unsafe extern "C" fn mb_adjust_opend(mut oap: *mut oparg_T) {
+/// Yank the region into every register a delete is supposed to fill, and fire
+/// TextYankPost.
+///
+/// Answers false when the named register is read-only, which is the one case
+/// where `op_delete` gives up without deleting anything.
+///
+/// Up to three registers are written: the named one, `"1` (with `"1`..`"9`
+/// shifted up) when the delete crosses a line or the caller asked for it, and
+/// the small-delete `"-` when no register was named and the delete stays
+/// inside one line. Only the *last* one written reaches the clipboard and the
+/// autocommand, which is upstream's behaviour and the reason `reg` is carried
+/// rather than each branch handling its own.
+///
+/// # Safety
+/// `oap` must point to a live `oparg_T` describing a region of the current
+/// buffer.
+unsafe fn save_deleted_text(oap: *mut oparg_T) -> bool {
+    unsafe {
+        let mut reg: *mut yankreg_T = ::core::ptr::null_mut();
+        let mut did_yank = false;
+
+        if (*oap).regname != 0 {
+            if !valid_yank_reg((*oap).regname, true) {
+                beep_flush();
+                return false;
+            }
+            reg = get_yank_register((*oap).regname, YREG_YANK as c_int);
+            // Yank without a message.
+            op_yank_reg(oap, false, reg, is_append_register((*oap).regname));
+            did_yank = true;
+        }
+
+        // Into `"1`, shifting the number registers, when the delete contains a
+        // line break or a specific operator was used (Vi compatible).
+        if (*oap).motion_type == kMTLineWise || (*oap).line_count > 1 || (*oap).use_reg_one {
+            shift_delete_registers(is_append_register((*oap).regname));
+            reg = get_y_register(1);
+            op_yank_reg(oap, false, reg, false);
+            did_yank = true;
+        }
+
+        // Into the small-delete register when no register was named and the
+        // delete is within one line.
+        if (*oap).regname == 0 && (*oap).motion_type != kMTLineWise && (*oap).line_count == 1 {
+            reg = get_yank_register('-' as c_int, YREG_YANK as c_int);
+            op_yank_reg(oap, false, reg, false);
+            did_yank = true;
+        }
+
+        if did_yank || (*oap).regname == 0 {
+            if reg.is_null() {
+                abort();
+            }
+            crate::src::nvim::clipboard::set_clipboard((*oap).regname, reg as *mut _);
+            do_autocmd_textyankpost(oap, reg);
+        }
+        true
+    }
+}
+
+/// The blockwise arm: cut the rectangle out of every line it reaches.
+///
+/// Deleting a TAB that straddles an edge can make the line *longer*, because
+/// the part of it outside the block comes back as spaces -- which is what
+/// `startspaces`/`endspaces` are, and why the new line is built rather than
+/// patched.
+///
+/// # Safety
+/// `oap` must point to a live blockwise `oparg_T`.
+unsafe fn delete_block(oap: *mut oparg_T) -> c_int {
+    unsafe {
+        if u_save((*oap).start.lnum - 1, (*oap).end.lnum + 1) == FAIL {
+            return FAIL;
+        }
+
+        let mut bd = block_def::ZERO;
+        let mut lnum = (*curwin.get()).w_cursor.lnum;
+        while lnum <= (*oap).end.lnum {
+            block_prep(oap, &raw mut bd, lnum, true);
+            if bd.textlen != 0 {
+                // Adjust the cursor for a TAB replaced by spaces, and 'lbr'.
+                if lnum == (*curwin.get()).w_cursor.lnum {
+                    (*curwin.get()).w_cursor.col = bd.textcol + bd.startspaces;
+                    (*curwin.get()).w_cursor.coladd = 0;
+                }
+
+                // The line shrinks by the block's text minus the padding that
+                // replaces the characters it only partly covers.
+                let n = bd.textlen - bd.startspaces - bd.endspaces;
+                let oldp = ml_get(lnum);
+                let newp = xmalloc(ml_get_len(lnum) as size_t - n as size_t + 1) as *mut c_char;
+                memmove(
+                    newp as *mut c_void,
+                    oldp as *const c_void,
+                    bd.textcol as size_t,
+                );
+                memset(
+                    newp.offset(bd.textcol as isize) as *mut c_void,
+                    ' ' as c_int,
+                    bd.startspaces as size_t + bd.endspaces as size_t,
+                );
+                strcpy(
+                    newp.offset((bd.textcol + bd.startspaces + bd.endspaces) as isize),
+                    oldp.offset((bd.textcol + bd.textlen) as isize),
+                );
+                ml_replace(lnum, newp, false);
+
+                extmark_splice_cols(
+                    curbuf.get(),
+                    lnum as c_int - 1,
+                    bd.textcol,
+                    bd.textlen,
+                    bd.startspaces + bd.endspaces,
+                    kExtmarkUndo,
+                );
+            }
+            lnum += 1;
+        }
+
+        check_cursor_col(curwin.get());
+        changed_lines(
+            curbuf.get(),
+            (*curwin.get()).w_cursor.lnum,
+            (*curwin.get()).w_cursor.col,
+            (*oap).end.lnum + 1,
+            0,
+            true,
+        );
+        // No whole lines were deleted, so `msgmore` must not report any.
+        (*oap).line_count = 0;
+        OK
+    }
+}
+
+/// The linewise arm.
+///
+/// `c` is the odd one: it deletes every line *but the first* and then empties
+/// the first, so that the insert starts on a line that already exists and
+/// 'autoindent' has an indent to keep.
+///
+/// # Safety
+/// `oap` must point to a live linewise `oparg_T`.
+unsafe fn delete_whole_lines(oap: *mut oparg_T) -> c_int {
+    unsafe {
+        if (*oap).op_type != OP_CHANGE {
+            del_lines((*oap).line_count, true);
+            beginline(BL_WHITE as c_int | BL_FIX as c_int);
+            // `U` is not possible after `dd`.
+            u_clearline(curbuf.get());
+            return OK;
+        }
+
+        // Delete every line but the first, with the cursor moved off it: the
+        // line number is remembered because deleting the last line moves it.
+        if (*oap).line_count > 1 {
+            let lnum = (*curwin.get()).w_cursor.lnum;
+            (*curwin.get()).w_cursor.lnum += 1;
+            del_lines((*oap).line_count - 1, true);
+            (*curwin.get()).w_cursor.lnum = lnum;
+        }
+        if u_save_cursor() == FAIL {
+            return FAIL;
+        }
+        if (*curbuf.get()).b_p_ai != 0 {
+            // Keep the indent, on the first non-white character; `did_ai` is
+            // what deletes it again if the insert is left with ESC.
+            beginline(BL_WHITE as c_int);
+            did_ai.set(true);
+            ai_col.set((*curwin.get()).w_cursor.col);
+        } else {
+            beginline(0);
+        }
+        // The rest of the line, leaving the cursor past its last character.
+        truncate_line(false_0);
+        if (*oap).line_count > 1 {
+            // `U` is not possible after `2cc`.
+            u_clearline(curbuf.get());
+        }
+        OK
+    }
+}
+
+/// The charwise arm.
+///
+/// # Safety
+/// `oap` must point to a live charwise `oparg_T`.
+unsafe fn delete_chars(oap: *mut oparg_T) -> c_int {
+    unsafe {
+        if virtual_op.get() != 0 && break_tabs_at_edges(oap) == FAIL {
+            return FAIL;
+        }
+
+        let deleted = if (*oap).line_count == 1 {
+            delete_chars_one_line(oap)
+        } else {
+            delete_chars_across_lines(oap)
+        };
+        if deleted == FAIL {
+            return FAIL;
+        }
+
+        if (*oap).op_type == OP_DELETE {
+            auto_format(false, true);
+        }
+        OK
+    }
+}
+
+/// 'virtualedit' only: replace a TAB the region starts or ends inside with the
+/// spaces it covers, so that the delete has real byte positions to work with.
+///
+/// Moves `oap.start`/`oap.end` onto those positions.
+///
+/// # Safety
+/// `oap` must point to a live charwise `oparg_T`.
+unsafe fn break_tabs_at_edges(oap: *mut oparg_T) -> c_int {
+    unsafe {
+        if gchar_pos(&raw mut (*oap).start) == '\t' as c_int {
+            // Save the first line for undo.
+            if u_save_cursor() == FAIL {
+                return FAIL;
+            }
+            // Breaking the start TAB moves the end too, so remember where the
+            // end was in *columns* first.
+            let mut endcol = 0;
+            if (*oap).line_count == 1 {
+                endcol = getviscol2((*oap).end.col, (*oap).end.coladd);
+            }
+            coladvance_force(getviscol2((*oap).start.col, (*oap).start.coladd));
+            (*oap).start = (*curwin.get()).w_cursor;
+            if (*oap).line_count == 1 {
+                coladvance(curwin.get(), endcol);
+                (*oap).end.col = (*curwin.get()).w_cursor.col;
+                (*oap).end.coladd = (*curwin.get()).w_cursor.coladd;
+                (*curwin.get()).w_cursor = (*oap).start;
+            }
+        }
+
+        // Break the end TAB only when it is inside the region.
+        if gchar_pos(&raw mut (*oap).end) == '\t' as c_int
+            && (*oap).end.coladd == 0
+            && (*oap).inclusive
+        {
+            // Save the last line for undo.
+            if u_save((*oap).end.lnum - 1, (*oap).end.lnum + 1) == FAIL {
+                return FAIL;
+            }
+            (*curwin.get()).w_cursor = (*oap).end;
+            coladvance_force(getviscol2((*oap).end.col, (*oap).end.coladd));
+            (*oap).end = (*curwin.get()).w_cursor;
+            (*curwin.get()).w_cursor = (*oap).start;
+        }
+
+        mb_adjust_opend(oap);
+        OK
+    }
+}
+
+/// Delete characters within one line.
+///
+/// # Safety
+/// `oap` must point to a live charwise `oparg_T` whose region is one line.
+unsafe fn delete_chars_one_line(oap: *mut oparg_T) -> c_int {
+    unsafe {
+        // Save the line for undo.
+        if u_save_cursor() == FAIL {
+            return FAIL;
+        }
+
+        // 'cpoptions' `$`: show a `$` at the end of the change rather than
+        // removing the text now.
+        if !vim_strchr(p_cpo.get(), CPO_DOLLAR).is_null()
+            && (*oap).op_type == OP_CHANGE
+            && (*oap).end.lnum == (*curwin.get()).w_cursor.lnum
+            && !(*oap).is_VIsual
+        {
+            display_dollar((*oap).end.col - c_int::from(!(*oap).inclusive));
+        }
+
+        let mut n = (*oap).end.col - (*oap).start.col + 1 - c_int::from(!(*oap).inclusive);
+
+        if virtual_op.get() != 0 {
+            let len = get_cursor_line_len();
+            if (*oap).end.coladd != 0
+                && (*oap).end.col >= len - 1
+                && !((*oap).start.coladd != 0 && (*oap).end.col >= len - 1)
+            {
+                n += 1;
+            }
+            // Delete at least one character, e.g. when on a control character.
+            if n == 0 && (*oap).start.coladd != (*oap).end.coladd {
+                n = 1;
+            }
+            // Having deleted a character in the line, `coladd` is stale.
+            if gchar_cursor() != NUL {
+                (*curwin.get()).w_cursor.coladd = 0;
+            }
+        }
+
+        del_bytes(
+            n,
+            virtual_op.get() == 0,
+            (*oap).op_type == OP_DELETE && !(*oap).is_VIsual,
+        );
+        OK
+    }
+}
+
+/// Delete a charwise region that spans lines.
+///
+/// Four edits -- truncate the first line, delete the whole lines between,
+/// delete the head of the last, join what is left -- bracketed by
+/// `curbuf_splice_pending` so that extmarks and the buffer-update RPC see the
+/// one splice measured up front rather than four.
+///
+/// # Safety
+/// `oap` must point to a live charwise `oparg_T` spanning at least two lines.
+unsafe fn delete_chars_across_lines(oap: *mut oparg_T) -> c_int {
+    unsafe {
+        // Save the deleted and changed lines for undo.
+        if u_save(
+            (*curwin.get()).w_cursor.lnum - 1,
+            (*curwin.get()).w_cursor.lnum + (*oap).line_count,
+        ) == FAIL
+        {
+            return FAIL;
+        }
+
+        *curbuf_splice_pending.ptr() += 1;
+        let startpos = (*curwin.get()).w_cursor;
+        let deleted_bytes = get_region_bytecount(
+            curbuf.get(),
+            startpos.lnum,
+            (*oap).end.lnum,
+            startpos.col,
+            (*oap).end.col,
+        ) + bcount_t::from((*oap).inclusive);
+
+        // From the cursor to the end of the line.
+        truncate_line(true_0);
+
+        let curpos = (*curwin.get()).w_cursor;
+        (*curwin.get()).w_cursor.lnum += 1;
+        del_lines((*oap).line_count - 2, false);
+
+        // From the start of the last line up to the region's end.
+        let n = (*oap).end.col + 1 - c_int::from(!(*oap).inclusive);
+        (*curwin.get()).w_cursor.col = 0;
+        del_bytes(
+            n,
+            virtual_op.get() == 0,
+            (*oap).op_type == OP_DELETE && !(*oap).is_VIsual,
+        );
+
+        (*curwin.get()).w_cursor = curpos;
+        do_join(2, false, false, false, false);
+        *curbuf_splice_pending.ptr() -= 1;
+
+        extmark_splice(
+            curbuf.get(),
+            startpos.lnum as c_int - 1,
+            startpos.col,
+            (*oap).line_count as c_int - 1,
+            n,
+            deleted_bytes,
+            0,
+            0,
+            0,
+            kExtmarkUndo,
+        );
+        OK
+    }
+}
+
+/// Pull `oap.end` back onto the *last byte* of the character it lands in, so
+/// that an inclusive delete takes the whole character.
+///
+/// # Safety
+/// `oap` must point to a live `oparg_T` whose end names a position in the
+/// current buffer.
+pub(crate) unsafe fn mb_adjust_opend(oap: *mut oparg_T) {
     unsafe {
         if !(*oap).inclusive {
             return;
         }
-        let mut line: *const ::core::ffi::c_char = ml_get((*oap).end.lnum);
-        let mut ptr: *const ::core::ffi::c_char = line.offset((*oap).end.col as isize);
-        if *ptr as ::core::ffi::c_int != NUL {
+        let line: *const c_char = ml_get((*oap).end.lnum);
+        let mut ptr = line.offset((*oap).end.col as isize);
+        if *ptr as c_int != NUL {
             ptr = ptr.offset(-(utf_head_off(line, ptr) as isize));
-            ptr = ptr.offset((utfc_ptr2len(ptr) - 1 as ::core::ffi::c_int) as isize);
+            ptr = ptr.offset((utfc_ptr2len(ptr) - 1) as isize);
             (*oap).end.col = ptr.offset_from(line) as colnr_T;
         }
     }
-}
-
-#[inline]
-unsafe extern "C" fn is_append_register(mut regname: ::core::ffi::c_int) -> bool {
-    return regname as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-        && regname as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint;
 }
