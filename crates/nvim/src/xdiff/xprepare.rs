@@ -160,8 +160,13 @@ fn prepare_ctx<'a>(
         dstart: 0,
         dend: nrec as i64 - 1,
         rchg: Changed::new(nrec),
-        rindex: vec![0; nrec + 1],
-        ha: vec![0; nrec + 1],
+        // Left empty, not zero-filled: `keep_matched` pushes exactly the
+        // lines that survive, and for patience and histogram — which never
+        // run it — nothing ever reads them. Upstream mallocs `nrec + 1`
+        // uninitialised entries here, so zeroing them would be work the C
+        // does not do, on the one path `:diffupdate` runs per redraw.
+        rindex: Vec::with_capacity(nrec + 1),
+        ha: Vec::with_capacity(nrec + 1),
         nreff: 0,
     }
 }
@@ -283,18 +288,16 @@ fn match_counts(
 /// Fill `rindex`/`ha` with the lines worth diffing, and mark the rest
 /// changed outright — they cannot match anything, so no walk will pair them.
 fn keep_matched(xdf: &mut XdFile<'_>, dis: &[i8]) {
-    let mut nreff = 0i64;
     for i in xdf.dstart..=xdf.dend {
         let d = dis[i as usize];
         if d == 1 || (d == 2 && !clean_mmatch(dis, i, xdf.dstart, xdf.dend)) {
-            xdf.rindex[nreff as usize] = i;
-            xdf.ha[nreff as usize] = xdf.ha_at(i);
-            nreff += 1;
+            xdf.rindex.push(i);
+            xdf.ha.push(xdf.ha_at(i));
         } else {
             xdf.rchg.set(i, true);
         }
     }
-    xdf.nreff = nreff;
+    xdf.nreff = xdf.rindex.len() as i64;
 }
 
 /// Early-trim the matching head and tail, narrowing `dstart`/`dend`.
