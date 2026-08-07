@@ -215,20 +215,7 @@ pub unsafe extern "C" fn in_cinkeys(
                             }
                             s = n;
                         }
-                        '_c2rust_label: {
-                            if p >= look
-                                && p.offset_from(look) as uintmax_t
-                                    <= 18446744073709551615 as uintmax_t
-                            {
-                            } else {
-                                __assert_fail(
-                                    c"p >= look && (uintmax_t)(p - look) <= SIZE_MAX".as_ptr(),
-                                    c"src/nvim/indent_c.rs".as_ptr(),
-                                    3933 as ::core::ffi::c_uint,
-                                    __ASSERT_FUNCTION.as_ptr(),
-                                );
-                            }
-                        };
+                        debug_assert!(p >= look);
                         if s.offset(p.offset_from(look) as isize)
                             <= line.offset((*curwin.get()).w_cursor.col as isize)
                             && (if icase as ::core::ffi::c_int != 0 {
@@ -250,20 +237,7 @@ pub unsafe extern "C" fn in_cinkeys(
                                     as ::core::ffi::c_int)
                     {
                         let mut line_0: *mut ::core::ffi::c_char = get_cursor_pos_ptr();
-                        '_c2rust_label_0: {
-                            if p >= look
-                                && p.offset_from(look) as uintmax_t
-                                    <= 18446744073709551615 as uintmax_t
-                            {
-                            } else {
-                                __assert_fail(
-                                    c"p >= look && (uintmax_t)(p - look) <= SIZE_MAX".as_ptr(),
-                                    c"src/nvim/indent_c.rs".as_ptr(),
-                                    3946 as ::core::ffi::c_uint,
-                                    __ASSERT_FUNCTION.as_ptr(),
-                                );
-                            }
-                        };
+                        debug_assert!(p >= look);
                         if ((*curwin.get()).w_cursor.col == p.offset_from(look) as colnr_T
                             || !vim_iswordc(
                                 *line_0.offset((-p.offset_from(look) - 1 as isize) as isize)

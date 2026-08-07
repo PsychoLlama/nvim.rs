@@ -40,7 +40,7 @@ use crate::src::nvim::mbyte::{mb_prevptr, mb_strnicmp, utfc_ptr2len};
 use crate::src::nvim::memline::{ml_get, ml_get_pos};
 use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::option::{copy_option_part, skip_to_option_part};
-use crate::src::nvim::os::libc::{__assert_fail, atoi, strcpy, strlen, strncmp, tolower};
+use crate::src::nvim::os::libc::{atoi, strcpy, strlen, strncmp, tolower};
 use crate::src::nvim::plines::getvcol;
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM, lt};
 use crate::src::nvim::search::{check_linecomment, findmatchlimit, linewhite};
@@ -48,7 +48,7 @@ use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
     EvalFuncData, buf_T, colnr_T, int64_t, intptr_t, linenr_T, lpos_T, oparg_T, pos_T, size_t,
-    typval_T, uint8_t, uintmax_t, varnumber_T,
+    typval_T, uint8_t, varnumber_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -71,6 +71,33 @@ pub use self::keys::*;
 pub(crate) use self::label::*;
 pub(crate) use self::paren::*;
 pub use self::recog::*;
+
+/// The screen column byte `col` of line `lnum` sits at.
+///
+/// Four of the amount answers in this family are a `getvcol` of one
+/// position, and `getvcol` needs a `pos_T` and three out-parameters to say
+/// so.
+///
+/// # Safety
+/// `lnum` must be a valid line of the current buffer.
+pub(crate) unsafe fn line_vcol(lnum: linenr_T, col: colnr_T) -> ::core::ffi::c_int {
+    unsafe {
+        let mut fp = pos_T {
+            lnum,
+            col,
+            coladd: 0,
+        };
+        let mut vcol: colnr_T = 0;
+        getvcol(
+            curwin.get(),
+            &raw mut fp,
+            &raw mut vcol,
+            ::core::ptr::null_mut::<colnr_T>(),
+            ::core::ptr::null_mut::<colnr_T>(),
+        );
+        vcol
+    }
+}
 
 /// The byte at `i` of a NUL-terminated line held as a slice.
 ///
@@ -102,11 +129,6 @@ pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;
 pub const COM_LEFT: ::core::ffi::c_int = 'l' as ::core::ffi::c_int;
 pub const COM_RIGHT: ::core::ffi::c_int = 'r' as ::core::ffi::c_int;
 pub const COM_MAX_LEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
-pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
-        *b"_Bool in_cinkeys(int, int, _Bool)\0",
-    )
-};
 pub const FIND_NAMESPACE_LIM: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const BRACE_IN_COL0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const BRACE_AT_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
