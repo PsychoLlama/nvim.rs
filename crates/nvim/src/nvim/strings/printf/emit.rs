@@ -462,13 +462,19 @@ unsafe fn render_string(
                     if c.min_field_width != 0 {
                         // Pad to a *cell* width: the field width is stated
                         // in cells and the padder counts bytes, so the
-                        // difference is added on. The `size_t` arithmetic
-                        // wraps *twice* when the text takes more cells than
-                        // bytes, which lands on the right answer -- unless
-                        // the total goes below zero, which is O-B15-2.
+                        // difference is added on. It is *signed* -- a
+                        // string can take more cells than bytes, and then
+                        // the field has to shrink -- and it can ask for a
+                        // width below zero, which is not a width at all.
+                        //
+                        // Upstream writes this in `size_t` and the
+                        // subtraction underflows there: `printf('%3S',
+                        // "\xe9\xe8\xfc")` asks for 3 - 9, gets ~2^64, and
+                        // the editor exits with `E41: Out of memory!`
+                        // (O-B15-2).
                         c.min_field_width = c
                             .min_field_width
-                            .wrapping_add(str_arg_l.wrapping_sub(cells));
+                            .saturating_add_signed(str_arg_l as isize - cells as isize);
                     }
                 }
                 Body::At(str_arg, str_arg_l)
