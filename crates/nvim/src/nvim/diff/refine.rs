@@ -248,7 +248,7 @@ unsafe extern "C" fn diff_refine_inline_word_highlight(
 pub(crate) unsafe extern "C" fn diff_find_change_inline_diff(mut dp: *mut diff_T) {
     unsafe {
         let mut new_diff: *mut diff_T = ::core::ptr::null_mut::<diff_T>();
-        let save_diff_algorithm: ::core::ffi::c_int = diff_algorithm.get();
+        let save_diff_algorithm: u64 = diff_algorithm.get();
         let mut dio: diffio_T = diffio_T {
             dio_orig: diffin_T {
                 din_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),

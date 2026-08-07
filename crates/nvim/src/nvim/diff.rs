@@ -92,7 +92,7 @@ use crate::src::nvim::os::libc::{
     __assert_fail, __ctype_b_loc, atol, fclose, fwrite, gettext, memcpy, memmove, memset, qsort,
     snprintf, strcat, strcmp, strcpy, strlen, strncmp, tolower,
 };
-use crate::src::nvim::os::shell::call_shell;
+use crate::src::nvim::os::shell::{call_shell, kShellOptDoOut, kShellOptSilent};
 use crate::src::nvim::path::FullName_save;
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
 use crate::src::nvim::search::{BACKWARD, FORWARD};
@@ -112,6 +112,11 @@ use crate::src::nvim::window::{
     WSP_VERT, frames_locked, scroll_to_fraction, set_fraction, win_split, win_valid,
 };
 use crate::src::xdiff::ffi::xdl_diff;
+use crate::src::xdiff::xtypes::{
+    XDF_HISTOGRAM_DIFF, XDF_IGNORE_BLANK_LINES, XDF_IGNORE_WHITESPACE,
+    XDF_IGNORE_WHITESPACE_AT_EOL, XDF_IGNORE_WHITESPACE_CHANGE, XDF_INDENT_HEURISTIC,
+    XDF_NEED_MINIMAL, XDF_PATIENCE_DIFF,
+};
 
 // The carve of the transpiled module; see each child's docs.
 mod block;
@@ -182,11 +187,11 @@ pub type diffstyle_T = ::core::ffi::c_uint;
 pub const DIFF_NONE: diffstyle_T = 2;
 pub const DIFF_UNIFIED: diffstyle_T = 1;
 pub const DIFF_ED: diffstyle_T = 0;
-pub const kShellOptDoOut: C2Rust_Unnamed_22 = 4;
-pub const kShellOptSilent: C2Rust_Unnamed_22 = 8;
-pub const kShellOptFilter: C2Rust_Unnamed_22 = 1;
-pub const MAX_DIFF_ANCHORS: C2Rust_Unnamed_24 = 20;
-pub const OPT_LOCAL: C2Rust_Unnamed_21 = 2;
+pub const MAX_DIFF_ANCHORS: ::core::ffi::c_int = 20;
+/// `kShellOptFilter`, which `os/shell.rs` does not declare: it is read by
+/// `do_filter`, not by `call_shell`.
+pub const kShellOptFilter: ::core::ffi::c_int = 1;
+pub const OPT_LOCAL: ::core::ffi::c_int = 2;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct linemap_entry_T {
@@ -194,9 +199,6 @@ pub struct linemap_entry_T {
     pub num_bytes: colnr_T,
     pub lineoff: ::core::ffi::c_int,
 }
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
@@ -233,29 +235,13 @@ pub const ALL_INLINE_DIFF: ::core::ffi::c_int = DIFF_INLINE_CHAR | DIFF_INLINE_W
 static diff_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(
     DIFF_INTERNAL | DIFF_FILLER | DIFF_CLOSE_OFF | DIFF_LINEMATCH | DIFF_INLINE_CHAR,
 );
-static diff_algorithm: GlobalCell<::core::ffi::c_int> = GlobalCell::new(XDF_INDENT_HEURISTIC);
+static diff_algorithm: GlobalCell<u64> = GlobalCell::new(XDF_INDENT_HEURISTIC);
 static diff_word_gap: GlobalCell<::core::ffi::c_int> = GlobalCell::new(5 as ::core::ffi::c_int);
 static linematch_lines: GlobalCell<::core::ffi::c_int> = GlobalCell::new(40 as ::core::ffi::c_int);
 pub const LBUFLEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 pub const MAX_XDIFF_SIZE: ::core::ffi::c_long =
     1024 as ::core::ffi::c_long * 1024 as ::core::ffi::c_long * 1023 as ::core::ffi::c_long;
 static diff_a_works: GlobalCell<TriState> = GlobalCell::new(kNone);
-pub const XDF_NEED_MINIMAL: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 0 as ::core::ffi::c_int;
-pub const XDF_IGNORE_WHITESPACE: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
-pub const XDF_IGNORE_WHITESPACE_CHANGE: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 2 as ::core::ffi::c_int;
-pub const XDF_IGNORE_WHITESPACE_AT_EOL: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 3 as ::core::ffi::c_int;
-pub const XDF_IGNORE_BLANK_LINES: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
-pub const XDF_PATIENCE_DIFF: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
-pub const XDF_HISTOGRAM_DIFF: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 15 as ::core::ffi::c_int;
-pub const XDF_INDENT_HEURISTIC: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 23 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;

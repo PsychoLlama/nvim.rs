@@ -121,7 +121,7 @@ pub unsafe fn ex_diffpatch(mut eap: *mut exarg_T) {
                     block_autocmds();
                     call_shell(
                         buf,
-                        kShellOptFilter as ::core::ffi::c_int,
+                        kShellOptFilter,
                         ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     );
                     unblock_autocmds();
@@ -291,7 +291,7 @@ unsafe extern "C" fn set_diff_option(mut wp: *mut win_T, mut value: bool) {
                     boolean: value as TriState,
                 },
             },
-            OPT_LOCAL as ::core::ffi::c_int,
+            OPT_LOCAL,
         );
         (*curbuf.get()).b_ro_locked -= 1;
         curwin.set(old_curwin);
@@ -339,7 +339,7 @@ pub unsafe extern "C" fn diff_win_options(mut wp: *mut win_T, mut addbuf: bool) 
                     },
                 },
             },
-            OPT_LOCAL as ::core::ffi::c_int,
+            OPT_LOCAL,
             0 as scid_T,
             kOptScopeWin,
             wp as *mut ::core::ffi::c_void,

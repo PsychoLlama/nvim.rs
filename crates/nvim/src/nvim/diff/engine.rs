@@ -153,18 +153,18 @@ pub(crate) unsafe extern "C" fn diff_file_internal(
             0 as ::core::ffi::c_int,
             ::core::mem::size_of::<xdemitcb_t>(),
         );
-        param.flags = diff_algorithm.get() as ::core::ffi::c_ulong;
+        param.flags = diff_algorithm.get();
         if diff_flags.get() & DIFF_IWHITE != 0 {
-            param.flags |= XDF_IGNORE_WHITESPACE_CHANGE as ::core::ffi::c_ulong;
+            param.flags |= XDF_IGNORE_WHITESPACE_CHANGE;
         }
         if diff_flags.get() & DIFF_IWHITEALL != 0 {
-            param.flags |= XDF_IGNORE_WHITESPACE as ::core::ffi::c_ulong;
+            param.flags |= XDF_IGNORE_WHITESPACE;
         }
         if diff_flags.get() & DIFF_IWHITEEOL != 0 {
-            param.flags |= XDF_IGNORE_WHITESPACE_AT_EOL as ::core::ffi::c_ulong;
+            param.flags |= XDF_IGNORE_WHITESPACE_AT_EOL;
         }
         if diff_flags.get() & DIFF_IBLANK != 0 {
-            param.flags |= XDF_IGNORE_BLANK_LINES as ::core::ffi::c_ulong;
+            param.flags |= XDF_IGNORE_BLANK_LINES;
         }
         emit_cfg.ctxlen = 0 as ::core::ffi::c_long;
         emit_cb.priv_0 = &raw mut (*diffio).dio_diff as *mut ::core::ffi::c_void;
@@ -269,9 +269,7 @@ pub(crate) unsafe extern "C" fn diff_file(mut dio: *mut diffio_T) -> ::core::ffi
         block_autocmds();
         call_shell(
             cmd,
-            kShellOptFilter as ::core::ffi::c_int
-                | kShellOptSilent as ::core::ffi::c_int
-                | kShellOptDoOut as ::core::ffi::c_int,
+            kShellOptFilter | kShellOptSilent | kShellOptDoOut,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
         );
         unblock_autocmds();

@@ -45,7 +45,7 @@ pub(crate) unsafe extern "C" fn parse_diffanchors(
             }
         }
         i = 0 as ::core::ffi::c_int;
-        while i < MAX_DIFF_ANCHORS as ::core::ffi::c_int && *dia as ::core::ffi::c_int != NUL {
+        while i < MAX_DIFF_ANCHORS && *dia as ::core::ffi::c_int != NUL {
             if *dia as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
                 return FAIL;
             }
@@ -92,13 +92,13 @@ pub(crate) unsafe extern "C" fn parse_diffanchors(
             }
             i += 1;
         }
-        if i == MAX_DIFF_ANCHORS as ::core::ffi::c_int && *dia as ::core::ffi::c_int != NUL {
+        if i == MAX_DIFF_ANCHORS && *dia as ::core::ffi::c_int != NUL {
             semsg(
                 gettext(
                     &raw const e_cannot_have_more_than_nr_diff_anchors
                         as *const ::core::ffi::c_char,
                 ),
-                MAX_DIFF_ANCHORS as ::core::ffi::c_int,
+                MAX_DIFF_ANCHORS,
             );
             return FAIL;
         }
@@ -146,8 +146,8 @@ pub unsafe extern "C" fn diffopt_changed() -> ::core::ffi::c_int {
         let mut linematch_lines_new: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut diff_flags_new: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut diff_foldcolumn_new: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-        let mut diff_algorithm_new: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut diff_indent_heuristic: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+        let mut diff_algorithm_new: u64 = 0;
+        let mut diff_indent_heuristic: u64 = 0;
         let mut p: *mut ::core::ffi::c_char = p_dip.get();
         while *p as ::core::ffi::c_int != NUL {
             if strncmp(
@@ -298,7 +298,7 @@ pub unsafe extern "C" fn diffopt_changed() -> ::core::ffi::c_int {
                 ) == 0 as ::core::ffi::c_int
                 {
                     p = p.offset(5 as ::core::ffi::c_int as isize);
-                    diff_algorithm_new = 0 as ::core::ffi::c_int;
+                    diff_algorithm_new = 0;
                 } else if strncmp(
                     p,
                     b"minimal\0".as_ptr() as *const ::core::ffi::c_char,
