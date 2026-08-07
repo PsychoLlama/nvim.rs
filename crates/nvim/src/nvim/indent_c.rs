@@ -40,7 +40,7 @@ use crate::src::nvim::mbyte::{mb_prevptr, mb_strnicmp, utfc_ptr2len};
 use crate::src::nvim::memline::{ml_get, ml_get_pos};
 use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::option::{copy_option_part, skip_to_option_part};
-use crate::src::nvim::os::libc::{atoi, strcpy, strlen, strncmp, tolower};
+use crate::src::nvim::os::libc::{atoi, strlen, strncmp, tolower};
 use crate::src::nvim::plines::getvcol;
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM, lt};
 use crate::src::nvim::search::{check_linecomment, findmatchlimit, linewhite};
@@ -48,7 +48,7 @@ use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
     EvalFuncData, buf_T, colnr_T, int64_t, linenr_T, lpos_T, oparg_T, pos_T, size_t, typval_T,
-    uint8_t, varnumber_T,
+    varnumber_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -57,16 +57,22 @@ mod comment;
 mod cpp;
 mod decl;
 mod engine;
+mod inblock;
+mod incomment;
+mod inparen;
 mod keys;
 mod label;
+mod lookfor;
 mod paren;
 mod recog;
+mod toplevel;
 
 pub use self::cino::*;
 pub use self::comment::*;
 pub(crate) use self::cpp::*;
 pub(crate) use self::decl::*;
 pub use self::engine::*;
+pub(crate) use self::inblock::*;
 pub use self::keys::*;
 pub(crate) use self::label::*;
 pub(crate) use self::paren::*;

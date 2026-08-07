@@ -193,10 +193,10 @@ pub(crate) unsafe fn find_match_paren_after_brace(ind_maxparen: c_int) -> *mut p
 ///
 /// # Safety
 /// Reads the cursor and the current buffer.
-pub(crate) unsafe fn corr_ind_maxparen(startpos: *mut pos_T) -> c_int {
+pub(crate) unsafe fn corr_ind_maxparen(startpos: &pos_T) -> c_int {
     unsafe {
         let maxparen = (*curbuf.get()).b_ind_maxparen;
-        let n = (*startpos).lnum - (*curwin.get()).w_cursor.lnum;
+        let n = startpos.lnum - (*curwin.get()).w_cursor.lnum;
         if n > 0 && n < maxparen / 2 {
             maxparen - n
         } else {
