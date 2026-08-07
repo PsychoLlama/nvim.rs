@@ -90,7 +90,7 @@ use crate::src::nvim::os::fs::{
 };
 use crate::src::nvim::os::libc::{
     __assert_fail, __ctype_b_loc, atol, fclose, fwrite, gettext, memcpy, memmove, memset, qsort,
-    snprintf, strcat, strcmp, strcpy, strlen, strncmp, tolower,
+    snprintf, strcat, strcpy, strlen, strncmp, tolower,
 };
 use crate::src::nvim::os::shell::{call_shell, kShellOptDoOut, kShellOptSilent};
 use crate::src::nvim::path::FullName_save;

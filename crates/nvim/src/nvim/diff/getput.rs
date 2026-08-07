@@ -422,7 +422,7 @@ unsafe extern "C" fn diffgetput(
                         if !(*curtab.get()).tp_diffbuf[i_1 as usize].is_null()
                             && i_1 != idx_from
                             && i_1 != idx_to
-                            && !diff_equal_entry(dp, idx_from, i_1)
+                            && !diff_equal_entry(dp, idx_from as usize, i_1 as usize)
                         {
                             break;
                         }

@@ -426,10 +426,13 @@ unsafe extern "C" fn diff_check_unchanged(mut tp: *mut tabpage_T, mut dp: *mut d
                 if dir == BACKWARD as ::core::ffi::c_int {
                     off_org = (*dp).df_count[i_org as usize] - 1 as linenr_T;
                 }
-                let mut line_org: *mut ::core::ffi::c_char = xstrdup(ml_get_buf(
+                // A copy: the `ml_get_buf` below invalidates the buffer
+                // this one answers with.
+                let line_org = ::std::ffi::CStr::from_ptr(ml_get_buf(
                     (*tp).tp_diffbuf[i_org as usize] as *mut buf_T,
                     (*dp).df_lnum[i_org as usize] + off_org,
-                ));
+                ))
+                .to_owned();
                 let mut i_new: ::core::ffi::c_int = 0;
                 i_new = i_org + 1 as ::core::ffi::c_int;
                 while i_new < DB_COUNT {
@@ -440,20 +443,18 @@ unsafe extern "C" fn diff_check_unchanged(mut tp: *mut tabpage_T, mut dp: *mut d
                         if off_new < 0 as linenr_T || off_new >= (*dp).df_count[i_new as usize] {
                             break;
                         }
-                        if diff_cmp(
-                            line_org,
-                            ml_get_buf(
+                        if !lines_equal(
+                            &line_org,
+                            ::std::ffi::CStr::from_ptr(ml_get_buf(
                                 (*tp).tp_diffbuf[i_new as usize] as *mut buf_T,
                                 (*dp).df_lnum[i_new as usize] + off_new,
-                            ),
-                        ) != 0 as ::core::ffi::c_int
-                        {
+                            )),
+                        ) {
                             break;
                         }
                     }
                     i_new += 1;
                 }
-                xfree(line_org as *mut ::core::ffi::c_void);
                 if i_new != DB_COUNT {
                     break;
                 }

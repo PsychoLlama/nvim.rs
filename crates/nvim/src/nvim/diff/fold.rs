@@ -168,7 +168,7 @@ pub unsafe extern "C" fn diff_check_with_linestatus(
                         && !(*curtab.get()).tp_diffbuf[i_0 as usize].is_null()
                         && (*dp).df_count[i_0 as usize] != 0 as linenr_T
                     {
-                        if !diff_equal_entry(dp, idx, i_0) {
+                        if !diff_equal_entry(dp, idx as usize, i_0 as usize) {
                             if !linestatus.is_null() {
                                 *linestatus = -1 as ::core::ffi::c_int;
                             }

@@ -150,7 +150,7 @@
     "crates/nvim/src/nvim/decoration/state.rs": {"unsafe": 21},
     "crates/nvim/src/nvim/decoration_provider.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/diff/block.rs": {"unsafe": 18},
-    "crates/nvim/src/nvim/diff/compare.rs": {"unsafe": 3},
+    "crates/nvim/src/nvim/diff/compare.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/diff/engine.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/diff/excmd.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/diff/fold.rs": {"unsafe": 6},
