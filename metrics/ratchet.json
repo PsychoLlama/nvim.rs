@@ -1,10 +1,11 @@
 {
   "internal_exports": 40,
-  "files_without_forbid_unsafe": 850,
+  "files_without_forbid_unsafe": 851,
   "files_without_deny_unsafe_op": 166,
   "files": {
-    "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2605, "unsafe": 56},
-    "crates/nvim/src/cjson/strbuf.rs": {"unsafe": 9},
+    "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe": 7},
+    "crates/nvim/src/cjson/lua_cjson/decode.rs": {"unsafe": 20},
+    "crates/nvim/src/cjson/lua_cjson/encode.rs": {"unsafe": 28},
     "crates/nvim/src/mpack/conv.rs": {"no_mangle": 1, "unsafe": 5},
     "crates/nvim/src/mpack/lmpack.rs": {"unsafe": 27},
     "crates/nvim/src/mpack/lmpack/session.rs": {"unsafe": 9},

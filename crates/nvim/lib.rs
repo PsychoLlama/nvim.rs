@@ -12,7 +12,6 @@ pub mod src {
     pub mod cjson {
         pub mod fpconv;
         pub mod lua_cjson;
-        pub mod strbuf;
     } // mod cjson
     pub mod mpack {
         pub mod conv;
