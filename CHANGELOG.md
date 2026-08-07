@@ -17,6 +17,15 @@ and this project adheres to [CalVer](https://calver.org/).
 - Rewrote the JSON codec behind `vim.json`, including its float formatting,
   which is what decides the exact text `vim.json.encode()` produces for a
   number.
+- Rewrote putting and the registers, covering `p`/`P` and their `g`, `]`,
+  `[` and `z` variants, yanking into a register and appending to one,
+  recording with `q` and replaying with `@`, CTRL-R in Insert mode and on
+  the command line, `:registers`, and the `getreg()`/`setreg()` surface the
+  clipboard provider and shada share.
+- Rewrote the buffer-change primitives, covering inserting and deleting
+  text, opening a new line with its indent and comment leader, and the
+  notifications an edit sends to the display, the extmark tree and the
+  buffer-update callbacks.
 - Rewrote text formatting and the text objects, covering auto-wrap at
   `'textwidth'`, `gq`/`gw` and `'formatexpr'`, the `'formatoptions'` and
   `'comments'` rules that decide where a paragraph ends, every `i`/`a`
