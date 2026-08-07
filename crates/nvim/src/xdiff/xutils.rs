@@ -247,18 +247,14 @@ fn hash_record_with_whitespace(text: &[u8], flags: u64) -> (u64, usize) {
 ///
 /// Upstream writes the sign into its scratch buffer *first* and then prepends
 /// the digits in front of it, so a negative value comes out with the minus on
-/// the wrong end: `-199` renders as `199-`. Reproduced here rather than
-/// quietly corrected, because the only way to reach it with a negative is a
-/// negative `ctxlen` and that is a divergence of its own (O-B15-1).
+/// the wrong end: `-199` renders as `199-`. Spelled correctly here (O-B15-1).
+/// Nothing reaches it negative any longer either — [`super::ffi::xdl_diff`]
+/// clamps `ctxlen`, which was the only way to compute a negative count.
 fn push_num(out: &mut Vec<u8>, val: i64) {
     let mut digits = [0u8; 21];
-    let mut i = digits.len();
-    if val < 0 {
-        i -= 1;
-        digits[i] = b'-';
-    }
     // `unsigned_abs`, so `i64::MIN` does not overflow the negation.
     let mut n = val.unsigned_abs();
+    let mut i = digits.len();
     loop {
         i -= 1;
         digits[i] = b'0' + (n % 10) as u8;
@@ -266,6 +262,10 @@ fn push_num(out: &mut Vec<u8>, val: i64) {
         if n == 0 {
             break;
         }
+    }
+    if val < 0 {
+        i -= 1;
+        digits[i] = b'-';
     }
     out.extend_from_slice(&digits[i..]);
 }
@@ -417,16 +417,16 @@ mod tests {
     }
 
     #[test]
-    fn push_num_puts_a_negative_sign_last() {
+    fn push_num_puts_the_sign_first() {
         let mut out = Vec::new();
         push_num(&mut out, 0);
         push_num(&mut out, 199);
         assert_eq!(out, b"0199".to_vec());
 
-        // O-B15-1: upstream's sign lands on the wrong end.
+        // O-B15-1: upstream would have written `199-` and `...808-`.
         let mut out = Vec::new();
         push_num(&mut out, -199);
         push_num(&mut out, i64::MIN);
-        assert_eq!(out, b"199-9223372036854775808-".to_vec());
+        assert_eq!(out, b"-199-9223372036854775808".to_vec());
     }
 }

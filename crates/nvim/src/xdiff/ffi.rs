@@ -176,7 +176,16 @@ pub unsafe fn xdl_diff(
         anchors,
     };
     let conf = EmitConf {
-        ctxlen: xecfg.ctxlen,
+        // A negative context length is not "less than none": it makes
+        // `xdl_emit_diff` compute a hunk header describing a range that is
+        // nowhere near the body it then writes, because the body's context
+        // loops simply do not run for a negative count while the header
+        // arithmetic still applies it. Clamping here is what makes the two
+        // agree; `vim.diff{ctxlen = -1}` is now `ctxlen = 0`. See O-B15-1.
+        ctxlen: xecfg.ctxlen.max(0),
+        // `interhunkctxlen` needs no clamp: it only shrinks the run of
+        // unchanged lines two hunks may share, and a negative one is a
+        // coherent (if pointless) request to never join two hunks.
         interhunkctxlen: xecfg.interhunkctxlen,
         flags: xecfg.flags,
     };
