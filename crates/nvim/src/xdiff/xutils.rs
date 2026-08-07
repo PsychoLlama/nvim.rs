@@ -185,16 +185,23 @@ pub fn recmatch(l1: &[u8], l2: &[u8], flags: u64) -> bool {
 /// need to see the byte after a whitespace run to know whether the run is at
 /// end of line, and that byte may be the newline itself.
 pub fn hash_record(text: &[u8], flags: u64) -> (u64, usize) {
+    // Where this line ends, and where the next one starts. Splitting the
+    // line off first is what keeps the fold loop below index-free: it is the
+    // one place in the engine that runs per *byte* of both files.
+    let end = text.iter().position(|&b| b == b'\n').unwrap_or(text.len());
+    let used = if end < text.len() { end + 1 } else { end };
     if flags & XDF_WHITESPACE_FLAGS != 0 {
-        return hash_record_with_whitespace(text, flags);
+        let complete = end < text.len();
+        return (
+            hash_record_with_whitespace(&text[..end], complete, flags),
+            used,
+        );
     }
     let mut ha = 5381u64;
-    let mut p = 0usize;
-    while p < text.len() && text[p] != b'\n' {
-        ha = fold(ha, text[p]);
-        p += 1;
+    for &byte in &text[..end] {
+        ha = fold(ha, byte);
     }
-    (ha, if p < text.len() { p + 1 } else { p })
+    (ha, used)
 }
 
 /// One djb2-ish step. The byte enters as a *signed* char, as it does in the
@@ -205,42 +212,51 @@ fn fold(ha: u64, byte: u8) -> u64 {
     ha.wrapping_add(ha << 5) ^ (byte as i8 as u64)
 }
 
-fn hash_record_with_whitespace(text: &[u8], flags: u64) -> (u64, usize) {
+/// The whitespace flavours, over one line with its newline already removed.
+///
+/// Upstream works over the whole remaining file and tests `ptr[1] == '\n'`
+/// to decide a whitespace run is at end of line; with the newline stripped
+/// that test is just "is this the last byte of the line", which is the same
+/// answer and needs no lookahead past the slice. `complete` says whether the
+/// line *had* a newline, which the CR rule below still has to know.
+fn hash_record_with_whitespace(line: &[u8], complete: bool, flags: u64) -> u64 {
     let mut ha = 5381u64;
     let cr_at_eol_only = flags & XDF_WHITESPACE_FLAGS == XDF_IGNORE_CR_AT_EOL;
-    let top = text.len();
+    let top = line.len();
     let mut p = 0usize;
 
-    while p < top && text[p] != b'\n' {
+    while p < top {
         if cr_at_eol_only {
-            // Do not ignore CR at the end of an incomplete line.
-            if text[p] == b'\r' && p + 1 < top && text[p + 1] == b'\n' {
+            // Do not ignore CR at the end of an incomplete line. The
+            // newline was stripped above, so "immediately before the
+            // newline" is "the last byte of a line that had one".
+            if line[p] == b'\r' && p + 1 == top && complete {
                 p += 1;
                 continue;
             }
-        } else if is_space(text[p]) {
+        } else if is_space(line[p]) {
             let run_start = p;
-            while p + 1 < top && is_space(text[p + 1]) && text[p + 1] != b'\n' {
+            while p + 1 < top && is_space(line[p + 1]) {
                 p += 1;
             }
-            let at_eol = p + 1 >= top || text[p + 1] == b'\n';
+            let at_eol = p + 1 >= top;
             if flags & XDF_IGNORE_WHITESPACE != 0 {
                 // Already handled: the whole run contributes nothing.
             } else if flags & XDF_IGNORE_WHITESPACE_CHANGE != 0 && !at_eol {
                 ha = fold(ha, b' ');
             } else if flags & XDF_IGNORE_WHITESPACE_AT_EOL != 0 && !at_eol {
-                for &byte in &text[run_start..=p] {
+                for &byte in &line[run_start..=p] {
                     ha = fold(ha, byte);
                 }
             }
             p += 1;
             continue;
         }
-        ha = fold(ha, text[p]);
+        ha = fold(ha, line[p]);
         p += 1;
     }
 
-    (ha, if p < top { p + 1 } else { p })
+    ha
 }
 
 /// `xdl_num_out`: append `val` in decimal.

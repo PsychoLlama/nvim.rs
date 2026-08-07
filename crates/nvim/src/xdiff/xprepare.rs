@@ -44,17 +44,20 @@ struct Class<'a> {
     len1: i64,
     /// How many lines of file 2 are.
     len2: i64,
+    /// Next class in the same hash bucket, or [`Classifier::NONE`].
+    ///
+    /// The chain is intrusive, exactly as upstream's is: a `Vec` per bucket
+    /// would cost a heap allocation per class and three words per *empty*
+    /// bucket, and there are `1 << hbits` of those per diff.
+    next: u32,
 }
 
 /// `xdlclassifier_t`: hash-to-class-id, shared across both files.
 struct Classifier<'a> {
     /// Width of [`Self::buckets`], in bits.
     hbits: u32,
-    /// Class ids per hash bucket, oldest first. Upstream chains newest-first
-    /// and takes the first match, so the search here walks in reverse — the
-    /// order decides which class a line joins when two classes both match
-    /// it, which the whitespace flavours make possible.
-    buckets: Vec<Vec<u32>>,
+    /// Newest class id per hash bucket, or [`Self::NONE`].
+    buckets: Vec<u32>,
     /// Every class, in the order they were first seen; the index *is* the
     /// class id, which is what makes the ids dense and comparable.
     classes: Vec<Class<'a>>,
@@ -63,11 +66,15 @@ struct Classifier<'a> {
 }
 
 impl<'a> Classifier<'a> {
+    /// End of a bucket chain. No class can have this id: `hbits` caps the
+    /// table at 2^32 buckets and the class count at the line count.
+    const NONE: u32 = u32::MAX;
+
     fn new(size: i64, flags: u64) -> Self {
         let hbits = hashbits(size as u32);
         Self {
             hbits,
-            buckets: vec![Vec::new(); 1usize << hbits],
+            buckets: vec![Self::NONE; 1usize << hbits],
             classes: Vec::with_capacity(size.max(0) as usize),
             flags,
         }
@@ -75,27 +82,34 @@ impl<'a> Classifier<'a> {
 
     /// Give `rec` its class id, counting it against the class's per-file
     /// tally. `pass` is 1 for the first file and 2 for the second.
+    ///
+    /// The chain is walked newest-first and the *first* match wins, which
+    /// matters: under the whitespace flags one line can match two classes,
+    /// and which one it joins decides the class ids the rest of the engine
+    /// compares.
     fn classify(&mut self, pass: u32, line: &'a [u8], rec: &mut Rec) {
         let bucket = hashlong(rec.ha, self.hbits);
-        let found = self.buckets[bucket].iter().rev().copied().find(|&id| {
-            let class = &self.classes[id as usize];
-            class.ha == rec.ha && recmatch(class.line, line, self.flags)
-        });
 
-        let id = match found {
-            Some(id) => id,
-            None => {
-                let id = self.classes.len() as u32;
-                self.classes.push(Class {
-                    ha: rec.ha,
-                    line,
-                    len1: 0,
-                    len2: 0,
-                });
-                self.buckets[bucket].push(id);
-                id
+        let mut id = self.buckets[bucket];
+        while id != Self::NONE {
+            let class = &self.classes[id as usize];
+            if class.ha == rec.ha && recmatch(class.line, line, self.flags) {
+                break;
             }
-        };
+            id = class.next;
+        }
+
+        if id == Self::NONE {
+            id = self.classes.len() as u32;
+            self.classes.push(Class {
+                ha: rec.ha,
+                line,
+                len1: 0,
+                len2: 0,
+                next: self.buckets[bucket],
+            });
+            self.buckets[bucket] = id;
+        }
 
         let class = &mut self.classes[id as usize];
         if pass == 1 {
