@@ -2,622 +2,505 @@
 //!
 //! Under those two `'diffopt'` values a changed block is diffed *again*, one
 //! character or one word per "line", and the resulting hunks become the column
-//! ranges.  `diff_find_change_inline_diff` builds that sub-problem and runs the
-//! internal engine over it; the two `diff_refine_inline_*_highlight` functions
-//! turn its output back into ranges, the word one merging ranges separated by
-//! less than `'diffopt'`'s `inline-word-gap`.
+//! ranges.  [`diff_find_change_inline_diff`] builds that sub-problem and runs
+//! the internal engine over it; the two `refine_inline_*` functions merge
+//! sub-blocks that are too close together to be worth showing apart, and
+//! [`change_for`] maps the result back through the line map onto real columns.
+//!
+//! ## The line map
+//!
+//! xdiff takes newline-delimited text, so a changed block is rewritten with
+//! one token -- a character, or a word under `inline:word` -- per line.  A
+//! [`LineMap`] entry per token records where in the *real* buffer that token
+//! came from, and is what turns an answer in token-line numbers back into
+//! `(line offset, byte range)`.  Because the tokens are the diff's unit, the
+//! `'diffopt'` ignore flags are applied while building them: `icase` folds
+//! each character, `iwhite` glues a run of white space into one token,
+//! `iwhiteall` drops white space entirely, and `iwhiteeol` rewinds the
+//! trailing run at end of line by truncating both arrays.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use ::core::ffi::{c_char, c_int};
+use ::std::ffi::CStr;
 
-unsafe extern "C" fn diff_refine_inline_char_highlight(
-    mut dp_orig: *mut diff_T,
-    mut linemap: *mut garray_T,
-    mut idx1: ::core::ffi::c_int,
-) {
+/// One entry per token written into the fake file, per buffer.
+type LineMap = [Vec<linemap_entry_T>; DB_COUNT as usize];
+
+/// The character class `mb_get_class_tab` gives an alphanumeric character.
+///
+/// Only this class counts as "word" for `inline:word`: emoji and CJK
+/// ideographs get their own classes, and word-diffing them is not useful
+/// because nvim has no way to segment them.
+const CLASS_WORD: c_int = 2;
+
+/// Whether the two blocks either side of a gap should be merged into one.
+///
+/// Both `inline:` modes run the same walk over the sub-diff's block list;
+/// they differ only in what makes a gap small enough to swallow, which is
+/// what this decides.  `Merge` unlinks `dp->df_next` into `dp`; `Keep` moves
+/// on; the `bool` is "this gap was a candidate but was left alone", which
+/// only `inline:char` uses.
+enum Gap {
+    Merge,
+    Keep(bool),
+}
+
+/// Walk a sub-diff's block list, merging each pair `decide` says to merge.
+///
+/// Answers whether any pair was merged and whether any candidate was left
+/// alone.  `entry_back` is how far back from the *next* block's first line the
+/// mode's first line-map entry sits: `inline:char` compares the last token of
+/// the left block, `inline:word` the one before it.
+unsafe fn merge_gaps(
+    dp_orig: *mut diff_T,
+    linemap: &LineMap,
+    idx1: usize,
+    entry_back: linenr_T,
+    mut decide: impl FnMut(*mut diff_T, &linemap_entry_T, &linemap_entry_T) -> Gap,
+) -> (bool, bool) {
     unsafe {
-        let mut pass: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-        loop {
-            let mut has_unmerged_gaps: bool = false_0 != 0;
-            let mut has_merged_gaps: bool = false_0 != 0;
-            let mut dp: *mut diff_T = dp_orig;
-            while !dp.is_null() && !(*dp).df_next.is_null() {
-                if (*dp).df_lnum[idx1 as usize] + (*dp).df_count[idx1 as usize] - 1 as linenr_T
-                    >= (*linemap.offset(idx1 as isize)).ga_len as linenr_T
-                    || (*(*dp).df_next).df_lnum[idx1 as usize] - 1 as linenr_T
-                        >= (*linemap.offset(idx1 as isize)).ga_len as linenr_T
-                {
-                    dp = (*dp).df_next;
-                } else {
-                    let mut entry1: *mut linemap_entry_T =
-                        ((*linemap.offset(idx1 as isize)).ga_data as *mut linemap_entry_T).offset(
-                            (*(&raw mut (*dp).df_lnum as *mut linenr_T).offset(idx1 as isize)
-                                + *(&raw mut (*dp).df_count as *mut linenr_T).offset(idx1 as isize)
-                                - 1 as linenr_T) as isize,
-                        );
-                    let mut entry2: *mut linemap_entry_T =
-                        ((*linemap.offset(idx1 as isize)).ga_data as *mut linemap_entry_T).offset(
-                            (*(&raw mut (*(*dp).df_next).df_lnum as *mut linenr_T)
-                                .offset(idx1 as isize)
-                                - 1 as linenr_T) as isize,
-                        );
-                    if (*entry1).lineoff != (*entry2).lineoff {
-                        dp = (*dp).df_next;
-                    } else {
-                        let mut gap: linenr_T = (*(*dp).df_next).df_lnum[idx1 as usize]
-                            - ((*dp).df_lnum[idx1 as usize] + (*dp).df_count[idx1 as usize]);
-                        if gap <= 3 as linenr_T {
-                            let mut max_df_count: linenr_T = 0 as linenr_T;
-                            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            while i < DB_COUNT {
-                                max_df_count = if max_df_count
-                                    > (*dp).df_count[i as usize]
-                                        + (*(*dp).df_next).df_count[i as usize]
-                                {
-                                    max_df_count
-                                } else {
-                                    (*dp).df_count[i as usize]
-                                        + (*(*dp).df_next).df_count[i as usize]
-                                };
-                                i += 1;
-                            }
-                            if max_df_count >= gap * 4 as linenr_T {
-                                let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                                while i_0 < DB_COUNT {
-                                    (*dp).df_count[i_0 as usize] = (*(*dp).df_next).df_lnum
-                                        [i_0 as usize]
-                                        + (*(*dp).df_next).df_count[i_0 as usize]
-                                        - (*dp).df_lnum[i_0 as usize];
-                                    i_0 += 1;
-                                }
-                                let mut dp_next: *mut diff_T = (*dp).df_next;
-                                (*dp).df_next = (*dp_next).df_next;
-                                clear_diffblock(dp_next);
-                                has_merged_gaps = true_0 != 0;
-                                continue;
-                            } else {
-                                has_unmerged_gaps = true_0 != 0;
-                            }
-                        }
-                        dp = (*dp).df_next;
+        let (mut merged, mut unmerged) = (false, false);
+        let map = &linemap[idx1];
+        let mut dp = dp_orig;
+        while !dp.is_null() && !(*dp).df_next.is_null() {
+            let next = (*dp).df_next;
+            // Both indices are into the token file, so a block ending past the
+            // map has no entry to compare and the gap cannot be judged.  The
+            // bound upstream tests is the block's *last* token either way,
+            // even where `entry_back` then steps one further back than that; a
+            // negative index is upstream's own out-of-bounds read, refused
+            // here rather than reproduced.
+            let last = (*dp).df_lnum[idx1] + (*dp).df_count[idx1] - 1;
+            let right = (*next).df_lnum[idx1] - 1;
+            if last >= map.len() as linenr_T || right >= map.len() as linenr_T {
+                dp = next;
+                continue;
+            }
+            let left = last + 1 - entry_back;
+            let (Some(entry1), Some(entry2)) = (
+                map.get(usize::try_from(left).unwrap_or(usize::MAX)),
+                map.get(usize::try_from(right).unwrap_or(usize::MAX)),
+            ) else {
+                dp = next;
+                continue;
+            };
+            // Two tokens on different source lines are not a gap *within* a
+            // line, which is the only thing either mode merges across.
+            if entry1.lineoff != entry2.lineoff {
+                dp = next;
+                continue;
+            }
+            match decide(dp, entry1, entry2) {
+                Gap::Merge => {
+                    for i in 0..DB_COUNT as usize {
+                        (*dp).df_count[i] =
+                            (*next).df_lnum[i] + (*next).df_count[i] - (*dp).df_lnum[i];
                     }
+                    (*dp).df_next = (*next).df_next;
+                    clear_diffblock(next);
+                    merged = true;
+                }
+                Gap::Keep(candidate) => {
+                    unmerged |= candidate;
+                    dp = next;
                 }
             }
-            if !has_unmerged_gaps || !has_merged_gaps {
-                break;
-            }
-            let c2rust_fresh9 = pass;
-            pass = pass + 1;
-            if c2rust_fresh9 >= 4 as ::core::ffi::c_int {
+        }
+        (merged, unmerged)
+    }
+}
+
+/// `inline:char`: swallow a gap of at most three tokens when the two blocks
+/// around it are at least four times as long as the gap.
+///
+/// Repeated until nothing more merges, because merging two blocks can make
+/// the next gap worth swallowing too -- but at most four passes, and only
+/// while the last pass both merged something and left something alone.
+unsafe fn refine_inline_char(dp_orig: *mut diff_T, linemap: &LineMap, idx1: usize) {
+    unsafe {
+        for _ in 0..4 {
+            let (merged, unmerged) = merge_gaps(dp_orig, linemap, idx1, 1, |dp, _, _| {
+                let next = (*dp).df_next;
+                let gap = (*next).df_lnum[idx1] - ((*dp).df_lnum[idx1] + (*dp).df_count[idx1]);
+                if gap > 3 {
+                    return Gap::Keep(false);
+                }
+                let longest = (0..DB_COUNT as usize)
+                    .map(|i| (*dp).df_count[i] + (*next).df_count[i])
+                    .max()
+                    .unwrap_or(0);
+                if longest >= gap * 4 {
+                    Gap::Merge
+                } else {
+                    Gap::Keep(true)
+                }
+            });
+            if !unmerged || !merged {
                 break;
             }
         }
     }
 }
 
-unsafe extern "C" fn diff_refine_inline_word_highlight(
-    mut dp_orig: *mut diff_T,
-    mut linemap: *mut garray_T,
-    mut idx1: ::core::ffi::c_int,
-    mut start_lnum: linenr_T,
+/// `inline:word`: swallow a gap of non-word text shorter than
+/// `'diffopt'`'s `inline-word-gap`, when the words either side of it are
+/// together at least twice as long as the gap.
+///
+/// Always four passes: unlike `inline:char` there is no cheap test for
+/// "nothing left to do", and merging can expose a new short gap.
+unsafe fn refine_inline_word(
+    dp_orig: *mut diff_T,
+    linemap: &LineMap,
+    idx1: usize,
+    start_lnum: linenr_T,
 ) {
     unsafe {
-        let mut pass: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-        loop {
-            let mut dp: *mut diff_T = dp_orig;
-            while !dp.is_null() && !(*dp).df_next.is_null() {
-                if (*dp).df_lnum[idx1 as usize] + (*dp).df_count[idx1 as usize] - 1 as linenr_T
-                    >= (*linemap.offset(idx1 as isize)).ga_len as linenr_T
-                    || (*(*dp).df_next).df_lnum[idx1 as usize] - 1 as linenr_T
-                        >= (*linemap.offset(idx1 as isize)).ga_len as linenr_T
+        let buf = (*curtab.get()).tp_diffbuf[idx1];
+        for _ in 0..4 {
+            merge_gaps(dp_orig, linemap, idx1, 2, |dp, entry1, entry2| {
+                let gap_start = entry1.byte_start + entry1.num_bytes;
+                let gap_size = entry2.byte_start - gap_start;
+                if gap_size <= 0 || gap_size > diff_word_gap.get() {
+                    return Gap::Keep(false);
+                }
+                // The gap is only worth swallowing if it is *punctuation*
+                // between two changed words; a word in the gap is a real
+                // unchanged word and splitting there is the point.
+                let line = CStr::from_ptr(ml_get_buf(buf, start_lnum + entry1.lineoff as linenr_T))
+                    .to_bytes();
+                let gap = &line[(gap_start as usize).min(line.len())..];
+                let gap = &gap[..(gap_size as usize).min(gap.len())];
+                if gap.is_empty()
+                    || gap.iter().enumerate().any(|(i, _)| {
+                        mb_get_class_tab(gap.as_ptr().add(i).cast(), (*buf).b_chartab.as_ptr())
+                            == CLASS_WORD
+                    })
                 {
-                    dp = (*dp).df_next;
-                } else {
-                    let mut entry1: *mut linemap_entry_T =
-                        ((*linemap.offset(idx1 as isize)).ga_data as *mut linemap_entry_T).offset(
-                            (*(&raw mut (*dp).df_lnum as *mut linenr_T).offset(idx1 as isize)
-                                + *(&raw mut (*dp).df_count as *mut linenr_T).offset(idx1 as isize)
-                                - 2 as linenr_T) as isize,
-                        );
-                    let mut entry2: *mut linemap_entry_T =
-                        ((*linemap.offset(idx1 as isize)).ga_data as *mut linemap_entry_T).offset(
-                            (*(&raw mut (*(*dp).df_next).df_lnum as *mut linenr_T)
-                                .offset(idx1 as isize)
-                                - 1 as linenr_T) as isize,
-                        );
-                    if (*entry1).lineoff != (*entry2).lineoff {
-                        dp = (*dp).df_next;
-                    } else {
-                        let mut gap_start: ::core::ffi::c_int = (*entry1).byte_start
-                            as ::core::ffi::c_int
-                            + (*entry1).num_bytes as ::core::ffi::c_int;
-                        let mut gap_end: ::core::ffi::c_int =
-                            (*entry2).byte_start as ::core::ffi::c_int;
-                        let mut gap_size: ::core::ffi::c_int = gap_end - gap_start;
-                        if gap_size <= 0 as ::core::ffi::c_int || gap_size > diff_word_gap.get() {
-                            dp = (*dp).df_next;
-                        } else {
-                            let mut line: *mut ::core::ffi::c_char = ml_get_buf(
-                                (*curtab.get()).tp_diffbuf[idx1 as usize] as *mut buf_T,
-                                start_lnum + (*entry1).lineoff as linenr_T,
-                            );
-                            let mut gap_text: *mut ::core::ffi::c_char =
-                                line.offset(gap_start as isize);
-                            let mut only_non_word: bool = true_0 != 0;
-                            let mut has_content: bool = false_0 != 0;
-                            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            while i < gap_size
-                                && *gap_text.offset(i as isize) as ::core::ffi::c_int != NUL
+                    return Gap::Keep(false);
+                }
+                // How much text the two blocks either side of the gap cover:
+                // a gap is only worth swallowing next to a substantial change.
+                let next = (*dp).df_next;
+                let mut changed: i64 = 0;
+                for i in 0..DB_COUNT as usize {
+                    if (*curtab.get()).tp_diffbuf[i].is_null() {
+                        continue;
+                    }
+                    for block in [dp, next] {
+                        for k in 0..(*block).df_count[i] {
+                            let at = (*block).df_lnum[i] + k - 1;
+                            if let Ok(at) = usize::try_from(at)
+                                && let Some(e) = linemap[i].get(at)
                             {
-                                has_content = true_0 != 0;
-                                let mut char_class: ::core::ffi::c_int = mb_get_class_tab(
-                                    gap_text.offset(i as isize),
-                                    &raw mut (**(&raw mut (*curtab.get()).tp_diffbuf
-                                        as *mut *mut buf_T)
-                                        .offset(idx1 as isize))
-                                    .b_chartab as *mut uint64_t,
-                                );
-                                if char_class == 2 as ::core::ffi::c_int {
-                                    only_non_word = false_0 != 0;
-                                    break;
-                                } else {
-                                    i += 1;
-                                }
+                                changed += e.num_bytes as i64;
                             }
-                            if has_content as ::core::ffi::c_int != 0
-                                && only_non_word as ::core::ffi::c_int != 0
-                            {
-                                let mut total_change_bytes: ::core::ffi::c_long =
-                                    0 as ::core::ffi::c_long;
-                                let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                                while i_0 < DB_COUNT {
-                                    if !(*curtab.get()).tp_diffbuf[i_0 as usize].is_null() {
-                                        let mut k: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                                        while (k as linenr_T) < (*dp).df_count[i_0 as usize] {
-                                            let mut idx: ::core::ffi::c_int =
-                                                (*dp).df_lnum[i_0 as usize] as ::core::ffi::c_int
-                                                    + k
-                                                    - 1 as ::core::ffi::c_int;
-                                            if idx < (*linemap.offset(i_0 as isize)).ga_len {
-                                                total_change_bytes +=
-                                                    (*((*linemap.offset(i_0 as isize)).ga_data
-                                                        as *mut linemap_entry_T)
-                                                        .offset(idx as isize))
-                                                    .num_bytes
-                                                        as ::core::ffi::c_long;
-                                            }
-                                            k += 1;
-                                        }
-                                        let mut k_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                                        while (k_0 as linenr_T)
-                                            < (*(*dp).df_next).df_count[i_0 as usize]
-                                        {
-                                            let mut idx_0: ::core::ffi::c_int =
-                                                (*(*dp).df_next).df_lnum[i_0 as usize]
-                                                    as ::core::ffi::c_int
-                                                    + k_0
-                                                    - 1 as ::core::ffi::c_int;
-                                            if idx_0 < (*linemap.offset(i_0 as isize)).ga_len {
-                                                total_change_bytes +=
-                                                    (*((*linemap.offset(i_0 as isize)).ga_data
-                                                        as *mut linemap_entry_T)
-                                                        .offset(idx_0 as isize))
-                                                    .num_bytes
-                                                        as ::core::ffi::c_long;
-                                            }
-                                            k_0 += 1;
-                                        }
-                                    }
-                                    i_0 += 1;
-                                }
-                                if total_change_bytes
-                                    >= (gap_size * 2 as ::core::ffi::c_int) as ::core::ffi::c_long
-                                {
-                                    let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                                    while i_1 < DB_COUNT {
-                                        if !(*curtab.get()).tp_diffbuf[i_1 as usize].is_null() {
-                                            (*dp).df_count[i_1 as usize] = (*(*dp).df_next).df_lnum
-                                                [i_1 as usize]
-                                                + (*(*dp).df_next).df_count[i_1 as usize]
-                                                - (*dp).df_lnum[i_1 as usize];
-                                        }
-                                        i_1 += 1;
-                                    }
-                                    let mut dp_next: *mut diff_T = (*dp).df_next;
-                                    (*dp).df_next = (*dp_next).df_next;
-                                    clear_diffblock(dp_next);
-                                    continue;
-                                }
-                            }
-                            dp = (*dp).df_next;
                         }
                     }
                 }
-            }
-            let c2rust_fresh10 = pass;
-            pass = pass + 1;
-            if c2rust_fresh10 >= 4 as ::core::ffi::c_int {
-                break;
-            }
+                if changed >= (gap_size * 2) as i64 {
+                    Gap::Merge
+                } else {
+                    Gap::Keep(false)
+                }
+            });
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn diff_find_change_inline_diff(mut dp: *mut diff_T) {
+/// Split one buffer line into tokens, appending them to `out` and their
+/// provenance to `map`.
+///
+/// `off` is the line's offset within the diff block, and `chartab` the
+/// *first* buffer's `'iskeyword'` table -- deliberately, so that all buffers
+/// are segmented the same way.  `word` selects `inline:word`.
+///
+/// The tokens are NL-separated because that is what xdiff reads; a real NL in
+/// the text (which cannot occur in a line, but `ml_get_buf` can answer one for
+/// a NUL byte) is written as the NUL it stands for.
+unsafe fn tokenize_line(
+    line: &CStr,
+    off: c_int,
+    chartab: *const uint64_t,
+    word: bool,
+    out: &mut Vec<u8>,
+    map: &mut Vec<linemap_entry_T>,
+) {
     unsafe {
-        let mut new_diff: *mut diff_T = ::core::ptr::null_mut::<diff_T>();
-        let save_diff_algorithm: u64 = diff_algorithm.get();
-        let mut dio: diffio_T = diffio_T {
-            dio_orig: diffin_T {
-                din_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                din_mmfile: mmfile_t {
-                    ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    size: 0,
-                },
-            },
-            dio_new: diffin_T {
-                din_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                din_mmfile: mmfile_t {
-                    ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    size: 0,
-                },
-            },
+        let flags = diff_flags.get();
+        let trim_eol = flags & (DIFF_IWHITEEOL | DIFF_IWHITE) != 0;
+        let bytes = line.to_bytes();
+        let mut in_keyword = false;
+        // Where to rewind to if the line ends in white space: the state as of
+        // the first byte of the trailing run.  `None` while the run has been
+        // broken by a non-blank.
+        let mut eol: Option<(usize, usize)> = None;
+        let mut last_white = false;
+
+        let mut i = 0;
+        while i < bytes.len() {
+            let at = bytes.as_ptr().add(i).cast::<c_char>();
+            let new_in_keyword = word && mb_get_class_tab(at, chartab) == CLASS_WORD;
+            if in_keyword && !new_in_keyword {
+                out.push(NL as u8);
+            }
+
+            if ascii_iswhite(bytes[i] as c_int) {
+                if flags & DIFF_IWHITEALL != 0 {
+                    in_keyword = false;
+                    i = bytes.len() - skip_white(&bytes[i..]).len();
+                    continue;
+                }
+                if trim_eol && !last_white {
+                    eol = Some((out.len(), map.len()));
+                    last_white = true;
+                }
+            } else if trim_eol {
+                last_white = false;
+                eol = None;
+            }
+
+            let mut tok_len = 1;
+            if bytes[i] == NL as u8 {
+                // NL is the internal stand-in for NUL.
+                out.push(0);
+            } else {
+                tok_len = utfc_ptr2len(at);
+                if ascii_iswhite(bytes[i] as c_int) && flags & DIFF_IWHITE != 0 {
+                    // The whole run of white space is one token.
+                    tok_len = (bytes.len() - skip_white(&bytes[i..]).len() - i) as c_int;
+                }
+                if flags & DIFF_ICASE != 0 {
+                    // xdiff cannot ignore case, so fold the text instead.
+                    let c = utf_ptr2char(at);
+                    let c_len = utf_char2len(c);
+                    // MB_MAXBYTES + 1.
+                    let mut cbuf = [0u8; 22];
+                    let folded = utf_char2bytes(utf_fold(c), cbuf.as_mut_ptr().cast::<c_char>());
+                    out.extend_from_slice(&cbuf[..folded as usize]);
+                    if tok_len > c_len {
+                        // Composing characters follow, and are not folded.
+                        out.extend_from_slice(&bytes[i + c_len as usize..i + tok_len as usize]);
+                    }
+                } else {
+                    out.extend_from_slice(&bytes[i..i + tok_len as usize]);
+                }
+            }
+
+            if !new_in_keyword {
+                out.push(NL as u8);
+            }
+            if !new_in_keyword || !in_keyword {
+                map.push(linemap_entry_T {
+                    byte_start: i as colnr_T,
+                    num_bytes: tok_len,
+                    lineoff: off,
+                });
+            } else {
+                // Still inside a keyword: grow the entry rather than add one.
+                map.last_mut()
+                    .expect("a keyword has a first character")
+                    .num_bytes += tok_len;
+            }
+            in_keyword = new_in_keyword;
+            i += tok_len as usize;
+        }
+        if in_keyword {
+            out.push(NL as u8);
+        }
+        if let (true, Some((out_len, map_len))) = (trim_eol, eol) {
+            out.truncate(out_len);
+            map.truncate(map_len);
+        }
+        if flags & DIFF_IWHITEALL == 0 {
+            // An empty token for the line ending, so that a difference in
+            // newlines is visible -- with `'list'` the eol listchar takes the
+            // highlight.
+            out.push(NL as u8);
+            map.push(linemap_entry_T {
+                byte_start: bytes.len() as colnr_T,
+                // Upstream writes `sizeof(NL)`, and `NL` is a *character
+                // constant*, so this is 4 rather than 1.  Reproduced: the
+                // width lands in `dc_end` and so in what gets highlighted.
+                // See O-B15-16.
+                num_bytes: ::core::mem::size_of::<c_int>() as colnr_T,
+                lineoff: off,
+            });
+        }
+    }
+}
+
+/// One sub-diff block's column range in every buffer, read back through the
+/// line map.
+///
+/// A block whose token range starts past the end of a buffer's map is an
+/// insertion as far as that buffer is concerned, which is spelled `MAXCOL`
+/// and an `INT_MAX` line offset -- the marker `diff_find_change` reads to
+/// decide a line is an addition.
+fn change_for(new_diff: &diff_T, linemap: &LineMap) -> diffline_change_T {
+    let mut change = diffline_change_T {
+        dc_start: [0; 8],
+        dc_end: [0; 8],
+        dc_start_lnum_off: [0; 8],
+        dc_end_lnum_off: [0; 8],
+    };
+    for i in 0..DB_COUNT as usize {
+        // Never negative; the test is for safety only.
+        if new_diff.df_lnum[i] <= 0 {
+            continue;
+        }
+        let map = &linemap[i];
+        let start = (new_diff.df_lnum[i] - 1) as usize; // zero-indexed
+        let end = start + new_diff.df_count[i] as usize;
+        match map.get(start) {
+            Some(e) => {
+                change.dc_start[i] = e.byte_start;
+                change.dc_start_lnum_off[i] = e.lineoff;
+            }
+            None => {
+                change.dc_start[i] = MAXCOL as colnr_T;
+                change.dc_start_lnum_off[i] = c_int::MAX;
+            }
+        }
+        if start == end {
+            change.dc_end[i] = change.dc_start[i];
+            change.dc_end_lnum_off[i] = change.dc_start_lnum_off[i];
+        } else {
+            match map.get(end - 1) {
+                Some(e) => {
+                    change.dc_end[i] = e.byte_start + e.num_bytes;
+                    change.dc_end_lnum_off[i] = e.lineoff;
+                }
+                None => {
+                    change.dc_end[i] = MAXCOL as colnr_T;
+                    change.dc_end_lnum_off[i] = c_int::MAX;
+                }
+            }
+        }
+    }
+    change
+}
+
+/// Diff one changed block again, token by token, and cache the column ranges.
+///
+/// The result is `dp->df_changes`, which [`diff_find_change`] then windows
+/// per line.  The whole thing runs *inside* the tabpage's diff state: the sub
+/// diff is built by pointing `tp_first_diff` at a fresh list and calling the
+/// ordinary `diff_file_internal`/`diff_read` pair, so the real block list and
+/// buffer table are saved and put back at the end.
+pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut diff_T) {
+    unsafe {
+        let save_diff_algorithm = diff_algorithm.get();
+        let mut dio = diffio_T {
+            dio_orig: DIFFIN_INIT,
+            dio_new: DIFFIN_INIT,
             dio_diff: diffout_T {
-                dout_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                dout_ga: garray_T {
-                    ga_len: 0,
-                    ga_maxlen: 0,
-                    ga_itemsize: 0,
-                    ga_growsize: 0,
-                    ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                },
+                dout_fname: ::core::ptr::null_mut(),
+                dout_ga: GA_EMPTY_INIT_VALUE,
             },
-            dio_internal: 0,
+            // The inline diff only supports the internal algorithm.
+            dio_internal: true_0,
         };
         ga_init(
             &raw mut dio.dio_diff.dout_ga,
-            ::core::mem::size_of::<diffhunk_T>() as ::core::ffi::c_int,
-            1000 as ::core::ffi::c_int,
+            ::core::mem::size_of::<diffhunk_T>() as c_int,
+            1000,
         );
-        dio.dio_internal = true_0;
-        (*diff_algorithm.ptr()) |= XDF_INDENT_HEURISTIC;
-        let mut orig_diff: *mut diff_T = (*curtab.get()).tp_first_diff;
-        (*curtab.get()).tp_first_diff = ::core::ptr::null_mut::<diff_T>();
-        let mut orig_diffbuf: [*mut buf_T; 8] = [::core::ptr::null_mut::<buf_T>(); 8];
-        memcpy(
-            &raw mut orig_diffbuf as *mut *mut buf_T as *mut ::core::ffi::c_void,
-            &raw mut (*curtab.get()).tp_diffbuf as *mut *mut buf_T as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<[*mut buf_T; 8]>(),
-        );
-        let mut linemap: [garray_T; 8] = [garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        }; 8];
-        let mut file1_str: garray_T = garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        };
-        let mut file2_str: garray_T = garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        };
-        ga_init(
-            &raw mut file1_str,
-            1 as ::core::ffi::c_int,
-            1024 as ::core::ffi::c_int,
-        );
-        ga_init(
-            &raw mut file2_str,
-            1 as ::core::ffi::c_int,
-            1024 as ::core::ffi::c_int,
-        );
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < DB_COUNT {
-            ga_init(
-                (&raw mut linemap as *mut garray_T).offset(i as isize),
-                ::core::mem::size_of::<linemap_entry_T>() as ::core::ffi::c_int,
-                128 as ::core::ffi::c_int,
-            );
-            i += 1;
-        }
-        let mut file1_idx: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-        let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        '_done: {
-            while i_0 < DB_COUNT {
-                dio.dio_diff.dout_ga.ga_len = 0 as ::core::ffi::c_int;
-                let mut buf: *mut buf_T = (*curtab.get()).tp_diffbuf[i_0 as usize] as *mut buf_T;
-                if !(buf.is_null() || (*buf).b_ml.ml_mfp.is_null()) {
-                    if (*dp).df_count[i_0 as usize] == 0 as linenr_T {
-                        (*curtab.get()).tp_diffbuf[i_0 as usize] = ::core::ptr::null_mut::<buf_T>();
-                    } else {
-                        if file1_idx == -1 as ::core::ffi::c_int {
-                            file1_idx = i_0;
-                        }
-                        let mut curstr: *mut garray_T = if file1_idx != i_0 {
-                            &raw mut file2_str
-                        } else {
-                            &raw mut file1_str
-                        };
-                        let mut numlines: linenr_T = 0 as linenr_T;
-                        (*curstr).ga_len = 0 as ::core::ffi::c_int;
-                        let mut off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                        while (off as linenr_T) < (*dp).df_count[i_0 as usize] {
-                            let mut curline: *mut ::core::ffi::c_char = ml_get_buf(
-                                (*curtab.get()).tp_diffbuf[i_0 as usize] as *mut buf_T,
-                                (*dp).df_lnum[i_0 as usize] + off as linenr_T,
-                            );
-                            let mut in_keyword: bool = false_0 != 0;
-                            let mut last_white: bool = false_0 != 0;
-                            let mut eol_ga_len: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-                            let mut eol_linemap_len: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-                            let mut eol_numlines: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-                            let mut s: *mut ::core::ffi::c_char = curline;
-                            while *s as ::core::ffi::c_int != NUL {
-                                let mut new_in_keyword: bool = false_0 != 0;
-                                if diff_flags.get() & DIFF_INLINE_WORD != 0 {
-                                    new_in_keyword = mb_get_class_tab(
-                                        s,
-                                        &raw mut (**(&raw mut (*curtab.get()).tp_diffbuf
-                                            as *mut *mut buf_T)
-                                            .offset(file1_idx as isize))
-                                        .b_chartab
-                                            as *mut uint64_t,
-                                    ) == 2 as ::core::ffi::c_int;
-                                }
-                                if in_keyword as ::core::ffi::c_int != 0 && !new_in_keyword {
-                                    ga_append(curstr, NL as uint8_t);
-                                    numlines += 1;
-                                }
-                                if ascii_iswhite(*s as ::core::ffi::c_int) {
-                                    if diff_flags.get() & DIFF_IWHITEALL != 0 {
-                                        in_keyword = false_0 != 0;
-                                        s = skipwhite(s);
-                                        continue;
-                                    } else if diff_flags.get() & DIFF_IWHITEEOL != 0
-                                        || diff_flags.get() & DIFF_IWHITE != 0
-                                    {
-                                        if !last_white {
-                                            eol_ga_len = (*curstr).ga_len;
-                                            eol_linemap_len = linemap[i_0 as usize].ga_len;
-                                            eol_numlines = numlines as ::core::ffi::c_int;
-                                            last_white = true_0 != 0;
-                                        }
-                                    }
-                                } else if diff_flags.get() & DIFF_IWHITEEOL != 0
-                                    || diff_flags.get() & DIFF_IWHITE != 0
-                                {
-                                    last_white = false_0 != 0;
-                                    eol_ga_len = -1 as ::core::ffi::c_int;
-                                    eol_linemap_len = -1 as ::core::ffi::c_int;
-                                    eol_numlines = -1 as ::core::ffi::c_int;
-                                }
-                                let mut char_len: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-                                if *s as ::core::ffi::c_int == NL {
-                                    ga_append(curstr, NUL as uint8_t);
-                                } else {
-                                    char_len = utfc_ptr2len(s);
-                                    if ascii_iswhite(*s as ::core::ffi::c_int) as ::core::ffi::c_int
-                                        != 0
-                                        && diff_flags.get() & DIFF_IWHITE != 0
-                                    {
-                                        char_len =
-                                            skipwhite(s).offset_from(s) as ::core::ffi::c_int;
-                                    }
-                                    if diff_flags.get() & DIFF_ICASE != 0 {
-                                        let mut c: ::core::ffi::c_int = utf_ptr2char(s);
-                                        let mut c_len: ::core::ffi::c_int = utf_char2len(c);
-                                        c = utf_fold(c);
-                                        let mut cbuf: [::core::ffi::c_char; 22] = [0; 22];
-                                        let mut c_fold_len: ::core::ffi::c_int = utf_char2bytes(
-                                            c,
-                                            &raw mut cbuf as *mut ::core::ffi::c_char,
-                                        );
-                                        ga_concat_len(
-                                            curstr,
-                                            &raw mut cbuf as *mut ::core::ffi::c_char,
-                                            c_fold_len as size_t,
-                                        );
-                                        if char_len > c_len {
-                                            ga_concat_len(
-                                                curstr,
-                                                s.offset(c_len as isize),
-                                                (char_len - c_len) as size_t,
-                                            );
-                                        }
-                                    } else {
-                                        ga_concat_len(curstr, s, char_len as size_t);
-                                    }
-                                }
-                                if !new_in_keyword {
-                                    ga_append(curstr, NL as uint8_t);
-                                    numlines += 1;
-                                }
-                                if !new_in_keyword
-                                    || new_in_keyword as ::core::ffi::c_int != 0 && !in_keyword
-                                {
-                                    let mut linemap_entry: linemap_entry_T = linemap_entry_T {
-                                        byte_start: s.offset_from(curline) as colnr_T,
-                                        num_bytes: char_len as colnr_T,
-                                        lineoff: off,
-                                    };
-                                    ga_grow(
-                                        (&raw mut linemap as *mut garray_T).offset(i_0 as isize),
-                                        1 as ::core::ffi::c_int,
-                                    );
-                                    *(linemap[i_0 as usize].ga_data as *mut linemap_entry_T)
-                                        .offset(linemap[i_0 as usize].ga_len as isize) =
-                                        linemap_entry;
-                                    linemap[i_0 as usize].ga_len += 1;
-                                } else {
-                                    (*(linemap[i_0 as usize].ga_data as *mut linemap_entry_T)
-                                        .offset(
-                                            (linemap[i_0 as usize].ga_len - 1 as ::core::ffi::c_int)
-                                                as isize,
-                                        ))
-                                    .num_bytes += char_len;
-                                }
-                                in_keyword = new_in_keyword;
-                                s = s.offset(char_len as isize);
-                            }
-                            if in_keyword {
-                                ga_append(curstr, NL as uint8_t);
-                                numlines += 1;
-                            }
-                            if diff_flags.get() & DIFF_IWHITEEOL != 0
-                                || diff_flags.get() & DIFF_IWHITE != 0
-                            {
-                                if eol_ga_len != -1 as ::core::ffi::c_int {
-                                    (*curstr).ga_len = eol_ga_len;
-                                    linemap[i_0 as usize].ga_len = eol_linemap_len;
-                                    numlines = eol_numlines as linenr_T;
-                                }
-                            }
-                            if diff_flags.get() & DIFF_IWHITEALL == 0 {
-                                ga_append(curstr, NL as uint8_t);
-                                numlines += 1;
-                                let mut linemap_entry_0: linemap_entry_T = linemap_entry_T {
-                                    byte_start: s.offset_from(curline) as colnr_T,
-                                    num_bytes: ::core::mem::size_of::<::core::ffi::c_int>()
-                                        as colnr_T,
-                                    lineoff: off,
-                                };
-                                ga_grow(
-                                    (&raw mut linemap as *mut garray_T).offset(i_0 as isize),
-                                    1 as ::core::ffi::c_int,
-                                );
-                                *(linemap[i_0 as usize].ga_data as *mut linemap_entry_T)
-                                    .offset(linemap[i_0 as usize].ga_len as isize) =
-                                    linemap_entry_0;
-                                linemap[i_0 as usize].ga_len += 1;
-                            }
-                            off += 1;
-                        }
-                        if file1_idx != i_0 {
-                            dio.dio_new.din_mmfile.ptr =
-                                (*curstr).ga_data as *mut ::core::ffi::c_char;
-                            dio.dio_new.din_mmfile.size = (*curstr).ga_len;
-                        } else {
-                            dio.dio_orig.din_mmfile.ptr =
-                                (*curstr).ga_data as *mut ::core::ffi::c_char;
-                            dio.dio_orig.din_mmfile.size = (*curstr).ga_len;
-                        }
-                        if file1_idx != i_0 {
-                            let mut diff_status: ::core::ffi::c_int =
-                                diff_file_internal(&raw mut dio);
-                            if diff_status == FAIL {
-                                break '_done;
-                            }
-                            diff_read(0 as ::core::ffi::c_int, i_0, &raw mut dio);
-                            clear_diffout(&raw mut dio.dio_diff);
-                        }
-                    }
+        // Always slide diff splits along whitespace.
+        diff_algorithm.set(save_diff_algorithm | XDF_INDENT_HEURISTIC);
+
+        // `diff_read` reads both of these: the list it appends to, and the
+        // table that says which buffers are active.
+        let tp = curtab.get();
+        let orig_diff = (*tp).tp_first_diff;
+        let orig_diffbuf = (*tp).tp_diffbuf;
+        (*tp).tp_first_diff = ::core::ptr::null_mut();
+
+        let mut linemap: LineMap = ::core::array::from_fn(|_| Vec::new());
+        let (mut file1, mut file2) = (Vec::<u8>::new(), Vec::<u8>::new());
+        let mut file1_idx = usize::MAX;
+
+        'done: {
+            for i in 0..DB_COUNT as usize {
+                dio.dio_diff.dout_ga.ga_len = 0;
+                let buf = (*tp).tp_diffbuf[i];
+                if buf.is_null() || (*buf).b_ml.ml_mfp.is_null() {
+                    continue; // not loaded
                 }
-                i_0 += 1;
-            }
-            new_diff = (*curtab.get()).tp_first_diff;
-            if diff_flags.get() & DIFF_INLINE_WORD != 0 && file1_idx != -1 as ::core::ffi::c_int {
-                diff_refine_inline_word_highlight(
-                    new_diff,
-                    &raw mut linemap as *mut garray_T,
-                    file1_idx,
-                    (*dp).df_lnum[file1_idx as usize],
-                );
-            } else if diff_flags.get() & DIFF_INLINE_CHAR != 0
-                && file1_idx != -1 as ::core::ffi::c_int
-            {
-                diff_refine_inline_char_highlight(
-                    new_diff,
-                    &raw mut linemap as *mut garray_T,
-                    file1_idx,
-                );
-            }
-            (*dp).df_changes.ga_len = 0 as ::core::ffi::c_int;
-            while !new_diff.is_null() {
-                let mut change: diffline_change_T = diffline_change_S {
-                    dc_start: [0 as colnr_T; 8],
-                    dc_end: [0; 8],
-                    dc_start_lnum_off: [0; 8],
-                    dc_end_lnum_off: [0; 8],
+                if (*dp).df_count[i] == 0 {
+                    // A buffer with no text in this block must not be left in
+                    // the table, or the whole block reads as modified in it.
+                    (*tp).tp_diffbuf[i] = ::core::ptr::null_mut();
+                    continue;
+                }
+                if file1_idx == usize::MAX {
+                    file1_idx = i;
+                }
+                let first = file1_idx == i;
+                let out = if first { &mut file1 } else { &mut file2 };
+                out.clear();
+                // Deliberately the *first* buffer's 'iskeyword', so that
+                // every buffer is segmented the same way.
+                let chartab = (*(*tp).tp_diffbuf[file1_idx]).b_chartab.as_ptr();
+                for off in 0..(*dp).df_count[i] {
+                    let line = CStr::from_ptr(ml_get_buf(buf, (*dp).df_lnum[i] + off));
+                    tokenize_line(
+                        line,
+                        off,
+                        chartab,
+                        diff_flags.get() & DIFF_INLINE_WORD != 0,
+                        out,
+                        &mut linemap[i],
+                    );
+                }
+                if first {
+                    continue;
+                }
+                dio.dio_orig.din_mmfile = mmfile_t {
+                    ptr: file1.as_mut_ptr().cast(),
+                    size: file1.len() as c_int,
                 };
-                let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while i_1 < DB_COUNT {
-                    if (*new_diff).df_lnum[i_1 as usize] > 0 as linenr_T {
-                        let mut diff_lnum: linenr_T =
-                            (*new_diff).df_lnum[i_1 as usize] - 1 as linenr_T;
-                        let mut diff_lnum_end: linenr_T =
-                            diff_lnum + (*new_diff).df_count[i_1 as usize];
-                        if diff_lnum >= linemap[i_1 as usize].ga_len as linenr_T {
-                            change.dc_start[i_1 as usize] = MAXCOL as ::core::ffi::c_int as colnr_T;
-                            change.dc_start_lnum_off[i_1 as usize] = INT_MAX;
-                        } else {
-                            change.dc_start[i_1 as usize] = (*(linemap[i_1 as usize].ga_data
-                                as *mut linemap_entry_T)
-                                .offset(diff_lnum as isize))
-                            .byte_start;
-                            change.dc_start_lnum_off[i_1 as usize] =
-                                (*(linemap[i_1 as usize].ga_data as *mut linemap_entry_T)
-                                    .offset(diff_lnum as isize))
-                                .lineoff;
-                        }
-                        if diff_lnum == diff_lnum_end {
-                            change.dc_end[i_1 as usize] = change.dc_start[i_1 as usize];
-                            change.dc_end_lnum_off[i_1 as usize] =
-                                change.dc_start_lnum_off[i_1 as usize];
-                        } else if diff_lnum_end - 1 as linenr_T
-                            >= linemap[i_1 as usize].ga_len as linenr_T
-                        {
-                            change.dc_end[i_1 as usize] = MAXCOL as ::core::ffi::c_int as colnr_T;
-                            change.dc_end_lnum_off[i_1 as usize] = INT_MAX;
-                        } else {
-                            change.dc_end[i_1 as usize] = (*(linemap[i_1 as usize].ga_data
-                                as *mut linemap_entry_T)
-                                .offset((diff_lnum_end - 1 as linenr_T) as isize))
-                            .byte_start
-                                + (*(linemap[i_1 as usize].ga_data as *mut linemap_entry_T)
-                                    .offset((diff_lnum_end - 1 as linenr_T) as isize))
-                                .num_bytes;
-                            change.dc_end_lnum_off[i_1 as usize] =
-                                (*(linemap[i_1 as usize].ga_data as *mut linemap_entry_T)
-                                    .offset((diff_lnum_end - 1 as linenr_T) as isize))
-                                .lineoff;
-                        }
-                    }
-                    i_1 += 1;
+                dio.dio_new.din_mmfile = mmfile_t {
+                    ptr: file2.as_mut_ptr().cast(),
+                    size: file2.len() as c_int,
+                };
+                if diff_file_internal(&raw mut dio) == FAIL {
+                    break 'done;
                 }
-                ga_grow(&raw mut (*dp).df_changes, 1 as ::core::ffi::c_int);
+                diff_read(0, i as c_int, &raw mut dio);
+                clear_diffout(&raw mut dio.dio_diff);
+            }
+
+            let head = (*tp).tp_first_diff;
+            if file1_idx != usize::MAX {
+                if diff_flags.get() & DIFF_INLINE_WORD != 0 {
+                    refine_inline_word(head, &linemap, file1_idx, (*dp).df_lnum[file1_idx]);
+                } else if diff_flags.get() & DIFF_INLINE_CHAR != 0 {
+                    refine_inline_char(head, &linemap, file1_idx);
+                }
+            }
+
+            (*dp).df_changes.ga_len = 0; // already zero
+            let mut new_diff = head;
+            while !new_diff.is_null() {
+                let change = change_for(&*new_diff, &linemap);
+                ga_grow(&raw mut (*dp).df_changes, 1);
                 *((*dp).df_changes.ga_data as *mut diffline_change_T)
                     .offset((*dp).df_changes.ga_len as isize) = change;
                 (*dp).df_changes.ga_len += 1;
                 new_diff = (*new_diff).df_next;
             }
         }
+
         diff_algorithm.set(save_diff_algorithm);
-        (*dp).has_changes = true_0 != 0;
-        diff_clear(curtab.get());
-        (*curtab.get()).tp_first_diff = orig_diff;
-        memcpy(
-            &raw mut (*curtab.get()).tp_diffbuf as *mut *mut buf_T as *mut ::core::ffi::c_void,
-            &raw mut orig_diffbuf as *mut *mut buf_T as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<[*mut buf_T; 8]>(),
-        );
-        ga_clear(&raw mut file1_str);
-        ga_clear(&raw mut file2_str);
+        (*dp).has_changes = true;
+        diff_clear(tp);
+        (*tp).tp_first_diff = orig_diff;
+        (*tp).tp_diffbuf = orig_diffbuf;
+        // `dio.dio_orig`/`dio_new` point into `file1`/`file2`, which go out of
+        // scope here; only the hunk array is separately owned.
         clear_diffout(&raw mut dio.dio_diff);
-        let mut i_2: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i_2 < DB_COUNT {
-            ga_clear((&raw mut linemap as *mut garray_T).offset(i_2 as isize));
-            i_2 += 1;
-        }
     }
 }

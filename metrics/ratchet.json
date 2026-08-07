@@ -159,7 +159,7 @@
     "crates/nvim/src/nvim/diff/inline.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/diff/lmatch.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/diff/opts.rs": {"unsafe": 3},
-    "crates/nvim/src/nvim/diff/refine.rs": {"unsafe": 3},
+    "crates/nvim/src/nvim/diff/refine.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/diff/scroll.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/diff/update.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/digraph.rs": {"unsafe": 27},

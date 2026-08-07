@@ -43,7 +43,7 @@ use crate::src::nvim::buffer::{
 };
 use crate::src::nvim::bufwrite::{WriteRequest, buf_write};
 use crate::src::nvim::change::{change_warning, changed_lines};
-use crate::src::nvim::charset::{getdigits_int, getdigits_int32, skipwhite};
+use crate::src::nvim::charset::{getdigits_int, getdigits_int32};
 use crate::src::nvim::cursor::check_cursor;
 use crate::src::nvim::decoration::decor_conceal_line;
 use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, redraw_later};
@@ -58,7 +58,7 @@ use crate::src::nvim::fileio::{
 use crate::src::nvim::fold::{
     foldUpdate, foldUpdateAll, foldmethodIsDiff, foldmethodIsManual, hasFolding, newFoldLevel,
 };
-use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat_len, ga_grow, ga_init};
+use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::{HLF_ADD, HLF_CHD, HLF_NONE, HLF_TXA, HLF_TXD};
 use crate::src::nvim::linematch::linematch_nbuffers;
@@ -89,8 +89,8 @@ use crate::src::nvim::os::fs::{
     os_chdir, os_dirname, os_fileinfo, os_fileinfo_size, os_fopen, os_remove,
 };
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, atol, fclose, fwrite, gettext, memcpy, memmove, memset, qsort,
-    snprintf, strcat, strcpy, strlen, strncmp, tolower,
+    __assert_fail, __ctype_b_loc, atol, fclose, fwrite, gettext, memmove, memset, qsort, snprintf,
+    strcat, strcpy, strlen, strncmp, tolower,
 };
 use crate::src::nvim::os::shell::{call_shell, kShellOptDoOut, kShellOptSilent};
 use crate::src::nvim::path::FullName_save;
@@ -101,10 +101,9 @@ use crate::src::nvim::types::{
     CMD_append, CMD_diffget, CMD_diffput, CMD_split, CMOD_LOCKMARKS, EvalFuncData, ExtmarkOp, FILE,
     FileInfo, OptInt, OptScope, OptVal, OptValData, OptValType, String_0, TriState, aco_save_T,
     buf_T, bufref_T, cmd_addr_T, colnr_T, cstack_T, diff_T, diffblock_S, diffline_S, diffline_T,
-    diffline_change_S, diffline_change_T, exarg_T, garray_T, hlf_T, int32_t, kFalse, kNone, kTrue,
-    linenr_T, mmfile_t, scid_T, size_t, tabpage_T, typval_T, uint8_t, uint64_t, uv_stat_t,
-    uv_timespec_t, varnumber_T, win_T, xdemitcb_t, xdemitconf_t, xdl_emit_hunk_consume_func_t,
-    xpparam_t,
+    diffline_change_T, exarg_T, garray_T, hlf_T, int32_t, kFalse, kNone, kTrue, linenr_T, mmfile_t,
+    scid_T, size_t, tabpage_T, typval_T, uint8_t, uint64_t, uv_stat_t, uv_timespec_t, varnumber_T,
+    win_T, xdemitcb_t, xdemitconf_t, xdl_emit_hunk_consume_func_t, xpparam_t,
 };
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::undo::{u_save, u_sync};
@@ -155,6 +154,25 @@ pub const kOptScopeWin: OptScope = 1;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub const ADDR_LINES: cmd_addr_T = 0;
+/// An empty growable array, the shape c2rust writes out at every site.
+pub(crate) const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
+    ga_len: 0,
+    ga_maxlen: 0,
+    ga_itemsize: 0,
+    ga_growsize: 0,
+    ga_data: ::core::ptr::null_mut(),
+};
+
+/// One side of a diff before either the file name or the memory image is
+/// filled in; which one is used depends on `dio_internal`.
+pub(crate) const DIFFIN_INIT: diffin_T = diffin_T {
+    din_fname: ::core::ptr::null_mut(),
+    din_mmfile: mmfile_t {
+        ptr: ::core::ptr::null_mut(),
+        size: 0,
+    },
+};
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct diffio_T {
