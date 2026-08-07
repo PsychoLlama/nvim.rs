@@ -298,14 +298,13 @@ pub fn encode_token(tok: &Tok) -> Option<Encoded> {
             (0, lo) => out.push(0xce).push4(lo),
             (hi, lo) => out.push(0xcf).push4(hi).push4(lo),
         },
-        // The negative arms test `lo` alone: the value is two's complement,
-        // so a small negative has `lo` near `0xffffffff` and `hi` all ones.
-        Kind::Sint => match tok.lo {
-            lo if lo < 0x8000_0000 => out.push(0xd3).push4(tok.hi).push4(lo),
-            lo if lo < 0xffff_8000 => out.push(0xd2).push4(lo),
-            lo if lo < 0xffff_ff80 => out.push(0xd1).push2(lo),
-            lo if lo < 0xffff_ffe0 => out.push(0xd0).push(lo),
-            lo => out.push(0x100u32.wrapping_add(lo)),
+        Kind::Sint => match sint_len(tok.hi, tok.lo) {
+            8 => out.push(0xd3).push4(tok.hi).push4(tok.lo),
+            4 => out.push(0xd2).push4(tok.lo),
+            2 => out.push(0xd1).push2(tok.lo),
+            // One byte, either as an `int 8` or as a negative fixint.
+            _ if tok.lo < 0xffff_ffe0 => out.push(0xd0).push(tok.lo),
+            _ => out.push(0x100u32.wrapping_add(tok.lo)),
         },
         Kind::Float => match tok.len {
             4 => out.push(0xca).push4(tok.lo),
@@ -357,6 +356,25 @@ fn encode_ext(out: Encoded, ext: u32, len: u32) -> Encoded {
         len if len < 0x100 => out.push(0xc7).push(len).push(ext),
         len if len < 0x10000 => out.push(0xc8).push2(len).push(ext),
         len => out.push(0xc9).push4(len).push(ext),
+    }
+}
+
+/// The narrowest signed width that carries the two's complement in `hi:lo`.
+///
+/// Every form below eight bytes stores `lo` alone, so `hi` has to *be* `lo`'s
+/// sign extension for one of them to be usable. Upstream tests `lo` on its
+/// own, both here and when choosing a token's `length`, so a value like
+/// `-4294967297` (`hi = 0xfffffffe`, `lo = 0xffffffff`) reads as a negative
+/// fixint and encodes as `-1`. See O-B15-10.
+const fn sint_len(hi: u32, lo: u32) -> u32 {
+    if hi != u32::MAX || lo < 0x8000_0000 {
+        8
+    } else if lo < 0xffff_8000 {
+        4
+    } else if lo < 0xffff_ff80 {
+        2
+    } else {
+        1
     }
 }
 
@@ -508,13 +526,7 @@ pub fn pack_number(v: f64) -> Tok {
         if tok.lo == 0 {
             tok.hi = tok.hi.wrapping_add(1);
         }
-        tok.len = match tok.lo {
-            0 if tok.hi == 0 => 1,
-            lo if lo < 0x8000_0000 => 8,
-            lo if lo < 0xffff_8000 => 4,
-            lo if lo < 0xffff_ff80 => 2,
-            _ => 1,
-        };
+        tok.len = sint_len(tok.hi, tok.lo);
     } else {
         tok.len = match tok.lo {
             _ if tok.hi != 0 => 8,
@@ -666,6 +678,26 @@ mod tests {
         for v in [0.5f64, -0.5, 1.0 / 3.0, -1e-9] {
             assert_eq!(pack_number(v).kind, Some(Kind::Float), "{v}");
             assert_eq!(unpack_number(&pack_number(v)), v, "{v}");
+        }
+    }
+
+    /// O-B15-10: a negative whose magnitude spans both halves may not use a
+    /// narrow form, however "small" its low word looks.
+    #[test]
+    fn a_negative_spanning_both_words_encodes_at_full_width() {
+        assert_eq!(
+            enc(&pack_number(-4294967297.0)),
+            [0xd3, 255, 255, 255, 254, 255, 255, 255, 255]
+        );
+        assert_eq!(pack_number(-4294967297.0).len, 8);
+        for v in [
+            -4294967297.0f64,
+            -4294967296.0,
+            -4294967298.0,
+            -1e15,
+            -9007199254740991.0,
+        ] {
+            assert_eq!(unpack_number(&dec(&enc(&pack_number(v)))), v, "{v}");
         }
     }
 
