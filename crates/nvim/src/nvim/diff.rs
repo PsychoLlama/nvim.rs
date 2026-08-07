@@ -98,10 +98,9 @@ use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescap
 use crate::src::nvim::types::{
     CMD_append, CMD_diffget, CMD_diffput, CMD_split, CMOD_LOCKMARKS, EvalFuncData, ExtmarkOp, FILE,
     FileInfo, OptInt, OptScope, OptVal, OptValData, OptValType, String_0, TriState, aco_save_T,
-    buf_T, bufref_T, cmd_addr_T, colnr_T, cstack_T, diff_T, diffblock_S, diffline_S, diffline_T,
+    buf_T, bufref_T, cmd_addr_T, colnr_T, diff_T, diffblock_S, diffline_S, diffline_T,
     diffline_change_T, exarg_T, garray_T, hlf_T, kFalse, kNone, kTrue, linenr_T, mmfile_t, scid_T,
-    size_t, tabpage_T, typval_T, uint64_t, uv_stat_t, uv_timespec_t, varnumber_T, win_T,
-    xdemitcb_t, xdemitconf_t, xpparam_t,
+    size_t, tabpage_T, typval_T, uint64_t, varnumber_T, win_T, xdemitcb_t, xdemitconf_t, xpparam_t,
 };
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::undo::{u_save, u_sync};

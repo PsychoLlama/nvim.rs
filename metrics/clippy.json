@@ -9,8 +9,6 @@
     "crates/nvim/src/nvim/context.rs": 38,
     "crates/nvim/src/nvim/cursor_shape.rs": 76,
     "crates/nvim/src/nvim/debugger.rs": 41,
-    "crates/nvim/src/nvim/diff/excmd.rs": 15,
-    "crates/nvim/src/nvim/diff/getput.rs": 10,
     "crates/nvim/src/nvim/digraph.rs": 9,
     "crates/nvim/src/nvim/drawline/columns.rs": 1,
     "crates/nvim/src/nvim/drawscreen/mode.rs": 1,
