@@ -76,9 +76,7 @@ use crate::src::nvim::r#move::{
 };
 use crate::src::nvim::option::{copy_option_part, get_ve_flags};
 use crate::src::nvim::options::kOptVeFlagOnemore;
-use crate::src::nvim::os::libc::{
-    __assert_fail, gettext, memmove, strcat, strcmp, strlen, strncmp,
-};
+use crate::src::nvim::os::libc::{gettext, memmove, strcat, strcmp, strlen, strncmp};
 use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::plines::{getvcol, linetabsize_eol, win_chartabsize};
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
@@ -92,8 +90,7 @@ use crate::src::nvim::textformat::{comp_textwidth, has_format_option};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     CMOD_KEEPJUMPS, CMOD_LOCKMARKS, ExtmarkOp, GraphemeState, MarkTree, VV_WARNINGMSG, bcount_t,
-    buf_T, colnr_T, fmark_T, fmarkv_T, int64_t, linenr_T, oparg_T, pos_T, size_t, ssize_t,
-    tabpage_T, win_T,
+    buf_T, colnr_T, fmark_T, fmarkv_T, int64_t, linenr_T, pos_T, size_t, ssize_t, tabpage_T, win_T,
 };
 use crate::src::nvim::ui::{ui_active, ui_has};
 use crate::src::nvim::undo::{curbufIsChanged, u_clearline, u_save_cursor, u_savedel};

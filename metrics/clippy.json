@@ -3,7 +3,6 @@
     "crates/nvim/src/nvim/base64.rs": 2,
     "crates/nvim/src/nvim/buffer.rs": 106,
     "crates/nvim/src/nvim/buffer_updates.rs": 72,
-    "crates/nvim/src/nvim/change/open_line.rs": 5,
     "crates/nvim/src/nvim/clipboard.rs": 7,
     "crates/nvim/src/nvim/cmdhist.rs": 5,
     "crates/nvim/src/nvim/context.rs": 38,
