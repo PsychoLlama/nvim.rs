@@ -40,7 +40,6 @@ use crate::src::nvim::edit::{prompt_text, replace_push, replace_push_nul, trunca
 use crate::src::nvim::eval::vars::set_vim_var_string;
 use crate::src::nvim::extmark::{extmark_adjust, extmark_splice, extmark_splice_cols};
 use crate::src::nvim::fold::{find_wl_entry, foldUpdate, hasAnyFolding, hasFoldingWin};
-use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::HLF_W;
 use crate::src::nvim::indent::{
     copy_indent, fixthisline, get_indent, get_lisp_indent, get_sw_value, indent_size_ts, may_do_si,
@@ -92,9 +91,9 @@ use crate::src::nvim::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::src::nvim::textformat::{comp_textwidth, has_format_option};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    AdditionalData, CMOD_KEEPJUMPS, CMOD_LOCKMARKS, ExtmarkOp, GraphemeState, MarkTree,
-    VV_WARNINGMSG, bcount_t, buf_T, colnr_T, fmark_T, fmarkv_T, foldinfo_T, int64_t, linenr_T,
-    oparg_T, pos_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, win_T,
+    CMOD_KEEPJUMPS, CMOD_LOCKMARKS, ExtmarkOp, GraphemeState, MarkTree, VV_WARNINGMSG, bcount_t,
+    buf_T, colnr_T, fmark_T, fmarkv_T, int64_t, linenr_T, oparg_T, pos_T, size_t, ssize_t,
+    tabpage_T, win_T,
 };
 use crate::src::nvim::ui::{ui_active, ui_has};
 use crate::src::nvim::undo::{curbufIsChanged, u_clearline, u_save_cursor, u_savedel};

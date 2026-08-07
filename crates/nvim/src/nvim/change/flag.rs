@@ -1,79 +1,110 @@
 //! Whether the buffer counts as modified.
 //!
-//! `changed` is the front door every edit goes through: it flips `b_changed`,
-//! warns once about a 'readonly' file (after giving FileChangedRO a chance to
-//! clear it), makes sure a swap file exists, and bumps `b:changedtick`.
-//! `unchanged` is the other direction -- `:w` and `:e!` -- and `save_file_ff` /
-//! `file_ff_differs` are the pair that remembers a buffer's 'fileformat',
-//! 'fileencoding' and BOM at load time so that `'cpo'`-`+` can tell a real
-//! change from one the reader made.
+//! [`changed`] is the front door every edit goes through: it flips
+//! `b_changed`, warns once about a 'readonly' file (after giving
+//! FileChangedRO a chance to clear it), makes sure a swap file exists, and
+//! bumps `b:changedtick`. [`unchanged`] is the other direction -- `:w` and
+//! `:e!` -- and [`save_file_ff`] / [`file_ff_differs`] are the pair that
+//! remembers a buffer's 'fileformat', 'fileencoding', end-of-line and BOM at
+//! load time so that `:w` can tell a real change from one the reader made.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use ::core::ffi::{c_char, c_int, c_void};
+
 use super::*;
 
-pub unsafe extern "C" fn change_warning(mut buf: *mut buf_T, mut col: ::core::ffi::c_int) {
+/// The message [`change_warning`] gives, once per buffer.
+const W_READONLY: *const c_char = c"W10: Warning: Changing a readonly file".as_ptr();
+
+/// Warn about the first change to a 'readonly' file.
+///
+/// Not `emsg()`, which would flush the macro buffer, and not at all while
+/// autocommands are running. `b_did_warn` is what makes it once-per-buffer:
+/// undoing every change clears `b_changed` again but not that flag. `col` is
+/// where to put the message, non-zero in Insert mode with 'showmode' on so
+/// that it lands after the mode message.
+///
+/// # Safety
+/// `buf` must be a live buffer. FileChangedRO may run arbitrary autocommands,
+/// which can reload the buffer and even change `curbuf`.
+pub unsafe fn change_warning(buf: *mut buf_T, col: c_int) {
     unsafe {
-        static w_readonly: GlobalCell<*const ::core::ffi::c_char> =
-            GlobalCell::new(c"W10: Warning: Changing a readonly file".as_ptr());
-        if (*buf).b_did_warn as ::core::ffi::c_int == false_0
-            && curbufIsChanged() as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-            && !autocmd_busy.get()
-            && (*buf).b_p_ro != 0
-        {
-            (*buf).b_ro_locked += 1;
-            apply_autocmds(
-                EVENT_FILECHANGEDRO,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false,
-                buf,
-            );
-            (*buf).b_ro_locked -= 1;
-            if (*buf).b_p_ro == 0 {
-                return;
-            }
-            msg_start();
-            if msg_row.get() == Rows.get() - 1 as ::core::ffi::c_int {
-                msg_col.set(col);
-            }
-            msg_source(HLF_W);
-            msg_ext_set_kind(c"wmsg".as_ptr());
-            msg_puts_hl(gettext(w_readonly.get()), HLF_W, true);
-            set_vim_var_string(VV_WARNINGMSG, gettext(w_readonly.get()), -1 as ptrdiff_t);
-            msg_clr_eos();
-            msg_end();
-            if msg_silent.get() == 0 as ::core::ffi::c_int && !silent_mode.get() && ui_active() != 0
-            {
-                msg_delay(1002 as uint64_t, true);
-            }
-            (*buf).b_did_warn = true;
-            redraw_cmdline.set(false);
-            if msg_row.get() < Rows.get() - 1 as ::core::ffi::c_int {
-                showmode();
-            }
+        if (*buf).b_did_warn || curbufIsChanged() || autocmd_busy.get() || (*buf).b_p_ro == 0 {
+            return;
+        }
+        (*buf).b_ro_locked += 1;
+        apply_autocmds(
+            EVENT_FILECHANGEDRO,
+            ::core::ptr::null_mut(),
+            ::core::ptr::null_mut(),
+            false,
+            buf,
+        );
+        (*buf).b_ro_locked -= 1;
+        if (*buf).b_p_ro == 0 {
+            // An autocommand cleared 'readonly': nothing to warn about.
+            return;
+        }
+
+        // What msg() does, but with a column offset.
+        msg_start();
+        if msg_row.get() == Rows.get() - 1 {
+            msg_col.set(col);
+        }
+        msg_source(HLF_W);
+        msg_ext_set_kind(c"wmsg".as_ptr());
+        msg_puts_hl(gettext(W_READONLY), HLF_W, true);
+        set_vim_var_string(VV_WARNINGMSG, gettext(W_READONLY), -1);
+        msg_clr_eos();
+        msg_end();
+        if msg_silent.get() == 0 && !silent_mode.get() && ui_active() != 0 {
+            // Give the user time to think about it.
+            msg_delay(1002, true);
+        }
+        (*buf).b_did_warn = true;
+        // Don't redraw and erase the message.
+        redraw_cmdline.set(false);
+        if msg_row.get() < Rows.get() - 1 {
+            showmode();
         }
     }
 }
 
+/// Note that something in `buf` changed.
+///
+/// Most often reached through [`changed_bytes`] and [`changed_lines`], which
+/// also mark the area of the display to be redrawn. `b:changedtick` is bumped
+/// on *every* call, whether or not the buffer was already modified.
+///
+/// # Safety
+/// `buf` must be a live buffer. May trigger autocommands that reload it.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn changed(mut buf: *mut buf_T) {
+pub unsafe extern "C" fn changed(buf: *mut buf_T) {
     unsafe {
         if (*buf).b_changed == 0 {
-            let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
-            change_warning(buf, 0 as ::core::ffi::c_int);
-            if (*buf).b_may_swap as ::core::ffi::c_int != 0 && !bt_dontwrite(buf) {
-                let mut save_need_wait_return: bool = need_wait_return.get();
+            let save_msg_scroll = msg_scroll.get();
+
+            // May check the file out, and so change `curbuf`.
+            change_warning(buf, 0);
+
+            // Create a swap file if that is wanted; not for "nofile" and
+            // "nowrite" buffers.
+            if (*buf).b_may_swap && !bt_dontwrite(buf) {
+                let save_need_wait_return = need_wait_return.get();
                 need_wait_return.set(false);
                 ml_open_file(buf);
-                if need_wait_return.get() as ::core::ffi::c_int != 0
-                    && emsg_silent.get() == 0 as ::core::ffi::c_int
+
+                // ml_open_file() can produce an ATTENTION message. Wait two
+                // seconds so the user reads it, and call wait_return() here
+                // rather than letting a later emsg() set msg_scroll.
+                if need_wait_return.get()
+                    && emsg_silent.get() == 0
                     && !in_assert_fails.get()
                     && !ui_has(kUIMessages)
                 {
-                    msg_delay(2002 as uint64_t, true);
-                    wait_return(true_0);
+                    msg_delay(2002, true);
+                    wait_return(true as c_int);
                     msg_scroll.set(save_msg_scroll);
                 } else {
                     need_wait_return.set(save_need_wait_return);
@@ -86,9 +117,14 @@ pub unsafe extern "C" fn changed(mut buf: *mut buf_T) {
     }
 }
 
-pub unsafe extern "C" fn changed_internal(mut buf: *mut buf_T) {
+/// Set `b_changed` and everything that displays it, without the warning, the
+/// swap file or the `b:changedtick` bump [`changed`] also does.
+///
+/// # Safety
+/// `buf` must be a live buffer.
+pub unsafe fn changed_internal(buf: *mut buf_T) {
     unsafe {
-        (*buf).b_changed = true_0;
+        (*buf).b_changed = true as c_int;
         (*buf).b_changed_invalid = true;
         ml_setflags(buf);
         redraw_buf_status_later(buf);
@@ -97,17 +133,21 @@ pub unsafe extern "C" fn changed_internal(mut buf: *mut buf_T) {
     }
 }
 
-pub unsafe extern "C" fn unchanged(
-    mut buf: *mut buf_T,
-    mut ff: bool,
-    mut always_inc_changedtick: bool,
-) {
+/// Note that `buf` is no longer modified -- `:w`, `:e!`, and undoing back to
+/// the last write.
+///
+/// With `ff` set, the buffer's 'fileformat' and friends are re-recorded as
+/// the on-disk state, and a buffer whose only "change" was one of those still
+/// counts as having been changed. `always_inc_changedtick` bumps
+/// `b:changedtick` even when nothing moved, which is what `:w` wants: the
+/// file on disk is new even if the text is not.
+///
+/// # Safety
+/// `buf` must be a live buffer.
+pub unsafe fn unchanged(buf: *mut buf_T, ff: bool, always_inc_changedtick: bool) {
     unsafe {
-        if (*buf).b_changed != 0
-            || ff as ::core::ffi::c_int != 0
-                && file_ff_differs(buf, false) as ::core::ffi::c_int != 0
-        {
-            (*buf).b_changed = false_0;
+        if (*buf).b_changed != 0 || (ff && file_ff_differs(buf, false)) {
+            (*buf).b_changed = false as c_int;
             (*buf).b_changed_invalid = true;
             ml_setflags(buf);
             if ff {
@@ -123,36 +163,53 @@ pub unsafe extern "C" fn unchanged(
     }
 }
 
-pub unsafe extern "C" fn save_file_ff(mut buf: *mut buf_T) {
+/// Remember `buf`'s 'fileformat', 'fileencoding', end-of-line, end-of-file
+/// and BOM as they are on disk, so that [`file_ff_differs`] can tell later
+/// whether the user changed one.
+///
+/// # Safety
+/// `buf` must be a live buffer.
+pub unsafe fn save_file_ff(buf: *mut buf_T) {
     unsafe {
-        (*buf).b_start_ffc = *(*buf).b_p_ff as ::core::ffi::c_uchar as ::core::ffi::c_int;
+        (*buf).b_start_ffc = c_int::from(*(*buf).b_p_ff as u8);
         (*buf).b_start_eof = (*buf).b_p_eof;
         (*buf).b_start_eol = (*buf).b_p_eol;
         (*buf).b_start_bomb = (*buf).b_p_bomb;
-        if (*buf).b_start_fenc.is_null()
-            || strcmp((*buf).b_start_fenc, (*buf).b_p_fenc) != 0 as ::core::ffi::c_int
-        {
-            xfree((*buf).b_start_fenc as *mut ::core::ffi::c_void);
+
+        // Only free and allocate when the value actually changed.
+        if (*buf).b_start_fenc.is_null() || strcmp((*buf).b_start_fenc, (*buf).b_p_fenc) != 0 {
+            xfree((*buf).b_start_fenc as *mut c_void);
             (*buf).b_start_fenc = xstrdup((*buf).b_p_fenc);
         }
     }
 }
 
-pub unsafe extern "C" fn file_ff_differs(mut buf: *mut buf_T, mut ignore_empty: bool) -> bool {
+/// Whether any of the options [`save_file_ff`] recorded has since changed.
+///
+/// `ignore_empty` is for `:w`: an unmodified, still-empty new buffer is not
+/// worth reporting, because the values it carries were never read off a file.
+///
+/// # Safety
+/// `buf` must be a live buffer.
+pub unsafe fn file_ff_differs(buf: *mut buf_T, ignore_empty: bool) -> bool {
     unsafe {
+        // Handle a file that was never loaded as "not changed": the recorded
+        // values are the defaults, not the file's.
         if (*buf).b_flags & BF_NEVERLOADED != 0 {
             return false;
         }
-        if ignore_empty as ::core::ffi::c_int != 0
+        if ignore_empty
             && (*buf).b_flags & BF_NEW != 0
-            && (*buf).b_ml.ml_line_count == 1 as linenr_T
-            && *ml_get_buf(buf, 1 as linenr_T) as ::core::ffi::c_int == NUL
+            && (*buf).b_ml.ml_line_count == 1
+            && c_int::from(*ml_get_buf(buf, 1)) == NUL
         {
             return false;
         }
-        if (*buf).b_start_ffc != *(*buf).b_p_ff as ::core::ffi::c_int {
+        if (*buf).b_start_ffc != c_int::from(*(*buf).b_p_ff) {
             return true;
         }
+        // 'endofline' and 'endoffile' only matter with 'binary' set or
+        // 'fixendofline' off: otherwise the writer normalises them anyway.
         if ((*buf).b_p_bin != 0 || (*buf).b_p_fixeol == 0)
             && ((*buf).b_start_eof != (*buf).b_p_eof || (*buf).b_start_eol != (*buf).b_p_eol)
         {
@@ -162,8 +219,8 @@ pub unsafe extern "C" fn file_ff_differs(mut buf: *mut buf_T, mut ignore_empty: 
             return true;
         }
         if (*buf).b_start_fenc.is_null() {
-            return *(*buf).b_p_fenc as ::core::ffi::c_int != NUL;
+            return c_int::from(*(*buf).b_p_fenc) != NUL;
         }
-        return strcmp((*buf).b_start_fenc, (*buf).b_p_fenc) != 0 as ::core::ffi::c_int;
+        strcmp((*buf).b_start_fenc, (*buf).b_p_fenc) != 0
     }
 }
