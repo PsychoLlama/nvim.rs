@@ -204,7 +204,7 @@ fn init_srand() -> u32 {
         return u32::from_ne_bytes(bytes);
     }
     // SAFETY: `os_get_pid` reads the process id; no arguments, no state.
-    (os_hrtime() as u32) ^ (unsafe { os_get_pid() } as u32)
+    (os_hrtime() as u32) ^ (os_get_pid() as u32)
 }
 
 /// The seed expander: one step of splitmix32, which turns a single 32-bit
