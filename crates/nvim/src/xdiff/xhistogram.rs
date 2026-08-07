@@ -1,648 +1,348 @@
-//! Rust port of xhistogram.c (git's port of JGit's HistogramDiff), as
-//! vendored by neovim v0.12.4. Unlike the rest of src/xdiff/, this file is
-//! NOT under the LGPL; its notice follows and must be retained:
+//! `xhistogram.c`: the histogram algorithm.
 //!
-//! Copyright (C) 2010, Google Inc.
-//! and other copyright owners as documented in JGit's IP log.
+//! A refinement of patience. Instead of insisting a common line be unique in
+//! both files, index every line of the "A" range by how often it occurs, and
+//! take as the pivot the longest common run built from the *least* frequent
+//! line available. Recurse either side of that run.
 //!
-//! This program and the accompanying materials are made available
-//! under the terms of the Eclipse Distribution License v1.0 which
-//! accompanies this distribution, is reproduced below, and is
-//! available at http://www.eclipse.org/org/documents/edl-v10.php
-//!
-//! All rights reserved.
-//!
-//! Redistribution and use in source and binary forms, with or
-//! without modification, are permitted provided that the following
-//! conditions are met:
-//!
-//! - Redistributions of source code must retain the above copyright
-//!   notice, this list of conditions and the following disclaimer.
-//!
-//! - Redistributions in binary form must reproduce the above
-//!   copyright notice, this list of conditions and the following
-//!   disclaimer in the documentation and/or other materials provided
-//!   with the distribution.
-//!
-//! - Neither the name of the Eclipse Foundation, Inc. nor the
-//!   names of its contributors may be used to endorse or promote
-//!   products derived from this software without specific prior
-//!   written permission.
-//!
-//! THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
-//! CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
-//! INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
-//! OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-//! ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
-//! CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-//! SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
-//! NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-//! LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-//! CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-//! STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-//! ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
-//! ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//! Two things make it give up rather than answer. A hash bucket that reaches
+//! [`MAX_CHAIN_LENGTH`] distinct lines aborts the whole diff — upstream's
+//! way of refusing pathological input — and a run whose rarest line is still
+//! more common than the chain limit is handed to the classic algorithm
+//! instead.
 
-use crate::src::nvim::memory::{xfree, xmalloc};
-use crate::src::nvim::os::libc::memset;
-use crate::src::nvim::types::{
-    chanode_t, chastore_t, mmfile_t, size_t, xdfenv_t, xpparam_t, xrecord_t,
-};
-use crate::src::xdiff::xprepare::xdl_prepare_env;
-use crate::src::xdiff::xutils::{
-    xdl_cha_alloc, xdl_cha_free, xdl_cha_init, xdl_fall_back_diff, xdl_hashbits, xdl_recmatch,
-};
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct region {
-    pub begin1: ::core::ffi::c_uint,
-    pub end1: ::core::ffi::c_uint,
-    pub begin2: ::core::ffi::c_uint,
-    pub end2: ::core::ffi::c_uint,
+#![forbid(unsafe_code)]
+
+use crate::src::xdiff::xprepare::prepare_env;
+use crate::src::xdiff::xtypes::{Aborted, Block, Env, Params, XdFile, XdResult};
+use crate::src::xdiff::xutils::{fall_back_diff, hashbits, recmatch};
+
+/// Largest line number the index can hold; upstream's `MAX_PTR`.
+const MAX_PTR: i64 = i32::MAX as i64;
+/// Ceiling on an occurrence count; upstream's `MAX_CNT`.
+const MAX_CNT: u32 = i32::MAX as u32;
+/// Distinct lines allowed in one hash bucket before the engine gives up.
+const MAX_CHAIN_LENGTH: u32 = 64;
+
+/// One distinct line of the A range, and every place it occurs.
+///
+/// `ptr` is the *most recently scanned* occurrence, and A is scanned
+/// backwards, so it is the earliest line seen so far; the rest of the
+/// occurrences hang off [`HistIndex::next_ptrs`] in increasing order.
+struct Occurrence {
+    /// Line number of the first known occurrence.
+    ptr: i64,
+    /// How many occurrences there are, capped at [`MAX_CNT`].
+    cnt: u32,
+    /// Next distinct line in the same hash bucket.
+    next: Option<u32>,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct histindex {
-    pub records: *mut *mut record,
-    pub line_map: *mut *mut record,
-    pub rcha: chastore_t,
-    pub next_ptrs: *mut ::core::ffi::c_uint,
-    pub table_bits: ::core::ffi::c_uint,
-    pub records_size: ::core::ffi::c_uint,
-    pub line_map_size: ::core::ffi::c_uint,
-    pub max_chain_length: ::core::ffi::c_uint,
-    pub key_shift: ::core::ffi::c_uint,
-    pub ptr_shift: ::core::ffi::c_uint,
-    pub cnt: ::core::ffi::c_uint,
-    pub has_common: ::core::ffi::c_uint,
-    pub env: *mut xdfenv_t,
-    pub xpp: *const xpparam_t,
+
+/// `struct histindex`: the A range, indexed by line content.
+struct HistIndex {
+    /// Head of each hash bucket's chain.
+    records: Vec<Option<u32>>,
+    /// Per line of the A range, which [`Occurrence`] it belongs to.
+    line_map: Vec<Option<u32>>,
+    /// Per line of the A range, the next line with the same content; 0 for
+    /// none, which is safe because line numbers here are 1-based.
+    next_ptrs: Vec<i64>,
+    /// Every distinct line; the index into this is the id used above.
+    pool: Vec<Occurrence>,
+    /// Width of [`Self::records`], in bits.
+    table_bits: u32,
+    /// Line number [`Self::line_map`] and [`Self::next_ptrs`] start at.
+    ptr_shift: i64,
+    /// Occurrence count of the current best run's rarest line. Starts one
+    /// above the chain limit, so any run at all improves on it.
+    cnt: u32,
+    /// Did any line of B match a line of A?
+    has_common: bool,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct record {
-    pub ptr: ::core::ffi::c_uint,
-    pub cnt: ::core::ffi::c_uint,
-    pub next: *mut record,
+
+/// The common run [`find_lcs`] settled on, as inclusive line ranges.
+#[derive(Clone, Copy, Default)]
+struct Region {
+    begin1: i64,
+    end1: i64,
+    begin2: i64,
+    end2: i64,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const XDF_PATIENCE_DIFF: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
-pub const XDF_HISTOGRAM_DIFF: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 15 as ::core::ffi::c_int;
-pub const XDF_DIFF_ALGORITHM_MASK: ::core::ffi::c_int = XDF_PATIENCE_DIFF | XDF_HISTOGRAM_DIFF;
-pub const MAX_PTR: ::core::ffi::c_int = INT_MAX;
-unsafe extern "C" fn cmp_recs(
-    mut xpp: *const xpparam_t,
-    mut r1: *mut xrecord_t,
-    mut r2: *mut xrecord_t,
-) -> ::core::ffi::c_int {
-    return ((*r1).ha == (*r2).ha
-        && xdl_recmatch(
-            (*r1).ptr,
-            (*r1).size,
-            (*r2).ptr,
-            (*r2).size,
-            (*xpp).flags as ::core::ffi::c_long,
-        ) != 0) as ::core::ffi::c_int;
+
+/// Do line `l1` of `a` and line `l2` of `b` match? Both are 1-based.
+fn cmp_recs(xpp: &Params<'_>, a: &XdFile<'_>, l1: i64, b: &XdFile<'_>, l2: i64) -> bool {
+    a.ha_at(l1 - 1) == b.ha_at(l2 - 1) && recmatch(a.line(l1 - 1), b.line(l2 - 1), xpp.flags)
 }
-unsafe extern "C" fn scanA(
-    mut index: *mut histindex,
-    mut line1: ::core::ffi::c_int,
-    mut count1: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut ptr: ::core::ffi::c_int = 0;
-    let mut tbl_idx: ::core::ffi::c_int = 0;
-    let mut chain_len: ::core::ffi::c_uint = 0;
-    let mut rec_chain: *mut *mut record = ::core::ptr::null_mut::<*mut record>();
-    let mut rec: *mut record = ::core::ptr::null_mut::<record>();
-    ptr = line1 + count1 - 1 as ::core::ffi::c_int;
-    while line1 <= ptr {
-        tbl_idx = ((**(*(*index).env)
-            .xdf1
-            .recs
-            .offset((ptr - 1 as ::core::ffi::c_int) as isize))
-        .ha
-        .wrapping_add(
-            (**(*(*index).env)
-                .xdf1
-                .recs
-                .offset((ptr - 1 as ::core::ffi::c_int) as isize))
-            .ha >> (*index).table_bits,
-        ) & ((1 as ::core::ffi::c_ulong) << (*index).table_bits)
-            .wrapping_sub(1 as ::core::ffi::c_ulong)) as ::core::ffi::c_int;
-        rec_chain = (*index).records.offset(tbl_idx as isize) as *mut *mut record;
-        rec = *rec_chain;
-        chain_len = 0 as ::core::ffi::c_uint;
-        's_95: {
-            while !rec.is_null() {
-                if cmp_recs(
-                    (*index).xpp,
-                    *(*(*index).env)
-                        .xdf1
-                        .recs
-                        .offset((*rec).ptr.wrapping_sub(1 as ::core::ffi::c_uint) as isize),
-                    *(*(*index).env)
-                        .xdf1
-                        .recs
-                        .offset((ptr - 1 as ::core::ffi::c_int) as isize),
-                ) != 0
+
+/// `XDL_HASHLONG` over a record's hash.
+fn table_hash(side: &XdFile<'_>, line: i64, bits: u32) -> usize {
+    let v = side.ha_at(line - 1);
+    (v.wrapping_add(v >> bits) & ((1u64 << bits) - 1)) as usize
+}
+
+impl HistIndex {
+    fn next_ptr(&self, ptr: i64) -> i64 {
+        self.next_ptrs[(ptr - self.ptr_shift) as usize]
+    }
+
+    fn set_next_ptr(&mut self, ptr: i64, to: i64) {
+        self.next_ptrs[(ptr - self.ptr_shift) as usize] = to;
+    }
+
+    /// How often line `ptr`'s content occurs in the A range.
+    fn count_at(&self, ptr: i64) -> u32 {
+        let id = self.line_map[(ptr - self.ptr_shift) as usize]
+            .expect("every line of the A range is mapped by scan_a");
+        self.pool[id as usize].cnt
+    }
+
+    /// Index the A range: one [`Occurrence`] per distinct line, with every
+    /// repeat threaded onto [`Self::next_ptrs`].
+    fn scan_a(&mut self, xpp: &Params<'_>, env: &Env<'_>, blk: Block) -> XdResult {
+        let mut ptr = blk.end1();
+        while blk.line1 <= ptr {
+            let bucket = table_hash(&env.xdf1, ptr, self.table_bits);
+            let mut chain_len = 0u32;
+            let mut cursor = self.records[bucket];
+            let mut matched = false;
+
+            while let Some(id) = cursor {
+                if cmp_recs(xpp, &env.xdf1, self.pool[id as usize].ptr, &env.xdf1, ptr) {
+                    // Identical to a line already seen: put `ptr` on the
+                    // front of that line's occurrence chain.
+                    let head = self.pool[id as usize].ptr;
+                    self.set_next_ptr(ptr, head);
+                    self.pool[id as usize].ptr = ptr;
+                    self.pool[id as usize].cnt = (self.pool[id as usize].cnt + 1).min(MAX_CNT);
+                    self.line_map[(ptr - self.ptr_shift) as usize] = Some(id);
+                    matched = true;
+                    break;
+                }
+                cursor = self.pool[id as usize].next;
+                chain_len += 1;
+            }
+
+            if !matched {
+                if chain_len == MAX_CHAIN_LENGTH {
+                    return Err(Aborted);
+                }
+                // First time we have seen this line; start a new chain.
+                let id = self.pool.len() as u32;
+                self.pool.push(Occurrence {
+                    ptr,
+                    cnt: 1,
+                    next: self.records[bucket],
+                });
+                self.records[bucket] = Some(id);
+                self.line_map[(ptr - self.ptr_shift) as usize] = Some(id);
+            }
+
+            ptr -= 1;
+        }
+        Ok(())
+    }
+
+    /// Extend every occurrence of line `b_ptr`'s content into the longest
+    /// common run it can, keeping the best one found so far in `lcs`.
+    ///
+    /// Answers the next line of B worth trying, which is past the end of any
+    /// run this call produced.
+    fn try_lcs(
+        &mut self,
+        xpp: &Params<'_>,
+        env: &Env<'_>,
+        lcs: &mut Region,
+        b_ptr: i64,
+        blk: Block,
+    ) -> i64 {
+        let (end_a, end_b) = (blk.end1(), blk.end2());
+        let mut b_next = b_ptr + 1;
+        let mut cursor = self.records[table_hash(&env.xdf2, b_ptr, self.table_bits)];
+
+        while let Some(id) = cursor {
+            cursor = self.pool[id as usize].next;
+            let rec_cnt = self.pool[id as usize].cnt;
+
+            if rec_cnt > self.cnt {
+                // Too common to be worth a run, but it still tells us the
+                // two files have something in common.
+                if !self.has_common {
+                    self.has_common =
+                        cmp_recs(xpp, &env.xdf1, self.pool[id as usize].ptr, &env.xdf2, b_ptr);
+                }
+                continue;
+            }
+
+            let mut a_at = self.pool[id as usize].ptr;
+            if !cmp_recs(xpp, &env.xdf1, a_at, &env.xdf2, b_ptr) {
+                continue;
+            }
+            self.has_common = true;
+
+            loop {
+                let mut np = self.next_ptr(a_at);
+                let (mut as_, mut bs) = (a_at, b_ptr);
+                let (mut ae, mut be) = (a_at, b_ptr);
+                let mut rc = rec_cnt;
+
+                while blk.line1 < as_
+                    && blk.line2 < bs
+                    && cmp_recs(xpp, &env.xdf1, as_ - 1, &env.xdf2, bs - 1)
                 {
-                    *(*index).next_ptrs.offset(
-                        (ptr as ::core::ffi::c_uint).wrapping_sub((*index).ptr_shift) as isize,
-                    ) = (*rec).ptr;
-                    (*rec).ptr = ptr as ::core::ffi::c_uint;
-                    (*rec).cnt = if (2147483647 as ::core::ffi::c_int as ::core::ffi::c_uint)
-                        < (*rec).cnt.wrapping_add(1 as ::core::ffi::c_uint)
-                    {
-                        2147483647 as ::core::ffi::c_int as ::core::ffi::c_uint
-                    } else {
-                        (*rec).cnt.wrapping_add(1 as ::core::ffi::c_uint)
+                    as_ -= 1;
+                    bs -= 1;
+                    if 1 < rc {
+                        rc = rc.min(self.count_at(as_));
+                    }
+                }
+                while ae < end_a
+                    && be < end_b
+                    && cmp_recs(xpp, &env.xdf1, ae + 1, &env.xdf2, be + 1)
+                {
+                    ae += 1;
+                    be += 1;
+                    if 1 < rc {
+                        rc = rc.min(self.count_at(ae));
+                    }
+                }
+
+                if b_next <= be {
+                    b_next = be + 1;
+                }
+                // A longer run wins, and so does an equally long one built
+                // from a rarer line.
+                if lcs.end1 - lcs.begin1 < ae - as_ || rc < self.cnt {
+                    *lcs = Region {
+                        begin1: as_,
+                        begin2: bs,
+                        end1: ae,
+                        end2: be,
                     };
-                    *(*index).line_map.offset(
-                        (ptr as ::core::ffi::c_uint).wrapping_sub((*index).ptr_shift) as isize,
-                    ) = rec as *mut record;
-                    break 's_95;
-                } else {
-                    rec = (*rec).next;
-                    chain_len = chain_len.wrapping_add(1);
+                    self.cnt = rc;
                 }
-            }
-            if chain_len == (*index).max_chain_length {
-                return -1 as ::core::ffi::c_int;
-            }
-            rec = xdl_cha_alloc(&raw mut (*index).rcha) as *mut record;
-            if rec.is_null() {
-                return -1 as ::core::ffi::c_int;
-            }
-            (*rec).ptr = ptr as ::core::ffi::c_uint;
-            (*rec).cnt = 1 as ::core::ffi::c_uint;
-            (*rec).next = *rec_chain;
-            *rec_chain = rec;
-            *(*index)
-                .line_map
-                .offset((ptr as ::core::ffi::c_uint).wrapping_sub((*index).ptr_shift) as isize) =
-                rec as *mut record;
-        }
-        ptr -= 1;
-    }
-    return 0 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn try_lcs(
-    mut index: *mut histindex,
-    mut lcs: *mut region,
-    mut b_ptr: ::core::ffi::c_int,
-    mut line1: ::core::ffi::c_int,
-    mut count1: ::core::ffi::c_int,
-    mut line2: ::core::ffi::c_int,
-    mut count2: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut b_next: ::core::ffi::c_uint = (b_ptr + 1 as ::core::ffi::c_int) as ::core::ffi::c_uint;
-    let mut rec: *mut record = *(*index).records.offset(
-        ((**(*(*index).env)
-            .xdf2
-            .recs
-            .offset((b_ptr - 1 as ::core::ffi::c_int) as isize))
-        .ha
-        .wrapping_add(
-            (**(*(*index).env)
-                .xdf2
-                .recs
-                .offset((b_ptr - 1 as ::core::ffi::c_int) as isize))
-            .ha >> (*index).table_bits,
-        ) & ((1 as ::core::ffi::c_ulong) << (*index).table_bits)
-            .wrapping_sub(1 as ::core::ffi::c_ulong)) as isize,
-    ) as *mut record;
-    let mut as_0: ::core::ffi::c_uint = 0;
-    let mut ae: ::core::ffi::c_uint = 0;
-    let mut bs: ::core::ffi::c_uint = 0;
-    let mut be: ::core::ffi::c_uint = 0;
-    let mut np: ::core::ffi::c_uint = 0;
-    let mut rc: ::core::ffi::c_uint = 0;
-    let mut should_break: ::core::ffi::c_int = 0;
-    while !rec.is_null() {
-        if (*rec).cnt > (*index).cnt {
-            if (*index).has_common == 0 {
-                (*index).has_common = cmp_recs(
-                    (*index).xpp,
-                    *(*(*index).env)
-                        .xdf1
-                        .recs
-                        .offset((*rec).ptr.wrapping_sub(1 as ::core::ffi::c_uint) as isize),
-                    *(*(*index).env)
-                        .xdf2
-                        .recs
-                        .offset((b_ptr - 1 as ::core::ffi::c_int) as isize),
-                ) as ::core::ffi::c_uint;
-            }
-        } else {
-            as_0 = (*rec).ptr;
-            if cmp_recs(
-                (*index).xpp,
-                *(*(*index).env)
-                    .xdf1
-                    .recs
-                    .offset(as_0.wrapping_sub(1 as ::core::ffi::c_uint) as isize),
-                *(*(*index).env)
-                    .xdf2
-                    .recs
-                    .offset((b_ptr - 1 as ::core::ffi::c_int) as isize),
-            ) != 0
-            {
-                (*index).has_common = 1 as ::core::ffi::c_uint;
-                loop {
-                    should_break = 0 as ::core::ffi::c_int;
-                    np = *(*index)
-                        .next_ptrs
-                        .offset(as_0.wrapping_sub((*index).ptr_shift) as isize);
-                    bs = b_ptr as ::core::ffi::c_uint;
-                    ae = as_0;
-                    be = bs;
-                    rc = (*rec).cnt;
-                    while line1 < as_0 as ::core::ffi::c_int
-                        && line2 < bs as ::core::ffi::c_int
-                        && cmp_recs(
-                            (*index).xpp,
-                            *(*(*index).env).xdf1.recs.offset(
-                                as_0.wrapping_sub(1 as ::core::ffi::c_uint)
-                                    .wrapping_sub(1 as ::core::ffi::c_uint)
-                                    as isize,
-                            ),
-                            *(*(*index).env).xdf2.recs.offset(
-                                bs.wrapping_sub(1 as ::core::ffi::c_uint)
-                                    .wrapping_sub(1 as ::core::ffi::c_uint)
-                                    as isize,
-                            ),
-                        ) != 0
-                    {
-                        as_0 = as_0.wrapping_sub(1);
-                        bs = bs.wrapping_sub(1);
-                        if (1 as ::core::ffi::c_uint) < rc {
-                            rc = if rc
-                                < (**(*index)
-                                    .line_map
-                                    .offset(as_0.wrapping_sub((*index).ptr_shift) as isize))
-                                .cnt
-                            {
-                                rc
-                            } else {
-                                (**(*index)
-                                    .line_map
-                                    .offset(as_0.wrapping_sub((*index).ptr_shift) as isize))
-                                .cnt
-                            };
-                        }
-                    }
-                    while (ae as ::core::ffi::c_int) < line1 + count1 - 1 as ::core::ffi::c_int
-                        && (be as ::core::ffi::c_int) < line2 + count2 - 1 as ::core::ffi::c_int
-                        && cmp_recs(
-                            (*index).xpp,
-                            *(*(*index).env).xdf1.recs.offset(
-                                ae.wrapping_add(1 as ::core::ffi::c_uint)
-                                    .wrapping_sub(1 as ::core::ffi::c_uint)
-                                    as isize,
-                            ),
-                            *(*(*index).env).xdf2.recs.offset(
-                                be.wrapping_add(1 as ::core::ffi::c_uint)
-                                    .wrapping_sub(1 as ::core::ffi::c_uint)
-                                    as isize,
-                            ),
-                        ) != 0
-                    {
-                        ae = ae.wrapping_add(1);
-                        be = be.wrapping_add(1);
-                        if (1 as ::core::ffi::c_uint) < rc {
-                            rc = if rc
-                                < (**(*index)
-                                    .line_map
-                                    .offset(ae.wrapping_sub((*index).ptr_shift) as isize))
-                                .cnt
-                            {
-                                rc
-                            } else {
-                                (**(*index)
-                                    .line_map
-                                    .offset(ae.wrapping_sub((*index).ptr_shift) as isize))
-                                .cnt
-                            };
-                        }
-                    }
-                    if b_next <= be {
-                        b_next = be.wrapping_add(1 as ::core::ffi::c_uint);
-                    }
-                    if (*lcs).end1.wrapping_sub((*lcs).begin1) < ae.wrapping_sub(as_0)
-                        || rc < (*index).cnt
-                    {
-                        (*lcs).begin1 = as_0;
-                        (*lcs).begin2 = bs;
-                        (*lcs).end1 = ae;
-                        (*lcs).end2 = be;
-                        (*index).cnt = rc;
-                    }
-                    if np == 0 as ::core::ffi::c_uint {
-                        break;
-                    }
-                    while np <= ae {
-                        np = *(*index)
-                            .next_ptrs
-                            .offset(np.wrapping_sub((*index).ptr_shift) as isize);
-                        if np != 0 as ::core::ffi::c_uint {
-                            continue;
-                        }
-                        should_break = 1 as ::core::ffi::c_int;
-                        break;
-                    }
-                    if should_break != 0 {
-                        break;
-                    }
-                    as_0 = np;
+
+                if np == 0 {
+                    break;
                 }
+                // Skip the occurrences this run already swallowed.
+                while np <= ae {
+                    np = self.next_ptr(np);
+                    if np == 0 {
+                        break;
+                    }
+                }
+                if np == 0 {
+                    break;
+                }
+                a_at = np;
             }
         }
-        rec = (*rec).next;
+
+        b_next
     }
-    return b_next as ::core::ffi::c_int;
 }
-unsafe extern "C" fn fall_back_to_classic_diff(
-    mut xpp: *const xpparam_t,
-    mut env: *mut xdfenv_t,
-    mut line1: ::core::ffi::c_int,
-    mut count1: ::core::ffi::c_int,
-    mut line2: ::core::ffi::c_int,
-    mut count2: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut xpparam: xpparam_t = xpparam_t {
-        flags: 0,
-        anchors: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-        anchors_nr: 0,
-    };
-    memset(
-        &raw mut xpparam as *mut ::core::ffi::c_void,
-        0 as ::core::ffi::c_int,
-        ::core::mem::size_of::<xpparam_t>(),
-    );
-    xpparam.flags = (*xpp).flags & !XDF_DIFF_ALGORITHM_MASK as ::core::ffi::c_ulong;
-    return xdl_fall_back_diff(env, &raw mut xpparam, line1, count1, line2, count2);
-}
-#[inline]
-unsafe extern "C" fn free_index(mut index: *mut histindex) {
-    xfree((*index).records as *mut ::core::ffi::c_void);
-    xfree((*index).line_map as *mut ::core::ffi::c_void);
-    xfree((*index).next_ptrs as *mut ::core::ffi::c_void);
-    xdl_cha_free(&raw mut (*index).rcha);
-}
-unsafe extern "C" fn find_lcs(
-    mut xpp: *const xpparam_t,
-    mut env: *mut xdfenv_t,
-    mut lcs: *mut region,
-    mut line1: ::core::ffi::c_int,
-    mut count1: ::core::ffi::c_int,
-    mut line2: ::core::ffi::c_int,
-    mut count2: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut b_ptr: ::core::ffi::c_int = 0;
-    let mut sz: ::core::ffi::c_int = 0;
-    let mut ret: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    let mut index: histindex = histindex {
-        records: ::core::ptr::null_mut::<*mut record>(),
-        line_map: ::core::ptr::null_mut::<*mut record>(),
-        rcha: chastore_t {
-            head: ::core::ptr::null_mut::<chanode_t>(),
-            tail: ::core::ptr::null_mut::<chanode_t>(),
-            isize: 0,
-            nsize: 0,
-            ancur: ::core::ptr::null_mut::<chanode_t>(),
-            sncur: ::core::ptr::null_mut::<chanode_t>(),
-            scurr: 0,
-        },
-        next_ptrs: ::core::ptr::null_mut::<::core::ffi::c_uint>(),
-        table_bits: 0,
-        records_size: 0,
-        line_map_size: 0,
-        max_chain_length: 0,
-        key_shift: 0,
-        ptr_shift: 0,
+
+/// Build the index for the A range and find the best common run in it.
+///
+/// Answers `Ok(true)` when even the best run's rarest line is too common to
+/// trust, which is the caller's cue to fall back to the classic algorithm.
+fn find_lcs(xpp: &Params<'_>, env: &Env<'_>, lcs: &mut Region, blk: Block) -> XdResult<bool> {
+    let table_bits = hashbits(blk.count1 as u32);
+    let mut index = HistIndex {
+        records: vec![None; 1usize << table_bits],
+        line_map: vec![None; blk.count1 as usize],
+        next_ptrs: vec![0; blk.count1 as usize],
+        // Upstream sizes its arena `count1 / 4 + 1` records at a time, "from
+        // xprepare.c"; the same guess makes a decent capacity here.
+        pool: Vec::with_capacity((blk.count1 / 4 + 1) as usize),
+        table_bits,
+        ptr_shift: blk.line1,
         cnt: 0,
-        has_common: 0,
-        env: ::core::ptr::null_mut::<xdfenv_t>(),
-        xpp: ::core::ptr::null::<xpparam_t>(),
+        has_common: false,
     };
-    memset(
-        &raw mut index as *mut ::core::ffi::c_void,
-        0 as ::core::ffi::c_int,
-        ::core::mem::size_of::<histindex>(),
-    );
-    index.env = env;
-    index.xpp = xpp;
-    index.records = ::core::ptr::null_mut::<*mut record>();
-    index.line_map = ::core::ptr::null_mut::<*mut record>();
-    index.rcha.head = ::core::ptr::null_mut::<chanode_t>();
-    index.table_bits = xdl_hashbits(count1 as ::core::ffi::c_uint);
-    index.records_size = ((1 as ::core::ffi::c_int) << index.table_bits) as ::core::ffi::c_uint;
-    sz = index.records_size as ::core::ffi::c_int;
-    sz = (sz as ::core::ffi::c_ulong)
-        .wrapping_mul(::core::mem::size_of::<*mut record>() as ::core::ffi::c_ulong)
-        as ::core::ffi::c_int;
-    index.records = xmalloc(sz as size_t) as *mut *mut record as *mut *mut record;
-    if !index.records.is_null() {
-        memset(
-            index.records as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            sz as size_t,
-        );
-        index.line_map_size = count1 as ::core::ffi::c_uint;
-        sz = index.line_map_size as ::core::ffi::c_int;
-        sz = (sz as ::core::ffi::c_ulong)
-            .wrapping_mul(::core::mem::size_of::<*mut record>() as ::core::ffi::c_ulong)
-            as ::core::ffi::c_int;
-        index.line_map = xmalloc(sz as size_t) as *mut *mut record as *mut *mut record;
-        if !index.line_map.is_null() {
-            memset(
-                index.line_map as *mut ::core::ffi::c_void,
-                0 as ::core::ffi::c_int,
-                sz as size_t,
-            );
-            sz = index.line_map_size as ::core::ffi::c_int;
-            sz = (sz as ::core::ffi::c_ulong)
-                .wrapping_mul(::core::mem::size_of::<::core::ffi::c_uint>() as ::core::ffi::c_ulong)
-                as ::core::ffi::c_int;
-            index.next_ptrs = xmalloc(sz as size_t) as *mut ::core::ffi::c_uint;
-            if !index.next_ptrs.is_null() {
-                memset(
-                    index.next_ptrs as *mut ::core::ffi::c_void,
-                    0 as ::core::ffi::c_int,
-                    sz as size_t,
-                );
-                if xdl_cha_init(
-                    &raw mut index.rcha,
-                    ::core::mem::size_of::<record>() as ::core::ffi::c_long,
-                    (count1 / 4 as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                        as ::core::ffi::c_long,
-                ) >= 0 as ::core::ffi::c_int
-                {
-                    index.ptr_shift = line1 as ::core::ffi::c_uint;
-                    index.max_chain_length = 64 as ::core::ffi::c_uint;
-                    if scanA(&raw mut index, line1, count1) == 0 {
-                        index.cnt = index
-                            .max_chain_length
-                            .wrapping_add(1 as ::core::ffi::c_uint);
-                        b_ptr = line2;
-                        while b_ptr <= line2 + count2 - 1 as ::core::ffi::c_int {
-                            b_ptr =
-                                try_lcs(&raw mut index, lcs, b_ptr, line1, count1, line2, count2);
-                        }
-                        if index.has_common != 0 && index.max_chain_length < index.cnt {
-                            ret = 1 as ::core::ffi::c_int;
-                        } else {
-                            ret = 0 as ::core::ffi::c_int;
-                        }
-                    }
-                }
-            }
-        }
+
+    index.scan_a(xpp, env, blk)?;
+    index.cnt = MAX_CHAIN_LENGTH + 1;
+
+    let mut b_ptr = blk.line2;
+    while b_ptr <= blk.end2() {
+        b_ptr = index.try_lcs(xpp, env, lcs, b_ptr, blk);
     }
-    free_index(&raw mut index);
-    return ret;
+
+    Ok(index.has_common && MAX_CHAIN_LENGTH < index.cnt)
 }
-unsafe extern "C" fn histogram_diff(
-    mut xpp: *const xpparam_t,
-    mut env: *mut xdfenv_t,
-    mut line1: ::core::ffi::c_int,
-    mut count1: ::core::ffi::c_int,
-    mut line2: ::core::ffi::c_int,
-    mut count2: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut lcs: region = region {
-        begin1: 0,
-        end1: 0,
-        begin2: 0,
-        end2: 0,
-    };
-    let mut lcs_found: ::core::ffi::c_int = 0;
-    let mut result: ::core::ffi::c_int = 0;
+
+/// Diff the two line ranges `blk` names.
+fn histogram_diff(xpp: &Params<'_>, env: &mut Env<'_>, mut blk: Block) -> XdResult {
     loop {
-        result = -1 as ::core::ffi::c_int;
-        if count1 <= 0 as ::core::ffi::c_int && count2 <= 0 as ::core::ffi::c_int {
-            return 0 as ::core::ffi::c_int;
+        if blk.count1 <= 0 && blk.count2 <= 0 {
+            return Ok(());
         }
-        if line1 + count1 - 1 as ::core::ffi::c_int == MAX_PTR {
-            return -1 as ::core::ffi::c_int;
+        if blk.end1() >= MAX_PTR {
+            return Err(Aborted);
         }
-        if count1 == 0 {
-            loop {
-                let c2rust_fresh0 = count2;
-                count2 = count2 - 1;
-                if c2rust_fresh0 == 0 {
-                    break;
-                }
-                let c2rust_fresh1 = line2;
-                line2 = line2 + 1;
-                *(*env)
-                    .xdf2
-                    .rchg
-                    .offset((c2rust_fresh1 - 1 as ::core::ffi::c_int) as isize) =
-                    1 as ::core::ffi::c_char;
+        if blk.count1 == 0 {
+            for i in 0..blk.count2 {
+                env.xdf2.rchg.set(blk.line2 + i - 1, true);
             }
-            return 0 as ::core::ffi::c_int;
-        } else if count2 == 0 {
-            loop {
-                let c2rust_fresh2 = count1;
-                count1 = count1 - 1;
-                if c2rust_fresh2 == 0 {
-                    break;
-                }
-                let c2rust_fresh3 = line1;
-                line1 = line1 + 1;
-                *(*env)
-                    .xdf1
-                    .rchg
-                    .offset((c2rust_fresh3 - 1 as ::core::ffi::c_int) as isize) =
-                    1 as ::core::ffi::c_char;
+            return Ok(());
+        } else if blk.count2 == 0 {
+            for i in 0..blk.count1 {
+                env.xdf1.rchg.set(blk.line1 + i - 1, true);
             }
-            return 0 as ::core::ffi::c_int;
+            return Ok(());
         }
-        memset(
-            &raw mut lcs as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            ::core::mem::size_of::<region>(),
-        );
-        lcs_found = find_lcs(xpp, env, &raw mut lcs, line1, count1, line2, count2);
-        if lcs_found < 0 as ::core::ffi::c_int {
-            break;
+
+        let mut lcs = Region::default();
+        if find_lcs(xpp, env, &mut lcs, blk)? {
+            return fall_back_diff(env, &xpp.without_algorithm(), blk);
         }
-        if lcs_found != 0 {
-            result = fall_back_to_classic_diff(xpp, env, line1, count1, line2, count2);
-            break;
-        } else if lcs.begin1 == 0 as ::core::ffi::c_uint && lcs.begin2 == 0 as ::core::ffi::c_uint {
-            loop {
-                let c2rust_fresh4 = count1;
-                count1 = count1 - 1;
-                if c2rust_fresh4 == 0 {
-                    break;
-                }
-                let c2rust_fresh5 = line1;
-                line1 = line1 + 1;
-                *(*env)
-                    .xdf1
-                    .rchg
-                    .offset((c2rust_fresh5 - 1 as ::core::ffi::c_int) as isize) =
-                    1 as ::core::ffi::c_char;
+
+        if lcs.begin1 == 0 && lcs.begin2 == 0 {
+            for i in 0..blk.count1 {
+                env.xdf1.rchg.set(blk.line1 + i - 1, true);
             }
-            loop {
-                let c2rust_fresh6 = count2;
-                count2 = count2 - 1;
-                if c2rust_fresh6 == 0 {
-                    break;
-                }
-                let c2rust_fresh7 = line2;
-                line2 = line2 + 1;
-                *(*env)
-                    .xdf2
-                    .rchg
-                    .offset((c2rust_fresh7 - 1 as ::core::ffi::c_int) as isize) =
-                    1 as ::core::ffi::c_char;
+            for i in 0..blk.count2 {
+                env.xdf2.rchg.set(blk.line2 + i - 1, true);
             }
-            result = 0 as ::core::ffi::c_int;
-            break;
-        } else {
-            result = histogram_diff(
-                xpp,
-                env,
-                line1,
-                lcs.begin1.wrapping_sub(line1 as ::core::ffi::c_uint) as ::core::ffi::c_int,
-                line2,
-                lcs.begin2.wrapping_sub(line2 as ::core::ffi::c_uint) as ::core::ffi::c_int,
-            );
-            if result != 0 {
-                break;
-            }
-            count1 = ((line1 + count1 - 1 as ::core::ffi::c_int) as ::core::ffi::c_uint)
-                .wrapping_sub(lcs.end1) as ::core::ffi::c_int;
-            line1 = lcs.end1.wrapping_add(1 as ::core::ffi::c_uint) as ::core::ffi::c_int;
-            count2 = ((line2 + count2 - 1 as ::core::ffi::c_int) as ::core::ffi::c_uint)
-                .wrapping_sub(lcs.end2) as ::core::ffi::c_int;
-            line2 = lcs.end2.wrapping_add(1 as ::core::ffi::c_uint) as ::core::ffi::c_int;
+            return Ok(());
         }
+
+        histogram_diff(
+            xpp,
+            env,
+            Block {
+                line1: blk.line1,
+                count1: lcs.begin1 - blk.line1,
+                line2: blk.line2,
+                count2: lcs.begin2 - blk.line2,
+            },
+        )?;
+        // Upstream hand-optimises the tail recursion into a `goto redo`;
+        // so does this loop.
+        blk = Block {
+            line1: lcs.end1 + 1,
+            count1: blk.end1() - lcs.end1,
+            line2: lcs.end2 + 1,
+            count2: blk.end2() - lcs.end2,
+        };
     }
-    return result;
 }
-pub unsafe extern "C" fn xdl_do_histogram_diff(
-    mut file1: *mut mmfile_t,
-    mut file2: *mut mmfile_t,
-    mut xpp: *const xpparam_t,
-    mut env: *mut xdfenv_t,
-) -> ::core::ffi::c_int {
-    if xdl_prepare_env(file1, file2, xpp, env) < 0 as ::core::ffi::c_int {
-        return -1 as ::core::ffi::c_int;
-    }
-    return histogram_diff(
+
+/// `xdl_do_histogram_diff`.
+pub fn diff<'a>(text1: &'a [u8], text2: &'a [u8], xpp: &Params<'_>) -> XdResult<Env<'a>> {
+    let mut env = prepare_env(text1, text2, xpp);
+    let (d1s, d1e) = (env.xdf1.dstart, env.xdf1.dend);
+    let (d2s, d2e) = (env.xdf2.dstart, env.xdf2.dend);
+    histogram_diff(
         xpp,
-        env,
-        ((*env).xdf1.dstart + 1 as ::core::ffi::c_long) as ::core::ffi::c_int,
-        ((*env).xdf1.dend - (*env).xdf1.dstart + 1 as ::core::ffi::c_long) as ::core::ffi::c_int,
-        ((*env).xdf2.dstart + 1 as ::core::ffi::c_long) as ::core::ffi::c_int,
-        ((*env).xdf2.dend - (*env).xdf2.dstart + 1 as ::core::ffi::c_long) as ::core::ffi::c_int,
-    );
+        &mut env,
+        Block {
+            line1: d1s + 1,
+            count1: d1e - d1s + 1,
+            line2: d2s + 1,
+            count2: d2e - d2s + 1,
+        },
+    )?;
+    Ok(env)
 }
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;

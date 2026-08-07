@@ -108,12 +108,6 @@
     "crates/nvim/src/nvim/vterm/pen.rs": 1,
     "crates/nvim/src/nvim/window.rs": 129,
     "crates/nvim/src/nvim/winfloat.rs": 27,
-    "crates/nvim/src/xdiff/xdiffi.rs": 12,
-    "crates/nvim/src/xdiff/xemit.rs": 5,
-    "crates/nvim/src/xdiff/xhistogram.rs": 6,
-    "crates/nvim/src/xdiff/xpatience.rs": 5,
-    "crates/nvim/src/xdiff/xprepare.rs": 2,
-    "crates/nvim/src/xdiff/xutils.rs": 10,
     "crates/nvim/tests/unit/memory.rs": 2,
     "crates/nvim/tests/unit/strings.rs": 8
   }

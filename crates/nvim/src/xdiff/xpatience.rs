@@ -1,488 +1,336 @@
-//! Rust port of LibXDiff's xpatience.c, as vendored by neovim v0.12.4.
+//! `xpatience.c`: the patience algorithm.
 //!
-//! LibXDiff by Davide Libenzi ( File Differential Library )
-//! Copyright (C) 2003-2016 Davide Libenzi, Johannes E. Schindelin
+//! Find the lines that are unique in *both* files — intuitively the ones a
+//! reader would call the common lines — and take the longest ordered
+//! sequence of such pairs as the initial set of matches. Grow each match
+//! outward while the neighbouring lines agree, recurse into the gaps, and
+//! hand whatever has no unique pair left to the classic algorithm.
 //!
-//! This library is free software; you can redistribute it and/or modify it
-//! under the terms of the GNU Lesser General Public License as published by
-//! the Free Software Foundation; either version 2.1 of the License, or (at
-//! your option) any later version (text: licenses/LGPL-2.1.txt).
-//!
-//! This library is distributed in the hope that it will be useful, but
-//! WITHOUT ANY WARRANTY; without even the implied warranty of
-//! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser
-//! General Public License for more details.
+//! Ordering matters twice here. The entries are visited in file-1 order, so
+//! the longest increasing subsequence is computed over `line2` alone
+//! ([`binary_search`]); and an *anchor* pins its position in that sequence,
+//! which is why [`find_longest_common_sequence`] carries `anchor_i`.
 
-use crate::src::nvim::memory::{xfree, xmalloc};
-use crate::src::nvim::os::libc::{memset, strlen, strncmp};
-use crate::src::nvim::types::{mmfile_t, size_t, xdfenv_t, xpparam_t, xrecord_t};
-use crate::src::xdiff::xprepare::xdl_prepare_env;
-use crate::src::xdiff::xutils::xdl_fall_back_diff;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct entry {
-    pub hash: ::core::ffi::c_ulong,
-    pub line1: ::core::ffi::c_ulong,
-    pub line2: ::core::ffi::c_ulong,
-    pub next: *mut entry,
-    pub previous: *mut entry,
-    pub anchor: [u8; 1],
-    pub c2rust_padding: [u8; 7],
+#![forbid(unsafe_code)]
+
+use crate::src::xdiff::xprepare::prepare_env;
+use crate::src::xdiff::xtypes::{Block, Env, Params, XdResult};
+use crate::src::xdiff::xutils::fall_back_diff;
+
+/// `line2` for a line that is not unique in one of the two files.
+const NON_UNIQUE: u64 = u64::MAX;
+
+/// One slot of [`HashMap`]: a line hash and the (at most one) line on each
+/// side that carries it.
+#[derive(Clone, Default)]
+struct Entry {
+    /// The record hash, meaningful only when [`Self::line1`] is set.
+    hash: u64,
+    /// 1-based line in file 1, or 0 for an unused slot.
+    line1: u64,
+    /// 1-based line in file 2, 0 for none, [`NON_UNIQUE`] when the line
+    /// occurs more than once in either file.
+    line2: u64,
+    /// Next entry, in file-1 order to begin with and in longest-sequence
+    /// order once [`find_longest_common_sequence`] has rewritten it.
+    next: Option<u32>,
+    /// Previous entry in the longest sequence being built.
+    previous: Option<u32>,
+    /// This line is one of `xpparam_t.anchors` and must stay in the
+    /// sequence.
+    anchor: bool,
 }
-crate::bitfield_accessors! {
-    impl entry.anchor {
-        0..=0 => anchor, set_anchor: ::core::ffi::c_uint;
-    }
+
+/// The open-addressed table `insert_record` fills, plus the file-1-order
+/// chain through the slots it used.
+struct HashMap {
+    entries: Vec<Entry>,
+    /// Head of the file-1-order chain.
+    first: Option<u32>,
+    /// Tail of it, so an insert is O(1).
+    last: Option<u32>,
+    /// How many slots are in use.
+    nr: usize,
+    /// Did any line of file 2 hash to a slot file 1 had used?
+    has_matches: bool,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct hashmap {
-    pub nr: ::core::ffi::c_int,
-    pub alloc: ::core::ffi::c_int,
-    pub entries: *mut entry,
-    pub first: *mut entry,
-    pub last: *mut entry,
-    pub has_matches: ::core::ffi::c_ulong,
-    pub file1: *mut mmfile_t,
-    pub file2: *mut mmfile_t,
-    pub env: *mut xdfenv_t,
-    pub xpp: *const xpparam_t,
+
+/// Does `line` start with one of the caller's anchor strings?
+///
+/// Upstream compares with `strncmp` against a NUL-terminated anchor, so an
+/// anchor longer than the line reads on into the next one; comparing slices
+/// stops at the line's end instead. Unobservable in nvim, which never fills
+/// `xpparam_t.anchors` — `'diffanchors'` is implemented in `diff.rs` by
+/// splitting the buffers before they get here.
+fn is_anchor(xpp: &Params<'_>, line: &[u8]) -> bool {
+    xpp.anchors.iter().any(|anchor| line.starts_with(anchor))
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const XDF_PATIENCE_DIFF: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
-pub const XDF_HISTOGRAM_DIFF: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 15 as ::core::ffi::c_int;
-pub const XDF_DIFF_ALGORITHM_MASK: ::core::ffi::c_int = XDF_PATIENCE_DIFF | XDF_HISTOGRAM_DIFF;
-pub const NON_UNIQUE: ::core::ffi::c_ulong = ULONG_MAX;
-unsafe extern "C" fn is_anchor(
-    mut xpp: *const xpparam_t,
-    mut line: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let mut i: ::core::ffi::c_int = 0;
-    i = 0 as ::core::ffi::c_int;
-    while i < (*xpp).anchors_nr as ::core::ffi::c_int {
-        if strncmp(
-            line,
-            *(*xpp).anchors.offset(i as isize),
-            strlen(*(*xpp).anchors.offset(i as isize)),
-        ) == 0
-        {
-            return 1 as ::core::ffi::c_int;
-        }
-        i += 1;
-    }
-    return 0 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn insert_record(
-    mut xpp: *const xpparam_t,
-    mut line: ::core::ffi::c_int,
-    mut map: *mut hashmap,
-    mut pass: ::core::ffi::c_int,
-) {
-    let mut records: *mut *mut xrecord_t = if pass == 1 as ::core::ffi::c_int {
-        (*(*map).env).xdf1.recs
-    } else {
-        (*(*map).env).xdf2.recs
-    };
-    let mut record: *mut xrecord_t = *records.offset((line - 1 as ::core::ffi::c_int) as isize);
-    let mut index: ::core::ffi::c_int = ((*record).ha << 1 as ::core::ffi::c_int)
-        .wrapping_rem((*map).alloc as ::core::ffi::c_ulong)
-        as ::core::ffi::c_int;
-    while (*(*map).entries.offset(index as isize)).line1 != 0 {
-        if (*(*map).entries.offset(index as isize)).hash != (*record).ha {
+
+/// Record line `line` of file `pass` in the table.
+///
+/// After `prepare_env`, a record's `ha` is a *linearized* class id rather
+/// than a hash: it starts at 0 and each new class is one higher. Upstream
+/// doubles it before taking the modulus, "in the hope that the hashing was
+/// unique enough".
+fn insert_record(xpp: &Params<'_>, env: &Env<'_>, map: &mut HashMap, line: i64, pass: u32) {
+    let side = if pass == 1 { &env.xdf1 } else { &env.xdf2 };
+    let ha = side.ha_at(line - 1);
+    let alloc = map.entries.len();
+    let mut index = ((ha << 1) % alloc as u64) as usize;
+
+    while map.entries[index].line1 != 0 {
+        if map.entries[index].hash != ha {
             index += 1;
-            if index >= (*map).alloc {
-                index = 0 as ::core::ffi::c_int;
+            if index >= alloc {
+                index = 0;
             }
-        } else {
-            if pass == 2 as ::core::ffi::c_int {
-                (*map).has_matches = 1 as ::core::ffi::c_ulong;
-            }
-            if pass == 1 as ::core::ffi::c_int
-                || (*(*map).entries.offset(index as isize)).line2 != 0
-            {
-                (*(*map).entries.offset(index as isize)).line2 = NON_UNIQUE;
-            } else {
-                (*(*map).entries.offset(index as isize)).line2 = line as ::core::ffi::c_ulong;
-            }
-            return;
+            continue;
         }
-    }
-    if pass == 2 as ::core::ffi::c_int {
+        if pass == 2 {
+            map.has_matches = true;
+        }
+        map.entries[index].line2 = if pass == 1 || map.entries[index].line2 != 0 {
+            NON_UNIQUE
+        } else {
+            line as u64
+        };
         return;
     }
-    (*(*map).entries.offset(index as isize)).line1 = line as ::core::ffi::c_ulong;
-    (*(*map).entries.offset(index as isize)).hash = (*record).ha;
-    (*(*map).entries.offset(index as isize)).set_anchor(is_anchor(
-        xpp,
-        (**(*(*map).env)
-            .xdf1
-            .recs
-            .offset((line - 1 as ::core::ffi::c_int) as isize))
-        .ptr,
-    ) as ::core::ffi::c_uint
-        as ::core::ffi::c_uint);
-    if (*map).first.is_null() {
-        (*map).first = (*map).entries.offset(index as isize);
+    if pass == 2 {
+        return;
     }
-    if !(*map).last.is_null() {
-        (*(*map).last).next = (*map).entries.offset(index as isize) as *mut entry;
-        (*(*map).entries.offset(index as isize)).previous = (*map).last as *mut entry;
+
+    let anchor = is_anchor(xpp, env.xdf1.line(line - 1));
+    let entry = &mut map.entries[index];
+    entry.line1 = line as u64;
+    entry.hash = ha;
+    entry.anchor = anchor;
+
+    let slot = index as u32;
+    if map.first.is_none() {
+        map.first = Some(slot);
     }
-    (*map).last = (*map).entries.offset(index as isize);
-    (*map).nr += 1;
+    if let Some(last) = map.last {
+        map.entries[last as usize].next = Some(slot);
+        map.entries[slot as usize].previous = Some(last);
+    }
+    map.last = Some(slot);
+    map.nr += 1;
 }
-unsafe extern "C" fn fill_hashmap(
-    mut file1: *mut mmfile_t,
-    mut file2: *mut mmfile_t,
-    mut xpp: *const xpparam_t,
-    mut env: *mut xdfenv_t,
-    mut result: *mut hashmap,
-    mut line1: ::core::ffi::c_int,
-    mut count1: ::core::ffi::c_int,
-    mut line2: ::core::ffi::c_int,
-    mut count2: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    (*result).file1 = file1;
-    (*result).file2 = file2;
-    (*result).xpp = xpp;
-    (*result).env = env;
-    (*result).alloc = count1 * 2 as ::core::ffi::c_int;
-    (*result).entries =
-        xmalloc(((*result).alloc as size_t).wrapping_mul(::core::mem::size_of::<entry>()))
-            as *mut entry as *mut entry;
-    if (*result).entries.is_null() {
-        return -1 as ::core::ffi::c_int;
+
+/// Build the table for one recursion level.
+///
+/// Called per level rather than once, because a line that is not unique
+/// across the whole file may well be unique within the range being looked
+/// at.
+fn fill_hashmap(xpp: &Params<'_>, env: &Env<'_>, blk: Block) -> HashMap {
+    // The size is exact: at most `count1` slots are ever used.
+    let alloc = (blk.count1 * 2) as usize;
+    let mut map = HashMap {
+        entries: vec![Entry::default(); alloc],
+        first: None,
+        last: None,
+        nr: 0,
+        has_matches: false,
+    };
+
+    for i in 0..blk.count1 {
+        insert_record(xpp, env, &mut map, blk.line1 + i, 1);
     }
-    memset(
-        (*result).entries as *mut ::core::ffi::c_void,
-        0 as ::core::ffi::c_int,
-        ((*result).alloc as size_t).wrapping_mul(::core::mem::size_of::<entry>()),
-    );
-    loop {
-        let c2rust_fresh8 = count1;
-        count1 = count1 - 1;
-        if c2rust_fresh8 == 0 {
-            break;
-        }
-        let c2rust_fresh9 = line1;
-        line1 = line1 + 1;
-        insert_record(xpp, c2rust_fresh9, result, 1 as ::core::ffi::c_int);
+    for i in 0..blk.count2 {
+        insert_record(xpp, env, &mut map, blk.line2 + i, 2);
     }
-    loop {
-        let c2rust_fresh10 = count2;
-        count2 = count2 - 1;
-        if c2rust_fresh10 == 0 {
-            break;
-        }
-        let c2rust_fresh11 = line2;
-        line2 = line2 + 1;
-        insert_record(xpp, c2rust_fresh11, result, 2 as ::core::ffi::c_int);
-    }
-    return 0 as ::core::ffi::c_int;
+
+    map
 }
-unsafe extern "C" fn binary_search(
-    mut sequence: *mut *mut entry,
-    mut longest: ::core::ffi::c_int,
-    mut entry: *mut entry,
-) -> ::core::ffi::c_int {
-    let mut left: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    let mut right: ::core::ffi::c_int = longest;
-    while (left + 1 as ::core::ffi::c_int) < right {
-        let mut middle: ::core::ffi::c_int = left + (right - left) / 2 as ::core::ffi::c_int;
-        if (**sequence.offset(middle as isize)).line2 > (*entry).line2 {
+
+/// Index in `sequence` of the longest run whose last element has a smaller
+/// `line2` than `entry`'s, or -1 if there is none.
+fn binary_search(entries: &[Entry], sequence: &[u32], longest: i64, line2: u64) -> i64 {
+    let mut left = -1i64;
+    let mut right = longest;
+    while left + 1 < right {
+        let middle = left + (right - left) / 2;
+        // By construction no two entries can be equal.
+        if entries[sequence[middle as usize] as usize].line2 > line2 {
             right = middle;
         } else {
             left = middle;
         }
     }
-    return left;
+    left
 }
-unsafe extern "C" fn find_longest_common_sequence(mut map: *mut hashmap) -> *mut entry {
-    let mut sequence: *mut *mut entry =
-        xmalloc(((*map).nr as size_t).wrapping_mul(::core::mem::size_of::<*mut entry>()))
-            as *mut *mut entry;
-    let mut longest: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut i: ::core::ffi::c_int = 0;
-    let mut entry: *mut entry = ::core::ptr::null_mut::<entry>();
-    let mut anchor_i: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    if sequence.is_null() {
-        return (*map).first as *mut entry;
-    }
-    entry = (*map).first as *mut entry;
-    while !entry.is_null() {
-        if !((*entry).line2 == 0 || (*entry).line2 == NON_UNIQUE) {
-            i = binary_search(sequence, longest, entry);
-            (*entry).previous = if i < 0 as ::core::ffi::c_int {
-                ::core::ptr::null_mut::<entry>()
-            } else {
-                *sequence.offset(i as isize)
-            };
-            i += 1;
-            if i > anchor_i {
-                *sequence.offset(i as isize) = entry;
-                if (*entry).anchor() != 0 {
-                    anchor_i = i;
-                    longest = anchor_i + 1 as ::core::ffi::c_int;
-                } else if i == longest {
-                    longest += 1;
-                }
-            }
+
+/// The longest ordered sequence of unique line pairs, as the head of a
+/// `next` chain.
+///
+/// The entries arrive in file-1 order, so the sequence is patience sorting
+/// over `line2`: one pile per length, each holding the smallest last element
+/// seen for that length.
+fn find_longest_common_sequence(map: &mut HashMap) -> Option<u32> {
+    let mut sequence: Vec<u32> = vec![0; map.nr];
+    let mut longest = 0i64;
+    // Once an anchor claims a position, nothing may override it — nor
+    // anything before it, which would have no effect anyway.
+    let mut anchor_i = -1i64;
+
+    let mut cursor = map.first;
+    while let Some(id) = cursor {
+        cursor = map.entries[id as usize].next;
+        let line2 = map.entries[id as usize].line2;
+        if line2 == 0 || line2 == NON_UNIQUE {
+            continue;
         }
-        entry = (*entry).next;
+        let i = binary_search(&map.entries, &sequence, longest, line2);
+        map.entries[id as usize].previous = if i < 0 {
+            None
+        } else {
+            Some(sequence[i as usize])
+        };
+        let i = i + 1;
+        if i <= anchor_i {
+            continue;
+        }
+        sequence[i as usize] = id;
+        if map.entries[id as usize].anchor {
+            anchor_i = i;
+            longest = anchor_i + 1;
+        } else if i == longest {
+            longest += 1;
+        }
     }
+
     if longest == 0 {
-        xfree(sequence as *mut ::core::ffi::c_void);
-        return ::core::ptr::null_mut::<entry>();
+        return None;
     }
-    entry = *sequence.offset((longest - 1 as ::core::ffi::c_int) as isize);
-    (*entry).next = ::core::ptr::null_mut::<entry>();
-    while !(*entry).previous.is_null() {
-        (*(*entry).previous).next = entry;
-        entry = (*entry).previous;
+
+    // Walk back from the last element, turning `previous` into `next`.
+    let mut id = sequence[(longest - 1) as usize];
+    map.entries[id as usize].next = None;
+    while let Some(prev) = map.entries[id as usize].previous {
+        map.entries[prev as usize].next = Some(id);
+        id = prev;
     }
-    xfree(sequence as *mut ::core::ffi::c_void);
-    return entry;
+    Some(id)
 }
-unsafe extern "C" fn match_0(
-    mut map: *mut hashmap,
-    mut line1: ::core::ffi::c_int,
-    mut line2: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut record1: *mut xrecord_t = *(*(*map).env)
-        .xdf1
-        .recs
-        .offset((line1 - 1 as ::core::ffi::c_int) as isize);
-    let mut record2: *mut xrecord_t = *(*(*map).env)
-        .xdf2
-        .recs
-        .offset((line2 - 1 as ::core::ffi::c_int) as isize);
-    return ((*record1).ha == (*record2).ha) as ::core::ffi::c_int;
+
+/// Do these two lines have the same class id?
+fn lines_match(env: &Env<'_>, line1: i64, line2: i64) -> bool {
+    env.xdf1.ha_at(line1 - 1) == env.xdf2.ha_at(line2 - 1)
 }
-unsafe extern "C" fn walk_common_sequence(
-    mut map: *mut hashmap,
-    mut first: *mut entry,
-    mut line1: ::core::ffi::c_int,
-    mut count1: ::core::ffi::c_int,
-    mut line2: ::core::ffi::c_int,
-    mut count2: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut end1: ::core::ffi::c_int = line1 + count1;
-    let mut end2: ::core::ffi::c_int = line2 + count2;
-    let mut next1: ::core::ffi::c_int = 0;
-    let mut next2: ::core::ffi::c_int = 0;
+
+/// Walk the common sequence, growing each match outward and recursing into
+/// the gaps between them.
+fn walk_common_sequence(
+    xpp: &Params<'_>,
+    env: &mut Env<'_>,
+    map: &HashMap,
+    mut first: Option<u32>,
+    blk: Block,
+) -> XdResult {
+    let (end1, end2) = (blk.line1 + blk.count1, blk.line2 + blk.count2);
+    let (mut line1, mut line2) = (blk.line1, blk.line2);
+
     loop {
-        if !first.is_null() {
-            next1 = (*first).line1 as ::core::ffi::c_int;
-            next2 = (*first).line2 as ::core::ffi::c_int;
-            while next1 > line1
-                && next2 > line2
-                && match_0(
-                    map,
-                    next1 - 1 as ::core::ffi::c_int,
-                    next2 - 1 as ::core::ffi::c_int,
-                ) != 0
-            {
+        // Try to grow the line ranges of common lines.
+        let (mut next1, mut next2) = match first {
+            Some(id) => (
+                map.entries[id as usize].line1 as i64,
+                map.entries[id as usize].line2 as i64,
+            ),
+            None => (end1, end2),
+        };
+        if first.is_some() {
+            while next1 > line1 && next2 > line2 && lines_match(env, next1 - 1, next2 - 1) {
                 next1 -= 1;
                 next2 -= 1;
             }
-        } else {
-            next1 = end1;
-            next2 = end2;
         }
-        while line1 < next1 && line2 < next2 && match_0(map, line1, line2) != 0 {
+        while line1 < next1 && line2 < next2 && lines_match(env, line1, line2) {
             line1 += 1;
             line2 += 1;
         }
+
         if next1 > line1 || next2 > line2 {
-            if patience_diff(
-                (*map).file1,
-                (*map).file2,
-                (*map).xpp,
-                (*map).env,
-                line1,
-                next1 - line1,
-                line2,
-                next2 - line2,
-            ) != 0
-            {
-                return -1 as ::core::ffi::c_int;
-            }
+            recurse(
+                xpp,
+                env,
+                Block {
+                    line1,
+                    count1: next1 - line1,
+                    line2,
+                    count2: next2 - line2,
+                },
+            )?;
         }
-        if first.is_null() {
-            return 0 as ::core::ffi::c_int;
-        }
-        while !(*first).next.is_null()
-            && (*(*first).next).line1 == (*first).line1.wrapping_add(1 as ::core::ffi::c_ulong)
-            && (*(*first).next).line2 == (*first).line2.wrapping_add(1 as ::core::ffi::c_ulong)
-        {
-            first = (*first).next;
-        }
-        line1 = (*first).line1.wrapping_add(1 as ::core::ffi::c_ulong) as ::core::ffi::c_int;
-        line2 = (*first).line2.wrapping_add(1 as ::core::ffi::c_ulong) as ::core::ffi::c_int;
-        first = (*first).next;
-    }
-}
-unsafe extern "C" fn fall_back_to_classic_diff(
-    mut map: *mut hashmap,
-    mut line1: ::core::ffi::c_int,
-    mut count1: ::core::ffi::c_int,
-    mut line2: ::core::ffi::c_int,
-    mut count2: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut xpp: xpparam_t = xpparam_t {
-        flags: 0,
-        anchors: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-        anchors_nr: 0,
-    };
-    memset(
-        &raw mut xpp as *mut ::core::ffi::c_void,
-        0 as ::core::ffi::c_int,
-        ::core::mem::size_of::<xpparam_t>(),
-    );
-    xpp.flags = (*(*map).xpp).flags & !XDF_DIFF_ALGORITHM_MASK as ::core::ffi::c_ulong;
-    return xdl_fall_back_diff((*map).env, &raw mut xpp, line1, count1, line2, count2);
-}
-unsafe extern "C" fn patience_diff(
-    mut file1: *mut mmfile_t,
-    mut file2: *mut mmfile_t,
-    mut xpp: *const xpparam_t,
-    mut env: *mut xdfenv_t,
-    mut line1: ::core::ffi::c_int,
-    mut count1: ::core::ffi::c_int,
-    mut line2: ::core::ffi::c_int,
-    mut count2: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut map: hashmap = hashmap {
-        nr: 0,
-        alloc: 0,
-        entries: ::core::ptr::null_mut::<entry>(),
-        first: ::core::ptr::null_mut::<entry>(),
-        last: ::core::ptr::null_mut::<entry>(),
-        has_matches: 0,
-        file1: ::core::ptr::null_mut::<mmfile_t>(),
-        file2: ::core::ptr::null_mut::<mmfile_t>(),
-        env: ::core::ptr::null_mut::<xdfenv_t>(),
-        xpp: ::core::ptr::null::<xpparam_t>(),
-    };
-    let mut first: *mut entry = ::core::ptr::null_mut::<entry>();
-    let mut result: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if count1 == 0 {
-        loop {
-            let c2rust_fresh0 = count2;
-            count2 = count2 - 1;
-            if c2rust_fresh0 == 0 {
+
+        let Some(mut id) = first else {
+            return Ok(());
+        };
+
+        // Absorb the run of consecutive pairs that follows.
+        while let Some(next) = map.entries[id as usize].next {
+            let (a, b) = (&map.entries[id as usize], &map.entries[next as usize]);
+            if b.line1 != a.line1 + 1 || b.line2 != a.line2 + 1 {
                 break;
             }
-            let c2rust_fresh1 = line2;
-            line2 = line2 + 1;
-            *(*env)
-                .xdf2
-                .rchg
-                .offset((c2rust_fresh1 - 1 as ::core::ffi::c_int) as isize) =
-                1 as ::core::ffi::c_char;
+            id = next;
         }
-        return 0 as ::core::ffi::c_int;
-    } else if count2 == 0 {
-        loop {
-            let c2rust_fresh2 = count1;
-            count1 = count1 - 1;
-            if c2rust_fresh2 == 0 {
-                break;
-            }
-            let c2rust_fresh3 = line1;
-            line1 = line1 + 1;
-            *(*env)
-                .xdf1
-                .rchg
-                .offset((c2rust_fresh3 - 1 as ::core::ffi::c_int) as isize) =
-                1 as ::core::ffi::c_char;
-        }
-        return 0 as ::core::ffi::c_int;
+
+        line1 = map.entries[id as usize].line1 as i64 + 1;
+        line2 = map.entries[id as usize].line2 as i64 + 1;
+        first = map.entries[id as usize].next;
     }
-    memset(
-        &raw mut map as *mut ::core::ffi::c_void,
-        0 as ::core::ffi::c_int,
-        ::core::mem::size_of::<hashmap>(),
-    );
-    if fill_hashmap(
-        file1,
-        file2,
+}
+
+/// Recursively find the longest common sequence of unique lines, and ask the
+/// classic algorithm when there is none.
+fn recurse(xpp: &Params<'_>, env: &mut Env<'_>, blk: Block) -> XdResult {
+    // Trivial case: one side is empty.
+    if blk.count1 == 0 {
+        for i in 0..blk.count2 {
+            env.xdf2.rchg.set(blk.line2 + i - 1, true);
+        }
+        return Ok(());
+    } else if blk.count2 == 0 {
+        for i in 0..blk.count1 {
+            env.xdf1.rchg.set(blk.line1 + i - 1, true);
+        }
+        return Ok(());
+    }
+
+    let mut map = fill_hashmap(xpp, env, blk);
+
+    // Are there any matching lines at all?
+    if !map.has_matches {
+        for i in 0..blk.count1 {
+            env.xdf1.rchg.set(blk.line1 + i - 1, true);
+        }
+        for i in 0..blk.count2 {
+            env.xdf2.rchg.set(blk.line2 + i - 1, true);
+        }
+        return Ok(());
+    }
+
+    match find_longest_common_sequence(&mut map) {
+        Some(first) => walk_common_sequence(xpp, env, &map, Some(first), blk),
+        None => fall_back_diff(env, &xpp.without_algorithm(), blk),
+    }
+}
+
+/// `xdl_do_patience_diff`.
+pub fn diff<'a>(text1: &'a [u8], text2: &'a [u8], xpp: &Params<'_>) -> XdResult<Env<'a>> {
+    let mut env = prepare_env(text1, text2, xpp);
+    let (n1, n2) = (env.xdf1.nrec(), env.xdf2.nrec());
+    recurse(
         xpp,
-        env,
-        &raw mut map,
-        line1,
-        count1,
-        line2,
-        count2,
-    ) != 0
-    {
-        return -1 as ::core::ffi::c_int;
-    }
-    if map.has_matches == 0 {
-        loop {
-            let c2rust_fresh4 = count1;
-            count1 = count1 - 1;
-            if c2rust_fresh4 == 0 {
-                break;
-            }
-            let c2rust_fresh5 = line1;
-            line1 = line1 + 1;
-            *(*env)
-                .xdf1
-                .rchg
-                .offset((c2rust_fresh5 - 1 as ::core::ffi::c_int) as isize) =
-                1 as ::core::ffi::c_char;
-        }
-        loop {
-            let c2rust_fresh6 = count2;
-            count2 = count2 - 1;
-            if c2rust_fresh6 == 0 {
-                break;
-            }
-            let c2rust_fresh7 = line2;
-            line2 = line2 + 1;
-            *(*env)
-                .xdf2
-                .rchg
-                .offset((c2rust_fresh7 - 1 as ::core::ffi::c_int) as isize) =
-                1 as ::core::ffi::c_char;
-        }
-        xfree(map.entries as *mut ::core::ffi::c_void);
-        return 0 as ::core::ffi::c_int;
-    }
-    first = find_longest_common_sequence(&raw mut map);
-    if !first.is_null() {
-        result = walk_common_sequence(&raw mut map, first, line1, count1, line2, count2);
-    } else {
-        result = fall_back_to_classic_diff(&raw mut map, line1, count1, line2, count2);
-    }
-    xfree(map.entries as *mut ::core::ffi::c_void);
-    return result;
+        &mut env,
+        Block {
+            line1: 1,
+            count1: n1,
+            line2: 1,
+            count2: n2,
+        },
+    )?;
+    Ok(env)
 }
-pub unsafe extern "C" fn xdl_do_patience_diff(
-    mut file1: *mut mmfile_t,
-    mut file2: *mut mmfile_t,
-    mut xpp: *const xpparam_t,
-    mut env: *mut xdfenv_t,
-) -> ::core::ffi::c_int {
-    if xdl_prepare_env(file1, file2, xpp, env) < 0 as ::core::ffi::c_int {
-        return -1 as ::core::ffi::c_int;
-    }
-    return patience_diff(
-        file1,
-        file2,
-        xpp,
-        env,
-        1 as ::core::ffi::c_int,
-        (*env).xdf1.nrec as ::core::ffi::c_int,
-        1 as ::core::ffi::c_int,
-        (*env).xdf2.nrec as ::core::ffi::c_int,
-    );
-}
-pub const __LONG_MAX__: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
-pub const LONG_MAX: ::core::ffi::c_long = __LONG_MAX__;
-pub const ULONG_MAX: ::core::ffi::c_ulong = (LONG_MAX as ::core::ffi::c_ulong)
-    .wrapping_mul(2 as ::core::ffi::c_ulong)
-    .wrapping_add(1 as ::core::ffi::c_ulong);

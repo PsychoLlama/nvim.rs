@@ -1,7 +1,7 @@
 {
   "internal_exports": 40,
-  "files_without_forbid_unsafe": 851,
-  "files_without_deny_unsafe_op": 166,
+  "files_without_forbid_unsafe": 846,
+  "files_without_deny_unsafe_op": 160,
   "files": {
     "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe": 7},
     "crates/nvim/src/cjson/lua_cjson/decode.rs": {"unsafe": 20},
@@ -854,11 +854,6 @@
     "crates/nvim/src/nvim/vterm/vterm.rs": {"no_mangle": 4, "unsafe": 12},
     "crates/nvim/src/nvim/window.rs": {"lines": 8929, "no_mangle": 5, "unsafe": 195},
     "crates/nvim/src/nvim/winfloat.rs": {"unsafe": 16},
-    "crates/nvim/src/xdiff/xdiffi.rs": {"lines": 1147, "unsafe": 24},
-    "crates/nvim/src/xdiff/xemit.rs": {"unsafe": 4},
-    "crates/nvim/src/xdiff/xhistogram.rs": {"unsafe": 8},
-    "crates/nvim/src/xdiff/xpatience.rs": {"unsafe": 10},
-    "crates/nvim/src/xdiff/xprepare.rs": {"unsafe": 11},
-    "crates/nvim/src/xdiff/xutils.rs": {"unsafe": 18}
+    "crates/nvim/src/xdiff/ffi.rs": {"unsafe": 7}
   }
 }

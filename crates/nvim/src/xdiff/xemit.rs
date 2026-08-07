@@ -1,242 +1,165 @@
-//! Rust port of LibXDiff's xemit.c, as vendored by neovim v0.12.4.
+//! `xemit.c`: grouping changes into hunks, and writing a unified diff.
 //!
-//! LibXDiff by Davide Libenzi ( File Differential Library )
-//! Copyright (C) 2003 Davide Libenzi <davidel@xmailserver.org>
+//! [`get_hunk`] is shared with `xdiffi`'s hunk-callback walk, which is how
+//! `:diffupdate` and `vim.diff{on_hunk=}` get the same hunk boundaries as
+//! the text writer without going near [`emit_diff`].
 //!
-//! This library is free software; you can redistribute it and/or modify it
-//! under the terms of the GNU Lesser General Public License as published by
-//! the Free Software Foundation; either version 2.1 of the License, or (at
-//! your option) any later version (text: licenses/LGPL-2.1.txt).
-//!
-//! This library is distributed in the hope that it will be useful, but
-//! WITHOUT ANY WARRANTY; without even the implied warranty of
-//! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser
-//! General Public License for more details.
+//! The `XDL_EMIT_FUNCNAMES`/`XDL_EMIT_FUNCCONTEXT` machinery — the `@@ ... @@
+//! func_name` suffix and the "extend context to the enclosing function"
+//! logic — is `#if 0`-ed out of the vendored source, so `xdemitconf_t`'s
+//! `find_func`/`find_func_priv` are dead and every hunk header here carries
+//! an empty function name.
 
-use crate::src::nvim::os::libc::strlen;
-use crate::src::nvim::types::{xdchange_t, xdemitcb_t, xdemitconf_t, xdfenv_t, xdfile_t};
-use crate::src::xdiff::xutils::{xdl_emit_diffrec, xdl_emit_hunk_hdr};
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct func_line {
-    pub len: ::core::ffi::c_long,
-    pub buf: [::core::ffi::c_char; 80],
-}
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const XDL_EMIT_NO_HUNK_HDR: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
-unsafe extern "C" fn xdl_get_rec(
-    mut xdf: *mut xdfile_t,
-    mut ri: ::core::ffi::c_long,
-    mut rec: *mut *const ::core::ffi::c_char,
-) -> ::core::ffi::c_long {
-    *rec = (**(*xdf).recs.offset(ri as isize)).ptr;
-    return (**(*xdf).recs.offset(ri as isize)).size;
-}
-unsafe extern "C" fn xdl_emit_record(
-    mut xdf: *mut xdfile_t,
-    mut ri: ::core::ffi::c_long,
-    mut pre: *const ::core::ffi::c_char,
-    mut ecb: *mut xdemitcb_t,
-) -> ::core::ffi::c_int {
-    let mut size: ::core::ffi::c_long = 0;
-    let mut psize: ::core::ffi::c_long = strlen(pre) as ::core::ffi::c_long;
-    let mut rec: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    size = xdl_get_rec(xdf, ri, &raw mut rec);
-    if xdl_emit_diffrec(rec, size, pre, psize, ecb) < 0 as ::core::ffi::c_int {
-        return -1 as ::core::ffi::c_int;
-    }
-    return 0 as ::core::ffi::c_int;
-}
-pub unsafe extern "C" fn xdl_get_hunk(
-    mut xscr: *mut *mut xdchange_t,
-    mut xecfg: *const xdemitconf_t,
-) -> *mut xdchange_t {
-    let mut xch: *mut xdchange_t = ::core::ptr::null_mut::<xdchange_t>();
-    let mut xchp: *mut xdchange_t = ::core::ptr::null_mut::<xdchange_t>();
-    let mut lxch: *mut xdchange_t = ::core::ptr::null_mut::<xdchange_t>();
-    let mut max_common: ::core::ffi::c_long =
-        2 as ::core::ffi::c_long * (*xecfg).ctxlen + (*xecfg).interhunkctxlen;
-    let mut max_ignorable: ::core::ffi::c_long = (*xecfg).ctxlen;
-    let mut ignored: ::core::ffi::c_ulong = 0 as ::core::ffi::c_ulong;
-    xchp = *xscr;
-    while !xchp.is_null() && (*xchp).ignore != 0 {
-        xch = (*xchp).next as *mut xdchange_t;
-        if xch.is_null() || (*xch).i1 - ((*xchp).i1 + (*xchp).chg1) >= max_ignorable {
-            *xscr = xch;
+#![forbid(unsafe_code)]
+
+use crate::src::xdiff::ffi::Emit;
+use crate::src::xdiff::xtypes::{Change, EmitConf, Env, XDL_EMIT_NO_HUNK_HDR, XdFile, XdResult};
+use crate::src::xdiff::xutils::{emit_diffrec, emit_hunk_hdr};
+
+/// Starting at `*start`, find the last change that belongs in the same hunk.
+///
+/// Two changes share a hunk when the unchanged run between them is short
+/// enough to be printed as context for both — `2 * ctxlen + interhunkctxlen`
+/// lines. Ignorable changes (all-blank, under `XDF_IGNORE_BLANK_LINES`)
+/// neither open a hunk nor extend one; leading ones are skipped by advancing
+/// `*start`, which is why it is in-out.
+///
+/// `None` means the skip ran off the end and there is no hunk left.
+pub fn get_hunk(script: &[Change], start: &mut usize, xecfg: &EmitConf) -> Option<usize> {
+    let max_common = 2 * xecfg.ctxlen + xecfg.interhunkctxlen;
+    let max_ignorable = xecfg.ctxlen;
+    // Blank lines skipped so far; they still count toward `max_common`.
+    let mut ignored = 0i64;
+
+    // Drop ignorable changes that are too far in front of any real one.
+    let mut p = *start;
+    while p < script.len() && script[p].ignore {
+        let next = p + 1;
+        if next >= script.len()
+            || script[next].i1 - (script[p].i1 + script[p].chg1) >= max_ignorable
+        {
+            *start = next;
         }
-        xchp = (*xchp).next as *mut xdchange_t;
+        p = next;
     }
-    if (*xscr).is_null() {
-        return ::core::ptr::null_mut::<xdchange_t>();
+    if *start >= script.len() {
+        return None;
     }
-    lxch = *xscr;
-    xchp = *xscr;
-    xch = (*xchp).next as *mut xdchange_t;
-    while !xch.is_null() {
-        let mut distance: ::core::ffi::c_long = (*xch).i1 - ((*xchp).i1 + (*xchp).chg1);
+
+    let mut last = *start;
+    let mut prev = *start;
+    let mut cur = prev + 1;
+    while cur < script.len() {
+        let distance = script[cur].i1 - (script[prev].i1 + script[prev].chg1);
         if distance > max_common {
             break;
         }
-        if distance < max_ignorable && ((*xch).ignore == 0 || lxch == xchp) {
-            lxch = xch;
-            ignored = 0 as ::core::ffi::c_ulong;
-        } else if distance < max_ignorable && (*xch).ignore != 0 {
-            ignored = ignored.wrapping_add((*xch).chg2 as ::core::ffi::c_ulong);
-        } else {
-            if lxch != xchp
-                && (*xch).i1 + ignored as ::core::ffi::c_long - ((*lxch).i1 + (*lxch).chg1)
-                    > max_common
-            {
-                break;
-            }
-            if (*xch).ignore == 0 {
-                lxch = xch;
-                ignored = 0 as ::core::ffi::c_ulong;
-            } else {
-                ignored = ignored.wrapping_add((*xch).chg2 as ::core::ffi::c_ulong);
-            }
-        }
-        xchp = xch;
-        xch = (*xch).next as *mut xdchange_t;
-    }
-    return lxch;
-}
-pub unsafe extern "C" fn xdl_emit_diff(
-    mut xe: *mut xdfenv_t,
-    mut xscr: *mut xdchange_t,
-    mut ecb: *mut xdemitcb_t,
-    mut xecfg: *const xdemitconf_t,
-) -> ::core::ffi::c_int {
-    let mut s1: ::core::ffi::c_long = 0;
-    let mut s2: ::core::ffi::c_long = 0;
-    let mut e1: ::core::ffi::c_long = 0;
-    let mut e2: ::core::ffi::c_long = 0;
-    let mut lctx: ::core::ffi::c_long = 0;
-    let mut xch: *mut xdchange_t = ::core::ptr::null_mut::<xdchange_t>();
-    let mut xche: *mut xdchange_t = ::core::ptr::null_mut::<xdchange_t>();
-    let mut func_line: func_line = func_line {
-        len: 0,
-        buf: [0; 80],
-    };
-    func_line.len = 0 as ::core::ffi::c_long;
-    xch = xscr;
-    while !xch.is_null() {
-        xche = xdl_get_hunk(&raw mut xch, xecfg);
-        if xch.is_null() {
-            break;
-        }
-        s1 = if (*xch).i1 - (*xecfg).ctxlen > 0 as ::core::ffi::c_long {
-            (*xch).i1 - (*xecfg).ctxlen
-        } else {
-            0 as ::core::ffi::c_long
-        };
-        s2 = if (*xch).i2 - (*xecfg).ctxlen > 0 as ::core::ffi::c_long {
-            (*xch).i2 - (*xecfg).ctxlen
-        } else {
-            0 as ::core::ffi::c_long
-        };
-        lctx = (*xecfg).ctxlen;
-        lctx = if lctx < (*xe).xdf1.nrec - ((*xche).i1 + (*xche).chg1) {
-            lctx
-        } else {
-            (*xe).xdf1.nrec - ((*xche).i1 + (*xche).chg1)
-        };
-        lctx = if lctx < (*xe).xdf2.nrec - ((*xche).i2 + (*xche).chg2) {
-            lctx
-        } else {
-            (*xe).xdf2.nrec - ((*xche).i2 + (*xche).chg2)
-        };
-        e1 = (*xche).i1 + (*xche).chg1 + lctx;
-        e2 = (*xche).i2 + (*xche).chg2 + lctx;
-        if (*xecfg).flags & XDL_EMIT_NO_HUNK_HDR as ::core::ffi::c_ulong == 0
-            && xdl_emit_hunk_hdr(
-                s1 + 1 as ::core::ffi::c_long,
-                e1 - s1,
-                s2 + 1 as ::core::ffi::c_long,
-                e2 - s2,
-                &raw mut func_line.buf as *mut ::core::ffi::c_char,
-                func_line.len,
-                ecb,
-            ) < 0 as ::core::ffi::c_int
+        if distance < max_ignorable && (!script[cur].ignore || last == prev) {
+            last = cur;
+            ignored = 0;
+        } else if distance < max_ignorable && script[cur].ignore {
+            ignored += script[cur].chg2;
+        } else if last != prev
+            && script[cur].i1 + ignored - (script[last].i1 + script[last].chg1) > max_common
         {
-            return -1 as ::core::ffi::c_int;
+            break;
+        } else if !script[cur].ignore {
+            last = cur;
+            ignored = 0;
+        } else {
+            ignored += script[cur].chg2;
         }
-        while s2 < (*xch).i2 {
-            if xdl_emit_record(
-                &raw mut (*xe).xdf2,
-                s2,
-                b" \0".as_ptr() as *const ::core::ffi::c_char,
-                ecb,
-            ) < 0 as ::core::ffi::c_int
-            {
-                return -1 as ::core::ffi::c_int;
-            }
-            s2 += 1;
+        prev = cur;
+        cur += 1;
+    }
+
+    Some(last)
+}
+
+/// Write one body line: its marker, the line, and the no-final-newline note.
+fn emit_record(xdf: &XdFile<'_>, ri: i64, pre: &[u8], emit: &mut Emit<'_>) -> XdResult {
+    emit_diffrec(xdf.line(ri), pre, emit)
+}
+
+/// Write the whole diff in unified format.
+///
+/// Reached only from `vim.diff()` without an `on_hunk` callback; everything
+/// else in the tree installs `xdemitconf_t.hunk_func` and takes
+/// `xdiffi::call_hunk_func` instead.
+pub fn emit_diff(
+    xe: &Env<'_>,
+    script: &[Change],
+    xecfg: &EmitConf,
+    emit: &mut Emit<'_>,
+) -> XdResult {
+    let mut at = 0usize;
+
+    while at < script.len() {
+        let mut first = at;
+        let Some(last) = get_hunk(script, &mut first, xecfg) else {
+            break;
+        };
+        let (start, end) = (script[first], script[last]);
+
+        let hdr1 = (start.i1 - xecfg.ctxlen).max(0);
+        let mut hdr2 = (start.i2 - xecfg.ctxlen).max(0);
+
+        // Trailing context, clamped to whatever is left of both files.
+        let lctx = xecfg
+            .ctxlen
+            .min(xe.xdf1.nrec() - (end.i1 + end.chg1))
+            .min(xe.xdf2.nrec() - (end.i2 + end.chg2));
+        let e1 = end.i1 + end.chg1 + lctx;
+        let e2 = end.i2 + end.chg2 + lctx;
+
+        if xecfg.flags & XDL_EMIT_NO_HUNK_HDR == 0 {
+            emit_hunk_hdr(hdr1 + 1, e1 - hdr1, hdr2 + 1, e2 - hdr2, emit)?;
         }
-        s1 = (*xch).i1;
-        s2 = (*xch).i2;
+
+        // Leading context.
+        while hdr2 < start.i2 {
+            emit_record(&xe.xdf2, hdr2, b" ", emit)?;
+            hdr2 += 1;
+        }
+
+        // The changes, with the unchanged lines between any two of them.
+        let mut k = first;
+        let mut s1 = start.i1;
+        let mut s2 = start.i2;
         loop {
-            while s1 < (*xch).i1 && s2 < (*xch).i2 {
-                if xdl_emit_record(
-                    &raw mut (*xe).xdf2,
-                    s2,
-                    b" \0".as_ptr() as *const ::core::ffi::c_char,
-                    ecb,
-                ) < 0 as ::core::ffi::c_int
-                {
-                    return -1 as ::core::ffi::c_int;
-                }
+            let ch = script[k];
+            while s1 < ch.i1 && s2 < ch.i2 {
+                emit_record(&xe.xdf2, s2, b" ", emit)?;
                 s1 += 1;
                 s2 += 1;
             }
-            s1 = (*xch).i1;
-            while s1 < (*xch).i1 + (*xch).chg1 {
-                if xdl_emit_record(
-                    &raw mut (*xe).xdf1,
-                    s1,
-                    b"-\0".as_ptr() as *const ::core::ffi::c_char,
-                    ecb,
-                ) < 0 as ::core::ffi::c_int
-                {
-                    return -1 as ::core::ffi::c_int;
-                }
+            s1 = ch.i1;
+            while s1 < ch.i1 + ch.chg1 {
+                emit_record(&xe.xdf1, s1, b"-", emit)?;
                 s1 += 1;
             }
-            s2 = (*xch).i2;
-            while s2 < (*xch).i2 + (*xch).chg2 {
-                if xdl_emit_record(
-                    &raw mut (*xe).xdf2,
-                    s2,
-                    b"+\0".as_ptr() as *const ::core::ffi::c_char,
-                    ecb,
-                ) < 0 as ::core::ffi::c_int
-                {
-                    return -1 as ::core::ffi::c_int;
-                }
+            s2 = ch.i2;
+            while s2 < ch.i2 + ch.chg2 {
+                emit_record(&xe.xdf2, s2, b"+", emit)?;
                 s2 += 1;
             }
-            if xch == xche {
+            if k == last {
                 break;
             }
-            s1 = (*xch).i1 + (*xch).chg1;
-            s2 = (*xch).i2 + (*xch).chg2;
-            xch = (*xch).next as *mut xdchange_t;
+            s1 = ch.i1 + ch.chg1;
+            s2 = ch.i2 + ch.chg2;
+            k += 1;
         }
-        s2 = (*xche).i2 + (*xche).chg2;
+
+        // Trailing context.
+        let mut s2 = end.i2 + end.chg2;
         while s2 < e2 {
-            if xdl_emit_record(
-                &raw mut (*xe).xdf2,
-                s2,
-                b" \0".as_ptr() as *const ::core::ffi::c_char,
-                ecb,
-            ) < 0 as ::core::ffi::c_int
-            {
-                return -1 as ::core::ffi::c_int;
-            }
+            emit_record(&xe.xdf2, s2, b" ", emit)?;
             s2 += 1;
         }
-        xch = (*xche).next as *mut xdchange_t;
+
+        at = last + 1;
     }
-    return 0 as ::core::ffi::c_int;
+
+    Ok(())
 }

@@ -18,7 +18,7 @@ use crate::src::nvim::types::{
     mmfile_t, object_data as C2Rust_Unnamed, size_t, xdemitcb_t, xdemitconf_t,
     xdl_emit_hunk_consume_func_t, xpparam_t,
 };
-use crate::src::xdiff::xdiffi::xdl_diff;
+use crate::src::xdiff::ffi::xdl_diff;
 pub const kNluaXdiffModeLocations: NluaXdiffMode = 2;
 pub type NluaXdiffMode = ::core::ffi::c_uint;
 pub const kNluaXdiffModeOnHunkCB: NluaXdiffMode = 1;

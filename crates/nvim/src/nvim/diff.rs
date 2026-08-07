@@ -77,7 +77,7 @@ use crate::src::nvim::undo::{u_save, u_sync};
 use crate::src::nvim::window::{
     WSP_VERT, frames_locked, scroll_to_fraction, set_fraction, win_split, win_valid,
 };
-use crate::src::xdiff::xdiffi::xdl_diff;
+use crate::src::xdiff::ffi::xdl_diff;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISdigit: C2Rust_Unnamed = 2048;
 pub const kOptValTypeString: OptValType = 2;

@@ -114,8 +114,6 @@ pub mod vterm_keycodes;
 pub mod win;
 pub mod window;
 pub mod xdiff;
-pub mod xdiffi;
-pub mod xtypes;
 
 // Not part of the namespace: a guard that walks the modules above and
 // asserts no two of them declare the same name (an E0659 that only fires
@@ -233,5 +231,3 @@ pub use self::vterm_keycodes::*;
 pub use self::win::*;
 pub use self::window::*;
 pub use self::xdiff::*;
-pub use self::xdiffi::*;
-pub use self::xtypes::*;

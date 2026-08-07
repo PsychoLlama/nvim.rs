@@ -1,668 +1,305 @@
-//! Rust port of LibXDiff's xprepare.c, as vendored by neovim v0.12.4.
+//! `xprepare.c`: split both files into lines, then reduce the problem.
 //!
-//! LibXDiff by Davide Libenzi ( File Differential Library )
-//! Copyright (C) 2003 Davide Libenzi <davidel@xmailserver.org>
+//! Three passes, in this order:
 //!
-//! This library is free software; you can redistribute it and/or modify it
-//! under the terms of the GNU Lesser General Public License as published by
-//! the Free Software Foundation; either version 2.1 of the License, or (at
-//! your option) any later version (text: licenses/LGPL-2.1.txt).
-//!
-//! This library is distributed in the hope that it will be useful, but
-//! WITHOUT ANY WARRANTY; without even the implied warranty of
-//! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser
-//! General Public License for more details.
+//! 1. [`prepare_ctx`] splits a file into [`Rec`]s and hashes each line.
+//! 2. [`Classifier`] replaces every hash with a dense *class id* shared
+//!    between the two files, so the rest of the engine compares small
+//!    integers and never re-reads a line. The histogram engine skips this —
+//!    it wants the content hash — and so does nothing else.
+//! 3. [`trim_ends`] and [`cleanup_records`] drop the matching head and tail
+//!    and then every line with no counterpart at all, leaving `rindex`/`ha`:
+//!    the reduced arrays the Myers walk actually runs over. Patience and
+//!    histogram skip this too; they reduce the problem their own way.
 
-use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
-use crate::src::nvim::os::libc::memset;
-use crate::src::nvim::types::{
-    chanode_t, chastore_t, mmfile_t, s_xrecord, size_t, xdfenv_t, xdfile_t, xpparam_t, xrecord_t,
-};
-use crate::src::xdiff::xutils::{
-    xdl_bogosqrt, xdl_cha_alloc, xdl_cha_free, xdl_cha_init, xdl_guess_lines, xdl_hash_record,
-    xdl_hashbits, xdl_mmfile_first, xdl_recmatch,
-};
-pub type xdlclassifier_t = s_xdlclassifier;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdlclassifier {
-    pub hbits: ::core::ffi::c_uint,
-    pub hsize: ::core::ffi::c_long,
-    pub rchash: *mut *mut xdlclass_t,
-    pub ncha: chastore_t,
-    pub rcrecs: *mut *mut xdlclass_t,
-    pub alloc: ::core::ffi::c_long,
-    pub count: ::core::ffi::c_long,
-    pub flags: ::core::ffi::c_long,
+#![forbid(unsafe_code)]
+
+use crate::src::xdiff::xtypes::{Algorithm, Changed, Env, Params, Rec, XdFile};
+use crate::src::xdiff::xutils::{bogosqrt, guess_lines, hash_record, hashbits, recmatch};
+
+/// A run of similar lines shorter than this fraction is not worth keeping;
+/// see the ratio at the end of [`clean_mmatch`].
+const XDL_KPDIS_RUN: i64 = 4;
+/// A line matching at least this many lines on the other side is "too
+/// common" to be evidence of anything.
+const XDL_MAX_EQLIMIT: i64 = 1024;
+/// How far either side of a multi-match line [`clean_mmatch`] looks. Without
+/// it the scan runs to the ends of the file on pathological input.
+const XDL_SIMSCAN_WINDOW: i64 = 100;
+/// Lines to sample when guessing a file's length.
+const XDL_GUESS_NLINES1: i64 = 256;
+/// The same, for the histogram engine: it never grows a hash table off the
+/// guess, so a poorer estimate costs nothing.
+const XDL_GUESS_NLINES2: i64 = 20;
+
+/// One equivalence class of lines: every line in both files that matches
+/// this one under the whitespace flags.
+struct Class<'a> {
+    /// The class's hash, as [`hash_record`] computed it.
+    ha: u64,
+    /// The first line that landed here, kept so [`recmatch`] has something
+    /// to compare a candidate against.
+    line: &'a [u8],
+    /// How many lines of file 1 are in this class.
+    len1: i64,
+    /// How many lines of file 2 are.
+    len2: i64,
 }
-pub type xdlclass_t = s_xdlclass;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct s_xdlclass {
-    pub next: *mut s_xdlclass,
-    pub ha: ::core::ffi::c_ulong,
-    pub line: *const ::core::ffi::c_char,
-    pub size: ::core::ffi::c_long,
-    pub idx: ::core::ffi::c_long,
-    pub len1: ::core::ffi::c_long,
-    pub len2: ::core::ffi::c_long,
+
+/// `xdlclassifier_t`: hash-to-class-id, shared across both files.
+struct Classifier<'a> {
+    /// Width of [`Self::buckets`], in bits.
+    hbits: u32,
+    /// Class ids per hash bucket, oldest first. Upstream chains newest-first
+    /// and takes the first match, so the search here walks in reverse — the
+    /// order decides which class a line joins when two classes both match
+    /// it, which the whitespace flavours make possible.
+    buckets: Vec<Vec<u32>>,
+    /// Every class, in the order they were first seen; the index *is* the
+    /// class id, which is what makes the ids dense and comparable.
+    classes: Vec<Class<'a>>,
+    /// The `XDF_*` flags [`recmatch`] runs under.
+    flags: u64,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const XDF_PATIENCE_DIFF: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
-pub const XDF_HISTOGRAM_DIFF: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 15 as ::core::ffi::c_int;
-pub const XDF_DIFF_ALGORITHM_MASK: ::core::ffi::c_int = XDF_PATIENCE_DIFF | XDF_HISTOGRAM_DIFF;
-pub const XDL_KPDIS_RUN: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const XDL_MAX_EQLIMIT: ::core::ffi::c_int = 1024 as ::core::ffi::c_int;
-pub const XDL_SIMSCAN_WINDOW: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-pub const XDL_GUESS_NLINES1: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
-pub const XDL_GUESS_NLINES2: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
-unsafe extern "C" fn xdl_init_classifier(
-    mut cf: *mut xdlclassifier_t,
-    mut size: ::core::ffi::c_long,
-    mut flags: ::core::ffi::c_long,
-) -> ::core::ffi::c_int {
-    (*cf).flags = flags;
-    (*cf).hbits = xdl_hashbits(size as ::core::ffi::c_uint);
-    (*cf).hsize = ((1 as ::core::ffi::c_int) << (*cf).hbits) as ::core::ffi::c_long;
-    if xdl_cha_init(
-        &raw mut (*cf).ncha,
-        ::core::mem::size_of::<xdlclass_t>() as ::core::ffi::c_long,
-        size / 4 as ::core::ffi::c_long + 1 as ::core::ffi::c_long,
-    ) < 0 as ::core::ffi::c_int
-    {
-        return -1 as ::core::ffi::c_int;
-    }
-    (*cf).rchash =
-        xmalloc(((*cf).hsize as size_t).wrapping_mul(::core::mem::size_of::<*mut xdlclass_t>()))
-            as *mut *mut xdlclass_t;
-    if (*cf).rchash.is_null() {
-        xdl_cha_free(&raw mut (*cf).ncha);
-        return -1 as ::core::ffi::c_int;
-    }
-    memset(
-        (*cf).rchash as *mut ::core::ffi::c_void,
-        0 as ::core::ffi::c_int,
-        ((*cf).hsize as size_t).wrapping_mul(::core::mem::size_of::<*mut xdlclass_t>()),
-    );
-    (*cf).alloc = size;
-    (*cf).rcrecs =
-        xmalloc(((*cf).alloc as size_t).wrapping_mul(::core::mem::size_of::<*mut xdlclass_t>()))
-            as *mut *mut xdlclass_t;
-    if (*cf).rcrecs.is_null() {
-        xfree((*cf).rchash as *mut ::core::ffi::c_void);
-        xdl_cha_free(&raw mut (*cf).ncha);
-        return -1 as ::core::ffi::c_int;
-    }
-    (*cf).count = 0 as ::core::ffi::c_long;
-    return 0 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn xdl_free_classifier(mut cf: *mut xdlclassifier_t) {
-    xfree((*cf).rcrecs as *mut ::core::ffi::c_void);
-    xfree((*cf).rchash as *mut ::core::ffi::c_void);
-    xdl_cha_free(&raw mut (*cf).ncha);
-}
-unsafe extern "C" fn xdl_classify_record(
-    mut pass: ::core::ffi::c_uint,
-    mut cf: *mut xdlclassifier_t,
-    mut rhash: *mut *mut xrecord_t,
-    mut hbits: ::core::ffi::c_uint,
-    mut rec: *mut xrecord_t,
-) -> ::core::ffi::c_int {
-    let mut hi: ::core::ffi::c_long = 0;
-    let mut line: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut rcrec: *mut xdlclass_t = ::core::ptr::null_mut::<xdlclass_t>();
-    let mut rcrecs: *mut *mut xdlclass_t = ::core::ptr::null_mut::<*mut xdlclass_t>();
-    line = (*rec).ptr;
-    hi = ((*rec).ha.wrapping_add((*rec).ha >> (*cf).hbits)
-        & ((1 as ::core::ffi::c_ulong) << (*cf).hbits).wrapping_sub(1 as ::core::ffi::c_ulong))
-        as ::core::ffi::c_long;
-    rcrec = *(*cf).rchash.offset(hi as isize);
-    while !rcrec.is_null() {
-        if (*rcrec).ha == (*rec).ha
-            && xdl_recmatch(
-                (*rcrec).line,
-                (*rcrec).size,
-                (*rec).ptr,
-                (*rec).size,
-                (*cf).flags,
-            ) != 0
-        {
-            break;
+
+impl<'a> Classifier<'a> {
+    fn new(size: i64, flags: u64) -> Self {
+        let hbits = hashbits(size as u32);
+        Self {
+            hbits,
+            buckets: vec![Vec::new(); 1usize << hbits],
+            classes: Vec::with_capacity(size.max(0) as usize),
+            flags,
         }
-        rcrec = (*rcrec).next as *mut xdlclass_t;
     }
-    if rcrec.is_null() {
-        rcrec = xdl_cha_alloc(&raw mut (*cf).ncha) as *mut xdlclass_t;
-        if rcrec.is_null() {
-            return -1 as ::core::ffi::c_int;
-        }
-        let c2rust_fresh1 = (*cf).count;
-        (*cf).count = (*cf).count + 1;
-        (*rcrec).idx = c2rust_fresh1;
-        if (*cf).count > (*cf).alloc {
-            (*cf).alloc *= 2 as ::core::ffi::c_long;
-            rcrecs = xrealloc(
-                (*cf).rcrecs as *mut ::core::ffi::c_void,
-                ((*cf).alloc as size_t).wrapping_mul(::core::mem::size_of::<*mut xdlclass_t>()),
-            ) as *mut *mut xdlclass_t;
-            if rcrecs.is_null() {
-                return -1 as ::core::ffi::c_int;
+
+    /// Give `rec` its class id, counting it against the class's per-file
+    /// tally. `pass` is 1 for the first file and 2 for the second.
+    fn classify(&mut self, pass: u32, line: &'a [u8], rec: &mut Rec) {
+        let bucket = hashlong(rec.ha, self.hbits);
+        let found = self.buckets[bucket].iter().rev().copied().find(|&id| {
+            let class = &self.classes[id as usize];
+            class.ha == rec.ha && recmatch(class.line, line, self.flags)
+        });
+
+        let id = match found {
+            Some(id) => id,
+            None => {
+                let id = self.classes.len() as u32;
+                self.classes.push(Class {
+                    ha: rec.ha,
+                    line,
+                    len1: 0,
+                    len2: 0,
+                });
+                self.buckets[bucket].push(id);
+                id
             }
-            (*cf).rcrecs = rcrecs;
+        };
+
+        let class = &mut self.classes[id as usize];
+        if pass == 1 {
+            class.len1 += 1;
+        } else {
+            class.len2 += 1;
         }
-        *(*cf).rcrecs.offset((*rcrec).idx as isize) = rcrec;
-        (*rcrec).line = line;
-        (*rcrec).size = (*rec).size;
-        (*rcrec).ha = (*rec).ha;
-        (*rcrec).len2 = 0 as ::core::ffi::c_long;
-        (*rcrec).len1 = (*rcrec).len2;
-        (*rcrec).next = *(*cf).rchash.offset(hi as isize) as *mut s_xdlclass;
-        *(*cf).rchash.offset(hi as isize) = rcrec;
+        rec.ha = u64::from(id);
     }
-    if pass == 1 as ::core::ffi::c_uint {
-        (*rcrec).len1 += 1;
-    } else {
-        (*rcrec).len2 += 1;
-    };
-    (*rec).ha = (*rcrec).idx as ::core::ffi::c_ulong;
-    hi = ((*rec).ha.wrapping_add((*rec).ha >> hbits)
-        & ((1 as ::core::ffi::c_ulong) << hbits).wrapping_sub(1 as ::core::ffi::c_ulong))
-        as ::core::ffi::c_long;
-    (*rec).next = *rhash.offset(hi as isize) as *mut s_xrecord;
-    *rhash.offset(hi as isize) = rec;
-    return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn xdl_prepare_ctx(
-    mut pass: ::core::ffi::c_uint,
-    mut mf: *mut mmfile_t,
-    mut narec: ::core::ffi::c_long,
-    mut xpp: *const xpparam_t,
-    mut cf: *mut xdlclassifier_t,
-    mut xdf: *mut xdfile_t,
-) -> ::core::ffi::c_int {
-    let mut hbits: ::core::ffi::c_uint = 0;
-    let mut nrec: ::core::ffi::c_long = 0;
-    let mut hsize: ::core::ffi::c_long = 0;
-    let mut bsize: ::core::ffi::c_long = 0;
-    let mut hav: ::core::ffi::c_ulong = 0;
-    let mut blk: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut cur: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut top: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut prev: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut crec: *mut xrecord_t = ::core::ptr::null_mut::<xrecord_t>();
-    let mut recs: *mut *mut xrecord_t = ::core::ptr::null_mut::<*mut xrecord_t>();
-    let mut rrecs: *mut *mut xrecord_t = ::core::ptr::null_mut::<*mut xrecord_t>();
-    let mut rhash: *mut *mut xrecord_t = ::core::ptr::null_mut::<*mut xrecord_t>();
-    let mut ha: *mut ::core::ffi::c_ulong = ::core::ptr::null_mut::<::core::ffi::c_ulong>();
-    let mut rchg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut rindex: *mut ::core::ffi::c_long = ::core::ptr::null_mut::<::core::ffi::c_long>();
-    ha = ::core::ptr::null_mut::<::core::ffi::c_ulong>();
-    rindex = ::core::ptr::null_mut::<::core::ffi::c_long>();
-    rchg = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    rhash = ::core::ptr::null_mut::<*mut xrecord_t>();
-    recs = ::core::ptr::null_mut::<*mut xrecord_t>();
-    '_abort: {
-        if xdl_cha_init(
-            &raw mut (*xdf).rcha,
-            ::core::mem::size_of::<xrecord_t>() as ::core::ffi::c_long,
-            narec / 4 as ::core::ffi::c_long + 1 as ::core::ffi::c_long,
-        ) >= 0 as ::core::ffi::c_int
-        {
-            recs = xmalloc((narec as size_t).wrapping_mul(::core::mem::size_of::<*mut xrecord_t>()))
-                as *mut *mut xrecord_t;
-            if !recs.is_null() {
-                if (*xpp).flags & XDF_DIFF_ALGORITHM_MASK as ::core::ffi::c_ulong
-                    == XDF_HISTOGRAM_DIFF as ::core::ffi::c_ulong
-                {
-                    hsize = 0 as ::core::ffi::c_long;
-                    hbits = hsize as ::core::ffi::c_uint;
-                } else {
-                    hbits = xdl_hashbits(narec as ::core::ffi::c_uint);
-                    hsize = ((1 as ::core::ffi::c_int) << hbits) as ::core::ffi::c_long;
-                    rhash = xmalloc(
-                        (hsize as size_t).wrapping_mul(::core::mem::size_of::<*mut xrecord_t>()),
-                    ) as *mut *mut xrecord_t;
-                    if rhash.is_null() {
-                        break '_abort;
-                    } else {
-                        memset(
-                            rhash as *mut ::core::ffi::c_void,
-                            0 as ::core::ffi::c_int,
-                            (hsize as size_t)
-                                .wrapping_mul(::core::mem::size_of::<*mut xrecord_t>()),
-                        );
-                    }
-                }
-                nrec = 0 as ::core::ffi::c_long;
-                's_139: {
-                    blk = xdl_mmfile_first(mf, &raw mut bsize) as *const ::core::ffi::c_char;
-                    cur = blk;
-                    if !cur.is_null() {
-                        top = blk.offset(bsize as isize);
-                        loop {
-                            if cur >= top {
-                                break 's_139;
-                            }
-                            prev = cur;
-                            hav = xdl_hash_record(
-                                &raw mut cur,
-                                top,
-                                (*xpp).flags as ::core::ffi::c_long,
-                            );
-                            if nrec >= narec {
-                                narec *= 2 as ::core::ffi::c_long;
-                                rrecs = xrealloc(
-                                    recs as *mut ::core::ffi::c_void,
-                                    (narec as size_t)
-                                        .wrapping_mul(::core::mem::size_of::<*mut xrecord_t>()),
-                                ) as *mut *mut xrecord_t;
-                                if rrecs.is_null() {
-                                    break '_abort;
-                                }
-                                recs = rrecs;
-                            }
-                            crec = xdl_cha_alloc(&raw mut (*xdf).rcha) as *mut xrecord_t;
-                            if crec.is_null() {
-                                break '_abort;
-                            }
-                            (*crec).ptr = prev;
-                            (*crec).size = cur.offset_from(prev) as ::core::ffi::c_long;
-                            (*crec).ha = hav;
-                            let c2rust_fresh0 = nrec;
-                            nrec = nrec + 1;
-                            let c2rust_lvalue_ptr = &raw mut *recs.offset(c2rust_fresh0 as isize);
-                            *c2rust_lvalue_ptr = crec;
-                            if (*xpp).flags & XDF_DIFF_ALGORITHM_MASK as ::core::ffi::c_ulong
-                                != XDF_HISTOGRAM_DIFF as ::core::ffi::c_ulong
-                                && xdl_classify_record(pass, cf, rhash, hbits, crec)
-                                    < 0 as ::core::ffi::c_int
-                            {
-                                break '_abort;
-                            }
-                        }
-                    }
-                }
-                rchg = xmalloc(
-                    ((nrec + 2 as ::core::ffi::c_long) as size_t)
-                        .wrapping_mul(::core::mem::size_of::<::core::ffi::c_char>()),
-                ) as *mut ::core::ffi::c_char;
-                if !rchg.is_null() {
-                    memset(
-                        rchg as *mut ::core::ffi::c_void,
-                        0 as ::core::ffi::c_int,
-                        ((nrec + 2 as ::core::ffi::c_long) as size_t)
-                            .wrapping_mul(::core::mem::size_of::<::core::ffi::c_char>()),
-                    );
-                    rindex = xmalloc(
-                        ((nrec + 1 as ::core::ffi::c_long) as size_t)
-                            .wrapping_mul(::core::mem::size_of::<::core::ffi::c_long>()),
-                    ) as *mut ::core::ffi::c_long;
-                    if !rindex.is_null() {
-                        ha = xmalloc(
-                            ((nrec + 1 as ::core::ffi::c_long) as size_t)
-                                .wrapping_mul(::core::mem::size_of::<::core::ffi::c_ulong>()),
-                        ) as *mut ::core::ffi::c_ulong;
-                        if !ha.is_null() {
-                            (*xdf).nrec = nrec;
-                            (*xdf).recs = recs;
-                            (*xdf).hbits = hbits;
-                            (*xdf).rhash = rhash;
-                            (*xdf).rchg = rchg.offset(1 as ::core::ffi::c_int as isize);
-                            (*xdf).rindex = rindex;
-                            (*xdf).nreff = 0 as ::core::ffi::c_long;
-                            (*xdf).ha = ha;
-                            (*xdf).dstart = 0 as ::core::ffi::c_long;
-                            (*xdf).dend = nrec - 1 as ::core::ffi::c_long;
-                            return 0 as ::core::ffi::c_int;
-                        }
-                    }
-                }
-            }
+
+/// `XDL_HASHLONG`: fold the high bits down and mask to `bits`.
+fn hashlong(v: u64, bits: u32) -> usize {
+    (v.wrapping_add(v >> bits) & ((1u64 << bits) - 1)) as usize
+}
+
+/// Split `text` into lines, hash each, and classify it unless the caller is
+/// the histogram engine.
+fn prepare_ctx<'a>(
+    pass: u32,
+    text: &'a [u8],
+    narec: i64,
+    xpp: &Params<'_>,
+    cf: Option<&mut Classifier<'a>>,
+) -> XdFile<'a> {
+    let mut recs: Vec<Rec> = Vec::with_capacity(narec.max(0) as usize);
+    let mut cf = cf;
+    let mut cur = 0usize;
+
+    while cur < text.len() {
+        let (ha, used) = hash_record(&text[cur..], xpp.flags);
+        let mut rec = Rec {
+            start: cur,
+            size: used,
+            ha,
+        };
+        if let Some(cf) = cf.as_deref_mut() {
+            cf.classify(pass, &text[cur..cur + used], &mut rec);
         }
+        recs.push(rec);
+        cur += used;
     }
-    xfree(ha as *mut ::core::ffi::c_void);
-    xfree(rindex as *mut ::core::ffi::c_void);
-    xfree(rchg as *mut ::core::ffi::c_void);
-    xfree(rhash as *mut ::core::ffi::c_void);
-    xfree(recs as *mut ::core::ffi::c_void);
-    xdl_cha_free(&raw mut (*xdf).rcha);
-    return -1 as ::core::ffi::c_int;
+
+    let nrec = recs.len();
+    XdFile {
+        text,
+        recs,
+        dstart: 0,
+        dend: nrec as i64 - 1,
+        rchg: Changed::new(nrec),
+        rindex: vec![0; nrec + 1],
+        ha: vec![0; nrec + 1],
+        nreff: 0,
+    }
 }
-unsafe extern "C" fn xdl_free_ctx(mut xdf: *mut xdfile_t) {
-    xfree((*xdf).rhash as *mut ::core::ffi::c_void);
-    xfree((*xdf).rindex as *mut ::core::ffi::c_void);
-    xfree((*xdf).rchg.offset(-(1 as ::core::ffi::c_int as isize)) as *mut ::core::ffi::c_void);
-    xfree((*xdf).ha as *mut ::core::ffi::c_void);
-    xfree((*xdf).recs as *mut ::core::ffi::c_void);
-    xdl_cha_free(&raw mut (*xdf).rcha);
-}
-pub unsafe extern "C" fn xdl_prepare_env(
-    mut mf1: *mut mmfile_t,
-    mut mf2: *mut mmfile_t,
-    mut xpp: *const xpparam_t,
-    mut xe: *mut xdfenv_t,
-) -> ::core::ffi::c_int {
-    let mut enl1: ::core::ffi::c_long = 0;
-    let mut enl2: ::core::ffi::c_long = 0;
-    let mut sample: ::core::ffi::c_long = 0;
-    let mut cf: xdlclassifier_t = xdlclassifier_t {
-        hbits: 0,
-        hsize: 0,
-        rchash: ::core::ptr::null_mut::<*mut xdlclass_t>(),
-        ncha: chastore_t {
-            head: ::core::ptr::null_mut::<chanode_t>(),
-            tail: ::core::ptr::null_mut::<chanode_t>(),
-            isize: 0,
-            nsize: 0,
-            ancur: ::core::ptr::null_mut::<chanode_t>(),
-            sncur: ::core::ptr::null_mut::<chanode_t>(),
-            scurr: 0,
-        },
-        rcrecs: ::core::ptr::null_mut::<*mut xdlclass_t>(),
-        alloc: 0,
-        count: 0,
-        flags: 0,
-    };
-    memset(
-        &raw mut cf as *mut ::core::ffi::c_void,
-        0 as ::core::ffi::c_int,
-        ::core::mem::size_of::<xdlclassifier_t>(),
-    );
-    sample = (if (*xpp).flags & XDF_DIFF_ALGORITHM_MASK as ::core::ffi::c_ulong
-        == XDF_HISTOGRAM_DIFF as ::core::ffi::c_ulong
-    {
+
+/// Prepare both files: split, classify, and (for the classic algorithm)
+/// reduce.
+pub fn prepare_env<'a>(text1: &'a [u8], text2: &'a [u8], xpp: &Params<'_>) -> Env<'a> {
+    let algorithm = xpp.algorithm();
+
+    // For histogram diff we can afford a smaller sample and thus a poorer
+    // estimate of the number of lines: its hash table is sized from the
+    // real count, not from the guess.
+    let sample = if algorithm == Algorithm::Histogram {
         XDL_GUESS_NLINES2
     } else {
         XDL_GUESS_NLINES1
-    }) as ::core::ffi::c_long;
-    enl1 = xdl_guess_lines(mf1, sample) + 1 as ::core::ffi::c_long;
-    enl2 = xdl_guess_lines(mf2, sample) + 1 as ::core::ffi::c_long;
-    if (*xpp).flags & XDF_DIFF_ALGORITHM_MASK as ::core::ffi::c_ulong
-        != XDF_HISTOGRAM_DIFF as ::core::ffi::c_ulong
-        && xdl_init_classifier(
-            &raw mut cf,
-            enl1 + enl2 + 1 as ::core::ffi::c_long,
-            (*xpp).flags as ::core::ffi::c_long,
-        ) < 0 as ::core::ffi::c_int
+    };
+    let enl1 = guess_lines(text1, sample) + 1;
+    let enl2 = guess_lines(text2, sample) + 1;
+
+    let mut cf =
+        (algorithm != Algorithm::Histogram).then(|| Classifier::new(enl1 + enl2 + 1, xpp.flags));
+
+    let mut xdf1 = prepare_ctx(1, text1, enl1, xpp, cf.as_mut());
+    let mut xdf2 = prepare_ctx(2, text2, enl2, xpp, cf.as_mut());
+
+    if let Some(cf) = &cf
+        && algorithm == Algorithm::Myers
     {
-        return -1 as ::core::ffi::c_int;
+        trim_ends(&mut xdf1, &mut xdf2);
+        cleanup_records(cf, &mut xdf1, &mut xdf2);
     }
-    if xdl_prepare_ctx(
-        1 as ::core::ffi::c_uint,
-        mf1,
-        enl1,
-        xpp,
-        &raw mut cf,
-        &raw mut (*xe).xdf1,
-    ) < 0 as ::core::ffi::c_int
-    {
-        xdl_free_classifier(&raw mut cf);
-        return -1 as ::core::ffi::c_int;
-    }
-    if xdl_prepare_ctx(
-        2 as ::core::ffi::c_uint,
-        mf2,
-        enl2,
-        xpp,
-        &raw mut cf,
-        &raw mut (*xe).xdf2,
-    ) < 0 as ::core::ffi::c_int
-    {
-        xdl_free_ctx(&raw mut (*xe).xdf1);
-        xdl_free_classifier(&raw mut cf);
-        return -1 as ::core::ffi::c_int;
-    }
-    if (*xpp).flags & XDF_DIFF_ALGORITHM_MASK as ::core::ffi::c_ulong
-        != XDF_PATIENCE_DIFF as ::core::ffi::c_ulong
-        && (*xpp).flags & XDF_DIFF_ALGORITHM_MASK as ::core::ffi::c_ulong
-            != XDF_HISTOGRAM_DIFF as ::core::ffi::c_ulong
-        && xdl_optimize_ctxs(&raw mut cf, &raw mut (*xe).xdf1, &raw mut (*xe).xdf2)
-            < 0 as ::core::ffi::c_int
-    {
-        xdl_free_ctx(&raw mut (*xe).xdf2);
-        xdl_free_ctx(&raw mut (*xe).xdf1);
-        xdl_free_classifier(&raw mut cf);
-        return -1 as ::core::ffi::c_int;
-    }
-    if (*xpp).flags & XDF_DIFF_ALGORITHM_MASK as ::core::ffi::c_ulong
-        != XDF_HISTOGRAM_DIFF as ::core::ffi::c_ulong
-    {
-        xdl_free_classifier(&raw mut cf);
-    }
-    return 0 as ::core::ffi::c_int;
+
+    Env { xdf1, xdf2 }
 }
-pub unsafe extern "C" fn xdl_free_env(mut xe: *mut xdfenv_t) {
-    xdl_free_ctx(&raw mut (*xe).xdf2);
-    xdl_free_ctx(&raw mut (*xe).xdf1);
-}
-unsafe extern "C" fn xdl_clean_mmatch(
-    mut dis: *const ::core::ffi::c_char,
-    mut i: ::core::ffi::c_long,
-    mut s: ::core::ffi::c_long,
-    mut e: ::core::ffi::c_long,
-) -> ::core::ffi::c_int {
-    let mut r: ::core::ffi::c_long = 0;
-    let mut rdis0: ::core::ffi::c_long = 0;
-    let mut rpdis0: ::core::ffi::c_long = 0;
-    let mut rdis1: ::core::ffi::c_long = 0;
-    let mut rpdis1: ::core::ffi::c_long = 0;
-    if i - s > XDL_SIMSCAN_WINDOW as ::core::ffi::c_long {
-        s = i - XDL_SIMSCAN_WINDOW as ::core::ffi::c_long;
+
+/// Should the multi-match line `i` be discarded?
+///
+/// Only when it sits in the middle of a run of lines that have no match at
+/// all: a multi-match line surrounded by other multi-match lines is evidence
+/// of a repeated block, which is worth keeping.
+fn clean_mmatch(dis: &[i8], i: i64, mut s: i64, mut e: i64) -> bool {
+    // Bound the window. The loops below stop at the first line that *does*
+    // have a unique match, but on data that has none they would otherwise
+    // walk to the ends of the file.
+    if i - s > XDL_SIMSCAN_WINDOW {
+        s = i - XDL_SIMSCAN_WINDOW;
     }
-    if e - i > XDL_SIMSCAN_WINDOW as ::core::ffi::c_long {
-        e = i + XDL_SIMSCAN_WINDOW as ::core::ffi::c_long;
+    if e - i > XDL_SIMSCAN_WINDOW {
+        e = i + XDL_SIMSCAN_WINDOW;
     }
-    r = 1 as ::core::ffi::c_long;
-    rdis0 = 0 as ::core::ffi::c_long;
-    rpdis0 = 1 as ::core::ffi::c_long;
+
+    // Scan back from `i` over lines that have no match (0) or many (2).
+    let (mut rdis0, mut rpdis0) = (0i64, 1i64);
+    let mut r = 1;
     while i - r >= s {
-        if *dis.offset((i - r) as isize) == 0 {
-            rdis0 += 1;
-        } else {
-            if *dis.offset((i - r) as isize) as ::core::ffi::c_int != 2 as ::core::ffi::c_int {
-                break;
-            }
-            rpdis0 += 1;
+        match dis[(i - r) as usize] {
+            0 => rdis0 += 1,
+            2 => rpdis0 += 1,
+            _ => break,
         }
         r += 1;
     }
-    if rdis0 == 0 as ::core::ffi::c_long {
-        return 0 as ::core::ffi::c_int;
+    // A run of nothing but multi-match lines: keep `i`.
+    if rdis0 == 0 {
+        return false;
     }
-    r = 1 as ::core::ffi::c_long;
-    rdis1 = 0 as ::core::ffi::c_long;
-    rpdis1 = 1 as ::core::ffi::c_long;
+
+    let (mut rdis1, mut rpdis1) = (0i64, 1i64);
+    let mut r = 1;
     while i + r <= e {
-        if *dis.offset((i + r) as isize) == 0 {
-            rdis1 += 1;
-        } else {
-            if *dis.offset((i + r) as isize) as ::core::ffi::c_int != 2 as ::core::ffi::c_int {
-                break;
-            }
-            rpdis1 += 1;
+        match dis[(i + r) as usize] {
+            0 => rdis1 += 1,
+            2 => rpdis1 += 1,
+            _ => break,
         }
         r += 1;
     }
-    if rdis1 == 0 as ::core::ffi::c_long {
-        return 0 as ::core::ffi::c_int;
+    if rdis1 == 0 {
+        return false;
     }
+
     rdis1 += rdis0;
     rpdis1 += rpdis0;
-    return ((rpdis1 * XDL_KPDIS_RUN as ::core::ffi::c_long) < rpdis1 + rdis1)
-        as ::core::ffi::c_int;
+    rpdis1 * XDL_KPDIS_RUN < rpdis1 + rdis1
 }
-unsafe extern "C" fn xdl_cleanup_records(
-    mut cf: *mut xdlclassifier_t,
-    mut xdf1: *mut xdfile_t,
-    mut xdf2: *mut xdfile_t,
-) -> ::core::ffi::c_int {
-    let mut i: ::core::ffi::c_long = 0;
-    let mut nm: ::core::ffi::c_long = 0;
-    let mut nreff: ::core::ffi::c_long = 0;
-    let mut mlim: ::core::ffi::c_long = 0;
-    let mut recs: *mut *mut xrecord_t = ::core::ptr::null_mut::<*mut xrecord_t>();
-    let mut rcrec: *mut xdlclass_t = ::core::ptr::null_mut::<xdlclass_t>();
-    let mut dis: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut dis1: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut dis2: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    dis = xmalloc(((*xdf1).nrec + (*xdf2).nrec + 2 as ::core::ffi::c_long) as size_t)
-        as *mut ::core::ffi::c_char;
-    if dis.is_null() {
-        return -1 as ::core::ffi::c_int;
-    }
-    memset(
-        dis as *mut ::core::ffi::c_void,
-        0 as ::core::ffi::c_int,
-        ((*xdf1).nrec + (*xdf2).nrec + 2 as ::core::ffi::c_long) as size_t,
-    );
-    dis1 = dis;
-    dis2 = dis1
-        .offset((*xdf1).nrec as isize)
-        .offset(1 as ::core::ffi::c_int as isize);
-    mlim = xdl_bogosqrt((*xdf1).nrec);
-    if mlim > XDL_MAX_EQLIMIT as ::core::ffi::c_long {
-        mlim = XDL_MAX_EQLIMIT as ::core::ffi::c_long;
-    }
-    i = (*xdf1).dstart;
-    recs = (*xdf1).recs.offset((*xdf1).dstart as isize);
-    while i <= (*xdf1).dend {
-        rcrec = *(*cf).rcrecs.offset((**recs).ha as isize);
-        nm = if !rcrec.is_null() {
-            (*rcrec).len2
-        } else {
-            0 as ::core::ffi::c_long
-        };
-        *dis1.offset(i as isize) = (if nm == 0 as ::core::ffi::c_long {
-            0 as ::core::ffi::c_int
+
+/// Discard records that have no match on the other side, and the
+/// multi-match ones [`clean_mmatch`] rejects; what is left is `rindex`/`ha`.
+fn cleanup_records(cf: &Classifier<'_>, xdf1: &mut XdFile<'_>, xdf2: &mut XdFile<'_>) {
+    let dis1 = match_counts(cf, xdf1, |class| class.len2);
+    let dis2 = match_counts(cf, xdf2, |class| class.len1);
+    keep_matched(xdf1, &dis1);
+    keep_matched(xdf2, &dis2);
+}
+
+/// Per line of `xdf`, how interesting it is: 0 for no match on the other
+/// side, 1 for a usable number, 2 for too many to mean anything.
+fn match_counts(
+    cf: &Classifier<'_>,
+    xdf: &XdFile<'_>,
+    other_side: impl Fn(&Class<'_>) -> i64,
+) -> Vec<i8> {
+    let mlim = bogosqrt(xdf.nrec()).min(XDL_MAX_EQLIMIT);
+    let mut dis = vec![0i8; xdf.recs.len() + 1];
+    for i in xdf.dstart..=xdf.dend {
+        let nm = other_side(&cf.classes[xdf.ha_at(i) as usize]);
+        dis[i as usize] = if nm == 0 {
+            0
         } else if nm >= mlim {
-            2 as ::core::ffi::c_int
+            2
         } else {
-            1 as ::core::ffi::c_int
-        }) as ::core::ffi::c_char;
-        i += 1;
-        recs = recs.offset(1);
-    }
-    mlim = xdl_bogosqrt((*xdf2).nrec);
-    if mlim > XDL_MAX_EQLIMIT as ::core::ffi::c_long {
-        mlim = XDL_MAX_EQLIMIT as ::core::ffi::c_long;
-    }
-    i = (*xdf2).dstart;
-    recs = (*xdf2).recs.offset((*xdf2).dstart as isize);
-    while i <= (*xdf2).dend {
-        rcrec = *(*cf).rcrecs.offset((**recs).ha as isize);
-        nm = if !rcrec.is_null() {
-            (*rcrec).len1
-        } else {
-            0 as ::core::ffi::c_long
+            1
         };
-        *dis2.offset(i as isize) = (if nm == 0 as ::core::ffi::c_long {
-            0 as ::core::ffi::c_int
-        } else if nm >= mlim {
-            2 as ::core::ffi::c_int
-        } else {
-            1 as ::core::ffi::c_int
-        }) as ::core::ffi::c_char;
-        i += 1;
-        recs = recs.offset(1);
     }
-    nreff = 0 as ::core::ffi::c_long;
-    i = (*xdf1).dstart;
-    recs = (*xdf1).recs.offset((*xdf1).dstart as isize);
-    while i <= (*xdf1).dend {
-        if *dis1.offset(i as isize) as ::core::ffi::c_int == 1 as ::core::ffi::c_int
-            || *dis1.offset(i as isize) as ::core::ffi::c_int == 2 as ::core::ffi::c_int
-                && xdl_clean_mmatch(dis1, i, (*xdf1).dstart, (*xdf1).dend) == 0
-        {
-            *(*xdf1).rindex.offset(nreff as isize) = i;
-            *(*xdf1).ha.offset(nreff as isize) = (**recs).ha;
+    dis
+}
+
+/// Fill `rindex`/`ha` with the lines worth diffing, and mark the rest
+/// changed outright — they cannot match anything, so no walk will pair them.
+fn keep_matched(xdf: &mut XdFile<'_>, dis: &[i8]) {
+    let mut nreff = 0i64;
+    for i in xdf.dstart..=xdf.dend {
+        let d = dis[i as usize];
+        if d == 1 || (d == 2 && !clean_mmatch(dis, i, xdf.dstart, xdf.dend)) {
+            xdf.rindex[nreff as usize] = i;
+            xdf.ha[nreff as usize] = xdf.ha_at(i);
             nreff += 1;
         } else {
-            *(*xdf1).rchg.offset(i as isize) = 1 as ::core::ffi::c_char;
+            xdf.rchg.set(i, true);
         }
-        i += 1;
-        recs = recs.offset(1);
     }
-    (*xdf1).nreff = nreff;
-    nreff = 0 as ::core::ffi::c_long;
-    i = (*xdf2).dstart;
-    recs = (*xdf2).recs.offset((*xdf2).dstart as isize);
-    while i <= (*xdf2).dend {
-        if *dis2.offset(i as isize) as ::core::ffi::c_int == 1 as ::core::ffi::c_int
-            || *dis2.offset(i as isize) as ::core::ffi::c_int == 2 as ::core::ffi::c_int
-                && xdl_clean_mmatch(dis2, i, (*xdf2).dstart, (*xdf2).dend) == 0
-        {
-            *(*xdf2).rindex.offset(nreff as isize) = i;
-            *(*xdf2).ha.offset(nreff as isize) = (**recs).ha;
-            nreff += 1;
-        } else {
-            *(*xdf2).rchg.offset(i as isize) = 1 as ::core::ffi::c_char;
-        }
-        i += 1;
-        recs = recs.offset(1);
-    }
-    (*xdf2).nreff = nreff;
-    xfree(dis as *mut ::core::ffi::c_void);
-    return 0 as ::core::ffi::c_int;
+    xdf.nreff = nreff;
 }
-unsafe extern "C" fn xdl_trim_ends(
-    mut xdf1: *mut xdfile_t,
-    mut xdf2: *mut xdfile_t,
-) -> ::core::ffi::c_int {
-    let mut i: ::core::ffi::c_long = 0;
-    let mut lim: ::core::ffi::c_long = 0;
-    let mut recs1: *mut *mut xrecord_t = ::core::ptr::null_mut::<*mut xrecord_t>();
-    let mut recs2: *mut *mut xrecord_t = ::core::ptr::null_mut::<*mut xrecord_t>();
-    recs1 = (*xdf1).recs;
-    recs2 = (*xdf2).recs;
-    i = 0 as ::core::ffi::c_long;
-    lim = if (*xdf1).nrec < (*xdf2).nrec {
-        (*xdf1).nrec
-    } else {
-        (*xdf2).nrec
-    };
-    while i < lim {
-        if (**recs1).ha != (**recs2).ha {
-            break;
-        }
+
+/// Early-trim the matching head and tail, narrowing `dstart`/`dend`.
+fn trim_ends(xdf1: &mut XdFile<'_>, xdf2: &mut XdFile<'_>) {
+    let (nrec1, nrec2) = (xdf1.nrec(), xdf2.nrec());
+    let mut lim = nrec1.min(nrec2);
+
+    let mut i = 0i64;
+    while i < lim && xdf1.ha_at(i) == xdf2.ha_at(i) {
         i += 1;
-        recs1 = recs1.offset(1);
-        recs2 = recs2.offset(1);
     }
-    (*xdf2).dstart = i;
-    (*xdf1).dstart = (*xdf2).dstart;
-    recs1 = (*xdf1)
-        .recs
-        .offset((*xdf1).nrec as isize)
-        .offset(-(1 as ::core::ffi::c_int as isize));
-    recs2 = (*xdf2)
-        .recs
-        .offset((*xdf2).nrec as isize)
-        .offset(-(1 as ::core::ffi::c_int as isize));
+    xdf1.dstart = i;
+    xdf2.dstart = i;
+
     lim -= i;
-    i = 0 as ::core::ffi::c_long;
-    while i < lim {
-        if (**recs1).ha != (**recs2).ha {
-            break;
-        }
+    let mut i = 0i64;
+    while i < lim && xdf1.ha_at(nrec1 - 1 - i) == xdf2.ha_at(nrec2 - 1 - i) {
         i += 1;
-        recs1 = recs1.offset(-1);
-        recs2 = recs2.offset(-1);
     }
-    (*xdf1).dend = (*xdf1).nrec - i - 1 as ::core::ffi::c_long;
-    (*xdf2).dend = (*xdf2).nrec - i - 1 as ::core::ffi::c_long;
-    return 0 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn xdl_optimize_ctxs(
-    mut cf: *mut xdlclassifier_t,
-    mut xdf1: *mut xdfile_t,
-    mut xdf2: *mut xdfile_t,
-) -> ::core::ffi::c_int {
-    if xdl_trim_ends(xdf1, xdf2) < 0 as ::core::ffi::c_int
-        || xdl_cleanup_records(cf, xdf1, xdf2) < 0 as ::core::ffi::c_int
-    {
-        return -1 as ::core::ffi::c_int;
-    }
-    return 0 as ::core::ffi::c_int;
+    xdf1.dend = nrec1 - i - 1;
+    xdf2.dend = nrec2 - i - 1;
 }

@@ -1,799 +1,432 @@
-//! Rust port of LibXDiff's xutils.c, as vendored by neovim v0.12.4.
+//! `xutils.c`: line hashing, line comparison and the unified-diff writer.
 //!
-//! LibXDiff by Davide Libenzi ( File Differential Library )
-//! Copyright (C) 2003 Davide Libenzi <davidel@xmailserver.org>
+//! Three of these are the whole of the `'diffopt'` whitespace family:
+//! [`hash_record`] decides which lines land in the same equivalence class,
+//! [`recmatch`] confirms it, and the two must agree or the classifier builds
+//! classes whose members do not match each other.
 //!
-//! This library is free software; you can redistribute it and/or modify it
-//! under the terms of the GNU Lesser General Public License as published by
-//! the Free Software Foundation; either version 2.1 of the License, or (at
-//! your option) any later version (text: licenses/LGPL-2.1.txt).
-//!
-//! This library is distributed in the hope that it will be useful, but
-//! WITHOUT ANY WARRANTY; without even the implied warranty of
-//! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser
-//! General Public License for more details.
+//! [`emit_hunk_hdr`] and [`emit_diffrec`] are reached only from `vim.diff()`
+//! without an `on_hunk` callback: `:diffupdate` installs
+//! `xdemitconf_t.hunk_func`, which routes around the whole writer.
 
-use crate::src::nvim::memory::{xfree, xmalloc};
-use crate::src::nvim::os::libc::{__ctype_b_loc, memchr, memcmp, memcpy, strlen};
-use crate::src::nvim::types::{
-    chanode_t, chastore_t, mmbuffer_t, mmfile_t, s_chanode, size_t, xdemitcb_t, xdfenv_t, xdfile_t,
-    xpparam_t, xrecord_t,
+#![forbid(unsafe_code)]
+
+use crate::src::xdiff::ffi::{Emit, is_space};
+use crate::src::xdiff::xdiffi::do_diff;
+use crate::src::xdiff::xtypes::{
+    Block, Env, Params, XDF_IGNORE_CR_AT_EOL, XDF_IGNORE_WHITESPACE, XDF_IGNORE_WHITESPACE_AT_EOL,
+    XDF_IGNORE_WHITESPACE_CHANGE, XDF_WHITESPACE_FLAGS, XdResult,
 };
-use crate::src::xdiff::xdiffi::xdl_do_diff;
-use crate::src::xdiff::xprepare::xdl_free_env;
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const _ISspace: C2Rust_Unnamed = 8192;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const XDF_IGNORE_WHITESPACE: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
-pub const XDF_IGNORE_WHITESPACE_CHANGE: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 2 as ::core::ffi::c_int;
-pub const XDF_IGNORE_WHITESPACE_AT_EOL: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 3 as ::core::ffi::c_int;
-pub const XDF_IGNORE_CR_AT_EOL: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int) << 4 as ::core::ffi::c_int;
-pub const XDF_WHITESPACE_FLAGS: ::core::ffi::c_int = XDF_IGNORE_WHITESPACE
-    | XDF_IGNORE_WHITESPACE_CHANGE
-    | XDF_IGNORE_WHITESPACE_AT_EOL
-    | XDF_IGNORE_CR_AT_EOL;
-pub unsafe extern "C" fn xdl_bogosqrt(mut n: ::core::ffi::c_long) -> ::core::ffi::c_long {
-    let mut i: ::core::ffi::c_long = 0;
-    i = 1 as ::core::ffi::c_long;
-    while n > 0 as ::core::ffi::c_long {
-        i <<= 1 as ::core::ffi::c_int;
-        n >>= 2 as ::core::ffi::c_int;
+
+/// What the writer appends when the last line of a file has no newline.
+const NO_NEWLINE: &[u8] = b"\n\\ No newline at end of file\n";
+
+/// A shift-only integer square root, used to size the Myers cost ceiling and
+/// the "this line matches too many others" limit. Approximate on purpose:
+/// both callers want an order of magnitude, not a root.
+pub fn bogosqrt(mut n: i64) -> i64 {
+    let mut i = 1i64;
+    while n > 0 {
+        i <<= 1;
+        n >>= 2;
     }
-    return i;
+    i
 }
-pub unsafe extern "C" fn xdl_emit_diffrec(
-    mut rec: *const ::core::ffi::c_char,
-    mut size: ::core::ffi::c_long,
-    mut pre: *const ::core::ffi::c_char,
-    mut psize: ::core::ffi::c_long,
-    mut ecb: *mut xdemitcb_t,
-) -> ::core::ffi::c_int {
-    let mut i: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-    let mut mb: [mmbuffer_t; 3] = [mmbuffer_t {
-        ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    }; 3];
-    mb[0 as ::core::ffi::c_int as usize].ptr = pre as *mut ::core::ffi::c_char;
-    mb[0 as ::core::ffi::c_int as usize].size = psize as ::core::ffi::c_int;
-    mb[1 as ::core::ffi::c_int as usize].ptr = rec as *mut ::core::ffi::c_char;
-    mb[1 as ::core::ffi::c_int as usize].size = size as ::core::ffi::c_int;
-    if size > 0 as ::core::ffi::c_long
-        && *rec.offset((size - 1 as ::core::ffi::c_long) as isize) as ::core::ffi::c_int
-            != '\n' as ::core::ffi::c_int
-    {
-        mb[2 as ::core::ffi::c_int as usize].ptr = b"\n\\ No newline at end of file\n\0".as_ptr()
-            as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
-        mb[2 as ::core::ffi::c_int as usize].size = strlen(mb[2 as ::core::ffi::c_int as usize].ptr)
-            as ::core::ffi::c_long
-            as ::core::ffi::c_int;
-        i += 1;
+
+/// How many bits of hash a table of `size` entries should be indexed by.
+pub fn hashbits(size: u32) -> u32 {
+    let mut val: u32 = 1;
+    let mut bits: u32 = 0;
+    while val < size && bits < u32::BITS {
+        // The last iteration shifts the top bit out. C's `unsigned int`
+        // wraps there; no caller gets a `size` anywhere near it, but the
+        // spelling has to be the wrapping one to mean the same thing.
+        val = val.wrapping_shl(1);
+        bits += 1;
     }
-    if (*ecb).out_line.expect("non-null function pointer")(
-        (*ecb).priv_0,
-        &raw mut mb as *mut mmbuffer_t,
-        i,
-    ) < 0 as ::core::ffi::c_int
-    {
-        return -1 as ::core::ffi::c_int;
+    if bits != 0 { bits } else { 1 }
+}
+
+/// Estimate `text`'s line count from its first `sample` lines.
+///
+/// Only a sizing hint: [`super::xprepare::prepare_ctx`] grows past it. The
+/// histogram engine asks for a much smaller sample because it never fills a
+/// hash table that would have to be grown.
+pub fn guess_lines(text: &[u8], sample: i64) -> i64 {
+    let mut nl = 0i64;
+    let mut cur = 0usize;
+    while nl < sample && cur < text.len() {
+        nl += 1;
+        cur = match text[cur..].iter().position(|&b| b == b'\n') {
+            Some(off) => cur + off + 1,
+            None => text.len(),
+        };
     }
-    return 0 as ::core::ffi::c_int;
-}
-pub unsafe extern "C" fn xdl_mmfile_first(
-    mut mmf: *mut mmfile_t,
-    mut size: *mut ::core::ffi::c_long,
-) -> *mut ::core::ffi::c_void {
-    *size = (*mmf).size as ::core::ffi::c_long;
-    return (*mmf).ptr as *mut ::core::ffi::c_void;
-}
-pub unsafe extern "C" fn xdl_mmfile_size(mut mmf: *mut mmfile_t) -> ::core::ffi::c_long {
-    return (*mmf).size as ::core::ffi::c_long;
-}
-pub unsafe extern "C" fn xdl_cha_init(
-    mut cha: *mut chastore_t,
-    mut isize: ::core::ffi::c_long,
-    mut icount: ::core::ffi::c_long,
-) -> ::core::ffi::c_int {
-    (*cha).tail = ::core::ptr::null_mut::<chanode_t>();
-    (*cha).head = (*cha).tail;
-    (*cha).isize = isize;
-    (*cha).nsize = icount * isize;
-    (*cha).sncur = ::core::ptr::null_mut::<chanode_t>();
-    (*cha).ancur = (*cha).sncur;
-    (*cha).scurr = 0 as ::core::ffi::c_long;
-    return 0 as ::core::ffi::c_int;
-}
-pub unsafe extern "C" fn xdl_cha_free(mut cha: *mut chastore_t) {
-    let mut cur: *mut chanode_t = ::core::ptr::null_mut::<chanode_t>();
-    let mut tmp: *mut chanode_t = ::core::ptr::null_mut::<chanode_t>();
-    cur = (*cha).head;
-    loop {
-        tmp = cur;
-        if tmp.is_null() {
-            break;
-        }
-        cur = (*cur).next as *mut chanode_t;
-        xfree(tmp as *mut ::core::ffi::c_void);
-    }
-}
-pub unsafe extern "C" fn xdl_cha_alloc(mut cha: *mut chastore_t) -> *mut ::core::ffi::c_void {
-    let mut ancur: *mut chanode_t = ::core::ptr::null_mut::<chanode_t>();
-    let mut data: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-    ancur = (*cha).ancur;
-    if ancur.is_null() || (*ancur).icurr == (*cha).nsize {
-        ancur = xmalloc(::core::mem::size_of::<chanode_t>().wrapping_add((*cha).nsize as size_t))
-            as *mut chanode_t;
-        if ancur.is_null() {
-            return NULL;
-        }
-        (*ancur).icurr = 0 as ::core::ffi::c_long;
-        (*ancur).next = ::core::ptr::null_mut::<s_chanode>();
-        if !(*cha).tail.is_null() {
-            (*(*cha).tail).next = ancur as *mut s_chanode;
-        }
-        if (*cha).head.is_null() {
-            (*cha).head = ancur;
-        }
-        (*cha).tail = ancur;
-        (*cha).ancur = ancur;
-    }
-    data = (ancur as *mut ::core::ffi::c_char)
-        .offset(::core::mem::size_of::<chanode_t>() as isize)
-        .offset((*ancur).icurr as isize) as *mut ::core::ffi::c_void;
-    (*ancur).icurr += (*cha).isize;
-    return data;
-}
-pub unsafe extern "C" fn xdl_guess_lines(
-    mut mf: *mut mmfile_t,
-    mut sample: ::core::ffi::c_long,
-) -> ::core::ffi::c_long {
-    let mut nl: ::core::ffi::c_long = 0 as ::core::ffi::c_long;
-    let mut size: ::core::ffi::c_long = 0;
-    let mut tsize: ::core::ffi::c_long = 0 as ::core::ffi::c_long;
-    let mut data: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut cur: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut top: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    data = xdl_mmfile_first(mf, &raw mut size) as *const ::core::ffi::c_char;
-    cur = data;
-    if !cur.is_null() {
-        top = data.offset(size as isize);
-        while nl < sample && cur < top {
-            nl += 1;
-            cur = memchr(
-                cur as *const ::core::ffi::c_void,
-                '\n' as ::core::ffi::c_int,
-                top.offset_from(cur) as size_t,
-            ) as *const ::core::ffi::c_char;
-            if cur.is_null() {
-                cur = top;
-            } else {
-                cur = cur.offset(1);
-            }
-        }
-        tsize += cur.offset_from(data) as ::core::ffi::c_long;
-    }
+    let tsize = cur as i64;
     if nl != 0 && tsize != 0 {
-        nl = xdl_mmfile_size(mf) / (tsize / nl);
+        // `tsize / nl` is at least 1: every line counted consumed at least
+        // its own byte, so this cannot divide by zero.
+        nl = text.len() as i64 / (tsize / nl);
     }
-    return nl + 1 as ::core::ffi::c_long;
+    nl + 1
 }
-pub unsafe extern "C" fn xdl_blankline(
-    mut line: *const ::core::ffi::c_char,
-    mut size: ::core::ffi::c_long,
-    mut flags: ::core::ffi::c_long,
-) -> ::core::ffi::c_int {
-    let mut i: ::core::ffi::c_long = 0;
-    if flags & XDF_WHITESPACE_FLAGS as ::core::ffi::c_long == 0 {
-        return (size <= 1 as ::core::ffi::c_long) as ::core::ffi::c_int;
+
+/// Is this line blank? Without a whitespace flag that means "empty or just a
+/// newline"; with one, "nothing but whitespace".
+pub fn blankline(line: &[u8], flags: u64) -> bool {
+    if flags & XDF_WHITESPACE_FLAGS == 0 {
+        return line.len() <= 1;
     }
-    i = 0 as ::core::ffi::c_long;
-    while i < size
-        && *(*__ctype_b_loc())
-            .offset(*line.offset(i as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int
-            & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-            != 0
-    {
-        i += 1;
-    }
-    return (i == size) as ::core::ffi::c_int;
+    line.iter().all(|&b| is_space(b))
 }
-unsafe extern "C" fn ends_with_optional_cr(
-    mut l: *const ::core::ffi::c_char,
-    mut s: ::core::ffi::c_long,
-    mut i: ::core::ffi::c_long,
-) -> ::core::ffi::c_int {
-    let mut complete: ::core::ffi::c_int = (s != 0
-        && *l.offset((s - 1 as ::core::ffi::c_long) as isize) as ::core::ffi::c_int
-            == '\n' as ::core::ffi::c_int)
-        as ::core::ffi::c_int;
-    if complete != 0 {
-        s -= 1;
+
+/// Have we eaten everything on the line, except for an optional CR at the
+/// very end?
+fn ends_with_optional_cr(line: &[u8], i: usize) -> bool {
+    let complete = line.last() == Some(&b'\n');
+    let end = if complete { line.len() - 1 } else { line.len() };
+    if end == i {
+        return true;
     }
-    if s == i {
-        return 1 as ::core::ffi::c_int;
-    }
-    if complete != 0
-        && s == i + 1 as ::core::ffi::c_long
-        && *l.offset(i as isize) as ::core::ffi::c_int == '\r' as ::core::ffi::c_int
-    {
-        return 1 as ::core::ffi::c_int;
-    }
-    return 0 as ::core::ffi::c_int;
+    // Do not ignore CR at the end of an incomplete line.
+    complete && end == i + 1 && line[i] == b'\r'
 }
-pub unsafe extern "C" fn xdl_recmatch(
-    mut l1: *const ::core::ffi::c_char,
-    mut s1: ::core::ffi::c_long,
-    mut l2: *const ::core::ffi::c_char,
-    mut s2: ::core::ffi::c_long,
-    mut flags: ::core::ffi::c_long,
-) -> ::core::ffi::c_int {
-    let mut i1: ::core::ffi::c_int = 0;
-    let mut i2: ::core::ffi::c_int = 0;
-    if s1 == s2
-        && memcmp(
-            l1 as *const ::core::ffi::c_void,
-            l2 as *const ::core::ffi::c_void,
-            s1 as size_t,
-        ) == 0
-    {
-        return 1 as ::core::ffi::c_int;
+
+/// Do these two lines match under `flags`?
+///
+/// `-w` matches everything `-b` matches, `-b` everything
+/// `--ignore-space-at-eol` matches, and that in turn everything
+/// `--ignore-cr-at-eol` matches — but each needs its own way of skipping
+/// whitespace while both sides are still in hand, so they are four loops
+/// rather than one.
+pub fn recmatch(l1: &[u8], l2: &[u8], flags: u64) -> bool {
+    if l1 == l2 {
+        return true;
     }
-    if flags & XDF_WHITESPACE_FLAGS as ::core::ffi::c_long == 0 {
-        return 0 as ::core::ffi::c_int;
+    if flags & XDF_WHITESPACE_FLAGS == 0 {
+        return false;
     }
-    i1 = 0 as ::core::ffi::c_int;
-    i2 = 0 as ::core::ffi::c_int;
-    if flags & XDF_IGNORE_WHITESPACE as ::core::ffi::c_long != 0 {
+
+    let (s1, s2) = (l1.len(), l2.len());
+    let (mut i1, mut i2) = (0usize, 0usize);
+
+    if flags & XDF_IGNORE_WHITESPACE != 0 {
         loop {
-            while (i1 as ::core::ffi::c_long) < s1
-                && *(*__ctype_b_loc()).offset(
-                    *l1.offset(i1 as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int as isize
-                ) as ::core::ffi::c_int
-                    & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                    != 0
-            {
+            while i1 < s1 && is_space(l1[i1]) {
                 i1 += 1;
             }
-            while (i2 as ::core::ffi::c_long) < s2
-                && *(*__ctype_b_loc()).offset(
-                    *l2.offset(i2 as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int as isize
-                ) as ::core::ffi::c_int
-                    & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                    != 0
-            {
+            while i2 < s2 && is_space(l2[i2]) {
                 i2 += 1;
             }
-            if !((i1 as ::core::ffi::c_long) < s1 && (i2 as ::core::ffi::c_long) < s2) {
+            if i1 >= s1 || i2 >= s2 {
                 break;
             }
-            let c2rust_fresh0 = i1;
-            i1 = i1 + 1;
-            let c2rust_fresh1 = i2;
-            i2 = i2 + 1;
-            if *l1.offset(c2rust_fresh0 as isize) as ::core::ffi::c_int
-                != *l2.offset(c2rust_fresh1 as isize) as ::core::ffi::c_int
-            {
-                return 0 as ::core::ffi::c_int;
+            if l1[i1] != l2[i2] {
+                return false;
             }
+            i1 += 1;
+            i2 += 1;
         }
-    } else if flags & XDF_IGNORE_WHITESPACE_CHANGE as ::core::ffi::c_long != 0 {
-        while (i1 as ::core::ffi::c_long) < s1 && (i2 as ::core::ffi::c_long) < s2 {
-            if *(*__ctype_b_loc()).offset(
-                *l1.offset(i1 as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int as isize
-            ) as ::core::ffi::c_int
-                & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                != 0
-                && *(*__ctype_b_loc()).offset(
-                    *l2.offset(i2 as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int as isize
-                ) as ::core::ffi::c_int
-                    & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                    != 0
-            {
-                while (i1 as ::core::ffi::c_long) < s1
-                    && *(*__ctype_b_loc())
-                        .offset(*l1.offset(i1 as isize) as ::core::ffi::c_uchar
-                            as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int
-                        & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort
-                            as ::core::ffi::c_int
-                        != 0
-                {
+    } else if flags & XDF_IGNORE_WHITESPACE_CHANGE != 0 {
+        while i1 < s1 && i2 < s2 {
+            if is_space(l1[i1]) && is_space(l2[i2]) {
+                // Skip matching spaces and try again.
+                while i1 < s1 && is_space(l1[i1]) {
                     i1 += 1;
                 }
-                while (i2 as ::core::ffi::c_long) < s2
-                    && *(*__ctype_b_loc())
-                        .offset(*l2.offset(i2 as isize) as ::core::ffi::c_uchar
-                            as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int
-                        & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort
-                            as ::core::ffi::c_int
-                        != 0
-                {
+                while i2 < s2 && is_space(l2[i2]) {
                     i2 += 1;
                 }
-            } else {
-                let c2rust_fresh2 = i1;
-                i1 = i1 + 1;
-                let c2rust_fresh3 = i2;
-                i2 = i2 + 1;
-                if *l1.offset(c2rust_fresh2 as isize) as ::core::ffi::c_int
-                    != *l2.offset(c2rust_fresh3 as isize) as ::core::ffi::c_int
-                {
-                    return 0 as ::core::ffi::c_int;
+                continue;
+            }
+            if l1[i1] != l2[i2] {
+                return false;
+            }
+            i1 += 1;
+            i2 += 1;
+        }
+    } else if flags & (XDF_IGNORE_WHITESPACE_AT_EOL | XDF_IGNORE_CR_AT_EOL) != 0 {
+        // Find the first difference; where it falls is the whole answer for
+        // the CR flavour, and the tail scan below settles the other.
+        while i1 < s1 && i2 < s2 && l1[i1] == l2[i2] {
+            i1 += 1;
+            i2 += 1;
+        }
+        if flags & XDF_IGNORE_WHITESPACE_AT_EOL == 0 {
+            return ends_with_optional_cr(l1, i1) && ends_with_optional_cr(l2, i2);
+        }
+    }
+
+    // After running out of one side, the remaining side must have nothing
+    // but whitespace for the lines to match. Note that the
+    // ignore-whitespace-at-eol case may break out of its loop while there
+    // still are characters remaining on both lines.
+    if i1 < s1 {
+        while i1 < s1 && is_space(l1[i1]) {
+            i1 += 1;
+        }
+        if s1 != i1 {
+            return false;
+        }
+    }
+    if i2 < s2 {
+        while i2 < s2 && is_space(l2[i2]) {
+            i2 += 1;
+        }
+        return s2 == i2;
+    }
+    true
+}
+
+/// Hash the line `text` starts with, and say how many bytes it took —
+/// its newline included, so the answer is where the next line begins.
+///
+/// `text` is the rest of the *file*, not one line: the whitespace flavours
+/// need to see the byte after a whitespace run to know whether the run is at
+/// end of line, and that byte may be the newline itself.
+pub fn hash_record(text: &[u8], flags: u64) -> (u64, usize) {
+    if flags & XDF_WHITESPACE_FLAGS != 0 {
+        return hash_record_with_whitespace(text, flags);
+    }
+    let mut ha = 5381u64;
+    let mut p = 0usize;
+    while p < text.len() && text[p] != b'\n' {
+        ha = fold(ha, text[p]);
+        p += 1;
+    }
+    (ha, if p < text.len() { p + 1 } else { p })
+}
+
+/// One djb2-ish step. The byte enters as a *signed* char, as it does in the
+/// C, so anything over 0x7F sign-extends to a 64-bit value with the top
+/// fifty-seven bits set — which is load-bearing, because it is what a
+/// multibyte line's hash is built out of.
+fn fold(ha: u64, byte: u8) -> u64 {
+    ha.wrapping_add(ha << 5) ^ (byte as i8 as u64)
+}
+
+fn hash_record_with_whitespace(text: &[u8], flags: u64) -> (u64, usize) {
+    let mut ha = 5381u64;
+    let cr_at_eol_only = flags & XDF_WHITESPACE_FLAGS == XDF_IGNORE_CR_AT_EOL;
+    let top = text.len();
+    let mut p = 0usize;
+
+    while p < top && text[p] != b'\n' {
+        if cr_at_eol_only {
+            // Do not ignore CR at the end of an incomplete line.
+            if text[p] == b'\r' && p + 1 < top && text[p + 1] == b'\n' {
+                p += 1;
+                continue;
+            }
+        } else if is_space(text[p]) {
+            let run_start = p;
+            while p + 1 < top && is_space(text[p + 1]) && text[p + 1] != b'\n' {
+                p += 1;
+            }
+            let at_eol = p + 1 >= top || text[p + 1] == b'\n';
+            if flags & XDF_IGNORE_WHITESPACE != 0 {
+                // Already handled: the whole run contributes nothing.
+            } else if flags & XDF_IGNORE_WHITESPACE_CHANGE != 0 && !at_eol {
+                ha = fold(ha, b' ');
+            } else if flags & XDF_IGNORE_WHITESPACE_AT_EOL != 0 && !at_eol {
+                for &byte in &text[run_start..=p] {
+                    ha = fold(ha, byte);
                 }
             }
+            p += 1;
+            continue;
         }
-    } else if flags & XDF_IGNORE_WHITESPACE_AT_EOL as ::core::ffi::c_long != 0 {
-        while (i1 as ::core::ffi::c_long) < s1
-            && (i2 as ::core::ffi::c_long) < s2
-            && *l1.offset(i1 as isize) as ::core::ffi::c_int
-                == *l2.offset(i2 as isize) as ::core::ffi::c_int
-        {
-            i1 += 1;
-            i2 += 1;
-        }
-    } else if flags & XDF_IGNORE_CR_AT_EOL as ::core::ffi::c_long != 0 {
-        while (i1 as ::core::ffi::c_long) < s1
-            && (i2 as ::core::ffi::c_long) < s2
-            && *l1.offset(i1 as isize) as ::core::ffi::c_int
-                == *l2.offset(i2 as isize) as ::core::ffi::c_int
-        {
-            i1 += 1;
-            i2 += 1;
-        }
-        return (ends_with_optional_cr(l1, s1, i1 as ::core::ffi::c_long) != 0
-            && ends_with_optional_cr(l2, s2, i2 as ::core::ffi::c_long) != 0)
-            as ::core::ffi::c_int;
+        ha = fold(ha, text[p]);
+        p += 1;
     }
-    if (i1 as ::core::ffi::c_long) < s1 {
-        while (i1 as ::core::ffi::c_long) < s1
-            && *(*__ctype_b_loc()).offset(
-                *l1.offset(i1 as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int as isize
-            ) as ::core::ffi::c_int
-                & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                != 0
-        {
-            i1 += 1;
-        }
-        if s1 != i1 as ::core::ffi::c_long {
-            return 0 as ::core::ffi::c_int;
-        }
-    }
-    if (i2 as ::core::ffi::c_long) < s2 {
-        while (i2 as ::core::ffi::c_long) < s2
-            && *(*__ctype_b_loc()).offset(
-                *l2.offset(i2 as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int as isize
-            ) as ::core::ffi::c_int
-                & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                != 0
-        {
-            i2 += 1;
-        }
-        return (s2 == i2 as ::core::ffi::c_long) as ::core::ffi::c_int;
-    }
-    return 1 as ::core::ffi::c_int;
+
+    (ha, if p < top { p + 1 } else { p })
 }
-unsafe extern "C" fn xdl_hash_record_with_whitespace(
-    mut data: *mut *const ::core::ffi::c_char,
-    mut top: *const ::core::ffi::c_char,
-    mut flags: ::core::ffi::c_long,
-) -> ::core::ffi::c_ulong {
-    let mut ha: ::core::ffi::c_ulong = 5381 as ::core::ffi::c_ulong;
-    let mut ptr: *const ::core::ffi::c_char = *data;
-    let mut cr_at_eol_only: ::core::ffi::c_int =
-        (flags & XDF_WHITESPACE_FLAGS as ::core::ffi::c_long
-            == XDF_IGNORE_CR_AT_EOL as ::core::ffi::c_long) as ::core::ffi::c_int;
-    while ptr < top && *ptr as ::core::ffi::c_int != '\n' as ::core::ffi::c_int {
-        's_10: {
-            if cr_at_eol_only != 0 {
-                if *ptr as ::core::ffi::c_int == '\r' as ::core::ffi::c_int
-                    && (ptr.offset(1 as ::core::ffi::c_int as isize) < top
-                        && *ptr.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            == '\n' as ::core::ffi::c_int)
-                {
-                    break 's_10;
-                }
-            } else if *(*__ctype_b_loc())
-                .offset(*ptr as ::core::ffi::c_uchar as ::core::ffi::c_int as isize)
-                as ::core::ffi::c_int
-                & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                != 0
-            {
-                let mut ptr2: *const ::core::ffi::c_char = ptr;
-                let mut at_eol: ::core::ffi::c_int = 0;
-                while ptr.offset(1 as ::core::ffi::c_int as isize) < top
-                    && *(*__ctype_b_loc())
-                        .offset(*ptr.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_uchar
-                            as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int
-                        & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort
-                            as ::core::ffi::c_int
-                        != 0
-                    && *ptr.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        != '\n' as ::core::ffi::c_int
-                {
-                    ptr = ptr.offset(1);
-                }
-                at_eol = (top <= ptr.offset(1 as ::core::ffi::c_int as isize)
-                    || *ptr.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == '\n' as ::core::ffi::c_int)
-                    as ::core::ffi::c_int;
-                if flags & XDF_IGNORE_WHITESPACE as ::core::ffi::c_long == 0 {
-                    if flags & XDF_IGNORE_WHITESPACE_CHANGE as ::core::ffi::c_long != 0
-                        && at_eol == 0
-                    {
-                        ha = ha.wrapping_add(ha << 5 as ::core::ffi::c_int);
-                        ha ^= ' ' as ::core::ffi::c_int as ::core::ffi::c_ulong;
-                    } else if flags & XDF_IGNORE_WHITESPACE_AT_EOL as ::core::ffi::c_long != 0
-                        && at_eol == 0
-                    {
-                        while ptr2 != ptr.offset(1 as ::core::ffi::c_int as isize) {
-                            ha = ha.wrapping_add(ha << 5 as ::core::ffi::c_int);
-                            ha ^= *ptr2 as ::core::ffi::c_ulong;
-                            ptr2 = ptr2.offset(1);
-                        }
-                    }
-                }
-                break 's_10;
-            }
-            ha = ha.wrapping_add(ha << 5 as ::core::ffi::c_int);
-            ha ^= *ptr as ::core::ffi::c_ulong;
+
+/// `xdl_num_out`: append `val` in decimal.
+///
+/// Upstream writes the sign into its scratch buffer *first* and then prepends
+/// the digits in front of it, so a negative value comes out with the minus on
+/// the wrong end: `-199` renders as `199-`. Reproduced here rather than
+/// quietly corrected, because the only way to reach it with a negative is a
+/// negative `ctxlen` and that is a divergence of its own (O-B15-1).
+fn push_num(out: &mut Vec<u8>, val: i64) {
+    let mut digits = [0u8; 21];
+    let mut i = digits.len();
+    if val < 0 {
+        i -= 1;
+        digits[i] = b'-';
+    }
+    // `unsigned_abs`, so `i64::MIN` does not overflow the negation.
+    let mut n = val.unsigned_abs();
+    loop {
+        i -= 1;
+        digits[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+        if n == 0 {
+            break;
         }
-        ptr = ptr.offset(1);
     }
-    *data = if ptr < top {
-        ptr.offset(1 as ::core::ffi::c_int as isize)
-    } else {
-        ptr
-    };
-    return ha;
+    out.extend_from_slice(&digits[i..]);
 }
-pub unsafe extern "C" fn xdl_hash_record(
-    mut data: *mut *const ::core::ffi::c_char,
-    mut top: *const ::core::ffi::c_char,
-    mut flags: ::core::ffi::c_long,
-) -> ::core::ffi::c_ulong {
-    let mut ha: ::core::ffi::c_ulong = 5381 as ::core::ffi::c_ulong;
-    let mut ptr: *const ::core::ffi::c_char = *data;
-    if flags & XDF_WHITESPACE_FLAGS as ::core::ffi::c_long != 0 {
-        return xdl_hash_record_with_whitespace(data, top, flags);
+
+/// Write `@@ -s1,c1 +s2,c2 @@` as a line, the way `diff -u` does: an empty
+/// side names the line *before* the insertion point, and a one-line side
+/// drops the count.
+fn format_hunk_hdr(s1: i64, c1: i64, s2: i64, c2: i64, emit: &mut Emit) -> XdResult {
+    let mut buf = Vec::with_capacity(32);
+    buf.extend_from_slice(b"@@ -");
+    push_num(&mut buf, if c1 != 0 { s1 } else { s1 - 1 });
+    if c1 != 1 {
+        buf.push(b',');
+        push_num(&mut buf, c1);
     }
-    while ptr < top && *ptr as ::core::ffi::c_int != '\n' as ::core::ffi::c_int {
-        ha = ha.wrapping_add(ha << 5 as ::core::ffi::c_int);
-        ha ^= *ptr as ::core::ffi::c_ulong;
-        ptr = ptr.offset(1);
+    buf.extend_from_slice(b" +");
+    push_num(&mut buf, if c2 != 0 { s2 } else { s2 - 1 });
+    if c2 != 1 {
+        buf.push(b',');
+        push_num(&mut buf, c2);
     }
-    *data = if ptr < top {
-        ptr.offset(1 as ::core::ffi::c_int as isize)
-    } else {
-        ptr
-    };
-    return ha;
+    buf.extend_from_slice(b" @@\n");
+    emit.line(&[&buf])
 }
-pub unsafe extern "C" fn xdl_hashbits(mut size: ::core::ffi::c_uint) -> ::core::ffi::c_uint {
-    let mut val: ::core::ffi::c_uint = 1 as ::core::ffi::c_uint;
-    let mut bits: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
-    while val < size
-        && (bits as usize)
-            < (CHAR_BIT as usize).wrapping_mul(::core::mem::size_of::<::core::ffi::c_uint>())
-    {
-        val <<= 1 as ::core::ffi::c_int;
-        bits = bits.wrapping_add(1);
+
+/// Report a hunk's extent, through `xdemitcb_t.out_hunk` if the caller
+/// installed one and as a formatted `@@` line otherwise.
+pub fn emit_hunk_hdr(s1: i64, c1: i64, s2: i64, c2: i64, emit: &mut Emit) -> XdResult {
+    if !emit.has_out_hunk() {
+        return format_hunk_hdr(s1, c1, s2, c2, emit);
     }
-    return if bits != 0 {
-        bits
-    } else {
-        1 as ::core::ffi::c_uint
-    };
-}
-pub unsafe extern "C" fn xdl_num_out(
-    mut out: *mut ::core::ffi::c_char,
-    mut val: ::core::ffi::c_long,
-) -> ::core::ffi::c_int {
-    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut str: *mut ::core::ffi::c_char = out;
-    let mut buf: [::core::ffi::c_char; 32] = [0; 32];
-    ptr = (&raw mut buf as *mut ::core::ffi::c_char)
-        .offset(::core::mem::size_of::<[::core::ffi::c_char; 32]>() as isize)
-        .offset(-(1 as ::core::ffi::c_int as isize));
-    *ptr = '\0' as ::core::ffi::c_char;
-    if val < 0 as ::core::ffi::c_long {
-        ptr = ptr.offset(-1);
-        *ptr = '-' as ::core::ffi::c_char;
-        val = -val;
-    }
-    while val != 0 && ptr > &raw mut buf as *mut ::core::ffi::c_char {
-        ptr = ptr.offset(-1);
-        *ptr = ::core::mem::transmute::<[u8; 11], [::core::ffi::c_char; 11]>(*b"0123456789\0")
-            [(val % 10 as ::core::ffi::c_long) as usize];
-        val /= 10 as ::core::ffi::c_long;
-    }
-    if *ptr != 0 {
-        while *ptr != 0 {
-            *str = *ptr;
-            ptr = ptr.offset(1);
-            str = str.offset(1);
-        }
-    } else {
-        let c2rust_fresh4 = str;
-        str = str.offset(1);
-        *c2rust_fresh4 = '0' as ::core::ffi::c_char;
-    }
-    *str = '\0' as ::core::ffi::c_char;
-    return str.offset_from(out) as ::core::ffi::c_int;
-}
-unsafe extern "C" fn xdl_format_hunk_hdr(
-    mut s1: ::core::ffi::c_long,
-    mut c1: ::core::ffi::c_long,
-    mut s2: ::core::ffi::c_long,
-    mut c2: ::core::ffi::c_long,
-    mut func: *const ::core::ffi::c_char,
-    mut funclen: ::core::ffi::c_long,
-    mut ecb: *mut xdemitcb_t,
-) -> ::core::ffi::c_int {
-    let mut nb: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut mb: mmbuffer_t = mmbuffer_t {
-        ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    };
-    let mut buf: [::core::ffi::c_char; 128] = [0; 128];
-    memcpy(
-        &raw mut buf as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
-        b"@@ -\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-        4 as size_t,
-    );
-    nb += 4 as ::core::ffi::c_int;
-    nb += xdl_num_out(
-        (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize),
-        if c1 != 0 {
-            s1
-        } else {
-            s1 - 1 as ::core::ffi::c_long
-        },
-    );
-    if c1 != 1 as ::core::ffi::c_long {
-        memcpy(
-            (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize)
-                as *mut ::core::ffi::c_void,
-            b",\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-            1 as size_t,
-        );
-        nb += 1 as ::core::ffi::c_int;
-        nb += xdl_num_out(
-            (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize),
-            c1,
-        );
-    }
-    memcpy(
-        (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize) as *mut ::core::ffi::c_void,
-        b" +\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-        2 as size_t,
-    );
-    nb += 2 as ::core::ffi::c_int;
-    nb += xdl_num_out(
-        (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize),
-        if c2 != 0 {
-            s2
-        } else {
-            s2 - 1 as ::core::ffi::c_long
-        },
-    );
-    if c2 != 1 as ::core::ffi::c_long {
-        memcpy(
-            (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize)
-                as *mut ::core::ffi::c_void,
-            b",\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-            1 as size_t,
-        );
-        nb += 1 as ::core::ffi::c_int;
-        nb += xdl_num_out(
-            (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize),
-            c2,
-        );
-    }
-    memcpy(
-        (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize) as *mut ::core::ffi::c_void,
-        b" @@\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-        3 as size_t,
-    );
-    nb += 3 as ::core::ffi::c_int;
-    if !func.is_null() && funclen != 0 {
-        let c2rust_fresh5 = nb;
-        nb = nb + 1;
-        buf[c2rust_fresh5 as usize] = ' ' as ::core::ffi::c_char;
-        if funclen
-            > ::core::mem::size_of::<[::core::ffi::c_char; 128]>() as ::core::ffi::c_long
-                - nb as ::core::ffi::c_long
-                - 1 as ::core::ffi::c_long
-        {
-            funclen = ::core::mem::size_of::<[::core::ffi::c_char; 128]>()
-                .wrapping_sub(nb as usize)
-                .wrapping_sub(1 as usize) as ::core::ffi::c_long;
-        }
-        memcpy(
-            (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize)
-                as *mut ::core::ffi::c_void,
-            func as *const ::core::ffi::c_void,
-            funclen as size_t,
-        );
-        nb = (nb as ::core::ffi::c_long + funclen) as ::core::ffi::c_int;
-    }
-    let c2rust_fresh6 = nb;
-    nb = nb + 1;
-    buf[c2rust_fresh6 as usize] = '\n' as ::core::ffi::c_char;
-    mb.ptr = &raw mut buf as *mut ::core::ffi::c_char;
-    mb.size = nb;
-    if (*ecb).out_line.expect("non-null function pointer")(
-        (*ecb).priv_0,
-        &raw mut mb,
-        1 as ::core::ffi::c_int,
-    ) < 0 as ::core::ffi::c_int
-    {
-        return -1 as ::core::ffi::c_int;
-    }
-    return 0 as ::core::ffi::c_int;
-}
-pub unsafe extern "C" fn xdl_emit_hunk_hdr(
-    mut s1: ::core::ffi::c_long,
-    mut c1: ::core::ffi::c_long,
-    mut s2: ::core::ffi::c_long,
-    mut c2: ::core::ffi::c_long,
-    mut func: *const ::core::ffi::c_char,
-    mut funclen: ::core::ffi::c_long,
-    mut ecb: *mut xdemitcb_t,
-) -> ::core::ffi::c_int {
-    if (*ecb).out_hunk.is_none() {
-        return xdl_format_hunk_hdr(s1, c1, s2, c2, func, funclen, ecb);
-    }
-    if (*ecb).out_hunk.expect("non-null function pointer")(
-        (*ecb).priv_0,
-        if c1 != 0 {
-            s1
-        } else {
-            s1 - 1 as ::core::ffi::c_long
-        },
+    emit.out_hunk(
+        if c1 != 0 { s1 } else { s1 - 1 },
         c1,
-        if c2 != 0 {
-            s2
-        } else {
-            s2 - 1 as ::core::ffi::c_long
-        },
+        if c2 != 0 { s2 } else { s2 - 1 },
         c2,
-        func,
-        funclen,
-    ) < 0 as ::core::ffi::c_int
-    {
-        return -1 as ::core::ffi::c_int;
-    }
-    return 0 as ::core::ffi::c_int;
-}
-pub unsafe extern "C" fn xdl_fall_back_diff(
-    mut diff_env: *mut xdfenv_t,
-    mut xpp: *const xpparam_t,
-    mut line1: ::core::ffi::c_int,
-    mut count1: ::core::ffi::c_int,
-    mut line2: ::core::ffi::c_int,
-    mut count2: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut subfile1: mmfile_t = mmfile_t {
-        ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    };
-    let mut subfile2: mmfile_t = mmfile_t {
-        ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    };
-    let mut env: xdfenv_t = xdfenv_t {
-        xdf1: xdfile_t {
-            rcha: chastore_t {
-                head: ::core::ptr::null_mut::<chanode_t>(),
-                tail: ::core::ptr::null_mut::<chanode_t>(),
-                isize: 0,
-                nsize: 0,
-                ancur: ::core::ptr::null_mut::<chanode_t>(),
-                sncur: ::core::ptr::null_mut::<chanode_t>(),
-                scurr: 0,
-            },
-            nrec: 0,
-            hbits: 0,
-            rhash: ::core::ptr::null_mut::<*mut xrecord_t>(),
-            dstart: 0,
-            dend: 0,
-            recs: ::core::ptr::null_mut::<*mut xrecord_t>(),
-            rchg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            rindex: ::core::ptr::null_mut::<::core::ffi::c_long>(),
-            nreff: 0,
-            ha: ::core::ptr::null_mut::<::core::ffi::c_ulong>(),
-        },
-        xdf2: xdfile_t {
-            rcha: chastore_t {
-                head: ::core::ptr::null_mut::<chanode_t>(),
-                tail: ::core::ptr::null_mut::<chanode_t>(),
-                isize: 0,
-                nsize: 0,
-                ancur: ::core::ptr::null_mut::<chanode_t>(),
-                sncur: ::core::ptr::null_mut::<chanode_t>(),
-                scurr: 0,
-            },
-            nrec: 0,
-            hbits: 0,
-            rhash: ::core::ptr::null_mut::<*mut xrecord_t>(),
-            dstart: 0,
-            dend: 0,
-            recs: ::core::ptr::null_mut::<*mut xrecord_t>(),
-            rchg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            rindex: ::core::ptr::null_mut::<::core::ffi::c_long>(),
-            nreff: 0,
-            ha: ::core::ptr::null_mut::<::core::ffi::c_ulong>(),
-        },
-    };
-    subfile1.ptr = (**(*diff_env)
-        .xdf1
-        .recs
-        .offset((line1 - 1 as ::core::ffi::c_int) as isize))
-    .ptr as *mut ::core::ffi::c_char;
-    subfile1.size = (**(*diff_env)
-        .xdf1
-        .recs
-        .offset((line1 + count1 - 2 as ::core::ffi::c_int) as isize))
-    .ptr
-    .offset(
-        (**(*diff_env)
-            .xdf1
-            .recs
-            .offset((line1 + count1 - 2 as ::core::ffi::c_int) as isize))
-        .size as isize,
     )
-    .offset_from(subfile1.ptr) as ::core::ffi::c_int;
-    subfile2.ptr = (**(*diff_env)
-        .xdf2
-        .recs
-        .offset((line2 - 1 as ::core::ffi::c_int) as isize))
-    .ptr as *mut ::core::ffi::c_char;
-    subfile2.size = (**(*diff_env)
-        .xdf2
-        .recs
-        .offset((line2 + count2 - 2 as ::core::ffi::c_int) as isize))
-    .ptr
-    .offset(
-        (**(*diff_env)
-            .xdf2
-            .recs
-            .offset((line2 + count2 - 2 as ::core::ffi::c_int) as isize))
-        .size as isize,
-    )
-    .offset_from(subfile2.ptr) as ::core::ffi::c_int;
-    if xdl_do_diff(&raw mut subfile1, &raw mut subfile2, xpp, &raw mut env)
-        < 0 as ::core::ffi::c_int
-    {
-        return -1 as ::core::ffi::c_int;
-    }
-    memcpy(
-        (*diff_env)
-            .xdf1
-            .rchg
-            .offset(line1 as isize)
-            .offset(-(1 as ::core::ffi::c_int as isize)) as *mut ::core::ffi::c_void,
-        env.xdf1.rchg as *const ::core::ffi::c_void,
-        count1 as size_t,
-    );
-    memcpy(
-        (*diff_env)
-            .xdf2
-            .rchg
-            .offset(line2 as isize)
-            .offset(-(1 as ::core::ffi::c_int as isize)) as *mut ::core::ffi::c_void,
-        env.xdf2.rchg as *const ::core::ffi::c_void,
-        count2 as size_t,
-    );
-    xdl_free_env(&raw mut env);
-    return 0 as ::core::ffi::c_int;
 }
-pub const __CHAR_BIT__: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
-pub const CHAR_BIT: ::core::ffi::c_int = __CHAR_BIT__;
+
+/// Write one body line: its ` `/`-`/`+` marker, the line, and the
+/// no-final-newline marker when the line has no newline of its own.
+pub fn emit_diffrec(rec: &[u8], pre: &[u8], emit: &mut Emit) -> XdResult {
+    if rec.last().is_some_and(|&b| b != b'\n') {
+        emit.line(&[pre, rec, NO_NEWLINE])
+    } else {
+        emit.line(&[pre, rec])
+    }
+}
+
+/// Diff lines `line1 ..` of file 1 against `line2 ..` of file 2 with the
+/// classic algorithm and fold the answer back into `env`.
+///
+/// Both of the other engines end here when they run out of anchors. The
+/// sub-files are re-derived from `env`'s records rather than from the
+/// original `mmfile_t`s — upstream's comment says it would rather reuse the
+/// prepared environment, but the library has no way to diff a range.
+pub fn fall_back_diff(env: &mut Env<'_>, xpp: &Params<'_>, blk: Block) -> XdResult {
+    let sub1 = env.xdf1.span(blk.line1 - 1, blk.end1() - 1);
+    let sub2 = env.xdf2.span(blk.line2 - 1, blk.end2() - 1);
+    let sub = do_diff(sub1, sub2, xpp)?;
+    env.xdf1
+        .rchg
+        .write(blk.line1 - 1, sub.xdf1.rchg.slice(0, blk.count1));
+    env.xdf2
+        .rchg
+        .write(blk.line2 - 1, sub.xdf2.rchg.slice(0, blk.count2));
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bogosqrt_is_a_power_of_two_bracketing_the_root() {
+        assert_eq!(bogosqrt(0), 1);
+        assert_eq!(bogosqrt(1), 2);
+        assert_eq!(bogosqrt(3), 2);
+        assert_eq!(bogosqrt(4), 4);
+        assert_eq!(bogosqrt(16), 8);
+        assert_eq!(bogosqrt(1_000_000), 1024);
+    }
+
+    #[test]
+    fn hashbits_never_answers_zero() {
+        assert_eq!(hashbits(0), 1);
+        assert_eq!(hashbits(1), 1);
+        assert_eq!(hashbits(2), 1);
+        assert_eq!(hashbits(3), 2);
+        assert_eq!(hashbits(256), 8);
+        assert_eq!(hashbits(257), 9);
+        assert_eq!(hashbits(u32::MAX), 32);
+    }
+
+    #[test]
+    fn guess_lines_counts_and_extrapolates() {
+        assert_eq!(guess_lines(b"", 256), 1);
+        assert_eq!(guess_lines(b"a\nb\nc\n", 256), 4);
+        // Sampled: two of six lines seen, so the estimate is scaled up.
+        assert_eq!(guess_lines(b"a\nb\nc\nd\ne\nf\n", 2), 7);
+    }
+
+    #[test]
+    fn hash_record_consumes_the_newline() {
+        let (_, used) = hash_record(b"abc\ndef\n", 0);
+        assert_eq!(used, 4);
+        let (_, used) = hash_record(b"abc", 0);
+        assert_eq!(used, 3);
+    }
+
+    #[test]
+    fn hash_record_sign_extends_high_bytes() {
+        // 0xC3 enters as -61, so the fold sets the top bits; an unsigned
+        // byte would leave them clear.
+        let (ha, _) = hash_record(&[0xC3, b'\n'], 0);
+        assert_eq!(ha, fold(5381, 0xC3));
+        assert!(ha > u64::from(u32::MAX));
+    }
+
+    #[test]
+    fn whitespace_flavours_agree_between_hash_and_match() {
+        let cases: &[(&[u8], &[u8], u64, bool)] = &[
+            (b"a b\n", b"a  b\n", XDF_IGNORE_WHITESPACE_CHANGE, true),
+            (b"a b\n", b"ab\n", XDF_IGNORE_WHITESPACE_CHANGE, false),
+            (b"a b\n", b"ab\n", XDF_IGNORE_WHITESPACE, true),
+            (b"ab \n", b"ab\n", XDF_IGNORE_WHITESPACE_AT_EOL, true),
+            (b"a b\n", b"ab\n", XDF_IGNORE_WHITESPACE_AT_EOL, false),
+            (b"ab\r\n", b"ab\n", XDF_IGNORE_CR_AT_EOL, true),
+            (b"ab\r", b"ab", XDF_IGNORE_CR_AT_EOL, false),
+        ];
+        for &(l1, l2, flags, matches) in cases {
+            assert_eq!(recmatch(l1, l2, flags), matches, "{l1:?} vs {l2:?}");
+            if matches {
+                assert_eq!(
+                    hash_record(l1, flags).0,
+                    hash_record(l2, flags).0,
+                    "hash disagrees with recmatch for {l1:?} vs {l2:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn blankline_needs_a_flag_to_see_spaces() {
+        assert!(blankline(b"\n", 0));
+        assert!(!blankline(b"  \n", 0));
+        assert!(blankline(b"  \n", XDF_IGNORE_WHITESPACE));
+        assert!(!blankline(b" x\n", XDF_IGNORE_WHITESPACE));
+    }
+
+    #[test]
+    fn push_num_puts_a_negative_sign_last() {
+        let mut out = Vec::new();
+        push_num(&mut out, 0);
+        push_num(&mut out, 199);
+        assert_eq!(out, b"0199".to_vec());
+
+        // O-B15-1: upstream's sign lands on the wrong end.
+        let mut out = Vec::new();
+        push_num(&mut out, -199);
+        push_num(&mut out, i64::MIN);
+        assert_eq!(out, b"199-9223372036854775808-".to_vec());
+    }
+}
