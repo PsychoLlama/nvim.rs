@@ -1,10 +1,14 @@
-//! The `i"`/`a"` objects, and the quote scan they are built on.
+//! The `i"`/`a'` objects, and the quote scan they are built on.
 //!
 //! [`find_next_quote`] and [`find_prev_quote`] walk one line looking for an
 //! unescaped `quotechar`, where "escaped" is decided by 'quoteescape'.
 //! [`current_quote`] is the bookkeeping around them: which of the two quotes
 //! the cursor is nearest, whether the current Visual selection already sits
 //! inside a quoted string, and how 'selection' shifts both ends.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use ::core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::src::nvim::ascii::ascii_iswhite;
@@ -17,305 +21,354 @@ use crate::src::nvim::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::src::nvim::memline::dec;
 use crate::src::nvim::pos::{equalpos, lt};
 use crate::src::nvim::strings::vim_strchr;
-use crate::src::nvim::types::{colnr_T, oparg_T, pos_T, uint8_t};
+use crate::src::nvim::types::{colnr_T, oparg_T};
 
-unsafe extern "C" fn find_next_quote(
-    mut line: *mut ::core::ffi::c_char,
-    mut col: ::core::ffi::c_int,
-    mut quotechar: ::core::ffi::c_int,
-    mut escape: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    loop {
-        let mut c: ::core::ffi::c_int = *line.offset(col as isize) as uint8_t as ::core::ffi::c_int;
-        if c == NUL {
-            return -1 as ::core::ffi::c_int;
-        } else {
+/// The column of the next `quotechar` at or after `col`, or -1 when there is
+/// none before the end of the line.
+///
+/// A character named in `escape` ('quoteescape') takes the one after it out
+/// of consideration, whatever it is.
+///
+/// # Safety
+/// `line` must be NUL-terminated; `escape` must be null or NUL-terminated.
+unsafe fn find_next_quote(
+    line: *mut c_char,
+    mut col: c_int,
+    quotechar: c_int,
+    escape: *mut c_char,
+) -> c_int {
+    unsafe {
+        loop {
+            let c = *line.offset(col as isize) as u8 as c_int;
+            if c == NUL {
+                return -1;
+            }
             if !escape.is_null() && !vim_strchr(escape, c).is_null() {
                 col += 1;
-                if *line.offset(col as isize) as ::core::ffi::c_int == NUL {
-                    return -1 as ::core::ffi::c_int;
+                if *line.offset(col as isize) as c_int == NUL {
+                    return -1;
                 }
             } else if c == quotechar {
-                break;
+                return col;
             }
             col += utfc_ptr2len(line.offset(col as isize));
         }
     }
-    return col;
 }
-unsafe extern "C" fn find_prev_quote(
-    mut line: *mut ::core::ffi::c_char,
-    mut col_start: ::core::ffi::c_int,
-    mut quotechar: ::core::ffi::c_int,
-    mut escape: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    while col_start > 0 as ::core::ffi::c_int {
-        col_start -= 1;
-        col_start -= utf_head_off(line, line.offset(col_start as isize));
-        let mut n: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if !escape.is_null() {
-            while col_start - n > 0 as ::core::ffi::c_int
-                && !vim_strchr(
-                    escape,
-                    *line.offset((col_start - n - 1 as ::core::ffi::c_int) as isize) as uint8_t
-                        as ::core::ffi::c_int,
-                )
-                .is_null()
-            {
-                n += 1;
+
+/// The column of the last `quotechar` before `col_start`, or zero when there
+/// is none.
+///
+/// An *odd* run of 'quoteescape' characters in front of a quote escapes it;
+/// an even one is escaped escapes, and the quote counts.
+///
+/// # Safety
+/// `line` must be NUL-terminated; `escape` must be null or NUL-terminated.
+unsafe fn find_prev_quote(
+    line: *mut c_char,
+    mut col_start: c_int,
+    quotechar: c_int,
+    escape: *mut c_char,
+) -> c_int {
+    unsafe {
+        while col_start > 0 {
+            col_start -= 1;
+            col_start -= utf_head_off(line, line.offset(col_start as isize));
+            let mut n = 0;
+            if !escape.is_null() {
+                while col_start - n > 0
+                    && !vim_strchr(
+                        escape,
+                        *line.offset((col_start - n - 1) as isize) as u8 as c_int,
+                    )
+                    .is_null()
+                {
+                    n += 1;
+                }
             }
-        }
-        if n & 1 as ::core::ffi::c_int != 0 {
-            col_start -= n;
-        } else if *line.offset(col_start as isize) as uint8_t as ::core::ffi::c_int == quotechar {
-            break;
-        }
-    }
-    return col_start;
-}
-pub unsafe extern "C" fn current_quote(
-    mut oap: *mut oparg_T,
-    mut count: ::core::ffi::c_int,
-    mut include: bool,
-    mut quotechar: ::core::ffi::c_int,
-) -> bool {
-    let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-    let mut col_end: ::core::ffi::c_int = 0;
-    let mut col_start: ::core::ffi::c_int = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-    let mut inclusive: bool = false;
-    let mut vis_empty: bool = true;
-    let mut vis_bef_curs: bool = false;
-    let mut did_exclusive_adj: bool = false;
-    let mut inside_quotes: bool = false;
-    let mut selected_quote: bool = false;
-    let mut i: ::core::ffi::c_int = 0;
-    let mut restore_vis_bef: bool = false;
-    if VIsual_active.get() {
-        if (*VIsual.ptr()).lnum != (*curwin.get()).w_cursor.lnum {
-            return false;
-        }
-        vis_bef_curs = lt(VIsual.get(), (*curwin.get()).w_cursor);
-        vis_empty = equalpos(VIsual.get(), (*curwin.get()).w_cursor);
-        if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
-            if vis_bef_curs {
-                dec_cursor();
-                did_exclusive_adj = true;
-            } else if !vis_empty {
-                dec(VIsual.ptr());
-                did_exclusive_adj = true;
-            }
-            vis_empty = equalpos(VIsual.get(), (*curwin.get()).w_cursor);
-            if !vis_bef_curs && !vis_empty {
-                let mut t: pos_T = (*curwin.get()).w_cursor;
-                (*curwin.get()).w_cursor = VIsual.get();
-                VIsual.set(t);
-                vis_bef_curs = true;
-                restore_vis_bef = true;
-            }
-        }
-    }
-    if !vis_empty {
-        if vis_bef_curs {
-            inside_quotes = (*VIsual.ptr()).col > 0 as ::core::ffi::c_int
-                && *line.offset(
-                    ((*VIsual.ptr()).col as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize,
-                ) as uint8_t as ::core::ffi::c_int
-                    == quotechar
-                && *line.offset((*curwin.get()).w_cursor.col as isize) as ::core::ffi::c_int != NUL
-                && *line.offset(
-                    ((*curwin.get()).w_cursor.col as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                        as isize,
-                ) as uint8_t as ::core::ffi::c_int
-                    == quotechar;
-            i = (*VIsual.ptr()).col as ::core::ffi::c_int;
-            col_end = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-        } else {
-            inside_quotes = (*curwin.get()).w_cursor.col > 0 as ::core::ffi::c_int
-                && *line.offset(
-                    ((*curwin.get()).w_cursor.col as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                        as isize,
-                ) as uint8_t as ::core::ffi::c_int
-                    == quotechar
-                && *line.offset((*VIsual.ptr()).col as isize) as ::core::ffi::c_int != NUL
-                && *line.offset(
-                    ((*VIsual.ptr()).col as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize,
-                ) as uint8_t as ::core::ffi::c_int
-                    == quotechar;
-            i = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-            col_end = (*VIsual.ptr()).col as ::core::ffi::c_int;
-        }
-        while i <= col_end {
-            if *line.offset(i as isize) as ::core::ffi::c_int == NUL {
+            if n & 1 != 0 {
+                col_start -= n; // an odd number of escapes: skip the quote
+            } else if *line.offset(col_start as isize) as u8 as c_int == quotechar {
                 break;
             }
-            let c2rust_fresh7 = i;
-            i = i + 1;
-            if *line.offset(c2rust_fresh7 as isize) as uint8_t as ::core::ffi::c_int != quotechar {
-                continue;
-            }
-            selected_quote = true;
-            break;
         }
+        col_start
     }
-    '_abort_search: {
-        's_368: {
-            if !vis_empty
-                && *line.offset(col_start as isize) as uint8_t as ::core::ffi::c_int == quotechar
-            {
-                if vis_bef_curs {
-                    col_start = find_next_quote(
-                        line,
-                        col_start + 1 as ::core::ffi::c_int,
-                        quotechar,
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    );
-                    if col_start < 0 as ::core::ffi::c_int {
-                        break '_abort_search;
-                    } else {
-                        col_end = find_next_quote(
-                            line,
-                            col_start + 1 as ::core::ffi::c_int,
-                            quotechar,
-                            (*curbuf.get()).b_p_qe,
-                        );
-                        if col_end < 0 as ::core::ffi::c_int {
-                            col_end = col_start;
-                            col_start = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-                        }
-                    }
-                } else {
-                    col_end = find_prev_quote(
-                        line,
-                        col_start,
-                        quotechar,
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    );
-                    if *line.offset(col_end as isize) as uint8_t as ::core::ffi::c_int != quotechar
-                    {
-                        break '_abort_search;
-                    } else {
-                        col_start =
-                            find_prev_quote(line, col_end, quotechar, (*curbuf.get()).b_p_qe);
-                        if *line.offset(col_start as isize) as uint8_t as ::core::ffi::c_int
-                            != quotechar
-                        {
-                            col_start = col_end;
-                            col_end = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-                        }
-                    }
-                }
-            } else if *line.offset(col_start as isize) as uint8_t as ::core::ffi::c_int == quotechar
-                || !vis_empty
-            {
-                let mut first_col: ::core::ffi::c_int = col_start;
-                if !vis_empty {
-                    if vis_bef_curs {
-                        first_col = find_next_quote(
-                            line,
-                            col_start,
-                            quotechar,
-                            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        );
-                    } else {
-                        first_col = find_prev_quote(
-                            line,
-                            col_start,
-                            quotechar,
-                            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        );
-                    }
-                }
-                col_start = 0 as ::core::ffi::c_int;
-                loop {
-                    col_start = find_next_quote(
-                        line,
-                        col_start,
-                        quotechar,
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    );
-                    if col_start < 0 as ::core::ffi::c_int || col_start > first_col {
-                        break '_abort_search;
-                    }
-                    col_end = find_next_quote(
-                        line,
-                        col_start + 1 as ::core::ffi::c_int,
-                        quotechar,
-                        (*curbuf.get()).b_p_qe,
-                    );
-                    if col_end < 0 as ::core::ffi::c_int {
-                        break '_abort_search;
-                    }
-                    if col_start <= first_col && first_col <= col_end {
-                        break 's_368;
-                    }
-                    col_start = col_end + 1 as ::core::ffi::c_int;
-                }
-            } else {
-                col_start = find_prev_quote(line, col_start, quotechar, (*curbuf.get()).b_p_qe);
-                if *line.offset(col_start as isize) as uint8_t as ::core::ffi::c_int != quotechar {
-                    col_start = find_next_quote(
-                        line,
-                        col_start,
-                        quotechar,
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    );
-                    if col_start < 0 as ::core::ffi::c_int {
-                        break '_abort_search;
-                    }
-                }
-                col_end = find_next_quote(
+}
+
+/// Where the quoted string enclosing the cursor begins and ends, as byte
+/// columns of `line`. `None` is upstream's `abort_search`.
+///
+/// Which of the four ways this is asked depends on what is already selected
+/// and on whether the cursor sits on a quote -- the cursor alone cannot say
+/// whether a quote it is on opens or closes a string, which is why the third
+/// arm rescans from column zero.
+///
+/// # Safety
+/// `line` must be the current line, NUL-terminated.
+unsafe fn quoted_span(
+    line: *mut c_char,
+    mut col_start: c_int,
+    quotechar: c_int,
+    vis_empty: bool,
+    vis_bef_curs: bool,
+) -> Option<(c_int, c_int)> {
+    unsafe {
+        let qe = (*curbuf.get()).b_p_qe;
+        let on_quote = *line.offset(col_start as isize) as u8 as c_int == quotechar;
+        let col_end;
+
+        if !vis_empty && on_quote {
+            // Something is already selected and the cursor is on a quote:
+            // find the *next* quoted string.
+            if vis_bef_curs {
+                // Assume this is a closing quote: move past the next opening
+                // one.
+                col_start = find_next_quote(
                     line,
-                    col_start + 1 as ::core::ffi::c_int,
+                    col_start + 1,
                     quotechar,
-                    (*curbuf.get()).b_p_qe,
+                    ::core::ptr::null_mut::<c_char>(),
                 );
-                if col_end < 0 as ::core::ffi::c_int {
-                    break '_abort_search;
+                if col_start < 0 {
+                    return None;
+                }
+                let mut end = find_next_quote(line, col_start + 1, quotechar, qe);
+                if end < 0 {
+                    // It was a starting quote after all.
+                    end = col_start;
+                    col_start = (*curwin.get()).w_cursor.col as c_int;
+                }
+                col_end = end;
+            } else {
+                let mut end = find_prev_quote(
+                    line,
+                    col_start,
+                    quotechar,
+                    ::core::ptr::null_mut::<c_char>(),
+                );
+                if *line.offset(end as isize) as u8 as c_int != quotechar {
+                    return None;
+                }
+                col_start = find_prev_quote(line, end, quotechar, qe);
+                if *line.offset(col_start as isize) as u8 as c_int != quotechar {
+                    // It was an ending quote after all.
+                    col_start = end;
+                    end = (*curwin.get()).w_cursor.col as c_int;
+                }
+                col_end = end;
+            }
+        } else if on_quote || !vis_empty {
+            // The cursor is on a quote and there is no telling whether it
+            // opens or closes a string, so rescan from the start of the line.
+            // Also done with a Visual area, since `a'` can leave the cursor
+            // between two strings.
+            let mut first_col = col_start;
+            if !vis_empty {
+                first_col = if vis_bef_curs {
+                    find_next_quote(
+                        line,
+                        col_start,
+                        quotechar,
+                        ::core::ptr::null_mut::<c_char>(),
+                    )
+                } else {
+                    find_prev_quote(
+                        line,
+                        col_start,
+                        quotechar,
+                        ::core::ptr::null_mut::<c_char>(),
+                    )
+                };
+            }
+            col_start = 0;
+            loop {
+                col_start = find_next_quote(
+                    line,
+                    col_start,
+                    quotechar,
+                    ::core::ptr::null_mut::<c_char>(),
+                );
+                if col_start < 0 || col_start > first_col {
+                    return None;
+                }
+                let end = find_next_quote(line, col_start + 1, quotechar, qe);
+                if end < 0 {
+                    return None;
+                }
+                if col_start <= first_col && first_col <= end {
+                    col_end = end;
+                    break;
+                }
+                col_start = end + 1;
+            }
+        } else {
+            // Search backwards for an opening quote.
+            col_start = find_prev_quote(line, col_start, quotechar, qe);
+            if *line.offset(col_start as isize) as u8 as c_int != quotechar {
+                // None before the cursor: look after it.
+                col_start = find_next_quote(
+                    line,
+                    col_start,
+                    quotechar,
+                    ::core::ptr::null_mut::<c_char>(),
+                );
+                if col_start < 0 {
+                    return None;
+                }
+            }
+            let end = find_next_quote(line, col_start + 1, quotechar, qe);
+            if end < 0 {
+                return None;
+            }
+            col_end = end;
+        }
+        Some((col_start, col_end))
+    }
+}
+
+/// `i"` / `a'` / ... : the text inside the quoted string under the cursor,
+/// cursor left at the end. Answers whether one was found.
+///
+/// # Safety
+/// `oap` must be a live operator argument, and there must be a current line.
+pub unsafe extern "C" fn current_quote(
+    oap: *mut oparg_T,
+    count: c_int,
+    include: bool,
+    quotechar: c_int,
+) -> bool {
+    unsafe {
+        let line = get_cursor_line_ptr();
+        let mut col_start = (*curwin.get()).w_cursor.col as c_int;
+        let mut inclusive = false;
+        let mut vis_empty = true; // the Visual selection is one character or less
+        let mut vis_bef_curs = false; // the Visual area starts before the cursor
+        let mut did_exclusive_adj = false; // the position was adjusted for 'selection'
+        let mut inside_quotes = false; // looks like an `i'` was done before
+        let mut selected_quote = false; // a quote is inside the selection
+        let mut restore_vis_bef = false; // put `VIsual` back if this aborts
+
+        // With 'selection' "exclusive", move the cursor to where it would be
+        // with "inclusive" so that the rest of this is written once; it is
+        // moved forward again after the area has been adjusted.
+        if VIsual_active.get() {
+            // This only works within one line.
+            if (*VIsual.ptr()).lnum != (*curwin.get()).w_cursor.lnum {
+                return false;
+            }
+            vis_bef_curs = lt(VIsual.get(), (*curwin.get()).w_cursor);
+            vis_empty = equalpos(VIsual.get(), (*curwin.get()).w_cursor);
+            if *p_sel.get() as c_int == 'e' as c_int {
+                if vis_bef_curs {
+                    dec_cursor();
+                    did_exclusive_adj = true;
+                } else if !vis_empty {
+                    dec(VIsual.ptr());
+                    did_exclusive_adj = true;
+                }
+                vis_empty = equalpos(VIsual.get(), (*curwin.get()).w_cursor);
+                if !vis_bef_curs && !vis_empty {
+                    // `VIsual` has to be the start of the selection.
+                    let t = (*curwin.get()).w_cursor;
+                    (*curwin.get()).w_cursor = VIsual.get();
+                    VIsual.set(t);
+                    vis_bef_curs = true;
+                    restore_vis_bef = true;
                 }
             }
         }
+
+        if !vis_empty {
+            // Does the existing selection span exactly the text inside a pair
+            // of quotes?
+            let mut i;
+            let sel_end;
+            if vis_bef_curs {
+                inside_quotes = (*VIsual.ptr()).col > 0
+                    && *line.offset((*VIsual.ptr()).col as isize - 1) as u8 as c_int == quotechar
+                    && *line.offset((*curwin.get()).w_cursor.col as isize) as c_int != NUL
+                    && *line.offset((*curwin.get()).w_cursor.col as isize + 1) as u8 as c_int
+                        == quotechar;
+                i = (*VIsual.ptr()).col as c_int;
+                sel_end = (*curwin.get()).w_cursor.col as c_int;
+            } else {
+                inside_quotes = (*curwin.get()).w_cursor.col > 0
+                    && *line.offset((*curwin.get()).w_cursor.col as isize - 1) as u8 as c_int
+                        == quotechar
+                    && *line.offset((*VIsual.ptr()).col as isize) as c_int != NUL
+                    && *line.offset((*VIsual.ptr()).col as isize + 1) as u8 as c_int == quotechar;
+                i = (*curwin.get()).w_cursor.col as c_int;
+                sel_end = (*VIsual.ptr()).col as c_int;
+            }
+            // Is there a quote in the selection at all?
+            while i <= sel_end {
+                // The line may have been changed since the Visual area was
+                // selected, so this can run off the end of it.
+                if *line.offset(i as isize) as c_int == NUL {
+                    break;
+                }
+                let c = *line.offset(i as isize) as u8 as c_int;
+                i += 1;
+                if c == quotechar {
+                    selected_quote = true;
+                    break;
+                }
+            }
+        }
+
+        let Some((start, mut col_end)) =
+            quoted_span(line, col_start, quotechar, vis_empty, vis_bef_curs)
+        else {
+            // `abort_search`: undo the 'selection' adjustment made above.
+            if VIsual_active.get() && *p_sel.get() as c_int == 'e' as c_int {
+                if did_exclusive_adj {
+                    inc_cursor();
+                }
+                if restore_vis_bef {
+                    let t = (*curwin.get()).w_cursor;
+                    (*curwin.get()).w_cursor = VIsual.get();
+                    VIsual.set(t);
+                }
+            }
+            return false;
+        };
+        col_start = start;
+
+        // With `include`, take the white space after the closing quote, or --
+        // when there is none there -- the white space before the opening one.
         if include {
-            if ascii_iswhite(
-                *line.offset((col_end + 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
-            ) {
-                while ascii_iswhite(*line.offset((col_end + 1 as ::core::ffi::c_int) as isize)
-                    as ::core::ffi::c_int)
-                {
+            if ascii_iswhite(*line.offset(col_end as isize + 1) as c_int) {
+                while ascii_iswhite(*line.offset(col_end as isize + 1) as c_int) {
                     col_end += 1;
                 }
             } else {
-                while col_start > 0 as ::core::ffi::c_int
-                    && ascii_iswhite(*line.offset((col_start - 1 as ::core::ffi::c_int) as isize)
-                        as ::core::ffi::c_int) as ::core::ffi::c_int
-                        != 0
+                while col_start > 0 && ascii_iswhite(*line.offset(col_start as isize - 1) as c_int)
                 {
                     col_start -= 1;
                 }
             }
         }
-        if !include
-            && count < 2 as ::core::ffi::c_int
-            && (vis_empty as ::core::ffi::c_int != 0 || !inside_quotes)
-        {
+
+        // The start position. After a `vi"`, another `i"` must take the quotes
+        // in; so must `v2i"`.
+        if !include && count < 2 && (vis_empty || !inside_quotes) {
             col_start += 1;
         }
         (*curwin.get()).w_cursor.col = col_start as colnr_T;
         if VIsual_active.get() {
-            if vis_empty as ::core::ffi::c_int != 0
-                || vis_bef_curs as ::core::ffi::c_int != 0
+            // Set the start of the Visual area when it was empty, when we
+            // were just inside quotes, or when it neither started at a quote
+            // nor contained one.
+            if vis_empty
+                || (vis_bef_curs
                     && !selected_quote
-                    && (inside_quotes as ::core::ffi::c_int != 0
-                        || *line.offset((*VIsual.ptr()).col as isize) as uint8_t
-                            as ::core::ffi::c_int
+                    && (inside_quotes
+                        || (*line.offset((*VIsual.ptr()).col as isize) as u8 as c_int
                             != quotechar
-                            && ((*VIsual.ptr()).col == 0 as ::core::ffi::c_int
-                                || *line.offset(
-                                    ((*VIsual.ptr()).col as ::core::ffi::c_int
-                                        - 1 as ::core::ffi::c_int)
-                                        as isize,
-                                ) as uint8_t
-                                    as ::core::ffi::c_int
-                                    != quotechar))
+                            && ((*VIsual.ptr()).col == 0
+                                || *line.offset((*VIsual.ptr()).col as isize - 1) as u8 as c_int
+                                    != quotechar))))
             {
                 VIsual.set((*curwin.get()).w_cursor);
                 redraw_curbuf_later(UPD_INVERTED);
@@ -324,58 +377,41 @@ pub unsafe extern "C" fn current_quote(
             (*oap).start = (*curwin.get()).w_cursor;
             (*oap).motion_type = kMTCharWise;
         }
+
+        // The end position.
         (*curwin.get()).w_cursor.col = col_end as colnr_T;
-        if (include as ::core::ffi::c_int != 0
-            || count > 1 as ::core::ffi::c_int
-            || !vis_empty && inside_quotes as ::core::ffi::c_int != 0)
-            && inc_cursor() == 2 as ::core::ffi::c_int
-        {
+        if (include || count > 1 || (!vis_empty && inside_quotes)) && inc_cursor() == 2 {
             inclusive = true;
         }
         if VIsual_active.get() {
-            if vis_empty as ::core::ffi::c_int != 0 || vis_bef_curs as ::core::ffi::c_int != 0 {
-                if *p_sel.get() as ::core::ffi::c_int != 'e' as ::core::ffi::c_int {
+            if vis_empty || vis_bef_curs {
+                // Step the cursor back when 'selection' is not exclusive.
+                if *p_sel.get() as c_int != 'e' as c_int {
                     dec_cursor();
                 }
             } else {
-                if inside_quotes as ::core::ffi::c_int != 0
-                    || !selected_quote
-                        && *line.offset((*VIsual.ptr()).col as isize) as uint8_t
-                            as ::core::ffi::c_int
-                            != quotechar
-                        && (*line.offset((*VIsual.ptr()).col as isize) as ::core::ffi::c_int == NUL
-                            || *line.offset(
-                                ((*VIsual.ptr()).col as ::core::ffi::c_int
-                                    + 1 as ::core::ffi::c_int)
-                                    as isize,
-                            ) as uint8_t as ::core::ffi::c_int
-                                != quotechar)
+                // The cursor is at the start of the Visual area. Set its end
+                // when we were just inside quotes, or when it did not end at
+                // a quote.
+                if inside_quotes
+                    || (!selected_quote
+                        && *line.offset((*VIsual.ptr()).col as isize) as u8 as c_int != quotechar
+                        && (*line.offset((*VIsual.ptr()).col as isize) as c_int == NUL
+                            || *line.offset((*VIsual.ptr()).col as isize + 1) as u8 as c_int
+                                != quotechar))
                 {
                     dec_cursor();
                     VIsual.set((*curwin.get()).w_cursor);
                 }
                 (*curwin.get()).w_cursor.col = col_start as colnr_T;
             }
-            if VIsual_mode.get() == 'V' as ::core::ffi::c_int {
-                VIsual_mode.set('v' as ::core::ffi::c_int);
-                redraw_cmdline.set(true);
+            if VIsual_mode.get() == 'V' as c_int {
+                VIsual_mode.set('v' as c_int);
+                redraw_cmdline.set(true); // show the mode later
             }
         } else {
             (*oap).inclusive = inclusive;
         }
-        return true;
+        true
     }
-    if VIsual_active.get() as ::core::ffi::c_int != 0
-        && *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
-    {
-        if did_exclusive_adj {
-            inc_cursor();
-        }
-        if restore_vis_bef {
-            let mut t_0: pos_T = (*curwin.get()).w_cursor;
-            (*curwin.get()).w_cursor = VIsual.get();
-            VIsual.set(t_0);
-        }
-    }
-    return false;
 }

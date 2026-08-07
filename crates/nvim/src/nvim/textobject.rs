@@ -12,7 +12,19 @@
 //! | `pair` | `i(` `a{` ... `it` `at` | -- |
 //! | `quote` | `i"` `a'` ... | -- |
 //!
+//! Every object here shares one shape: outside Visual mode it fills in the
+//! pending operator's `oap`, and inside it *extends* the selection instead --
+//! which is why each of the five carries a retry or an `extend` path, and why
+//! `'selection'` being exclusive is adjusted for on the way in and undone on
+//! the way out.
+//!
 //! This parent keeps no functions, only the vocabulary the children share.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use ::core::ffi::{c_int, c_uint, c_void};
+
+use crate::src::nvim::types::MotionType;
 
 mod pair;
 mod para;
@@ -26,17 +38,15 @@ pub use self::quote::*;
 pub use self::sent::*;
 pub use self::word::*;
 
-use crate::src::nvim::types::MotionType;
-
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const FM_FORWARD: C2Rust_Unnamed_14 = 2;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const CPO_ENDOFSENT: ::core::ffi::c_int = 'J' as ::core::ffi::c_int;
-pub const CPO_MATCHBSL: ::core::ffi::c_int = 'M' as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+/// `findmatchlimit`'s "search forward" flag.
+pub const FM_FORWARD: c_uint = 2;
+pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
+pub const NUL: c_int = '\0' as c_int;
+pub const OK: c_int = 1;
+pub const FAIL: c_int = 0;
+/// 'cpoptions' `J`: a sentence ends at `.` `!` `?` followed by *two* spaces.
+pub const CPO_ENDOFSENT: c_int = 'J' as c_int;
+/// 'cpoptions' `M`: a `\` before a bracket does not make it escaped.
+pub const CPO_MATCHBSL: c_int = 'M' as c_int;
