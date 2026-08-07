@@ -20,6 +20,7 @@ pub mod src {
         pub mod mpack_core;
         pub mod object;
         pub mod rpc;
+        pub mod token;
     } // mod mpack
     pub mod nvim {
         pub mod api {

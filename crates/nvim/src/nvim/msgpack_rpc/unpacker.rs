@@ -774,15 +774,12 @@ pub unsafe fn unpack_integer(
 
 /// The value of an integer token, whichever sign it was encoded with.
 fn unpack_integer_token(tok: mpack_token_t) -> Option<Integer> {
-    // The decoders only read the token they are handed.
-    unsafe {
-        if tok.type_0 == TOKEN_UINT {
-            Some(mpack_unpack_uint(tok) as Integer)
-        } else if tok.type_0 == TOKEN_SINT {
-            Some(mpack_unpack_sint(tok) as Integer)
-        } else {
-            None
-        }
+    if tok.type_0 == TOKEN_UINT {
+        Some(mpack_unpack_uint(tok) as Integer)
+    } else if tok.type_0 == TOKEN_SINT {
+        Some(mpack_unpack_sint(tok) as Integer)
+    } else {
+        None
     }
 }
 

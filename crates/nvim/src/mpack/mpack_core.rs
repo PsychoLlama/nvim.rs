@@ -1,877 +1,559 @@
-use crate::src::nvim::os::libc::{__assert_fail, memcpy};
+//! `mpack_core.c`: the streaming half of the token codec.
+//!
+//! [`super::token`] turns bytes into a [`Tok`] and back with no state at all.
+//! This module adds the state: a `mpack_tokbuf_t` that can be handed a byte
+//! at a time and still produce whole tokens, which is what makes the RPC
+//! framer work over a socket that splits wherever it likes.
+//!
+//! Two pieces of state, never both live:
+//!
+//! * `pending`/`ppos`/`plen` — a partial token. Reading, it holds the bytes
+//!   of a token seen so far and `plen` is how many it needs; writing, it
+//!   holds an encoded token and `plen` is how many bytes are left to hand
+//!   over.
+//! * `passthrough` — how many bytes of a `str`/`bin`/`ext` *body* are still
+//!   owed. While it is non-zero every read answers a `MPACK_TOKEN_CHUNK`
+//!   borrowing the caller's own buffer, so bodies are never copied.
+//!
+//! The exported functions keep the C signatures: `nvim/msgpack_rpc/unpacker`
+//! and `nvim/eval/decode/msgpack` drive them from raw pointers they own, and
+//! `test/unit/msgpack_spec.lua` sizes `Unpacker` (which embeds a tokbuf)
+//! through the FFI. Each is a thin shim over a safe core below.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{c_char, c_int, c_uint};
+
+use super::token::{self, Kind, MAX_TOKEN_LEN, Read, Tok};
 use crate::src::nvim::types::{
-    mpack_tokbuf_t, mpack_token_s_data as C2Rust_Unnamed_0, mpack_token_t, mpack_token_type_t,
-    mpack_uint32_t, mpack_value_t, size_t,
+    mpack_tokbuf_t, mpack_token_s_data, mpack_token_t, mpack_token_type_t, mpack_uint32_t,
+    mpack_value_t, size_t,
 };
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const MPACK_ERROR: C2Rust_Unnamed = 2;
-pub const MPACK_EOF: C2Rust_Unnamed = 1;
-pub const MPACK_OK: C2Rust_Unnamed = 0;
-pub const MPACK_TOKEN_EXT: mpack_token_type_t = 11;
-pub const MPACK_TOKEN_STR: mpack_token_type_t = 10;
-pub const MPACK_TOKEN_BIN: mpack_token_type_t = 9;
-pub const MPACK_TOKEN_MAP: mpack_token_type_t = 8;
-pub const MPACK_TOKEN_ARRAY: mpack_token_type_t = 7;
-pub const MPACK_TOKEN_CHUNK: mpack_token_type_t = 6;
-pub const MPACK_TOKEN_FLOAT: mpack_token_type_t = 5;
-pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
-pub const MPACK_TOKEN_UINT: mpack_token_type_t = 3;
-pub const MPACK_TOKEN_BOOLEAN: mpack_token_type_t = 2;
-pub const MPACK_TOKEN_NIL: mpack_token_type_t = 1;
-pub const MPACK_MAX_TOKEN_LEN: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
-pub unsafe extern "C-unwind" fn mpack_tokbuf_init(mut tokbuf: *mut mpack_tokbuf_t) {
-    (*tokbuf).ppos = 0 as size_t;
-    (*tokbuf).plen = 0 as size_t;
-    (*tokbuf).passthrough = 0 as mpack_uint32_t;
+
+/// `mpack_read`/`mpack_write` status codes.
+pub const MPACK_OK: c_uint = 0;
+pub const MPACK_EOF: c_uint = 1;
+pub const MPACK_ERROR: c_uint = 2;
+
+pub const MPACK_TOKEN_NIL: mpack_token_type_t = Kind::Nil as mpack_token_type_t;
+pub const MPACK_TOKEN_BOOLEAN: mpack_token_type_t = Kind::Boolean as mpack_token_type_t;
+pub const MPACK_TOKEN_UINT: mpack_token_type_t = Kind::Uint as mpack_token_type_t;
+pub const MPACK_TOKEN_SINT: mpack_token_type_t = Kind::Sint as mpack_token_type_t;
+pub const MPACK_TOKEN_FLOAT: mpack_token_type_t = Kind::Float as mpack_token_type_t;
+pub const MPACK_TOKEN_CHUNK: mpack_token_type_t = Kind::Chunk as mpack_token_type_t;
+pub const MPACK_TOKEN_ARRAY: mpack_token_type_t = Kind::Array as mpack_token_type_t;
+pub const MPACK_TOKEN_MAP: mpack_token_type_t = Kind::Map as mpack_token_type_t;
+pub const MPACK_TOKEN_BIN: mpack_token_type_t = Kind::Bin as mpack_token_type_t;
+pub const MPACK_TOKEN_STR: mpack_token_type_t = Kind::Str as mpack_token_type_t;
+pub const MPACK_TOKEN_EXT: mpack_token_type_t = Kind::Ext as mpack_token_type_t;
+
+pub const MPACK_MAX_TOKEN_LEN: c_int = MAX_TOKEN_LEN as c_int;
+
+// ---------------------------------------------------------------------------
+// The C token, and the bridge to the safe one
+// ---------------------------------------------------------------------------
+
+/// A `mpack_token_t` payload built from the whole 64-bit value.
+///
+/// Writing both halves matters: the C's `mpack_blob` sets only `ext_type`,
+/// which leaves four bytes of the union uninitialised in every `map`,
+/// `array`, `str` and `bin` token it makes. `ext_type` is `lo`'s four bytes,
+/// so filling `hi` as well costs nothing and makes the token a value the
+/// whole tree can copy.
+pub const fn value_data(lo: mpack_uint32_t, hi: mpack_uint32_t) -> mpack_token_s_data {
+    mpack_token_s_data {
+        value: mpack_value_t { lo, hi },
+    }
 }
-pub unsafe extern "C-unwind" fn mpack_read(
-    mut tokbuf: *mut mpack_tokbuf_t,
-    mut buf: *mut *const ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-    mut tok: *mut mpack_token_t,
-) -> ::core::ffi::c_int {
-    let mut status: ::core::ffi::c_int = 0;
-    let mut initial_ppos: size_t = 0;
-    let mut ptrlen: size_t = 0;
-    let mut advanced: size_t = 0;
-    let mut ptr: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut ptr_save: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    '_c2rust_label: {
-        if !(*buf).is_null() {
-        } else {
-            __assert_fail(
-                b"*buf\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/mpack/mpack_core.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                50 as ::core::ffi::c_uint,
-                b"int mpack_read(mpack_tokbuf_t *, const char **, size_t *, mpack_token_t *)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    if *buflen == 0 as size_t {
-        return MPACK_EOF as ::core::ffi::c_int;
-    }
-    if (*tokbuf).passthrough != 0 {
-        (*tok).type_0 = MPACK_TOKEN_CHUNK;
-        (*tok).data.chunk_ptr = *buf;
-        (*tok).length = if (*buflen as mpack_uint32_t) < (*tokbuf).passthrough {
-            *buflen as mpack_uint32_t
-        } else {
-            (*tokbuf).passthrough
-        };
-        (*tokbuf).passthrough = (*tokbuf).passthrough.wrapping_sub((*tok).length);
-        *buf = (*buf).offset((*tok).length as isize);
-        *buflen = (*buflen).wrapping_sub((*tok).length as size_t);
-    } else {
-        initial_ppos = (*tokbuf).ppos;
-        if (*tokbuf).plen != 0 {
-            if mpack_rpending(buf, buflen, tokbuf) == 0 {
-                return MPACK_EOF as ::core::ffi::c_int;
-            }
-            ptr = &raw mut (*tokbuf).pending as *mut ::core::ffi::c_char;
-            ptrlen = (*tokbuf).ppos;
-        } else {
-            ptr = *buf;
-            ptrlen = *buflen;
-        }
-        ptr_save = ptr;
-        status = mpack_rtoken(&raw mut ptr, &raw mut ptrlen, tok);
-        if status != 0 {
-            if status != MPACK_EOF as ::core::ffi::c_int {
-                return MPACK_ERROR as ::core::ffi::c_int;
-            }
-            '_c2rust_label_0: {
-                if (*tokbuf).plen == 0 {
-                } else {
-                    __assert_fail(
-                        b"!tokbuf->plen\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/mpack/mpack_core.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        85 as ::core::ffi::c_uint,
-                        b"int mpack_read(mpack_tokbuf_t *, const char **, size_t *, mpack_token_t *)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            (*tokbuf).plen = (*tok).length.wrapping_add(1 as mpack_uint32_t) as size_t;
-            '_c2rust_label_1: {
-                if (*tokbuf).plen <= ::core::mem::size_of::<[::core::ffi::c_char; 9]>() {
-                } else {
-                    __assert_fail(
-                        b"tokbuf->plen <= sizeof(tokbuf->pending)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                        b"src/mpack/mpack_core.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        90 as ::core::ffi::c_uint,
-                        b"int mpack_read(mpack_tokbuf_t *, const char **, size_t *, mpack_token_t *)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            (*tokbuf).ppos = 0 as size_t;
-            status = mpack_rpending(buf, buflen, tokbuf);
-            '_c2rust_label_2: {
-                if status == 0 {
-                } else {
-                    __assert_fail(
-                        b"!status\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/mpack/mpack_core.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        93 as ::core::ffi::c_uint,
-                        b"int mpack_read(mpack_tokbuf_t *, const char **, size_t *, mpack_token_t *)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            return MPACK_EOF as ::core::ffi::c_int;
-        }
-        advanced = (ptr.offset_from(ptr_save) as size_t).wrapping_sub(initial_ppos);
-        (*tokbuf).ppos = 0 as size_t;
-        (*tokbuf).plen = (*tokbuf).ppos;
-        *buflen = (*buflen).wrapping_sub(advanced);
-        *buf = (*buf).offset(advanced as isize);
-        if (*tok).type_0 as ::core::ffi::c_uint
-            > MPACK_TOKEN_MAP as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            (*tokbuf).passthrough = (*tok).length;
-        }
-    }
-    return MPACK_OK as ::core::ffi::c_int;
-}
-pub unsafe extern "C-unwind" fn mpack_write(
-    mut tokbuf: *mut mpack_tokbuf_t,
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-    mut t: *const mpack_token_t,
-) -> ::core::ffi::c_int {
-    let mut status: ::core::ffi::c_int = 0;
-    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut ptrlen: size_t = 0;
-    let mut tok: mpack_token_t = if (*tokbuf).plen != 0 {
-        (*tokbuf).pending_tok
-    } else {
-        *t
-    };
-    '_c2rust_label: {
-        if !(*buf).is_null() && *buflen != 0 {
-        } else {
-            __assert_fail(
-                b"*buf && *buflen\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/mpack/mpack_core.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                117 as ::core::ffi::c_uint,
-                b"int mpack_write(mpack_tokbuf_t *, char **, size_t *, const mpack_token_t *)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    if tok.type_0 as ::core::ffi::c_uint
-        == MPACK_TOKEN_CHUNK as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        let mut written: size_t = 0;
-        let mut pending: size_t = 0;
-        let mut count: size_t = 0;
-        if (*tokbuf).plen == 0 {
-            (*tokbuf).ppos = 0 as size_t;
-        }
-        written = (*tokbuf).ppos;
-        pending = (tok.length as size_t).wrapping_sub(written);
-        count = if pending < *buflen { pending } else { *buflen };
-        memcpy(
-            *buf as *mut ::core::ffi::c_void,
-            tok.data.chunk_ptr.offset(written as isize) as *const ::core::ffi::c_void,
-            count,
-        );
-        *buf = (*buf).offset(count as isize);
-        *buflen = (*buflen).wrapping_sub(count);
-        (*tokbuf).ppos = (*tokbuf).ppos.wrapping_add(count);
-        (*tokbuf).plen = (if count == pending {
-            0 as mpack_uint32_t
-        } else {
-            tok.length
-        }) as size_t;
-        if count == pending {
-            return MPACK_OK as ::core::ffi::c_int;
-        } else {
-            (*tokbuf).pending_tok = tok;
-            return MPACK_EOF as ::core::ffi::c_int;
-        }
-    }
-    if (*tokbuf).plen != 0 {
-        return mpack_wpending(buf, buflen, tokbuf);
-    }
-    if *buflen < MPACK_MAX_TOKEN_LEN as size_t {
-        ptr = &raw mut (*tokbuf).pending as *mut ::core::ffi::c_char;
-        ptrlen = ::core::mem::size_of::<[::core::ffi::c_char; 9]>() as size_t;
-    } else {
-        ptr = *buf;
-        ptrlen = *buflen;
-    }
-    status = mpack_wtoken(&raw mut tok, &raw mut ptr, &raw mut ptrlen);
-    if status != 0 {
-        return status;
-    }
-    if *buflen < MPACK_MAX_TOKEN_LEN as size_t {
-        let mut toklen: size_t =
-            ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(ptrlen);
-        let mut write_cnt: size_t = if toklen < *buflen { toklen } else { *buflen };
-        memcpy(
-            *buf as *mut ::core::ffi::c_void,
-            &raw mut (*tokbuf).pending as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
-            write_cnt,
-        );
-        *buf = (*buf).offset(write_cnt as isize);
-        *buflen = (*buflen).wrapping_sub(write_cnt);
-        if write_cnt < toklen {
-            '_c2rust_label_0: {
-                if *buflen == 0 {
-                } else {
-                    __assert_fail(
-                        b"!*buflen\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/mpack/mpack_core.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        157 as ::core::ffi::c_uint,
-                        b"int mpack_write(mpack_tokbuf_t *, char **, size_t *, const mpack_token_t *)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            (*tokbuf).plen = toklen;
-            (*tokbuf).ppos = write_cnt;
-            (*tokbuf).pending_tok = tok;
-            return MPACK_EOF as ::core::ffi::c_int;
-        }
-    } else {
-        *buflen = (*buflen).wrapping_sub(ptr.offset_from(*buf) as size_t);
-        *buf = ptr;
-    }
-    return MPACK_OK as ::core::ffi::c_int;
-}
-pub unsafe extern "C-unwind" fn mpack_rtoken(
-    mut buf: *mut *const ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-    mut tok: *mut mpack_token_t,
-) -> ::core::ffi::c_int {
-    if *buflen == 0 as size_t {
-        return MPACK_EOF as ::core::ffi::c_int;
-    }
-    *buflen = (*buflen).wrapping_sub(1);
-    let c2rust_fresh0 = *buf;
-    *buf = (*buf).offset(1);
-    let mut t: ::core::ffi::c_uchar = *c2rust_fresh0 as ::core::ffi::c_uchar;
-    if (t as ::core::ffi::c_int) < 0x80 as ::core::ffi::c_int {
-        return mpack_value(MPACK_TOKEN_UINT, 1 as mpack_uint32_t, mpack_byte(t), tok);
-    } else if (t as ::core::ffi::c_int) < 0x90 as ::core::ffi::c_int {
-        return mpack_blob(
-            MPACK_TOKEN_MAP,
-            (t as ::core::ffi::c_int & 0xf as ::core::ffi::c_int) as mpack_uint32_t,
-            0 as ::core::ffi::c_int,
-            tok,
-        );
-    } else if (t as ::core::ffi::c_int) < 0xa0 as ::core::ffi::c_int {
-        return mpack_blob(
-            MPACK_TOKEN_ARRAY,
-            (t as ::core::ffi::c_int & 0xf as ::core::ffi::c_int) as mpack_uint32_t,
-            0 as ::core::ffi::c_int,
-            tok,
-        );
-    } else if (t as ::core::ffi::c_int) < 0xc0 as ::core::ffi::c_int {
-        return mpack_blob(
-            MPACK_TOKEN_STR,
-            (t as ::core::ffi::c_int & 0x1f as ::core::ffi::c_int) as mpack_uint32_t,
-            0 as ::core::ffi::c_int,
-            tok,
-        );
-    } else if (t as ::core::ffi::c_int) < 0xe0 as ::core::ffi::c_int {
-        match t as ::core::ffi::c_int {
-            192 => {
-                return mpack_value(
-                    MPACK_TOKEN_NIL,
-                    0 as mpack_uint32_t,
-                    mpack_byte(0 as ::core::ffi::c_uchar),
-                    tok,
-                );
-            }
-            194 => {
-                return mpack_value(
-                    MPACK_TOKEN_BOOLEAN,
-                    1 as mpack_uint32_t,
-                    mpack_byte(0 as ::core::ffi::c_uchar),
-                    tok,
-                );
-            }
-            195 => {
-                return mpack_value(
-                    MPACK_TOKEN_BOOLEAN,
-                    1 as mpack_uint32_t,
-                    mpack_byte(1 as ::core::ffi::c_uchar),
-                    tok,
-                );
-            }
-            196 | 197 | 198 => {
-                return mpack_rblob(
-                    MPACK_TOKEN_BIN,
-                    ((1 as ::core::ffi::c_int)
-                        << t as ::core::ffi::c_int - 0xc4 as ::core::ffi::c_int)
-                        as mpack_uint32_t,
-                    buf,
-                    buflen,
-                    tok,
-                );
-            }
-            199 | 200 | 201 => {
-                return mpack_rblob(
-                    MPACK_TOKEN_EXT,
-                    ((1 as ::core::ffi::c_int)
-                        << t as ::core::ffi::c_int - 0xc7 as ::core::ffi::c_int)
-                        as mpack_uint32_t,
-                    buf,
-                    buflen,
-                    tok,
-                );
-            }
-            202 | 203 => {
-                return mpack_rvalue(
-                    MPACK_TOKEN_FLOAT,
-                    ((1 as ::core::ffi::c_int)
-                        << t as ::core::ffi::c_int - 0xc8 as ::core::ffi::c_int)
-                        as mpack_uint32_t,
-                    buf,
-                    buflen,
-                    tok,
-                );
-            }
-            204 | 205 | 206 | 207 => {
-                return mpack_rvalue(
-                    MPACK_TOKEN_UINT,
-                    ((1 as ::core::ffi::c_int)
-                        << t as ::core::ffi::c_int - 0xcc as ::core::ffi::c_int)
-                        as mpack_uint32_t,
-                    buf,
-                    buflen,
-                    tok,
-                );
-            }
-            208 | 209 | 210 | 211 => {
-                return mpack_rvalue(
-                    MPACK_TOKEN_SINT,
-                    ((1 as ::core::ffi::c_int)
-                        << t as ::core::ffi::c_int - 0xd0 as ::core::ffi::c_int)
-                        as mpack_uint32_t,
-                    buf,
-                    buflen,
-                    tok,
-                );
-            }
-            212 | 213 | 214 | 215 | 216 => {
-                if *buflen == 0 as size_t {
-                    (*tok).length = 1 as mpack_uint32_t;
-                    return MPACK_EOF as ::core::ffi::c_int;
-                }
-                (*tok).length = ((1 as ::core::ffi::c_int)
-                    << t as ::core::ffi::c_int - 0xd4 as ::core::ffi::c_int)
-                    as mpack_uint32_t;
-                (*tok).type_0 = MPACK_TOKEN_EXT;
-                *buflen = (*buflen).wrapping_sub(1);
-                let c2rust_fresh1 = *buf;
-                *buf = (*buf).offset(1);
-                (*tok).data.ext_type = *c2rust_fresh1 as ::core::ffi::c_uchar as ::core::ffi::c_int;
-                return MPACK_OK as ::core::ffi::c_int;
-            }
-            217 | 218 | 219 => {
-                return mpack_rblob(
-                    MPACK_TOKEN_STR,
-                    ((1 as ::core::ffi::c_int)
-                        << t as ::core::ffi::c_int - 0xd9 as ::core::ffi::c_int)
-                        as mpack_uint32_t,
-                    buf,
-                    buflen,
-                    tok,
-                );
-            }
-            220 | 221 => {
-                return mpack_rblob(
-                    MPACK_TOKEN_ARRAY,
-                    ((1 as ::core::ffi::c_int)
-                        << t as ::core::ffi::c_int - 0xdb as ::core::ffi::c_int)
-                        as mpack_uint32_t,
-                    buf,
-                    buflen,
-                    tok,
-                );
-            }
-            222 | 223 => {
-                return mpack_rblob(
-                    MPACK_TOKEN_MAP,
-                    ((1 as ::core::ffi::c_int)
-                        << t as ::core::ffi::c_int - 0xdd as ::core::ffi::c_int)
-                        as mpack_uint32_t,
-                    buf,
-                    buflen,
-                    tok,
-                );
-            }
-            _ => return MPACK_ERROR as ::core::ffi::c_int,
-        }
-    } else {
-        return mpack_value(MPACK_TOKEN_SINT, 1 as mpack_uint32_t, mpack_byte(t), tok);
-    };
-}
-unsafe extern "C-unwind" fn mpack_rpending(
-    mut buf: *mut *const ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-    mut state: *mut mpack_tokbuf_t,
-) -> ::core::ffi::c_int {
-    let mut count: size_t = 0;
-    '_c2rust_label: {
-        if (*state).ppos < (*state).plen {
-        } else {
-            __assert_fail(
-                b"state->ppos < state->plen\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/mpack/mpack_core.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                255 as ::core::ffi::c_uint,
-                b"int mpack_rpending(const char **, size_t *, mpack_tokbuf_t *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    count = if (*state).plen.wrapping_sub((*state).ppos) < *buflen {
-        (*state).plen.wrapping_sub((*state).ppos)
-    } else {
-        *buflen
-    };
-    memcpy(
-        (&raw mut (*state).pending as *mut ::core::ffi::c_char).offset((*state).ppos as isize)
-            as *mut ::core::ffi::c_void,
-        *buf as *const ::core::ffi::c_void,
-        count,
-    );
-    (*state).ppos = (*state).ppos.wrapping_add(count);
-    if (*state).ppos < (*state).plen {
-        *buf = (*buf).offset(*buflen as isize);
-        *buflen = 0 as size_t;
-        return 0 as ::core::ffi::c_int;
-    }
-    return 1 as ::core::ffi::c_int;
-}
-unsafe extern "C-unwind" fn mpack_rvalue(
-    mut type_0: mpack_token_type_t,
-    mut remaining: mpack_uint32_t,
-    mut buf: *mut *const ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-    mut tok: *mut mpack_token_t,
-) -> ::core::ffi::c_int {
-    if *buflen < remaining as size_t {
-        (*tok).length = remaining;
-        return MPACK_EOF as ::core::ffi::c_int;
-    }
-    mpack_value(
-        type_0,
-        remaining,
-        mpack_byte(0 as ::core::ffi::c_uchar),
-        tok,
-    );
-    while remaining != 0 {
-        *buflen = (*buflen).wrapping_sub(1);
-        let c2rust_fresh3 = *buf;
-        *buf = (*buf).offset(1);
-        let mut byte: mpack_uint32_t = *c2rust_fresh3 as ::core::ffi::c_uchar as mpack_uint32_t;
-        let mut byte_idx: mpack_uint32_t = 0;
-        let mut byte_shift: mpack_uint32_t = 0;
-        remaining = remaining.wrapping_sub(1);
-        byte_idx = remaining;
-        byte_shift = byte_idx
-            .wrapping_rem(4 as mpack_uint32_t)
-            .wrapping_mul(8 as mpack_uint32_t);
-        (*tok).data.value.lo |= byte << byte_shift;
-        if remaining == 4 as mpack_uint32_t {
-            (*tok).data.value.hi = (*tok).data.value.lo;
-            (*tok).data.value.lo = 0 as mpack_uint32_t;
-        }
-    }
-    if type_0 as ::core::ffi::c_uint
-        == MPACK_TOKEN_SINT as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        let mut hi: mpack_uint32_t = (*tok).data.value.hi;
-        let mut lo: mpack_uint32_t = (*tok).data.value.lo;
-        let mut msb: mpack_uint32_t = ((*tok).length == 8 as mpack_uint32_t
-            && hi >> 31 as ::core::ffi::c_int != 0
-            || (*tok).length == 4 as mpack_uint32_t && lo >> 31 as ::core::ffi::c_int != 0
-            || (*tok).length == 2 as mpack_uint32_t && lo >> 15 as ::core::ffi::c_int != 0
-            || (*tok).length == 1 as mpack_uint32_t && lo >> 7 as ::core::ffi::c_int != 0)
-            as ::core::ffi::c_int as mpack_uint32_t;
-        if msb == 0 {
-            (*tok).type_0 = MPACK_TOKEN_UINT;
-        }
-    }
-    return MPACK_OK as ::core::ffi::c_int;
-}
-unsafe extern "C-unwind" fn mpack_rblob(
-    mut type_0: mpack_token_type_t,
-    mut tlen: mpack_uint32_t,
-    mut buf: *mut *const ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-    mut tok: *mut mpack_token_t,
-) -> ::core::ffi::c_int {
-    let mut l: mpack_token_t = mpack_token_t {
-        type_0: 0 as mpack_token_type_t,
+
+/// A zeroed token, for a caller that needs one before it has one.
+pub const fn empty_token() -> mpack_token_t {
+    mpack_token_t {
+        type_0: 0,
         length: 0,
-        data: C2Rust_Unnamed_0 {
-            value: mpack_value_t { lo: 0, hi: 0 },
-        },
-    };
-    let mut required: mpack_uint32_t = tlen.wrapping_add(
-        (if type_0 as ::core::ffi::c_uint
-            == MPACK_TOKEN_EXT as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            1 as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        }) as mpack_uint32_t,
-    );
-    if *buflen < required as size_t {
-        (*tok).length = required;
-        return MPACK_EOF as ::core::ffi::c_int;
+        data: value_data(0, 0),
     }
-    l.data.value.lo = 0 as mpack_uint32_t;
-    mpack_rvalue(MPACK_TOKEN_UINT, tlen, buf, buflen, &raw mut l);
-    (*tok).type_0 = type_0;
-    (*tok).length = l.data.value.lo;
-    if type_0 as ::core::ffi::c_uint == MPACK_TOKEN_EXT as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        *buflen = (*buflen).wrapping_sub(1);
-        let c2rust_fresh2 = *buf;
-        *buf = (*buf).offset(1);
-        (*tok).data.ext_type = *c2rust_fresh2 as ::core::ffi::c_uchar as ::core::ffi::c_int;
+}
+
+/// The C token as a [`Tok`].
+///
+/// A `MPACK_TOKEN_CHUNK` has a pointer in that union, not a value, so it
+/// answers a payload-less token rather than reading the pointer as integers.
+/// No caller of this needs a chunk's payload: both directions handle chunks
+/// before they reach the codec.
+pub fn to_tok(c: &mpack_token_t) -> Tok {
+    let kind = Kind::from_raw(c.type_0);
+    let (lo, hi) = match kind {
+        Some(Kind::Chunk) => (0, 0),
+        // SAFETY: every non-chunk token in this tree is built through
+        // `value_data`, so the union's value arm is fully initialised.
+        _ => unsafe { (c.data.value.lo, c.data.value.hi) },
+    };
+    Tok {
+        kind,
+        len: c.length,
+        lo,
+        hi,
     }
-    return MPACK_OK as ::core::ffi::c_int;
 }
-unsafe extern "C-unwind" fn mpack_wtoken(
-    mut tok: *const mpack_token_t,
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-) -> ::core::ffi::c_int {
-    match (*tok).type_0 as ::core::ffi::c_uint {
-        1 => return mpack_w1(buf, buflen, 0xc0 as mpack_uint32_t),
-        2 => {
-            return mpack_w1(
-                buf,
-                buflen,
-                (if (*tok).data.value.lo != 0 {
-                    0xc3 as ::core::ffi::c_int
-                } else {
-                    0xc2 as ::core::ffi::c_int
-                }) as mpack_uint32_t,
-            );
-        }
-        3 => return mpack_wpint(buf, buflen, (*tok).data.value),
-        4 => return mpack_wnint(buf, buflen, (*tok).data.value),
-        5 => return mpack_wfloat(buf, buflen, tok),
-        9 => return mpack_wbin(buf, buflen, (*tok).length),
-        10 => return mpack_wstr(buf, buflen, (*tok).length),
-        11 => return mpack_wext(buf, buflen, (*tok).data.ext_type, (*tok).length),
-        7 => return mpack_warray(buf, buflen, (*tok).length),
-        8 => return mpack_wmap(buf, buflen, (*tok).length),
-        _ => return MPACK_ERROR as ::core::ffi::c_int,
+
+/// The safe token as the C one.
+pub const fn from_tok(t: &Tok) -> mpack_token_t {
+    let type_0 = match t.kind {
+        Some(kind) => kind as mpack_token_type_t,
+        None => 0,
     };
-}
-unsafe extern "C-unwind" fn mpack_wpending(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-    mut state: *mut mpack_tokbuf_t,
-) -> ::core::ffi::c_int {
-    let mut count: size_t = 0;
-    '_c2rust_label: {
-        if (*state).ppos < (*state).plen {
-        } else {
-            __assert_fail(
-                b"state->ppos < state->plen\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/mpack/mpack_core.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                361 as ::core::ffi::c_uint,
-                b"int mpack_wpending(char **, size_t *, mpack_tokbuf_t *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    count = if (*state).plen.wrapping_sub((*state).ppos) < *buflen {
-        (*state).plen.wrapping_sub((*state).ppos)
-    } else {
-        *buflen
-    };
-    memcpy(
-        *buf as *mut ::core::ffi::c_void,
-        (&raw mut (*state).pending as *mut ::core::ffi::c_char).offset((*state).ppos as isize)
-            as *const ::core::ffi::c_void,
-        count,
-    );
-    (*state).ppos = (*state).ppos.wrapping_add(count);
-    *buf = (*buf).offset(count as isize);
-    *buflen = (*buflen).wrapping_sub(count);
-    if (*state).ppos == (*state).plen {
-        (*state).plen = 0 as size_t;
-        return MPACK_OK as ::core::ffi::c_int;
+    mpack_token_t {
+        type_0,
+        length: t.len,
+        data: value_data(t.lo, t.hi),
     }
-    return MPACK_EOF as ::core::ffi::c_int;
 }
-unsafe extern "C-unwind" fn mpack_wpint(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-    mut val: mpack_value_t,
-) -> ::core::ffi::c_int {
-    let mut hi: mpack_uint32_t = val.hi;
-    let mut lo: mpack_uint32_t = val.lo;
-    if hi != 0 {
-        return (mpack_w1(buf, buflen, 0xcf as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, hi) != 0
-            || mpack_w4(buf, buflen, lo) != 0) as ::core::ffi::c_int;
-    } else if lo > 0xffff as mpack_uint32_t {
-        return (mpack_w1(buf, buflen, 0xce as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, lo) != 0) as ::core::ffi::c_int;
-    } else if lo > 0xff as mpack_uint32_t {
-        return (mpack_w1(buf, buflen, 0xcd as mpack_uint32_t) != 0
-            || mpack_w2(buf, buflen, lo) != 0) as ::core::ffi::c_int;
-    } else if lo > 0x7f as mpack_uint32_t {
-        return (mpack_w1(buf, buflen, 0xcc as mpack_uint32_t) != 0
-            || mpack_w1(buf, buflen, lo) != 0) as ::core::ffi::c_int;
+
+// ---------------------------------------------------------------------------
+// The safe streaming core
+// ---------------------------------------------------------------------------
+
+/// What one [`read_step`] produced.
+enum Step {
+    /// A complete token.
+    Token(Tok),
+    /// The next `len` bytes of the input are a `str`/`bin`/`ext` body.
+    Chunk(u32),
+    /// Not enough input; what there was has been buffered.
+    Eof,
+    /// The input is not msgpack.
+    Error,
+}
+
+/// A tokbuf's pending bytes. `pending` is a `[c_char; 9]`, which is signed
+/// on every platform this builds for; nine bytes is cheap enough to copy
+/// rather than reach for a cast.
+fn pending_bytes(tb: &mpack_tokbuf_t) -> [u8; MAX_TOKEN_LEN] {
+    let mut out = [0u8; MAX_TOKEN_LEN];
+    for (slot, &byte) in out.iter_mut().zip(&tb.pending) {
+        *slot = byte as u8;
+    }
+    out
+}
+
+/// Copy as much of `input` into `pending` as the partial token still needs
+/// (`mpack_rpending`). Answers how many bytes were taken, and whether the
+/// token is now whole.
+fn fill_pending(tb: &mut mpack_tokbuf_t, input: &[u8]) -> (usize, bool) {
+    debug_assert!(tb.ppos < tb.plen, "nothing pending");
+    let want = tb.plen.min(MAX_TOKEN_LEN) - tb.ppos;
+    let count = want.min(input.len());
+    for (slot, &byte) in tb.pending[tb.ppos..].iter_mut().zip(&input[..count]) {
+        *slot = byte as c_char;
+    }
+    tb.ppos += count;
+    (count, tb.ppos >= tb.plen)
+}
+
+/// One step of `mpack_read`, over a slice.
+///
+/// Answers the step and how many bytes of `input` it consumed. The C bumps
+/// the caller's pointer in three different places for this; here every path
+/// reports a count and the shim does it once.
+fn read_step(tb: &mut mpack_tokbuf_t, input: &[u8]) -> (Step, usize) {
+    if input.is_empty() {
+        return (Step::Eof, 0);
+    }
+
+    if tb.passthrough != 0 {
+        let len = (tb.passthrough as usize).min(input.len()) as mpack_uint32_t;
+        tb.passthrough -= len;
+        return (Step::Chunk(len), len as usize);
+    }
+
+    // A token already half-buffered is completed from `pending`; a fresh one
+    // is parsed out of the caller's buffer directly.
+    let (decoded, buffered) = if tb.plen != 0 {
+        let (taken, whole) = fill_pending(tb, input);
+        if !whole {
+            // Everything went into the buffer and it is still short.
+            return (Step::Eof, input.len());
+        }
+        (
+            token::decode_token(&pending_bytes(tb)[..tb.ppos]),
+            tb.ppos - taken,
+        )
     } else {
-        return mpack_w1(buf, buflen, lo);
+        (token::decode_token(input), 0)
     };
+
+    match decoded {
+        Read::Done { tok, used } => {
+            tb.ppos = 0;
+            tb.plen = 0;
+            if tok.kind > Some(Kind::Map) {
+                tb.passthrough = tok.len;
+            }
+            (Step::Token(tok), used - buffered)
+        }
+        Read::Partial { need } => {
+            debug_assert_eq!(tb.plen, 0, "a buffered token cannot ask for more");
+            tb.plen = need as usize + 1;
+            tb.ppos = 0;
+            let (taken, whole) = fill_pending(tb, input);
+            debug_assert!(!whole, "a token that needed more should still need more");
+            (Step::Eof, if whole { taken } else { input.len() })
+        }
+        // Unreachable: the empty input and the buffered-token cases are both
+        // handled above, so the decoder always has at least one byte.
+        Read::Empty => (Step::Eof, 0),
+        Read::Invalid => (Step::Error, 0),
+    }
 }
-unsafe extern "C-unwind" fn mpack_wnint(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-    mut val: mpack_value_t,
-) -> ::core::ffi::c_int {
-    let mut hi: mpack_uint32_t = val.hi;
-    let mut lo: mpack_uint32_t = val.lo;
-    if lo < 0x80000000 as ::core::ffi::c_uint {
-        return (mpack_w1(buf, buflen, 0xd3 as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, hi) != 0
-            || mpack_w4(buf, buflen, lo) != 0) as ::core::ffi::c_int;
-    } else if lo < 0xffff8000 as ::core::ffi::c_uint {
-        return (mpack_w1(buf, buflen, 0xd2 as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, lo) != 0) as ::core::ffi::c_int;
-    } else if lo < 0xffffff80 as ::core::ffi::c_uint {
-        return (mpack_w1(buf, buflen, 0xd1 as mpack_uint32_t) != 0
-            || mpack_w2(buf, buflen, lo) != 0) as ::core::ffi::c_int;
-    } else if lo < 0xffffffe0 as ::core::ffi::c_uint {
-        return (mpack_w1(buf, buflen, 0xd0 as mpack_uint32_t) != 0
-            || mpack_w1(buf, buflen, lo) != 0) as ::core::ffi::c_int;
+
+/// One step of `mpack_write`, over a slice: encode `tok` into `out`, or as
+/// much of it as fits.
+///
+/// Answers `(status, written)`. On a short buffer the whole encoding is
+/// parked in `pending` and `mpack_wpending` hands over the rest.
+fn write_step(tb: &mut mpack_tokbuf_t, tok: &Tok, out: &mut [u8]) -> (c_uint, usize) {
+    let Some(encoded) = token::encode_token(tok) else {
+        return (MPACK_ERROR, 0);
+    };
+    let bytes = encoded.as_bytes();
+    for (slot, &byte) in tb.pending.iter_mut().zip(bytes) {
+        *slot = byte as c_char;
+    }
+    let count = bytes.len().min(out.len());
+    out[..count].copy_from_slice(&bytes[..count]);
+    if count == bytes.len() {
+        (MPACK_OK, count)
     } else {
-        return mpack_w1(buf, buflen, (0x100 as mpack_uint32_t).wrapping_add(lo));
-    };
+        tb.plen = bytes.len();
+        tb.ppos = count;
+        tb.pending_tok = from_tok(tok);
+        (MPACK_EOF, count)
+    }
 }
-unsafe extern "C-unwind" fn mpack_wfloat(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-    mut tok: *const mpack_token_t,
-) -> ::core::ffi::c_int {
-    if (*tok).length == 4 as mpack_uint32_t {
-        return (mpack_w1(buf, buflen, 0xca as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, (*tok).data.value.lo) != 0)
-            as ::core::ffi::c_int;
-    } else if (*tok).length == 8 as mpack_uint32_t {
-        return (mpack_w1(buf, buflen, 0xcb as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, (*tok).data.value.hi) != 0
-            || mpack_w4(buf, buflen, (*tok).data.value.lo) != 0)
-            as ::core::ffi::c_int;
+
+/// Hand over the rest of a parked encoding (`mpack_wpending`).
+fn drain_pending(tb: &mut mpack_tokbuf_t, out: &mut [u8]) -> (c_uint, usize) {
+    debug_assert!(tb.ppos < tb.plen, "nothing pending");
+    let count = (tb.plen - tb.ppos).min(out.len());
+    out[..count].copy_from_slice(&pending_bytes(tb)[tb.ppos..tb.ppos + count]);
+    tb.ppos += count;
+    if tb.ppos == tb.plen {
+        tb.plen = 0;
+        (MPACK_OK, count)
     } else {
-        return MPACK_ERROR as ::core::ffi::c_int;
-    };
+        (MPACK_EOF, count)
+    }
 }
-unsafe extern "C-unwind" fn mpack_wstr(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-    mut len: mpack_uint32_t,
-) -> ::core::ffi::c_int {
-    if len < 0x20 as mpack_uint32_t {
-        return mpack_w1(buf, buflen, 0xa0 as mpack_uint32_t | len);
-    } else if len < 0x100 as mpack_uint32_t {
-        return (mpack_w1(buf, buflen, 0xd9 as mpack_uint32_t) != 0
-            || mpack_w1(buf, buflen, len) != 0) as ::core::ffi::c_int;
-    } else if len < 0x10000 as ::core::ffi::c_int as mpack_uint32_t {
-        return (mpack_w1(buf, buflen, 0xda as mpack_uint32_t) != 0
-            || mpack_w2(buf, buflen, len) != 0) as ::core::ffi::c_int;
+
+// ---------------------------------------------------------------------------
+// The C entry points
+// ---------------------------------------------------------------------------
+
+/// Reset a tokbuf to "no partial token, no body outstanding".
+///
+/// # Safety
+/// `tokbuf` must point at a writable `mpack_tokbuf_t`.
+pub unsafe extern "C-unwind" fn mpack_tokbuf_init(tokbuf: *mut mpack_tokbuf_t) {
+    // The C leaves `pending`/`pending_tok` alone, on the grounds that
+    // `ppos`/`plen` say nothing in them is meaningful yet. That makes the
+    // struct un-copyable without reading uninitialised bytes — which
+    // `mpack_parser_copy` and `mpack_rpc_session_copy` both do — so it is
+    // written out here instead. Twenty-five bytes, once per session.
+    unsafe {
+        tokbuf.write(mpack_tokbuf_t {
+            pending: [0; MAX_TOKEN_LEN],
+            pending_tok: empty_token(),
+            ppos: 0,
+            plen: 0,
+            passthrough: 0,
+        });
+    }
+}
+
+/// Read one token out of `*buf`, advancing it past what was consumed.
+///
+/// Answers `MPACK_OK` with `*tok` filled, `MPACK_EOF` if the input ran out
+/// mid-token (the remainder is buffered, so the next call resumes), or
+/// `MPACK_ERROR` for a byte that is not msgpack.
+///
+/// # Safety
+/// `buf`/`buflen` must describe a readable slice, and `tokbuf`/`tok` must
+/// point at writable objects.
+pub unsafe extern "C-unwind" fn mpack_read(
+    tokbuf: *mut mpack_tokbuf_t,
+    buf: *mut *const c_char,
+    buflen: *mut size_t,
+    tok: *mut mpack_token_t,
+) -> c_int {
+    let tokbuf = unsafe { &mut *tokbuf };
+    let start = unsafe { *buf };
+    let input = unsafe { core::slice::from_raw_parts(start.cast::<u8>(), *buflen) };
+    debug_assert!(!start.is_null());
+
+    let (step, consumed) = read_step(tokbuf, input);
+    unsafe {
+        *buf = start.add(consumed);
+        *buflen -= consumed;
+    }
+    match step {
+        Step::Token(parsed) => {
+            unsafe { *tok = from_tok(&parsed) };
+            MPACK_OK as c_int
+        }
+        Step::Chunk(len) => {
+            unsafe {
+                *tok = mpack_token_t {
+                    type_0: MPACK_TOKEN_CHUNK,
+                    length: len,
+                    data: mpack_token_s_data { chunk_ptr: start },
+                };
+            }
+            MPACK_OK as c_int
+        }
+        Step::Eof => MPACK_EOF as c_int,
+        Step::Error => MPACK_ERROR as c_int,
+    }
+}
+
+/// Write one token into `*buf`, advancing it past what was written.
+///
+/// Answers `MPACK_EOF` when the buffer filled first; the caller drains and
+/// calls again with the same token, which the tokbuf remembers.
+///
+/// # Safety
+/// `buf`/`buflen` must describe a writable slice, `tokbuf` a writable
+/// tokbuf, and `t` a readable token whose chunk pointer (if it is a chunk)
+/// spans `t->length` bytes.
+pub unsafe extern "C-unwind" fn mpack_write(
+    tokbuf: *mut mpack_tokbuf_t,
+    buf: *mut *mut c_char,
+    buflen: *mut size_t,
+    t: *const mpack_token_t,
+) -> c_int {
+    let tokbuf = unsafe { &mut *tokbuf };
+    let start = unsafe { *buf };
+    debug_assert!(!start.is_null() && unsafe { *buflen } != 0);
+    let out = unsafe { core::slice::from_raw_parts_mut(start.cast::<u8>(), *buflen) };
+
+    // A parked token wins over the argument: the caller is resuming.
+    let c_tok = if tokbuf.plen != 0 {
+        tokbuf.pending_tok
     } else {
-        return (mpack_w1(buf, buflen, 0xdb as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int;
+        unsafe { *t }
     };
-}
-unsafe extern "C-unwind" fn mpack_wbin(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-    mut len: mpack_uint32_t,
-) -> ::core::ffi::c_int {
-    if len < 0x100 as mpack_uint32_t {
-        return (mpack_w1(buf, buflen, 0xc4 as mpack_uint32_t) != 0
-            || mpack_w1(buf, buflen, len) != 0) as ::core::ffi::c_int;
-    } else if len < 0x10000 as ::core::ffi::c_int as mpack_uint32_t {
-        return (mpack_w1(buf, buflen, 0xc5 as mpack_uint32_t) != 0
-            || mpack_w2(buf, buflen, len) != 0) as ::core::ffi::c_int;
+    let (status, written) = if c_tok.type_0 == MPACK_TOKEN_CHUNK {
+        unsafe { write_chunk(tokbuf, &c_tok, out) }
+    } else if tokbuf.plen != 0 {
+        drain_pending(tokbuf, out)
     } else {
-        return (mpack_w1(buf, buflen, 0xc6 as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int;
+        write_step(tokbuf, &to_tok(&c_tok), out)
     };
+
+    unsafe {
+        *buf = start.add(written);
+        *buflen -= written;
+    }
+    status as c_int
 }
-unsafe extern "C-unwind" fn mpack_wext(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-    mut type_0: ::core::ffi::c_int,
-    mut len: mpack_uint32_t,
-) -> ::core::ffi::c_int {
-    let mut t: mpack_uint32_t = 0;
-    '_c2rust_label: {
-        if type_0 >= 0 as ::core::ffi::c_int && type_0 < 0x80 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"type >= 0 && type < 0x80\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/mpack/mpack_core.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                478 as ::core::ffi::c_uint,
-                b"int mpack_wext(char **, size_t *, int, mpack_uint32_t)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
+
+/// Copy the next slice of a `str`/`bin`/`ext` body out of the caller's own
+/// storage. `ppos` counts how much of *this* chunk has gone, and `plen`
+/// holds the chunk's length while it is unfinished.
+///
+/// # Safety
+/// `tok` must be a chunk token whose `chunk_ptr` spans `tok->length` bytes.
+unsafe fn write_chunk(
+    tb: &mut mpack_tokbuf_t,
+    tok: &mpack_token_t,
+    out: &mut [u8],
+) -> (c_uint, usize) {
+    if tb.plen == 0 {
+        tb.ppos = 0;
+    }
+    let written = tb.ppos;
+    let outstanding = tok.length as usize - written;
+    let count = outstanding.min(out.len());
+    // SAFETY: the caller promises `chunk_ptr` spans the token's length.
+    let body = unsafe {
+        core::slice::from_raw_parts(tok.data.chunk_ptr.cast::<u8>(), tok.length as usize)
     };
-    t = type_0 as mpack_uint32_t;
-    match len {
-        1 => {
-            mpack_w1(buf, buflen, 0xd4 as mpack_uint32_t);
-            return mpack_w1(buf, buflen, t);
+    out[..count].copy_from_slice(&body[written..written + count]);
+    tb.ppos += count;
+    if count == outstanding {
+        tb.plen = 0;
+        (MPACK_OK, count)
+    } else {
+        tb.plen = tok.length as usize;
+        tb.pending_tok = *tok;
+        (MPACK_EOF, count)
+    }
+}
+
+/// Decode a single token with no buffering: the whole token must be present.
+///
+/// `nvim/msgpack_rpc/unpacker` uses this to peek at a message's header
+/// fields, where the input is a complete buffer by construction.
+///
+/// # Safety
+/// `buf`/`buflen` must describe a readable slice and `tok` a writable token.
+pub unsafe extern "C-unwind" fn mpack_rtoken(
+    buf: *mut *const c_char,
+    buflen: *mut size_t,
+    tok: *mut mpack_token_t,
+) -> c_int {
+    let start = unsafe { *buf };
+    let input = unsafe { core::slice::from_raw_parts(start.cast::<u8>(), *buflen) };
+    match token::decode_token(input) {
+        Read::Done { tok: parsed, used } => {
+            unsafe {
+                *tok = from_tok(&parsed);
+                *buf = start.add(used);
+                *buflen -= used;
+            }
+            MPACK_OK as c_int
         }
-        2 => {
-            mpack_w1(buf, buflen, 0xd5 as mpack_uint32_t);
-            return mpack_w1(buf, buflen, t);
+        Read::Partial { need } => {
+            // The C leaves the type code consumed and reports the shortfall
+            // through `tok->length`; `mpack_read` is the only caller that
+            // reads it back.
+            unsafe {
+                (*tok).length = need;
+                *buf = start.add(1);
+                *buflen -= 1;
+            }
+            MPACK_EOF as c_int
         }
-        4 => {
-            mpack_w1(buf, buflen, 0xd6 as mpack_uint32_t);
-            return mpack_w1(buf, buflen, t);
+        Read::Empty => MPACK_EOF as c_int,
+        Read::Invalid => {
+            unsafe {
+                *buf = start.add(1);
+                *buflen -= 1;
+            }
+            MPACK_ERROR as c_int
         }
-        8 => {
-            mpack_w1(buf, buflen, 0xd7 as mpack_uint32_t);
-            return mpack_w1(buf, buflen, t);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tokbuf() -> mpack_tokbuf_t {
+        mpack_tokbuf_t {
+            pending: [0; MAX_TOKEN_LEN],
+            pending_tok: empty_token(),
+            ppos: 0,
+            plen: 0,
+            passthrough: 0,
         }
-        16 => {
-            mpack_w1(buf, buflen, 0xd8 as mpack_uint32_t);
-            return mpack_w1(buf, buflen, t);
-        }
-        _ => {
-            if len < 0x100 as mpack_uint32_t {
-                return (mpack_w1(buf, buflen, 0xc7 as mpack_uint32_t) != 0
-                    || mpack_w1(buf, buflen, len) != 0
-                    || mpack_w1(buf, buflen, t) != 0) as ::core::ffi::c_int;
-            } else if len < 0x10000 as ::core::ffi::c_int as mpack_uint32_t {
-                return (mpack_w1(buf, buflen, 0xc8 as mpack_uint32_t) != 0
-                    || mpack_w2(buf, buflen, len) != 0
-                    || mpack_w1(buf, buflen, t) != 0) as ::core::ffi::c_int;
-            } else {
-                return (mpack_w1(buf, buflen, 0xc9 as mpack_uint32_t) != 0
-                    || mpack_w4(buf, buflen, len) != 0
-                    || mpack_w1(buf, buflen, t) != 0) as ::core::ffi::c_int;
+    }
+
+    /// Feed `input` a byte at a time and collect every token that emerges,
+    /// which is the contract the RPC framer depends on.
+    fn dribble(input: &[u8]) -> Vec<Tok> {
+        let mut tb = tokbuf();
+        let mut out = Vec::new();
+        for i in 0..input.len() {
+            let mut rest = &input[i..i + 1];
+            while !rest.is_empty() {
+                let (step, used) = read_step(&mut tb, rest);
+                rest = &rest[used..];
+                match step {
+                    Step::Token(tok) => out.push(tok),
+                    Step::Chunk(len) => out.push(Tok::new(Kind::Chunk, len, 0, 0)),
+                    Step::Eof => break,
+                    Step::Error => panic!("unexpected error"),
+                }
             }
         }
-    };
-}
-unsafe extern "C-unwind" fn mpack_warray(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-    mut len: mpack_uint32_t,
-) -> ::core::ffi::c_int {
-    if len < 0x10 as mpack_uint32_t {
-        return mpack_w1(buf, buflen, 0x90 as mpack_uint32_t | len);
-    } else if len < 0x10000 as ::core::ffi::c_int as mpack_uint32_t {
-        return (mpack_w1(buf, buflen, 0xdc as mpack_uint32_t) != 0
-            || mpack_w2(buf, buflen, len) != 0) as ::core::ffi::c_int;
-    } else {
-        return (mpack_w1(buf, buflen, 0xdd as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int;
-    };
-}
-unsafe extern "C-unwind" fn mpack_wmap(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut buflen: *mut size_t,
-    mut len: mpack_uint32_t,
-) -> ::core::ffi::c_int {
-    if len < 0x10 as mpack_uint32_t {
-        return mpack_w1(buf, buflen, 0x80 as mpack_uint32_t | len);
-    } else if len < 0x10000 as ::core::ffi::c_int as mpack_uint32_t {
-        return (mpack_w1(buf, buflen, 0xde as mpack_uint32_t) != 0
-            || mpack_w2(buf, buflen, len) != 0) as ::core::ffi::c_int;
-    } else {
-        return (mpack_w1(buf, buflen, 0xdf as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int;
-    };
-}
-unsafe extern "C-unwind" fn mpack_w1(
-    mut b: *mut *mut ::core::ffi::c_char,
-    mut bl: *mut size_t,
-    mut v: mpack_uint32_t,
-) -> ::core::ffi::c_int {
-    *bl = (*bl).wrapping_sub(1);
-    let c2rust_fresh8 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh8 = (v & 0xff as mpack_uint32_t) as ::core::ffi::c_char;
-    return MPACK_OK as ::core::ffi::c_int;
-}
-unsafe extern "C-unwind" fn mpack_w2(
-    mut b: *mut *mut ::core::ffi::c_char,
-    mut bl: *mut size_t,
-    mut v: mpack_uint32_t,
-) -> ::core::ffi::c_int {
-    *bl = (*bl).wrapping_sub(2 as size_t);
-    let c2rust_fresh9 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh9 = (v >> 8 as ::core::ffi::c_int & 0xff as mpack_uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh10 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh10 = (v & 0xff as mpack_uint32_t) as ::core::ffi::c_char;
-    return MPACK_OK as ::core::ffi::c_int;
-}
-unsafe extern "C-unwind" fn mpack_w4(
-    mut b: *mut *mut ::core::ffi::c_char,
-    mut bl: *mut size_t,
-    mut v: mpack_uint32_t,
-) -> ::core::ffi::c_int {
-    *bl = (*bl).wrapping_sub(4 as size_t);
-    let c2rust_fresh4 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh4 =
-        (v >> 24 as ::core::ffi::c_int & 0xff as mpack_uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh5 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh5 =
-        (v >> 16 as ::core::ffi::c_int & 0xff as mpack_uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh6 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh6 = (v >> 8 as ::core::ffi::c_int & 0xff as mpack_uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh7 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh7 = (v & 0xff as mpack_uint32_t) as ::core::ffi::c_char;
-    return MPACK_OK as ::core::ffi::c_int;
-}
-unsafe extern "C-unwind" fn mpack_value(
-    mut type_0: mpack_token_type_t,
-    mut length: mpack_uint32_t,
-    mut value: mpack_value_t,
-    mut tok: *mut mpack_token_t,
-) -> ::core::ffi::c_int {
-    (*tok).type_0 = type_0;
-    (*tok).length = length;
-    (*tok).data.value = value;
-    return MPACK_OK as ::core::ffi::c_int;
-}
-unsafe extern "C-unwind" fn mpack_blob(
-    mut type_0: mpack_token_type_t,
-    mut length: mpack_uint32_t,
-    mut ext_type: ::core::ffi::c_int,
-    mut tok: *mut mpack_token_t,
-) -> ::core::ffi::c_int {
-    (*tok).type_0 = type_0;
-    (*tok).length = length;
-    (*tok).data.ext_type = ext_type;
-    return MPACK_OK as ::core::ffi::c_int;
-}
-unsafe extern "C-unwind" fn mpack_byte(mut byte: ::core::ffi::c_uchar) -> mpack_value_t {
-    let mut rv: mpack_value_t = mpack_value_t { lo: 0, hi: 0 };
-    rv.lo = byte as mpack_uint32_t;
-    rv.hi = 0 as mpack_uint32_t;
-    return rv;
+        out
+    }
+
+    #[test]
+    fn a_token_split_across_calls_is_reassembled() {
+        // [1, "ab", 4294967296]
+        let msg = b"\x93\x01\xa2ab\xcf\x00\x00\x00\x01\x00\x00\x00\x00";
+        let whole = {
+            let mut tb = tokbuf();
+            let mut out = Vec::new();
+            let mut rest = &msg[..];
+            while !rest.is_empty() {
+                let (step, used) = read_step(&mut tb, rest);
+                rest = &rest[used..];
+                match step {
+                    Step::Token(tok) => out.push(tok),
+                    Step::Chunk(len) => out.push(Tok::new(Kind::Chunk, len, 0, 0)),
+                    _ => panic!("unexpected"),
+                }
+            }
+            out
+        };
+        assert_eq!(whole[0], Tok::new(Kind::Array, 3, 0, 0));
+        assert_eq!(whole[2], Tok::new(Kind::Str, 2, 0, 0));
+        assert_eq!(token::unpack_uint(&whole[4]), 1 << 32);
+
+        // Byte at a time, the string body arrives as two one-byte chunks
+        // instead of one two-byte chunk; everything else must match.
+        let dribbled = dribble(msg);
+        assert_eq!(dribbled.len(), whole.len() + 1);
+        assert_eq!(dribbled[0], whole[0]);
+        assert_eq!(dribbled[2], whole[2]);
+        assert_eq!(token::unpack_uint(dribbled.last().unwrap()), 1 << 32);
+    }
+
+    #[test]
+    fn a_body_is_handed_back_as_chunks_of_whatever_is_available() {
+        let mut tb = tokbuf();
+        let (step, used) = read_step(&mut tb, b"\xa5hello");
+        assert!(matches!(step, Step::Token(t) if t == Tok::new(Kind::Str, 5, 0, 0)));
+        assert_eq!((used, tb.passthrough), (1, 5));
+        let (step, used) = read_step(&mut tb, b"hel");
+        assert!(matches!(step, Step::Chunk(3)));
+        assert_eq!((used, tb.passthrough), (3, 2));
+        let (step, used) = read_step(&mut tb, b"lo");
+        assert!(matches!(step, Step::Chunk(2)));
+        assert_eq!((used, tb.passthrough), (2, 0));
+    }
+
+    #[test]
+    fn a_token_wider_than_the_output_is_parked_and_resumed() {
+        let mut tb = tokbuf();
+        let tok = token::pack_uint(u64::MAX);
+        let mut out = [0u8; 4];
+        let (status, written) = write_step(&mut tb, &tok, &mut out);
+        assert_eq!((status, written), (MPACK_EOF, 4));
+        assert_eq!(out, [0xcf, 0xff, 0xff, 0xff]);
+        let mut rest = [0u8; 16];
+        let (status, written) = drain_pending(&mut tb, &mut rest);
+        assert_eq!((status, written), (MPACK_OK, 5));
+        assert_eq!(&rest[..5], &[0xff, 0xff, 0xff, 0xff, 0xff]);
+        assert_eq!(tb.plen, 0);
+    }
+
+    #[test]
+    fn an_unencodable_token_is_an_error_not_a_write() {
+        let mut tb = tokbuf();
+        let mut out = [0u8; 16];
+        assert_eq!(
+            write_step(&mut tb, &Tok::default(), &mut out),
+            (MPACK_ERROR, 0)
+        );
+    }
+
+    #[test]
+    fn the_c_token_and_the_safe_one_agree() {
+        for tok in [
+            Tok::new(Kind::Nil, 0, 0, 0),
+            Tok::new(Kind::Ext, 16, 42, 0),
+            token::pack_sint(i64::MIN),
+            token::pack_float(0.1),
+        ] {
+            assert_eq!(to_tok(&from_tok(&tok)), tok);
+        }
+        // An ext token's type code shares its four bytes with `lo`, which is
+        // what lets `lmpack` read `data.ext_type` off a token this built.
+        let c = from_tok(&Tok::new(Kind::Ext, 1, 42, 0));
+        assert_eq!(unsafe { c.data.ext_type }, 42);
+    }
 }
