@@ -1,7 +1,7 @@
 {
   "internal_exports": 40,
   "files_without_forbid_unsafe": 882,
-  "files_without_deny_unsafe_op": 161,
+  "files_without_deny_unsafe_op": 159,
   "files": {
     "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe": 7},
     "crates/nvim/src/cjson/lua_cjson/decode.rs": {"unsafe": 20},
@@ -809,7 +809,7 @@
     "crates/nvim/src/nvim/textobject/pair.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/textobject/para.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/textobject/quote.rs": {"unsafe": 3},
-    "crates/nvim/src/nvim/textobject/sent.rs": {"unsafe": 7},
+    "crates/nvim/src/nvim/textobject/sent.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/textobject/word.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/tui/attrs.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/tui/cursor.rs": {"unsafe": 3},

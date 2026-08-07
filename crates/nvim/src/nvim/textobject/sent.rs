@@ -1,9 +1,14 @@
 //! Sentences: the `(`/`)` motions and the `is`/`as` objects.
 //!
-//! A sentence ends at `.`, `!` or `?` followed by white space or end of
-//! line, with any of `)]"'` allowed in between, and 'cpoptions' `J` decides
-//! whether one space is enough.  [`findsent`] is that rule; everything else
-//! here is about which side of the trailing white space an object claims.
+//! A sentence ends at `.`, `!` or `?` followed by white space or end of line,
+//! with any of `)]"'` allowed in between, and 'cpoptions' `J` decides whether
+//! one space is enough or two are needed. [`findsent`] is that rule;
+//! everything else here is about which side of the surrounding white space an
+//! object claims.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use ::core::ffi::c_int;
 
 use super::*;
 use crate::src::nvim::ascii::ascii_iswhite;
@@ -17,336 +22,375 @@ use crate::src::nvim::memline::{decl, gchar_pos, inc, incl, ml_get};
 use crate::src::nvim::pos::{equalpos, lt};
 use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::strings::vim_strchr;
-use crate::src::nvim::types::{Direction, linenr_T, oparg_T, pos_T};
+use crate::src::nvim::types::{Direction, oparg_T, pos_T};
 
-pub unsafe extern "C" fn findsent(
-    mut dir: Direction,
-    mut count: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut found_dot: bool = false;
-    let mut startlnum: ::core::ffi::c_int = 0;
-    let mut cpo_J: bool = false;
-    let mut c: ::core::ffi::c_int = 0;
-    let mut func: Option<unsafe fn(*mut pos_T) -> ::core::ffi::c_int> = None;
-    let mut noskip: bool = false;
-    let mut pos: pos_T = (*curwin.get()).w_cursor;
-    if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int {
-        func = Some(incl as unsafe fn(*mut pos_T) -> ::core::ffi::c_int);
-    } else {
-        func = Some(decl as unsafe fn(*mut pos_T) -> ::core::ffi::c_int);
-    }
-    loop {
-        let c2rust_fresh0 = count;
-        count = count - 1;
-        if c2rust_fresh0 == 0 {
-            break;
-        }
-        let prev_pos: pos_T = pos;
-        '_found: {
-            if gchar_pos(&raw mut pos) == NUL {
-                while func.expect("non-null function pointer")(&raw mut pos)
-                    != -1 as ::core::ffi::c_int
+/// One step of a position walk: [`incl`] going forward, [`decl`] going back.
+type StepFn = unsafe fn(*mut pos_T) -> c_int;
+
+/// Move to the start of the `count`th next sentence in `dir`, leaving the
+/// cursor there. Answers OK when one was found.
+///
+/// The definition (`:h sentence`): a sentence ends at `.`, `!` or `?`
+/// followed by end of line, or by a space or tab -- two of them when
+/// 'cpoptions' has `J` -- with any number of `)`, `]`, `"` and `'` in
+/// between. A paragraph or section boundary ends one as well.
+///
+/// # Safety
+/// There must be a current buffer and window.
+pub unsafe extern "C" fn findsent(dir: Direction, mut count: c_int) -> c_int {
+    unsafe {
+        let mut noskip = false; // do not skip blanks
+        let mut pos = (*curwin.get()).w_cursor;
+        let step: StepFn = if dir as c_int == FORWARD as c_int {
+            incl
+        } else {
+            decl
+        };
+
+        loop {
+            let this = count;
+            count -= 1;
+            if this == 0 {
+                break;
+            }
+            let prev_pos = pos;
+            'found: {
+                if gchar_pos(&raw mut pos) == NUL {
+                    // On an empty line: skip up to a non-empty one.
+                    while step(&raw mut pos) != -1 {
+                        if gchar_pos(&raw mut pos) != NUL {
+                            break;
+                        }
+                    }
+                    if dir as c_int == FORWARD as c_int {
+                        break 'found;
+                    }
+                } else if dir as c_int == FORWARD as c_int
+                    && pos.col == 0
+                    && startPS(pos.lnum, NUL, false)
                 {
-                    if gchar_pos(&raw mut pos) != NUL {
+                    // At the start of a paragraph or section, going forward:
+                    // the next line is the answer.
+                    if pos.lnum == (*curbuf.get()).b_ml.ml_line_count {
+                        return FAIL;
+                    }
+                    pos.lnum += 1;
+                    break 'found;
+                } else if dir as c_int == BACKWARD as c_int {
+                    decl(&raw mut pos);
+                }
+
+                // Back to the previous non-white, non-punctuation character.
+                let mut found_dot = false;
+                loop {
+                    let c = gchar_pos(&raw mut pos);
+                    if !(ascii_iswhite(c) || !vim_strchr(c".!?)]\"'".as_ptr(), c).is_null()) {
                         break;
                     }
-                }
-                if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int {
-                    break '_found;
-                }
-            } else if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int
-                && pos.col == 0 as ::core::ffi::c_int
-                && startPS(pos.lnum, NUL, false) as ::core::ffi::c_int != 0
-            {
-                if pos.lnum == (*curbuf.get()).b_ml.ml_line_count {
-                    return FAIL;
-                }
-                pos.lnum += 1;
-                break '_found;
-            } else if dir as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int {
-                decl(&raw mut pos);
-            }
-            found_dot = false;
-            loop {
-                c = gchar_pos(&raw mut pos);
-                if !(ascii_iswhite(c) as ::core::ffi::c_int != 0
-                    || !vim_strchr(c".!?)]\"'".as_ptr(), c).is_null())
-                {
-                    break;
-                }
-                let mut tpos: pos_T = pos;
-                if decl(&raw mut tpos) == -1 as ::core::ffi::c_int
-                    || *ml_get(tpos.lnum) as ::core::ffi::c_int == NUL
-                        && dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int
-                {
-                    break;
-                }
-                if found_dot {
-                    break;
-                }
-                if !vim_strchr(c".!?".as_ptr(), c).is_null() {
-                    found_dot = true;
-                }
-                if !vim_strchr(c")]\"'".as_ptr(), c).is_null()
-                    && vim_strchr(c".!?)]\"'".as_ptr(), gchar_pos(&raw mut tpos)).is_null()
-                {
-                    break;
-                }
-                decl(&raw mut pos);
-            }
-            startlnum = pos.lnum as ::core::ffi::c_int;
-            cpo_J = !vim_strchr(p_cpo.get(), CPO_ENDOFSENT).is_null();
-            loop {
-                c = gchar_pos(&raw mut pos);
-                if c == NUL
-                    || pos.col == 0 as ::core::ffi::c_int
-                        && startPS(pos.lnum, NUL, false) as ::core::ffi::c_int != 0
-                {
-                    if dir as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int
-                        && pos.lnum != startlnum as linenr_T
+                    let mut tpos = pos;
+                    if decl(&raw mut tpos) == -1
+                        || (*ml_get(tpos.lnum) as c_int == NUL && dir as c_int == FORWARD as c_int)
                     {
-                        pos.lnum += 1;
+                        break;
                     }
-                    break;
-                } else {
-                    if c == '.' as ::core::ffi::c_int
-                        || c == '!' as ::core::ffi::c_int
-                        || c == '?' as ::core::ffi::c_int
+                    if found_dot {
+                        break;
+                    }
+                    if !vim_strchr(c".!?".as_ptr(), c).is_null() {
+                        found_dot = true;
+                    }
+                    if !vim_strchr(c")]\"'".as_ptr(), c).is_null()
+                        && vim_strchr(c".!?)]\"'".as_ptr(), gchar_pos(&raw mut tpos)).is_null()
                     {
-                        let mut tpos_0: pos_T = pos;
+                        break;
+                    }
+                    decl(&raw mut pos);
+                }
+
+                // The line the search started on, so that a backward search
+                // that crossed one can step back onto it.
+                let startlnum = pos.lnum;
+                let cpo_j = !vim_strchr(p_cpo.get(), CPO_ENDOFSENT).is_null();
+
+                loop {
+                    // Find the end of the sentence.
+                    let mut c = gchar_pos(&raw mut pos);
+                    if c == NUL || (pos.col == 0 && startPS(pos.lnum, NUL, false)) {
+                        if dir as c_int == BACKWARD as c_int && pos.lnum != startlnum {
+                            pos.lnum += 1;
+                        }
+                        break;
+                    }
+                    if c == '.' as c_int || c == '!' as c_int || c == '?' as c_int {
+                        let mut tpos = pos;
                         loop {
-                            c = inc(&raw mut tpos_0);
-                            if c == -1 as ::core::ffi::c_int {
+                            c = inc(&raw mut tpos);
+                            if c == -1 {
                                 break;
                             }
-                            c = gchar_pos(&raw mut tpos_0);
+                            c = gchar_pos(&raw mut tpos);
                             if vim_strchr(c")]\"'".as_ptr(), c).is_null() {
                                 break;
                             }
                         }
-                        if c == -1 as ::core::ffi::c_int
-                            || !cpo_J
-                                && (c == ' ' as ::core::ffi::c_int
-                                    || c == '\t' as ::core::ffi::c_int)
+                        if c == -1
+                            || (!cpo_j && (c == ' ' as c_int || c == '\t' as c_int))
                             || c == NUL
-                            || cpo_J as ::core::ffi::c_int != 0
-                                && (c == ' ' as ::core::ffi::c_int
-                                    && inc(&raw mut tpos_0) >= 0 as ::core::ffi::c_int
-                                    && gchar_pos(&raw mut tpos_0) == ' ' as ::core::ffi::c_int)
+                            || (cpo_j
+                                && c == ' ' as c_int
+                                && inc(&raw mut tpos) >= 0
+                                && gchar_pos(&raw mut tpos) == ' ' as c_int)
                         {
-                            pos = tpos_0;
+                            pos = tpos;
                             if gchar_pos(&raw mut pos) == NUL {
-                                inc(&raw mut pos);
+                                inc(&raw mut pos); // skip the NUL at end of line
                             }
                             break;
                         }
                     }
-                    if func.expect("non-null function pointer")(&raw mut pos)
-                        != -1 as ::core::ffi::c_int
-                    {
-                        continue;
+                    if step(&raw mut pos) == -1 {
+                        if count != 0 {
+                            return FAIL;
+                        }
+                        noskip = true;
+                        break;
                     }
+                }
+            }
+
+            // Skip the white space in front of the sentence.
+            while !noskip && {
+                let c = gchar_pos(&raw mut pos);
+                c == ' ' as c_int || c == '\t' as c_int
+            } {
+                if incl(&raw mut pos) == -1 {
+                    break;
+                }
+            }
+
+            if equalpos(prev_pos, pos) {
+                // Nothing moved: step one character and try again.
+                if step(&raw mut pos) == -1 {
                     if count != 0 {
                         return FAIL;
                     }
-                    noskip = true;
                     break;
                 }
+                count += 1;
             }
         }
-        while !noskip && {
-            c = gchar_pos(&raw mut pos);
-            c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int
-        } {
-            if incl(&raw mut pos) == -1 as ::core::ffi::c_int {
-                break;
-            }
-        }
-        if !equalpos(prev_pos, pos) {
-            continue;
-        }
-        if func.expect("non-null function pointer")(&raw mut pos) == -1 as ::core::ffi::c_int {
-            if count != 0 {
-                return FAIL;
-            }
-            break;
-        } else {
-            count += 1;
-        }
-    }
-    setpcmark();
-    (*curwin.get()).w_cursor = pos;
-    return OK;
-}
-unsafe extern "C" fn find_first_blank(mut posp: *mut pos_T) {
-    while decl(posp) != -1 as ::core::ffi::c_int {
-        let mut c: ::core::ffi::c_int = gchar_pos(posp);
-        if ascii_iswhite(c) {
-            continue;
-        }
-        incl(posp);
-        break;
+
+        setpcmark();
+        (*curwin.get()).w_cursor = pos;
+        OK
     }
 }
-unsafe extern "C" fn findsent_forward(mut count: ::core::ffi::c_int, mut at_start_sent: bool) {
-    loop {
-        let c2rust_fresh3 = count;
-        count = count - 1;
-        if c2rust_fresh3 == 0 {
-            break;
-        }
-        findsent(FORWARD, 1 as ::core::ffi::c_int);
-        if at_start_sent {
-            find_first_blank(&raw mut (*curwin.get()).w_cursor);
-        }
-        if count == 0 as ::core::ffi::c_int || at_start_sent as ::core::ffi::c_int != 0 {
-            decl(&raw mut (*curwin.get()).w_cursor);
-        }
-        at_start_sent = !at_start_sent;
-    }
-}
-pub unsafe extern "C" fn current_sent(
-    mut oap: *mut oparg_T,
-    mut count: ::core::ffi::c_int,
-    mut include: bool,
-) -> ::core::ffi::c_int {
-    let mut start_blank: bool = false;
-    let mut c: ::core::ffi::c_int = 0;
-    let mut at_start_sent: bool = false;
-    let mut ncount: ::core::ffi::c_int = 0;
-    let mut start_pos: pos_T = (*curwin.get()).w_cursor;
-    let mut pos: pos_T = start_pos;
-    findsent(FORWARD, 1 as ::core::ffi::c_int);
-    '_extend: {
-        if !(VIsual_active.get() as ::core::ffi::c_int != 0 && !equalpos(start_pos, VIsual.get())) {
-            loop {
-                c = gchar_pos(&raw mut pos);
-                if !ascii_iswhite(c) {
-                    break;
-                }
-                incl(&raw mut pos);
-            }
-            if equalpos(pos, (*curwin.get()).w_cursor) {
-                start_blank = true;
-                find_first_blank(&raw mut start_pos);
-            } else {
-                start_blank = false;
-                findsent(BACKWARD, 1 as ::core::ffi::c_int);
-                start_pos = (*curwin.get()).w_cursor;
-            }
-            if include {
-                ncount = count * 2 as ::core::ffi::c_int;
-            } else {
-                ncount = count;
-                if start_blank {
-                    ncount -= 1;
-                }
-            }
-            if ncount > 0 as ::core::ffi::c_int {
-                findsent_forward(ncount, true);
-            } else {
-                decl(&raw mut (*curwin.get()).w_cursor);
-            }
-            if include {
-                if start_blank {
-                    find_first_blank(&raw mut (*curwin.get()).w_cursor);
-                    c = gchar_pos(&raw mut (*curwin.get()).w_cursor);
-                    if ascii_iswhite(c) {
-                        decl(&raw mut (*curwin.get()).w_cursor);
-                    }
-                } else {
-                    c = gchar_cursor();
-                    if !ascii_iswhite(c) as ::core::ffi::c_int != 0 {
-                        find_first_blank(&raw mut start_pos);
-                    }
-                }
-            }
-            if VIsual_active.get() {
-                if equalpos(start_pos, (*curwin.get()).w_cursor) {
-                    break '_extend;
-                } else {
-                    if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
-                        (*curwin.get()).w_cursor.col += 1;
-                    }
-                    VIsual.set(start_pos);
-                    VIsual_mode.set('v' as ::core::ffi::c_int);
-                    redraw_cmdline.set(true);
-                    redraw_curbuf_later(UPD_INVERTED);
-                }
-            } else {
-                (*oap).inclusive =
-                    incl(&raw mut (*curwin.get()).w_cursor) == -1 as ::core::ffi::c_int;
-                (*oap).start = start_pos;
-                (*oap).motion_type = kMTCharWise;
-            }
-            return OK;
-        }
-    }
-    if lt(start_pos, VIsual.get()) {
-        at_start_sent = true;
-        decl(&raw mut pos);
-        while lt(pos, (*curwin.get()).w_cursor) {
-            c = gchar_pos(&raw mut pos);
+
+/// Move `posp` back to the first character of the run of white space it ends
+/// in, or leave it alone when it is not preceded by any.
+///
+/// # Safety
+/// `posp` must name a valid position in the current buffer.
+pub(crate) unsafe fn find_first_blank(posp: *mut pos_T) {
+    unsafe {
+        while decl(posp) != -1 {
+            let c = gchar_pos(posp);
             if !ascii_iswhite(c) {
-                at_start_sent = false;
+                incl(posp);
                 break;
-            } else {
-                incl(&raw mut pos);
             }
         }
-        if !at_start_sent {
-            findsent(BACKWARD, 1 as ::core::ffi::c_int);
-            if equalpos((*curwin.get()).w_cursor, start_pos) {
-                at_start_sent = true;
-            } else {
-                findsent(FORWARD, 1 as ::core::ffi::c_int);
-            }
-        }
-        if include {
-            count *= 2 as ::core::ffi::c_int;
-        }
+    }
+}
+
+/// Skip `count`/2 sentences and `count`/2 runs of the white space between
+/// them, starting on whichever of the two `at_start_sent` says.
+///
+/// # Safety
+/// There must be a current line and the cursor must be on it.
+unsafe fn findsent_forward(mut count: c_int, mut at_start_sent: bool) {
+    unsafe {
         loop {
-            let c2rust_fresh2 = count;
-            count = count - 1;
-            if c2rust_fresh2 == 0 {
+            let this = count;
+            count -= 1;
+            if this == 0 {
                 break;
             }
+            findsent(FORWARD, 1);
             if at_start_sent {
                 find_first_blank(&raw mut (*curwin.get()).w_cursor);
             }
-            c = gchar_cursor();
-            if !at_start_sent || !include && !ascii_iswhite(c) {
-                findsent(BACKWARD, 1 as ::core::ffi::c_int);
+            if count == 0 || at_start_sent {
+                decl(&raw mut (*curwin.get()).w_cursor);
             }
             at_start_sent = !at_start_sent;
         }
-    } else {
-        incl(&raw mut pos);
-        at_start_sent = true;
-        if !equalpos(pos, (*curwin.get()).w_cursor) {
-            at_start_sent = false;
+    }
+}
+
+/// Grow an existing Visual selection by `count` more sentences, in whichever
+/// direction the cursor sits relative to its start.
+///
+/// This is upstream's `extend:` label, which is jumped to from two places:
+/// once when the selection is already bigger than one character, and once
+/// from the bottom of [`current_sent`] when the object it computed turned out
+/// to be empty -- `is` on a single space before a sentence, which would
+/// otherwise never move.
+///
+/// # Safety
+/// There must be a current line and Visual mode must be active.
+unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: pos_T, mut pos: pos_T) {
+    unsafe {
+        if lt(start_pos, VIsual.get()) {
+            // The cursor is at the start of the Visual area. Work out where
+            // that is: in the white space before a sentence, inside one or
+            // just after it, or exactly at the start of one.
+            let mut at_start_sent = true;
+            decl(&raw mut pos);
             while lt(pos, (*curwin.get()).w_cursor) {
-                c = gchar_pos(&raw mut pos);
-                if !ascii_iswhite(c) {
-                    at_start_sent = true;
+                if !ascii_iswhite(gchar_pos(&raw mut pos)) {
+                    at_start_sent = false;
                     break;
+                }
+                incl(&raw mut pos);
+            }
+            if !at_start_sent {
+                findsent(BACKWARD, 1);
+                if equalpos((*curwin.get()).w_cursor, start_pos) {
+                    at_start_sent = true; // exactly at the start of a sentence
                 } else {
-                    incl(&raw mut pos);
+                    // Inside a sentence: go to its end, the next one's start.
+                    findsent(FORWARD, 1);
                 }
             }
-            if at_start_sent {
-                findsent(BACKWARD, 1 as ::core::ffi::c_int);
-            } else {
-                (*curwin.get()).w_cursor = start_pos;
+            if include {
+                count *= 2; // `as` gets twice as much as `is`
+            }
+            loop {
+                let this = count;
+                count -= 1;
+                if this == 0 {
+                    break;
+                }
+                if at_start_sent {
+                    find_first_blank(&raw mut (*curwin.get()).w_cursor);
+                }
+                let c = gchar_cursor();
+                if !at_start_sent || (!include && !ascii_iswhite(c)) {
+                    findsent(BACKWARD, 1);
+                }
+                at_start_sent = !at_start_sent;
+            }
+        } else {
+            // The cursor is at the end of the Visual area: just before a
+            // sentence, in or just before the white space in front of one, or
+            // inside one.
+            incl(&raw mut pos);
+            let mut at_start_sent = true;
+            if !equalpos(pos, (*curwin.get()).w_cursor) {
+                // Not just before a sentence.
+                at_start_sent = false;
+                while lt(pos, (*curwin.get()).w_cursor) {
+                    if !ascii_iswhite(gchar_pos(&raw mut pos)) {
+                        at_start_sent = true;
+                        break;
+                    }
+                    incl(&raw mut pos);
+                }
+                if at_start_sent {
+                    findsent(BACKWARD, 1); // inside the sentence
+                } else {
+                    (*curwin.get()).w_cursor = start_pos; // in the white space
+                }
+            }
+            if include {
+                count *= 2; // `as` gets twice as much as `is`
+            }
+            findsent_forward(count, at_start_sent);
+            if *p_sel.get() as c_int == 'e' as c_int {
+                (*curwin.get()).w_cursor.col += 1;
             }
         }
-        if include {
-            count *= 2 as ::core::ffi::c_int;
-        }
-        findsent_forward(count, at_start_sent);
-        if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
-            (*curwin.get()).w_cursor.col += 1;
-        }
     }
-    return OK;
+}
+
+/// `is` / `as`: the sentence(s) under the cursor, cursor left at the end. In
+/// Visual mode an existing selection is extended by one or more sentences
+/// instead.
+///
+/// # Safety
+/// `oap` must be a live operator argument, and there must be a current line.
+pub unsafe extern "C" fn current_sent(oap: *mut oparg_T, count: c_int, include: bool) -> c_int {
+    unsafe {
+        let mut start_pos = (*curwin.get()).w_cursor;
+        let mut pos = start_pos;
+        findsent(FORWARD, 1); // the start of the next sentence
+
+        // A Visual area bigger than one character is extended, not replaced.
+        if VIsual_active.get() && !equalpos(start_pos, VIsual.get()) {
+            extend_sentences(count, include, start_pos, pos);
+            return OK;
+        }
+
+        // The cursor started on a blank: is it just before the start of the
+        // next sentence?
+        while ascii_iswhite(gchar_pos(&raw mut pos)) {
+            incl(&raw mut pos);
+        }
+        let start_blank = equalpos(pos, (*curwin.get()).w_cursor);
+        if start_blank {
+            find_first_blank(&raw mut start_pos); // back to the first blank
+        } else {
+            findsent(BACKWARD, 1);
+            start_pos = (*curwin.get()).w_cursor;
+        }
+
+        let ncount = if include {
+            count * 2
+        } else if start_blank {
+            count - 1
+        } else {
+            count
+        };
+        if ncount > 0 {
+            findsent_forward(ncount, true);
+        } else {
+            decl(&raw mut (*curwin.get()).w_cursor);
+        }
+
+        if include {
+            // With the blank in front of the sentence included, leave the
+            // blanks at the end out: go back to the first of them. When there
+            // are none, take the leading blanks instead.
+            if start_blank {
+                find_first_blank(&raw mut (*curwin.get()).w_cursor);
+                if ascii_iswhite(gchar_pos(&raw mut (*curwin.get()).w_cursor)) {
+                    decl(&raw mut (*curwin.get()).w_cursor);
+                }
+            } else if !ascii_iswhite(gchar_cursor()) {
+                find_first_blank(&raw mut start_pos);
+            }
+        }
+
+        if VIsual_active.get() {
+            // Don't get stuck with `is` on a single space before a sentence.
+            if equalpos(start_pos, (*curwin.get()).w_cursor) {
+                extend_sentences(count, include, start_pos, pos);
+                return OK;
+            }
+            if *p_sel.get() as c_int == 'e' as c_int {
+                (*curwin.get()).w_cursor.col += 1;
+            }
+            VIsual.set(start_pos);
+            VIsual_mode.set('v' as c_int);
+            redraw_cmdline.set(true); // show the mode later
+            redraw_curbuf_later(UPD_INVERTED); // update the inversion
+        } else {
+            // Include the newline after the sentence, if there is one.
+            (*oap).inclusive = incl(&raw mut (*curwin.get()).w_cursor) == -1;
+            (*oap).start = start_pos;
+            (*oap).motion_type = kMTCharWise;
+        }
+        OK
+    }
 }
