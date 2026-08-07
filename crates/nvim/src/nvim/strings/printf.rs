@@ -33,7 +33,6 @@ mod emit;
 mod spec;
 
 pub use self::emit::*;
-pub(crate) use self::spec::*;
 
 /// Raised when the format asks for an argument `printf()` was not given.
 const E_INSUFFICIENT_ARGS: &CStr = c"E766: Insufficient arguments for printf()";

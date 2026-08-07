@@ -1,19 +1,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::eval::typval::tv_get_bool_chk;
 use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::main::e_using_number_as_bool_nr;
-use crate::src::nvim::mbyte::{utf_char2bytes, utf_ptr2cells, utfc_ptr2len};
-use crate::src::nvim::memory::{xfree, xmalloc, xmallocz, xmemscan, xstrchrnul, xstrlcpy};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::mbyte::{utf_char2bytes, utfc_ptr2len};
+use crate::src::nvim::memory::{xmalloc, xmallocz};
+use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::{
-    __assert_fail, gettext, log10, memmove, memset, qsort, snprintf, strcasecmp, strchr, strcmp,
-    strlen, strncmp, strstr,
+    gettext, qsort, strcasecmp, strchr, strcmp, strlen, strncmp, strstr,
 };
-use crate::src::nvim::types::{
-    VAR_UNKNOWN, int16_t, intmax_t, keyvalue_T, ptrdiff_t, size_t, typval_T, uint16_t, uintmax_t,
-};
+use crate::src::nvim::types::{VAR_UNKNOWN, keyvalue_T, size_t, typval_T};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::slice;
