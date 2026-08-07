@@ -125,7 +125,7 @@ pub const MOD_MASK_MULTI_CLICK: ::core::ffi::c_int =
 static orig_topline: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
 static orig_topfill: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 unsafe extern "C" fn get_mouse_class(mut p: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
-    if (*utf8len_tab.ptr())[*p.offset(0 as ::core::ffi::c_int as isize) as uint8_t as usize]
+    if utf8len_tab[*p.offset(0 as ::core::ffi::c_int as isize) as uint8_t as usize]
         as ::core::ffi::c_int
         > 1 as ::core::ffi::c_int
     {

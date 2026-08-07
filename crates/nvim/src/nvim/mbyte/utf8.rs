@@ -97,7 +97,7 @@ pub unsafe extern "C" fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::cor
         if (v0 < 0x80 as uint32_t) as ::core::ffi::c_int as ::core::ffi::c_long != 0 {
             return v0 as ::core::ffi::c_int;
         }
-        let len: uint8_t = (*utf8len_tab.ptr())[v0 as usize];
+        let len: uint8_t = utf8len_tab[v0 as usize];
         if ((len as ::core::ffi::c_int) < 2 as ::core::ffi::c_int) as ::core::ffi::c_int
             as ::core::ffi::c_long
             != 0
@@ -234,7 +234,7 @@ pub(crate) unsafe extern "C" fn utf_safe_read_char_adv(
         if *n == 0 as size_t {
             return 0 as ::core::ffi::c_int;
         }
-        let mut k: uint8_t = (*utf8len_tab_zero.ptr())[**s as uint8_t as usize];
+        let mut k: uint8_t = utf8len_tab_zero[**s as uint8_t as usize];
         if k as ::core::ffi::c_int == 1 as ::core::ffi::c_int {
             *n = (*n).wrapping_sub(1);
             let c2rust_fresh0 = *s;
@@ -396,7 +396,7 @@ pub unsafe extern "C" fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core
         if *p as ::core::ffi::c_int == NUL {
             return 0 as ::core::ffi::c_int;
         }
-        let len: ::core::ffi::c_int = (*utf8len_tab.ptr())[*p as usize] as ::core::ffi::c_int;
+        let len: ::core::ffi::c_int = utf8len_tab[*p as usize] as ::core::ffi::c_int;
         let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
         while i < len {
             if *p.offset(i as isize) as ::core::ffi::c_int & 0xc0 as ::core::ffi::c_int
@@ -411,9 +411,7 @@ pub unsafe extern "C" fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core
 }
 
 pub unsafe extern "C" fn utf_byte2len(mut b: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    unsafe {
-        return (*utf8len_tab.ptr())[b as usize] as ::core::ffi::c_int;
-    }
+    return utf8len_tab[b as usize] as ::core::ffi::c_int;
 }
 
 pub unsafe extern "C" fn utf_ptr2len_len(
@@ -422,8 +420,7 @@ pub unsafe extern "C" fn utf_ptr2len_len(
 ) -> ::core::ffi::c_int {
     unsafe {
         let mut m: ::core::ffi::c_int = 0;
-        let mut len: ::core::ffi::c_int =
-            (*utf8len_tab.ptr())[*p as uint8_t as usize] as ::core::ffi::c_int;
+        let mut len: ::core::ffi::c_int = utf8len_tab[*p as uint8_t as usize] as ::core::ffi::c_int;
         if len == 1 as ::core::ffi::c_int {
             return 1 as ::core::ffi::c_int;
         }
@@ -687,7 +684,7 @@ pub unsafe fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharInfo {
                 len: 1,
             };
         }
-        let len = (*utf8len_tab.ptr())[first as usize] as ::core::ffi::c_int;
+        let len = utf8len_tab[first as usize] as ::core::ffi::c_int;
         let code_point = utf_ptr2CharInfo_impl(p, len as uintptr_t);
         CharInfo {
             value: code_point,

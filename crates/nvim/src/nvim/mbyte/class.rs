@@ -36,7 +36,7 @@ pub unsafe extern "C" fn mb_get_class_tab(
     chartab: *const uint64_t,
 ) -> ::core::ffi::c_int {
     unsafe {
-        if (*utf8len_tab.ptr())[*p.offset(0 as ::core::ffi::c_int as isize) as uint8_t as usize]
+        if utf8len_tab[*p.offset(0 as ::core::ffi::c_int as isize) as uint8_t as usize]
             as ::core::ffi::c_int
             == 1 as ::core::ffi::c_int
         {

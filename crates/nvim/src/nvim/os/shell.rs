@@ -1384,8 +1384,7 @@ unsafe extern "C" fn out_data_append_to_screen(
         };
         if !eof
             && i == 1 as ::core::ffi::c_int
-            && (*utf8len_tab_zero.ptr())[*(p as *mut uint8_t) as usize] as isize
-                > end.offset_from(p)
+            && utf8len_tab_zero[*(p as *mut uint8_t) as usize] as isize > end.offset_from(p)
         {
             *count = p.offset_from(output) as size_t;
             break;

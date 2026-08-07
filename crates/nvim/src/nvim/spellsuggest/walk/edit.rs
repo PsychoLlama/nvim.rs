@@ -49,9 +49,7 @@ const SOUND_VOWEL: c_int = b'*' as c_int;
 /// encoding's own table.
 #[inline]
 fn byte2len(c: c_int) -> u8 {
-    // SAFETY: a pure table lookup over all 256 byte values; the `unsafe`
-    // is only there because the length table has not been rewritten yet.
-    unsafe { (*utf8len_tab.ptr())[c as usize] }
+    utf8len_tab[c as usize]
 }
 
 impl Walk {

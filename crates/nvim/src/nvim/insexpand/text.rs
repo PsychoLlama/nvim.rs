@@ -289,7 +289,7 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
         }
 
         // C's MB_BYTE2LEN: bytes in the sequence this byte starts.
-        let byte2len = |b: c_char| (*utf8len_tab.ptr())[b as u8 as usize] as c_int;
+        let byte2len = |b: c_char| utf8len_tab[b as u8 as usize] as c_int;
 
         let mut match_count: Vec<c_int> = vec![0; cpt_sources_count.get() as usize];
         get_leader_for_startcol(ptr::null_mut(), true); // Clear the cache

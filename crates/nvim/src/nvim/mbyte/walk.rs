@@ -115,7 +115,7 @@ pub unsafe extern "C" fn utf_head_off(
         {
             start = start.offset(-1);
         }
-        let last_len: uint8_t = (*utf8len_tab.ptr())[*start as usize];
+        let last_len: uint8_t = utf8len_tab[*start as usize];
         let mut cur_code: int32_t = utf_ptr2CharInfo_impl(start, last_len as uintptr_t);
         if cur_code < 0 as int32_t || p.offset_from(start) >= last_len as isize {
             return 0 as ::core::ffi::c_int;
@@ -141,7 +141,7 @@ pub unsafe extern "C" fn utf_head_off(
                 start = start.offset(-1);
             }
             let mut prev_len: ::core::ffi::c_int =
-                (*utf8len_tab.ptr())[*start as usize] as ::core::ffi::c_int;
+                utf8len_tab[*start as usize] as ::core::ffi::c_int;
             let mut prev_code: int32_t = utf_ptr2CharInfo_impl(start, prev_len as uintptr_t);
             if prev_code < 0 as int32_t || (prev_len as isize) < cur_pos.offset_from(start) {
                 start = cur_pos;
@@ -196,7 +196,7 @@ pub unsafe extern "C" fn utfc_next_impl(mut cur: StrCharInfo) -> StrCharInfo {
             "*next >= 0x80"
         );
         loop {
-            let next_len: uint8_t = (*utf8len_tab.ptr())[*next as usize];
+            let next_len: uint8_t = utf8len_tab[*next as usize];
             let next_code: int32_t = utf_ptr2CharInfo_impl(next, next_len as uintptr_t);
             if !utf_iscomposing(
                 prev_code as ::core::ffi::c_int,
@@ -298,8 +298,7 @@ pub unsafe extern "C" fn utf_cp_bounds_len(
             first_off -= 1;
         }
         let max_end_off: ::core::ffi::c_int =
-            (*utf8len_tab.ptr())[*p.offset(first_off as isize) as usize] as ::core::ffi::c_int
-                + first_off;
+            utf8len_tab[*p.offset(first_off as isize) as usize] as ::core::ffi::c_int + first_off;
         if max_end_off <= 0 as ::core::ffi::c_int || max_end_off > p_len {
             return CharBoundsOff {
                 begin_off: 0 as int8_t,

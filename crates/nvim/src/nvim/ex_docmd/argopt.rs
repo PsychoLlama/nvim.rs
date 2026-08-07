@@ -72,7 +72,7 @@ pub unsafe fn get_bad_opt(p: *const c_char, eap: *mut exarg_T) -> c_int {
             (*eap).bad_char = BAD_KEEP;
         } else if strcasecmp(p as *mut c_char, c"drop".as_ptr() as *mut c_char) == 0 {
             (*eap).bad_char = BAD_DROP;
-        } else if (*utf8len_tab.ptr())[*p as uint8_t as usize] == 1 && *p.add(1) as c_int == NUL {
+        } else if utf8len_tab[*p as uint8_t as usize] == 1 && *p.add(1) as c_int == NUL {
             (*eap).bad_char = *p as uint8_t as c_int;
         } else {
             return FAIL;

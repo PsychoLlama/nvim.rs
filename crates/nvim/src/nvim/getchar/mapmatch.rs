@@ -293,9 +293,7 @@ unsafe fn search_maphash(
                 // changing 'encoding'. Beware that 0x80 is escaped.
                 let mut p1: *const c_char = (*mp).m_keys;
                 let p2 = mb_unescape(&raw mut p1);
-                if !p2.is_null()
-                    && c_int::from((*utf8len_tab.ptr())[tb_c1 as usize]) > utfc_ptr2len(p2)
-                {
+                if !p2.is_null() && c_int::from(utf8len_tab[tb_c1 as usize]) > utfc_ptr2len(p2) {
                     mlen = 0;
                 }
 

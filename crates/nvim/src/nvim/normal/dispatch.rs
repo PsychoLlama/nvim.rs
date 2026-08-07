@@ -282,9 +282,7 @@ unsafe fn read_composing_tail(s: *mut NormalState) {
         let mut prev_code = (*s).ca.nchar;
         loop {
             (*s).c = vpeekc();
-            if !((*s).c > 0
-                && ((*s).c >= 0x100 || (*utf8len_tab.ptr())[vpeekc() as usize] as c_int > 1))
-            {
+            if !((*s).c > 0 && ((*s).c >= 0x100 || utf8len_tab[vpeekc() as usize] as c_int > 1)) {
                 break;
             }
             (*s).c = plain_vgetc();

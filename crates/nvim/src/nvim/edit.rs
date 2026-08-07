@@ -1867,7 +1867,7 @@ pub unsafe extern "C" fn get_literal(mut no_simplify: bool) -> ::core::ffi::c_in
             && (if nc < 0 as ::core::ffi::c_int || nc > 255 as ::core::ffi::c_int {
                 1 as ::core::ffi::c_int
             } else {
-                (*utf8len_tab.ptr())[nc as usize] as ::core::ffi::c_int
+                utf8len_tab[nc as usize] as ::core::ffi::c_int
             }) == 1 as ::core::ffi::c_int
         {
             add_to_showcmd(nc);
@@ -2101,8 +2101,7 @@ pub unsafe extern "C" fn insertchar(
                     || c >= DEL
                     || c == '0' as ::core::ffi::c_int
                     || c == '^' as ::core::ffi::c_int)
-                && (*utf8len_tab.ptr())[c as usize] as ::core::ffi::c_int
-                    == 1 as ::core::ffi::c_int
+                && utf8len_tab[c as usize] as ::core::ffi::c_int == 1 as ::core::ffi::c_int
                 && i_0 < INPUT_BUFLEN
                 && (textwidth == 0 as ::core::ffi::c_int || {
                     virtcol_0 += byte2cells(

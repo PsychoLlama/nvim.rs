@@ -127,7 +127,7 @@ pub unsafe extern "C" fn get_keystroke(mut events: *mut MultiQueue) -> ::core::f
                 );
             }
         } else {
-            if (*utf8len_tab.ptr())[n as usize] as ::core::ffi::c_int > len {
+            if utf8len_tab[n as usize] as ::core::ffi::c_int > len {
                 continue;
             }
             *buf.offset(

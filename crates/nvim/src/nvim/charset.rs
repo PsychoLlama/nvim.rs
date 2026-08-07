@@ -352,7 +352,7 @@ pub unsafe extern "C" fn vim_iswordp(p: *const c_char) -> bool {
 /// `p` must point into a NUL-terminated string and `buf` be a valid buffer.
 pub unsafe fn vim_iswordp_buf(p: *const c_char, buf: *mut buf_T) -> bool {
     let mut c = *p as uint8_t as c_int;
-    if (*utf8len_tab.ptr())[c as usize] as c_int > 1 {
+    if utf8len_tab[c as usize] as c_int > 1 {
         c = utf_ptr2char(p);
     }
     vim_iswordc_buf(c, buf)

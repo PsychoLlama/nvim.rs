@@ -102,8 +102,7 @@ pub unsafe extern "C" fn utf_ptr2cells(mut p_in: *const ::core::ffi::c_char) -> 
     unsafe {
         let mut p: *const uint8_t = p_in as *const uint8_t;
         if *p as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int {
-            let mut len: ::core::ffi::c_int =
-                (*utf8len_tab.ptr())[*p as usize] as ::core::ffi::c_int;
+            let mut len: ::core::ffi::c_int = utf8len_tab[*p as usize] as ::core::ffi::c_int;
             let mut c: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
             if c <= 0 as int32_t {
                 return 4 as ::core::ffi::c_int;
@@ -138,7 +137,7 @@ pub unsafe extern "C" fn utf_ptr2cells_len(
             && *p as uint8_t as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int
         {
             let mut len: ::core::ffi::c_int = utf_ptr2len_len(p, size);
-            if len < (*utf8len_tab.ptr())[*p as uint8_t as usize] as ::core::ffi::c_int {
+            if len < utf8len_tab[*p as uint8_t as usize] as ::core::ffi::c_int {
                 return 1 as ::core::ffi::c_int;
             }
             let mut c: ::core::ffi::c_int = utf_ptr2char(p);
@@ -156,7 +155,7 @@ pub unsafe extern "C" fn utf_ptr2cells_len(
                     as ::core::ffi::c_int
                     != 0
                 && utf_ptr2len_len(p.offset(len as isize), size - len)
-                    == (*utf8len_tab.ptr())[*p.offset(len as isize) as uint8_t as usize]
+                    == utf8len_tab[*p.offset(len as isize) as uint8_t as usize]
                         as ::core::ffi::c_int
             {
                 let mut c2: ::core::ffi::c_int = utf_ptr2char(p.offset(len as isize));

@@ -232,8 +232,7 @@ pub unsafe extern "C" fn utf_valid_string(
             (p < end as *mut uint8_t as *const uint8_t) as ::core::ffi::c_int
         } != 0
         {
-            let mut l: ::core::ffi::c_int =
-                (*utf8len_tab_zero.ptr())[*p as usize] as ::core::ffi::c_int;
+            let mut l: ::core::ffi::c_int = utf8len_tab_zero[*p as usize] as ::core::ffi::c_int;
             if l == 0 as ::core::ffi::c_int {
                 return false_0 != 0;
             }

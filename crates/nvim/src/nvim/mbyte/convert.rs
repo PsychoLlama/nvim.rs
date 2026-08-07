@@ -412,8 +412,8 @@ pub unsafe extern "C" fn string_convert_ext(
                         d = d.offset(1);
                         *c2rust_fresh5 = NUL as uint8_t;
                     } else if l == 1 as ::core::ffi::c_int {
-                        let mut l_w: uint8_t = (*utf8len_tab_zero.ptr())
-                            [*ptr.offset(i_1 as isize) as uint8_t as usize];
+                        let mut l_w: uint8_t =
+                            utf8len_tab_zero[*ptr.offset(i_1 as isize) as uint8_t as usize];
                         if l_w as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
                             xfree(retval as *mut ::core::ffi::c_void);
                             return ::core::ptr::null_mut::<::core::ffi::c_char>();

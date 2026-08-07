@@ -328,7 +328,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
                         (*colored_ccline).cmdlen
                     );
                     break 'body Err(());
-                } else if (*utf8len_tab_zero.ptr())
+                } else if utf8len_tab_zero
                     [*(*colored_ccline).cmdbuff.offset(start as isize) as uint8_t as usize]
                     == 0
                 {
@@ -367,7 +367,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
                     );
                     break 'body Err(());
                 } else if end < (*colored_ccline).cmdlen as varnumber_T
-                    && (*utf8len_tab_zero.ptr())
+                    && utf8len_tab_zero
                         [*(*colored_ccline).cmdbuff.offset(end as isize) as uint8_t as usize]
                         == 0
                 {

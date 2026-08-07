@@ -300,7 +300,7 @@ pub(crate) fn mb_byte2len_check(b: c_int) -> usize {
     if !(0..=255).contains(&b) {
         1
     } else {
-        unsafe { (*utf8len_tab.ptr())[b as usize] as usize }
+        utf8len_tab[b as usize] as usize
     }
 }
 

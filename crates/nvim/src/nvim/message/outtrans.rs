@@ -373,7 +373,7 @@ pub unsafe fn str2special(
             }
         }
 
-        if c >= 0 && (*utf8len_tab.ptr())[c as usize] > 1 {
+        if c >= 0 && utf8len_tab[c as usize] > 1 {
             *sp = str;
             // Try to un-escape a multi-byte character after the modifiers.
             let unescaped = mb_unescape(sp);
