@@ -78,41 +78,11 @@ pub(crate) use self::label::*;
 pub(crate) use self::paren::*;
 pub use self::recog::*;
 
-/// The screen column byte `col` of line `lnum` sits at.
-///
-/// Four of the amount answers in this family are a `getvcol` of one
-/// position, and `getvcol` needs a `pos_T` and three out-parameters to say
-/// so.
-///
-/// # Safety
-/// `lnum` must be a valid line of the current buffer.
-pub(crate) unsafe fn line_vcol(lnum: linenr_T, col: colnr_T) -> ::core::ffi::c_int {
-    unsafe {
-        let mut fp = pos_T {
-            lnum,
-            col,
-            coladd: 0,
-        };
-        let mut vcol: colnr_T = 0;
-        getvcol(
-            curwin.get(),
-            &raw mut fp,
-            &raw mut vcol,
-            ::core::ptr::null_mut::<colnr_T>(),
-            ::core::ptr::null_mut::<colnr_T>(),
-        );
-        vcol
-    }
-}
-
-/// The byte at `i` of a NUL-terminated line held as a slice.
-///
-/// Past the end is the terminator: `CStr::to_bytes()` drops it, but the
-/// memory is still there, and upstream reaches these strings through the NUL
-/// rather than through a length.
-pub(crate) fn byte_at(s: &[u8], i: usize) -> u8 {
-    s.get(i).copied().unwrap_or(0)
-}
+// `line_vcol` (the `getvcol` of one position four amount answers here want)
+// and `byte_at` (a NUL-terminated line read past its slice) moved to
+// `indent.rs` at B15-17, which needs both as well. Re-exported rather than
+// imported so the children keep reaching them through `use super::*`.
+pub(crate) use crate::src::nvim::indent::{byte_at, line_vcol};
 
 pub const KEY_COMPLETE: ::core::ffi::c_int = 259;
 pub const KEY_OPEN_BACK: ::core::ffi::c_int = 258;

@@ -1,6 +1,12 @@
 //! Indent computed by running something: 'indentexpr', and the built-in
 //! Lisp indenter behind 'lisp'.
 
+// Still transpiled: the bodies of its `unsafe` fns are bare, and the parent's
+// inner deny of `unsafe_op_in_unsafe_fn` reaches every child, so this file
+// has to opt out of it until it is rewritten. (Spelling the parent's
+// attribute out here would also make the ratchet read this file as carrying
+// it, and stop charging for the declarations -- see `traps-ratchet.md`.)
+#![allow(unsafe_op_in_unsafe_fn)]
 use super::*;
 use crate::src::nvim::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::src::nvim::cursor::{check_cursor, get_cursor_line_ptr};
