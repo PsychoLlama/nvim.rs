@@ -1,510 +1,589 @@
 //! Converting text between encodings.
 //!
-//! `convert_setup` builds a `vimconv_T` describing how to get from one encoding to
-//! another, and `string_convert_ext` runs it over a string.  Most pairs go through
-//! iconv, which is a real foreign boundary: `my_iconv_open` opens a descriptor
-//! (and remembers whether the host's iconv works at all), `iconv_string` pumps it.
-//! The Latin-1 and Latin-9 pairs are handled directly, without iconv.
+//! [`convert_setup`] works out *how* to get from one encoding to another and
+//! records it in a `vimconv_T`; [`string_convert_ext`] runs that plan over a
+//! string. Four pairs are done here directly — Latin-1 and Latin-9 to and
+//! from UTF-8 — because they are the common cases and are pure arithmetic.
+//! Everything else goes through iconv.
+//!
+//! **iconv is a real foreign boundary and the `unsafe` in this file is
+//! genuine.** It is a stateful C library reached through an opaque
+//! descriptor, it writes into caller-owned buffers whose remaining room it
+//! reports back by decrementing a counter, and it signals every one of its
+//! outcomes through `errno`. None of that has a safe Rust shape.
+//! [`my_iconv_open`] also has to *probe* the host's iconv, because a
+//! dynamically loaded one can accept an `iconv_open` and then do nothing.
+//!
+//! A conversion that cannot represent a character does not fail by default:
+//! it substitutes `?` (or `¿` on the way to Latin-1) and carries on, unless
+//! `vc_fail` asks for an error instead.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int, c_uint, c_void};
 
-pub type WorkingStatus = ::core::ffi::c_uint;
+/// Has the host's iconv been proved to work?
+///
+/// A dynamically loaded iconv can accept `iconv_open` and then convert
+/// nothing, so the first successfully opened descriptor is probed before it
+/// is trusted. The answer is remembered for the process.
+type WorkingStatus = c_uint;
+const kUnknown: WorkingStatus = 0;
+const kWorking: WorkingStatus = 1;
+const kBroken: WorkingStatus = 2;
 
-pub const kBroken: WorkingStatus = 2;
+/// The scratch buffer `tv_get_string_buf` renders a non-string argument into.
+const NUMBUFLEN: usize = 65;
 
-pub const kWorking: WorkingStatus = 1;
+/// How many bytes the probe conversion is given to write into.
+const ICONV_TESTLEN: usize = 400;
 
-pub const kUnknown: WorkingStatus = 0;
+/// iconv's own `errno` values, which a dynamically loaded library may report
+/// instead of the host's — both spellings are tested at every site.
+pub const ICONV_E2BIG: c_int = E2BIG;
+pub const ICONV_EINVAL: c_int = EINVAL;
+pub const ICONV_EILSEQ: c_int = EILSEQ;
+pub const E2BIG: c_int = 7;
+pub const EINVAL: c_int = 22;
+pub const EILSEQ: c_int = 84;
 
-pub unsafe extern "C" fn my_iconv_open(
-    mut to: *mut ::core::ffi::c_char,
-    mut from: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_void {
+/// `(iconv_t)-1`: what `iconv_open` answers when it cannot convert a pair.
+fn iconv_failed() -> iconv_t {
+    core::ptr::with_exposed_provenance_mut(-1i32 as usize)
+}
+
+/// Open an iconv descriptor from `from` to `to`, or [`iconv_failed`].
+///
+/// The first descriptor this ever opens is *probed* — a conversion with no
+/// input, which a working iconv answers by leaving the output pointer alone
+/// and a broken one by nulling it. Once iconv is known broken this never
+/// tries again.
+///
+/// # Safety
+///
+/// Both names must be NUL-terminated strings.
+pub unsafe fn my_iconv_open(to: *mut c_char, from: *mut c_char) -> iconv_t {
     unsafe {
-        let mut tobuf: [::core::ffi::c_char; 400] = [0; 400];
         static iconv_working: GlobalCell<WorkingStatus> = GlobalCell::new(kUnknown);
-        if iconv_working.get() as ::core::ffi::c_uint
-            == kBroken as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            return ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                -1 as ::core::ffi::c_int as usize,
-            );
+        if iconv_working.get() == kBroken {
+            return iconv_failed();
         }
-        let mut fd: iconv_t = iconv_open(enc_skip(to), enc_skip(from));
-        if fd
-            != ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                -1 as ::core::ffi::c_int as usize,
-            )
-            && iconv_working.get() as ::core::ffi::c_uint
-                == kUnknown as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut p: *mut ::core::ffi::c_char = &raw mut tobuf as *mut ::core::ffi::c_char;
-            let mut tolen: size_t = ICONV_TESTLEN as size_t;
-            iconv(
-                fd,
-                ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<size_t>(),
-                &raw mut p,
-                &raw mut tolen,
-            );
-            if p.is_null() {
-                iconv_working.set(kBroken);
-                iconv_close(fd);
-                fd = ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                    -1 as ::core::ffi::c_int as usize,
-                );
-            } else {
-                iconv_working.set(kWorking);
-            }
+
+        let mut fd = iconv_open(enc_skip(to), enc_skip(from));
+        if fd == iconv_failed() || iconv_working.get() != kUnknown {
+            return fd;
         }
-        return fd;
+
+        let mut tobuf = [0 as c_char; ICONV_TESTLEN];
+        let mut p = tobuf.as_mut_ptr();
+        let mut tolen: size_t = ICONV_TESTLEN;
+        iconv(
+            fd,
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+            &raw mut p,
+            &raw mut tolen,
+        );
+        if p.is_null() {
+            iconv_working.set(kBroken);
+            iconv_close(fd);
+            fd = iconv_failed();
+        } else {
+            iconv_working.set(kWorking);
+        }
+        fd
     }
 }
 
-pub const ICONV_TESTLEN: ::core::ffi::c_int = 400 as ::core::ffi::c_int;
-
-unsafe extern "C" fn iconv_string(
+/// Convert `str[..slen]` through `vcp`'s open iconv descriptor.
+///
+/// The output buffer is grown and the conversion resumed whenever iconv runs
+/// out of room, which is what the `E2BIG` arm is for: it is not an error.
+/// `done` is how much of the result is already final, so a reallocation can
+/// copy it forward and pick up where it left off.
+///
+/// # Safety
+///
+/// `vcp.vc_fd` must be an open descriptor and `str` must have `slen` readable
+/// bytes. The result is `xmalloc`'d, or null when the conversion failed.
+unsafe fn iconv_string(
     vcp: *const vimconv_T,
-    mut str: *const ::core::ffi::c_char,
-    mut slen: size_t,
-    mut unconvlenp: *mut size_t,
-    mut resultlenp: *mut size_t,
-) -> *mut ::core::ffi::c_char {
+    str: *const c_char,
+    slen: size_t,
+    unconvlenp: *mut size_t,
+    resultlenp: *mut size_t,
+) -> *mut c_char {
     unsafe {
-        let mut to: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut len: size_t = 0 as size_t;
-        let mut done: size_t = 0 as size_t;
-        let mut result: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut from: *const ::core::ffi::c_char = str;
-        let mut fromlen: size_t = slen;
+        // iconv reports every outcome through `errno`, read straight after
+        // the call that set it. A closure, so it inherits this block.
+        let errno = || *__errno_location();
+
+        let fail = (*vcp).vc_fail;
+        let mut result: *mut c_char = core::ptr::null_mut();
+        let mut to: *mut c_char = core::ptr::null_mut();
+        let mut len: size_t = 0;
+        let mut done: size_t = 0;
+        let mut from = str;
+        let mut fromlen = slen;
+
         loop {
-            if len == 0 as size_t || *__errno_location() == ICONV_E2BIG {
-                len = len
-                    .wrapping_add(fromlen.wrapping_mul(2 as size_t))
-                    .wrapping_add(40 as size_t);
-                let mut p: *mut ::core::ffi::c_char = xmalloc(len) as *mut ::core::ffi::c_char;
-                if done > 0 as size_t {
-                    memmove(
-                        p as *mut ::core::ffi::c_void,
-                        result as *const ::core::ffi::c_void,
-                        done,
-                    );
+            if len == 0 || errno() == ICONV_E2BIG {
+                // Enough for most conversions; on a retry, more than last time.
+                len = len + fromlen * 2 + 40;
+                let p = xmalloc(len) as *mut c_char;
+                if done > 0 {
+                    memmove(p as *mut c_void, result as *const c_void, done);
                 }
-                xfree(result as *mut ::core::ffi::c_void);
+                xfree(result as *mut c_void);
                 result = p;
             }
-            to = result.offset(done as isize);
-            let mut tolen: size_t = len.wrapping_sub(done).wrapping_sub(2 as size_t);
+
+            to = result.add(done);
+            // Two bytes held back: the NUL, and the second `?` an
+            // unconvertible wide character can need.
+            let mut tolen = len - done - 2;
             if iconv(
                 (*vcp).vc_fd,
-                &raw mut from as *mut ::core::ffi::c_void as *mut *mut ::core::ffi::c_char,
+                &raw mut from as *mut c_void as *mut *mut c_char,
                 &raw mut fromlen,
                 &raw mut to,
                 &raw mut tolen,
             ) != SIZE_MAX as size_t
             {
-                *to = NUL as ::core::ffi::c_char;
+                *to = 0; // finished
                 break;
-            } else if !(*vcp).vc_fail
-                && !unconvlenp.is_null()
-                && (*__errno_location() == ICONV_EINVAL || *__errno_location() == EINVAL)
-            {
-                *to = NUL as ::core::ffi::c_char;
+            }
+
+            let e = errno();
+            let incomplete = e == ICONV_EINVAL || e == EINVAL;
+            let illegal = e == ICONV_EILSEQ || e == EILSEQ;
+            if !fail && incomplete && !unconvlenp.is_null() {
+                // A sequence cut off at the end: hand back how much is left
+                // rather than treating it as bad input.
+                *to = 0;
                 *unconvlenp = fromlen;
                 break;
-            } else {
-                if !(*vcp).vc_fail
-                    && (*__errno_location() == ICONV_EILSEQ
-                        || *__errno_location() == EILSEQ
-                        || *__errno_location() == ICONV_EINVAL
-                        || *__errno_location() == EINVAL)
-                {
-                    let c2rust_fresh10 = to;
+            } else if !fail && (illegal || incomplete) {
+                // Cannot convert: emit `?` and skip one character. This
+                // assumes the input is 'encoding'; nothing else would tell us
+                // how much to skip.
+                *to = b'?' as c_char;
+                to = to.offset(1);
+                if utf_ptr2cells(from) > 1 {
+                    *to = b'?' as c_char;
                     to = to.offset(1);
-                    *c2rust_fresh10 = '?' as ::core::ffi::c_char;
-                    if utf_ptr2cells(from) > 1 as ::core::ffi::c_int {
-                        let c2rust_fresh11 = to;
-                        to = to.offset(1);
-                        *c2rust_fresh11 = '?' as ::core::ffi::c_char;
-                    }
-                    let mut l: ::core::ffi::c_int =
-                        utfc_ptr2len_len(from, fromlen as ::core::ffi::c_int);
-                    from = from.offset(l as isize);
-                    fromlen = fromlen.wrapping_sub(l as size_t);
-                } else if *__errno_location() != ICONV_E2BIG {
-                    let mut ptr_: *mut *mut ::core::ffi::c_void =
-                        &raw mut result as *mut *mut ::core::ffi::c_void;
-                    xfree(*ptr_);
-                    *ptr_ = NULL;
-                    let _ = *ptr_;
-                    break;
                 }
-                done = to.offset_from(result) as size_t;
+                let l = utfc_ptr2len_len(from, fromlen as c_int);
+                from = from.add(l as usize);
+                fromlen -= l as size_t;
+            } else if e != ICONV_E2BIG {
+                xfree(result as *mut c_void);
+                result = core::ptr::null_mut();
+                break;
             }
+            done = to.offset_from(result) as size_t;
         }
+
         if !resultlenp.is_null() && !result.is_null() {
             *resultlenp = to.offset_from(result) as size_t;
         }
-        return result;
+        result
     }
 }
 
+/// `iconv({string}, {from}, {to})`.
 pub unsafe extern "C" fn f_iconv(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
     unsafe {
-        let mut vimconv: vimconv_T = vimconv_T {
-            vc_type: 0,
-            vc_factor: 0,
-            vc_fd: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            vc_fail: false,
-        };
         (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let str: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let mut buf1: [::core::ffi::c_char; 65] = [0; 65];
-        let from: *mut ::core::ffi::c_char = enc_canonize(enc_skip(tv_get_string_buf(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-            &raw mut buf1 as *mut ::core::ffi::c_char,
-        )
-            as *mut ::core::ffi::c_char));
-        let mut buf2: [::core::ffi::c_char; 65] = [0; 65];
-        let to: *mut ::core::ffi::c_char = enc_canonize(enc_skip(tv_get_string_buf(
-            argvars.offset(2 as ::core::ffi::c_int as isize),
-            &raw mut buf2 as *mut ::core::ffi::c_char,
-        )
-            as *mut ::core::ffi::c_char));
-        vimconv.vc_type = CONV_NONE;
+        (*rettv).vval.v_string = core::ptr::null_mut();
+
+        let str = tv_get_string(argvars);
+        let mut buf1 = [0 as c_char; NUMBUFLEN];
+        let from = enc_canonize(enc_skip(
+            tv_get_string_buf(argvars.add(1), buf1.as_mut_ptr()).cast_mut(),
+        ));
+        let mut buf2 = [0 as c_char; NUMBUFLEN];
+        let to = enc_canonize(enc_skip(
+            tv_get_string_buf(argvars.add(2), buf2.as_mut_ptr()).cast_mut(),
+        ));
+
+        let mut vimconv = CONV_NONE_INIT;
         convert_setup(&raw mut vimconv, from, to);
-        if vimconv.vc_type == CONV_NONE {
-            (*rettv).vval.v_string = xstrdup(str);
+        (*rettv).vval.v_string = if vimconv.vc_type == CONV_NONE {
+            // Same encoding both ways: hand back a copy unchanged.
+            xstrdup(str)
         } else {
-            (*rettv).vval.v_string = string_convert(
-                &raw mut vimconv,
-                str as *mut ::core::ffi::c_char,
-                ::core::ptr::null_mut::<size_t>(),
-            );
-        }
+            string_convert(&raw mut vimconv, str.cast_mut(), core::ptr::null_mut())
+        };
+
+        // Closes the descriptor.
         convert_setup(
             &raw mut vimconv,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
         );
-        xfree(from as *mut ::core::ffi::c_void);
-        xfree(to as *mut ::core::ffi::c_void);
+        xfree(from as *mut c_void);
+        xfree(to as *mut c_void);
     }
 }
 
+/// A `vimconv_T` that converts nothing.
+const CONV_NONE_INIT: vimconv_T = vimconv_T {
+    vc_type: CONV_NONE,
+    vc_factor: 1,
+    vc_fd: core::ptr::null_mut(),
+    vc_fail: false,
+};
+
+/// Plan a conversion from `from` to `to`, replacing whatever `vcp` held.
+///
+/// # Safety
+///
+/// `vcp` must be writable and hold either a valid plan or zeroed memory;
+/// `from` and `to` must be null or NUL-terminated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn convert_setup(
-    mut vcp: *mut vimconv_T,
-    mut from: *mut ::core::ffi::c_char,
-    mut to: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        return convert_setup_ext(vcp, from, true_0 != 0, to, true_0 != 0);
-    }
+    vcp: *mut vimconv_T,
+    from: *mut c_char,
+    to: *mut c_char,
+) -> c_int {
+    unsafe { convert_setup_ext(vcp, from, true, to, true) }
 }
 
-pub unsafe extern "C" fn convert_setup_ext(
-    mut vcp: *mut vimconv_T,
-    mut from: *mut ::core::ffi::c_char,
-    mut from_unicode_is_utf8: bool,
-    mut to: *mut ::core::ffi::c_char,
-    mut to_unicode_is_utf8: bool,
-) -> ::core::ffi::c_int {
+/// [`convert_setup`], choosing what "Unicode" means on each side.
+///
+/// `*_unicode_is_utf8` says whether *any* Unicode encoding on that side may
+/// be treated as UTF-8, or only the one whose properties are exactly
+/// `ENC_UNICODE` — which is `utf-8` itself. A reader of a UTF-16 file needs
+/// the strict answer; a caller that has already decoded to UTF-8 wants the
+/// loose one.
+///
+/// # Safety
+///
+/// As [`convert_setup`].
+pub unsafe fn convert_setup_ext(
+    vcp: *mut vimconv_T,
+    from: *mut c_char,
+    from_unicode_is_utf8: bool,
+    to: *mut c_char,
+    to_unicode_is_utf8: bool,
+) -> c_int {
     unsafe {
-        let mut from_is_utf8: ::core::ffi::c_int = 0;
-        let mut to_is_utf8: ::core::ffi::c_int = 0;
-        if (*vcp).vc_type == CONV_ICONV
-            && (*vcp).vc_fd
-                != ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                    -1 as ::core::ffi::c_int as usize,
-                )
-        {
+        if (*vcp).vc_type == CONV_ICONV && (*vcp).vc_fd != iconv_failed() {
             iconv_close((*vcp).vc_fd);
         }
-        *vcp = vimconv_T {
-            vc_type: CONV_NONE,
-            vc_factor: 1 as ::core::ffi::c_int,
-            vc_fd: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            vc_fail: false_0 != 0,
-        };
-        if from.is_null()
-            || *from as ::core::ffi::c_int == NUL
-            || to.is_null()
-            || *to as ::core::ffi::c_int == NUL
-            || strcmp(from, to) == 0 as ::core::ffi::c_int
-        {
+        *vcp = CONV_NONE_INIT;
+
+        // Nothing to do: an unnamed side, or the same encoding twice.
+        if from.is_null() || *from == 0 || to.is_null() || *to == 0 || strcmp(from, to) == 0 {
             return OK;
         }
-        let mut from_prop: ::core::ffi::c_int = enc_canon_props(from);
-        let mut to_prop: ::core::ffi::c_int = enc_canon_props(to);
-        if from_unicode_is_utf8 {
-            from_is_utf8 = from_prop & ENC_UNICODE;
-        } else {
-            from_is_utf8 = (from_prop == ENC_UNICODE) as ::core::ffi::c_int;
-        }
-        if to_unicode_is_utf8 {
-            to_is_utf8 = to_prop & ENC_UNICODE;
-        } else {
-            to_is_utf8 = (to_prop == ENC_UNICODE) as ::core::ffi::c_int;
-        }
-        if from_prop & ENC_LATIN1 != 0 && to_is_utf8 != 0 {
+
+        let from_prop = enc_canon_props(from);
+        let to_prop = enc_canon_props(to);
+        let is_utf8 = |prop: EncProps, loose: bool| {
+            if loose {
+                prop & ENC_UNICODE != 0
+            } else {
+                prop == ENC_UNICODE
+            }
+        };
+        let from_is_utf8 = is_utf8(from_prop, from_unicode_is_utf8);
+        let to_is_utf8 = is_utf8(to_prop, to_unicode_is_utf8);
+
+        // `vc_factor` is how much the output can grow: a Latin-1 byte becomes
+        // at most two UTF-8 bytes, a Latin-9 one at most three, and iconv's
+        // worst case is budgeted at four.
+        if from_prop & ENC_LATIN1 != 0 && to_is_utf8 {
             (*vcp).vc_type = CONV_TO_UTF8;
-            (*vcp).vc_factor = 2 as ::core::ffi::c_int;
-        } else if from_prop & ENC_LATIN9 != 0 && to_is_utf8 != 0 {
+            (*vcp).vc_factor = 2;
+        } else if from_prop & ENC_LATIN9 != 0 && to_is_utf8 {
             (*vcp).vc_type = CONV_9_TO_UTF8;
-            (*vcp).vc_factor = 3 as ::core::ffi::c_int;
-        } else if from_is_utf8 != 0 && to_prop & ENC_LATIN1 != 0 {
+            (*vcp).vc_factor = 3;
+        } else if from_is_utf8 && to_prop & ENC_LATIN1 != 0 {
             (*vcp).vc_type = CONV_TO_LATIN1;
-        } else if from_is_utf8 != 0 && to_prop & ENC_LATIN9 != 0 {
+        } else if from_is_utf8 && to_prop & ENC_LATIN9 != 0 {
             (*vcp).vc_type = CONV_TO_LATIN9;
         } else {
-            (*vcp).vc_fd = my_iconv_open(
-                (if to_is_utf8 != 0 {
-                    b"utf-8\0".as_ptr() as *const ::core::ffi::c_char
+            // A side already known to be UTF-8 is named as such, whatever
+            // Unicode spelling it arrived under.
+            let named = |is_utf8: bool, name: *mut c_char| {
+                if is_utf8 {
+                    c"utf-8".as_ptr().cast_mut()
                 } else {
-                    to as *const ::core::ffi::c_char
-                }) as *mut ::core::ffi::c_char,
-                (if from_is_utf8 != 0 {
-                    b"utf-8\0".as_ptr() as *const ::core::ffi::c_char
-                } else {
-                    from as *const ::core::ffi::c_char
-                }) as *mut ::core::ffi::c_char,
-            );
-            if (*vcp).vc_fd
-                != ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                    -1 as ::core::ffi::c_int as usize,
-                )
-            {
+                    name
+                }
+            };
+            (*vcp).vc_fd = my_iconv_open(named(to_is_utf8, to), named(from_is_utf8, from));
+            if (*vcp).vc_fd != iconv_failed() {
                 (*vcp).vc_type = CONV_ICONV;
-                (*vcp).vc_factor = 4 as ::core::ffi::c_int;
+                (*vcp).vc_factor = 4;
             }
         }
         if (*vcp).vc_type == CONV_NONE {
-            return FAIL;
-        }
-        return OK;
-    }
-}
-
-pub unsafe extern "C" fn string_convert(
-    vcp: *const vimconv_T,
-    mut ptr: *mut ::core::ffi::c_char,
-    mut lenp: *mut size_t,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        return string_convert_ext(vcp, ptr, lenp, ::core::ptr::null_mut::<size_t>());
-    }
-}
-
-pub unsafe extern "C" fn string_convert_ext(
-    vcp: *const vimconv_T,
-    mut ptr: *mut ::core::ffi::c_char,
-    mut lenp: *mut size_t,
-    mut unconvlenp: *mut size_t,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        let mut retval: *mut uint8_t = ::core::ptr::null_mut::<uint8_t>();
-        let mut d: *mut uint8_t = ::core::ptr::null_mut::<uint8_t>();
-        let mut c: ::core::ffi::c_int = 0;
-        let mut len: size_t = 0;
-        if lenp.is_null() {
-            len = strlen(ptr);
+            FAIL
         } else {
-            len = *lenp;
+            OK
         }
-        if len == 0 as size_t {
-            return xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);
-        }
-        match (*vcp).vc_type {
-            1 => {
-                retval = xmalloc(len.wrapping_mul(2 as size_t).wrapping_add(1 as size_t))
-                    as *mut uint8_t;
-                d = retval;
-                let mut i: size_t = 0 as size_t;
-                while i < len {
-                    c = *ptr.offset(i as isize) as uint8_t as ::core::ffi::c_int;
-                    if c < 0x80 as ::core::ffi::c_int {
-                        let c2rust_fresh2 = d;
-                        d = d.offset(1);
-                        *c2rust_fresh2 = c as uint8_t;
-                    } else {
-                        let c2rust_fresh3 = d;
-                        d = d.offset(1);
-                        *c2rust_fresh3 = (0xc0 as ::core::ffi::c_int
-                            + (c as ::core::ffi::c_uint >> 6 as ::core::ffi::c_int) as uint8_t
-                                as ::core::ffi::c_int)
-                            as uint8_t;
-                        let c2rust_fresh4 = d;
-                        d = d.offset(1);
-                        *c2rust_fresh4 = (0x80 as ::core::ffi::c_int
-                            + (c & 0x3f as ::core::ffi::c_int))
-                            as uint8_t;
-                    }
-                    i = i.wrapping_add(1);
-                }
-                *d = NUL as uint8_t;
-                if !lenp.is_null() {
-                    *lenp = d.offset_from(retval) as size_t;
-                }
-            }
-            2 => {
-                retval = xmalloc(len.wrapping_mul(3 as size_t).wrapping_add(1 as size_t))
-                    as *mut uint8_t;
-                d = retval;
-                let mut i_0: size_t = 0 as size_t;
-                while i_0 < len {
-                    c = *ptr.offset(i_0 as isize) as uint8_t as ::core::ffi::c_int;
-                    match c {
-                        164 => {
-                            c = 0x20ac as ::core::ffi::c_int;
-                        }
-                        166 => {
-                            c = 0x160 as ::core::ffi::c_int;
-                        }
-                        168 => {
-                            c = 0x161 as ::core::ffi::c_int;
-                        }
-                        180 => {
-                            c = 0x17d as ::core::ffi::c_int;
-                        }
-                        184 => {
-                            c = 0x17e as ::core::ffi::c_int;
-                        }
-                        188 => {
-                            c = 0x152 as ::core::ffi::c_int;
-                        }
-                        189 => {
-                            c = 0x153 as ::core::ffi::c_int;
-                        }
-                        190 => {
-                            c = 0x178 as ::core::ffi::c_int;
-                        }
-                        _ => {}
-                    }
-                    d = d.offset(utf_char2bytes(c, d as *mut ::core::ffi::c_char) as isize);
-                    i_0 = i_0.wrapping_add(1);
-                }
-                *d = NUL as uint8_t;
-                if !lenp.is_null() {
-                    *lenp = d.offset_from(retval) as size_t;
-                }
-            }
-            3 | 4 => {
-                retval = xmalloc(len.wrapping_add(1 as size_t)) as *mut uint8_t;
-                d = retval;
-                let mut i_1: size_t = 0 as size_t;
-                while i_1 < len {
-                    let mut l: ::core::ffi::c_int = utf_ptr2len_len(
-                        ptr.offset(i_1 as isize),
-                        len.wrapping_sub(i_1) as ::core::ffi::c_int,
-                    );
-                    if l == 0 as ::core::ffi::c_int {
-                        let c2rust_fresh5 = d;
-                        d = d.offset(1);
-                        *c2rust_fresh5 = NUL as uint8_t;
-                    } else if l == 1 as ::core::ffi::c_int {
-                        let mut l_w: uint8_t =
-                            utf8len_tab_zero[*ptr.offset(i_1 as isize) as uint8_t as usize];
-                        if l_w as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-                            xfree(retval as *mut ::core::ffi::c_void);
-                            return ::core::ptr::null_mut::<::core::ffi::c_char>();
-                        }
-                        if !unconvlenp.is_null() && l_w as size_t > len.wrapping_sub(i_1) {
-                            *unconvlenp = len.wrapping_sub(i_1);
-                            break;
-                        } else {
-                            let c2rust_fresh6 = d;
-                            d = d.offset(1);
-                            *c2rust_fresh6 = *ptr.offset(i_1 as isize) as uint8_t;
-                        }
-                    } else {
-                        c = utf_ptr2char(ptr.offset(i_1 as isize));
-                        if (*vcp).vc_type == CONV_TO_LATIN9 {
-                            match c {
-                                8364 => {
-                                    c = 0xa4 as ::core::ffi::c_int;
-                                }
-                                352 => {
-                                    c = 0xa6 as ::core::ffi::c_int;
-                                }
-                                353 => {
-                                    c = 0xa8 as ::core::ffi::c_int;
-                                }
-                                381 => {
-                                    c = 0xb4 as ::core::ffi::c_int;
-                                }
-                                382 => {
-                                    c = 0xb8 as ::core::ffi::c_int;
-                                }
-                                338 => {
-                                    c = 0xbc as ::core::ffi::c_int;
-                                }
-                                339 => {
-                                    c = 0xbd as ::core::ffi::c_int;
-                                }
-                                376 => {
-                                    c = 0xbe as ::core::ffi::c_int;
-                                }
-                                164 | 166 | 168 | 180 | 184 | 188 | 189 | 190 => {
-                                    c = 0x100 as ::core::ffi::c_int;
-                                }
-                                _ => {}
-                            }
-                        }
-                        if !utf_iscomposing_legacy(c) {
-                            if c < 0x100 as ::core::ffi::c_int {
-                                let c2rust_fresh7 = d;
-                                d = d.offset(1);
-                                *c2rust_fresh7 = c as uint8_t;
-                            } else if (*vcp).vc_fail {
-                                xfree(retval as *mut ::core::ffi::c_void);
-                                return ::core::ptr::null_mut::<::core::ffi::c_char>();
-                            } else {
-                                let c2rust_fresh8 = d;
-                                d = d.offset(1);
-                                *c2rust_fresh8 = 0xbf as uint8_t;
-                                if utf_char2cells(c) > 1 as ::core::ffi::c_int {
-                                    let c2rust_fresh9 = d;
-                                    d = d.offset(1);
-                                    *c2rust_fresh9 = '?' as uint8_t;
-                                }
-                            }
-                        }
-                        i_1 = i_1.wrapping_add((l as size_t).wrapping_sub(1 as size_t));
-                    }
-                    i_1 = i_1.wrapping_add(1);
-                }
-                *d = NUL as uint8_t;
-                if !lenp.is_null() {
-                    *lenp = d.offset_from(retval) as size_t;
-                }
-            }
-            5 => {
-                retval = iconv_string(vcp, ptr, len, unconvlenp, lenp) as *mut uint8_t;
-            }
-            _ => {}
-        }
-        return retval as *mut ::core::ffi::c_char;
     }
 }
 
-pub const E2BIG: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
+/// [`string_convert_ext`] without the incomplete-tail report.
+///
+/// # Safety
+///
+/// As [`string_convert_ext`].
+pub unsafe fn string_convert(
+    vcp: *const vimconv_T,
+    ptr: *mut c_char,
+    lenp: *mut size_t,
+) -> *mut c_char {
+    unsafe { string_convert_ext(vcp, ptr, lenp, core::ptr::null_mut()) }
+}
 
-pub const EINVAL: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
+/// Run `vcp`'s plan over `ptr`, answering a freshly allocated string.
+///
+/// `lenp` is the input length in and the output length out; null means "NUL
+/// terminated". `unconvlenp`, when given, receives the length of an
+/// incomplete sequence left at the end — the caller is reading a stream and
+/// the rest of it has not arrived yet.
+///
+/// Null comes back when the conversion failed: an invalid sequence in the
+/// input, or an unrepresentable character with `vc_fail` set.
+///
+/// # Safety
+///
+/// `ptr` must have `*lenp` readable bytes, or be NUL-terminated when `lenp`
+/// is null. The result is `xmalloc`'d.
+pub unsafe fn string_convert_ext(
+    vcp: *const vimconv_T,
+    ptr: *mut c_char,
+    lenp: *mut size_t,
+    unconvlenp: *mut size_t,
+) -> *mut c_char {
+    unsafe {
+        let len = if lenp.is_null() { strlen(ptr) } else { *lenp };
+        if len == 0 {
+            return xstrdup(c"".as_ptr());
+        }
+        let src = core::slice::from_raw_parts(ptr as *const u8, len);
 
-pub const ICONV_E2BIG: ::core::ffi::c_int = E2BIG;
+        // iconv manages its own buffer and reports its own length.
+        if (*vcp).vc_type == CONV_ICONV {
+            return iconv_string(vcp, ptr, len, unconvlenp, lenp);
+        }
 
-pub const ICONV_EINVAL: ::core::ffi::c_int = EINVAL;
+        // The worst-case growth of each conversion, which is what upstream
+        // allocates: it converts *in place* into this buffer. Building the
+        // answer first and copying it in would be tighter, but the allocation
+        // size is observable -- `test/unit/eval/typval_spec.lua` asserts the
+        // exact malloc sizes a converting `tv_list_copy` makes -- and it is
+        // the same bound `vimconv_T::vc_factor` promises callers.
+        let factor: size_t = match (*vcp).vc_type {
+            CONV_TO_UTF8 => 2,
+            CONV_9_TO_UTF8 => 3,
+            CONV_TO_LATIN1 | CONV_TO_LATIN9 => 1,
+            // CONV_NONE, and anything else: nothing was planned.
+            _ => return core::ptr::null_mut(),
+        };
+        let room = len * factor + 1;
+        let result = xmalloc(room) as *mut u8;
 
-pub const ICONV_EILSEQ: ::core::ffi::c_int = EILSEQ;
+        let out = match (*vcp).vc_type {
+            CONV_TO_UTF8 => Some(latin1_to_utf8(src)),
+            CONV_9_TO_UTF8 => Some(latin9_to_utf8(src)),
+            _ => utf8_to_latin(
+                src,
+                (*vcp).vc_type == CONV_TO_LATIN9,
+                (*vcp).vc_fail,
+                unconvlenp,
+            ),
+        };
+        let Some(out) = out else {
+            xfree(result as *mut c_void);
+            return core::ptr::null_mut();
+        };
+        debug_assert!(out.len() < room, "conversion overran vc_factor");
+        core::ptr::copy_nonoverlapping(out.as_ptr(), result, out.len());
+        *result.add(out.len()) = 0;
+        if !lenp.is_null() {
+            *lenp = out.len();
+        }
+        result as *mut c_char
+    }
+}
 
-pub const EILSEQ: ::core::ffi::c_int = 84 as ::core::ffi::c_int;
+/// Latin-1 to UTF-8: every byte is the codepoint of the same number.
+fn latin1_to_utf8(src: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(src.len() * 2);
+    for &c in src {
+        if c < 0x80 {
+            out.push(c);
+        } else {
+            out.push(0xc0 + (c >> 6));
+            out.push(0x80 + (c & 0x3f));
+        }
+    }
+    out
+}
+
+/// The eight positions where Latin-9 differs from Latin-1, as
+/// `(latin9 byte, codepoint)`.
+///
+/// Latin-9 is Latin-1 with eight characters replaced: the euro sign, the
+/// French œ ligature and Ÿ, and the S and Z with caron that Baltic languages
+/// need.
+const LATIN9_REPLACEMENTS: [(u8, c_int); 8] = [
+    (0xa4, 0x20ac), // €
+    (0xa6, 0x0160), // Š
+    (0xa8, 0x0161), // š
+    (0xb4, 0x017d), // Ž
+    (0xb8, 0x017e), // ž
+    (0xbc, 0x0152), // Œ
+    (0xbd, 0x0153), // œ
+    (0xbe, 0x0178), // Ÿ
+];
+
+/// Latin-9 to UTF-8: Latin-1's mapping, with the eight replacements applied.
+fn latin9_to_utf8(src: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(src.len() * 3);
+    let mut buf = [0 as c_char; MB_MAXCHAR];
+    for &b in src {
+        let c = LATIN9_REPLACEMENTS
+            .iter()
+            .find(|&&(byte, _)| byte == b)
+            .map_or(b as c_int, |&(_, code)| code);
+        // SAFETY: `buf` is the longest sequence `utf_char2bytes` can write.
+        let n = unsafe { utf_char2bytes(c, buf.as_mut_ptr()) } as usize;
+        out.extend(buf[..n].iter().map(|&b| b as u8));
+    }
+    out
+}
+
+/// UTF-8 to Latin-1 or Latin-9.
+///
+/// A character with no representation becomes `¿` (plus a `?` when it was
+/// drawn two cells wide, so columns line up), unless `fail` asks for an error
+/// instead. Composing characters are dropped: the base character is all
+/// either target can hold.
+///
+/// Answers `None` when the input is not UTF-8 at all, or when `fail` is set
+/// and a character cannot be represented.
+///
+/// # Safety
+///
+/// `unconvlenp` must be null or writable.
+unsafe fn utf8_to_latin(
+    src: &[u8],
+    to_latin9: bool,
+    fail: bool,
+    unconvlenp: *mut size_t,
+) -> Option<Vec<u8>> {
+    unsafe {
+        let mut out = Vec::with_capacity(src.len());
+        let mut i = 0;
+        while i < src.len() {
+            let p = src.as_ptr().add(i) as *const c_char;
+            let l = utf_ptr2len_len(p, (src.len() - i) as c_int);
+            if l == 0 {
+                // An embedded NUL, which `len` says is part of the string.
+                out.push(0);
+                i += 1;
+                continue;
+            }
+            if l == 1 {
+                if utf8len_tab_zero[src[i] as usize] == 0 {
+                    return None; // not a lead byte: the input is not UTF-8
+                }
+                if !unconvlenp.is_null()
+                    && utf8len_tab_zero[src[i] as usize] as usize > src.len() - i
+                {
+                    // A sequence cut off by the end of the input.
+                    *unconvlenp = src.len() - i;
+                    break;
+                }
+                out.push(src[i]);
+                i += 1;
+                continue;
+            }
+
+            let mut c = utf_ptr2char(p);
+            if to_latin9 {
+                c = to_latin9_byte(c);
+            }
+            if !utf_iscomposing_legacy(c) {
+                if c < 0x100 {
+                    out.push(c as u8);
+                } else if fail {
+                    return None;
+                } else {
+                    out.push(0xbf); // ¿
+                    if utf_char2cells(c) > 1 {
+                        out.push(b'?');
+                    }
+                }
+            }
+            i += l as usize;
+        }
+        Some(out)
+    }
+}
+
+/// The Latin-9 byte for a codepoint, or a value no byte can hold.
+///
+/// The eight replaced positions map back to their bytes. The eight
+/// *Latin-1* characters those positions displaced map to `0x100`, which is
+/// out of range on purpose: they exist in Latin-1 but not in Latin-9, so they
+/// must become `¿` rather than silently turning into the wrong glyph.
+fn to_latin9_byte(c: c_int) -> c_int {
+    if let Some(&(byte, _)) = LATIN9_REPLACEMENTS.iter().find(|&&(_, code)| code == c) {
+        return byte as c_int;
+    }
+    if LATIN9_REPLACEMENTS
+        .iter()
+        .any(|&(byte, _)| byte as c_int == c)
+    {
+        return 0x100;
+    }
+    c
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn latin1_round_trip() {
+        let src: Vec<u8> = (0u8..=255).collect();
+        let utf8 = latin1_to_utf8(&src);
+        // Every byte is the codepoint of the same number.
+        assert_eq!(String::from_utf8(utf8).unwrap().chars().count(), 256);
+    }
+
+    /// The Latin-9 map has to be a bijection on the eight positions, or a
+    /// round trip would lose characters.
+    #[test]
+    fn latin9_map_is_a_bijection() {
+        for &(byte, code) in &LATIN9_REPLACEMENTS {
+            assert_eq!(to_latin9_byte(code), byte as c_int);
+            // The Latin-1 character this position displaced has no Latin-9
+            // spelling, and must be pushed out of byte range.
+            assert_eq!(to_latin9_byte(byte as c_int), 0x100);
+        }
+        // Everything else passes through.
+        assert_eq!(to_latin9_byte('a' as c_int), 'a' as c_int);
+        assert_eq!(to_latin9_byte(0xe9), 0xe9); // é, same in both
+    }
+
+    #[test]
+    fn latin9_encodes_the_euro() {
+        assert_eq!(latin9_to_utf8(&[0xa4]), "€".as_bytes());
+        assert_eq!(latin9_to_utf8(&[b'a']), b"a");
+    }
+}
