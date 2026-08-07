@@ -1,6 +1,6 @@
 {
   "internal_exports": 40,
-  "files_without_forbid_unsafe": 827,
+  "files_without_forbid_unsafe": 834,
   "files_without_deny_unsafe_op": 176,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -716,7 +716,14 @@
     "crates/nvim/src/nvim/spellsuggest/walk/transpose.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/state.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/statusline.rs": {"lines": 3146, "no_mangle": 1, "unsafe": 15},
-    "crates/nvim/src/nvim/strings.rs": {"lines": 3975, "no_mangle": 1, "unsafe": 113, "variadic": 5},
+    "crates/nvim/src/nvim/strings.rs": {"no_mangle": 1, "unsafe": 14},
+    "crates/nvim/src/nvim/strings/case.rs": {"unsafe": 7},
+    "crates/nvim/src/nvim/strings/charindex.rs": {"unsafe": 28},
+    "crates/nvim/src/nvim/strings/escape.rs": {"unsafe": 4},
+    "crates/nvim/src/nvim/strings/eval.rs": {"unsafe": 20},
+    "crates/nvim/src/nvim/strings/printf.rs": {"unsafe": 11, "variadic": 5},
+    "crates/nvim/src/nvim/strings/printf/emit.rs": {"lines": 1316, "unsafe": 1},
+    "crates/nvim/src/nvim/strings/printf/spec.rs": {"unsafe": 28},
     "crates/nvim/src/nvim/syntax.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/syntax/attr.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/syntax/clear.rs": {"unsafe": 9},
