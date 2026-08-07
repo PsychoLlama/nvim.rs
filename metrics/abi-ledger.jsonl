@@ -57,7 +57,7 @@
 {"symbol":"ga_clear","kind":"fn","file":"crates/nvim/src/nvim/garray.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"ga_init","kind":"fn","file":"crates/nvim/src/nvim/garray.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"gc_first_list","kind":"static","file":"crates/nvim/src/nvim/eval/gc.rs","class":"test","refs":["functional-specs"]}
-{"symbol":"get_region_bytecount","kind":"fn","file":"crates/nvim/src/nvim/ops.rs","class":"internal","refs":[]}
+{"symbol":"get_region_bytecount","kind":"fn","file":"crates/nvim/src/nvim/ops/count.rs","class":"internal","refs":[]}
 {"symbol":"get_search_pat","kind":"fn","file":"crates/nvim/src/nvim/search/pattern.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"get_sts_value","kind":"fn","file":"crates/nvim/src/nvim/indent.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"getcell","kind":"fn","file":"crates/nvim/src/nvim/vterm/screen.rs","class":"test","refs":["unit-fixtures.so"]}
