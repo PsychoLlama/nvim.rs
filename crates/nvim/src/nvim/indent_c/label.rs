@@ -88,7 +88,7 @@ pub(crate) unsafe extern "C" fn skip_label(
         cursor_save = (*curwin.get()).w_cursor;
         (*curwin.get()).w_cursor.lnum = lnum;
         l = get_cursor_line_ptr();
-        if cin_iscase(l, false) || cin_isscopedecl(l) || cin_islabel() as ::core::ffi::c_int != 0 {
+        if cin_iscase(l, false) || cin_isscopedecl(l) || cin_islabel() {
             amount = get_indent_nolabel(lnum);
             l = after_label(get_cursor_line_ptr());
             if l.is_null() {

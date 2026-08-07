@@ -1,354 +1,352 @@
 //! Labels, declarations and the preprocessor.
 //!
-//! `cin_islabel` decides whether the current line is a jump label -- which
-//! 'cinoptions' `L` moves to the left margin -- and has to look *backwards* to
-//! do it, because `foo:` is only a label if the statement before it ended.
-//! `cin_isfuncdecl` is the K&R-parameter test, `cin_isinit` the
-//! `= {`/`enum` one, and `cin_ispreproc_cont` walks a `\`-continued `#define`
-//! back to its first line so that the scan does not stop inside one.
+//! [`cin_islabel`] decides whether the current line is a jump label -- which
+//! 'cinoptions' `L` moves to the left margin -- and has to look *backwards*
+//! to do it, because `foo:` is only a label if the statement before it ended.
+//! [`cin_isfuncdecl`] is the K&R-parameter test, [`cin_isinit`] the
+//! `= {`/`enum` one, and [`cin_ispreproc_cont`] walks a `\`-continued
+//! `#define` back to its first line so that the scan does not stop inside
+//! one.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
-use ::core::ffi::CStr;
+use ::core::ffi::{CStr, c_char, c_int};
 
-unsafe extern "C" fn cin_islabel_skip(mut s: *mut *const ::core::ffi::c_char) -> bool {
+/// Step `s` over `label:`, answering whether there was one.
+///
+/// `::` is C++ scope resolution rather than a label, and the walk is by
+/// *character* rather than by byte, because an identifier may be multibyte.
+///
+/// # Safety
+/// `*s` must point at a NUL-terminated string.
+pub(crate) unsafe fn cin_islabel_skip(s: &mut *const c_char) -> bool {
     unsafe {
-        if !vim_isIDc(**s as uint8_t as ::core::ffi::c_int) {
-            return false;
+        if !vim_isIDc(c_int::from(**s as u8)) {
+            return false; // need at least one ID character
         }
-        while vim_isIDc(**s as uint8_t as ::core::ffi::c_int) {
+        while vim_isIDc(c_int::from(**s as u8)) {
             *s = (*s).offset(utfc_ptr2len(*s) as isize);
         }
         *s = cin_skipcomment(*s);
-        return **s as ::core::ffi::c_int == ':' as ::core::ffi::c_int && {
-            *s = (*s).offset(1);
-            **s as ::core::ffi::c_int != ':' as ::core::ffi::c_int
-        };
+        if **s as u8 != b':' {
+            return false;
+        }
+        *s = (*s).add(1);
+        **s as u8 != b':'
     }
 }
 
-pub(crate) unsafe extern "C" fn cin_islabel() -> bool {
+/// Whether the cursor's line is a jump label (`foo:`).
+///
+/// A label only counts if the *previous* statement ended -- otherwise `foo:`
+/// is a ternary's second half or a bit-field width -- so this walks back past
+/// comments, raw strings and `#` directives until it finds a line it can
+/// judge.  `default:` and a 'cinscopedecls' word are excluded: they indent
+/// like switch labels, not like jump labels.
+///
+/// # Safety
+/// Reads and restores the cursor; may unlock the current line.
+pub(crate) unsafe fn cin_islabel() -> bool {
     unsafe {
-        let mut s: *const ::core::ffi::c_char = cin_skipcomment(get_cursor_line_ptr());
-        if cin_isdefault(s) {
-            return false;
-        }
-        if cin_isscopedecl(s) {
-            return false;
-        }
-        if !cin_islabel_skip(&raw mut s) {
+        let mut s = cin_skipcomment(get_cursor_line_ptr());
+        if cin_isdefault(s) || cin_isscopedecl(s) || !cin_islabel_skip(&mut s) {
             return false;
         }
         if !ind_find_start_CORS(None).is_null() {
-            return false;
+            return false; // not a label in a comment or a raw string
         }
-        let mut cursor_save: pos_T = pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        };
-        let mut trypos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-        let mut line: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        cursor_save = (*curwin.get()).w_cursor;
-        while (*curwin.get()).w_cursor.lnum > 1 as linenr_T {
+
+        let cursor_save = (*curwin.get()).w_cursor;
+        while (*curwin.get()).w_cursor.lnum > 1 {
             (*curwin.get()).w_cursor.lnum -= 1;
-            (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-            trypos = ind_find_start_CORS(None);
+            (*curwin.get()).w_cursor.col = 0;
+            let trypos = ind_find_start_CORS(None);
             if !trypos.is_null() {
                 (*curwin.get()).w_cursor = *trypos;
             }
-            line = get_cursor_line_ptr();
-            if cin_ispreproc(line) != 0 {
-                continue;
+
+            let mut line = get_cursor_line_ptr().cast_const();
+            if cin_ispreproc(line) {
+                continue; // ignore #defines, #if, etc.
             }
             line = cin_skipcomment(line);
-            if *line as ::core::ffi::c_int == NUL {
+            if *line == 0 {
                 continue;
             }
+
             (*curwin.get()).w_cursor = cursor_save;
-            if cin_isterminated(line, true, false) != 0
+            return cin_isterminated(line, true, false) != 0
                 || cin_isscopedecl(line)
                 || cin_iscase(line, true)
-                || cin_islabel_skip(&raw mut line) as ::core::ffi::c_int != 0 && cin_nocode(line)
-            {
-                return true;
-            }
-            return false;
+                || (cin_islabel_skip(&mut line) && cin_nocode(line));
         }
         (*curwin.get()).w_cursor = cursor_save;
-        return true;
+        true // label at start of file???
     }
 }
 
-unsafe extern "C" fn cin_is_compound_init(mut s: *const ::core::ffi::c_char) -> bool {
+/// Whether `s` is a structure or compound-literal initialisation:
+/// `=`/`return` then `[&]`, an optional typecast, then any number of `{`.
+///
+/// # Safety
+/// `s` must point at a NUL-terminated string.
+pub(crate) unsafe fn cin_is_compound_init(s: *const c_char) -> bool {
     unsafe {
-        let mut p: *const ::core::ffi::c_char = s;
-        let mut r: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+        // Find the *last* `=` or `return` on the line: the initialiser is
+        // whatever follows it.
+        let mut p = s;
+        let mut r = ::core::ptr::null::<c_char>();
         while *p != 0 {
-            if *p as ::core::ffi::c_int == '=' as ::core::ffi::c_int {
-                r = cin_skipcomment(p.offset(1 as ::core::ffi::c_int as isize));
-                p = r;
-            } else if strncmp(p, c"return".as_ptr(), 6 as size_t) == 0
-                && !vim_isIDc(*p.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                && (p == s
-                    || p > s
-                        && !vim_isIDc(
-                            *p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        ))
+            if *p as u8 == b'=' {
+                p = cin_skipcomment(p.add(1));
+                r = p;
+            } else if CStr::from_ptr(p).to_bytes().starts_with(b"return")
+                && !vim_isIDc(c_int::from(*p.add(6) as u8))
+                && (p == s || !vim_isIDc(c_int::from(*p.sub(1) as u8)))
             {
-                r = cin_skipcomment(p.offset(6 as ::core::ffi::c_int as isize));
-                p = r;
+                p = cin_skipcomment(p.add(6));
+                r = p;
             } else {
-                p = cin_skip_comment_and_string(p.offset(1 as ::core::ffi::c_int as isize));
+                p = cin_skip_comment_and_string(p.add(1));
             }
         }
         if r.is_null() {
             return false;
         }
-        p = r;
+
+        let mut p = r; // now just after the '=' or the "return"
         if cin_nocode(p) {
             return true;
         }
-        if *p as ::core::ffi::c_int == '&' as ::core::ffi::c_int {
-            p = cin_skipcomment(p.offset(1 as ::core::ffi::c_int as isize));
+        if *p as u8 == b'&' {
+            p = cin_skipcomment(p.add(1));
         }
-        if *p as ::core::ffi::c_int == '(' as ::core::ffi::c_int {
-            let mut open_count: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-            loop {
-                p = cin_skip_comment_and_string(p.offset(1 as ::core::ffi::c_int as isize));
+        if *p as u8 == b'(' {
+            // Skip a typecast.
+            let mut open_count = 1i32;
+            while open_count != 0 {
+                p = cin_skip_comment_and_string(p.add(1));
                 if cin_nocode(p) {
                     return true;
                 }
-                open_count += (*p as ::core::ffi::c_int == '(' as ::core::ffi::c_int)
-                    as ::core::ffi::c_int
-                    - (*p as ::core::ffi::c_int == ')' as ::core::ffi::c_int) as ::core::ffi::c_int;
-                if open_count == 0 {
-                    break;
-                }
+                open_count += i32::from(*p as u8 == b'(') - i32::from(*p as u8 == b')');
             }
-            p = cin_skipcomment(p.offset(1 as ::core::ffi::c_int as isize));
+            p = cin_skipcomment(p.add(1));
             if cin_nocode(p) {
                 return true;
             }
         }
-        while *p as ::core::ffi::c_int == '{' as ::core::ffi::c_int {
-            p = cin_skipcomment(p.offset(1 as ::core::ffi::c_int as isize));
+        while *p as u8 == b'{' {
+            p = cin_skipcomment(p.add(1));
         }
-        return cin_nocode(p);
+        cin_nocode(p)
     }
 }
 
-pub(crate) unsafe extern "C" fn cin_isinit() -> bool {
+/// Whether the cursor's line is an enumeration or a structure
+/// initialisation: `[typedef] [static|public|protected|private] enum`, or
+/// anything [`cin_is_compound_init`] accepts.
+///
+/// # Safety
+/// Reads the cursor; may unlock the current line.
+pub(crate) unsafe fn cin_isinit() -> bool {
+    /// Storage-class and access words that may precede the `enum`.
+    const SKIP: [&[u8]; 4] = [b"static", b"public", b"protected", b"private"];
+
     unsafe {
-        let mut s: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        static skip: GlobalCell<[*mut ::core::ffi::c_char; 4]> = GlobalCell::new([
-            c"static".as_ptr() as *mut ::core::ffi::c_char,
-            c"public".as_ptr() as *mut ::core::ffi::c_char,
-            c"protected".as_ptr() as *mut ::core::ffi::c_char,
-            c"private".as_ptr() as *mut ::core::ffi::c_char,
-        ]);
-        s = cin_skipcomment(get_cursor_line_ptr());
+        let mut s = cin_skipcomment(get_cursor_line_ptr());
         if cin_starts_with(s, b"typedef") {
-            s = cin_skipcomment(s.offset(7 as ::core::ffi::c_int as isize));
+            s = cin_skipcomment(s.add(7));
         }
-        loop {
-            let mut i: ::core::ffi::c_int = 0;
-            let mut l: ::core::ffi::c_int = 0;
-            i = 0 as ::core::ffi::c_int;
-            while i < ::core::mem::size_of::<[*mut ::core::ffi::c_char; 4]>()
-                .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[*mut ::core::ffi::c_char; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-                        == 0) as ::core::ffi::c_int as usize,
-                ) as ::core::ffi::c_int
-            {
-                l = strlen((*skip.ptr())[i as usize]) as ::core::ffi::c_int;
-                if cin_starts_with(s, CStr::from_ptr((*skip.ptr())[i as usize]).to_bytes()) {
-                    s = cin_skipcomment(s.offset(l as isize));
-                    l = 0 as ::core::ffi::c_int;
-                    break;
-                } else {
-                    i += 1;
-                }
-            }
-            if l != 0 as ::core::ffi::c_int {
-                break;
-            }
+        while let Some(word) = SKIP.iter().find(|word| cin_starts_with(s, word)) {
+            s = cin_skipcomment(s.add(word.len()));
         }
-        if cin_starts_with(s, b"enum") {
-            return true;
-        }
-        return cin_is_compound_init(s);
+        cin_starts_with(s, b"enum") || cin_is_compound_init(s)
     }
 }
 
-unsafe extern "C" fn cin_ispreproc(mut s: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    unsafe {
-        if *skipwhite(s) as ::core::ffi::c_int == '#' as ::core::ffi::c_int {
-            return true_0;
-        }
-        return false_0;
-    }
+/// Whether `s` is a preprocessor directive: anything starting with `#`.
+///
+/// # Safety
+/// `s` must point at a NUL-terminated string.
+pub(crate) unsafe fn cin_ispreproc(s: *const c_char) -> bool {
+    unsafe { *skipwhite(s) as u8 == b'#' }
 }
 
-pub(crate) unsafe extern "C" fn cin_ispreproc_cont(
-    mut pp: *mut *const ::core::ffi::c_char,
-    mut lnump: *mut linenr_T,
-    mut amount: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Whether line `*lnump` is a preprocessor directive *or a `\`-continuation
+/// of one*, walking `*lnump`/`*pp` back to the line that started it.
+///
+/// `*amount` is only written when the answer is yes, and then it is the
+/// indent of the *continued* line rather than of the directive -- so a scan
+/// that skips over a `#define` keeps the amount it would have used.
+///
+/// # Safety
+/// `*pp` must point at a NUL-terminated line; may unlock the current line.
+pub(crate) unsafe fn cin_ispreproc_cont(
+    pp: &mut *const c_char,
+    lnump: &mut linenr_T,
+    amount: &mut c_int,
+) -> bool {
     unsafe {
-        let mut line: *const ::core::ffi::c_char = *pp;
-        let mut lnum: linenr_T = *lnump;
-        let mut retval: ::core::ffi::c_int = false_0;
-        let mut candidate_amount: ::core::ffi::c_int = *amount;
-        if *line as ::core::ffi::c_int != NUL
-            && *line.offset(strlen(line).wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
-                == '\\' as ::core::ffi::c_int
-        {
+        let mut line = *pp;
+        let mut lnum = *lnump;
+        let mut retval = false;
+        let mut candidate_amount = *amount;
+
+        if *line != 0 && *line.add(strlen(line) - 1) as u8 == b'\\' {
             candidate_amount = get_indent_lnum(lnum);
         }
+
         loop {
-            if cin_ispreproc(line) != 0 {
-                retval = true_0;
+            if cin_ispreproc(line) {
+                retval = true;
                 *lnump = lnum;
                 break;
-            } else {
-                if lnum == 1 as linenr_T {
-                    break;
-                }
-                lnum -= 1;
-                line = ml_get(lnum);
-                if *line as ::core::ffi::c_int == NUL
-                    || *line.offset(strlen(line).wrapping_sub(1 as size_t) as isize)
-                        as ::core::ffi::c_int
-                        != '\\' as ::core::ffi::c_int
-                {
-                    break;
-                }
+            }
+            if lnum == 1 {
+                break;
+            }
+            lnum -= 1;
+            line = ml_get(lnum);
+            if *line == 0 || *line.add(strlen(line) - 1) as u8 != b'\\' {
+                break;
             }
         }
+
         if lnum != *lnump {
             *pp = ml_get(*lnump);
         }
-        if retval != 0 {
+        if retval {
             *amount = candidate_amount;
         }
-        return retval;
+        retval
     }
 }
 
-pub(crate) unsafe extern "C" fn cin_isfuncdecl(
-    mut sp: *mut *const ::core::ffi::c_char,
-    mut first_lnum: linenr_T,
-    mut min_lnum: linenr_T,
-) -> ::core::ffi::c_int {
+/// Whether the line at `first_lnum` looks like a function declaration: an
+/// open paren somewhere, a close paren at the end of the line, and no
+/// semicolon in between.
+///
+/// A line ending in `,` continues into the next one, which is why this can
+/// read further down the buffer.  `min_lnum` bounds how far *back* the
+/// matching `(` may be, and `sp`, when given, both supplies the first line
+/// and is restored to it before returning.
+///
+/// # Safety
+/// `*sp` must point at a NUL-terminated line; reads and restores the cursor
+/// line number, and may unlock the current line.
+pub(crate) unsafe fn cin_isfuncdecl(
+    sp: Option<&mut *const c_char>,
+    first_lnum: linenr_T,
+    min_lnum: linenr_T,
+) -> bool {
     unsafe {
-        let mut s: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut lnum: linenr_T = first_lnum;
-        let mut save_lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
-        let mut retval: ::core::ffi::c_int = false_0;
-        let mut trypos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-        let mut just_started: ::core::ffi::c_int = true_0;
-        if sp.is_null() {
-            s = ml_get(lnum);
-        } else {
-            s = *sp;
-        }
+        let mut lnum = first_lnum;
+        let save_lnum = (*curwin.get()).w_cursor.lnum;
+        let mut retval = false;
+        let mut just_started = true;
+
+        let mut s = match &sp {
+            Some(p) => **p,
+            None => ml_get(lnum),
+        };
+
+        // Position on the rightmost unmatched paren so that matching it
+        // takes us to the line the declaration starts on.
         (*curwin.get()).w_cursor.lnum = lnum;
-        if find_last_paren(s, '(' as ::core::ffi::c_char, ')' as ::core::ffi::c_char) != 0 && {
-            trypos = find_match_paren((*curbuf.get()).b_ind_maxparen);
-            !trypos.is_null()
-        } {
-            lnum = (*trypos).lnum;
-            if lnum < min_lnum {
-                (*curwin.get()).w_cursor.lnum = save_lnum;
-                return false_0;
+        if find_last_paren(s, b'(', b')') {
+            let trypos = find_match_paren((*curbuf.get()).b_ind_maxparen);
+            if !trypos.is_null() {
+                lnum = (*trypos).lnum;
+                if lnum < min_lnum {
+                    (*curwin.get()).w_cursor.lnum = save_lnum;
+                    return false;
+                }
+                s = ml_get(lnum);
             }
-            s = ml_get(lnum);
         }
         (*curwin.get()).w_cursor.lnum = save_lnum;
-        if cin_ispreproc(s) != 0 {
-            return false_0;
+
+        if cin_ispreproc(s) {
+            return false; // ignore a line starting with #
         }
-        while *s as ::core::ffi::c_int != 0
-            && *s as ::core::ffi::c_int != '(' as ::core::ffi::c_int
-            && *s as ::core::ffi::c_int != ';' as ::core::ffi::c_int
-            && *s as ::core::ffi::c_int != '\'' as ::core::ffi::c_int
-            && *s as ::core::ffi::c_int != '"' as ::core::ffi::c_int
+
+        while *s != 0
+            && *s as u8 != b'('
+            && *s as u8 != b';'
+            && *s as u8 != b'\''
+            && *s as u8 != b'"'
         {
             if cin_iscomment(s) {
                 s = cin_skipcomment(s);
-            } else if *s as ::core::ffi::c_int == ':' as ::core::ffi::c_int {
-                if *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == ':' as ::core::ffi::c_int
-                {
-                    s = s.offset(2 as ::core::ffi::c_int as isize);
-                } else {
-                    return false_0;
+            } else if *s as u8 == b':' {
+                if *s.add(1) as u8 != b':' {
+                    // A constructor's initialiser list is not a declaration:
+                    //     A::A(int a, int b)
+                    //         : a(0)  // <-- not a function decl
+                    //         , b(0)
+                    return false;
                 }
+                s = s.add(2);
             } else {
-                s = s.offset(1);
+                s = s.add(1);
             }
         }
-        if *s as ::core::ffi::c_int != '(' as ::core::ffi::c_int {
-            return false_0;
+        if *s as u8 != b'(' {
+            return false; // ';', ' or " before any () or no '('
         }
-        while *s as ::core::ffi::c_int != 0
-            && *s as ::core::ffi::c_int != ';' as ::core::ffi::c_int
-            && *s as ::core::ffi::c_int != '\'' as ::core::ffi::c_int
-            && *s as ::core::ffi::c_int != '"' as ::core::ffi::c_int
-        {
-            if *s as ::core::ffi::c_int == ')' as ::core::ffi::c_int
-                && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize))
-            {
-                lnum = first_lnum - 1 as linenr_T;
-                s = ml_get(lnum);
-                if *s as ::core::ffi::c_int == NUL
-                    || *s.offset(strlen(s).wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
-                        != '\\' as ::core::ffi::c_int
-                {
-                    retval = true_0;
-                }
-                break;
-            } else if *s as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-                && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize))
-                || *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-                || cin_nocode(s)
-            {
-                let mut comma: ::core::ffi::c_int =
-                    (*s as ::core::ffi::c_int == ',' as ::core::ffi::c_int) as ::core::ffi::c_int;
-                while lnum < (*curbuf.get()).b_ml.ml_line_count {
-                    lnum += 1;
+
+        'done: {
+            while *s != 0 && *s as u8 != b';' && *s as u8 != b'\'' && *s as u8 != b'"' {
+                if *s as u8 == b')' && cin_nocode(s.add(1)) {
+                    // ')' at the end: a match, unless the line before the
+                    // one we started on ends in a backslash --
+                    //     #if defined(x) && \
+                    //         defined(y)
+                    lnum = first_lnum - 1;
                     s = ml_get(lnum);
-                    if cin_ispreproc(s) == 0 {
+                    retval = *s == 0 || *s.add(strlen(s) - 1) as u8 != b'\\';
+                    break 'done;
+                }
+                if (*s as u8 == b',' && cin_nocode(s.add(1))) || *s.add(1) == 0 || cin_nocode(s) {
+                    let comma = *s as u8 == b',';
+
+                    // A ',' at the end continues into the next line; so does
+                    // the end of the line, for this style:
+                    //     func(arg1
+                    //           , arg2)
+                    while lnum < (*curbuf.get()).b_ml.ml_line_count {
+                        lnum += 1;
+                        s = ml_get(lnum);
+                        if !cin_ispreproc(s) {
+                            break;
+                        }
+                    }
+                    if lnum >= (*curbuf.get()).b_ml.ml_line_count {
                         break;
                     }
+                    // Require a comma at the end of this line, or a comma or
+                    // ')' at the start of the next.
+                    s = skipwhite(s);
+                    if !just_started && !comma && *s as u8 != b',' && *s as u8 != b')' {
+                        break;
+                    }
+                    just_started = false;
+                } else if cin_iscomment(s) {
+                    s = cin_skipcomment(s);
+                } else {
+                    s = s.add(1);
+                    just_started = false;
                 }
-                if lnum >= (*curbuf.get()).b_ml.ml_line_count {
-                    break;
-                }
-                s = skipwhite(s);
-                if just_started == 0
-                    && (comma == 0
-                        && *s as ::core::ffi::c_int != ',' as ::core::ffi::c_int
-                        && *s as ::core::ffi::c_int != ')' as ::core::ffi::c_int)
-                {
-                    break;
-                }
-                just_started = false_0;
-            } else if cin_iscomment(s) {
-                s = cin_skipcomment(s);
-            } else {
-                s = s.offset(1);
-                just_started = false_0;
             }
         }
-        if lnum != first_lnum && !sp.is_null() {
-            *sp = ml_get(first_lnum);
+
+        if lnum != first_lnum
+            && let Some(p) = sp
+        {
+            *p = ml_get(first_lnum);
         }
-        return retval;
+        retval
     }
 }

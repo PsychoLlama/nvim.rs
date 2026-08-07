@@ -242,16 +242,10 @@ pub(crate) unsafe extern "C" fn get_baseclass_amount(
         let mut trypos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
         if col == 0 as ::core::ffi::c_int {
             amount = get_indent();
-            if find_last_paren(
-                get_cursor_line_ptr(),
-                '(' as ::core::ffi::c_char,
-                ')' as ::core::ffi::c_char,
-            ) != 0
-                && {
-                    trypos = find_match_paren((*curbuf.get()).b_ind_maxparen);
-                    !trypos.is_null()
-                }
-            {
+            if find_last_paren(get_cursor_line_ptr(), b'(', b')') && {
+                trypos = find_match_paren((*curbuf.get()).b_ind_maxparen);
+                !trypos.is_null()
+            } {
                 amount = get_indent_lnum((*trypos).lnum);
             }
             if !cin_ends_in(get_cursor_line_ptr(), b",") {

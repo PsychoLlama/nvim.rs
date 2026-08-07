@@ -1,70 +1,78 @@
 //! Finding the enclosing bracket, and the matching keyword.
 //!
-//! `find_match_paren`/`find_match_char` search backwards for an unclosed
-//! `(`/`[`, `find_start_brace` for an unclosed `{` that is not inside a comment
-//! or a paren, both bounded by 'cinoptions' `)N` (`b_ind_maxparen`).
-//! `find_last_paren` puts the cursor on the rightmost unmatched bracket of a
-//! line first, which is what makes the backwards search start in the right
-//! place.  `find_match` is the other kind of matching: the `if` an `else`
-//! belongs to, or the `do` a `while` closes.
+//! [`find_match_paren`]/[`find_match_char`] search backwards for an unclosed
+//! `(`/`[`, [`find_start_brace`] for an unclosed `{` that is not inside a
+//! comment or a paren, both bounded by 'cinoptions' `)N`
+//! (`b_ind_maxparen`).  [`find_last_paren`] puts the cursor on the rightmost
+//! unmatched bracket of a line first, which is what makes the backwards
+//! search start in the right place.  [`find_match`] is the other kind of
+//! matching: the `if` an `else` belongs to, or the `do` a `while` closes.
+//!
+//! `findmatchlimit` answers out of one static, so every function here that
+//! calls it twice has to copy the first answer before making the second
+//! call.  That is what the `GlobalCell`s are for, and it is also why these
+//! answers are pointers rather than values: the callers pass them on.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+use ::core::ffi::{c_char, c_int};
 
-unsafe extern "C" fn cin_skip2pos(mut trypos: *mut pos_T) -> ::core::ffi::c_int {
+/// The column `trypos.col` sits at once comments and strings before it are
+/// stepped over -- so a `{` inside a comment answers a column past its own,
+/// which is how the searches below reject it.
+///
+/// # Safety
+/// Reads the buffer; may unlock the current line.
+pub(crate) unsafe fn cin_skip2pos(trypos: *mut pos_T) -> c_int {
     unsafe {
-        let mut line: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut new_p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        line = ml_get((*trypos).lnum);
-        p = line;
-        while *p as ::core::ffi::c_int != 0 && (p.offset_from(line) as colnr_T) < (*trypos).col {
+        let line = ml_get((*trypos).lnum);
+        let mut p = line.cast_const();
+        while *p != 0 && (p.offset_from(line) as colnr_T) < (*trypos).col {
             if cin_iscomment(p) {
                 p = cin_skipcomment(p);
             } else {
-                new_p = skip_string(p);
-                if new_p == p {
-                    p = p.offset(1);
-                } else {
-                    p = new_p;
-                }
+                let new_p = skip_string(p);
+                p = if new_p == p { p.add(1) } else { new_p };
             }
         }
-        return p.offset_from(line) as ::core::ffi::c_int;
+        p.offset_from(line) as c_int
     }
 }
 
-pub(crate) unsafe extern "C" fn find_start_brace() -> *mut pos_T {
+/// The `{` opening the block the cursor is in, or null.
+///
+/// A `{` inside a `//` or `/* */` comment is ignored -- which is what makes
+/// the three lines of `foo()\n{\n}` indent -- and the search resumes from
+/// the start of whatever comment or raw string swallowed it.
+///
+/// # Safety
+/// Reads and restores the cursor; may unlock the current line.
+pub(crate) unsafe fn find_start_brace() -> *mut pos_T {
     unsafe {
-        let mut cursor_save: pos_T = pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        };
-        let mut trypos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-        let mut pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-        static pos_copy: GlobalCell<pos_T> = GlobalCell::new(pos_T {
+        static POS_COPY: GlobalCell<pos_T> = GlobalCell::new(pos_T {
             lnum: 0,
             col: 0,
             coladd: 0,
         });
-        cursor_save = (*curwin.get()).w_cursor;
+        let cursor_save = (*curwin.get()).w_cursor;
+        let mut trypos;
         loop {
             trypos = findmatchlimit(
                 ::core::ptr::null_mut::<oparg_T>(),
-                '{' as ::core::ffi::c_int,
+                c_int::from(b'{'),
                 FM_BLOCKSTOP,
-                0 as int64_t,
+                0,
             );
             if trypos.is_null() {
                 break;
             }
-            pos_copy.set(*trypos);
-            trypos = pos_copy.ptr();
+            // Copy it: the next `findmatchlimit` overwrites the static.
+            POS_COPY.set(*trypos);
+            trypos = POS_COPY.ptr();
             (*curwin.get()).w_cursor = *trypos;
-            pos = ::core::ptr::null_mut::<pos_T>();
+
+            let mut pos = ::core::ptr::null_mut::<pos_T>();
             if cin_skip2pos(trypos) == (*trypos).col && {
                 pos = ind_find_start_CORS(None);
                 pos.is_null()
@@ -76,168 +84,187 @@ pub(crate) unsafe extern "C" fn find_start_brace() -> *mut pos_T {
             }
         }
         (*curwin.get()).w_cursor = cursor_save;
-        return trypos;
+        trypos
     }
 }
 
-pub(crate) unsafe extern "C" fn find_match_paren(
-    mut ind_maxparen: ::core::ffi::c_int,
-) -> *mut pos_T {
-    unsafe {
-        return find_match_char('(' as ::core::ffi::c_char, ind_maxparen);
-    }
+/// The unclosed `(` above the cursor, or null.
+///
+/// # Safety
+/// Reads and restores the cursor; may unlock the current line.
+pub(crate) unsafe fn find_match_paren(ind_maxparen: c_int) -> *mut pos_T {
+    unsafe { find_match_char(b'(', ind_maxparen) }
 }
 
-pub(crate) unsafe extern "C" fn find_match_char(
-    mut c: ::core::ffi::c_char,
-    mut ind_maxparen: ::core::ffi::c_int,
-) -> *mut pos_T {
+/// The unclosed `c` above the cursor, or null, ignoring one inside a comment
+/// or a raw string.
+///
+/// When the match turns out to be inside one, the search restarts from the
+/// *start* of that comment with the remaining budget -- `ind_maxparen` less
+/// the lines already walked -- so the total distance searched stays bounded
+/// however many comments are in the way.
+///
+/// # Safety
+/// Reads and restores the cursor; may unlock the current line.
+pub(crate) unsafe fn find_match_char(c: u8, ind_maxparen: c_int) -> *mut pos_T {
     unsafe {
-        let mut cursor_save: pos_T = pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        };
-        let mut trypos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-        static pos_copy: GlobalCell<pos_T> = GlobalCell::new(pos_T {
+        static POS_COPY: GlobalCell<pos_T> = GlobalCell::new(pos_T {
             lnum: 0,
             col: 0,
             coladd: 0,
         });
-        let mut ind_maxp_wk: ::core::ffi::c_int = 0;
-        cursor_save = (*curwin.get()).w_cursor;
-        ind_maxp_wk = ind_maxparen;
-        loop {
-            trypos = findmatchlimit(
+        let cursor_save = (*curwin.get()).w_cursor;
+        let mut ind_maxp_wk = ind_maxparen;
+
+        let found = loop {
+            let mut trypos = findmatchlimit(
                 ::core::ptr::null_mut::<oparg_T>(),
-                c as uint8_t as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
-                ind_maxp_wk as int64_t,
+                c_int::from(c),
+                0,
+                int64_t::from(ind_maxp_wk),
             );
             if trypos.is_null() {
-                break;
+                break trypos;
             }
+
+            // Is the match inside a `//` comment?
             if cin_skip2pos(trypos) > (*trypos).col {
-                ind_maxp_wk = (ind_maxparen as linenr_T - (cursor_save.lnum - (*trypos).lnum))
-                    as ::core::ffi::c_int;
-                if ind_maxp_wk > 0 as ::core::ffi::c_int {
-                    (*curwin.get()).w_cursor = *trypos;
-                    (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-                } else {
-                    trypos = ::core::ptr::null_mut::<pos_T>();
-                    break;
+                ind_maxp_wk = ind_maxparen - (cursor_save.lnum - (*trypos).lnum);
+                if ind_maxp_wk <= 0 {
+                    break ::core::ptr::null_mut::<pos_T>();
                 }
-            } else {
-                let mut trypos_wk: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-                pos_copy.set(*trypos);
-                trypos = pos_copy.ptr();
                 (*curwin.get()).w_cursor = *trypos;
-                trypos_wk = ind_find_start_CORS(None);
-                if trypos_wk.is_null() {
-                    break;
-                }
-                ind_maxp_wk = (ind_maxparen as linenr_T - (cursor_save.lnum - (*trypos_wk).lnum))
-                    as ::core::ffi::c_int;
-                if ind_maxp_wk > 0 as ::core::ffi::c_int {
-                    (*curwin.get()).w_cursor = *trypos_wk;
-                } else {
-                    trypos = ::core::ptr::null_mut::<pos_T>();
-                    break;
-                }
+                (*curwin.get()).w_cursor.col = 0;
+                continue;
             }
-        }
+
+            // Copy it: the `ind_find_start_CORS` below overwrites the static.
+            POS_COPY.set(*trypos);
+            trypos = POS_COPY.ptr();
+            (*curwin.get()).w_cursor = *trypos;
+
+            let trypos_wk = ind_find_start_CORS(None);
+            if trypos_wk.is_null() {
+                break trypos;
+            }
+            ind_maxp_wk = ind_maxparen - (cursor_save.lnum - (*trypos_wk).lnum);
+            if ind_maxp_wk <= 0 {
+                break ::core::ptr::null_mut::<pos_T>();
+            }
+            (*curwin.get()).w_cursor = *trypos_wk;
+        };
+
         (*curwin.get()).w_cursor = cursor_save;
-        return trypos;
+        found
     }
 }
 
-pub(crate) unsafe extern "C" fn find_match_paren_after_brace(
-    mut ind_maxparen: ::core::ffi::c_int,
-) -> *mut pos_T {
+/// [`find_match_paren`], but null when an unmatched `{` is closer.
+///
+/// # Safety
+/// Reads and restores the cursor; may unlock the current line.
+pub(crate) unsafe fn find_match_paren_after_brace(ind_maxparen: c_int) -> *mut pos_T {
     unsafe {
-        let mut trypos: *mut pos_T = find_match_paren(ind_maxparen);
+        let trypos = find_match_paren(ind_maxparen);
         if trypos.is_null() {
-            return ::core::ptr::null_mut::<pos_T>();
+            return trypos;
         }
-        let mut tryposBrace: *mut pos_T = find_start_brace();
-        if !tryposBrace.is_null()
-            && (if (*trypos).lnum != (*tryposBrace).lnum {
-                ((*trypos).lnum < (*tryposBrace).lnum) as ::core::ffi::c_int
+        let brace = find_start_brace();
+        let brace_is_further_down = !brace.is_null()
+            && if (*trypos).lnum != (*brace).lnum {
+                (*trypos).lnum < (*brace).lnum
             } else {
-                ((*trypos).col < (*tryposBrace).col) as ::core::ffi::c_int
-            }) != 0
-        {
-            trypos = ::core::ptr::null_mut::<pos_T>();
+                (*trypos).col < (*brace).col
+            };
+        if brace_is_further_down {
+            ::core::ptr::null_mut::<pos_T>()
+        } else {
+            trypos
         }
-        return trypos;
     }
 }
 
-pub(crate) unsafe extern "C" fn corr_ind_maxparen(mut startpos: *mut pos_T) -> ::core::ffi::c_int {
+/// 'cinoptions' `)N` corrected for how far *below* the cursor `startpos` is.
+///
+/// Searching for a match above the cursor from a position below it would
+/// otherwise get a longer reach than the option allows, and could find a
+/// paren the option was meant to exclude.  Only a `startpos` below the cursor
+/// and within half the budget shortens it.
+///
+/// # Safety
+/// Reads the cursor and the current buffer.
+pub(crate) unsafe fn corr_ind_maxparen(startpos: *mut pos_T) -> c_int {
     unsafe {
-        let mut n: ::core::ffi::c_int = (*startpos).lnum as ::core::ffi::c_int
-            - (*curwin.get()).w_cursor.lnum as ::core::ffi::c_int;
-        if n > 0 as ::core::ffi::c_int
-            && n < (*curbuf.get()).b_ind_maxparen / 2 as ::core::ffi::c_int
-        {
-            return (*curbuf.get()).b_ind_maxparen - n;
+        let maxparen = (*curbuf.get()).b_ind_maxparen;
+        let n = (*startpos).lnum - (*curwin.get()).w_cursor.lnum;
+        if n > 0 && n < maxparen / 2 {
+            maxparen - n
+        } else {
+            maxparen
         }
-        return (*curbuf.get()).b_ind_maxparen;
     }
 }
 
-pub(crate) unsafe extern "C" fn find_last_paren(
-    mut l: *const ::core::ffi::c_char,
-    mut start: ::core::ffi::c_char,
-    mut end: ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+/// Put `w_cursor.col` on the last unmatched `end` in `l`, answering whether
+/// there was one.  `l` must be the start of the line.
+///
+/// Brackets inside comments and strings do not count, which is what the two
+/// skips at the top of the loop are for.
+///
+/// # Safety
+/// `l` must point at the start of a NUL-terminated line; writes the cursor
+/// column.
+pub(crate) unsafe fn find_last_paren(l: *const c_char, start: u8, end: u8) -> bool {
     unsafe {
-        let mut i: ::core::ffi::c_int = 0;
-        let mut retval: ::core::ffi::c_int = false_0;
-        let mut open_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-        i = 0 as ::core::ffi::c_int;
-        while *l.offset(i as isize) as ::core::ffi::c_int != NUL {
-            i = cin_skipcomment(l.offset(i as isize)).offset_from(l) as ::core::ffi::c_int;
-            i = skip_string(l.offset(i as isize)).offset_from(l) as ::core::ffi::c_int;
-            if *l.offset(i as isize) as ::core::ffi::c_int == start as ::core::ffi::c_int {
+        let mut retval = false;
+        let mut open_count = 0;
+        (*curwin.get()).w_cursor.col = 0; // default is start of line
+
+        let mut i: isize = 0;
+        while *l.offset(i) != 0 {
+            i = cin_skipcomment(l.offset(i)).offset_from(l); // ignore brackets in comments
+            i = skip_string(l.offset(i)).offset_from(l); // ... and in quotes
+            if *l.offset(i) as u8 == start {
                 open_count += 1;
-            } else if *l.offset(i as isize) as ::core::ffi::c_int == end as ::core::ffi::c_int {
-                if open_count > 0 as ::core::ffi::c_int {
+            } else if *l.offset(i) as u8 == end {
+                if open_count > 0 {
                     open_count -= 1;
                 } else {
                     (*curwin.get()).w_cursor.col = i as colnr_T;
-                    retval = true_0;
+                    retval = true;
                 }
             }
             i += 1;
         }
-        return retval;
+        retval
     }
 }
 
-pub(crate) unsafe extern "C" fn find_match(
-    mut lookfor: ::core::ffi::c_int,
-    mut ourscope: linenr_T,
-) -> ::core::ffi::c_int {
+/// Search back from the cursor for the `if` an `else` belongs to
+/// (`LOOKFOR_IF`) or the `do` a `while` closes, stopping at `ourscope`.
+///
+/// Both directions are one walk with two counters: an `else` that is not an
+/// `else if` needs one more `if`, a `do`-`while` needs one more `do`, and a
+/// line whose enclosing brace is not `ourscope`'s is in a different scope and
+/// is skipped whole.
+///
+/// # Safety
+/// Moves the cursor; may unlock the current line.
+pub(crate) unsafe fn find_match(lookfor: c_int, ourscope: linenr_T) -> bool {
     unsafe {
-        let mut look: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut theirscope: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-        let mut mightbeif: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut elselevel: ::core::ffi::c_int = 0;
-        let mut whilelevel: ::core::ffi::c_int = 0;
-        if lookfor == LOOKFOR_IF {
-            elselevel = 1 as ::core::ffi::c_int;
-            whilelevel = 0 as ::core::ffi::c_int;
+        let (mut elselevel, mut whilelevel) = if lookfor == LOOKFOR_IF {
+            (1, 0)
         } else {
-            elselevel = 0 as ::core::ffi::c_int;
-            whilelevel = 1 as ::core::ffi::c_int;
-        }
-        (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-        while (*curwin.get()).w_cursor.lnum > ourscope + 1 as linenr_T {
+            (0, 1)
+        };
+
+        (*curwin.get()).w_cursor.col = 0;
+
+        while (*curwin.get()).w_cursor.lnum > ourscope + 1 {
             (*curwin.get()).w_cursor.lnum -= 1;
-            (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-            look = cin_skipcomment(get_cursor_line_ptr());
+            (*curwin.get()).w_cursor.col = 0;
+
+            let mut look = cin_skipcomment(get_cursor_line_ptr());
             if !cin_iselse(look)
                 && !cin_isif(look)
                 && !cin_isdo(look)
@@ -245,42 +272,51 @@ pub(crate) unsafe extern "C" fn find_match(
             {
                 continue;
             }
-            theirscope = find_start_brace();
-            if theirscope.is_null() {
-                break;
+
+            // Outside the braces entirely, or enclosed by a brace further
+            // back than ours: out of scope either way.
+            let theirscope = find_start_brace();
+            if theirscope.is_null() || (*theirscope).lnum < ourscope {
+                return false;
             }
-            if (*theirscope).lnum < ourscope {
-                break;
-            }
+            // Enclosed by a *deeper* brace: a different scope, ignore it.
             if (*theirscope).lnum > ourscope {
                 continue;
             }
+
             look = cin_skipcomment(get_cursor_line_ptr());
+            // Looking for an `if`, ignore the `if`s and `else`s of a deeper
+            // do-while loop.
             if !(lookfor == LOOKFOR_IF && whilelevel != 0) {
                 if cin_iselse(look) {
-                    mightbeif = cin_skipcomment(look.offset(4 as ::core::ffi::c_int as isize));
-                    if !cin_isif(mightbeif) {
+                    // An `else` that is not an `else if` needs one more `if`.
+                    if !cin_isif(cin_skipcomment(look.add(4))) {
                         elselevel += 1;
                     }
                     continue;
-                } else if cin_isif(look) {
+                }
+                if cin_isif(look) {
                     elselevel -= 1;
-                    if elselevel == 0 as ::core::ffi::c_int && lookfor == LOOKFOR_IF {
-                        whilelevel = 0 as ::core::ffi::c_int;
+                    // Once the `if` is found, `while`s stop getting in the way.
+                    if elselevel == 0 && lookfor == LOOKFOR_IF {
+                        whilelevel = 0;
                     }
                 }
             }
+
             if cin_iswhileofdo(look, (*curwin.get()).w_cursor.lnum) {
                 whilelevel += 1;
-            } else {
-                if cin_isdo(look) {
-                    whilelevel -= 1;
-                }
-                if elselevel <= 0 as ::core::ffi::c_int && whilelevel <= 0 as ::core::ffi::c_int {
-                    return OK;
-                }
+                continue;
+            }
+            if cin_isdo(look) {
+                whilelevel -= 1;
+            }
+
+            // All the `else`s used up: this is the one.
+            if elselevel <= 0 && whilelevel <= 0 {
+                return true;
             }
         }
-        return FAIL;
+        false
     }
 }

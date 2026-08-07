@@ -42,7 +42,6 @@
     "crates/nvim/src/nvim/help.rs": 49,
     "crates/nvim/src/nvim/highlight_group/table.rs": 2,
     "crates/nvim/src/nvim/indent.rs": 12,
-    "crates/nvim/src/nvim/indent_c/decl.rs": 3,
     "crates/nvim/src/nvim/indent_c/engine.rs": 7,
     "crates/nvim/src/nvim/indent_c/keys.rs": 2,
     "crates/nvim/src/nvim/indent_c/label.rs": 1,

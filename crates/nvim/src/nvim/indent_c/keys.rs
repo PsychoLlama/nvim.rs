@@ -121,10 +121,7 @@ pub unsafe extern "C" fn in_cinkeys(
             } else if *look as ::core::ffi::c_int == ':' as ::core::ffi::c_int {
                 if try_match as ::core::ffi::c_int != 0 && keytyped == ':' as ::core::ffi::c_int {
                     p = get_cursor_line_ptr();
-                    if cin_iscase(p, false)
-                        || cin_isscopedecl(p)
-                        || cin_islabel() as ::core::ffi::c_int != 0
-                    {
+                    if cin_iscase(p, false) || cin_isscopedecl(p) || cin_islabel() {
                         return true;
                     }
                     p = get_cursor_line_ptr();
@@ -144,9 +141,7 @@ pub unsafe extern "C" fn in_cinkeys(
                             ((*curwin.get()).w_cursor.col as ::core::ffi::c_int
                                 - 1 as ::core::ffi::c_int) as isize,
                         ) = ' ' as ::core::ffi::c_char;
-                        let i: bool = cin_iscase(p, false)
-                            || cin_isscopedecl(p)
-                            || cin_islabel() as ::core::ffi::c_int != 0;
+                        let i: bool = cin_iscase(p, false) || cin_isscopedecl(p) || cin_islabel();
                         p = get_cursor_line_ptr();
                         *p.offset(
                             ((*curwin.get()).w_cursor.col as ::core::ffi::c_int
