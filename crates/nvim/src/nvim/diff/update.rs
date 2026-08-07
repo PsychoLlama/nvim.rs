@@ -1,202 +1,215 @@
 //! Recomputing a tabpage's diff.
 //!
-//! `ex_diffupdate` is `:diffupdate`; `diff_try_update` is the body it and every
-//! implicit recompute share -- write each buffer out (`diff_write_buffer` for the
-//! internal engine, `diff_write` through a temp file for the external one), run
-//! the diff, read the hunks back.  It is also where the fall back from the
-//! external diff to the internal one happens.
+//! [`ex_diffupdate`] is `:diffupdate`; [`diff_try_update`] is the body it and
+//! every implicit recompute share -- write each buffer out
+//! ([`diff_write_buffer`] for the internal engine, [`diff_write`] through a
+//! temp file for the external one), run the diff, read the hunks back.
+//!
+//! `'diffanchors'` is implemented here rather than in the engine: the
+//! buffers are split at the anchor lines and each segment is diffed on its
+//! own, then the resulting block lists are shifted back into place and
+//! concatenated.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use ::core::ffi::{c_char, c_int};
+use ::std::ffi::CStr;
 
-unsafe extern "C" fn clear_diffin(mut din: *mut diffin_T) {
+/// Release one side of a diff: the temp file if there is one, else the
+/// memory image.
+unsafe fn clear_diffin(din: *mut diffin_T) {
     unsafe {
         if (*din).din_fname.is_null() {
-            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                &raw mut (*din).din_mmfile.ptr as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr_);
-            *ptr_ = NULL;
-            let _ = *ptr_;
+            xfree((*din).din_mmfile.ptr.cast());
+            (*din).din_mmfile.ptr = ::core::ptr::null_mut();
         } else {
             os_remove((*din).din_fname);
-        };
+        }
     }
 }
 
-pub(crate) unsafe extern "C" fn clear_diffout(mut dout: *mut diffout_T) {
+/// Release the diff's output: the temp file if there is one, else the hunk
+/// array.
+pub(crate) unsafe fn clear_diffout(dout: *mut diffout_T) {
     unsafe {
         if (*dout).dout_fname.is_null() {
             ga_clear(&raw mut (*dout).dout_ga);
         } else {
             os_remove((*dout).dout_fname);
-        };
+        }
     }
 }
 
-pub(crate) unsafe extern "C" fn diff_write_buffer(
-    mut buf: *mut buf_T,
-    mut m: *mut mmfile_t,
-    mut start: linenr_T,
+/// Write lines `start`..`end` of `buf` into a memory image for `xdl_diff`.
+///
+/// The image is one NL-terminated line after another.  A NL *inside* a line
+/// stands for a NUL byte in the file -- `ml_get_buf` answers the two swapped
+/// -- and is written back as one, so the terminators are unambiguous.
+/// `icase` is applied here, by folding each character, because xdiff has no
+/// flag for it.
+pub(crate) unsafe fn diff_write_buffer(
+    buf: *mut buf_T,
+    m: *mut mmfile_t,
+    start: linenr_T,
     mut end: linenr_T,
-) -> ::core::ffi::c_int {
+) -> c_int {
     unsafe {
-        if end < 0 as linenr_T {
+        if end < 0 {
             end = (*buf).b_ml.ml_line_count;
         }
         if (*buf).b_ml.ml_flags & ML_EMPTY != 0 || end < start {
-            (*m).ptr = ::core::ptr::null_mut::<::core::ffi::c_char>();
-            (*m).size = 0 as ::core::ffi::c_int;
+            *m = MMFILE_INIT;
             return OK;
         }
-        let mut len: size_t = 0 as size_t;
-        let mut lnum: linenr_T = start;
-        while lnum <= end {
-            len = len.wrapping_add((ml_get_buf_len(buf, lnum) as size_t).wrapping_add(1 as size_t));
-            lnum += 1;
-        }
-        let mut ptr: *mut ::core::ffi::c_char = xmalloc(len) as *mut ::core::ffi::c_char;
-        (*m).ptr = ptr;
-        (*m).size = len as ::core::ffi::c_int;
-        len = 0 as size_t;
-        let mut lnum_0: linenr_T = start;
-        while lnum_0 <= end {
-            let mut s: *mut ::core::ffi::c_char = ml_get_buf(buf, lnum_0);
-            if diff_flags.get() & DIFF_ICASE != 0 {
-                while *s as ::core::ffi::c_int != NUL {
-                    let mut c: ::core::ffi::c_int = 0;
-                    let mut c_len: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-                    let mut cbuf: [::core::ffi::c_char; 22] = [0; 22];
-                    if *s as ::core::ffi::c_int == NL {
-                        c = NUL;
-                    } else {
-                        c = utf_ptr2char(s);
-                        c_len = utf_char2len(c);
-                        c = utf_fold(c);
-                    }
-                    let orig_len: ::core::ffi::c_int = utfc_ptr2len(s);
-                    if utf_char2bytes(c, &raw mut cbuf as *mut ::core::ffi::c_char) != c_len {
-                        memmove(
-                            ptr.offset(len as isize) as *mut ::core::ffi::c_void,
-                            s as *const ::core::ffi::c_void,
-                            orig_len as size_t,
-                        );
-                    } else {
-                        memmove(
-                            ptr.offset(len as isize) as *mut ::core::ffi::c_void,
-                            &raw mut cbuf as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
-                            c_len as size_t,
-                        );
-                        if orig_len > c_len {
-                            memmove(
-                                ptr.offset(len as isize).offset(c_len as isize)
-                                    as *mut ::core::ffi::c_void,
-                                s.offset(c_len as isize) as *const ::core::ffi::c_void,
-                                (orig_len - c_len) as size_t,
-                            );
-                        }
-                    }
-                    s = s.offset(orig_len as isize);
-                    len = len.wrapping_add(orig_len as size_t);
-                }
-            } else {
-                let mut slen: size_t = strlen(s);
-                memmove(
-                    ptr.offset(len as isize) as *mut ::core::ffi::c_void,
-                    s as *const ::core::ffi::c_void,
-                    slen,
-                );
+
+        let len = (start..=end)
+            .map(|lnum| ml_get_buf_len(buf, lnum) as usize + 1)
+            .sum::<usize>();
+        let ptr = xmalloc(len) as *mut c_char;
+        *m = mmfile_t {
+            ptr,
+            size: len as c_int,
+        };
+        let out = ::core::slice::from_raw_parts_mut(ptr.cast::<u8>(), len);
+
+        let mut at = 0;
+        for lnum in start..=end {
+            let line = CStr::from_ptr(ml_get_buf(buf, lnum)).to_bytes();
+            if diff_flags.get() & DIFF_ICASE == 0 {
+                out[at..at + line.len()].copy_from_slice(line);
                 memchrsub(
-                    ptr.offset(len as isize) as *mut ::core::ffi::c_void,
-                    NL as ::core::ffi::c_char,
-                    NUL as ::core::ffi::c_char,
-                    slen,
+                    out.as_mut_ptr().add(at).cast(),
+                    NL as c_char,
+                    NUL as c_char,
+                    line.len(),
                 );
-                len = len.wrapping_add(slen);
+                at += line.len();
+            } else {
+                at += fold_line(line, &mut out[at..]);
             }
-            let c2rust_fresh8 = len;
-            len = len.wrapping_add(1);
-            *ptr.offset(c2rust_fresh8 as isize) = NL as ::core::ffi::c_char;
-            lnum_0 += 1;
+            out[at] = NL as u8;
+            at += 1;
         }
-        return OK;
+        OK
     }
 }
 
-unsafe extern "C" fn diff_write(
-    mut buf: *mut buf_T,
-    mut din: *mut diffin_T,
-    mut start: linenr_T,
+/// Copy `line` into `out` with every character case-folded, answering how
+/// many bytes were written.
+///
+/// Always exactly `line.len()`: where the folded form is a different length
+/// from the original the *original* is written instead, which is what keeps
+/// the caller's precomputed allocation exact.  A NUL byte stands for a NL,
+/// and folds to itself.
+unsafe fn fold_line(line: &[u8], out: &mut [u8]) -> usize {
+    unsafe {
+        let mut at = 0;
+        while at < line.len() {
+            let s = line.as_ptr().add(at).cast::<c_char>();
+            let (folded, c_len) = if line[at] == NL as u8 {
+                (NUL, 1)
+            } else {
+                let c = utf_ptr2char(s);
+                (utf_fold(c), utf_char2len(c))
+            };
+            let orig_len = utfc_ptr2len(s) as usize;
+            // MB_MAXBYTES + 1.
+            let mut cbuf = [0u8; 22];
+            if utf_char2bytes(folded, cbuf.as_mut_ptr().cast()) == c_len {
+                let c_len = c_len as usize;
+                out[at..at + c_len].copy_from_slice(&cbuf[..c_len]);
+                if orig_len > c_len {
+                    // Composing characters follow; they are not folded.
+                    out[at + c_len..at + orig_len]
+                        .copy_from_slice(&line[at + c_len..at + orig_len]);
+                }
+            } else {
+                out[at..at + orig_len].copy_from_slice(&line[at..at + orig_len]);
+            }
+            at += orig_len;
+        }
+        at
+    }
+}
+
+/// Write lines `start`..`end` of `buf` out for the external diff.
+///
+/// The internal engine wants a memory image, which is what `din_fname` being
+/// NULL selects; otherwise the lines go through a temp file.
+unsafe fn diff_write(
+    buf: *mut buf_T,
+    din: *mut diffin_T,
+    start: linenr_T,
     mut end: linenr_T,
-) -> ::core::ffi::c_int {
+) -> c_int {
     unsafe {
         if (*din).din_fname.is_null() {
             return diff_write_buffer(buf, &raw mut (*din).din_mmfile, start, end);
         }
+        // Writing a buffer runs `aucmd_prepbuf`/`aucmd_restbuf`, which can
+        // change the window layout -- and re-entering `winframe_remove` is a
+        // use after free.
         if frames_locked() {
             return FAIL;
         }
-        if end < 0 as linenr_T {
+        if end < 0 {
             end = (*buf).b_ml.ml_line_count;
         }
-        let mut save_ml_flags: ::core::ffi::c_int = (*buf).b_ml.ml_flags;
-        let mut save_ff: *mut ::core::ffi::c_char = (*buf).b_p_ff;
-        (*buf).b_p_ff = xstrdup(b"unix\0".as_ptr() as *const ::core::ffi::c_char);
-        let save_cmod_flags: bool = (*cmdmod.ptr()).cmod_flags != 0;
-        (*cmdmod.ptr()).cmod_flags |= CMOD_LOCKMARKS as ::core::ffi::c_int;
+
+        let save_ml_flags = (*buf).b_ml.ml_flags;
+        let save_ff = (*buf).b_p_ff;
+        // The diff must see the file the way the buffer holds it.
+        (*buf).b_p_ff = xstrdup(c"unix".as_ptr());
+        // Writing the buffer is an implementation detail of the diff, so it
+        // must not move the '[ and '] marks.
+        //
+        // Upstream saves the whole `cmod_flags` bit set into a `bool` and
+        // restores it from there, so every flag that was set comes back as
+        // the single bit 1. Reproduced; see O-B15-17.
+        let save_cmod_flags = (*cmdmod.ptr()).cmod_flags != 0;
+        (*cmdmod.ptr()).cmod_flags |= CMOD_LOCKMARKS as c_int;
         if end < start {
+            // The range names a completely empty file.
             end = start;
             (*buf).b_ml.ml_flags |= ML_EMPTY;
         }
-        let mut r: ::core::ffi::c_int = buf_write(
+        let r = buf_write(
             buf,
             (*din).din_fname,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            ::core::ptr::null_mut(),
             start,
             end,
-            ::core::ptr::null_mut::<exarg_T>(),
+            ::core::ptr::null_mut(),
             WriteRequest::filter(),
         );
-        (*cmdmod.ptr()).cmod_flags = save_cmod_flags as ::core::ffi::c_int;
+        (*cmdmod.ptr()).cmod_flags = save_cmod_flags as c_int;
         free_string_option((*buf).b_p_ff);
         (*buf).b_p_ff = save_ff;
         (*buf).b_ml.ml_flags = (*buf).b_ml.ml_flags & !ML_EMPTY | save_ml_flags & ML_EMPTY;
-        return r;
+        r
     }
 }
 
-unsafe extern "C" fn lnum_compare(
-    mut s1: *const ::core::ffi::c_void,
-    mut s2: *const ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
+/// Recompute the current tabpage's blocks with `idx_orig` as the reference
+/// buffer.
+///
+/// Every other buffer is diffed against that one in turn, and `diff_read`
+/// merges each answer into the shared block list.  With `'diffopt'`'s
+/// `anchor` the whole thing runs once per segment between anchors, and the
+/// segments' block lists are shifted back into place and chained together.
+unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T) {
     unsafe {
-        let mut lnum1: linenr_T = *(s1 as *mut linenr_T);
-        let mut lnum2: linenr_T = *(s2 as *mut linenr_T);
-        if lnum1 < lnum2 {
-            return -1 as ::core::ffi::c_int;
-        }
-        if lnum1 > lnum2 {
-            return 1 as ::core::ffi::c_int;
-        }
-        return 0 as ::core::ffi::c_int;
-    }
-}
-
-unsafe extern "C" fn diff_try_update(
-    mut dio: *mut diffio_T,
-    mut idx_orig: ::core::ffi::c_int,
-    mut eap: *mut exarg_T,
-) {
-    unsafe {
-        let mut num_anchors: ::core::ffi::c_int = 0;
-        let mut anchors: [[linenr_T; 20]; 8] = [[0; 20]; 8];
-        '_theend: {
+        let tp = curtab.get();
+        let idx_orig = idx_orig as usize;
+        let mut anchors = [[0 as linenr_T; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
+        'theend: {
             if (*dio).dio_internal != 0 {
                 ga_init(
                     &raw mut (*dio).dio_diff.dout_ga,
-                    ::core::mem::size_of::<diffhunk_T>() as ::core::ffi::c_int,
-                    100 as ::core::ffi::c_int,
+                    ::core::mem::size_of::<diffhunk_T>() as c_int,
+                    100,
                 );
             } else {
                 (*dio).dio_orig.din_fname = vim_tempname();
@@ -205,283 +218,192 @@ unsafe extern "C" fn diff_try_update(
                 if (*dio).dio_orig.din_fname.is_null()
                     || (*dio).dio_new.din_fname.is_null()
                     || (*dio).dio_diff.dout_fname.is_null()
+                    || check_external_diff(dio) == FAIL
                 {
-                    break '_theend;
-                } else if check_external_diff(dio) == FAIL {
-                    break '_theend;
+                    break 'theend;
                 }
             }
+
+            // `:diffupdate!` re-reads any buffer that changed on disk first.
             if !eap.is_null() && (*eap).forceit != 0 {
-                let mut idx_new: ::core::ffi::c_int = idx_orig;
-                while idx_new < DB_COUNT {
-                    let mut buf: *mut buf_T =
-                        (*curtab.get()).tp_diffbuf[idx_new as usize] as *mut buf_T;
+                for idx in idx_orig..DB_COUNT as usize {
+                    let buf = (*tp).tp_diffbuf[idx];
                     if buf_valid(buf) {
                         buf_check_timestamp(buf);
                     }
-                    idx_new += 1;
                 }
             }
-            num_anchors = INT_MAX;
-            anchors = [[0; 20]; 8];
-            memset(
-                &raw mut anchors as *mut ::core::ffi::c_void,
-                0 as ::core::ffi::c_int,
-                ::core::mem::size_of::<[[linenr_T; 20]; 8]>(),
-            );
+
+            // Every buffer has to supply the same number of anchors, or the
+            // segments would not line up; the smallest count wins, and a
+            // buffer whose `'diffanchors'` does not resolve cancels them all.
+            let mut num_anchors = c_int::MAX;
             if diff_flags.get() & DIFF_ANCHOR != 0 {
-                let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while idx < DB_COUNT {
-                    if !(*curtab.get()).tp_diffbuf[idx as usize].is_null() {
-                        let mut buf_num_anchors: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                        if parse_diffanchors(
-                            false_0 != 0,
-                            (*curtab.get()).tp_diffbuf[idx as usize] as *mut buf_T,
-                            &raw mut *(&raw mut anchors as *mut [linenr_T; 20]).offset(idx as isize)
-                                as *mut linenr_T,
-                            &raw mut buf_num_anchors,
-                        ) != OK
-                        {
-                            emsg(gettext(
-                                &raw const e_failed_to_find_all_diff_anchors
-                                    as *const ::core::ffi::c_char,
-                            ));
-                            num_anchors = 0 as ::core::ffi::c_int;
-                            memset(
-                                &raw mut anchors as *mut ::core::ffi::c_void,
-                                0 as ::core::ffi::c_int,
-                                ::core::mem::size_of::<[[linenr_T; 20]; 8]>(),
-                            );
-                            break;
+                for idx in 0..DB_COUNT as usize {
+                    if (*tp).tp_diffbuf[idx].is_null() {
+                        continue;
+                    }
+                    let mut buf_num_anchors = 0;
+                    if parse_diffanchors(
+                        false,
+                        (*tp).tp_diffbuf[idx],
+                        anchors[idx].as_mut_ptr(),
+                        &raw mut buf_num_anchors,
+                    ) != OK
+                    {
+                        emsg(gettext(
+                            &raw const e_failed_to_find_all_diff_anchors as *const c_char,
+                        ));
+                        num_anchors = 0;
+                        anchors = [[0; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
+                        break;
+                    }
+                    num_anchors = num_anchors.min(buf_num_anchors);
+                    if buf_num_anchors > 0 {
+                        anchors[idx][..buf_num_anchors as usize].sort_unstable();
+                    }
+                }
+            }
+            if num_anchors == c_int::MAX {
+                num_anchors = 0;
+            }
+
+            // One diff per segment: `[1, a1)`, `[a1, a2)`, … `[aN, end]`.
+            for anchor_i in 0..=num_anchors as usize {
+                let segment = |idx: usize| {
+                    (
+                        if anchor_i == 0 {
+                            1
                         } else {
-                            if buf_num_anchors < num_anchors {
-                                num_anchors = buf_num_anchors;
-                            }
-                            if buf_num_anchors > 0 as ::core::ffi::c_int {
-                                qsort(
-                                    &raw mut *(&raw mut anchors as *mut [linenr_T; 20])
-                                        .offset(idx as isize)
-                                        as *mut linenr_T
-                                        as *mut ::core::ffi::c_void,
-                                    buf_num_anchors as size_t,
-                                    ::core::mem::size_of::<linenr_T>(),
-                                    Some(
-                                        lnum_compare
-                                            as unsafe extern "C" fn(
-                                                *const ::core::ffi::c_void,
-                                                *const ::core::ffi::c_void,
-                                            )
-                                                -> ::core::ffi::c_int,
-                                    ),
-                                );
-                            }
-                        }
-                    }
-                    idx += 1;
-                }
-            }
-            if num_anchors == INT_MAX {
-                num_anchors = 0 as ::core::ffi::c_int;
-            }
-            let mut anchor_i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            loop {
-                if anchor_i > num_anchors {
-                    break '_theend;
-                }
-                let mut orig_diff: *mut diff_T = ::core::ptr::null_mut::<diff_T>();
-                if anchor_i != 0 as ::core::ffi::c_int {
-                    orig_diff = (*curtab.get()).tp_first_diff;
-                    (*curtab.get()).tp_first_diff = ::core::ptr::null_mut::<diff_T>();
-                }
-                let mut lnum_start: linenr_T = if anchor_i == 0 as ::core::ffi::c_int {
-                    1 as linenr_T
-                } else {
-                    anchors[idx_orig as usize][(anchor_i - 1 as ::core::ffi::c_int) as usize]
+                            anchors[idx][anchor_i - 1]
+                        },
+                        if anchor_i == num_anchors as usize {
+                            -1
+                        } else {
+                            anchors[idx][anchor_i] - 1
+                        },
+                    )
                 };
-                let mut lnum_end: linenr_T = if anchor_i == num_anchors {
-                    -1 as linenr_T
+                // Each segment builds its own list, which is appended to the
+                // ones before it once its line numbers have been corrected.
+                let orig_diff = if anchor_i == 0 {
+                    ::core::ptr::null_mut()
                 } else {
-                    anchors[idx_orig as usize][anchor_i as usize] - 1 as linenr_T
+                    let head = (*tp).tp_first_diff;
+                    (*tp).tp_first_diff = ::core::ptr::null_mut();
+                    head
                 };
-                let mut buf_0: *mut buf_T =
-                    (*curtab.get()).tp_diffbuf[idx_orig as usize] as *mut buf_T;
-                if diff_write(buf_0, &raw mut (*dio).dio_orig, lnum_start, lnum_end) == FAIL {
+
+                let (start, end) = segment(idx_orig);
+                if diff_write(
+                    (*tp).tp_diffbuf[idx_orig],
+                    &raw mut (*dio).dio_orig,
+                    start,
+                    end,
+                ) == FAIL
+                {
                     if !orig_diff.is_null() {
-                        (*curtab.get()).tp_first_diff = orig_diff;
-                        diff_clear(curtab.get());
+                        (*tp).tp_first_diff = orig_diff;
+                        diff_clear(tp);
                     }
-                    break '_theend;
-                } else {
-                    let mut idx_new_0: ::core::ffi::c_int = idx_orig + 1 as ::core::ffi::c_int;
-                    while idx_new_0 < DB_COUNT {
-                        buf_0 = (*curtab.get()).tp_diffbuf[idx_new_0 as usize] as *mut buf_T;
-                        if !(buf_0.is_null() || (*buf_0).b_ml.ml_mfp.is_null()) {
-                            lnum_start = if anchor_i == 0 as ::core::ffi::c_int {
-                                1 as linenr_T
-                            } else {
-                                anchors[idx_new_0 as usize]
-                                    [(anchor_i - 1 as ::core::ffi::c_int) as usize]
-                            };
-                            lnum_end = if anchor_i == num_anchors {
-                                -1 as linenr_T
-                            } else {
-                                anchors[idx_new_0 as usize][anchor_i as usize] - 1 as linenr_T
-                            };
-                            if diff_write(buf_0, &raw mut (*dio).dio_new, lnum_start, lnum_end)
-                                != FAIL
-                            {
-                                if diff_file(dio) != FAIL {
-                                    diff_read(idx_orig, idx_new_0, dio);
-                                    clear_diffin(&raw mut (*dio).dio_new);
-                                    clear_diffout(&raw mut (*dio).dio_diff);
-                                }
-                            }
-                        }
-                        idx_new_0 += 1;
+                    break 'theend;
+                }
+                for idx_new in idx_orig + 1..DB_COUNT as usize {
+                    let buf = (*tp).tp_diffbuf[idx_new];
+                    if buf.is_null() || (*buf).b_ml.ml_mfp.is_null() {
+                        continue;
                     }
-                    clear_diffin(&raw mut (*dio).dio_orig);
-                    if anchor_i != 0 as ::core::ffi::c_int {
-                        let mut dp: *mut diff_T = (*curtab.get()).tp_first_diff;
-                        while !dp.is_null() {
-                            let mut idx_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            while idx_0 < DB_COUNT {
-                                if anchors[idx_0 as usize]
-                                    [(anchor_i - 1 as ::core::ffi::c_int) as usize]
-                                    > 0 as linenr_T
-                                {
-                                    (*dp).df_lnum[idx_0 as usize] = ((*dp).df_lnum[idx_0 as usize]
-                                        as ::core::ffi::c_int
-                                        + (anchors[idx_0 as usize]
-                                            [(anchor_i - 1 as ::core::ffi::c_int) as usize]
-                                            - 1 as linenr_T)
-                                            as ::core::ffi::c_int)
-                                        as linenr_T;
-                                }
-                                idx_0 += 1;
-                            }
-                            dp = (*dp).df_next;
-                        }
-                        if !orig_diff.is_null() {
-                            let mut last_diff: *mut diff_T = orig_diff;
-                            while !(*last_diff).df_next.is_null() {
-                                last_diff = (*last_diff).df_next;
-                            }
-                            (*last_diff).df_next = (*curtab.get()).tp_first_diff;
-                            (*curtab.get()).tp_first_diff = orig_diff;
+                    let (start, end) = segment(idx_new);
+                    if diff_write(buf, &raw mut (*dio).dio_new, start, end) != FAIL
+                        && diff_file(dio) != FAIL
+                    {
+                        diff_read(idx_orig as c_int, idx_new as c_int, dio);
+                        clear_diffin(&raw mut (*dio).dio_new);
+                        clear_diffout(&raw mut (*dio).dio_diff);
+                    }
+                }
+                clear_diffin(&raw mut (*dio).dio_orig);
+
+                if anchor_i == 0 {
+                    continue;
+                }
+                // This segment's diff was computed over lines starting at 1;
+                // shift it down to where the segment really begins.
+                let mut dp = (*tp).tp_first_diff;
+                while !dp.is_null() {
+                    for idx in 0..DB_COUNT as usize {
+                        let anchor = anchors[idx][anchor_i - 1];
+                        if anchor > 0 {
+                            (*dp).df_lnum[idx] += anchor - 1;
                         }
                     }
-                    anchor_i += 1;
+                    dp = (*dp).df_next;
+                }
+                if !orig_diff.is_null() {
+                    let mut last = orig_diff;
+                    while !(*last).df_next.is_null() {
+                        last = (*last).df_next;
+                    }
+                    (*last).df_next = (*tp).tp_first_diff;
+                    (*tp).tp_first_diff = orig_diff;
                 }
             }
         }
-        xfree((*dio).dio_orig.din_fname as *mut ::core::ffi::c_void);
-        xfree((*dio).dio_new.din_fname as *mut ::core::ffi::c_void);
-        xfree((*dio).dio_diff.dout_fname as *mut ::core::ffi::c_void);
+        xfree((*dio).dio_orig.din_fname.cast());
+        xfree((*dio).dio_new.din_fname.cast());
+        xfree((*dio).dio_diff.dout_fname.cast());
     }
 }
 
-pub unsafe extern "C" fn diff_internal() -> ::core::ffi::c_int {
-    unsafe {
-        return (diff_flags.get() & DIFF_INTERNAL != 0 as ::core::ffi::c_int
-            && *p_dex.get() as ::core::ffi::c_int == NUL) as ::core::ffi::c_int;
-    }
+/// Whether the built-in diff engine is what a recompute would use.
+///
+/// `'diffexpr'` overrides `'diffopt'`'s `internal`.
+pub unsafe fn diff_internal() -> c_int {
+    unsafe { c_int::from(diff_flags.get() & DIFF_INTERNAL != 0 && *p_dex.get() == 0) }
 }
 
-pub unsafe fn ex_diffupdate(mut eap: *mut exarg_T) {
+/// `:diffupdate`, and every implicit recompute.
+pub unsafe fn ex_diffupdate(eap: *mut exarg_T) {
     unsafe {
-        let mut idx_new: ::core::ffi::c_int = 0;
-        let mut diffio: diffio_T = diffio_T {
-            dio_orig: diffin_T {
-                din_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                din_mmfile: mmfile_t {
-                    ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    size: 0,
-                },
-            },
-            dio_new: diffin_T {
-                din_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                din_mmfile: mmfile_t {
-                    ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    size: 0,
-                },
-            },
-            dio_diff: diffout_T {
-                dout_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                dout_ga: garray_T {
-                    ga_len: 0,
-                    ga_maxlen: 0,
-                    ga_itemsize: 0,
-                    ga_growsize: 0,
-                    ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                },
-            },
-            dio_internal: 0,
-        };
+        // A recompute asked for from inside `:diffget`/`:diffput` is deferred
+        // to that command's tail, where `diff_need_update` is read.
         if diff_busy.get() {
-            diff_need_update.set(true_0 != 0);
+            diff_need_update.set(true);
             return;
         }
-        let mut had_diffs: ::core::ffi::c_int =
-            !(*curtab.get()).tp_first_diff.is_null() as ::core::ffi::c_int;
-        diff_clear(curtab.get());
-        (*curtab.get()).tp_diff_invalid = false_0;
-        let mut idx_orig: ::core::ffi::c_int = 0;
-        idx_orig = 0 as ::core::ffi::c_int;
-        while idx_orig < DB_COUNT {
-            if !(*curtab.get()).tp_diffbuf[idx_orig as usize].is_null() {
-                break;
-            }
-            idx_orig += 1;
+        let tp = curtab.get();
+        let had_diffs = !(*tp).tp_first_diff.is_null();
+        diff_clear(tp);
+        (*tp).tp_diff_invalid = false_0;
+
+        // The first two buffers in the tabpage: everything is diffed against
+        // the first, so there is nothing to do without a second.
+        let first_two = (0..DB_COUNT)
+            .find(|&i| !(*tp).tp_diffbuf[i as usize].is_null())
+            .filter(|&idx_orig| {
+                (idx_orig + 1..DB_COUNT).any(|i| !(*tp).tp_diffbuf[i as usize].is_null())
+            });
+        if let Some(idx_orig) = first_two {
+            let mut diffio = diffio_T {
+                dio_orig: DIFFIN_INIT,
+                dio_new: DIFFIN_INIT,
+                dio_diff: diffout_T {
+                    dout_fname: ::core::ptr::null_mut(),
+                    dout_ga: GA_EMPTY_INIT_VALUE,
+                },
+                dio_internal: diff_internal(),
+            };
+            diff_try_update(&raw mut diffio, idx_orig, eap);
+            (*curwin.get()).w_valid_cursor.lnum = 0;
         }
-        if idx_orig != DB_COUNT {
-            idx_new = 0;
-            idx_new = idx_orig + 1 as ::core::ffi::c_int;
-            while idx_new < DB_COUNT {
-                if !(*curtab.get()).tp_diffbuf[idx_new as usize].is_null() {
-                    break;
-                }
-                idx_new += 1;
-            }
-            if idx_new != DB_COUNT {
-                diffio = diffio_T {
-                    dio_orig: diffin_T {
-                        din_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        din_mmfile: mmfile_t {
-                            ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            size: 0,
-                        },
-                    },
-                    dio_new: diffin_T {
-                        din_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        din_mmfile: mmfile_t {
-                            ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            size: 0,
-                        },
-                    },
-                    dio_diff: diffout_T {
-                        dout_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        dout_ga: garray_T {
-                            ga_len: 0,
-                            ga_maxlen: 0,
-                            ga_itemsize: 0,
-                            ga_growsize: 0,
-                            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                        },
-                    },
-                    dio_internal: 0,
-                };
-                diffio.dio_internal = diff_internal();
-                diff_try_update(&raw mut diffio, idx_orig, eap);
-                (*curwin.get()).w_valid_cursor.lnum = 0 as ::core::ffi::c_int as linenr_T;
-            }
-        }
-        if had_diffs != 0 || !(*curtab.get()).tp_first_diff.is_null() {
-            diff_redraw(true_0 != 0);
+
+        if had_diffs || !(*tp).tp_first_diff.is_null() {
+            diff_redraw(true);
             apply_autocmds(
                 EVENT_DIFFUPDATED,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
+                ::core::ptr::null_mut(),
+                ::core::ptr::null_mut(),
+                false,
                 curbuf.get(),
             );
         }

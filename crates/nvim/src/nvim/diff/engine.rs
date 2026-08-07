@@ -1,267 +1,199 @@
 //! Running one diff, internal or external.
 //!
-//! `diff_file` picks between the three: `'diffexpr'`, the external `diff(1)` and
-//! the built-in `xdl_diff`.  `check_external_diff` is the probe that decides
-//! whether the host's `diff` is usable at all (and caches the answer in
-//! `diff_a_works`); `diff_file_internal` is the `xdl_diff` call, with `xdiff_out`
-//! as its hunk callback.
+//! [`diff_file`] picks between the three: `'diffexpr'`, the external
+//! `diff(1)` and the built-in `xdl_diff`.  [`check_external_diff`] is the
+//! probe that decides whether the host's `diff` is usable at all (and caches
+//! the answer in `diff_a_works`); [`diff_file_internal`] is the `xdl_diff`
+//! call, with [`xdiff_out`] as its hunk callback.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use ::core::ffi::{c_char, c_int};
+use ::std::ffi::CStr;
 
-pub(crate) unsafe extern "C" fn check_external_diff(
-    mut diffio: *mut diffio_T,
-) -> ::core::ffi::c_int {
+/// Diff two one-line files and see whether the answer is recognisable.
+///
+/// Answers `OK` if the host has a usable `diff`, and leaves `diff_a_works`
+/// saying whether it accepts `-a`.  The probe runs at most twice: the first
+/// attempt passes `-a`, and if that produces nothing recognisable the flag is
+/// remembered as unsupported and the whole thing is tried again without it.
+pub(crate) unsafe fn check_external_diff(diffio: *mut diffio_T) -> c_int {
     unsafe {
-        let mut io_error: bool = false_0 != 0;
-        let mut ok: TriState = kFalse;
+        let orig = (*diffio).dio_orig.din_fname;
+        let new = (*diffio).dio_new.din_fname;
+        let out = (*diffio).dio_diff.dout_fname;
+        let mut io_error = false;
+        let mut ok = kFalse;
         loop {
             ok = kFalse;
-            let mut fd: *mut FILE = os_fopen(
-                (*diffio).dio_orig.din_fname,
-                b"w\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            let mut fd = os_fopen(orig, c"w".as_ptr());
             if fd.is_null() {
-                io_error = true_0 != 0;
+                io_error = true;
             } else {
-                if fwrite(
-                    b"line1\n\0".as_ptr() as *const ::core::ffi::c_char
-                        as *const ::core::ffi::c_void,
-                    6 as size_t,
-                    1 as size_t,
-                    fd,
-                ) != 1 as ::core::ffi::c_ulong
-                {
-                    io_error = true_0 != 0;
+                if fwrite(c"line1\n".as_ptr().cast(), 6, 1, fd) != 1 {
+                    io_error = true;
                 }
                 fclose(fd);
-                fd = os_fopen(
-                    (*diffio).dio_new.din_fname,
-                    b"w\0".as_ptr() as *const ::core::ffi::c_char,
-                );
+                fd = os_fopen(new, c"w".as_ptr());
                 if fd.is_null() {
-                    io_error = true_0 != 0;
+                    io_error = true;
                 } else {
-                    if fwrite(
-                        b"line2\n\0".as_ptr() as *const ::core::ffi::c_char
-                            as *const ::core::ffi::c_void,
-                        6 as size_t,
-                        1 as size_t,
-                        fd,
-                    ) != 1 as ::core::ffi::c_ulong
-                    {
-                        io_error = true_0 != 0;
+                    if fwrite(c"line2\n".as_ptr().cast(), 6, 1, fd) != 1 {
+                        io_error = true;
                     }
                     fclose(fd);
                     fd = if diff_file(diffio) == OK {
-                        os_fopen(
-                            (*diffio).dio_diff.dout_fname,
-                            b"r\0".as_ptr() as *const ::core::ffi::c_char,
-                        )
+                        os_fopen(out, c"r".as_ptr())
                     } else {
-                        ::core::ptr::null_mut::<FILE>()
+                        ::core::ptr::null_mut()
                     };
                     if fd.is_null() {
-                        io_error = true_0 != 0;
+                        io_error = true;
                     } else {
-                        let mut linebuf: [::core::ffi::c_char; 50] = [0; 50];
-                        while !vim_fgets(&raw mut linebuf as *mut ::core::ffi::c_char, LBUFLEN, fd)
-                        {
-                            if strncmp(
-                                &raw mut linebuf as *mut ::core::ffi::c_char,
-                                b"1c1\0".as_ptr() as *const ::core::ffi::c_char,
-                                3 as size_t,
-                            ) == 0 as ::core::ffi::c_int
-                                || strncmp(
-                                    &raw mut linebuf as *mut ::core::ffi::c_char,
-                                    b"@@ -1 +1 @@\0".as_ptr() as *const ::core::ffi::c_char,
-                                    11 as size_t,
-                                ) == 0 as ::core::ffi::c_int
+                        // The two spellings a working `diff` can answer with:
+                        // ed-style and unified.
+                        let mut linebuf = [0 as c_char; LBUFLEN as usize];
+                        while !vim_fgets(linebuf.as_mut_ptr(), LBUFLEN, fd) {
+                            if strncmp(linebuf.as_ptr(), c"1c1".as_ptr(), 3) == 0
+                                || strncmp(linebuf.as_ptr(), c"@@ -1 +1 @@".as_ptr(), 11) == 0
                             {
                                 ok = kTrue;
                             }
                         }
                         fclose(fd);
                     }
-                    os_remove((*diffio).dio_diff.dout_fname);
-                    os_remove((*diffio).dio_new.din_fname);
+                    os_remove(out);
+                    os_remove(new);
                 }
-                os_remove((*diffio).dio_orig.din_fname);
+                os_remove(orig);
             }
-            if *p_dex.get() as ::core::ffi::c_int != NUL {
-                break;
-            }
-            if diff_a_works.get() as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
+            // With `'diffexpr'` set there is no `-a` to retry without.
+            if *p_dex.get() != 0 || diff_a_works.get() != kNone {
                 break;
             }
             diff_a_works.set(ok);
-            if ok as u64 != 0 {
+            if ok != kFalse {
                 break;
             }
         }
-        if ok as u64 == 0 {
-            if io_error {
-                emsg(gettext(b"E810: Cannot read or write temp files\0".as_ptr()
-                    as *const ::core::ffi::c_char));
-            }
-            emsg(gettext(
-                b"E97: Cannot create diffs\0".as_ptr() as *const ::core::ffi::c_char
-            ));
-            diff_a_works.set(kNone);
-            return FAIL;
+        if ok != kFalse {
+            return OK;
         }
-        return OK;
+        if io_error {
+            emsg(gettext(c"E810: Cannot read or write temp files".as_ptr()));
+        }
+        emsg(gettext(c"E97: Cannot create diffs".as_ptr()));
+        diff_a_works.set(kNone);
+        FAIL
     }
 }
 
-pub(crate) unsafe extern "C" fn diff_file_internal(
-    mut diffio: *mut diffio_T,
-) -> ::core::ffi::c_int {
+/// Diff the two memory images with `xdl_diff`, collecting hunks into
+/// `dio_diff.dout_ga`.
+pub(crate) unsafe fn diff_file_internal(diffio: *mut diffio_T) -> c_int {
     unsafe {
-        let mut param: xpparam_t = xpparam_t {
-            flags: 0,
-            anchors: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+        let flags = diff_flags.get();
+        let mut param = xpparam_t {
+            // `'diffopt'`'s ignore flags map onto xdiff's own; `icase` does
+            // not, and is applied while writing the buffers out instead.
+            flags: diff_algorithm.get()
+                | if flags & DIFF_IWHITE != 0 {
+                    XDF_IGNORE_WHITESPACE_CHANGE
+                } else {
+                    0
+                }
+                | if flags & DIFF_IWHITEALL != 0 {
+                    XDF_IGNORE_WHITESPACE
+                } else {
+                    0
+                }
+                | if flags & DIFF_IWHITEEOL != 0 {
+                    XDF_IGNORE_WHITESPACE_AT_EOL
+                } else {
+                    0
+                }
+                | if flags & DIFF_IBLANK != 0 {
+                    XDF_IGNORE_BLANK_LINES
+                } else {
+                    0
+                },
+            // `'diffanchors'` is implemented by splitting the buffers, not
+            // by xdiff's anchor list.
+            anchors: ::core::ptr::null_mut(),
             anchors_nr: 0,
         };
-        let mut emit_cfg: xdemitconf_t = xdemitconf_t {
+        let mut emit_cfg = xdemitconf_t {
+            // No context lines: nvim wants the hunks, not a patch.
             ctxlen: 0,
             interhunkctxlen: 0,
             flags: 0,
             find_func: None,
-            find_func_priv: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            hunk_func: None,
+            find_func_priv: ::core::ptr::null_mut(),
+            hunk_func: Some(xdiff_out),
         };
-        let mut emit_cb: xdemitcb_t = xdemitcb_t {
-            priv_0: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+        let mut emit_cb = xdemitcb_t {
+            priv_0: (&raw mut (*diffio).dio_diff).cast(),
             out_hunk: None,
             out_line: None,
         };
-        memset(
-            &raw mut param as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            ::core::mem::size_of::<xpparam_t>(),
-        );
-        memset(
-            &raw mut emit_cfg as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            ::core::mem::size_of::<xdemitconf_t>(),
-        );
-        memset(
-            &raw mut emit_cb as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            ::core::mem::size_of::<xdemitcb_t>(),
-        );
-        param.flags = diff_algorithm.get();
-        if diff_flags.get() & DIFF_IWHITE != 0 {
-            param.flags |= XDF_IGNORE_WHITESPACE_CHANGE;
-        }
-        if diff_flags.get() & DIFF_IWHITEALL != 0 {
-            param.flags |= XDF_IGNORE_WHITESPACE;
-        }
-        if diff_flags.get() & DIFF_IWHITEEOL != 0 {
-            param.flags |= XDF_IGNORE_WHITESPACE_AT_EOL;
-        }
-        if diff_flags.get() & DIFF_IBLANK != 0 {
-            param.flags |= XDF_IGNORE_BLANK_LINES;
-        }
-        emit_cfg.ctxlen = 0 as ::core::ffi::c_long;
-        emit_cb.priv_0 = &raw mut (*diffio).dio_diff as *mut ::core::ffi::c_void;
-        emit_cfg.hunk_func = Some(
-            xdiff_out
-                as unsafe extern "C" fn(
-                    ::core::ffi::c_int,
-                    ::core::ffi::c_int,
-                    ::core::ffi::c_int,
-                    ::core::ffi::c_int,
-                    *mut ::core::ffi::c_void,
-                ) -> ::core::ffi::c_int,
-        ) as xdl_emit_hunk_consume_func_t;
+
         if (*diffio).dio_orig.din_mmfile.size as ::core::ffi::c_long > MAX_XDIFF_SIZE
             || (*diffio).dio_new.din_mmfile.size as ::core::ffi::c_long > MAX_XDIFF_SIZE
+            || xdl_diff(
+                &raw mut (*diffio).dio_orig.din_mmfile,
+                &raw mut (*diffio).dio_new.din_mmfile,
+                &raw mut param,
+                &raw mut emit_cfg,
+                &raw mut emit_cb,
+            ) < 0
         {
             emsg(gettext(
-                &raw const e_problem_creating_internal_diff as *const ::core::ffi::c_char,
+                &raw const e_problem_creating_internal_diff as *const c_char,
             ));
             return FAIL;
         }
-        if xdl_diff(
-            &raw mut (*diffio).dio_orig.din_mmfile,
-            &raw mut (*diffio).dio_new.din_mmfile,
-            &raw mut param,
-            &raw mut emit_cfg,
-            &raw mut emit_cb,
-        ) < 0 as ::core::ffi::c_int
-        {
-            emsg(gettext(
-                &raw const e_problem_creating_internal_diff as *const ::core::ffi::c_char,
-            ));
-            return FAIL;
-        }
-        return OK;
+        OK
     }
 }
 
-pub(crate) unsafe extern "C" fn diff_file(mut dio: *mut diffio_T) -> ::core::ffi::c_int {
+/// Diff whichever way `'diffopt'` and `'diffexpr'` say.
+pub(crate) unsafe fn diff_file(dio: *mut diffio_T) -> c_int {
     unsafe {
-        let mut tmp_orig: *mut ::core::ffi::c_char = (*dio).dio_orig.din_fname;
-        let mut tmp_new: *mut ::core::ffi::c_char = (*dio).dio_new.din_fname;
-        let mut tmp_diff: *mut ::core::ffi::c_char = (*dio).dio_diff.dout_fname;
-        if *p_dex.get() as ::core::ffi::c_int != NUL {
+        let tmp_orig = (*dio).dio_orig.din_fname;
+        let tmp_new = (*dio).dio_new.din_fname;
+        let tmp_diff = (*dio).dio_diff.dout_fname;
+        if *p_dex.get() != 0 {
             eval_diff(tmp_orig, tmp_new, tmp_diff);
             return OK;
         }
         if (*dio).dio_internal != 0 {
             return diff_file_internal(dio);
         }
-        let len: size_t = strlen(tmp_orig)
-            .wrapping_add(strlen(tmp_new))
-            .wrapping_add(strlen(tmp_diff))
-            .wrapping_add(strlen(p_srr.get()))
-            .wrapping_add(27 as size_t);
-        let cmd: *mut ::core::ffi::c_char = xmalloc(len) as *mut ::core::ffi::c_char;
-        if os_env_exists(
-            b"DIFF_OPTIONS\0".as_ptr() as *const ::core::ffi::c_char,
-            true_0 != 0,
-        ) {
-            os_unsetenv(b"DIFF_OPTIONS\0".as_ptr() as *const ::core::ffi::c_char);
+
+        // "diff " plus six two-character flags, three file names, the redirect
+        // and the terminator.
+        let len = strlen(tmp_orig) + strlen(tmp_new) + strlen(tmp_diff) + strlen(p_srr.get()) + 27;
+        let cmd = xmalloc(len) as *mut c_char;
+        // The user's own `diff` options would corrupt the output format.
+        if os_env_exists(c"DIFF_OPTIONS".as_ptr(), true) {
+            os_unsetenv(c"DIFF_OPTIONS".as_ptr());
         }
+        let flag = |on: bool, text: &'static CStr| {
+            if on { text.as_ptr() } else { c"".as_ptr() }
+        };
         vim_snprintf(
             cmd,
             len,
-            b"diff %s%s%s%s%s%s%s%s %s\0".as_ptr() as *const ::core::ffi::c_char,
-            if diff_a_works.get() as ::core::ffi::c_int == kFalse as ::core::ffi::c_int {
-                b"\0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                b"-a \0".as_ptr() as *const ::core::ffi::c_char
-            },
-            b"\0".as_ptr() as *const ::core::ffi::c_char,
-            if diff_flags.get() & DIFF_IWHITE != 0 {
-                b"-b \0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                b"\0".as_ptr() as *const ::core::ffi::c_char
-            },
-            if diff_flags.get() & DIFF_IWHITEALL != 0 {
-                b"-w \0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                b"\0".as_ptr() as *const ::core::ffi::c_char
-            },
-            if diff_flags.get() & DIFF_IWHITEEOL != 0 {
-                b"-Z \0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                b"\0".as_ptr() as *const ::core::ffi::c_char
-            },
-            if diff_flags.get() & DIFF_IBLANK != 0 {
-                b"-B \0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                b"\0".as_ptr() as *const ::core::ffi::c_char
-            },
-            if diff_flags.get() & DIFF_ICASE != 0 {
-                b"-i \0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                b"\0".as_ptr() as *const ::core::ffi::c_char
-            },
+            c"diff %s%s%s%s%s%s%s%s %s".as_ptr(),
+            flag(diff_a_works.get() != kFalse, c"-a "),
+            c"".as_ptr(),
+            flag(diff_flags.get() & DIFF_IWHITE != 0, c"-b "),
+            flag(diff_flags.get() & DIFF_IWHITEALL != 0, c"-w "),
+            flag(diff_flags.get() & DIFF_IWHITEEOL != 0, c"-Z "),
+            flag(diff_flags.get() & DIFF_IBLANK != 0, c"-B "),
+            flag(diff_flags.get() & DIFF_ICASE != 0, c"-i "),
             tmp_orig,
             tmp_new,
         );
@@ -270,32 +202,34 @@ pub(crate) unsafe extern "C" fn diff_file(mut dio: *mut diffio_T) -> ::core::ffi
         call_shell(
             cmd,
             kShellOptFilter | kShellOptSilent | kShellOptDoOut,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            ::core::ptr::null_mut(),
         );
         unblock_autocmds();
-        xfree(cmd as *mut ::core::ffi::c_void);
-        return OK;
+        xfree(cmd.cast());
+        OK
     }
 }
 
+/// `xdl_diff`'s hunk callback: append one hunk to the `diffout_T` behind
+/// `priv_0`, converting xdiff's zero-based starts to line numbers.
 unsafe extern "C" fn xdiff_out(
-    mut start_a: ::core::ffi::c_int,
-    mut count_a: ::core::ffi::c_int,
-    mut start_b: ::core::ffi::c_int,
-    mut count_b: ::core::ffi::c_int,
-    mut priv_0: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
+    start_a: c_int,
+    count_a: c_int,
+    start_b: c_int,
+    count_b: c_int,
+    priv_0: *mut ::core::ffi::c_void,
+) -> c_int {
     unsafe {
-        let mut dout: *mut diffout_T = priv_0 as *mut diffout_T;
-        ga_grow(&raw mut (*dout).dout_ga, 1 as ::core::ffi::c_int);
+        let dout = priv_0 as *mut diffout_T;
+        ga_grow(&raw mut (*dout).dout_ga, 1);
         *((*dout).dout_ga.ga_data as *mut diffhunk_T).offset((*dout).dout_ga.ga_len as isize) =
             diffhunk_T {
-                lnum_orig: start_a as linenr_T + 1 as linenr_T,
+                lnum_orig: start_a + 1,
                 count_orig: count_a,
-                lnum_new: start_b as linenr_T + 1 as linenr_T,
+                lnum_new: start_b + 1,
                 count_new: count_b,
             };
         (*dout).dout_ga.ga_len += 1;
-        return 0 as ::core::ffi::c_int;
+        0
     }
 }

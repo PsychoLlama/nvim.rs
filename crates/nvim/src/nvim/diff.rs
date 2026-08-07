@@ -88,8 +88,8 @@ use crate::src::nvim::os::fs::{
     os_chdir, os_dirname, os_fileinfo, os_fileinfo_size, os_fopen, os_remove,
 };
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, atol, fclose, fwrite, gettext, memmove, memset, qsort, snprintf,
-    strcat, strcpy, strlen, strncmp, tolower,
+    __assert_fail, __ctype_b_loc, atol, fclose, fwrite, gettext, snprintf, strcat, strcpy, strlen,
+    strncmp, tolower,
 };
 use crate::src::nvim::os::shell::{call_shell, kShellOptDoOut, kShellOptSilent};
 use crate::src::nvim::path::FullName_save;
@@ -102,7 +102,7 @@ use crate::src::nvim::types::{
     buf_T, bufref_T, cmd_addr_T, colnr_T, cstack_T, diff_T, diffblock_S, diffline_S, diffline_T,
     diffline_change_T, exarg_T, garray_T, hlf_T, int32_t, kFalse, kNone, kTrue, linenr_T, mmfile_t,
     scid_T, size_t, tabpage_T, typval_T, uint8_t, uint64_t, uv_stat_t, uv_timespec_t, varnumber_T,
-    win_T, xdemitcb_t, xdemitconf_t, xdl_emit_hunk_consume_func_t, xpparam_t,
+    win_T, xdemitcb_t, xdemitconf_t, xpparam_t,
 };
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::undo::{u_save, u_sync};
