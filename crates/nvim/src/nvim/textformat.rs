@@ -14,7 +14,14 @@
 //! [`has_format_option`] (which every one of those files asks) and
 //! [`comp_textwidth`] (the margin they are all measured against).
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use ::core::ffi::{c_int, c_uint, c_void};
+
+use crate::src::nvim::ascii::ascii_iswhite;
+use crate::src::nvim::cursor::get_cursor_pos_ptr;
 use crate::src::nvim::main::{cmdwin_buf, curbuf, curwin, p_paste};
+use crate::src::nvim::mbyte::{utf_iscomposing_first, utf_ptr2char};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::window::win_fdccol_count;
 
@@ -28,78 +35,95 @@ pub(crate) use self::lines::*;
 pub(crate) use self::para::*;
 pub use self::wrap::*;
 
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
-pub const kBufOptFormatexpr: C2Rust_Unnamed_14 = 36;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const OPENLINE_FORMAT: C2Rust_Unnamed_15 = 32;
-pub const OPENLINE_COM_LIST: C2Rust_Unnamed_15 = 16;
-pub const OPENLINE_MARKFIX: C2Rust_Unnamed_15 = 8;
-pub const OPENLINE_KEEPTRAIL: C2Rust_Unnamed_15 = 4;
-pub const OPENLINE_DO_COM: C2Rust_Unnamed_15 = 2;
-pub const OPENLINE_DELSPACES: C2Rust_Unnamed_15 = 1;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const INDENT_SET: C2Rust_Unnamed_18 = 1;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const BL_FIX: C2Rust_Unnamed_19 = 4;
-pub const BL_WHITE: C2Rust_Unnamed_19 = 1;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const SIN_CHANGED: C2Rust_Unnamed_22 = 1;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub const OPT_LOCAL: C2Rust_Unnamed_23 = 2;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const FO_WRAP: ::core::ffi::c_int = 't' as ::core::ffi::c_int;
-pub const FO_WRAP_COMS: ::core::ffi::c_int = 'c' as ::core::ffi::c_int;
-pub const FO_Q_COMS: ::core::ffi::c_int = 'q' as ::core::ffi::c_int;
-pub const FO_Q_NUMBER: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
-pub const FO_Q_SECOND: ::core::ffi::c_int = '2' as ::core::ffi::c_int;
-pub const FO_INS_VI: ::core::ffi::c_int = 'v' as ::core::ffi::c_int;
-pub const FO_INS_BLANK: ::core::ffi::c_int = 'b' as ::core::ffi::c_int;
-pub const FO_MBYTE_BREAK: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
-pub const FO_ONE_LETTER: ::core::ffi::c_int = '1' as ::core::ffi::c_int;
-pub const FO_WHITE_PAR: ::core::ffi::c_int = 'w' as ::core::ffi::c_int;
-pub const FO_AUTO: ::core::ffi::c_int = 'a' as ::core::ffi::c_int;
-pub const FO_RIGOROUS_TW: ::core::ffi::c_int = ']' as ::core::ffi::c_int;
-pub const FO_PERIOD_ABBR: ::core::ffi::c_int = 'p' as ::core::ffi::c_int;
-pub const COM_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
-pub const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
-pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;
-pub const COM_FIRST: ::core::ffi::c_int = 'f' as ::core::ffi::c_int;
-pub unsafe extern "C" fn has_format_option(mut x: ::core::ffi::c_int) -> bool {
-    if p_paste.get() != 0 {
-        return false;
-    }
-    return !vim_strchr((*curbuf.get()).b_p_fo, x).is_null();
+pub const kBufOptFormatexpr: c_int = 36;
+pub const OPENLINE_FORMAT: c_uint = 32;
+pub const OPENLINE_COM_LIST: c_uint = 16;
+pub const OPENLINE_MARKFIX: c_uint = 8;
+pub const OPENLINE_KEEPTRAIL: c_uint = 4;
+pub const OPENLINE_DO_COM: c_uint = 2;
+pub const OPENLINE_DELSPACES: c_uint = 1;
+pub const INDENT_SET: c_uint = 1;
+pub const BL_FIX: c_uint = 4;
+pub const BL_WHITE: c_uint = 1;
+pub const SIN_CHANGED: c_uint = 1;
+pub const OPT_LOCAL: c_uint = 2;
+pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
+pub const NUL: c_int = '\0' as c_int;
+pub const FAIL: c_int = 0;
+
+// The 'formatoptions' flag letters this family reads. Each is the option's
+// own spelling, so a flag test is `has_format_option(FO_WRAP)`.
+pub const FO_WRAP: c_int = 't' as c_int;
+pub const FO_WRAP_COMS: c_int = 'c' as c_int;
+pub const FO_Q_COMS: c_int = 'q' as c_int;
+pub const FO_Q_NUMBER: c_int = 'n' as c_int;
+pub const FO_Q_SECOND: c_int = '2' as c_int;
+pub const FO_INS_VI: c_int = 'v' as c_int;
+pub const FO_INS_BLANK: c_int = 'b' as c_int;
+pub const FO_MBYTE_BREAK: c_int = 'm' as c_int;
+pub const FO_ONE_LETTER: c_int = '1' as c_int;
+pub const FO_WHITE_PAR: c_int = 'w' as c_int;
+pub const FO_AUTO: c_int = 'a' as c_int;
+pub const FO_RIGOROUS_TW: c_int = ']' as c_int;
+pub const FO_PERIOD_ABBR: c_int = 'p' as c_int;
+
+// The 'comments' item flag letters: `s`tart, `m`iddle, `e`nd, `f`irst.
+pub const COM_START: c_int = 's' as c_int;
+pub const COM_MIDDLE: c_int = 'm' as c_int;
+pub const COM_END: c_int = 'e' as c_int;
+pub const COM_FIRST: c_int = 'f' as c_int;
+
+/// Whether 'formatoptions' flag `x` is in effect. Always false under 'paste',
+/// which turns formatting off wholesale.
+///
+/// # Safety
+/// There must be a current buffer.
+pub unsafe extern "C" fn has_format_option(x: c_int) -> bool {
+    unsafe { p_paste.get() == 0 && !vim_strchr((*curbuf.get()).b_p_fo, x).is_null() }
 }
-pub unsafe extern "C" fn comp_textwidth(mut ff: bool) -> ::core::ffi::c_int {
-    let mut textwidth: ::core::ffi::c_int = (*curbuf.get()).b_p_tw as ::core::ffi::c_int;
-    if textwidth == 0 as ::core::ffi::c_int && (*curbuf.get()).b_p_wm != 0 {
-        textwidth = (*curwin.get()).w_view_width - (*curbuf.get()).b_p_wm as ::core::ffi::c_int;
-        if curbuf.get() == cmdwin_buf.get() {
-            textwidth -= 1 as ::core::ffi::c_int;
-        }
-        textwidth -= win_fdccol_count(curwin.get());
-        textwidth -= (*curwin.get()).w_scwidth;
-        if (*curwin.get()).w_onebuf_opt.wo_nu != 0 || (*curwin.get()).w_onebuf_opt.wo_rnu != 0 {
-            textwidth -= 8 as ::core::ffi::c_int;
-        }
+
+/// `WHITECHAR` (`v0.12.4:textformat.c:50`): `cc` is white space, and the
+/// character at the cursor is not the base of a combining sequence.
+///
+/// The two halves are about different positions on purpose. The argument is
+/// whatever the caller has in hand, while the composing test always reads the
+/// byte *after* the cursor -- so a caller passing `line[col - 1]` is asking
+/// about two different characters at once. Upstream is a macro, and every
+/// call site inherits that.
+///
+/// # Safety
+/// There must be a current line and the cursor must be on it.
+pub(crate) unsafe fn whitechar(cc: c_int) -> bool {
+    unsafe {
+        ascii_iswhite(cc) && !utf_iscomposing_first(utf_ptr2char(get_cursor_pos_ptr().add(1)))
     }
-    textwidth = if textwidth > 0 as ::core::ffi::c_int {
+}
+
+/// The width to format to: 'textwidth' if set, else the window width less
+/// 'wrapmargin', else zero. `ff` forces a usable answer for `gq`, which is
+/// the window width capped at 79.
+///
+/// # Safety
+/// There must be a current window and buffer.
+pub unsafe extern "C" fn comp_textwidth(ff: bool) -> c_int {
+    unsafe {
+        let win = curwin.get();
+        let mut textwidth = (*curbuf.get()).b_p_tw as c_int;
+        if textwidth == 0 && (*curbuf.get()).b_p_wm != 0 {
+            textwidth = (*win).w_view_width - (*curbuf.get()).b_p_wm as c_int;
+            if curbuf.get() == cmdwin_buf.get() {
+                textwidth -= 1;
+            }
+            textwidth -= win_fdccol_count(win);
+            textwidth -= (*win).w_scwidth;
+            if (*win).w_onebuf_opt.wo_nu != 0 || (*win).w_onebuf_opt.wo_rnu != 0 {
+                textwidth -= 8;
+            }
+        }
+        textwidth = textwidth.max(0);
+        if ff && textwidth == 0 {
+            textwidth = ((*win).w_view_width - 1).min(79);
+        }
         textwidth
-    } else {
-        0 as ::core::ffi::c_int
-    };
-    if ff as ::core::ffi::c_int != 0 && textwidth == 0 as ::core::ffi::c_int {
-        textwidth = if ((*curwin.get()).w_view_width - 1 as ::core::ffi::c_int)
-            < 79 as ::core::ffi::c_int
-        {
-            (*curwin.get()).w_view_width - 1 as ::core::ffi::c_int
-        } else {
-            79 as ::core::ffi::c_int
-        };
     }
-    return textwidth;
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
