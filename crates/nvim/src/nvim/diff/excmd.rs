@@ -354,21 +354,9 @@ pub unsafe extern "C" fn diff_win_options(mut wp: *mut win_T, mut addbuf: bool) 
         }
         free_string_option((*wp).w_onebuf_opt.wo_fdc);
         (*wp).w_onebuf_opt.wo_fdc = xstrdup(b"2\0".as_ptr() as *const ::core::ffi::c_char);
-        '_c2rust_label: {
-            if diff_foldcolumn.get() >= 0 as ::core::ffi::c_int
-                && diff_foldcolumn.get() <= 9 as ::core::ffi::c_int
-            {
-            } else {
-                __assert_fail(
-                    b"diff_foldcolumn >= 0 && diff_foldcolumn <= 9\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                    b"src/nvim/diff.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1573 as ::core::ffi::c_uint,
-                    b"void diff_win_options(win_T *, _Bool)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        // A single digit, because the option's buffer is one byte plus the
+        // NUL. C's `assert()` is `debug_assert!`: it vanishes under NDEBUG.
+        debug_assert!((0..=9).contains(&diff_foldcolumn.get()));
         snprintf(
             (*wp).w_onebuf_opt.wo_fdc,
             strlen((*wp).w_onebuf_opt.wo_fdc).wrapping_add(1 as size_t),
