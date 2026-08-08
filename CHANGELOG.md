@@ -31,6 +31,12 @@ and this project adheres to [CalVer](https://calver.org/).
   `g CTRL-G`, the blockwise geometry they share, and the dispatcher that
   turns an operator plus a motion or a Visual selection into the region
   each one is given.
+- Rewrote Insert mode, covering the key loop and everything a key can mean
+  in it: backspace and delete under every `'backspace'` spelling, `<Tab>`
+  under `'expandtab'`/`'softtabstop'`/`'vartabstop'`, the arrow keys and
+  their shifted and CTRL- forms, CTRL-V and CTRL-K, CTRL-R, CTRL-O, CTRL-G,
+  Replace and Virtual Replace mode's undo of what they overwrote, `.`
+  repeating an insert, and the prompt buffer.
 - Rewrote text formatting and the text objects, covering auto-wrap at
   `'textwidth'`, `gq`/`gw` and `'formatexpr'`, the `'formatoptions'` and
   `'comments'` rules that decide where a paragraph ends, every `i`/`a`
