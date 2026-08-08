@@ -1,140 +1,81 @@
-//! `insertchar` -- putting one typed character into the buffer.
+//! [`insertchar`] -- putting one typed character into the buffer.
 //!
 //! The common path, and the one that has to be fast: everything that is not
-//! a special key ends here.  Three things make it more than an insert.  It
-//! batches -- while more plain characters are already available and nothing
-//! needs formatting, it collects them into one `ins_str` rather than one
-//! call apiece.  It decides whether this character triggers a wrap, which
-//! is 'textwidth', 'formatoptions' and 'formatexpr' and is handed to
-//! `internal_format`.  And it runs the `InsertCharPre` autocommand, which
-//! may replace the character with a whole string -- `do_insert_char_pre` is
-//! that, and it is why the function cannot simply take an `int`.
+//! a special key ends here.  Three things make it more than an insert.
 //!
-//! `echeck_abbr` is here because an abbreviation is triggered by the
+//! It may *wrap* first ([`wrap_before_insert`]): 'textwidth' and
+//! 'formatoptions' decide whether this character pushes the line over, and
+//! either 'formatexpr' or `internal_format` does the breaking.  It may have
+//! to *end a comment* ([`end_pending_comment`]): after an auto-indent that
+//! opened one, typing the last character of the 'comments' end leader
+//! replaces the middle leader with the end leader.  And it *batches* -- while
+//! more plain characters are already available and none of the conditions
+//! above can trigger, it collects up to `INPUT_BUFLEN` of them into one
+//! `ins_str` rather than one call apiece, which is what makes pasted or
+//! mapped text fast.
+//!
+//! [`do_insert_char_pre`] is the `InsertCharPre` autocommand, which may
+//! replace the character with a whole *string*; it is one of the several
+//! reasons the batch path has to be given up.
+//!
+//! [`echeck_abbr`] is here because an abbreviation is triggered by the
 //! *non*-word character that ends the word, which is the character being
 //! inserted.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use ::core::ffi::{c_char, c_int};
 
-pub unsafe extern "C" fn insertchar(
-    mut c: ::core::ffi::c_int,
-    mut flags: ::core::ffi::c_int,
-    mut second_indent: ::core::ffi::c_int,
-) {
+use super::*;
+use crate::src::nvim::types::MB_MAXCHAR;
+
+/// Upstream's `ISSPECIAL`: a character that needs processing other than the
+/// simple insert this file can do.
+///
+/// `<Esc>` ends the insert and CR/NL open a line; `0` and `^` are here
+/// because either can be followed by CTRL-D.
+const fn is_special(c: c_int) -> bool {
+    c < b' ' as c_int || c >= DEL || c == b'0' as c_int || c == b'^' as c_int
+}
+
+/// Insert one character, formatting and batching as described in the module
+/// doc.
+///
+/// `c` is the character, or NUL to ask for formatting only.  `flags` is
+/// `INSCHAR_FORMAT` (force formatting), `INSCHAR_CTRLV` (typed just after
+/// CTRL-V) and `INSCHAR_NO_FEX` (do not use 'formatexpr'); the whole value is
+/// passed straight through to `internal_format`, which also reads
+/// `INSCHAR_DO_COM` and `INSCHAR_COM_LIST`.  `second_indent` is the indent
+/// for a second line, if not negative.
+///
+/// # Safety
+/// Must run with a live `curwin`/`curbuf`.
+pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
     unsafe {
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut force_format: ::core::ffi::c_int = flags & INSCHAR_FORMAT as ::core::ffi::c_int;
-        let textwidth: ::core::ffi::c_int = comp_textwidth(force_format != 0);
-        let fo_ins_blank: bool = has_format_option(FO_INS_BLANK);
-        if textwidth > 0 as ::core::ffi::c_int
-            && (force_format != 0
-                || !ascii_iswhite(c)
-                    && !(State.get() & REPLACE_FLAG != 0
-                        && State.get() & VREPLACE_FLAG == 0
-                        && *get_cursor_pos_ptr() as ::core::ffi::c_int != NUL)
-                    && ((*curwin.get()).w_cursor.lnum != (*Insstart.ptr()).lnum
-                        || (!has_format_option(FO_INS_LONG)
-                            || Insstart_textlen.get() <= textwidth)
-                            && (!fo_ins_blank || Insstart_blank_vcol.get() <= textwidth)))
-        {
-            let mut do_internal: bool = true_0 != 0;
-            let mut virtcol: colnr_T =
-                get_nolist_virtcol() + char2cells(if c != NUL { c } else { gchar_cursor() });
-            if *(*curbuf.get()).b_p_fex as ::core::ffi::c_int != NUL
-                && flags & INSCHAR_NO_FEX as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-                && (force_format != 0 || virtcol > textwidth)
-            {
-                do_internal =
-                    fex_format((*curwin.get()).w_cursor.lnum, 1 as ::core::ffi::c_long, c)
-                        != 0 as ::core::ffi::c_int;
-                ins_need_undo.set(true_0 != 0);
-            }
-            if do_internal {
-                internal_format(textwidth, second_indent, flags, c == NUL, c);
-            }
-        }
+        let textwidth = comp_textwidth(flags & INSCHAR_FORMAT as c_int != 0);
+        wrap_before_insert(c, flags, second_indent, textwidth);
+
         if c == NUL {
-            return;
+            return; // only formatting was wanted
         }
-        if did_ai.get() as ::core::ffi::c_int != 0 && c == end_comment_pending.get() {
-            let mut lead_end: [::core::ffi::c_char; 50] = [0; 50];
-            let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-            let mut i: ::core::ffi::c_int =
-                get_leader_len(line, &raw mut p, false_0 != 0, true_0 != 0);
-            if i > 0 as ::core::ffi::c_int && !vim_strchr(p, COM_MIDDLE).is_null() {
-                while *p as ::core::ffi::c_int != 0
-                    && *p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        != ':' as ::core::ffi::c_int
-                {
-                    p = p.offset(1);
-                }
-                let mut middle_len: ::core::ffi::c_int = copy_option_part(
-                    &raw mut p,
-                    &raw mut lead_end as *mut ::core::ffi::c_char,
-                    COM_MAX_LEN as size_t,
-                    b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                ) as ::core::ffi::c_int;
-                while middle_len > 0 as ::core::ffi::c_int
-                    && ascii_iswhite(
-                        lead_end[(middle_len - 1 as ::core::ffi::c_int) as usize]
-                            as ::core::ffi::c_int,
-                    ) as ::core::ffi::c_int
-                        != 0
-                {
-                    middle_len -= 1;
-                }
-                while *p as ::core::ffi::c_int != 0
-                    && *p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        != ':' as ::core::ffi::c_int
-                {
-                    p = p.offset(1);
-                }
-                let mut end_len: ::core::ffi::c_int = copy_option_part(
-                    &raw mut p,
-                    &raw mut lead_end as *mut ::core::ffi::c_char,
-                    COM_MAX_LEN as size_t,
-                    b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                ) as ::core::ffi::c_int;
-                i = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-                loop {
-                    i -= 1;
-                    if !(i >= 0 as ::core::ffi::c_int
-                        && ascii_iswhite(*line.offset(i as isize) as ::core::ffi::c_int)
-                            as ::core::ffi::c_int
-                            != 0)
-                    {
-                        break;
-                    }
-                }
-                i += 1;
-                i -= middle_len;
-                if i >= 0 as ::core::ffi::c_int
-                    && end_len > 0 as ::core::ffi::c_int
-                    && lead_end[(end_len - 1 as ::core::ffi::c_int) as usize] as uint8_t
-                        as ::core::ffi::c_int
-                        == end_comment_pending.get()
-                {
-                    backspace_until_column(i);
-                    ins_bytes_len(
-                        &raw mut lead_end as *mut ::core::ffi::c_char,
-                        (end_len - 1 as ::core::ffi::c_int) as size_t,
-                    );
-                }
-            }
-        }
+
+        end_pending_comment(c);
         end_comment_pending.set(NUL);
-        did_ai.set(false_0 != 0);
-        did_si.set(false_0 != 0);
-        can_si.set(false_0 != 0);
-        can_si_back.set(false_0 != 0);
-        if !(c < ' ' as ::core::ffi::c_int
-            || c >= DEL
-            || c == '0' as ::core::ffi::c_int
-            || c == '^' as ::core::ffi::c_int)
-            && utf_char2len(c) == 1 as ::core::ffi::c_int
+
+        did_ai.set(false);
+        did_si.set(false);
+        can_si.set(false);
+        can_si_back.set(false);
+
+        // With input already pending, grab up to INPUT_BUFLEN characters at
+        // once; this speeds up ordinary text input considerably.  Not with
+        // 'cindent' or 'indentexpr', which may want to re-indent on a `:` or
+        // any other character, and not with an `InsertCharPre` autocommand,
+        // which has to see every character one at a time.  The event test
+        // comes before `vpeekc` because the autocommand can change the input
+        // buffer.
+        if !is_special(c)
+            && utf_char2len(c) == 1
             && !has_event(EVENT_INSERTCHARPRE)
             && !test_disable_char_avail.get()
             && vpeekc() != NUL
@@ -142,144 +83,261 @@ pub unsafe extern "C" fn insertchar(
             && !cindent_on()
             && p_ri.get() == 0
         {
-            let mut buf: [::core::ffi::c_char; 101] = [0; 101];
-            let mut virtcol_0: colnr_T = 0 as colnr_T;
-            buf[0 as ::core::ffi::c_int as usize] = c as ::core::ffi::c_char;
-            let mut i_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-            if textwidth > 0 as ::core::ffi::c_int {
-                virtcol_0 = get_nolist_virtcol();
+            let mut buf: [c_char; INPUT_BUFLEN as usize + 1] = [0; INPUT_BUFLEN as usize + 1];
+            let mut virtcol: colnr_T = 0;
+
+            buf[0] = c as c_char;
+            let mut i = 1;
+            if textwidth > 0 {
+                virtcol = get_nolist_virtcol();
             }
+            // Stop when there is nothing more to take, on a special
+            // character (a command key), when the buffer is full, at the
+            // 'textwidth' boundary, or where an abbreviation may need
+            // checking -- a non-word character after a word character.
             loop {
-                c = vpeekc();
-                if !(c != NUL
-                    && !(c < ' ' as ::core::ffi::c_int
-                        || c >= DEL
-                        || c == '0' as ::core::ffi::c_int
-                        || c == '^' as ::core::ffi::c_int)
-                    && utf8len_tab[c as usize] as ::core::ffi::c_int == 1 as ::core::ffi::c_int
-                    && i_0 < INPUT_BUFLEN
-                    && (textwidth == 0 as ::core::ffi::c_int || {
-                        virtcol_0 += byte2cells(
-                            buf[(i_0 - 1 as ::core::ffi::c_int) as usize] as uint8_t
-                                as ::core::ffi::c_int,
-                        );
-                        virtcol_0 < textwidth
+                let next = vpeekc();
+                let take = next != NUL
+                    && !is_special(next)
+                    && utf8len_tab[next as usize] as c_int == 1
+                    && i < INPUT_BUFLEN
+                    && (textwidth == 0 || {
+                        virtcol += byte2cells(buf[i as usize - 1] as uint8_t as c_int);
+                        virtcol < textwidth
                     })
                     && !(!no_abbr.get()
-                        && !vim_iswordc(c)
-                        && vim_iswordc(
-                            buf[(i_0 - 1 as ::core::ffi::c_int) as usize] as uint8_t
-                                as ::core::ffi::c_int,
-                        ) as ::core::ffi::c_int
-                            != 0))
-                {
+                        && !vim_iswordc(next)
+                        && vim_iswordc(buf[i as usize - 1] as uint8_t as c_int));
+                if !take {
                     break;
                 }
-                c = vgetc();
-                let c2rust_fresh0 = i_0;
-                i_0 = i_0 + 1;
-                buf[c2rust_fresh0 as usize] = c as ::core::ffi::c_char;
+                buf[i as usize] = vgetc() as c_char;
+                i += 1;
             }
-            do_digraph(-1 as ::core::ffi::c_int);
-            do_digraph(
-                buf[(i_0 - 1 as ::core::ffi::c_int) as usize] as uint8_t as ::core::ffi::c_int,
-            );
-            buf[i_0 as usize] = NUL as ::core::ffi::c_char;
-            ins_str(&raw mut buf as *mut ::core::ffi::c_char, i_0 as size_t);
-            if flags & INSCHAR_CTRLV as ::core::ffi::c_int != 0 {
-                redo_literal(
-                    *(&raw mut buf as *mut ::core::ffi::c_char) as uint8_t as ::core::ffi::c_int,
-                );
-                i_0 = 1 as ::core::ffi::c_int;
+
+            do_digraph(-1); // clear digraphs
+            do_digraph(buf[i as usize - 1] as uint8_t as c_int); // may start one
+            buf[i as usize] = NUL as c_char;
+            ins_str(buf.as_mut_ptr(), i as size_t);
+
+            // After CTRL-V the first character is recorded literally, and
+            // the rest as themselves.
+            let redo_from = if flags & INSCHAR_CTRLV as c_int != 0 {
+                redo_literal(buf[0] as uint8_t as c_int);
+                1
             } else {
-                i_0 = 0 as ::core::ffi::c_int;
-            }
-            if buf[i_0 as usize] as ::core::ffi::c_int != NUL {
-                AppendToRedobuffLit(
-                    (&raw mut buf as *mut ::core::ffi::c_char).offset(i_0 as isize),
-                    -1 as ::core::ffi::c_int,
-                );
+                0
+            };
+            if buf[redo_from] as c_int != NUL {
+                AppendToRedobuffLit(buf.as_mut_ptr().add(redo_from), -1);
             }
         } else {
-            let mut cc: ::core::ffi::c_int = 0;
-            cc = utf_char2len(c);
-            if cc > 1 as ::core::ffi::c_int {
-                let mut buf_0: [::core::ffi::c_char; 7] = [0; 7];
-                utf_char2bytes(c, &raw mut buf_0 as *mut ::core::ffi::c_char);
-                buf_0[cc as usize] = NUL as ::core::ffi::c_char;
-                ins_char_bytes(&raw mut buf_0 as *mut ::core::ffi::c_char, cc as size_t);
+            let cc = utf_char2len(c);
+            if cc > 1 {
+                let mut buf: [c_char; MB_MAXCHAR + 1] = [0; MB_MAXCHAR + 1];
+                utf_char2bytes(c, buf.as_mut_ptr());
+                buf[cc as usize] = NUL as c_char;
+                ins_char_bytes(buf.as_mut_ptr(), cc as size_t);
                 AppendCharToRedobuff(c);
             } else {
                 ins_char(c);
-                if flags & INSCHAR_CTRLV as ::core::ffi::c_int != 0 {
+                if flags & INSCHAR_CTRLV as c_int != 0 {
                     redo_literal(c);
                 } else {
                     AppendCharToRedobuff(c);
                 }
             }
-        };
+        }
     }
 }
 
-pub(crate) unsafe extern "C" fn echeck_abbr(mut c: ::core::ffi::c_int) -> bool {
+/// Break the line in two or more pieces before `c` is inserted, if
+/// 'textwidth' and 'formatoptions' say so.
+///
+/// Always when the caller asked for formatting only (`INSCHAR_FORMAT`), and
+/// always when 'formatoptions' has `a` and the line ends in white space.
+/// Otherwise: not when inserting a blank; not when an existing character is
+/// being replaced, unless in `MODE_VREPLACE`; and, on the line the insert
+/// started on, only when 'formatoptions' lacks `l` or the line was not
+/// already too long, and lacks `b` or a blank was inserted at or before
+/// 'textwidth'.
+///
+/// # Safety
+/// Must run with a live `curwin`/`curbuf`.
+unsafe fn wrap_before_insert(c: c_int, flags: c_int, second_indent: c_int, textwidth: c_int) {
     unsafe {
-        if p_paste.get() != 0
-            || no_abbr.get() as ::core::ffi::c_int != 0
-            || arrow_used.get() as ::core::ffi::c_int != 0
-        {
-            return false_0 != 0;
+        let force_format = flags & INSCHAR_FORMAT as c_int;
+        let fo_ins_blank = has_format_option(FO_INS_BLANK);
+
+        if textwidth <= 0 {
+            return;
         }
-        return check_abbr(
+        let wanted = force_format != 0
+            || (!ascii_iswhite(c)
+                && !(State.get() & REPLACE_FLAG != 0
+                    && State.get() & VREPLACE_FLAG == 0
+                    && *get_cursor_pos_ptr() as c_int != NUL)
+                && ((*curwin.get()).w_cursor.lnum != (*Insstart.ptr()).lnum
+                    || ((!has_format_option(FO_INS_LONG) || Insstart_textlen.get() <= textwidth)
+                        && (!fo_ins_blank || Insstart_blank_vcol.get() <= textwidth))));
+        if !wanted {
+            return;
+        }
+
+        // Format with 'formatexpr' when it is set; use the internal
+        // formatting when it is not, or when it answered non-zero.
+        let mut do_internal = true;
+        let virtcol = get_nolist_virtcol() + char2cells(if c != NUL { c } else { gchar_cursor() });
+
+        if *(*curbuf.get()).b_p_fex as c_int != NUL
+            && flags & INSCHAR_NO_FEX as c_int == 0
+            && (force_format != 0 || virtcol > textwidth)
+        {
+            do_internal = fex_format((*curwin.get()).w_cursor.lnum, 1, c) != 0;
+            // Saving for undo may be needed again, e.g. when the expression
+            // called setline().
+            ins_need_undo.set(true);
+        }
+        if do_internal {
+            internal_format(textwidth, second_indent, flags, c == NUL, c);
+        }
+    }
+}
+
+/// After an auto-indent that opened a comment, does `c` finish it?
+///
+/// `end_comment_pending` holds the last character of the 'comments' end
+/// leader.  When it arrives, the *middle* leader that was auto-indented in
+/// has to come off and the end leader go in -- all but its last character,
+/// which the caller inserts as an ordinary one.
+///
+/// # Safety
+/// Must run with a live `curwin`.
+unsafe fn end_pending_comment(c: c_int) {
+    unsafe {
+        if !did_ai.get() || c != end_comment_pending.get() {
+            return;
+        }
+
+        // Find the comment leader this line starts with.
+        let mut p: *mut c_char = ::core::ptr::null_mut();
+        let line = get_cursor_line_ptr();
+        let mut i = get_leader_len(line, &raw mut p, false, true);
+        if i <= 0 || vim_strchr(p, COM_MIDDLE).is_null() {
+            return; // just checking
+        }
+
+        let mut lead_end: [c_char; COM_MAX_LEN as usize] = [0; COM_MAX_LEN as usize];
+
+        // Skip the middle-comment string.
+        while *p as c_int != 0 && *p.offset(-1) as c_int != b':' as c_int {
+            p = p.offset(1); // find the end of the middle flags
+        }
+        let mut middle_len = copy_option_part(
+            &raw mut p,
+            lead_end.as_mut_ptr(),
+            COM_MAX_LEN as size_t,
+            c",".as_ptr().cast_mut(),
+        ) as c_int;
+        // Trailing white space does not count towards `middle_len`.
+        while middle_len > 0 && ascii_iswhite(lead_end[middle_len as usize - 1] as c_int) {
+            middle_len -= 1;
+        }
+
+        // Find the end-comment string.
+        while *p as c_int != 0 && *p.offset(-1) as c_int != b':' as c_int {
+            p = p.offset(1); // find the end of the end flags
+        }
+        let end_len = copy_option_part(
+            &raw mut p,
+            lead_end.as_mut_ptr(),
+            COM_MAX_LEN as size_t,
+            c",".as_ptr().cast_mut(),
+        ) as c_int;
+
+        // Skip the white space before the cursor, then back over the middle
+        // leader.
+        i = (*curwin.get()).w_cursor.col;
+        while i > 0 && ascii_iswhite(*line.offset(i as isize - 1) as c_int) {
+            i -= 1;
+        }
+        i -= middle_len;
+
+        // Check some expected things before going on.
+        if i >= 0
+            && end_len > 0
+            && lead_end[end_len as usize - 1] as uint8_t as c_int == end_comment_pending.get()
+        {
+            // Backspace over everything being replaced.
+            backspace_until_column(i);
+            // Insert the end-comment string except for its last character,
+            // which the caller inserts as an ordinary one.
+            ins_bytes_len(lead_end.as_mut_ptr(), (end_len - 1) as size_t);
+        }
+    }
+}
+
+/// Check the word in front of the cursor for an abbreviation.
+///
+/// Called when the non-identifier character `c` has been entered.  When an
+/// abbreviation is recognised it is removed from the text and the replacement
+/// is put into the typeahead buffer, followed by `c`.
+///
+/// # Safety
+/// Must run with a live `curwin`.
+pub(crate) unsafe fn echeck_abbr(c: c_int) -> bool {
+    unsafe {
+        // Not in 'paste' mode, not when disabled, and not just after moving
+        // around with the cursor keys.
+        if p_paste.get() != 0 || no_abbr.get() || arrow_used.get() {
+            return false;
+        }
+
+        check_abbr(
             c,
             get_cursor_line_ptr(),
-            (*curwin.get()).w_cursor.col as ::core::ffi::c_int,
+            (*curwin.get()).w_cursor.col,
             if (*curwin.get()).w_cursor.lnum == (*Insstart.ptr()).lnum {
-                (*Insstart.ptr()).col as ::core::ffi::c_int
+                (*Insstart.ptr()).col
             } else {
-                0 as ::core::ffi::c_int
+                0
             },
-        );
+        )
     }
 }
 
-pub(crate) unsafe extern "C" fn do_insert_char_pre(
-    mut c: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+/// Run the `InsertCharPre` autocommand for `c`.
+///
+/// Answers an allocated replacement string when the autocommand changed
+/// `v:char`, and null to go on inserting `c` -- which is also the answer when
+/// there is no such autocommand at all.
+///
+/// # Safety
+/// Must run on the main thread; the caller frees the answer.
+pub(crate) unsafe fn do_insert_char_pre(c: c_int) -> *mut c_char {
     unsafe {
-        let mut buf: [::core::ffi::c_char; 22] = [0; 22];
-        let save_State: ::core::ffi::c_int = State.get();
-        if c == Ctrl_RSB {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        if c == Ctrl_RSB || !has_event(EVENT_INSERTCHARPRE) {
+            return ::core::ptr::null_mut();
         }
-        if !has_event(EVENT_INSERTCHARPRE) {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
-        }
-        let mut buflen: size_t =
-            utf_char2bytes(c, &raw mut buf as *mut ::core::ffi::c_char) as size_t;
-        buf[buflen as usize] = NUL as ::core::ffi::c_char;
+
+        let save_state = State.get();
+        let mut buf: [c_char; MB_MAXBYTES + 1] = [0; MB_MAXBYTES + 1];
+        let buflen = utf_char2bytes(c, buf.as_mut_ptr()) as size_t;
+        buf[buflen] = NUL as c_char;
+
         (*textlock.ptr()) += 1;
-        set_vim_var_string(
-            VV_CHAR,
-            &raw mut buf as *mut ::core::ffi::c_char,
-            buflen as ptrdiff_t,
-        );
-        let mut res: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if ins_apply_autocmds(EVENT_INSERTCHARPRE) != 0 {
-            if strcmp(
-                &raw mut buf as *mut ::core::ffi::c_char,
-                get_vim_var_str(VV_CHAR),
-            ) != 0 as ::core::ffi::c_int
-            {
-                res = xstrdup(get_vim_var_str(VV_CHAR));
-            }
+        set_vim_var_string(VV_CHAR, buf.as_mut_ptr(), buflen as ptrdiff_t);
+
+        let mut res = ::core::ptr::null_mut();
+        if ins_apply_autocmds(EVENT_INSERTCHARPRE) != 0
+            && strcmp(buf.as_mut_ptr(), get_vim_var_str(VV_CHAR)) != 0
+        {
+            res = xstrdup(get_vim_var_str(VV_CHAR));
         }
-        set_vim_var_string(
-            VV_CHAR,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            -1 as ptrdiff_t,
-        );
+
+        set_vim_var_string(VV_CHAR, ::core::ptr::null(), -1);
         (*textlock.ptr()) -= 1;
-        State.set(save_State);
-        return res;
+        State.set(save_state);
+        res
     }
 }

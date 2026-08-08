@@ -177,19 +177,19 @@ mod tab;
 mod undo;
 
 pub(crate) use self::bs::*;
-pub use self::chars::*;
+pub(crate) use self::chars::*;
 pub use self::ctrl::*;
 pub(crate) use self::cursor::*;
 pub(crate) use self::key::*;
 pub(crate) use self::lastins::*;
-pub use self::literal::*;
+pub(crate) use self::literal::*;
 pub(crate) use self::motion::*;
 pub(crate) use self::prompt::*;
 pub(crate) use self::redraw::*;
 pub(crate) use self::replace::*;
 pub use self::state::*;
 pub use self::tab::*;
-pub use self::undo::*;
+pub(crate) use self::undo::*;
 
 /// The alphanumeric bit of the C library's `__ctype_b_loc()` table, the one
 /// `isalnum()` reads.  Locale-dependent by construction.
