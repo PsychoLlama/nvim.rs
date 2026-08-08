@@ -75,8 +75,8 @@ use crate::src::nvim::keycodes::{
     K_MIDDLEMOUSE, K_MIDDLERELEASE, K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP,
     K_PAGEDOWN, K_PAGEUP, K_PASTE_START, K_RIGHT, K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE,
     K_S_DOWN, K_S_END, K_S_HOME, K_S_LEFT, K_S_RIGHT, K_S_TAB, K_S_UP, K_SELECT, K_SPECIAL, K_UP,
-    K_X1DRAG, K_X1MOUSE, K_X1RELEASE, K_X2DRAG, K_X2MOUSE, K_X2RELEASE, K_XF1, K_ZERO, KE_C_LEFT,
-    KE_C_RIGHT, KE_EVENT, KE_IGNORE, KE_NOP, add_char2buf, get_special_key_name,
+    K_X1DRAG, K_X1MOUSE, K_X1RELEASE, K_X2DRAG, K_X2MOUSE, K_X2RELEASE, K_XF1, K_ZERO, KE_IGNORE,
+    add_char2buf, get_special_key_name,
 };
 use crate::src::nvim::main::{
     Insstart, Insstart_orig, KeyStuffed, KeyTyped, RedrawingDisabled, State, VIsual_active, ai_col,
@@ -121,7 +121,7 @@ use crate::src::nvim::options::{
     kOptFdoFlagAll, kOptFdoFlagHor, kOptFdoFlagInsert, kOptVeFlagAll, kOptVeFlagOnemore,
 };
 use crate::src::nvim::os::input::line_breakcheck;
-use crate::src::nvim::os::libc::{__ctype_b_loc, gettext, memcpy, memmove, memset, strcmp, strlen};
+use crate::src::nvim::os::libc::{__ctype_b_loc, gettext, memcpy, memmove, strcmp, strlen};
 use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::plines::linetabsize_str;
 use crate::src::nvim::plines::{
@@ -152,7 +152,7 @@ use crate::src::nvim::types::{
     INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, StrCharInfo,
     String_0, TriState, VV_CHAR, VV_INSERTMODE, VimState, aco_save_T, buf_T, cmdarg_T, colnr_T,
     event_T, int32_t, int64_t, kFalse, kNone, kTrue, linenr_T, pos_T, ptrdiff_t, schar_T, size_t,
-    ssize_t, state_check_callback, state_execute_callback, uint8_t, uint32_t, varnumber_T, win_T,
+    ssize_t, uint8_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::src::nvim::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -185,7 +185,7 @@ pub(crate) use self::motion::*;
 pub(crate) use self::prompt::*;
 pub(crate) use self::redraw::*;
 pub(crate) use self::replace::*;
-pub use self::state::*;
+pub(crate) use self::state::*;
 pub(crate) use self::tab::*;
 pub(crate) use self::undo::*;
 
