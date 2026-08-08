@@ -372,6 +372,8 @@ pub(crate) unsafe fn insert_handle_key(s: *mut InsertState) -> c_int {
                 Next::Continue
             }
 
+            // CTRL-Z is inserted as an ordinary character (upstream says
+            // so explicitly), and so is everything else.
             _ => Next::Normal,
         };
 
