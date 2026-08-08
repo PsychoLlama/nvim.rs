@@ -13,10 +13,20 @@ and this project adheres to [CalVer](https://calver.org/).
   expansion, running the shell for `:!`, `system()` and wildcard expansion,
   the locale and `:language`, and the input buffer every keystroke arrives
   in. File-system access was reorganised but not rewritten.
+- Rewrote the string and multibyte layer, covering `printf()`'s whole format
+  language, UTF-8 decoding, character width and character classes, case
+  folding, and the `iconv`-backed encoding conversion behind `++enc` and
+  `'fileencoding'`.
 - Rewrote the msgpack codec and the `vim.mpack` module.
 - Rewrote the JSON codec behind `vim.json`, including its float formatting,
   which is what decides the exact text `vim.json.encode()` produces for a
   number.
+- Rewrote diffing, covering the vendored Myers, minimal, patience and
+  histogram algorithms, `vim.diff()`, diff mode's internal and external
+  paths, the highlighting down to the inline character diff, diff folds,
+  `]c`/`[c` and `:diffget`/`:diffput`.
+- Rewrote C indenting, covering `'cindent'`, `cindent()` and the whole
+  `'cinoptions'`/`'cinkeys'`/`'cinwords'`/`'cinscopedecls'` vocabulary.
 - Rewrote putting and the registers, covering `p`/`P` and their `g`, `]`,
   `[` and `z` variants, yanking into a register and appending to one,
   recording with `q` and replaying with `@`, CTRL-R in Insert mode and on
@@ -46,6 +56,8 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Fixed
 
+- `printf()` no longer exits the editor when `%S`'s field width is wider than
+  the string it formats (`printf('%3S', 'éèü')`).
 - `vim.mpack.encode()` no longer aborts the editor on a number over 2^53, on
   `math.huge` or on a NaN, and no longer drops the high half of a negative
   integer larger than 2^32 (which decoded back as a different number).
