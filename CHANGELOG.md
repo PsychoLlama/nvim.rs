@@ -7,6 +7,14 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote version reporting, covering `:version`, `nvim -v`, the intro
+  screen and the `has("nvim-…")`/`has("patch-…")` predicates. `:version`
+  now names the port and the version it was built from, and reports the
+  real build profile and compiler instead of the CMake-era text the
+  transpiler baked in; `Build type:` and `Compilation:` are gone.
+
 ## [2026.08.08-0be4297933]
 
 ### Changed
