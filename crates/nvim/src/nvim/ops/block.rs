@@ -519,7 +519,7 @@ pub(crate) unsafe fn get_op_vcol(oap: *mut oparg_T, redo_visual_vcol: colnr_T, i
                 if initial
                     && *p_sel.get() as c_int == 'e' as c_int
                     && start >= 1
-                    && start - 1 >= (*oap).end_vcol
+                    && start > (*oap).end_vcol
                 {
                     (*oap).end_vcol = start - 1;
                 } else {

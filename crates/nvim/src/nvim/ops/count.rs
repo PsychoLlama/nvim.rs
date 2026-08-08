@@ -143,7 +143,7 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
             if dict.is_null() && bom_count > 0 {
                 let len = strlen(IObuff.ptr() as *mut c_char);
                 vim_snprintf(
-                    (IObuff.ptr() as *mut c_char).offset(len as isize),
+                    (IObuff.ptr() as *mut c_char).add(len),
                     IOSIZE as size_t - len,
                     gettext(c"(+%ld for BOM)".as_ptr()),
                     bom_count,
