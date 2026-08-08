@@ -12,7 +12,6 @@
     "crates/nvim/src/nvim/drawline/columns.rs": 1,
     "crates/nvim/src/nvim/drawscreen/mode.rs": 1,
     "crates/nvim/src/nvim/drawscreen/winupdate.rs": 1,
-    "crates/nvim/src/nvim/edit/key.rs": 3,
     "crates/nvim/src/nvim/eval/callback.rs": 1,
     "crates/nvim/src/nvim/eval/collect.rs": 2,
     "crates/nvim/src/nvim/eval/deprecated.rs": 3,
