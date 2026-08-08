@@ -149,11 +149,11 @@ use crate::src::nvim::textobject::{bck_word, fwd_word};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     BS_EOL, BS_INDENT, BS_NOSTOP, BS_START, CMOD_KEEPJUMPS, CharsizeArg, CharsizeKind,
-    GraphemeState, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES, OptInt, PUT_CURSEND,
-    PUT_FIXINDENT, StrCharInfo, String_0, TriState, VV_CHAR, VV_INSERTMODE, VimState, aco_save_T,
-    buf_T, cmdarg_T, colnr_T, event_T, int32_t, int64_t, kFalse, kNone, kTrue, linenr_T, pos_T,
-    ptrdiff_t, schar_T, size_t, ssize_t, state_check_callback, state_execute_callback, uint8_t,
-    uint32_t, varnumber_T, win_T,
+    INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT,
+    StrCharInfo, String_0, TriState, VV_CHAR, VV_INSERTMODE, VimState, aco_save_T, buf_T, cmdarg_T,
+    colnr_T, event_T, int32_t, int64_t, kFalse, kNone, kTrue, linenr_T, pos_T, ptrdiff_t, schar_T,
+    size_t, ssize_t, state_check_callback, state_execute_callback, uint8_t, uint32_t, varnumber_T,
+    win_T,
 };
 use crate::src::nvim::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::src::nvim::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -234,10 +234,6 @@ pub const MSCR_RIGHT: ::core::ffi::c_int = -2;
 pub const MSCR_LEFT: ::core::ffi::c_int = -1;
 pub const MSCR_UP: ::core::ffi::c_int = 1;
 pub const MSCR_DOWN: ::core::ffi::c_int = 0;
-pub const BACKSPACE_LINE: ::core::ffi::c_int = 4;
-pub const BACKSPACE_CHAR: ::core::ffi::c_int = 1;
-pub const BACKSPACE_WORD_NOT_SPACE: ::core::ffi::c_int = 3;
-pub const BACKSPACE_WORD: ::core::ffi::c_int = 2;
 pub const YREG_PASTE: ::core::ffi::c_int = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const REPLACE_STACK_EMPTY: ReplaceStack = ReplaceStack {

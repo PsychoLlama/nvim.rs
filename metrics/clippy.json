@@ -12,7 +12,6 @@
     "crates/nvim/src/nvim/drawline/columns.rs": 1,
     "crates/nvim/src/nvim/drawscreen/mode.rs": 1,
     "crates/nvim/src/nvim/drawscreen/winupdate.rs": 1,
-    "crates/nvim/src/nvim/edit/bs.rs": 1,
     "crates/nvim/src/nvim/edit/key.rs": 3,
     "crates/nvim/src/nvim/edit/state.rs": 3,
     "crates/nvim/src/nvim/edit/tab.rs": 3,

@@ -121,7 +121,7 @@ pub(crate) unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::
                                             K_BS | Ctrl_H => {
                                                 (*s).did_backspace = ins_bs(
                                                     (*s).c,
-                                                    BACKSPACE_CHAR,
+                                                    Backspace::Char,
                                                     &raw mut (*s).inserted_space,
                                                 );
                                                 auto_format(false_0 != 0, true_0 != 0);
@@ -159,7 +159,7 @@ pub(crate) unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::
                                                 }
                                                 (*s).did_backspace = ins_bs(
                                                     (*s).c,
-                                                    BACKSPACE_WORD,
+                                                    Backspace::Word,
                                                     &raw mut (*s).inserted_space,
                                                 );
                                                 auto_format(false_0 != 0, true_0 != 0);
@@ -189,7 +189,7 @@ pub(crate) unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::
                                                 } else {
                                                     (*s).did_backspace = ins_bs(
                                                         (*s).c,
-                                                        BACKSPACE_LINE,
+                                                        Backspace::Line,
                                                         &raw mut (*s).inserted_space,
                                                     );
                                                     auto_format(false_0 != 0, true_0 != 0);

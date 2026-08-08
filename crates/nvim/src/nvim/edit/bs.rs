@@ -1,379 +1,529 @@
 //! Backspace and delete: `i_BS`, `i_CTRL-W`, `i_CTRL-U` and `i_DEL`.
 //!
-//! `ins_bs` is one function for all three backwards forms, told apart by its
-//! `mode` argument (`BACKSPACE_CHAR`, `BACKSPACE_WORD`,
-//! `BACKSPACE_WORD_NOT_SPACE`, `BACKSPACE_LINE`).  Most of its length is the
-//! set of things it is *not allowed* to delete: 'backspace' decides whether
-//! it may cross the start of the insert, an auto-indent, or a line break;
-//! Replace and Virtual Replace mode restore from the replace stack instead
-//! of deleting; a prompt buffer's prompt is off limits; and joining two
-//! lines has to reproduce what `J` would have done to the indent.
-//! `ins_del` is `<Del>`, which is the forward case and much shorter.
+//! [`ins_bs`] is one function for all three backwards forms, told apart by
+//! its [`Backspace`] argument.  It is a guard, a setup, one of three deleting
+//! phases, and a tail:
+//!
+//! | phase | when |
+//! | --- | --- |
+//! | [`bs_blocked`] | the whole set of things backspace may *not* delete |
+//! | [`bs_join_line`] | the cursor is in column 0, so the line break goes |
+//! | [`bs_one_shiftwidth`] | 'softtabstop'/'smarttab' say one BS eats a whole indent step |
+//! | [`bs_delete_chars`] | everything else: delete backwards until a stopping rule fires |
+//!
+//! The guard is most of what makes the key complicated: 'backspace' decides
+//! whether it may cross the start of the insert (`BS_START`), an auto-indent
+//! (`BS_INDENT`) or a line break (`BS_EOL`), a prompt buffer's prompt is off
+//! limits, and 'revins' turns all of it around.  Replace and Virtual Replace
+//! mode never delete at all -- they restore from the replace stack.
+//!
+//! [`ins_del`] is `<Del>`, the forward case, and is much shorter because
+//! none of those rules apply to it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use ::core::ffi::c_int;
+
 use super::*;
 
-pub(crate) unsafe extern "C" fn ins_del() {
+/// Which backwards-delete key is running.
+///
+/// The word forms change from [`Backspace::Word`] to
+/// [`Backspace::WordNotSpace`] *inside* the delete loop, at the first
+/// non-blank: that is how "delete the white space, then the word" is
+/// spelled.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub(crate) enum Backspace {
+    /// `i_BS`: one character.
+    Char,
+    /// `i_CTRL-W`, while still in the white space before the word.
+    Word,
+    /// `i_CTRL-W`, once the word itself has been reached.
+    WordNotSpace,
+    /// `i_CTRL-U`: back to the start of the line (or of the indent).
+    Line,
+}
+
+/// `<Del>` in Insert mode: delete forwards.
+///
+/// At the end of a line that means joining the next one, which needs
+/// 'backspace' to contain `eol` just as a backspace over a line break does.
+///
+/// # Safety
+/// Must run with a live `curwin`/`curbuf`.
+pub(crate) unsafe fn ins_del() {
     unsafe {
         if stop_arrow() == FAIL {
             return;
         }
         if gchar_cursor() == NUL {
-            let temp: ::core::ffi::c_int = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-            if !can_bs(BS_EOL)
-                || do_join(
-                    2 as size_t,
-                    false_0 != 0,
-                    true_0 != 0,
-                    false_0 != 0,
-                    false_0 != 0,
-                ) == FAIL
-            {
-                vim_beep(kOptBoFlagBackspace as ::core::ffi::c_int as ::core::ffi::c_uint);
+            // Delete the newline.
+            let temp = (*curwin.get()).w_cursor.col;
+            if !can_bs(BS_EOL) || do_join(2, false, true, false, false) == FAIL {
+                vim_beep(kOptBoFlagBackspace as ::core::ffi::c_uint);
             } else {
-                (*curwin.get()).w_cursor.col = temp as colnr_T;
+                (*curwin.get()).w_cursor.col = temp;
+                // Adjust `orig_line_count` when more lines were deleted than
+                // added, so a later `open_line` can still reach every line.
                 if State.get() & VREPLACE_FLAG != 0
                     && orig_line_count.get() > (*curbuf.get()).b_ml.ml_line_count
                 {
                     orig_line_count.set((*curbuf.get()).b_ml.ml_line_count);
                 }
             }
-        } else if del_char(false_0 != 0) == FAIL {
-            vim_beep(kOptBoFlagBackspace as ::core::ffi::c_int as ::core::ffi::c_uint);
+        } else if del_char(false) == FAIL {
+            // Delete the character under the cursor.
+            vim_beep(kOptBoFlagBackspace as ::core::ffi::c_uint);
         }
-        did_ai.set(false_0 != 0);
-        did_si.set(false_0 != 0);
-        can_si.set(false_0 != 0);
-        can_si_back.set(false_0 != 0);
+        did_ai.set(false);
+        did_si.set(false);
+        can_si.set(false);
+        can_si_back.set(false);
         AppendCharToRedobuff(K_DEL);
     }
 }
 
-pub(crate) unsafe extern "C" fn ins_bs(
-    mut c: ::core::ffi::c_int,
-    mut mode: ::core::ffi::c_int,
-    mut inserted_space_p: *mut ::core::ffi::c_int,
-) -> bool {
+/// Everything a backspace is not allowed to delete.
+///
+/// Nothing at all in an empty file; never past the first character in the
+/// buffer; not past the start of the insert unless 'backspace' has `start`
+/// (with a prompt buffer excepted, because the prompt is protected
+/// separately); not into an auto-indent without `indent`; and not over a
+/// line break without `eol`.  All of it is off in 'revins'.
+///
+/// # Safety
+/// Must run with a live `curwin`/`curbuf`.
+unsafe fn bs_blocked() -> bool {
     unsafe {
-        let mut cc: ::core::ffi::c_int = 0;
-        let mut temp: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut did_backspace: bool = false_0 != 0;
-        let mut call_fix_indent: bool = false_0 != 0;
-        if buf_is_empty(curbuf.get()) as ::core::ffi::c_int != 0
-            || !revins_on.get()
-                && ((*curwin.get()).w_cursor.lnum == 1 as linenr_T
-                    && (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int
-                    || !can_bs(BS_START)
-                        && (arrow_used.get() as ::core::ffi::c_int != 0
-                            && !bt_prompt(curbuf.get())
-                            || (*curwin.get()).w_cursor.lnum == (*Insstart_orig.ptr()).lnum
-                                && (*curwin.get()).w_cursor.col <= (*Insstart_orig.ptr()).col)
-                    || !can_bs(BS_INDENT)
-                        && !arrow_used.get()
-                        && ai_col.get() > 0 as ::core::ffi::c_int
-                        && (*curwin.get()).w_cursor.col <= ai_col.get()
-                    || !can_bs(BS_EOL) && (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int)
-        {
-            vim_beep(kOptBoFlagBackspace as ::core::ffi::c_int as ::core::ffi::c_uint);
-            return false_0 != 0;
+        if buf_is_empty(curbuf.get()) {
+            return true;
+        }
+        if revins_on.get() {
+            return false;
+        }
+        let cursor = (*curwin.get()).w_cursor;
+        let start = *Insstart_orig.ptr();
+        (cursor.lnum == 1 && cursor.col == 0)
+            || (!can_bs(BS_START)
+                && ((arrow_used.get() && !bt_prompt(curbuf.get()))
+                    || (cursor.lnum == start.lnum && cursor.col <= start.col)))
+            || (!can_bs(BS_INDENT)
+                && !arrow_used.get()
+                && ai_col.get() > 0
+                && cursor.col <= ai_col.get())
+            || (!can_bs(BS_EOL) && cursor.col == 0)
+    }
+}
+
+/// Handle Backspace, delete-word and delete-line in Insert mode.
+///
+/// `c` is the character that was typed (it goes into the redo buffer),
+/// `mode` says which of the three keys it is, and `inserted_space_p` is the
+/// caller's "the last thing inserted was a space" flag, which
+/// [`bs_one_shiftwidth`] both reads and clears.
+///
+/// Answers whether a backspace actually happened.
+///
+/// # Safety
+/// `inserted_space_p` must point to a live `c_int`.
+pub(crate) unsafe fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: *mut c_int) -> bool {
+    unsafe {
+        if bs_blocked() {
+            vim_beep(kOptBoFlagBackspace as ::core::ffi::c_uint);
+            return false;
         }
         if stop_arrow() == FAIL {
-            return false_0 != 0;
+            return false;
         }
-        let mut in_indent: bool = inindent(0 as ::core::ffi::c_int);
+
+        let in_indent = inindent(0);
         if in_indent {
-            can_cindent.set(false_0 != 0);
+            can_cindent.set(false);
         }
-        end_comment_pending.set(NUL);
+        end_comment_pending.set(NUL); // after BS, don't auto-end a comment
         if revins_on.get() {
-            inc_cursor();
+            inc_cursor(); // put the cursor after the last inserted character
         }
-        if (*curwin.get()).w_cursor.coladd > 0 as ::core::ffi::c_int {
-            if mode == BACKSPACE_CHAR {
+
+        // In 'virtualedit': BACKSPACE_CHAR eats one virtual space,
+        // BACKSPACE_WORD eats all the `coladd`, and BACKSPACE_LINE eats all
+        // of it and keeps going.
+        if (*curwin.get()).w_cursor.coladd > 0 {
+            if mode == Backspace::Char {
                 (*curwin.get()).w_cursor.coladd -= 1;
-                return true_0 != 0;
+                return true;
             }
-            if mode == BACKSPACE_WORD {
-                (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
-                return true_0 != 0;
+            if mode == Backspace::Word {
+                (*curwin.get()).w_cursor.coladd = 0;
+                return true;
             }
-            (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
+            (*curwin.get()).w_cursor.coladd = 0;
         }
-        if (*curwin.get()).w_cursor.col == 0 as ::core::ffi::c_int {
-            let mut lnum: linenr_T = (*Insstart.ptr()).lnum;
-            if (*curwin.get()).w_cursor.lnum == lnum || revins_on.get() as ::core::ffi::c_int != 0 {
-                if u_save(
-                    (*curwin.get()).w_cursor.lnum - 2 as linenr_T,
-                    (*curwin.get()).w_cursor.lnum + 1 as linenr_T,
-                ) == FAIL
-                {
-                    return false_0 != 0;
-                }
-                (*Insstart.ptr()).lnum -= 1;
-                (*Insstart.ptr()).col = ml_get_len((*Insstart.ptr()).lnum);
+
+        let mut did_backspace = false;
+        let mut call_fix_indent = false;
+
+        if (*curwin.get()).w_cursor.col == 0 {
+            if !bs_join_line() {
+                return false;
             }
-            cc = -1 as ::core::ffi::c_int;
-            if State.get() & REPLACE_FLAG != 0 {
-                cc = replace_pop_if_nul();
-            }
-            if State.get() & REPLACE_FLAG != 0 && (*curwin.get()).w_cursor.lnum <= lnum {
-                dec_cursor();
-            } else {
-                if State.get() & VREPLACE_FLAG == 0
-                    || (*curwin.get()).w_cursor.lnum > orig_line_count.get()
-                {
-                    temp = gchar_cursor();
-                    (*curwin.get()).w_cursor.lnum -= 1;
-                    if has_format_option(FO_AUTO) as ::core::ffi::c_int != 0
-                        && has_format_option(FO_WHITE_PAR) as ::core::ffi::c_int != 0
-                    {
-                        let mut ptr: *const ::core::ffi::c_char =
-                            ml_get_buf(curbuf.get(), (*curwin.get()).w_cursor.lnum);
-                        let mut len: ::core::ffi::c_int = get_cursor_line_len();
-                        if len > 0 as ::core::ffi::c_int
-                            && *ptr.offset((len - 1 as ::core::ffi::c_int) as isize)
-                                as ::core::ffi::c_int
-                                == ' ' as ::core::ffi::c_int
-                        {
-                            let mut newp: *mut ::core::ffi::c_char = xmemdupz(
-                                ptr as *const ::core::ffi::c_void,
-                                (len - 1 as ::core::ffi::c_int) as size_t,
-                            )
-                                as *mut ::core::ffi::c_char;
-                            if (*curbuf.get()).b_ml.ml_flags & (ML_LINE_DIRTY | ML_ALLOCATED) != 0 {
-                                xfree((*curbuf.get()).b_ml.ml_line_ptr as *mut ::core::ffi::c_void);
-                            }
-                            (*curbuf.get()).b_ml.ml_line_ptr = newp;
-                            (*curbuf.get()).b_ml.ml_line_textlen -= 1;
-                            (*curbuf.get()).b_ml.ml_flags |= ML_LINE_DIRTY;
-                        }
-                    }
-                    do_join(
-                        2 as size_t,
-                        false_0 != 0,
-                        false_0 != 0,
-                        false_0 != 0,
-                        false_0 != 0,
-                    );
-                    if temp == NUL && gchar_cursor() != NUL {
-                        inc_cursor();
-                    }
-                } else {
-                    dec_cursor();
-                }
-                if State.get() & REPLACE_FLAG != 0 {
-                    let mut oldState: ::core::ffi::c_int = State.get();
-                    State.set(MODE_NORMAL);
-                    while cc > 0 as ::core::ffi::c_int {
-                        let mut save_col: colnr_T = (*curwin.get()).w_cursor.col;
-                        mb_replace_pop_ins();
-                        (*curwin.get()).w_cursor.col = save_col;
-                        cc = replace_pop_if_nul();
-                    }
-                    replace_pop_ins();
-                    State.set(oldState);
-                }
-            }
-            did_ai.set(false_0 != 0);
+            did_ai.set(false);
         } else {
             if revins_on.get() {
-                dec_cursor();
+                dec_cursor(); // put the cursor on the last inserted character
             }
-            let mut mincol: colnr_T = 0 as colnr_T;
-            if mode == BACKSPACE_LINE
-                && ((*curbuf.get()).b_p_ai != 0 || cindent_on() as ::core::ffi::c_int != 0)
+
+            // Keep the indent: CTRL-U stops at the first non-blank if there
+            // is one before the cursor.
+            let mut mincol: colnr_T = 0;
+            if mode == Backspace::Line
+                && ((*curbuf.get()).b_p_ai != 0 || cindent_on())
                 && !revins_on.get()
             {
-                let mut save_col_0: colnr_T = (*curwin.get()).w_cursor.col;
+                let save_col = (*curwin.get()).w_cursor.col;
                 beginline(BL_WHITE);
-                if (*curwin.get()).w_cursor.col < save_col_0 {
+                if (*curwin.get()).w_cursor.col < save_col {
                     mincol = (*curwin.get()).w_cursor.col;
-                    call_fix_indent = true_0 != 0;
+                    // The indent should now be fixed to match the previous
+                    // line.
+                    call_fix_indent = true;
                 }
-                (*curwin.get()).w_cursor.col = save_col_0;
+                (*curwin.get()).w_cursor.col = save_col;
             }
-            if mode == BACKSPACE_CHAR
-                && (p_sta.get() != 0 && in_indent as ::core::ffi::c_int != 0
-                    || (get_sts_value() != 0 as ::core::ffi::c_int
+
+            // One BS deletes a whole 'shiftwidth' or 'softtabstop' when
+            // 'smarttab' says so in the indent, or when the byte before the
+            // cursor is white space this insert did not type.
+            let one_step = mode == Backspace::Char
+                && ((p_sta.get() != 0 && in_indent)
+                    || ((get_sts_value() != 0
                         || tabstop_count((*curbuf.get()).b_p_vsts_array) != 0)
-                        && (*curwin.get()).w_cursor.col > 0 as ::core::ffi::c_int
-                        && (*get_cursor_pos_ptr().offset(-(1 as ::core::ffi::c_int as isize))
-                            as ::core::ffi::c_int
-                            == TAB
-                            || *get_cursor_pos_ptr().offset(-(1 as ::core::ffi::c_int as isize))
-                                as ::core::ffi::c_int
-                                == ' ' as ::core::ffi::c_int
-                                && (*inserted_space_p == 0
-                                    || arrow_used.get() as ::core::ffi::c_int != 0)))
-            {
+                        && (*curwin.get()).w_cursor.col > 0
+                        && (*get_cursor_pos_ptr().offset(-1) as c_int == TAB
+                            || (*get_cursor_pos_ptr().offset(-1) as c_int == ' ' as c_int
+                                && (*inserted_space_p == 0 || arrow_used.get())))));
+            if one_step {
                 *inserted_space_p = false_0;
-                let use_ts: bool = (*curwin.get()).w_onebuf_opt.wo_list == 0
-                    || (*curwin.get()).w_p_lcs_chars.tab1 != 0;
-                let line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-                let cursor_ptr: *mut ::core::ffi::c_char =
-                    line.offset((*curwin.get()).w_cursor.col as isize);
-                let mut vcol: colnr_T = 0 as colnr_T;
-                let mut space_vcol: colnr_T = 0 as colnr_T;
-                let mut sci: StrCharInfo = utf_ptr2StrCharInfo(line);
-                let mut space_sci: StrCharInfo = sci;
-                let mut prev_space: bool = false_0 != 0;
-                while sci.ptr < cursor_ptr {
-                    let mut cur_space: bool = ascii_iswhite(sci.chr.value as ::core::ffi::c_int);
-                    if !prev_space && cur_space as ::core::ffi::c_int != 0 {
-                        space_sci = sci;
-                        space_vcol = vcol;
-                    }
-                    vcol += charsize_nowrap(curbuf.get(), sci.ptr, use_ts, vcol, sci.chr.value);
-                    sci = utfc_next(sci);
-                    prev_space = cur_space;
-                }
-                let mut want_vcol: colnr_T = if vcol > 0 as ::core::ffi::c_int {
-                    vcol - 1 as colnr_T
-                } else {
-                    0 as colnr_T
-                };
-                if p_sta.get() != 0 && in_indent as ::core::ffi::c_int != 0 {
-                    want_vcol -= want_vcol as ::core::ffi::c_int % get_sw_value(curbuf.get());
-                } else {
-                    want_vcol =
-                        tabstop_start(want_vcol, get_sts_value(), (*curbuf.get()).b_p_vsts_array);
-                }
-                loop {
-                    let mut size: ::core::ffi::c_int = charsize_nowrap(
-                        curbuf.get(),
-                        space_sci.ptr,
-                        use_ts,
-                        space_vcol,
-                        space_sci.chr.value,
-                    );
-                    if space_vcol as ::core::ffi::c_int + size > want_vcol {
-                        break;
-                    }
-                    space_vcol += size;
-                    space_sci = utfc_next(space_sci);
-                }
-                let want_col: colnr_T = space_sci.ptr.offset_from(line) as colnr_T;
-                while (*curwin.get()).w_cursor.col > want_col {
-                    dec_cursor();
-                    if State.get() & REPLACE_FLAG != 0 {
-                        if (*curwin.get()).w_cursor.lnum != (*Insstart.ptr()).lnum
-                            || (*curwin.get()).w_cursor.col >= (*Insstart.ptr()).col
-                        {
-                            replace_do_bs(-1 as ::core::ffi::c_int);
-                        }
-                    } else {
-                        del_char(false_0 != 0);
-                    }
-                }
-                while space_vcol < want_vcol {
-                    if (*curwin.get()).w_cursor.lnum == (*Insstart_orig.ptr()).lnum
-                        && (*curwin.get()).w_cursor.col < (*Insstart_orig.ptr()).col
-                    {
-                        (*Insstart_orig.ptr()).col = (*curwin.get()).w_cursor.col;
-                    }
-                    if State.get() & VREPLACE_FLAG != 0 {
-                        ins_char(' ' as ::core::ffi::c_int);
-                    } else {
-                        ins_str(
-                            b" \0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
-                            ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                                .wrapping_sub(1 as size_t),
-                        );
-                        if State.get() & REPLACE_FLAG != 0 {
-                            replace_push_nul();
-                        }
-                    }
-                    space_vcol += 1;
-                }
+                bs_one_shiftwidth(in_indent);
             } else {
-                let mut cclass: ::core::ffi::c_int = mb_get_class(get_cursor_pos_ptr());
-                loop {
-                    if !revins_on.get() {
-                        dec_cursor();
-                    }
-                    cc = gchar_cursor();
-                    let mut prev_cclass: ::core::ffi::c_int = cclass;
-                    cclass = mb_get_class(get_cursor_pos_ptr());
-                    if mode == BACKSPACE_WORD && !ascii_isspace(cc) {
-                        mode = BACKSPACE_WORD_NOT_SPACE;
-                        temp = vim_iswordc(cc) as ::core::ffi::c_int;
-                    } else if mode == BACKSPACE_WORD_NOT_SPACE
-                        && (ascii_isspace(cc) as ::core::ffi::c_int != 0
-                            || vim_iswordc(cc) as ::core::ffi::c_int != temp
-                            || prev_cclass != cclass)
-                    {
-                        if !revins_on.get() {
-                            inc_cursor();
-                        } else if State.get() & REPLACE_FLAG != 0 {
-                            dec_cursor();
-                        }
-                        break;
-                    }
-                    if State.get() & REPLACE_FLAG != 0 {
-                        replace_do_bs(-1 as ::core::ffi::c_int);
-                    } else {
-                        let mut has_composing: bool = false_0 != 0;
-                        if p_deco.get() != 0 {
-                            let mut p0: *mut ::core::ffi::c_char = get_cursor_pos_ptr();
-                            has_composing = utf_composinglike(
-                                p0,
-                                p0.offset(utf_ptr2len(p0) as isize),
-                                ::core::ptr::null_mut::<GraphemeState>(),
-                            );
-                        }
-                        del_char(false_0 != 0);
-                        if has_composing {
-                            inc_cursor();
-                        }
-                        if revins_chars.get() != 0 {
-                            (*revins_chars.ptr()) -= 1;
-                            (*revins_legal.ptr()) += 1;
-                        }
-                        if revins_on.get() as ::core::ffi::c_int != 0 && gchar_cursor() == NUL {
-                            break;
-                        }
-                    }
-                    if mode == BACKSPACE_CHAR {
-                        break;
-                    }
-                    if !(revins_on.get() as ::core::ffi::c_int != 0
-                        || (*curwin.get()).w_cursor.col > mincol
-                            && (can_bs(BS_NOSTOP) as ::core::ffi::c_int != 0
-                                || ((*curwin.get()).w_cursor.lnum != (*Insstart_orig.ptr()).lnum
-                                    || (*curwin.get()).w_cursor.col != (*Insstart_orig.ptr()).col)))
-                    {
-                        break;
-                    }
-                }
+                bs_delete_chars(mode, mincol);
             }
-            did_backspace = true_0 != 0;
+            did_backspace = true;
         }
-        did_si.set(false_0 != 0);
-        can_si.set(false_0 != 0);
-        can_si_back.set(false_0 != 0);
-        if (*curwin.get()).w_cursor.col <= 1 as ::core::ffi::c_int {
-            did_ai.set(false_0 != 0);
+
+        did_si.set(false);
+        can_si.set(false);
+        can_si_back.set(false);
+        if (*curwin.get()).w_cursor.col <= 1 {
+            did_ai.set(false);
         }
         if call_fix_indent {
             fix_indent();
         }
+
+        // It is a little strange to put backspaces into the redo buffer, but
+        // it makes auto-indent much easier to deal with.
         AppendCharToRedobuff(c);
+
+        // If the deletion went before the insertion point, move that too.
         if (*curwin.get()).w_cursor.lnum == (*Insstart_orig.ptr()).lnum
             && (*curwin.get()).w_cursor.col < (*Insstart_orig.ptr()).col
         {
             (*Insstart_orig.ptr()).col = (*curwin.get()).w_cursor.col;
         }
-        if !vim_strchr(p_cpo.get(), CPO_BACKSPACE).is_null()
-            && dollar_vcol.get() == -1 as ::core::ffi::c_int
-        {
+
+        // Vi moves the cursor back but leaves the character on the screen;
+        // Vim erases it.  The vi behaviour is emulated by pretending a
+        // dollar is displayed even when there is not one.
+        //  --pkv Sun Jan 19 01:56:40 EST 2003
+        if !vim_strchr(p_cpo.get(), CPO_BACKSPACE).is_null() && dollar_vcol.get() == -1 {
             dollar_vcol.set((*curwin.get()).w_virtcol);
         }
+
+        // After deleting a character the cursor line must never be in a
+        // closed fold -- with 'foldmethod' indent, deleting the first
+        // non-white character before a TAB can put it in one.
         if did_backspace {
             foldOpenCursor();
         }
-        return did_backspace;
+        did_backspace
+    }
+}
+
+/// The cursor is in column 0: delete the line break in front of it.
+///
+/// Answers false when undo could not be saved, in which case nothing has
+/// happened and the caller must give up.
+///
+/// In Replace mode the line break may have *replaced* characters, which are
+/// on the replace stack: first a NUL-terminated run that was deleted after
+/// the cursor, then the characters the NL itself replaced.
+///
+/// # Safety
+/// Must run with a live `curwin`/`curbuf`, cursor in column 0.
+unsafe fn bs_join_line() -> bool {
+    unsafe {
+        let lnum = (*Insstart.ptr()).lnum;
+        if (*curwin.get()).w_cursor.lnum == lnum || revins_on.get() {
+            if u_save(
+                (*curwin.get()).w_cursor.lnum - 2,
+                (*curwin.get()).w_cursor.lnum + 1,
+            ) == FAIL
+            {
+                return false;
+            }
+            (*Insstart.ptr()).lnum -= 1;
+            (*Insstart.ptr()).col = ml_get_len((*Insstart.ptr()).lnum);
+        }
+
+        // In Replace mode: below zero the NL was inserted, so delete it; at
+        // or above zero it replaced characters, which go back.
+        let mut cc = -1;
+        if State.get() & REPLACE_FLAG != 0 {
+            cc = replace_pop_if_nul(); // -1 if the NL was inserted
+        }
+
+        // In Replace mode, on the line the replacing started on, only the
+        // cursor moves.
+        if State.get() & REPLACE_FLAG != 0 && (*curwin.get()).w_cursor.lnum <= lnum {
+            dec_cursor();
+            return true;
+        }
+
+        if State.get() & VREPLACE_FLAG == 0 || (*curwin.get()).w_cursor.lnum > orig_line_count.get()
+        {
+            let temp = gchar_cursor(); // remember the current character
+            (*curwin.get()).w_cursor.lnum -= 1;
+
+            // With `aw` in 'formatoptions' the space at the end of the line
+            // has to go too, or auto-formatting would break the line again.
+            if has_format_option(FO_AUTO) && has_format_option(FO_WHITE_PAR) {
+                let ptr = ml_get_buf(curbuf.get(), (*curwin.get()).w_cursor.lnum);
+                let len = get_cursor_line_len();
+                if len > 0 && *ptr.offset((len - 1) as isize) as c_int == ' ' as c_int {
+                    let newp = xmemdupz(ptr as *const ::core::ffi::c_void, (len - 1) as size_t)
+                        as *mut ::core::ffi::c_char;
+                    if (*curbuf.get()).b_ml.ml_flags & (ML_LINE_DIRTY | ML_ALLOCATED) != 0 {
+                        xfree((*curbuf.get()).b_ml.ml_line_ptr as *mut ::core::ffi::c_void);
+                    }
+                    (*curbuf.get()).b_ml.ml_line_ptr = newp;
+                    (*curbuf.get()).b_ml.ml_line_textlen -= 1;
+                    (*curbuf.get()).b_ml.ml_flags |= ML_LINE_DIRTY;
+                }
+            }
+
+            do_join(2, false, false, false, false);
+            if temp == NUL && gchar_cursor() != NUL {
+                inc_cursor();
+            }
+        } else {
+            dec_cursor();
+        }
+
+        if State.get() & REPLACE_FLAG != 0 {
+            // Do the insertions in MODE_NORMAL state, so `ins_char` does not
+            // replace characters and does not call `showmatch`.
+            let old_state = State.get();
+            State.set(MODE_NORMAL);
+            // Restore the characters (blanks) that were deleted after the
+            // cursor...
+            while cc > 0 {
+                let save_col = (*curwin.get()).w_cursor.col;
+                mb_replace_pop_ins();
+                (*curwin.get()).w_cursor.col = save_col;
+                cc = replace_pop_if_nul();
+            }
+            // ... and then the ones the NL replaced.
+            replace_pop_ins();
+            State.set(old_state);
+        }
+        true
+    }
+}
+
+/// Delete back to the previous 'softtabstop' or 'shiftwidth' boundary.
+///
+/// The white space around the cursor is *rebuilt* rather than trimmed: the
+/// walk finds the last run of blanks that is preceded by something else,
+/// deletes back to a boundary at or before the wanted virtual column, and
+/// then pads forward with spaces.  `charsize_nowrap` is used throughout so
+/// that virtual text and wrapping cannot change the answer.
+///
+/// # Safety
+/// Must run with a live `curwin`/`curbuf`, cursor past column 0.
+unsafe fn bs_one_shiftwidth(in_indent: bool) {
+    unsafe {
+        let use_ts =
+            (*curwin.get()).w_onebuf_opt.wo_list == 0 || (*curwin.get()).w_p_lcs_chars.tab1 != 0;
+        let line = get_cursor_line_ptr();
+        let cursor_ptr = line.offset((*curwin.get()).w_cursor.col as isize);
+
+        // The cursor's virtual column, and the last white space before it
+        // that is preceded by non-white space.
+        let mut vcol: colnr_T = 0;
+        let mut space_vcol: colnr_T = 0;
+        let mut sci: StrCharInfo = utf_ptr2StrCharInfo(line);
+        let mut space_sci = sci;
+        let mut prev_space = false;
+        while sci.ptr < cursor_ptr {
+            let cur_space = ascii_iswhite(sci.chr.value);
+            if !prev_space && cur_space {
+                space_sci = sci;
+                space_vcol = vcol;
+            }
+            vcol += charsize_nowrap(curbuf.get(), sci.ptr, use_ts, vcol, sci.chr.value);
+            sci = utfc_next(sci);
+            prev_space = cur_space;
+        }
+
+        // The virtual column to end up at.
+        let mut want_vcol = if vcol > 0 { vcol - 1 } else { 0 };
+        if p_sta.get() != 0 && in_indent {
+            want_vcol -= want_vcol % get_sw_value(curbuf.get());
+        } else {
+            want_vcol = tabstop_start(want_vcol, get_sts_value(), (*curbuf.get()).b_p_vsts_array);
+        }
+
+        // Where to stop backspacing.
+        loop {
+            let size = charsize_nowrap(
+                curbuf.get(),
+                space_sci.ptr,
+                use_ts,
+                space_vcol,
+                space_sci.chr.value,
+            );
+            if space_vcol + size > want_vcol {
+                break;
+            }
+            space_vcol += size;
+            space_sci = utfc_next(space_sci);
+        }
+        let want_col = space_sci.ptr.offset_from(line) as colnr_T;
+
+        // Delete until at or before `want_col`.
+        while (*curwin.get()).w_cursor.col > want_col {
+            dec_cursor();
+            if State.get() & REPLACE_FLAG != 0 {
+                // Don't delete before the insert point in Replace mode.
+                if (*curwin.get()).w_cursor.lnum != (*Insstart.ptr()).lnum
+                    || (*curwin.get()).w_cursor.col >= (*Insstart.ptr()).col
+                {
+                    replace_do_bs(-1);
+                }
+            } else {
+                del_char(false);
+            }
+        }
+
+        // Insert spaces until at `want_vcol`.
+        while space_vcol < want_vcol {
+            // Remember the first character inserted.
+            if (*curwin.get()).w_cursor.lnum == (*Insstart_orig.ptr()).lnum
+                && (*curwin.get()).w_cursor.col < (*Insstart_orig.ptr()).col
+            {
+                (*Insstart_orig.ptr()).col = (*curwin.get()).w_cursor.col;
+            }
+
+            if State.get() & VREPLACE_FLAG != 0 {
+                ins_char(' ' as c_int);
+            } else {
+                ins_str(c" ".as_ptr().cast_mut(), 1);
+                if State.get() & REPLACE_FLAG != 0 {
+                    replace_push_nul();
+                }
+            }
+            space_vcol += 1;
+        }
+    }
+}
+
+/// Delete backwards until the starting point, the start of the line, or the
+/// previous word.
+///
+/// `mincol` is where CTRL-U decided the indent begins, and is 0 for the
+/// other two keys.  `mode` changes *inside* the loop: CTRL-W eats the white
+/// space as [`Backspace::Word`] and then the word itself as
+/// [`Backspace::WordNotSpace`], stopping at the first character whose
+/// "wordness" or multi-byte class differs from the previous one's.
+///
+/// # Safety
+/// Must run with a live `curwin`, cursor past column 0.
+unsafe fn bs_delete_chars(mut mode: Backspace, mincol: colnr_T) {
+    unsafe {
+        // What kind of word the deletion started in, so a class change can
+        // end it.
+        let mut cclass = mb_get_class(get_cursor_pos_ptr());
+        // Whether the word being deleted is made of 'iskeyword' characters;
+        // only read once `mode` is `WordNotSpace`.
+        let mut is_word = 0;
+        loop {
+            if !revins_on.get() {
+                dec_cursor(); // put the cursor on the character to delete
+            }
+            let cc = gchar_cursor();
+            let prev_cclass = cclass;
+            cclass = mb_get_class(get_cursor_pos_ptr());
+
+            if mode == Backspace::Word && !ascii_isspace(cc) {
+                // The start of the word.
+                mode = Backspace::WordNotSpace;
+                is_word = vim_iswordc(cc) as c_int;
+            } else if mode == Backspace::WordNotSpace
+                && (ascii_isspace(cc)
+                    || vim_iswordc(cc) as c_int != is_word
+                    || prev_cclass != cclass)
+            {
+                // The end of the word.
+                if !revins_on.get() {
+                    inc_cursor();
+                } else if State.get() & REPLACE_FLAG != 0 {
+                    dec_cursor();
+                }
+                break;
+            }
+
+            if State.get() & REPLACE_FLAG != 0 {
+                replace_do_bs(-1);
+            } else {
+                let mut has_composing = false;
+                if p_deco.get() != 0 {
+                    let p0 = get_cursor_pos_ptr();
+                    has_composing = utf_composinglike(
+                        p0,
+                        p0.offset(utf_ptr2len(p0) as isize),
+                        ::core::ptr::null_mut(),
+                    );
+                }
+                del_char(false);
+                // With combining characters and 'delcombine' set, move the
+                // cursor back -- but never before the base character.
+                if has_composing {
+                    inc_cursor();
+                }
+                if revins_chars.get() != 0 {
+                    (*revins_chars.ptr()) -= 1;
+                    (*revins_legal.ptr()) += 1;
+                }
+                if revins_on.get() && gchar_cursor() == NUL {
+                    break;
+                }
+            }
+
+            // Just a single backspace?
+            if mode == Backspace::Char {
+                break;
+            }
+            // The `do`-`while` condition: keep going while there is
+            // something left this key is allowed to take.
+            let more = revins_on.get()
+                || ((*curwin.get()).w_cursor.col > mincol
+                    && (can_bs(BS_NOSTOP)
+                        || ((*curwin.get()).w_cursor.lnum != (*Insstart_orig.ptr()).lnum
+                            || (*curwin.get()).w_cursor.col != (*Insstart_orig.ptr()).col)));
+            if !more {
+                break;
+            }
+        }
     }
 }

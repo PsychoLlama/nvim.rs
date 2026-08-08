@@ -187,7 +187,7 @@
     "crates/nvim/src/nvim/drawscreen/winlines.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/drawscreen/winupdate.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/edit.rs": {"unsafe": 3},
-    "crates/nvim/src/nvim/edit/bs.rs": {"unsafe": 2},
+    "crates/nvim/src/nvim/edit/bs.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/edit/chars.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/edit/ctrl.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/edit/cursor.rs": {"unsafe": 7},
