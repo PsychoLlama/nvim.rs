@@ -1,3 +1,37 @@
+//! Insert mode: the whole of it, less the completion machinery
+//! (`insexpand.rs`) and the wrapping (`textformat.rs`).
+//!
+//! The parent keeps no functions.  It holds the vocabulary the children
+//! share -- the `BL_*`/`INDENT_*`/`MSCR_*` arguments they pass out of the
+//! family, the `FO_*`/`CPO_*` option letters they test, and `InsertState`,
+//! which is the *only* per-insert state that is not global -- plus the
+//! nineteen `GlobalCell`s the mode runs on.
+//!
+//! Those cells are what makes Insert mode reentrant with everything else,
+//! so here is what writes each one:
+//!
+//! | cell | what it means | written by |
+//! | --- | --- | --- |
+//! | `Insstart_textlen` | how wide the line was when the insert started | `prompt`, `state`, `undo` |
+//! | `Insstart_blank_vcol` | the column of the first blank inserted ('formatoptions' `b`) | `key`, `prompt`, `state`, `tab` |
+//! | `update_Insstart_orig` | whether `Insstart_orig` still tracks `Insstart` | `ctrl`, `state`, `undo` |
+//! | `arrow_used` / `ins_need_undo` | the undo-block pair; see `undo.rs` | `ctrl`, `key`, `chars`, `state`, `undo` |
+//! | `dont_sync_undo` | `i_CTRL-G_U`: the next motion keeps the block | `motion`, `ctrl`, `key`, `state` |
+//! | `last_insert` / `last_insert_skip` | the text `.` repeats, and the command on its front | `lastins`, `undo` |
+//! | `new_insert_skip` | the length of that command, measured at entry | `state`, `undo` |
+//! | `did_restart_edit` | `restart_edit` as it was when `edit()` was called | `state` |
+//! | `can_cindent` | whether the next key may trigger a 'cindent' re-indent | `bs`, `motion`, `ctrl`, `key`, `state`, `tab` |
+//! | `revins_on` / `revins_chars` / `revins_legal` / `revins_scol` | 'revins' and how far back it may go | `ctrl`, `state`, and every key that moves |
+//! | `o_lnum` / `ins_at_eol` | where `i_CTRL-O` left the cursor | `state` |
+//! | `replace_stack` | what Replace mode has to put back; see `replace.rs` | `replace`, `undo` |
+//! | `pc_status` / `pc_schar` / `pc_attr` / `pc_row` / `pc_col` | the cell `edit_putchar` wrote over | `redraw`, and the two keys that draw |
+//! | `compl_busy` | a completion is running, so `edit()` must not recurse | `state` |
+//!
+//! The children are seamed by **what a key does**: `state` and `key` are the
+//! machine and its dispatcher, `bs`/`tab`/`motion`/`ctrl`/`literal`/`chars`
+//! are one family of keys each, and `replace`/`redraw`/`undo`/`prompt`/
+//! `lastins`/`cursor` are the pieces they share.
+
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::ascii::{
