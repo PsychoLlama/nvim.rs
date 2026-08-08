@@ -589,7 +589,7 @@
     "crates/nvim/src/nvim/normal/state.rs": {"unsafe": 22},
     "crates/nvim/src/nvim/normal/visual.rs": {"unsafe": 21},
     "crates/nvim/src/nvim/ops.rs": {"unsafe": 1},
-    "crates/nvim/src/nvim/ops/addsub.rs": {"unsafe": 2},
+    "crates/nvim/src/nvim/ops/addsub.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/ops/block.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/ops/case.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/ops/count.rs": {"unsafe": 8},

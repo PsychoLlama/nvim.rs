@@ -60,7 +60,6 @@
     "crates/nvim/src/nvim/normal/misc.rs": 1,
     "crates/nvim/src/nvim/normal/motion.rs": 1,
     "crates/nvim/src/nvim/normal/visual.rs": 1,
-    "crates/nvim/src/nvim/ops/addsub.rs": 7,
     "crates/nvim/src/nvim/ops/block.rs": 1,
     "crates/nvim/src/nvim/ops/count.rs": 1,
     "crates/nvim/src/nvim/ops/pending.rs": 2,

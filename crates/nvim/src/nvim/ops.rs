@@ -1,7 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::ascii::{
-    ascii_isbdigit, ascii_isdigit, ascii_isspace, ascii_iswhite, ascii_isxdigit,
+    ascii_isalpha, ascii_isbdigit, ascii_isdigit, ascii_isspace, ascii_iswhite, ascii_isxdigit,
 };
 use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::buffer::col_print;
@@ -86,7 +86,7 @@ use crate::src::nvim::types::{
     OP_ROT13, OP_RSHIFT, OP_UPPER, OP_YANK, OpType, OptInt, StrCharInfo, TriState, VAR_STRING,
     VAR_UNKNOWN, VAR_UNLOCKED, bcount_t, block_def, buf_T, cmdarg_T, colnr_T, dict_T, int32_t,
     int64_t, kNone, linenr_T, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T,
-    typval_vval_union, uint8_t, uvarnumber_T, varnumber_T, yankreg_T,
+    typval_vval_union, uvarnumber_T, varnumber_T, yankreg_T,
 };
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::undo::{u_clearline, u_save, u_save_cursor};
