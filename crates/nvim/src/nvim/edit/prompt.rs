@@ -1,126 +1,138 @@
 //! The prompt buffer: an Insert mode with a read-only prefix.
 //!
-//! A 'buftype' of "prompt" makes the last line a prompt the user types
-//! after and cannot back over.  `init_prompt` is what runs on entering
-//! Insert mode in such a buffer: make sure the last line exists and starts
-//! with the prompt text, and put the cursor after it.  `buf_prompt_text`
-//! resolves 'b:prompt_text' against the default, and `prompt_curpos_editable`
-//! is the guard `ins_bs` and the cursor motions ask before moving left.
+//! A 'buftype' of "prompt" makes the last line a prompt the user types after
+//! and cannot back over.  [`init_prompt`] is what runs on entering Insert
+//! mode in such a buffer: make sure the prompt line exists and starts with
+//! the prompt text, and put the cursor after it.  [`buf_prompt_text`]
+//! resolves 'b:prompt_text' against the default, and
+//! [`prompt_curpos_editable`] is the guard `ins_bs` and the cursor motions
+//! ask before moving left.
+//!
+//! `b_prompt_start` is the mark that says where the editable part begins: a
+//! line number *and* a column, because the prompt occupies the head of its
+//! own line.  Everything here is about keeping that mark and the buffer in
+//! agreement, since either can have moved while the buffer was not in Insert
+//! mode.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use ::core::ffi::{c_char, c_int};
+
 use super::*;
 
-pub unsafe extern "C" fn buf_prompt_text(buf: *const buf_T) -> *mut ::core::ffi::c_char {
+/// The effective prompt for `buf`: 'b:prompt_text', or `"% "`.
+///
+/// # Safety
+/// `buf` must point to a live buffer.
+pub(crate) unsafe fn buf_prompt_text(buf: *const buf_T) -> *mut c_char {
     unsafe {
         if (*buf).b_prompt_text.is_null() {
-            return b"% \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            return c"% ".as_ptr().cast_mut();
         }
-        return (*buf).b_prompt_text;
+        (*buf).b_prompt_text
     }
 }
 
-pub unsafe extern "C" fn prompt_text() -> *mut ::core::ffi::c_char {
-    unsafe {
-        return buf_prompt_text(curbuf.get());
-    }
+/// The effective prompt for the current buffer.
+///
+/// # Safety
+/// Must run with a live `curbuf`.
+pub(crate) unsafe fn prompt_text() -> *mut c_char {
+    unsafe { buf_prompt_text(curbuf.get()) }
 }
 
-pub(crate) unsafe extern "C" fn init_prompt(mut cmdchar_todo: ::core::ffi::c_int) {
+/// Prepare for prompt mode: make sure the prompt line carries the prompt
+/// text, and move the cursor after it.
+///
+/// `cmdchar_todo` is the command that started the insert, so that an `A`
+/// still means "at the end of the line" once the cursor has been moved onto
+/// the prompt line.
+///
+/// # Safety
+/// Must run with a live `curbuf`/`curwin`.
+pub(crate) unsafe fn init_prompt(cmdchar_todo: c_int) {
     unsafe {
-        let mut prompt: *mut ::core::ffi::c_char = prompt_text();
-        let mut prompt_len: ::core::ffi::c_int = strlen(prompt) as ::core::ffi::c_int;
-        if (*curbuf.get()).b_prompt_start.mark.lnum < 1 as linenr_T
-            || (*curbuf.get()).b_prompt_start.mark.lnum > (*curbuf.get()).b_ml.ml_line_count
-        {
-            (*curbuf.get()).b_prompt_start.mark.lnum = if 1 as linenr_T
-                > (if (*curbuf.get()).b_prompt_start.mark.lnum < (*curbuf.get()).b_ml.ml_line_count
-                {
-                    (*curbuf.get()).b_prompt_start.mark.lnum
-                } else {
-                    (*curbuf.get()).b_ml.ml_line_count
-                }) {
-                1 as linenr_T
-            } else if (*curbuf.get()).b_prompt_start.mark.lnum < (*curbuf.get()).b_ml.ml_line_count
-            {
-                (*curbuf.get()).b_prompt_start.mark.lnum
-            } else {
-                (*curbuf.get()).b_ml.ml_line_count
-            };
-            (*curbuf.get()).b_prompt_append_new_line = true_0 != 0;
+        let buf = curbuf.get();
+        let win = curwin.get();
+        let prompt = prompt_text();
+        let prompt_len = strlen(prompt) as c_int;
+
+        // The mark may name a line that no longer exists.
+        let start = &raw mut (*buf).b_prompt_start.mark;
+        if (*start).lnum < 1 || (*start).lnum > (*buf).b_ml.ml_line_count {
+            (*start).lnum = (*start).lnum.min((*buf).b_ml.ml_line_count).max(1);
+            (*buf).b_prompt_append_new_line = true;
         }
-        (*curwin.get()).w_cursor.lnum =
-            if (*curwin.get()).w_cursor.lnum > (*curbuf.get()).b_prompt_start.mark.lnum {
-                (*curwin.get()).w_cursor.lnum
-            } else {
-                (*curbuf.get()).b_prompt_start.mark.lnum
-            };
-        let mut text: *mut ::core::ffi::c_char = ml_get((*curbuf.get()).b_prompt_start.mark.lnum);
-        let mut text_len: colnr_T = ml_get_len((*curbuf.get()).b_prompt_start.mark.lnum);
-        if (*curbuf.get()).b_prompt_start.mark.lnum == (*curwin.get()).w_cursor.lnum
-            && ((*curbuf.get()).b_prompt_start.mark.col < prompt_len
-                || (*curbuf.get()).b_prompt_start.mark.col > text_len
+
+        (*win).w_cursor.lnum = (*win).w_cursor.lnum.max((*start).lnum);
+        let text = ml_get((*start).lnum);
+        let text_len = ml_get_len((*start).lnum);
+
+        // Is the prompt actually there, ending at the mark's column?  The
+        // `col` bounds are what keeps the `strnequal` read inside the line.
+        let prompt_missing = || {
+            (*start).col < prompt_len
+                || (*start).col > text_len
                 || !strnequal(
-                    text.offset((*curbuf.get()).b_prompt_start.mark.col as isize)
-                        .offset(-(prompt_len as isize)),
+                    text.offset(((*start).col - prompt_len) as isize),
                     prompt,
                     prompt_len as size_t,
-                ))
-        {
-            if *text as ::core::ffi::c_int == NUL {
-                ml_replace(
-                    (*curbuf.get()).b_prompt_start.mark.lnum,
-                    prompt,
-                    true_0 != 0,
-                );
-                inserted_bytes(
-                    (*curbuf.get()).b_prompt_start.mark.lnum,
-                    0 as colnr_T,
-                    0 as ::core::ffi::c_int,
-                    prompt_len,
-                );
+                )
+        };
+        if (*start).lnum == (*win).w_cursor.lnum && prompt_missing() {
+            if *text as c_int == NUL {
+                // The line is empty: the prompt *is* the line.
+                ml_replace((*start).lnum, prompt, true);
+                inserted_bytes((*start).lnum, 0, 0, prompt_len);
             } else {
-                let lnum: linenr_T = (*curbuf.get()).b_ml.ml_line_count;
-                ml_append(lnum, prompt, 0 as colnr_T, false_0 != 0);
-                appended_lines_mark(lnum, 1 as ::core::ffi::c_int);
-                (*curbuf.get()).b_prompt_start.mark.lnum = (*curbuf.get()).b_ml.ml_line_count;
-                (*curbuf.get()).b_prompt_append_new_line = true_0 != 0;
-                u_clearallandblockfree(curbuf.get());
+                // The line holds something else, so the prompt goes on a new
+                // last line.
+                let lnum = (*buf).b_ml.ml_line_count;
+                ml_append(lnum, prompt, 0, false);
+                appended_lines_mark(lnum, 1);
+                (*start).lnum = (*buf).b_ml.ml_line_count;
+                (*buf).b_prompt_append_new_line = true;
+                // Like submitting: the undo history belonged to the old
+                // prompt.
+                u_clearallandblockfree(buf);
             }
-            (*curbuf.get()).b_prompt_start.mark.col = prompt_len as colnr_T;
-            (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_ml.ml_line_count;
-            coladvance(curwin.get(), MAXCOL as ::core::ffi::c_int);
+            (*start).col = prompt_len;
+            (*win).w_cursor.lnum = (*buf).b_ml.ml_line_count;
+            coladvance(win, MAXCOL as c_int);
         }
-        if (*Insstart_orig.ptr()).lnum != (*curbuf.get()).b_prompt_start.mark.lnum
-            || (*Insstart_orig.ptr()).col != (*curbuf.get()).b_prompt_start.mark.col
+
+        // The insert always starts after the prompt; text after it stays
+        // editable.
+        if (*Insstart_orig.ptr()).lnum != (*start).lnum
+            || (*Insstart_orig.ptr()).col != (*start).col
         {
-            (*Insstart.ptr()).lnum = (*curbuf.get()).b_prompt_start.mark.lnum;
-            (*Insstart.ptr()).col = (*curbuf.get()).b_prompt_start.mark.col;
+            (*Insstart.ptr()).lnum = (*start).lnum;
+            (*Insstart.ptr()).col = (*start).col;
             Insstart_orig.set(Insstart.get());
             Insstart_textlen.set((*Insstart.ptr()).col);
-            Insstart_blank_vcol.set(MAXCOL as ::core::ffi::c_int as colnr_T);
-            arrow_used.set(false_0 != 0);
+            Insstart_blank_vcol.set(MAXCOL as colnr_T);
+            arrow_used.set(false);
         }
-        if cmdchar_todo == 'A' as ::core::ffi::c_int {
-            coladvance(curwin.get(), MAXCOL as ::core::ffi::c_int);
+
+        if cmdchar_todo == 'A' as c_int {
+            coladvance(win, MAXCOL as c_int);
         }
-        if (*curbuf.get()).b_prompt_start.mark.lnum == (*curwin.get()).w_cursor.lnum {
-            (*curwin.get()).w_cursor.col =
-                if (*curwin.get()).w_cursor.col > (*curbuf.get()).b_prompt_start.mark.col {
-                    (*curwin.get()).w_cursor.col
-                } else {
-                    (*curbuf.get()).b_prompt_start.mark.col
-                };
+        if (*start).lnum == (*win).w_cursor.lnum {
+            (*win).w_cursor.col = (*win).w_cursor.col.max((*start).col);
         }
-        check_cursor(curwin.get());
+        // Make sure the cursor is in a valid position.
+        check_cursor(win);
     }
 }
 
-pub unsafe extern "C" fn prompt_curpos_editable() -> bool {
+/// Is the cursor in the editable part of the prompt line?
+///
+/// # Safety
+/// Must run with a live `curbuf`/`curwin`.
+pub(crate) unsafe fn prompt_curpos_editable() -> bool {
     unsafe {
-        return (*curwin.get()).w_cursor.lnum > (*curbuf.get()).b_prompt_start.mark.lnum
-            || (*curwin.get()).w_cursor.lnum == (*curbuf.get()).b_prompt_start.mark.lnum
-                && (*curwin.get()).w_cursor.col >= (*curbuf.get()).b_prompt_start.mark.col;
+        let start = (*curbuf.get()).b_prompt_start.mark;
+        let cursor = (*curwin.get()).w_cursor;
+        cursor.lnum > start.lnum || (cursor.lnum == start.lnum && cursor.col >= start.col)
     }
 }

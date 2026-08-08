@@ -1,195 +1,224 @@
 //! Drawing while inserting: postponing it, and the two things drawn
 //! directly.
 //!
-//! `ins_redraw` is the postponement -- Insert mode does not redraw after
+//! [`ins_redraw`] is the postponement -- Insert mode does not redraw after
 //! each character but just before the next key is *waited for*, which is
 //! what makes a long CTRL-R or a mapping fast and is also where the
 //! `TextChangedI`/`CursorMovedI` autocommands and the completion popup's
-//! update live.
+//! update live.  Everything it does is conditional on `char_avail()` being
+//! false: if the user has already typed ahead, none of it happens.
 //!
-//! `edit_putchar`/`edit_unputchar` bypass all of that: they write one
+//! [`edit_putchar`]/[`edit_unputchar`] bypass all of that: they write one
 //! character straight onto the grid and remember what was under it, which is
 //! how CTRL-V and CTRL-K show a `^` or a `?` at the cursor while they wait
-//! for the rest of the sequence.  `display_dollar`/`undisplay_dollar` are
+//! for the rest of the sequence.  [`display_dollar`]/[`undisplay_dollar`] are
 //! the same trick for the `$` that 'cpoptions' `$` puts at the end of a
 //! changed region.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use ::core::ffi::{c_char, c_int};
 
-pub unsafe extern "C" fn ins_redraw(mut ready: bool) {
+use super::*;
+use crate::src::nvim::types::MB_MAXCHAR;
+
+/// Redraw for Insert mode.
+///
+/// Postponed until the next character is asked for, so that `$` in
+/// 'cpoptions' works, and skipped entirely while characters are already
+/// available -- which is what makes a long CTRL-R or a mapping fast.
+///
+/// `ready` means "not busy with something": with it false only the drawing
+/// happens, and none of the autocommands.
+///
+/// # Safety
+/// Must run with a live `curwin`/`curbuf`.
+pub(crate) unsafe fn ins_redraw(ready: bool) {
     unsafe {
         if char_avail() {
             return;
         }
-        if ready as ::core::ffi::c_int != 0
-            && has_event(EVENT_CURSORMOVEDI) as ::core::ffi::c_int != 0
+
+        // CursorMovedI, if the cursor moved.  Not while the popup menu is up:
+        // the command might delete it.
+        if ready
+            && has_event(EVENT_CURSORMOVEDI)
             && (last_cursormoved_win.get() != curwin.get()
                 || !equalpos(last_cursormoved.get(), (*curwin.get()).w_cursor))
             && !pum_visible()
         {
-            if syntax_present(curwin.get()) as ::core::ffi::c_int != 0 && must_redraw.get() != 0 {
+            // Update the screen first so syntax highlighting is right after a
+            // change (inserting a `(`, say).  The autocommand may ask for
+            // another redraw, which happens again below.
+            if syntax_present(curwin.get()) && must_redraw.get() != 0 {
                 update_screen();
             }
+            // An autocommand may call getcurpos(), so curswant has to be
+            // correct first.
             update_curswant();
             ins_apply_autocmds(EVENT_CURSORMOVEDI);
             last_cursormoved_win.set(curwin.get());
             last_cursormoved.set((*curwin.get()).w_cursor);
         }
-        if ready as ::core::ffi::c_int != 0
-            && has_event(EVENT_TEXTCHANGEDI) as ::core::ffi::c_int != 0
-            && (*curbuf.get()).b_last_changedtick_i != buf_get_changedtick(curbuf.get())
-            && !pum_visible()
-        {
-            let mut aco: aco_save_T = aco_save_T::default();
-            let mut tick: varnumber_T = buf_get_changedtick(curbuf.get());
+
+        // TextChangedI when changedtick_i differs, and TextChangedP when
+        // changedtick_pum does.  They keep separate ticks because closing the
+        // popup menu still has to fire TextChangedI, for compatibility.
+        //
+        // The autocommand may change the buffer *and* the window, so `curbuf`
+        // is saved around it; and if it changed the text, the insert's undo
+        // block has to be closed the way `ins_apply_autocmds` does it.
+        let fire_text_changed = |event: event_T, tick: *mut varnumber_T| {
+            let mut aco = aco_save_T::default();
+            let before = buf_get_changedtick(curbuf.get());
+
+            // Save and restore curwin/curbuf, in case the autocommand changes
+            // them.
             aucmd_prepbuf(&raw mut aco, curbuf.get());
             apply_autocmds(
-                EVENT_TEXTCHANGEDI,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
+                event,
+                ::core::ptr::null_mut(),
+                ::core::ptr::null_mut(),
+                false,
                 curbuf.get(),
             );
             aucmd_restbuf(&raw mut aco);
-            (*curbuf.get()).b_last_changedtick_i = buf_get_changedtick(curbuf.get());
-            if tick != buf_get_changedtick(curbuf.get()) {
+
+            *tick = buf_get_changedtick(curbuf.get());
+            if before != *tick {
+                // See `ins_apply_autocmds`: the autocommand's change belongs
+                // to a block of its own.
                 u_save(
                     (*curwin.get()).w_cursor.lnum,
-                    (*curwin.get()).w_cursor.lnum + 1 as linenr_T,
+                    (*curwin.get()).w_cursor.lnum + 1,
                 );
             }
-        }
-        if ready as ::core::ffi::c_int != 0
-            && has_event(EVENT_TEXTCHANGEDP) as ::core::ffi::c_int != 0
-            && (*curbuf.get()).b_last_changedtick_pum != buf_get_changedtick(curbuf.get())
-            && pum_visible() as ::core::ffi::c_int != 0
-        {
-            let mut aco_0: aco_save_T = aco_save_T::default();
-            let mut tick_0: varnumber_T = buf_get_changedtick(curbuf.get());
-            aucmd_prepbuf(&raw mut aco_0, curbuf.get());
-            apply_autocmds(
-                EVENT_TEXTCHANGEDP,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
-                curbuf.get(),
-            );
-            aucmd_restbuf(&raw mut aco_0);
-            (*curbuf.get()).b_last_changedtick_pum = buf_get_changedtick(curbuf.get());
-            if tick_0 != buf_get_changedtick(curbuf.get()) {
-                u_save(
-                    (*curwin.get()).w_cursor.lnum,
-                    (*curwin.get()).w_cursor.lnum + 1 as linenr_T,
-                );
+        };
+
+        if ready && has_event(EVENT_TEXTCHANGEDI) && !pum_visible() {
+            let tick = &raw mut (*curbuf.get()).b_last_changedtick_i;
+            if *tick != buf_get_changedtick(curbuf.get()) {
+                fire_text_changed(EVENT_TEXTCHANGEDI, tick);
             }
         }
+        if ready && has_event(EVENT_TEXTCHANGEDP) && pum_visible() {
+            let tick = &raw mut (*curbuf.get()).b_last_changedtick_pum;
+            if *tick != buf_get_changedtick(curbuf.get()) {
+                fire_text_changed(EVENT_TEXTCHANGEDP, tick);
+            }
+        }
+
         if ready {
             may_trigger_win_scrolled_resized();
         }
-        if ready as ::core::ffi::c_int != 0
-            && has_event(EVENT_BUFMODIFIEDSET) as ::core::ffi::c_int != 0
-            && (*curbuf.get()).b_changed_invalid as ::core::ffi::c_int == true_0
+
+        // BufModified, if b_changed_invalid is set.
+        if ready
+            && has_event(EVENT_BUFMODIFIEDSET)
+            && (*curbuf.get()).b_changed_invalid
             && !pum_visible()
         {
             apply_autocmds(
                 EVENT_BUFMODIFIEDSET,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
+                ::core::ptr::null_mut(),
+                ::core::ptr::null_mut(),
+                false,
                 curbuf.get(),
             );
-            (*curbuf.get()).b_changed_invalid = false_0 != 0;
+            (*curbuf.get()).b_changed_invalid = false;
         }
-        may_trigger_safestate(
-            ready as ::core::ffi::c_int != 0 && !ins_compl_active() && !pum_visible(),
-        );
+
+        // SafeState, if nothing is pending.
+        may_trigger_safestate(ready && !ins_compl_active() && !pum_visible());
+
         pum_check_clear();
-        show_cursor_info_later(false_0 != 0);
+        show_cursor_info_later(false);
         if must_redraw.get() != 0 {
             update_screen();
         } else {
             redraw_statuslines();
-            if clear_cmdline.get() as ::core::ffi::c_int != 0
-                || redraw_cmdline.get() as ::core::ffi::c_int != 0
-                || redraw_mode.get() as ::core::ffi::c_int != 0
-            {
-                showmode();
+            if clear_cmdline.get() || redraw_cmdline.get() || redraw_mode.get() {
+                showmode(); // clear cmdline and show mode
             }
         }
         setcursor();
-        emsg_on_display.set(false_0 != 0);
+        emsg_on_display.set(false); // may remove error message now
     }
 }
 
-pub unsafe extern "C" fn edit_putchar(mut c: ::core::ffi::c_int, mut highlight: bool) {
+/// Put character `c` directly onto the screen at the cursor, remembering what
+/// was there so [`edit_unputchar`] can put it back.
+///
+/// Used while handling CTRL-V, CTRL-K and friends, which have to show
+/// something at the cursor while they wait for the rest of the sequence.
+/// Nothing is stored in a buffer, so the next real redraw removes it.
+///
+/// # Safety
+/// Must run with a live `curwin`.
+pub(crate) unsafe fn edit_putchar(c: c_int, highlight: bool) {
     unsafe {
-        if (*curwin.get()).w_grid_alloc.chars.is_null() && (*default_grid.ptr()).chars.is_null() {
+        let win = curwin.get();
+        if (*win).w_grid_alloc.chars.is_null() && (*default_grid.ptr()).chars.is_null() {
             return;
         }
-        let mut attr: ::core::ffi::c_int = 0;
-        update_topline(curwin.get());
-        validate_cursor(curwin.get());
-        if highlight {
-            attr = *(*hl_attr_active.ptr()).offset(HLF_8 as isize);
+
+        update_topline(win); // just in case w_topline isn't valid
+        validate_cursor(win);
+        let attr = if highlight {
+            *(*hl_attr_active.ptr()).offset(HLF_8 as isize)
         } else {
-            attr = 0 as ::core::ffi::c_int;
-        }
-        pc_row.set((*curwin.get()).w_wrow);
-        pc_status.set(PC_STATUS_UNSET);
-        grid_line_start(&raw mut (*curwin.get()).w_grid, pc_row.get());
-        if (*curwin.get()).w_onebuf_opt.wo_rl != 0 {
-            pc_col.set(
-                (*curwin.get()).w_view_width - 1 as ::core::ffi::c_int - (*curwin.get()).w_wcol,
-            );
-            if grid_line_getchar(pc_col.get(), ::core::ptr::null_mut::<::core::ffi::c_int>())
-                == NUL as schar_T
-            {
-                grid_line_put_schar(
-                    pc_col.get() - 1 as ::core::ffi::c_int,
-                    ' ' as ::core::ffi::c_int as schar_T,
-                    attr,
-                );
-                (*curwin.get()).w_wcol -= 1;
-                pc_status.set(PC_STATUS_RIGHT);
+            0
+        };
+
+        pc_row.set((*win).w_wrow);
+        pc_status.set(PutChar::Unset);
+        grid_line_start(&raw mut (*win).w_grid, pc_row.get());
+        if (*win).w_onebuf_opt.wo_rl != 0 {
+            pc_col.set((*win).w_view_width - 1 - (*win).w_wcol);
+            if grid_line_getchar(pc_col.get(), ::core::ptr::null_mut()) == NUL as schar_T {
+                grid_line_put_schar(pc_col.get() - 1, ' ' as schar_T, attr);
+                (*win).w_wcol -= 1;
+                pc_status.set(PutChar::Right);
             }
         } else {
-            pc_col.set((*curwin.get()).w_wcol);
-            if grid_line_getchar(
-                pc_col.get() + 1 as ::core::ffi::c_int,
-                ::core::ptr::null_mut::<::core::ffi::c_int>(),
-            ) == NUL as schar_T
-            {
-                pc_status.set(PC_STATUS_LEFT);
+            pc_col.set((*win).w_wcol);
+            if grid_line_getchar(pc_col.get() + 1, ::core::ptr::null_mut()) == NUL as schar_T {
+                // pc_col is the left half of a double-width character.
+                pc_status.set(PutChar::Left);
             }
         }
-        if pc_status.get() == PC_STATUS_UNSET {
+
+        // Save the character, so it can be put back.
+        if pc_status.get() == PutChar::Unset {
             pc_schar.set(grid_line_getchar(pc_col.get(), pc_attr.ptr()));
-            pc_status.set(PC_STATUS_SET);
+            pc_status.set(PutChar::Set);
         }
-        let mut buf: [::core::ffi::c_char; 7] = [0; 7];
-        grid_line_puts(
-            pc_col.get(),
-            &raw mut buf as *mut ::core::ffi::c_char,
-            utf_char2bytes(c, &raw mut buf as *mut ::core::ffi::c_char),
-            attr,
-        );
+
+        let mut buf: [c_char; MB_MAXCHAR + 1] = [0; MB_MAXCHAR + 1];
+        let p = buf.as_mut_ptr();
+        grid_line_puts(pc_col.get(), p, utf_char2bytes(c, p), attr);
         grid_line_flush();
     }
 }
 
-pub unsafe extern "C" fn edit_unputchar() {
+/// Undo the previous [`edit_putchar`].
+///
+/// # Safety
+/// Must run with a live `curwin`.
+pub(crate) unsafe fn edit_unputchar() {
     unsafe {
-        if pc_status.get() != PC_STATUS_UNSET {
-            if pc_status.get() == PC_STATUS_RIGHT {
-                (*curwin.get()).w_wcol += 1;
+        let win = curwin.get();
+        match pc_status.get() {
+            PutChar::Unset => {}
+            // Half of a double-width character was overwritten and cannot be
+            // restored a cell at a time; redraw the whole line instead.
+            PutChar::Right => {
+                (*win).w_wcol += 1;
+                redrawWinline(win, (*win).w_cursor.lnum);
             }
-            if pc_status.get() == PC_STATUS_RIGHT || pc_status.get() == PC_STATUS_LEFT {
-                redrawWinline(curwin.get(), (*curwin.get()).w_cursor.lnum);
-            } else {
-                grid_line_start(&raw mut (*curwin.get()).w_grid, pc_row.get());
+            PutChar::Left => redrawWinline(win, (*win).w_cursor.lnum),
+            PutChar::Set => {
+                grid_line_start(&raw mut (*win).w_grid, pc_row.get());
                 grid_line_put_schar(pc_col.get(), pc_schar.get(), pc_attr.get());
                 grid_line_flush();
             }
@@ -197,53 +226,69 @@ pub unsafe extern "C" fn edit_unputchar() {
     }
 }
 
-pub unsafe extern "C" fn display_dollar(mut col_arg: colnr_T) {
+/// Called when `$` is in 'cpoptions': show a `$` at the end of the changed
+/// text.  Only works while the cursor is in the line that changes.
+///
+/// # Safety
+/// Must run with a live `curwin` whose cursor line is at least `col_arg`
+/// bytes long.
+pub(crate) unsafe fn display_dollar(col_arg: colnr_T) {
     unsafe {
-        let mut col: colnr_T = if col_arg > 0 as ::core::ffi::c_int {
-            col_arg
-        } else {
-            0 as colnr_T
-        };
+        let col = col_arg.max(0);
+
         if !redrawing() {
             return;
         }
-        let mut save_col: colnr_T = (*curwin.get()).w_cursor.col;
-        (*curwin.get()).w_cursor.col = col;
-        let mut p: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-        (*curwin.get()).w_cursor.col -= utf_head_off(p, p.offset(col as isize));
-        curs_columns(curwin.get(), false_0);
-        if (*curwin.get()).w_wcol < (*curwin.get()).w_view_width {
-            edit_putchar('$' as ::core::ffi::c_int, false_0 != 0);
-            dollar_vcol.set((*curwin.get()).w_virtcol);
+
+        let win = curwin.get();
+        let save_col = (*win).w_cursor.col;
+        (*win).w_cursor.col = col;
+
+        // On the last byte of a multi-byte character, move to the first byte.
+        let p = get_cursor_line_ptr();
+        (*win).w_cursor.col -= utf_head_off(p, p.offset(col as isize));
+        curs_columns(win, false_0); // recompute w_wrow and w_wcol
+        if (*win).w_wcol < (*win).w_view_width {
+            edit_putchar('$' as c_int, false);
+            dollar_vcol.set((*win).w_virtcol);
         }
-        (*curwin.get()).w_cursor.col = save_col;
+        (*win).w_cursor.col = save_col;
     }
 }
 
-pub unsafe extern "C" fn undisplay_dollar() {
+/// Take the `$` away again.  Call before moving the cursor off the normal
+/// insert position.
+///
+/// # Safety
+/// Must run with a live `curwin`.
+pub(crate) unsafe fn undisplay_dollar() {
     unsafe {
-        if dollar_vcol.get() < 0 as ::core::ffi::c_int {
+        if dollar_vcol.get() < 0 {
             return;
         }
-        dollar_vcol.set(-1 as ::core::ffi::c_int as colnr_T);
+        dollar_vcol.set(-1);
         redrawWinline(curwin.get(), (*curwin.get()).w_cursor.lnum);
     }
 }
 
-pub unsafe extern "C" fn get_nolist_virtcol() -> colnr_T {
+/// The value `w_virtcol` would have with 'list' off -- unless 'cpoptions'
+/// contains `L`, which says the option should be honoured after all.
+///
+/// # Safety
+/// Must run with a live `curwin`.
+pub(crate) unsafe fn get_nolist_virtcol() -> colnr_T {
     unsafe {
-        if (*curwin.get()).w_buffer.is_null()
-            || (*(*curwin.get()).w_buffer).b_ml.ml_mfp.is_null()
-            || (*curwin.get()).w_cursor.lnum > (*(*curwin.get()).w_buffer).b_ml.ml_line_count
+        let win = curwin.get();
+        if (*win).w_buffer.is_null()
+            || (*(*win).w_buffer).b_ml.ml_mfp.is_null()
+            || (*win).w_cursor.lnum > (*(*win).w_buffer).b_ml.ml_line_count
         {
-            return 0 as colnr_T;
+            return 0;
         }
-        if (*curwin.get()).w_onebuf_opt.wo_list != 0
-            && vim_strchr(p_cpo.get(), CPO_LISTWM).is_null()
-        {
-            return getvcol_nolist(&raw mut (*curwin.get()).w_cursor);
+        if (*win).w_onebuf_opt.wo_list != 0 && vim_strchr(p_cpo.get(), CPO_LISTWM).is_null() {
+            return getvcol_nolist(&raw mut (*win).w_cursor);
         }
-        validate_virtcol(curwin.get());
-        return (*curwin.get()).w_virtcol;
+        validate_virtcol(win);
+        (*win).w_virtcol
     }
 }

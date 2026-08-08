@@ -152,8 +152,8 @@ use crate::src::nvim::types::{
     AdditionalData, BS_EOL, BS_INDENT, BS_NOSTOP, BS_START, CMOD_KEEPJUMPS, CharsizeArg,
     CharsizeKind, GraphemeState, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES,
     OptInt, PUT_CURSEND, PUT_FIXINDENT, StrCharInfo, String_0, TriState, VV_CHAR, VV_INSERTMODE,
-    VimState, aco_save_T, buf_T, cmdarg_T, colnr_T, event_T, fmark_T, fmarkv_T, foldinfo_T,
-    int32_t, int64_t, kFalse, kNone, kTrue, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t,
+    VimState, aco_save_T, buf_T, cmdarg_T, colnr_T, event_T, fmark_T, fmarkv_T, int32_t, int64_t,
+    kFalse, kNone, kTrue, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t,
     state_check_callback, state_execute_callback, uint8_t, uint32_t, varnumber_T, win_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
@@ -179,13 +179,13 @@ mod undo;
 pub(crate) use self::bs::*;
 pub use self::chars::*;
 pub use self::ctrl::*;
-pub use self::cursor::*;
+pub(crate) use self::cursor::*;
 pub(crate) use self::key::*;
 pub use self::lastins::*;
 pub use self::literal::*;
 pub(crate) use self::motion::*;
-pub use self::prompt::*;
-pub use self::redraw::*;
+pub(crate) use self::prompt::*;
+pub(crate) use self::redraw::*;
 pub use self::replace::*;
 pub use self::state::*;
 pub use self::tab::*;
@@ -299,11 +299,20 @@ static ins_need_undo: GlobalCell<bool> = GlobalCell::new(false);
 static dont_sync_undo: GlobalCell<TriState> = GlobalCell::new(kFalse);
 static o_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
 static replace_stack: GlobalCell<ReplaceStack> = GlobalCell::new(REPLACE_STACK_EMPTY);
-static pc_status: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-pub const PC_STATUS_UNSET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const PC_STATUS_RIGHT: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const PC_STATUS_LEFT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const PC_STATUS_SET: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
+/// What the last `edit_putchar` did to the screen cell it wrote over, and so
+/// how `edit_unputchar` has to take it back.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum PutChar {
+    /// Nothing was put on the screen.
+    Unset,
+    /// The right half of a double-width character was overwritten.
+    Right,
+    /// The left half of a double-width character was overwritten.
+    Left,
+    /// A whole cell was overwritten and `pc_schar`/`pc_attr` hold it.
+    Set,
+}
+static pc_status: GlobalCell<PutChar> = GlobalCell::new(PutChar::Unset);
 static pc_schar: GlobalCell<schar_T> = GlobalCell::new(0);
 static pc_attr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static pc_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);

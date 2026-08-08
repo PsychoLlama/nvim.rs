@@ -189,7 +189,7 @@ pub(crate) unsafe extern "C" fn redo_literal(mut c: ::core::ffi::c_int) {
 pub(crate) unsafe extern "C" fn ins_digraph() -> ::core::ffi::c_int {
     unsafe {
         let mut did_putchar: bool = false_0 != 0;
-        pc_status.set(PC_STATUS_UNSET);
+        pc_status.set(PutChar::Unset);
         if redrawing() as ::core::ffi::c_int != 0 && !char_avail() {
             ins_redraw(false_0 != 0);
             edit_putchar('?' as ::core::ffi::c_int, true_0 != 0);

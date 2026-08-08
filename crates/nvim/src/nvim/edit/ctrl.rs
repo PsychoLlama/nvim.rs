@@ -20,7 +20,7 @@ pub(crate) unsafe extern "C" fn ins_reg() {
         let mut need_redraw: bool = false_0 != 0;
         let mut literally: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut vis_active: ::core::ffi::c_int = VIsual_active.get() as ::core::ffi::c_int;
-        pc_status.set(PC_STATUS_UNSET);
+        pc_status.set(PutChar::Unset);
         if redrawing() as ::core::ffi::c_int != 0 && !char_avail() {
             ins_redraw(false_0 != 0);
             edit_putchar('"' as ::core::ffi::c_int, true_0 != 0);
