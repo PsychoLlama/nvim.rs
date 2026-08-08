@@ -194,7 +194,7 @@
     "crates/nvim/src/nvim/edit/key.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/edit/lastins.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/edit/literal.rs": {"unsafe": 7},
-    "crates/nvim/src/nvim/edit/motion.rs": {"unsafe": 11},
+    "crates/nvim/src/nvim/edit/motion.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/edit/prompt.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/edit/redraw.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/edit/replace.rs": {"unsafe": 10},

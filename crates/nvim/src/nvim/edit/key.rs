@@ -320,9 +320,9 @@ pub(crate) unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::
                                                 if pum_visible() {
                                                     insert_do_complete(s);
                                                 } else if mod_mask.get() & MOD_MASK_SHIFT != 0 {
-                                                    ins_pageup();
+                                                    ins_page(true);
                                                 } else {
-                                                    ins_up(false_0 != 0);
+                                                    ins_updown(true, false);
                                                 }
                                                 break 's_1398;
                                             }
@@ -330,7 +330,7 @@ pub(crate) unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::
                                                 if pum_visible() {
                                                     insert_do_complete(s);
                                                 } else {
-                                                    ins_pageup();
+                                                    ins_page(true);
                                                 }
                                                 break 's_1398;
                                             }
@@ -338,9 +338,9 @@ pub(crate) unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::
                                                 if pum_visible() {
                                                     insert_do_complete(s);
                                                 } else if mod_mask.get() & MOD_MASK_SHIFT != 0 {
-                                                    ins_pagedown();
+                                                    ins_page(false);
                                                 } else {
-                                                    ins_down(false_0 != 0);
+                                                    ins_updown(false, false);
                                                 }
                                                 break 's_1398;
                                             }
@@ -348,7 +348,7 @@ pub(crate) unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::
                                                 if pum_visible() {
                                                     insert_do_complete(s);
                                                 } else {
-                                                    ins_pagedown();
+                                                    ins_page(false);
                                                 }
                                                 break 's_1398;
                                             }
