@@ -907,7 +907,7 @@
     "crates/nvim/src/nvim/undo/write.rs": {"no_mangle": 1, "unsafe": 1},
     "crates/nvim/src/nvim/usercmd.rs": {"lines": 2933, "unsafe": 41},
     "crates/nvim/src/nvim/utf8proc/tables.rs": {"lines": 12412},
-    "crates/nvim/src/nvim/version.rs": {"lines": 1241, "unsafe": 16},
+    "crates/nvim/src/nvim/version.rs": {"lines": 1248, "unsafe": 15},
     "crates/nvim/src/nvim/viml/parser/expressions/ast.rs": {"no_mangle": 5, "unsafe": 4},
     "crates/nvim/src/nvim/viml/parser/expressions/brackets.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/viml/parser/expressions/figure.rs": {"unsafe": 2},

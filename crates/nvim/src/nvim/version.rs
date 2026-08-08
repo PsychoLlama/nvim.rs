@@ -35,8 +35,21 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const SYS_VIMRC_FILE: [::core::ffi::c_char; 17] = unsafe {
     ::core::mem::transmute::<[u8; 17], [::core::ffi::c_char; 17]>(*b"$VIM/sysinit.vim\0")
 };
-pub const NVIM_VERSION_LONG: [::core::ffi::c_char; 13] =
-    unsafe { ::core::mem::transmute::<[u8; 13], [::core::ffi::c_char; 13]>(*b"NVIM v0.12.4\0") };
+/// The banner, NUL-terminated for the C-ABI callers that print it
+/// (`:version`, `nvim -v`, the intro screen, shada's generator field). The
+/// version is `build.rs`'s: the CalVer release tag when HEAD is one, else
+/// `dev-<short sha>[-dirty]`, else whatever `$NVIM_RS_VERSION` declared.
+const LONG_VERSION: &[u8] = concat!("nvim.rs ", env!("NVIM_RS_VERSION"), "\0").as_bytes();
+/// How `:version` describes this build's toolchain: the cargo profile
+/// `build.rs` was invoked under, and the `rustc` cargo handed it.
+const BUILD_LINE: &[u8] = concat!(
+    "Build: ",
+    env!("NVIM_RS_PROFILE"),
+    ", rustc ",
+    env!("NVIM_RS_RUSTC"),
+    "\0"
+)
+.as_bytes();
 pub static Versions: GlobalCell<[*mut ::core::ffi::c_char; 5]> = GlobalCell::new([
     b"8.1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"8.2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -45,12 +58,7 @@ pub static Versions: GlobalCell<[*mut ::core::ffi::c_char; 5]> = GlobalCell::new
     b"9.2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
 ]);
 pub static longVersion: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(NVIM_VERSION_LONG.as_ptr() as *mut ::core::ffi::c_char);
-pub static version_buildtype: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
-    b"Build type: Debug\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-);
-pub static version_cflags: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(b"Compilation: /nix/store/vr15iyyykg9zai6fpgvhcgyw7gckl78w-gcc-wrapper-14.3.0/bin/gcc -g  -Wall -Wextra -pedantic -Wno-unused-parameter -Wstrict-prototypes -std=gnu99 -Wshadow -Wconversion -Wvla -Wdouble-promotion -Wmissing-noreturn -Wmissing-format-attribute -Wmissing-prototypes -Wno-unused-function -fsigned-char -fstack-protector-strong -Wno-conversion -fno-common -Wimplicit-fallthrough -fdiagnostics-color=always -Wno-free-nonheap-object -DHAVE_UNIBILIUM -DNVIM_LOG_DEBUG -DUNIT_TESTING -D_GNU_SOURCE -DUTF8PROC_STATIC -I.deps/usr/include/luajit-2.1 -I.deps/usr/include -Ibuild/src/nvim/auto -Ibuild/include -Ibuild/cmake.config -Isrc -I/nix/store/l1fi677mcxsa175gf0zvpk68kf1calbn-glibc-iconv-2.40/include -I/nix/store/gi4cz4ir3zlwhf1azqfgxqdnczfrwsr7-glibc-2.40-66-dev/include \0"
-    .as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
+    GlobalCell::new(LONG_VERSION.as_ptr() as *mut ::core::ffi::c_char);
 static vim_versions: GlobalCell<[::core::ffi::c_int; 5]> = GlobalCell::new([
     801 as ::core::ffi::c_int,
     802 as ::core::ffi::c_int,
@@ -888,30 +896,27 @@ pub unsafe extern "C" fn list_version() {
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     msg_puts(longVersion.get());
     msg_putchar('\n' as ::core::ffi::c_int);
-    msg_puts(version_buildtype.get());
+    // The Nvim release this port tracks — the version every compatibility
+    // surface (`has('nvim-…')`, `v:version`, the API metadata) answers with.
+    // Terminated in the format string: the numbers can't contain a NUL.
+    let compat = format!(
+        "NVIM v{NVIM_VERSION_MAJOR}.{NVIM_VERSION_MINOR}.{NVIM_VERSION_PATCH} compatible\0"
+    );
+    msg_puts(compat.as_ptr() as *const ::core::ffi::c_char);
     msg_putchar('\n' as ::core::ffi::c_int);
     list_lua_version();
     if p_verbose.get() > 0 as OptInt {
         msg_putchar('\n' as ::core::ffi::c_int);
+        msg_puts(BUILD_LINE.as_ptr() as *const ::core::ffi::c_char);
+        msg_putchar('\n' as ::core::ffi::c_int);
         msg_puts(b"Vim versions: \0".as_ptr() as *const ::core::ffi::c_char);
-        let mut i: size_t = 0 as size_t;
-        while i < ::core::mem::size_of::<[::core::ffi::c_int; 5]>()
-            .wrapping_div(::core::mem::size_of::<::core::ffi::c_int>())
-            .wrapping_div(
-                (::core::mem::size_of::<[::core::ffi::c_int; 5]>()
-                    .wrapping_rem(::core::mem::size_of::<::core::ffi::c_int>())
-                    == 0) as ::core::ffi::c_int as usize,
-            )
-        {
+        for (i, vim_version) in (*Versions.ptr()).iter().enumerate() {
             if i != 0 {
                 msg_puts(b", \0".as_ptr() as *const ::core::ffi::c_char);
             }
-            msg_puts((*Versions.ptr())[i as usize]);
-            i = i.wrapping_add(1);
+            msg_puts(*vim_version);
         }
-        msg_putchar('\n' as ::core::ffi::c_int);
-        msg_puts(version_cflags.get());
-        version_msg(b"\n\n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
+        version_msg(b"\n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
         version_msg(gettext(
             b"   system vimrc file: \"\0".as_ptr() as *const ::core::ffi::c_char
         ));
@@ -964,8 +969,7 @@ pub unsafe extern "C" fn intro_message(mut colon: bool) {
         b"\xE2\x94\x82\xE2\x94\x82 \xE2\x95\xB2 \xE2\x94\x82\0".as_ptr()
             as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"NVIM v0.12.4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        LONG_VERSION.as_ptr() as *mut ::core::ffi::c_char,
         b"\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\0"
             .as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"Nvim is open source and freely distributable\0".as_ptr()
@@ -1141,14 +1145,17 @@ unsafe extern "C" fn do_intro_line(
         grid_line_flush();
         return;
     }
+    // The banner line, highlighted as a whole. Matched on the lowercase
+    // "nvim" of `nvim.rs …`, which no other intro line starts with ("Nvim is
+    // open source…" capitalizes it).
     let mut is_version: bool = *mesg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        == 'N' as ::core::ffi::c_int
+        == 'n' as ::core::ffi::c_int
         && *mesg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == 'V' as ::core::ffi::c_int
+            == 'v' as ::core::ffi::c_int
         && *mesg.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == 'I' as ::core::ffi::c_int
+            == 'i' as ::core::ffi::c_int
         && *mesg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == 'M' as ::core::ffi::c_int;
+            == 'm' as ::core::ffi::c_int;
     let mut is_sep: bool = utfc_ptr2len(mesg) == 3 as ::core::ffi::c_int
         && utf_ptr2char(mesg) == 0x2500 as ::core::ffi::c_int;
     if is_version as ::core::ffi::c_int != 0 || is_sep as ::core::ffi::c_int != 0 {

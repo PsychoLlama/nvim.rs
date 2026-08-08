@@ -65,23 +65,10 @@ describe('has()', function()
   end)
 
   it('"terminfo"', function()
-    local version = n.exec_capture('verbose version')
-    local compilation_string = version:match('Compilation: (.*)')
-    -- zig builds currently show only TODO for the compilation string
-    if not compilation_string or compilation_string:match('TODO') then
-      pending('no compilation string present')
-    end
-    -- Looks like "HAVE_UNIBILIUM ", "HAVE_UNIBILIUM=1", "HAVE_UNIBILIUM off", ….
-    -- Capture group returns the "1"/"off"/….
-    local build_flag =
-      vim.trim((compilation_string:match('HAVE_UNIBILIUM([^-]+)') or 'missing'):lower())
-    local is_enabled = not (
-      build_flag == 'missing'
-      or build_flag == 'false'
-      or build_flag == '0'
-      or build_flag == 'off'
-    )
-    eq(is_enabled and 1 or 0, fn.has('terminfo'))
+    -- The unibilium port is compiled in unconditionally: there is no
+    -- HAVE_UNIBILIUM build switch to interrogate any more, so terminfo
+    -- support is simply always present.
+    eq(1, fn.has('terminfo'))
   end)
 
   it('"wsl"', function()

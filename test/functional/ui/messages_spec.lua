@@ -2196,7 +2196,7 @@ describe('ui/builtin messages', function()
   it(':intro with small screen #38396', function()
     screen:try_resize(80, 6)
     feed(':intro<CR>')
-    screen:expect({ any = 'NVIM' })
+    screen:expect({ any = 'nvim%.rs' })
     feed('<CR>')
     assert_alive()
   end)
@@ -2242,7 +2242,7 @@ describe('ui/ext_messages', function()
       {1:~                                    }{16:││}{26:╲╲││}{1:                                     }|
       {1:~                                    }{16:││} {26:╲} {26:│}{1:                                     }|
       {1:~                                                                               }|
-      {1:~{MATCH: +}}{26:NVIM {MATCH:%S+}}{1:{MATCH: +}}|
+      {1:~{MATCH: +}}{26:nvim.rs {MATCH:%S+}}{1:{MATCH: +}}|
       {1:~                 ────────────────────────────────────────────                  }|
       {1:~                 }Nvim is open source and freely distributable{1:                  }|
       {1:~                           }https://neovim.io/#chat{1:                             }|
@@ -2282,7 +2282,7 @@ describe('ui/ext_messages', function()
         {1:~                                    }{16:││}{26:╲╲││}{1:                                     }|
         {1:~                                    }{16:││} {26:╲} {26:│}{1:                                     }|
         {1:~                                                                               }|
-        {1:~{MATCH: +}}{26:NVIM {MATCH:%S+}}{1:{MATCH: +}}|
+        {1:~{MATCH: +}}{26:nvim.rs {MATCH:%S+}}{1:{MATCH: +}}|
         {1:~                 ────────────────────────────────────────────                  }|
         {1:~                 }Nvim is open source and freely distributable{1:                  }|
         {1:~                           }https://neovim.io/#chat{1:                             }|
@@ -2323,7 +2323,7 @@ describe('ui/ext_messages', function()
                                              {16:││}{26:╲╲││}                                     |
                                              {16:││} {26:╲} {26:│}                                     |
                                                                                         |
-        {MATCH: +}{26:NVIM {MATCH:%S+}}{MATCH: +}|
+        {MATCH: +}{26:nvim.rs {MATCH:%S+}}{MATCH: +}|
                           {1:────────────────────────────────────────────}                  |
                           Nvim is open source and freely distributable                  |
                                     https://neovim.io/#chat                             |
@@ -2457,7 +2457,7 @@ it('ui/ext_multigrid supports intro screen', function()
       {1:~                                    }{16:││}{26:╲╲││}{1:                                     }|
       {1:~                                    }{16:││} {26:╲} {26:│}{1:                                     }|
       {1:~                                                                               }|
-      {1:~{MATCH: +}}{26:NVIM {MATCH:%S+}}{1:{MATCH: +}}|
+      {1:~{MATCH: +}}{26:nvim.rs {MATCH:%S+}}{1:{MATCH: +}}|
       {1:~                 ────────────────────────────────────────────                  }|
       {1:~                 }Nvim is open source and freely distributable{1:                  }|
       {1:~                           }https://neovim.io/#chat{1:                             }|

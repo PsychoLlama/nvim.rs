@@ -256,14 +256,12 @@ Use a fast terminal emulator:
 
 Use an optimized build:
 
-`:version` should report one of these "build types":
+`:verbose version` should report a release build:
 >
-    Build type: RelWithDebInfo
-    Build type: MinSizeRel
-    Build type: Release
+    Build: release, rustc 1.99.0
 <
-If it reports `Build type: Debug` and you're building Nvim from source, see
-https://github.com/neovim/neovim/blob/master/BUILD.md.
+If it reports `Build: debug` and you're building Nvim from source, build with
+`cargo build --release` (or `just build-release`) instead.
 
 
 ------------------------------------------------------------------------------

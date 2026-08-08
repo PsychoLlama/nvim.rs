@@ -90,7 +90,7 @@
     "crates/nvim/src/nvim/ui/sinks.rs": 2,
     "crates/nvim/src/nvim/ui_compositor.rs": 76,
     "crates/nvim/src/nvim/usercmd.rs": 251,
-    "crates/nvim/src/nvim/version.rs": 66,
+    "crates/nvim/src/nvim/version.rs": 63,
     "crates/nvim/src/nvim/viml/parser/expressions/ast.rs": 54,
     "crates/nvim/src/nvim/viml/parser/expressions/lexer.rs": 56,
     "crates/nvim/src/nvim/viml/parser/expressions/strings.rs": 29,
