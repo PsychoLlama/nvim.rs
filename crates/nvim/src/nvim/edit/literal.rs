@@ -293,10 +293,7 @@ pub(crate) unsafe extern "C" fn ins_ctrl_ey(mut tc: ::core::ffi::c_int) -> ::cor
             );
             if c != NUL {
                 if c < 256 as ::core::ffi::c_int
-                    && *(*__ctype_b_loc()).offset(c as isize) as ::core::ffi::c_int
-                        & _ISalnum as ::core::ffi::c_int as ::core::ffi::c_ushort
-                            as ::core::ffi::c_int
-                        == 0
+                    && *(*__ctype_b_loc()).offset(c as isize) & _ISalnum == 0
                 {
                     AppendToRedobuff(CTRL_V_STR.as_ptr());
                 }

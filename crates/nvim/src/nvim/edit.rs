@@ -89,9 +89,9 @@ use crate::src::nvim::main::{
     last_cursormoved, last_cursormoved_win, mod_mask, msg_scroll, msg_silent, must_redraw,
     need_check_timestamps, need_highlight_changed, need_start_insertmode, no_abbr, no_mapping,
     no_u_sync, old_indent, orig_line_count, p_ari, p_ch, p_cpo, p_deco, p_langmap, p_lrm, p_paste,
-    p_ri, p_smd, p_sol, p_sta, p_ww, redraw_cmdline, redraw_mode, reg_recording, replace_offset,
-    restart_VIsual_select, restart_edit, sandbox, spell_redraw_lnum, stop_insert_mode,
-    test_disable_char_avail, textlock, u_sync_once, vgetc_busy, vr_lines_changed,
+    p_ri, p_smd, p_sol, p_sta, p_ww, pum_want, redraw_cmdline, redraw_mode, reg_recording,
+    replace_offset, restart_VIsual_select, restart_edit, sandbox, spell_redraw_lnum,
+    stop_insert_mode, test_disable_char_avail, textlock, u_sync_once, vgetc_busy, vr_lines_changed,
     where_paste_started,
 };
 use crate::src::nvim::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
@@ -150,12 +150,11 @@ use crate::src::nvim::textobject::{bck_word, fwd_word};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     AdditionalData, BS_EOL, BS_INDENT, BS_NOSTOP, BS_START, CMOD_KEEPJUMPS, CharsizeArg,
-    CharsizeKind, Direction, GraphemeState, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX,
-    MB_MAXBYTES, MotionType, OptInt, PUT_CURSEND, PUT_FIXINDENT, StrCharInfo, String_0, TriState,
-    UndoObjectType, VV_CHAR, VV_INSERTMODE, VimState, aco_save_T, buf_T, cmdarg_T, colnr_T,
-    event_T, fmark_T, fmarkv_T, foldinfo_T, int32_t, int64_t, kFalse, kNone, kTrue, linenr_T,
-    pos_T, ptrdiff_t, schar_T, size_t, ssize_t, state_check_callback, state_execute_callback,
-    uint8_t, uint32_t, varnumber_T, win_T, yankreg_T,
+    CharsizeKind, GraphemeState, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES,
+    OptInt, PUT_CURSEND, PUT_FIXINDENT, StrCharInfo, String_0, TriState, VV_CHAR, VV_INSERTMODE,
+    VimState, aco_save_T, buf_T, cmdarg_T, colnr_T, event_T, fmark_T, fmarkv_T, foldinfo_T,
+    int32_t, int64_t, kFalse, kNone, kTrue, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t,
+    state_check_callback, state_execute_callback, uint8_t, uint32_t, varnumber_T, win_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::src::nvim::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -192,27 +191,16 @@ pub use self::state::*;
 pub use self::tab::*;
 pub use self::undo::*;
 
-unsafe extern "C" {
-    static pum_want: GlobalCell<C2Rust_Unnamed_27>;
-}
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const _ISalnum: C2Rust_Unnamed = 8;
-pub const _ISlower: C2Rust_Unnamed = 512;
-pub const _ISupper: C2Rust_Unnamed = 256;
-pub const kExtmarkMove: UndoObjectType = 1;
-pub const kExtmarkSplice: UndoObjectType = 0;
-pub const kDirectionNotSet: Direction = 0;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const OPENLINE_DO_COM: C2Rust_Unnamed_18 = 2;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub const INDENT_DEC: C2Rust_Unnamed_23 = 3;
-pub const INDENT_INC: C2Rust_Unnamed_23 = 2;
-pub const INDENT_SET: C2Rust_Unnamed_23 = 1;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
-pub const BL_FIX: C2Rust_Unnamed_24 = 4;
-pub const BL_SOL: C2Rust_Unnamed_24 = 2;
-pub const BL_WHITE: C2Rust_Unnamed_24 = 1;
-pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
+/// The alphanumeric bit of the C library's `__ctype_b_loc()` table, the one
+/// `isalnum()` reads.  Locale-dependent by construction.
+pub const _ISalnum: ::core::ffi::c_ushort = 8;
+pub const OPENLINE_DO_COM: ::core::ffi::c_int = 2;
+pub const INDENT_DEC: ::core::ffi::c_int = 3;
+pub const INDENT_INC: ::core::ffi::c_int = 2;
+pub const INDENT_SET: ::core::ffi::c_int = 1;
+pub const BL_FIX: ::core::ffi::c_int = 4;
+pub const BL_SOL: ::core::ffi::c_int = 2;
+pub const BL_WHITE: ::core::ffi::c_int = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct InsertState {
@@ -236,38 +224,24 @@ pub struct InsertState {
     pub did_restart_edit: ::core::ffi::c_int,
     pub nomove: bool,
 }
-pub const kMTLineWise: MotionType = 1;
-pub const kMTCharWise: MotionType = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct C2Rust_Unnamed_26 {
+pub struct ReplaceStack {
     pub size: size_t,
     pub capacity: size_t,
     pub items: *mut ::core::ffi::c_char,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_27 {
-    pub active: bool,
-    pub item: ::core::ffi::c_int,
-    pub insert: bool,
-    pub finish: bool,
-}
-pub const MSCR_RIGHT: C2Rust_Unnamed_30 = -2;
-pub const MSCR_LEFT: C2Rust_Unnamed_30 = -1;
-pub const MSCR_UP: C2Rust_Unnamed_30 = 1;
-pub const MSCR_DOWN: C2Rust_Unnamed_30 = 0;
-pub const BACKSPACE_LINE: C2Rust_Unnamed_34 = 4;
-pub const BACKSPACE_CHAR: C2Rust_Unnamed_34 = 1;
-pub const BACKSPACE_WORD_NOT_SPACE: C2Rust_Unnamed_34 = 3;
-pub const BACKSPACE_WORD: C2Rust_Unnamed_34 = 2;
-pub const YREG_PASTE: C2Rust_Unnamed_32 = 0;
-pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_30 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
+pub const MSCR_RIGHT: ::core::ffi::c_int = -2;
+pub const MSCR_LEFT: ::core::ffi::c_int = -1;
+pub const MSCR_UP: ::core::ffi::c_int = 1;
+pub const MSCR_DOWN: ::core::ffi::c_int = 0;
+pub const BACKSPACE_LINE: ::core::ffi::c_int = 4;
+pub const BACKSPACE_CHAR: ::core::ffi::c_int = 1;
+pub const BACKSPACE_WORD_NOT_SPACE: ::core::ffi::c_int = 3;
+pub const BACKSPACE_WORD: ::core::ffi::c_int = 2;
+pub const YREG_PASTE: ::core::ffi::c_int = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const KV_INITIAL_VALUE: C2Rust_Unnamed_26 = C2Rust_Unnamed_26 {
+pub const REPLACE_STACK_EMPTY: ReplaceStack = ReplaceStack {
     size: 0 as size_t,
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -324,7 +298,7 @@ static revins_scol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static ins_need_undo: GlobalCell<bool> = GlobalCell::new(false);
 static dont_sync_undo: GlobalCell<TriState> = GlobalCell::new(kFalse);
 static o_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
-static replace_stack: GlobalCell<C2Rust_Unnamed_26> = GlobalCell::new(KV_INITIAL_VALUE);
+static replace_stack: GlobalCell<ReplaceStack> = GlobalCell::new(REPLACE_STACK_EMPTY);
 static pc_status: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub const PC_STATUS_UNSET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const PC_STATUS_RIGHT: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

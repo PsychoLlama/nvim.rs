@@ -121,7 +121,7 @@ pub(crate) unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::
                                             K_BS | Ctrl_H => {
                                                 (*s).did_backspace = ins_bs(
                                                     (*s).c,
-                                                    BACKSPACE_CHAR as ::core::ffi::c_int,
+                                                    BACKSPACE_CHAR,
                                                     &raw mut (*s).inserted_space,
                                                 );
                                                 auto_format(false_0 != 0, true_0 != 0);
@@ -159,7 +159,7 @@ pub(crate) unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::
                                                 }
                                                 (*s).did_backspace = ins_bs(
                                                     (*s).c,
-                                                    BACKSPACE_WORD as ::core::ffi::c_int,
+                                                    BACKSPACE_WORD,
                                                     &raw mut (*s).inserted_space,
                                                 );
                                                 auto_format(false_0 != 0, true_0 != 0);
@@ -189,7 +189,7 @@ pub(crate) unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::
                                                 } else {
                                                     (*s).did_backspace = ins_bs(
                                                         (*s).c,
-                                                        BACKSPACE_LINE as ::core::ffi::c_int,
+                                                        BACKSPACE_LINE,
                                                         &raw mut (*s).inserted_space,
                                                     );
                                                     auto_format(false_0 != 0, true_0 != 0);
@@ -228,19 +228,19 @@ pub(crate) unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::
                                                 break 's_1398;
                                             }
                                             K_MOUSEDOWN => {
-                                                ins_mousescroll(MSCR_DOWN as ::core::ffi::c_int);
+                                                ins_mousescroll(MSCR_DOWN);
                                                 break 's_1398;
                                             }
                                             K_MOUSEUP => {
-                                                ins_mousescroll(MSCR_UP as ::core::ffi::c_int);
+                                                ins_mousescroll(MSCR_UP);
                                                 break 's_1398;
                                             }
                                             K_MOUSELEFT => {
-                                                ins_mousescroll(MSCR_LEFT as ::core::ffi::c_int);
+                                                ins_mousescroll(MSCR_LEFT);
                                                 break 's_1398;
                                             }
                                             K_MOUSERIGHT => {
-                                                ins_mousescroll(MSCR_RIGHT as ::core::ffi::c_int);
+                                                ins_mousescroll(MSCR_RIGHT);
                                                 break 's_1398;
                                             }
                                             K_SELECT | -13821 => {

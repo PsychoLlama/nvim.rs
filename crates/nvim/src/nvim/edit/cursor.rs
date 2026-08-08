@@ -16,15 +16,15 @@ use super::*;
 
 pub unsafe extern "C" fn beginline(mut flags: ::core::ffi::c_int) {
     unsafe {
-        if flags & BL_SOL as ::core::ffi::c_int != 0 && p_sol.get() == 0 {
+        if flags & BL_SOL != 0 && p_sol.get() == 0 {
             coladvance(curwin.get(), (*curwin.get()).w_curswant);
         } else {
             (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
             (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
-            if flags & (BL_WHITE as ::core::ffi::c_int | BL_SOL as ::core::ffi::c_int) != 0 {
+            if flags & (BL_WHITE | BL_SOL) != 0 {
                 let mut ptr: *mut ::core::ffi::c_char = get_cursor_line_ptr();
                 while ascii_iswhite(*ptr as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-                    && !(flags & BL_FIX as ::core::ffi::c_int != 0
+                    && !(flags & BL_FIX != 0
                         && *ptr.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                             == NUL)
                 {

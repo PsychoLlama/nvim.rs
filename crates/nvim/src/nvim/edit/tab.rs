@@ -36,19 +36,10 @@ pub(crate) unsafe extern "C" fn ins_shift(
             if lastc == '^' as ::core::ffi::c_int {
                 old_indent.set(get_indent());
             }
-            change_indent(
-                INDENT_SET as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
-                true_0,
-                true_0 != 0,
-            );
+            change_indent(INDENT_SET, 0 as ::core::ffi::c_int, true_0, true_0 != 0);
         } else {
             change_indent(
-                if c == Ctrl_D {
-                    INDENT_DEC as ::core::ffi::c_int
-                } else {
-                    INDENT_INC as ::core::ffi::c_int
-                },
+                if c == Ctrl_D { INDENT_DEC } else { INDENT_INC },
                 0 as ::core::ffi::c_int,
                 true_0,
                 true_0 != 0,
@@ -339,7 +330,7 @@ pub unsafe extern "C" fn ins_eol(mut c: ::core::ffi::c_int) -> bool {
         let mut i: bool = open_line(
             FORWARD as ::core::ffi::c_int,
             if has_format_option(FO_RET_COMS) as ::core::ffi::c_int != 0 {
-                OPENLINE_DO_COM as ::core::ffi::c_int
+                OPENLINE_DO_COM
             } else {
                 0 as ::core::ffi::c_int
             },

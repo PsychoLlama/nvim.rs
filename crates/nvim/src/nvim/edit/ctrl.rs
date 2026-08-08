@@ -82,8 +82,7 @@ pub(crate) unsafe extern "C" fn ins_reg() {
             vim_beep(kOptBoFlagRegister as ::core::ffi::c_int as ::core::ffi::c_uint);
             need_redraw = true_0 != 0;
         } else {
-            let mut reg: *mut yankreg_T =
-                get_yank_register(regname, YREG_PASTE as ::core::ffi::c_int);
+            let mut reg: *mut yankreg_T = get_yank_register(regname, YREG_PASTE);
             if literally == Ctrl_O || literally == Ctrl_P {
                 AppendCharToRedobuff(Ctrl_R);
                 AppendCharToRedobuff(literally);

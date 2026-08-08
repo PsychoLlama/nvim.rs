@@ -91,11 +91,11 @@ pub(crate) unsafe extern "C" fn ins_bs(
             inc_cursor();
         }
         if (*curwin.get()).w_cursor.coladd > 0 as ::core::ffi::c_int {
-            if mode == BACKSPACE_CHAR as ::core::ffi::c_int {
+            if mode == BACKSPACE_CHAR {
                 (*curwin.get()).w_cursor.coladd -= 1;
                 return true_0 != 0;
             }
-            if mode == BACKSPACE_WORD as ::core::ffi::c_int {
+            if mode == BACKSPACE_WORD {
                 (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
                 return true_0 != 0;
             }
@@ -182,19 +182,19 @@ pub(crate) unsafe extern "C" fn ins_bs(
                 dec_cursor();
             }
             let mut mincol: colnr_T = 0 as colnr_T;
-            if mode == BACKSPACE_LINE as ::core::ffi::c_int
+            if mode == BACKSPACE_LINE
                 && ((*curbuf.get()).b_p_ai != 0 || cindent_on() as ::core::ffi::c_int != 0)
                 && !revins_on.get()
             {
                 let mut save_col_0: colnr_T = (*curwin.get()).w_cursor.col;
-                beginline(BL_WHITE as ::core::ffi::c_int);
+                beginline(BL_WHITE);
                 if (*curwin.get()).w_cursor.col < save_col_0 {
                     mincol = (*curwin.get()).w_cursor.col;
                     call_fix_indent = true_0 != 0;
                 }
                 (*curwin.get()).w_cursor.col = save_col_0;
             }
-            if mode == BACKSPACE_CHAR as ::core::ffi::c_int
+            if mode == BACKSPACE_CHAR
                 && (p_sta.get() != 0 && in_indent as ::core::ffi::c_int != 0
                     || (get_sts_value() != 0 as ::core::ffi::c_int
                         || tabstop_count((*curbuf.get()).b_p_vsts_array) != 0)
@@ -297,10 +297,10 @@ pub(crate) unsafe extern "C" fn ins_bs(
                     cc = gchar_cursor();
                     let mut prev_cclass: ::core::ffi::c_int = cclass;
                     cclass = mb_get_class(get_cursor_pos_ptr());
-                    if mode == BACKSPACE_WORD as ::core::ffi::c_int && !ascii_isspace(cc) {
-                        mode = BACKSPACE_WORD_NOT_SPACE as ::core::ffi::c_int;
+                    if mode == BACKSPACE_WORD && !ascii_isspace(cc) {
+                        mode = BACKSPACE_WORD_NOT_SPACE;
                         temp = vim_iswordc(cc) as ::core::ffi::c_int;
-                    } else if mode == BACKSPACE_WORD_NOT_SPACE as ::core::ffi::c_int
+                    } else if mode == BACKSPACE_WORD_NOT_SPACE
                         && (ascii_isspace(cc) as ::core::ffi::c_int != 0
                             || vim_iswordc(cc) as ::core::ffi::c_int != temp
                             || prev_cclass != cclass)
@@ -336,7 +336,7 @@ pub(crate) unsafe extern "C" fn ins_bs(
                             break;
                         }
                     }
-                    if mode == BACKSPACE_CHAR as ::core::ffi::c_int {
+                    if mode == BACKSPACE_CHAR {
                         break;
                     }
                     if !(revins_on.get() as ::core::ffi::c_int != 0
