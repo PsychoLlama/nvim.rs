@@ -14,6 +14,11 @@
 //! test because `setlocale(LC_ALL, "")` at startup leaves `LC_CTYPE` under
 //! the user's control, so which bytes count as whitespace is observable
 //! through `'diffopt'`'s `iwhite` family.
+//!
+//! The interface ported here is LibXDiff's `xdiff.h`, by Davide Libenzi
+//! (File Differential Library), Copyright (C) 2003 Davide Libenzi. LibXDiff
+//! is LGPL-2.1-or-later, and this port stays under that license (text:
+//! licenses/LGPL-2.1.txt).
 
 #![deny(unsafe_op_in_unsafe_fn)]
 

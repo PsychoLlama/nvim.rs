@@ -9,6 +9,10 @@
 //! logic — is `#if 0`-ed out of the vendored source, so `xdemitconf_t`'s
 //! `find_func`/`find_func_priv` are dead and every hunk header here carries
 //! an empty function name.
+//!
+//! Ported from LibXDiff by Davide Libenzi (File Differential Library),
+//! Copyright (C) 2003 Davide Libenzi. LibXDiff is LGPL-2.1-or-later, and
+//! this port stays under that license (text: licenses/LGPL-2.1.txt).
 
 #![forbid(unsafe_code)]
 

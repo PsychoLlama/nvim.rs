@@ -11,6 +11,10 @@
 //!    and then every line with no counterpart at all, leaving `rindex`/`ha`:
 //!    the reduced arrays the Myers walk actually runs over. Patience and
 //!    histogram skip this too; they reduce the problem their own way.
+//!
+//! Ported from LibXDiff by Davide Libenzi (File Differential Library),
+//! Copyright (C) 2003 Davide Libenzi. LibXDiff is LGPL-2.1-or-later, and
+//! this port stays under that license (text: licenses/LGPL-2.1.txt).
 
 #![forbid(unsafe_code)]
 

@@ -8,6 +8,10 @@
 //! [`emit_hunk_hdr`] and [`emit_diffrec`] are reached only from `vim.diff()`
 //! without an `on_hunk` callback: `:diffupdate` installs
 //! `xdemitconf_t.hunk_func`, which routes around the whole writer.
+//!
+//! Ported from LibXDiff by Davide Libenzi (File Differential Library),
+//! Copyright (C) 2003 Davide Libenzi. LibXDiff is LGPL-2.1-or-later, and
+//! this port stays under that license (text: licenses/LGPL-2.1.txt).
 
 #![forbid(unsafe_code)]
 

@@ -10,6 +10,11 @@
 //! the longest increasing subsequence is computed over `line2` alone
 //! ([`binary_search`]); and an *anchor* pins its position in that sequence,
 //! which is why [`find_longest_common_sequence`] carries `anchor_i`.
+//!
+//! Ported from LibXDiff by Davide Libenzi (File Differential Library),
+//! Copyright (C) 2003-2016 Davide Libenzi, Johannes E. Schindelin. LibXDiff
+//! is LGPL-2.1-or-later, and this port stays under that license (text:
+//! licenses/LGPL-2.1.txt).
 
 #![forbid(unsafe_code)]
 
