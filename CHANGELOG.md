@@ -61,8 +61,12 @@ and this project adheres to [CalVer](https://calver.org/).
 - `vim.mpack.encode()` no longer aborts the editor on a number over 2^53, on
   `math.huge` or on a NaN, and no longer drops the high half of a negative
   integer larger than 2^32 (which decoded back as a different number).
+- A `vim.mpack.Packer({ ext = ... })` no longer aborts the editor when it
+  encodes a table whose metatable has no handler in the ext table.
 - `vim.json.encode()` called from inside a metamethod of the value it is
   encoding no longer corrupts the document its caller was building.
+- `vim.diff()` with a negative `ctxlen` no longer answers a hunk header that
+  contradicts the hunk body; the count is clamped at zero.
 
 ## [2026.08.06-eb75350b02]
 
