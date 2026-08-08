@@ -87,7 +87,7 @@ use crate::src::nvim::types::{
 };
 use crate::src::nvim::ui::{ui_flush, ui_has};
 use crate::src::nvim::undo::bufIsChanged;
-use crate::src::nvim::version::Versions;
+use crate::src::nvim::version::min_vim_version_name;
 
 // The carve of the transpiled module; see each child's docs.
 mod block0;
@@ -336,7 +336,7 @@ unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhd
                 (&raw mut (*b0p).b0_version).cast::<::core::ffi::c_char>(),
                 c"VIM ".as_ptr(),
             ),
-            *Versions.ptr().cast::<*mut ::core::ffi::c_char>(),
+            min_vim_version_name().as_ptr(),
             6,
         );
         b0_store_number(

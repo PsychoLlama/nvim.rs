@@ -91,7 +91,7 @@ use crate::src::nvim::types::{
     typval_T, typval_vval_union, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
     var_flavour_T, win_T, xfmark_T, yankreg_T,
 };
-use crate::src::nvim::version::longVersion;
+use crate::src::nvim::version::LONG_VERSION;
 
 // The carve of the transpiled module; see each child's docs.
 mod file;

@@ -38,7 +38,7 @@ use crate::src::nvim::window::{
     check_can_set_curbuf_forceit, goto_tabpage_tp, lastwin_nofloating, tabpage_index,
     valid_tabpage, win_close, win_enter, win_move_after, win_split, win_valid,
 };
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
 /// Constants the transpiler copied in from the headers this module includes.
@@ -596,17 +596,11 @@ pub unsafe fn ex_args(mut eap: *mut exarg_T) {
         if argcount() <= 0 {
             return;
         }
-        let mut items: *mut *mut c_char =
-            xmalloc(size_of::<*mut c_char>().wrapping_mul(argcount() as size_t))
-                as *mut *mut c_char;
         gotocmdline(true);
-        let mut i: c_int = 0;
-        while i < argcount() {
-            *items.offset(i as isize) = arg_name(i);
-            i += 1;
-        }
-        list_in_columns(items, argcount(), (*curwin.get()).w_arg_idx);
-        xfree(items as *mut c_void);
+        let items: Vec<&CStr> = (0..argcount())
+            .map(|i| CStr::from_ptr(arg_name(i)))
+            .collect();
+        list_in_columns(&items, (*curwin.get()).w_arg_idx);
         return;
     }
     if (*eap).cmdidx as c_int == CMD_arglocal as c_int {

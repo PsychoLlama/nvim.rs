@@ -234,10 +234,7 @@ impl Writing {
             let mut header = DictBuf::<5>::new();
             header
                 .insert(c"generator", Object::string(static_cstring(c"nvim")))
-                .insert(
-                    c"version",
-                    Object::string(cstr_as_string(longVersion.get())),
-                )
+                .insert(c"version", Object::string(static_cstring(LONG_VERSION)))
                 .insert(
                     c"max_kbyte",
                     Object::integer(self.limits.max_kbyte as Integer),
