@@ -33,7 +33,6 @@ use crate::src::nvim::indent::{
 };
 use crate::src::nvim::indent_c::get_c_indent;
 use crate::src::nvim::keycodes::{Ctrl_V, KE_COMMAND, KE_LUA};
-use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::main::{
     IObuff, Insstart, KeyTyped, State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect,
     VIsual_select, VIsual_select_reg, ai_col, bangredo, can_si, cmdmod, curbuf,

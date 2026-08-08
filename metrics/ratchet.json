@@ -1,5 +1,5 @@
 {
-  "internal_exports": 35,
+  "internal_exports": 34,
   "files_without_forbid_unsafe": 910,
   "files_without_deny_unsafe_op": 152,
   "files": {
@@ -592,7 +592,7 @@
     "crates/nvim/src/nvim/ops/addsub.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/ops/block.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/ops/case.rs": {"unsafe": 3},
-    "crates/nvim/src/nvim/ops/count.rs": {"no_mangle": 1, "unsafe": 3},
+    "crates/nvim/src/nvim/ops/count.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/ops/delete.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/ops/external.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/ops/insert.rs": {"unsafe": 7},

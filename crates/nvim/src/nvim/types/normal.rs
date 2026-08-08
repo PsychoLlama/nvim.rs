@@ -44,3 +44,49 @@ pub struct oparg_T {
     pub prev_count0: ::core::ffi::c_int,
     pub excl_tr_ws: bool,
 }
+
+impl oparg_T {
+    /// All zeros — no pending operator, an empty charwise region.
+    ///
+    /// This is what `clear_oparg` writes, and what a caller that only wants
+    /// `block_prep`'s geometry (`cursor_pos_info`, the register API) starts
+    /// from before filling in the two vcols.
+    pub const ZERO: Self = oparg_T {
+        op_type: 0,
+        regname: 0,
+        motion_type: 0,
+        motion_force: 0,
+        use_reg_one: false,
+        inclusive: false,
+        end_adjusted: false,
+        start: pos_T {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
+        },
+        end: pos_T {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
+        },
+        cursor_start: pos_T {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
+        },
+        line_count: 0,
+        empty: false,
+        is_VIsual: false,
+        start_vcol: 0,
+        end_vcol: 0,
+        prev_opcount: 0,
+        prev_count0: 0,
+        excl_tr_ws: false,
+    };
+}
+
+impl Default for oparg_T {
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
