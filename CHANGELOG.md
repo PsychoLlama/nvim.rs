@@ -26,6 +26,11 @@ and this project adheres to [CalVer](https://calver.org/).
   text, opening a new line with its indent and comment leader, and the
   notifications an edit sends to the display, the extmark tree and the
   buffer-update callbacks.
+- Rewrote the operators, covering `d`, `c`, `y`, `<`/`>`, `J`/`gJ`, `r`,
+  `g~`/`gu`/`gU`/`g?`, blockwise `I`/`A`, CTRL-A/CTRL-X, `!`, `=`, `g@` and
+  `g CTRL-G`, the blockwise geometry they share, and the dispatcher that
+  turns an operator plus a motion or a Visual selection into the region
+  each one is given.
 - Rewrote text formatting and the text objects, covering auto-wrap at
   `'textwidth'`, `gq`/`gw` and `'formatexpr'`, the `'formatoptions'` and
   `'comments'` rules that decide where a paragraph ends, every `i`/`a`
