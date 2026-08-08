@@ -63,7 +63,6 @@
     "crates/nvim/src/nvim/ops/addsub.rs": 7,
     "crates/nvim/src/nvim/ops/block.rs": 1,
     "crates/nvim/src/nvim/ops/count.rs": 20,
-    "crates/nvim/src/nvim/ops/join.rs": 4,
     "crates/nvim/src/nvim/ops/pending.rs": 2,
     "crates/nvim/src/nvim/optionstr/check.rs": 1,
     "crates/nvim/src/nvim/optionstr/flags.rs": 1,

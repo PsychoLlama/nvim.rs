@@ -67,7 +67,7 @@ use crate::src::nvim::option::{
 use crate::src::nvim::options::{kOptBoFlagOperator, kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, abort, gettext, memmove, memset, ngettext, strcpy, strlen,
+    __ctype_b_loc, abort, gettext, memmove, memset, ngettext, strcpy, strlen,
 };
 use crate::src::nvim::plines::linetabsize_str;
 use crate::src::nvim::plines::{getvcol, getvcols, getvvcol, init_charsize_arg, win_charsize};

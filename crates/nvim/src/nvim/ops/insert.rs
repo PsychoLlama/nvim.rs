@@ -1,425 +1,529 @@
-//! `I` and `A` in blockwise Visual mode, and `c` everywhere.
+//! Blockwise `I` and `A`, and `c` everywhere.
 //!
-//! `op_insert` is the blockwise pair: it enters Insert mode once, at the
-//! block's top line, and afterwards replays what was typed into every other
-//! line through `block_insert`.  That "afterwards" is why the function is
-//! long -- it has to reconstruct what the user typed by diffing the line
-//! against a saved copy, and cope with the insert having changed the line's
-//! length, moved the cursor, or been abandoned.  `op_change` is `c`: delete
-//! the region, then start an insert, with the same blockwise replay on the
-//! way out.  `adjust_cursor_eol` is the shared tail that puts the cursor
-//! back on a legal column.
+//! All three run Insert mode *once*, on the block's first line, and then copy
+//! what was typed into the rest of the block. Nothing records what was typed:
+//! it is recovered afterwards by comparing the first line's length against
+//! [`BlockInsertPre`], measured just before `edit()` ran -- which is why both
+//! [`op_insert`] and [`op_change`] are a "before" half, an `edit()`, and an
+//! "after" half that has to cope with everything Insert mode may have done in
+//! between.
+//!
+//! The awkward cases the after-half exists for:
+//!
+//! * 'autoindent' or `=` may have changed the *indent* of the first line, so
+//!   the block's column has moved and the indent itself must not be counted as
+//!   inserted text;
+//! * the user may have moved the cursor before typing, so the insert did not
+//!   start where the block did (`b_op_start_orig` against `oap.start`);
+//! * `A` on a block opened with `$` has no fixed right edge, so the insert's
+//!   own start column is the only reference there is;
+//! * Insert mode may have been left with CTRL-C (`got_int`) or on another
+//!   line, in which case there is nothing sensible to replay and the operator
+//!   quietly stops.
+//!
+//! [`adjust_cursor_eol`] is the shared tail that puts the cursor back on a
+//! legal column afterwards.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use ::core::ffi::{c_char, c_int, c_uint, c_void};
+
 use super::*;
 
-pub unsafe extern "C" fn op_insert(mut oap: *mut oparg_T, mut count1: ::core::ffi::c_int) {
+/// The first line, measured just before Insert mode runs.
+///
+/// [`op_insert`] recovers what was typed by measuring the line again
+/// afterwards and subtracting; everything here exists so that the difference
+/// is the *text* and not an indent change.
+struct BlockInsertPre {
+    /// Indent of the first line in bytes.
+    ind_pre_col: colnr_T,
+    /// Indent of the first line in screen columns.
+    ind_pre_vcol: c_int,
+    /// Bytes of the first line from the block's column onwards (past the
+    /// block's text as well, for `A`).
+    pre_textlen: c_int,
+}
+
+/// Blockwise `I` and `A`.
+///
+/// # Safety
+/// `oap` must point to a live `oparg_T` describing a region of the current
+/// buffer.
+pub(crate) unsafe fn op_insert(oap: *mut oparg_T, count1: c_int) {
     unsafe {
-        let mut pre_textlen: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut ind_pre_col: colnr_T = 0 as colnr_T;
-        let mut ind_pre_vcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut bd: block_def = block_def {
-            startspaces: 0,
-            endspaces: 0,
-            textlen: 0,
-            textstart: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            textcol: 0,
-            start_vcol: 0,
-            end_vcol: 0,
-            is_short: 0,
-            is_MAX: 0,
-            is_oneChar: 0,
-            pre_whitesp: 0,
-            pre_whitesp_c: 0,
-            end_char_vcols: 0,
-            start_char_vcols: 0,
-        };
-        bd.is_MAX =
-            ((*curwin.get()).w_curswant == MAXCOL as ::core::ffi::c_int) as ::core::ffi::c_int;
+        let mut bd = block_def::ZERO;
+        // `edit()` changes `w_curswant`; record it now, for `A`.
+        bd.is_MAX = c_int::from((*curwin.get()).w_curswant == MAXCOL);
+
+        // The Visual block is still marked; get rid of it now.
         (*curwin.get()).w_cursor.lnum = (*oap).start.lnum;
         redraw_curbuf_later(UPD_INVERTED);
         update_screen();
-        if (*oap).motion_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
-            if (*curwin.get()).w_cursor.coladd > 0 as ::core::ffi::c_int {
-                let mut old_ve_flags: ::core::ffi::c_uint =
-                    (*curwin.get()).w_onebuf_opt.wo_ve_flags;
-                if u_save_cursor() == FAIL {
-                    return;
-                }
-                (*curwin.get()).w_onebuf_opt.wo_ve_flags =
-                    kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint;
-                coladvance_force(if (*oap).op_type == OP_APPEND {
-                    (*oap).end_vcol + 1 as colnr_T
-                } else {
-                    getviscol()
-                });
-                if (*oap).op_type == OP_APPEND {
-                    (*curwin.get()).w_cursor.col -= 1;
-                }
-                (*curwin.get()).w_onebuf_opt.wo_ve_flags = old_ve_flags;
-            }
-            block_prep(oap, &raw mut bd, (*oap).start.lnum, true_0 != 0);
-            ind_pre_col = getwhitecols_curline() as colnr_T;
-            ind_pre_vcol = get_indent();
-            pre_textlen = (ml_get_len((*oap).start.lnum) - bd.textcol) as ::core::ffi::c_int;
-            if (*oap).op_type == OP_APPEND {
-                pre_textlen -= bd.textlen;
+
+        let mut pre = BlockInsertPre {
+            ind_pre_col: 0,
+            ind_pre_vcol: 0,
+            pre_textlen: 0,
+        };
+        if (*oap).motion_type == kMTBlockWise {
+            match measure_before_insert(oap, &mut bd) {
+                Some(measured) => pre = measured,
+                None => return,
             }
         }
-        if (*oap).op_type == OP_APPEND {
-            if (*oap).motion_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int
-                && (*curwin.get()).w_cursor.coladd == 0 as ::core::ffi::c_int
-            {
-                (*curwin.get()).w_set_curswant = true_0;
-                while *get_cursor_pos_ptr() as ::core::ffi::c_int != NUL
-                    && (*curwin.get()).w_cursor.col < bd.textcol as ::core::ffi::c_int + bd.textlen
-                {
-                    (*curwin.get()).w_cursor.col += 1;
-                }
-                if bd.is_short != 0 && bd.is_MAX == 0 {
-                    if u_save_cursor() == FAIL {
-                        return;
-                    }
-                    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    while i < bd.endspaces {
-                        ins_char(' ' as ::core::ffi::c_int);
-                        i += 1;
-                    }
-                    bd.textlen += bd.endspaces;
-                }
-            } else {
-                (*curwin.get()).w_cursor = (*oap).end;
-                check_cursor_col(curwin.get());
-                if !(*ml_get((*curwin.get()).w_cursor.lnum) as ::core::ffi::c_int == NUL)
-                    && (*oap).start_vcol != (*oap).end_vcol
-                {
-                    inc_cursor();
-                }
-            }
+
+        if (*oap).op_type == OP_APPEND && !move_cursor_for_append(oap, &mut bd) {
+            return;
         }
-        let mut t1: pos_T = (*oap).start;
-        let start_insert: pos_T = (*curwin.get()).w_cursor;
-        edit(NUL, false_0 != 0, count1);
+
+        let t1 = (*oap).start;
+        let start_insert = (*curwin.get()).w_cursor;
+        edit(NUL, false, count1);
+
+        // When a TAB was inserted and the characters in front of it were
+        // folded into it too, the cursor's column may have been *reduced*.
         if t1.lnum == (*curbuf.get()).b_op_start_orig.lnum
-            && lt((*curbuf.get()).b_op_start_orig, t1) as ::core::ffi::c_int != 0
+            && lt((*curbuf.get()).b_op_start_orig, t1)
         {
             (*oap).start = (*curbuf.get()).b_op_start_orig;
         }
-        if (*curwin.get()).w_cursor.lnum != (*oap).start.lnum
-            || got_int.get() as ::core::ffi::c_int != 0
-        {
+
+        // The user moved off the line, or left Insert mode with CTRL-C: there
+        // is nothing to replay.
+        if (*curwin.get()).w_cursor.lnum != (*oap).start.lnum || got_int.get() {
             return;
         }
-        if (*oap).motion_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
-            let mut ind_post_vcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            let mut bd2: block_def = block_def {
-                startspaces: 0,
-                endspaces: 0,
-                textlen: 0,
-                textstart: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                textcol: 0,
-                start_vcol: 0,
-                end_vcol: 0,
-                is_short: 0,
-                is_MAX: 0,
-                is_oneChar: 0,
-                pre_whitesp: 0,
-                pre_whitesp_c: 0,
-                end_char_vcols: 0,
-                start_char_vcols: 0,
-            };
-            let mut did_indent: bool = false_0 != 0;
-            let mut ind_post_col: colnr_T = getwhitecols_curline() as colnr_T;
-            if (*curbuf.get()).b_op_start.col > ind_pre_col && ind_post_col > ind_pre_col {
-                bd.textcol += ind_post_col - ind_pre_col;
-                ind_post_vcol = get_indent();
-                bd.start_vcol += ind_post_vcol - ind_pre_vcol;
-                did_indent = true_0 != 0;
-            }
-            if (*oap).start.lnum == (*curbuf.get()).b_op_start_orig.lnum
-                && bd.is_MAX == 0
-                && !did_indent
-            {
-                let t: ::core::ffi::c_int = getviscol2(
-                    (*curbuf.get()).b_op_start_orig.col,
-                    (*curbuf.get()).b_op_start_orig.coladd,
-                );
-                if (*oap).op_type == OP_INSERT
-                    && (*oap).start.col + (*oap).start.coladd
-                        != (*curbuf.get()).b_op_start_orig.col
-                            + (*curbuf.get()).b_op_start_orig.coladd
-                {
-                    (*oap).start.col = (*curbuf.get()).b_op_start_orig.col;
-                    pre_textlen -= (t as colnr_T - (*oap).start_vcol) as ::core::ffi::c_int;
-                    (*oap).start_vcol = t as colnr_T;
-                } else if (*oap).op_type == OP_APPEND
-                    && (*oap).start.col + (*oap).start.coladd
-                        >= (*curbuf.get()).b_op_start_orig.col
-                            + (*curbuf.get()).b_op_start_orig.coladd
-                {
-                    (*oap).start.col = (*curbuf.get()).b_op_start_orig.col;
-                    pre_textlen += bd.textlen;
-                    pre_textlen -= (t as colnr_T - (*oap).start_vcol) as ::core::ffi::c_int;
-                    (*oap).start_vcol = t as colnr_T;
-                    (*oap).op_type = OP_INSERT;
-                }
-            }
-            if did_indent as ::core::ffi::c_int != 0
-                && bd.textcol - ind_post_col > 0 as ::core::ffi::c_int
-            {
-                (*oap).start.col += ind_post_col - ind_pre_col;
-                (*oap).start_vcol += ind_post_vcol - ind_pre_vcol;
-                (*oap).end.col += ind_post_col - ind_pre_col;
-                (*oap).end_vcol += ind_post_vcol - ind_pre_vcol;
-            }
-            block_prep(oap, &raw mut bd2, (*oap).start.lnum, true_0 != 0);
-            if did_indent as ::core::ffi::c_int != 0
-                && bd.textcol - ind_post_col > 0 as ::core::ffi::c_int
-            {
-                (*oap).start.col -= ind_post_col - ind_pre_col;
-                (*oap).start_vcol -= ind_post_vcol - ind_pre_vcol;
-                (*oap).end.col -= ind_post_col - ind_pre_col;
-                (*oap).end_vcol -= ind_post_vcol - ind_pre_vcol;
-            }
-            if bd.is_MAX == 0 || bd2.textlen < bd.textlen {
-                if (*oap).op_type == OP_APPEND {
-                    pre_textlen += bd2.textlen - bd.textlen;
-                    if bd2.endspaces != 0 {
-                        bd2.textlen -= 1;
-                    }
-                }
-                bd.textcol = bd2.textcol;
-                bd.textlen = bd2.textlen;
-            }
-            let mut firstline: *mut ::core::ffi::c_char = ml_get((*oap).start.lnum);
-            let mut len: colnr_T = ml_get_len((*oap).start.lnum);
-            let mut add: colnr_T = bd.textcol;
-            let mut offset: colnr_T = 0 as colnr_T;
-            if (*oap).op_type == OP_APPEND {
-                add += bd.textlen;
-                if bd.is_MAX != 0
-                    && start_insert.lnum == (*Insstart.ptr()).lnum
-                    && start_insert.col > (*Insstart.ptr()).col
-                {
-                    offset = start_insert.col - (*Insstart.ptr()).col;
-                    add -= offset;
-                    if (*oap).end_vcol > offset {
-                        (*oap).end_vcol -= offset as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-                    } else {
-                        return;
-                    }
-                }
-            }
-            add = if add < len { add } else { len };
-            firstline = firstline.offset(add as isize);
-            len -= add;
-            let mut ins_len: ::core::ffi::c_int =
-                len as ::core::ffi::c_int - pre_textlen - offset as ::core::ffi::c_int;
-            if pre_textlen >= 0 as ::core::ffi::c_int && ins_len > 0 as ::core::ffi::c_int {
-                let mut ins_text: *mut ::core::ffi::c_char =
-                    xmemdupz(firstline as *const ::core::ffi::c_void, ins_len as size_t)
-                        as *mut ::core::ffi::c_char;
-                if u_save((*oap).start.lnum, (*oap).end.lnum + 1 as linenr_T) == OK {
-                    block_insert(
-                        oap,
-                        ins_text,
-                        ins_len as size_t,
-                        (*oap).op_type == OP_INSERT,
-                        &raw mut bd,
-                    );
-                }
-                (*curwin.get()).w_cursor.col = (*oap).start.col;
-                check_cursor(curwin.get());
-                xfree(ins_text as *mut ::core::ffi::c_void);
-            }
+
+        if (*oap).motion_type == kMTBlockWise {
+            replay_insert(oap, &mut bd, &mut pre, start_insert);
         }
     }
 }
 
-pub unsafe extern "C" fn op_change(mut oap: *mut oparg_T) -> ::core::ffi::c_int {
+/// The blockwise half of `op_insert`'s prologue: put the cursor on a real
+/// column and measure the first line.
+///
+/// `None` means undo could not be prepared and the operator must stop.
+///
+/// # Safety
+/// `oap` must point to a live blockwise `oparg_T`.
+unsafe fn measure_before_insert(oap: *mut oparg_T, bd: &mut block_def) -> Option<BlockInsertPre> {
     unsafe {
-        let mut pre_textlen: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut pre_indent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut firstline: *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut bd: block_def = block_def {
-            startspaces: 0,
-            endspaces: 0,
-            textlen: 0,
-            textstart: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            textcol: 0,
-            start_vcol: 0,
-            end_vcol: 0,
-            is_short: 0,
-            is_MAX: 0,
-            is_oneChar: 0,
-            pre_whitesp: 0,
-            pre_whitesp_c: 0,
-            end_char_vcols: 0,
-            start_char_vcols: 0,
-        };
-        let mut l: colnr_T = (*oap).start.col;
-        if (*oap).motion_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int {
-            l = 0 as ::core::ffi::c_int as colnr_T;
+        // With 'virtualedit' the spaces have to go in before `block_prep`
+        // runs. When only "block" is set, virtual edit is already off here,
+        // but `coladvance_force` still needs it -- and it reads the
+        // *window-local* 'virtualedit', so that is what gets overridden.
+        if (*curwin.get()).w_cursor.coladd > 0 {
+            let old_ve_flags: c_uint = (*curwin.get()).w_onebuf_opt.wo_ve_flags;
+            if u_save_cursor() == FAIL {
+                return None;
+            }
+            (*curwin.get()).w_onebuf_opt.wo_ve_flags = kOptVeFlagAll as c_uint;
+            coladvance_force(if (*oap).op_type == OP_APPEND {
+                (*oap).end_vcol + 1
+            } else {
+                getviscol()
+            });
+            if (*oap).op_type == OP_APPEND {
+                (*curwin.get()).w_cursor.col -= 1;
+            }
+            (*curwin.get()).w_onebuf_opt.wo_ve_flags = old_ve_flags;
+        }
+
+        block_prep(oap, &raw mut *bd, (*oap).start.lnum, true);
+        let mut pre_textlen = ml_get_len((*oap).start.lnum) - bd.textcol;
+        if (*oap).op_type == OP_APPEND {
+            pre_textlen -= bd.textlen;
+        }
+        Some(BlockInsertPre {
+            ind_pre_col: getwhitecols_curline() as colnr_T,
+            ind_pre_vcol: get_indent(),
+            pre_textlen,
+        })
+    }
+}
+
+/// Put the cursor where `A` should start typing; false means give up.
+///
+/// # Safety
+/// `oap` must point to a live `oparg_T`; `bd` must describe its first line.
+unsafe fn move_cursor_for_append(oap: *mut oparg_T, bd: &mut block_def) -> bool {
+    unsafe {
+        if (*oap).motion_type == kMTBlockWise && (*curwin.get()).w_cursor.coladd == 0 {
+            // To the character right of the block.
+            (*curwin.get()).w_set_curswant = true_0;
+            while *get_cursor_pos_ptr() as c_int != NUL
+                && (*curwin.get()).w_cursor.col < bd.textcol + bd.textlen
+            {
+                (*curwin.get()).w_cursor.col += 1;
+            }
+            if bd.is_short != 0 && bd.is_MAX == 0 {
+                // The first line was too short: pad it out and say so in `bd`.
+                if u_save_cursor() == FAIL {
+                    return false;
+                }
+                for _ in 0..bd.endspaces {
+                    ins_char(' ' as c_int);
+                }
+                bd.textlen += bd.endspaces;
+            }
+        } else {
+            (*curwin.get()).w_cursor = (*oap).end;
+            check_cursor_col(curwin.get());
+            // Works just like `i` on the next character.
+            if *ml_get((*curwin.get()).w_cursor.lnum) as c_int != NUL
+                && (*oap).start_vcol != (*oap).end_vcol
+            {
+                inc_cursor();
+            }
+        }
+        true
+    }
+}
+
+/// Copy what was typed on the block's first line into the rest of the block.
+///
+/// Everything before the `block_insert` call is re-measuring: the indent may
+/// have changed, the insert may not have started where the block did, and with
+/// `$` the block has no right edge to measure against.
+///
+/// # Safety
+/// `oap` must point to a live blockwise `oparg_T` whose first line is the
+/// cursor line.
+unsafe fn replay_insert(
+    oap: *mut oparg_T,
+    bd: &mut block_def,
+    pre: &mut BlockInsertPre,
+    start_insert: pos_T,
+) {
+    unsafe {
+        // If indenting kicked in the first line has moved -- but only count it
+        // when the indent actually grew.
+        let mut ind_post_vcol = 0;
+        let mut did_indent = false;
+        let ind_post_col = getwhitecols_curline() as colnr_T;
+        if (*curbuf.get()).b_op_start.col > pre.ind_pre_col && ind_post_col > pre.ind_pre_col {
+            bd.textcol += ind_post_col - pre.ind_pre_col;
+            ind_post_vcol = get_indent();
+            bd.start_vcol += ind_post_vcol - pre.ind_pre_vcol;
+            did_indent = true;
+        }
+
+        // The user may have moved the cursor before typing; try to move the
+        // block to match. Only when the difference is not the indent's doing.
+        if (*oap).start.lnum == (*curbuf.get()).b_op_start_orig.lnum
+            && bd.is_MAX == 0
+            && !did_indent
+        {
+            let t = getviscol2(
+                (*curbuf.get()).b_op_start_orig.col,
+                (*curbuf.get()).b_op_start_orig.coladd,
+            );
+            let orig_at =
+                (*curbuf.get()).b_op_start_orig.col + (*curbuf.get()).b_op_start_orig.coladd;
+            let block_at = (*oap).start.col + (*oap).start.coladd;
+
+            if (*oap).op_type == OP_INSERT && block_at != orig_at {
+                (*oap).start.col = (*curbuf.get()).b_op_start_orig.col;
+                pre.pre_textlen -= t - (*oap).start_vcol;
+                (*oap).start_vcol = t;
+            } else if (*oap).op_type == OP_APPEND && block_at >= orig_at {
+                (*oap).start.col = (*curbuf.get()).b_op_start_orig.col;
+                // Back to what `pre_textlen` would have been for an insert.
+                pre.pre_textlen += bd.textlen;
+                pre.pre_textlen -= t - (*oap).start_vcol;
+                (*oap).start_vcol = t;
+                (*oap).op_type = OP_INSERT;
+            }
+        }
+
+        // Spaces and tabs in the indent may have turned into other spaces and
+        // tabs, so measure the starting column again. Not with `$`, where the
+        // end of the line has moved anyway.
+        let shift_for_indent = did_indent && bd.textcol - ind_post_col > 0;
+        if shift_for_indent {
+            (*oap).start.col += ind_post_col - pre.ind_pre_col;
+            (*oap).start_vcol += ind_post_vcol - pre.ind_pre_vcol;
+            (*oap).end.col += ind_post_col - pre.ind_pre_col;
+            (*oap).end_vcol += ind_post_vcol - pre.ind_pre_vcol;
+        }
+        let mut bd2 = block_def::ZERO;
+        block_prep(oap, &raw mut bd2, (*oap).start.lnum, true);
+        if shift_for_indent {
+            // `oap` is used below, so put it back.
+            (*oap).start.col -= ind_post_col - pre.ind_pre_col;
+            (*oap).start_vcol -= ind_post_vcol - pre.ind_pre_vcol;
+            (*oap).end.col -= ind_post_col - pre.ind_pre_col;
+            (*oap).end_vcol -= ind_post_vcol - pre.ind_pre_vcol;
+        }
+        if bd.is_MAX == 0 || bd2.textlen < bd.textlen {
+            if (*oap).op_type == OP_APPEND {
+                pre.pre_textlen += bd2.textlen - bd.textlen;
+                if bd2.endspaces != 0 {
+                    bd2.textlen -= 1;
+                }
+            }
+            bd.textcol = bd2.textcol;
+            bd.textlen = bd2.textlen;
+        }
+
+        // A later `ml_get` flushes the line data, so the inserted text has to
+        // be copied out before anything else touches the buffer.
+        let mut firstline = ml_get((*oap).start.lnum);
+        let mut len = ml_get_len((*oap).start.lnum);
+        let mut add = bd.textcol;
+        // How far the cursor was moved during the insert.
+        let mut offset: colnr_T = 0;
+        if (*oap).op_type == OP_APPEND {
+            add += bd.textlen;
+            // The cursor may have been moved during the insert when `$` was
+            // used, and then the block has no right edge to measure from.
+            if bd.is_MAX != 0
+                && start_insert.lnum == (*Insstart.ptr()).lnum
+                && start_insert.col > (*Insstart.ptr()).col
+            {
+                offset = start_insert.col - (*Insstart.ptr()).col;
+                add -= offset;
+                if (*oap).end_vcol <= offset {
+                    // Moved outside the Visual block; nothing sensible to do.
+                    return;
+                }
+                (*oap).end_vcol -= offset + 1;
+            }
+        }
+        // A short line: point at the NUL.
+        add = add.min(len);
+        firstline = firstline.offset(add as isize);
+        len -= add;
+
+        let ins_len = len - pre.pre_textlen - offset;
+        if pre.pre_textlen >= 0 && ins_len > 0 {
+            let ins_text = xmemdupz(firstline as *const c_void, ins_len as size_t) as *mut c_char;
+            if u_save((*oap).start.lnum, (*oap).end.lnum + 1) == OK {
+                block_insert(
+                    oap,
+                    ins_text,
+                    ins_len as size_t,
+                    (*oap).op_type == OP_INSERT,
+                    &raw mut *bd,
+                );
+            }
+            (*curwin.get()).w_cursor.col = (*oap).start.col;
+            check_cursor(curwin.get());
+            xfree(ins_text as *mut c_void);
+        }
+    }
+}
+
+/// `c` -- delete the region, then insert.
+///
+/// Answers true when `edit()` returned because of a CTRL-O command.
+///
+/// # Safety
+/// `oap` must point to a live `oparg_T` describing a region of the current
+/// buffer.
+pub(crate) unsafe fn op_change(oap: *mut oparg_T) -> c_int {
+    unsafe {
+        let mut l = (*oap).start.col;
+        if (*oap).motion_type == kMTLineWise {
+            l = 0;
+            // Like opening a new line: do smart indent.
             can_si.set(may_do_si());
         }
+
+        // Delete the region first. In an empty buffer there is nothing to
+        // delete, only undo to prepare.
         if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
             if u_save_cursor() == FAIL {
-                return false_0;
+                return 0;
             }
         } else if op_delete(oap) == FAIL {
-            return false_0;
+            return 0;
         }
+
         if l > (*curwin.get()).w_cursor.col
-            && !(*ml_get((*curwin.get()).w_cursor.lnum) as ::core::ffi::c_int == NUL)
-            && virtual_op.get() as u64 == 0
+            && *ml_get((*curwin.get()).w_cursor.lnum) as c_int != NUL
+            && virtual_op.get() == 0
         {
             inc_cursor();
         }
-        if (*oap).motion_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
-            if virtual_op.get() as ::core::ffi::c_int != 0
-                && ((*curwin.get()).w_cursor.coladd > 0 as ::core::ffi::c_int
-                    || gchar_cursor() == NUL)
+
+        let mut bd = block_def::ZERO;
+        let mut pre_textlen = 0;
+        let mut pre_indent = 0;
+        if (*oap).motion_type == kMTBlockWise {
+            // Add the spaces before measuring the line's length.
+            if virtual_op.get() != 0
+                && ((*curwin.get()).w_cursor.coladd > 0 || gchar_cursor() == NUL)
             {
                 coladvance_force(getviscol());
             }
-            firstline = ml_get((*oap).start.lnum);
-            pre_textlen = ml_get_len((*oap).start.lnum) as ::core::ffi::c_int;
-            pre_indent = getwhitecols(firstline) as ::core::ffi::c_int;
+            let firstline = ml_get((*oap).start.lnum);
+            pre_textlen = ml_get_len((*oap).start.lnum);
+            pre_indent = getwhitecols(firstline) as c_int;
             bd.textcol = (*curwin.get()).w_cursor.col;
         }
-        if (*oap).motion_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int {
+
+        if (*oap).motion_type == kMTLineWise {
             fix_indent();
         }
-        let save_finish_op: bool = finish_op.get();
-        finish_op.set(false_0 != 0);
-        let mut retval: ::core::ffi::c_int =
-            edit(NUL, false_0 != 0, 1 as ::core::ffi::c_int) as ::core::ffi::c_int;
+
+        // Reset `finish_op` now: it must not be set inside `edit()`.
+        let save_finish_op = finish_op.get();
+        finish_op.set(false);
+        let retval = c_int::from(edit(NUL, false, 1));
         finish_op.set(save_finish_op);
-        if (*oap).motion_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int
+
+        // Copy the new text to the rest of a Visual block. Not when Insert
+        // mode ended with CTRL-C.
+        if (*oap).motion_type == kMTBlockWise
             && (*oap).start.lnum != (*oap).end.lnum
             && !got_int.get()
         {
-            firstline = ml_get((*oap).start.lnum);
-            if bd.textcol > pre_indent {
-                let mut new_indent: ::core::ffi::c_int =
-                    getwhitecols(firstline) as ::core::ffi::c_int;
-                pre_textlen += new_indent - pre_indent;
-                bd.textcol += new_indent - pre_indent;
-            }
-            let mut ins_len: ::core::ffi::c_int = ml_get_len((*oap).start.lnum) - pre_textlen;
-            if ins_len > 0 as ::core::ffi::c_int {
-                let mut ins_text: *mut ::core::ffi::c_char =
-                    xmalloc((ins_len as size_t).wrapping_add(1 as size_t))
-                        as *mut ::core::ffi::c_char;
-                xmemcpyz(
-                    ins_text as *mut ::core::ffi::c_void,
-                    firstline.offset(bd.textcol as isize) as *const ::core::ffi::c_void,
-                    ins_len as size_t,
-                );
-                let mut linenr: linenr_T = (*oap).start.lnum + 1 as linenr_T;
-                while linenr <= (*oap).end.lnum {
-                    block_prep(oap, &raw mut bd, linenr, true_0 != 0);
-                    if bd.is_short == 0 || virtual_op.get() as ::core::ffi::c_int != 0 {
-                        let mut vpos: pos_T = pos_T {
-                            lnum: 0,
-                            col: 0,
-                            coladd: 0,
-                        };
-                        if bd.is_short != 0 {
-                            vpos.lnum = linenr;
-                            getvpos(curwin.get(), &raw mut vpos, (*oap).start_vcol);
-                        } else {
-                            vpos.coladd = 0 as ::core::ffi::c_int as colnr_T;
-                        }
-                        let mut oldp: *mut ::core::ffi::c_char = ml_get(linenr);
-                        let mut newp: *mut ::core::ffi::c_char = xmalloc(
-                            (ml_get_len(linenr) as size_t)
-                                .wrapping_add(vpos.coladd as size_t)
-                                .wrapping_add(ins_len as size_t)
-                                .wrapping_add(1 as size_t),
-                        )
-                            as *mut ::core::ffi::c_char;
-                        memmove(
-                            newp as *mut ::core::ffi::c_void,
-                            oldp as *const ::core::ffi::c_void,
-                            bd.textcol as size_t,
-                        );
-                        let mut newlen: ::core::ffi::c_int = bd.textcol as ::core::ffi::c_int;
-                        memset(
-                            newp.offset(newlen as isize) as *mut ::core::ffi::c_void,
-                            ' ' as ::core::ffi::c_int,
-                            vpos.coladd as size_t,
-                        );
-                        newlen += vpos.coladd as ::core::ffi::c_int;
-                        memmove(
-                            newp.offset(newlen as isize) as *mut ::core::ffi::c_void,
-                            ins_text as *const ::core::ffi::c_void,
-                            ins_len as size_t,
-                        );
-                        newlen += ins_len;
-                        strcpy(
-                            newp.offset(newlen as isize),
-                            oldp.offset(bd.textcol as isize),
-                        );
-                        ml_replace(linenr, newp, false_0 != 0);
-                        extmark_splice_cols(
-                            curbuf.get(),
-                            linenr as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                            bd.textcol,
-                            0 as colnr_T,
-                            vpos.coladd + ins_len as colnr_T,
-                            kExtmarkUndo,
-                        );
-                    }
-                    linenr += 1;
-                }
-                check_cursor(curwin.get());
-                changed_lines(
-                    curbuf.get(),
-                    (*oap).start.lnum + 1 as linenr_T,
-                    0 as colnr_T,
-                    (*oap).end.lnum + 1 as linenr_T,
-                    0 as linenr_T,
-                    true_0 != 0,
-                );
-                xfree(ins_text as *mut ::core::ffi::c_void);
-            }
+            replay_change(oap, &mut bd, pre_textlen, pre_indent);
         }
-        auto_format(false_0 != 0, true_0 != 0);
-        return retval;
+
+        auto_format(false, true);
+        retval
     }
 }
 
-pub unsafe extern "C" fn adjust_cursor_eol() {
+/// Copy what `c` inserted on the block's first line into the rest of the
+/// block.
+///
+/// # Safety
+/// `oap` must point to a live blockwise `oparg_T`; `bd.textcol` must be the
+/// column the insert started at.
+unsafe fn replay_change(
+    oap: *mut oparg_T,
+    bd: &mut block_def,
+    mut pre_textlen: c_int,
+    pre_indent: c_int,
+) {
     unsafe {
-        let mut cur_ve_flags: ::core::ffi::c_uint = get_ve_flags(curwin.get());
-        let adj_cursor: bool = (*curwin.get()).w_cursor.col > 0 as ::core::ffi::c_int
+        // Auto-indenting may have changed the indent. If the cursor was past
+        // the indent, that change is not part of the inserted text.
+        let firstline = ml_get((*oap).start.lnum);
+        if bd.textcol > pre_indent {
+            let new_indent = getwhitecols(firstline) as c_int;
+            pre_textlen += new_indent - pre_indent;
+            bd.textcol += new_indent - pre_indent;
+        }
+
+        let ins_len = ml_get_len((*oap).start.lnum) - pre_textlen;
+        if ins_len <= 0 {
+            return;
+        }
+
+        // A later `ml_get` flushes the line data, so take a copy first.
+        let ins_text = xmalloc(ins_len as size_t + 1) as *mut c_char;
+        xmemcpyz(
+            ins_text as *mut c_void,
+            firstline.offset(bd.textcol as isize) as *const c_void,
+            ins_len as size_t,
+        );
+
+        let mut linenr = (*oap).start.lnum + 1;
+        while linenr <= (*oap).end.lnum {
+            block_prep(oap, &raw mut *bd, linenr, true);
+            if bd.is_short == 0 || virtual_op.get() != 0 {
+                // When the block starts in virtual space, that offset is
+                // padding in front of the text.
+                let mut vpos = pos_T {
+                    lnum: linenr,
+                    col: 0,
+                    coladd: 0,
+                };
+                if bd.is_short != 0 {
+                    getvpos(curwin.get(), &raw mut vpos, (*oap).start_vcol);
+                }
+
+                let oldp = ml_get(linenr);
+                let newp = xmalloc(
+                    ml_get_len(linenr) as size_t + vpos.coladd as size_t + ins_len as size_t + 1,
+                ) as *mut c_char;
+                // Up to the block's column, then the pad, then the text.
+                memmove(
+                    newp as *mut c_void,
+                    oldp as *const c_void,
+                    bd.textcol as size_t,
+                );
+                let mut newlen = bd.textcol;
+                memset(
+                    newp.offset(newlen as isize) as *mut c_void,
+                    ' ' as c_int,
+                    vpos.coladd as size_t,
+                );
+                newlen += vpos.coladd;
+                memmove(
+                    newp.offset(newlen as isize) as *mut c_void,
+                    ins_text as *const c_void,
+                    ins_len as size_t,
+                );
+                newlen += ins_len;
+                strcpy(
+                    newp.offset(newlen as isize),
+                    oldp.offset(bd.textcol as isize),
+                );
+                ml_replace(linenr, newp, false);
+                extmark_splice_cols(
+                    curbuf.get(),
+                    linenr as c_int - 1,
+                    bd.textcol,
+                    0,
+                    vpos.coladd + ins_len,
+                    kExtmarkUndo,
+                );
+            }
+            linenr += 1;
+        }
+
+        check_cursor(curwin.get());
+        changed_lines(
+            curbuf.get(),
+            (*oap).start.lnum + 1,
+            0,
+            (*oap).end.lnum + 1,
+            0,
+            true,
+        );
+        xfree(ins_text as *mut c_void);
+    }
+}
+
+/// Move the cursor left off the NUL past the end of the line, when it should
+/// not be sitting there.
+///
+/// # Safety
+/// Operates on the current window's cursor.
+pub unsafe fn adjust_cursor_eol() {
+    unsafe {
+        let cur_ve_flags = get_ve_flags(curwin.get());
+        let adj_cursor = (*curwin.get()).w_cursor.col > 0
             && gchar_cursor() == NUL
-            && cur_ve_flags & kOptVeFlagOnemore as ::core::ffi::c_int as ::core::ffi::c_uint
-                == 0 as ::core::ffi::c_uint
-            && cur_ve_flags & kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
-                == 0 as ::core::ffi::c_uint
+            && cur_ve_flags & kOptVeFlagOnemore as c_uint == 0
+            && cur_ve_flags & kOptVeFlagAll as c_uint == 0
             && !(restart_edit.get() != 0 || State.get() & MODE_INSERT != 0);
         if !adj_cursor {
             return;
         }
+
+        // Onto the last character in the line.
         dec_cursor();
-        if cur_ve_flags == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint {
+
+        if cur_ve_flags == kOptVeFlagAll as c_uint {
+            // `coladd` becomes the width of that last character.
             let mut scol: colnr_T = 0;
             let mut ecol: colnr_T = 0;
             getvcol(
                 curwin.get(),
                 &raw mut (*curwin.get()).w_cursor,
                 &raw mut scol,
-                ::core::ptr::null_mut::<colnr_T>(),
+                ::core::ptr::null_mut(),
                 &raw mut ecol,
             );
-            (*curwin.get()).w_cursor.coladd = (ecol as ::core::ffi::c_int
-                - scol as ::core::ffi::c_int
-                + 1 as ::core::ffi::c_int) as colnr_T;
+            (*curwin.get()).w_cursor.coladd = ecol - scol + 1;
         }
     }
 }
