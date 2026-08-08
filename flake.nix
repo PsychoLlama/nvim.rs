@@ -77,6 +77,16 @@
           nvim = pkgs.callPackage ./nix/package.nix {
             inherit nvim-deps;
 
+            # `src` below is a filtered store path with no `.git`, so build.rs
+            # cannot work the version out for itself. Only the flake knows the
+            # revision — and only as a sha: a release tag is invisible here, so
+            # this always reads as a development build. Releases are cut by
+            # `just package <version>`, which states the tag outright.
+            # `shortRev` exists only for a clean checkout; a dirty tree has
+            # `dirtyShortRev` (already suffixed `-dirty`), and a plain path
+            # source has neither.
+            nvimRsVersion = "dev-${self.shortRev or self.dirtyShortRev or "unknown"}";
+
             rustPlatform = pkgs.makeRustPlatform {
               cargo = toolchain;
               rustc = toolchain;

@@ -16,11 +16,15 @@ build-release:
 # layout nix/package.nix installs (bin/ + runtime + tree-sitter parsers) but
 # with a cargo-built binary: the baked default paths don't exist on a consumer
 # machine, so nvim falls through to exe-relative resolution of this tree.
-# `version` names the archive, e.g. `just package 2026.07.18-a1b2c3d4e`.
+# `version` names the archive, e.g. `just package 2026.07.18-a1b2c3d4e`, and is
+# also what the binary reports as its version: build.rs would otherwise infer
+# one from git, which a CI checkout of a tag can't be trusted to answer for.
 # Requires the devshell: $NVIM_DEPS_PREFIX is the source of the parsers.
-package version: build-release
+package version:
   #!/usr/bin/env bash
   set -euo pipefail
+  export NVIM_RS_VERSION='{{ version }}'
+  cargo build --release
   name="nvim-{{ version }}-x86_64-linux"
   stage="target/dist/$name"
   rm -rf "$stage"

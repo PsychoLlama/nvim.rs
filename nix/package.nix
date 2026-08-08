@@ -10,6 +10,10 @@
   nvim-deps,
   # Source scoped to the Rust crate + runtime files.
   src,
+  # What `nvim --version` reports. build.rs would normally read this out of
+  # git, but `src` is a filtered store path with no `.git`, so the flake has
+  # to state it.
+  nvimRsVersion ? "unknown",
 }:
 
 rustPlatform.buildRustPackage {
@@ -24,6 +28,9 @@ rustPlatform.buildRustPackage {
 
   # Link against the prebuilt C deps instead of building them via cmake.deps.
   env.NVIM_DEPS_PREFIX = "${nvim-deps}";
+
+  # The version banner, since build.rs can't derive one from the sandbox.
+  env.NVIM_RS_VERSION = nvimRsVersion;
 
   # Bake the installed runtime + parser locations so the binary is relocatable
   # within the store with no env vars. `build.rs` honours these overrides.
