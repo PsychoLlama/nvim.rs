@@ -148,12 +148,11 @@ use crate::src::nvim::textformat::{
 use crate::src::nvim::textobject::{bck_word, fwd_word};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    BS_EOL, BS_INDENT, BS_NOSTOP, BS_START, CMOD_KEEPJUMPS, CharsizeArg, CharsizeKind,
-    INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT,
-    StrCharInfo, String_0, TriState, VV_CHAR, VV_INSERTMODE, VimState, aco_save_T, buf_T, cmdarg_T,
-    colnr_T, event_T, int32_t, int64_t, kFalse, kNone, kTrue, linenr_T, pos_T, ptrdiff_t, schar_T,
-    size_t, ssize_t, state_check_callback, state_execute_callback, uint8_t, uint32_t, varnumber_T,
-    win_T,
+    BS_EOL, BS_INDENT, BS_NOSTOP, BS_START, CMOD_KEEPJUMPS, CharsizeArg, INSCHAR_CTRLV,
+    INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, StrCharInfo,
+    String_0, TriState, VV_CHAR, VV_INSERTMODE, VimState, aco_save_T, buf_T, cmdarg_T, colnr_T,
+    event_T, int32_t, int64_t, kFalse, kNone, kTrue, linenr_T, pos_T, ptrdiff_t, schar_T, size_t,
+    ssize_t, state_check_callback, state_execute_callback, uint8_t, uint32_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::src::nvim::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -187,7 +186,7 @@ pub(crate) use self::prompt::*;
 pub(crate) use self::redraw::*;
 pub(crate) use self::replace::*;
 pub use self::state::*;
-pub use self::tab::*;
+pub(crate) use self::tab::*;
 pub(crate) use self::undo::*;
 
 /// The alphanumeric bit of the C library's `__ctype_b_loc()` table, the one

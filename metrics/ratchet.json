@@ -199,7 +199,7 @@
     "crates/nvim/src/nvim/edit/redraw.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/edit/replace.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/edit/state.rs": {"unsafe": 9},
-    "crates/nvim/src/nvim/edit/tab.rs": {"unsafe": 3},
+    "crates/nvim/src/nvim/edit/tab.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/edit/undo.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/eval/buffer.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/eval/buffer/info.rs": {"unsafe": 2},
