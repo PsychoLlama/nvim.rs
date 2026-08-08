@@ -248,7 +248,7 @@ unsafe fn record_operator_redo(cap: *mut cmdarg_T, oap: *mut oparg_T, redo_yank:
             if vim_strchr(p_cpo.get(), CPO_REDO).is_null() {
                 AppendToRedobuffLit((*cap).searchbuf, -1);
             }
-            AppendToRedobuff(NL_STR.as_ptr());
+            AppendToRedobuff(c"\n".as_ptr());
         } else if is_ex_cmdchar(cap) {
             // `do_cmdline` stored the first typed line in `repeat_cmdline`.
             // When several lines were typed, repeating is not possible.
@@ -260,13 +260,13 @@ unsafe fn record_operator_redo(cap: *mut cmdarg_T, oap: *mut oparg_T, redo_yank:
                 } else {
                     AppendToRedobuffSpec(repeat_cmdline.get());
                 }
-                AppendToRedobuff(NL_STR.as_ptr());
+                AppendToRedobuff(c"\n".as_ptr());
                 xfree(repeat_cmdline.get() as *mut c_void);
                 repeat_cmdline.set(::core::ptr::null_mut());
             }
         } else if (*cap).cmdchar == K_LUA {
             AppendNumberToRedobuff(repeat_luaref.get() as c_int);
-            AppendToRedobuff(NL_STR.as_ptr());
+            AppendToRedobuff(c"\n".as_ptr());
         }
     }
 }

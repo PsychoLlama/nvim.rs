@@ -1,3 +1,14 @@
+//! The operators: what `d`, `y`, `c`, `<`, `>`, `J`, `g~`, `r`, `I`, `A`,
+//! `g@`, `!` and CTRL-A do to a region of text.
+//!
+//! `ops/pending.rs` is the way in: normal mode reads an operator and a motion,
+//! and `do_pending_operator` turns the pair into a region and calls one of the
+//! others. `ops/optype.rs` is the vocabulary that maps the keys to an `OP_*`,
+//! and `ops/block.rs` the geometry three of the operators share.
+//!
+//! This file holds no code -- only the constants c2rust copied in from the
+//! headers, and the `redo_VIsual_T` that `pending.rs` keeps one of.
+
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::ascii::{
@@ -118,71 +129,108 @@ pub use self::pending::*;
 pub(crate) use self::replace::*;
 pub use self::shift::*;
 
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const _ISalpha: C2Rust_Unnamed = 1024;
-pub const _ISupper: C2Rust_Unnamed = 256;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const NUMBUFLEN: C2Rust_Unnamed_16 = 65;
+/// `_ISalpha` and `_ISupper` from the C library's `__ctype_b_loc` table.
+///
+/// `isalpha`/`isupper` are locale-dependent, which is why `do_addsub` uses
+/// them rather than `ascii_isalpha`: the case of a hex digit follows the
+/// user's locale.
+pub const _ISalpha: ::core::ffi::c_ushort = 1024;
+pub const _ISupper: ::core::ffi::c_ushort = 256;
+
+/// Enough for any number this module formats, plus its NUL.
+pub const NUMBUFLEN: ::core::ffi::c_int = 65;
+
+/// `ExtmarkOp`: the edit is undoable, so extmarks move with it.
 pub const kExtmarkUndo: ExtmarkOp = 1;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const STR2NR_HEX: C2Rust_Unnamed_20 = 4;
-pub const STR2NR_OCT: C2Rust_Unnamed_20 = 2;
-pub const STR2NR_BIN: C2Rust_Unnamed_20 = 1;
-pub const kMTBlockWise: MotionType = 2;
-pub const kMTLineWise: MotionType = 1;
+
+/// `vim_str2nr` flags: which bases 'nrformats' allows.
+pub const STR2NR_BIN: ::core::ffi::c_int = 1;
+pub const STR2NR_OCT: ::core::ffi::c_int = 2;
+pub const STR2NR_HEX: ::core::ffi::c_int = 4;
+
+/// The three region shapes an operator can be given.
 pub const kMTCharWise: MotionType = 0;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const CA_NO_ADJ_OP_END: C2Rust_Unnamed_21 = 2;
-pub const CA_COMMAND_BUSY: C2Rust_Unnamed_21 = 1;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_int;
-pub const REPLACE_NL_NCHAR: C2Rust_Unnamed_22 = -2;
-pub const REPLACE_CR_NCHAR: C2Rust_Unnamed_22 = -1;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub const YREG_YANK: C2Rust_Unnamed_23 = 1;
-pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
-pub const INDENT_SET: C2Rust_Unnamed_25 = 1;
-pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
-pub const BL_FIX: C2Rust_Unnamed_26 = 4;
-pub const BL_SOL: C2Rust_Unnamed_26 = 2;
-pub const BL_WHITE: C2Rust_Unnamed_26 = 1;
-pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
-pub const SIN_CHANGED: C2Rust_Unnamed_28 = 1;
+pub const kMTLineWise: MotionType = 1;
+pub const kMTBlockWise: MotionType = 2;
+
+/// `cmdarg_T::retval`: normal mode must not act on what the operator left.
+pub const CA_COMMAND_BUSY: ::core::ffi::c_int = 1;
+/// `cmdarg_T::retval`: leave `oap->end` where the motion put it.
+pub const CA_NO_ADJ_OP_END: ::core::ffi::c_int = 2;
+
+/// `r CTRL-V <CR>` and `r CTRL-V <NL>`: the literal byte, not a line split.
+pub const REPLACE_CR_NCHAR: ::core::ffi::c_int = -1;
+pub const REPLACE_NL_NCHAR: ::core::ffi::c_int = -2;
+
+/// `get_yank_register` mode: the register is about to be written.
+pub const YREG_YANK: ::core::ffi::c_int = 1;
+
+/// `change_indent`: set the indent to the given column.
+pub const INDENT_SET: ::core::ffi::c_int = 1;
+
+/// `beginline` flags: to the first non-white, to the start of the line, and
+/// "fix the column even in Visual mode".
+pub const BL_WHITE: ::core::ffi::c_int = 1;
+pub const BL_SOL: ::core::ffi::c_int = 2;
+pub const BL_FIX: ::core::ffi::c_int = 4;
+
+/// `set_indent`: report the change through `changed_bytes`.
+pub const SIN_CHANGED: ::core::ffi::c_int = 1;
+
+/// The Visual area a `.` replays -- see `pending::REDO_VISUAL`.
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct redo_VIsual_T {
+    /// `v`, `V` or CTRL-V.
     pub rv_mode: ::core::ffi::c_int,
+    /// Number of lines.
     pub rv_line_count: linenr_T,
+    /// Number of columns, or the end column.
     pub rv_vcol: colnr_T,
+    /// Count typed before the Visual operator.
     pub rv_count: ::core::ffi::c_int,
+    /// Extra argument; `g CTRL-A` is the only user.
     pub rv_arg: ::core::ffi::c_int,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const VALID_WROW: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const VALID_WCOL: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const VALID_VIRTCOL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+
+/// `w_valid` bits invalidated whenever a column is measured differently.
+pub const VALID_WROW: ::core::ffi::c_int = 0x1;
+pub const VALID_WCOL: ::core::ffi::c_int = 0x2;
+pub const VALID_VIRTCOL: ::core::ffi::c_int = 0x4;
+
+/// `b_ml.ml_flags`: the buffer is one empty line.
+pub const ML_EMPTY: ::core::ffi::c_int = 0x1;
+
+pub const OK: ::core::ffi::c_int = 1;
+pub const FAIL: ::core::ffi::c_int = 0;
+
+/// `get_fileformat`: lines end with CR LF, so a line break is two bytes.
+pub const EOL_DOS: ::core::ffi::c_int = 1;
+
+/// 'formatoptions' letters this module reads.
 pub const FO_MBYTE_JOIN: ::core::ffi::c_int = 'M' as ::core::ffi::c_int;
 pub const FO_MBYTE_JOIN2: ::core::ffi::c_int = 'B' as ::core::ffi::c_int;
 pub const FO_AUTO: ::core::ffi::c_int = 'a' as ::core::ffi::c_int;
 pub const FO_REMOVE_COMS: ::core::ffi::c_int = 'j' as ::core::ffi::c_int;
+
+/// 'cpoptions' letters this module reads.
 pub const CPO_EMPTYREGION: ::core::ffi::c_int = 'E' as ::core::ffi::c_int;
 pub const CPO_JOINCOL: ::core::ffi::c_int = 'q' as ::core::ffi::c_int;
 pub const CPO_REDO: ::core::ffi::c_int = 'r' as ::core::ffi::c_int;
 pub const CPO_YANK: ::core::ffi::c_int = 'y' as ::core::ffi::c_int;
 pub const CPO_DOLLAR: ::core::ffi::c_int = '$' as ::core::ffi::c_int;
 pub const CPO_FILTER: ::core::ffi::c_int = '!' as ::core::ffi::c_int;
+
+/// 'comments' flag: this leader ends a three-part comment.
 pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;
+
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const NL_STR: [::core::ffi::c_char; 2] =
-    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"\n\0") };
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-pub const OPF_LINES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const OPF_CHANGE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
+/// Size of `IObuff`, the shared message buffer.
+pub const IOSIZE: ::core::ffi::c_int = 1024 + 1;
+
+pub const true_0: ::core::ffi::c_int = 1;
+pub const false_0: ::core::ffi::c_int = 0;
