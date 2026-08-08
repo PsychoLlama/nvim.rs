@@ -32,7 +32,7 @@ use crate::src::nvim::indent::{
     use_indentexpr_for_lisp,
 };
 use crate::src::nvim::indent_c::get_c_indent;
-use crate::src::nvim::keycodes::{Ctrl_V, KE_COMMAND, KE_LUA};
+use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::main::{
     IObuff, Insstart, KeyTyped, State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect,
     VIsual_select, VIsual_select_reg, ai_col, bangredo, can_si, cmdmod, curbuf,
@@ -81,12 +81,12 @@ use crate::src::nvim::textformat::{auto_format, has_format_option, op_format, op
 use crate::src::nvim::types::{
     CMOD_LOCKMARKS, Callback, Callback_data as C2Rust_Unnamed_5, CharsizeArg, ExtmarkOp,
     MotionType, OP_APPEND, OP_CHANGE, OP_COLON, OP_DELETE, OP_FILTER, OP_FOLD, OP_FOLDCLOSE,
-    OP_FOLDCLOSEREC, OP_FOLDDEL, OP_FOLDDELREC, OP_FOLDOPEN, OP_FOLDOPENREC, OP_FORMAT,
-    OP_FUNCTION, OP_INDENT, OP_INSERT, OP_JOIN, OP_LOWER, OP_LSHIFT, OP_NOP, OP_NR_SUB, OP_REPLACE,
-    OP_ROT13, OP_RSHIFT, OP_UPPER, OP_YANK, OpType, OptInt, StrCharInfo, TriState, VAR_STRING,
-    VAR_UNKNOWN, VAR_UNLOCKED, bcount_t, block_def, buf_T, cmdarg_T, colnr_T, dict_T, int32_t,
-    int64_t, kNone, linenr_T, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T,
-    typval_vval_union, uvarnumber_T, varnumber_T, yankreg_T,
+    OP_FOLDCLOSEREC, OP_FOLDDEL, OP_FOLDDELREC, OP_FOLDOPEN, OP_FOLDOPENREC, OP_FORMAT, OP_FORMAT2,
+    OP_FUNCTION, OP_INDENT, OP_INSERT, OP_JOIN, OP_JOIN_NS, OP_LOWER, OP_LSHIFT, OP_NOP, OP_NR_ADD,
+    OP_NR_SUB, OP_REPLACE, OP_ROT13, OP_RSHIFT, OP_TILDE, OP_UPPER, OP_YANK, OpType, OptInt,
+    StrCharInfo, TriState, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, bcount_t, block_def, buf_T,
+    cmdarg_T, colnr_T, dict_T, int32_t, int64_t, kNone, linenr_T, oparg_T, optset_T, pos_T, size_t,
+    ssize_t, typval_T, typval_vval_union, uvarnumber_T, varnumber_T, yankreg_T,
 };
 use crate::src::nvim::ui::vim_beep;
 use crate::src::nvim::undo::{u_clearline, u_save, u_save_cursor};

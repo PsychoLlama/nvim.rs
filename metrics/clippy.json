@@ -62,7 +62,6 @@
     "crates/nvim/src/nvim/normal/visual.rs": 1,
     "crates/nvim/src/nvim/ops/block.rs": 1,
     "crates/nvim/src/nvim/ops/count.rs": 1,
-    "crates/nvim/src/nvim/ops/pending.rs": 2,
     "crates/nvim/src/nvim/optionstr/check.rs": 1,
     "crates/nvim/src/nvim/optionstr/flags.rs": 1,
     "crates/nvim/src/nvim/path.rs": 3,

@@ -210,10 +210,14 @@ unsafe fn delete_block(oap: *mut oparg_T) -> c_int {
                 }
 
                 // The line shrinks by the block's text minus the padding that
-                // replaces the characters it only partly covers.
+                // replaces the characters it only partly covers -- and a
+                // deleted TAB can be replaced by more spaces than it took, so
+                // `n` may be *negative* and the line grow. The arithmetic
+                // stays in `c_int` for that reason; upstream does it in
+                // `size_t` and relies on the wraparound.
                 let n = bd.textlen - bd.startspaces - bd.endspaces;
                 let oldp = ml_get(lnum);
-                let newp = xmalloc(ml_get_len(lnum) as size_t - n as size_t + 1) as *mut c_char;
+                let newp = xmalloc((ml_get_len(lnum) - n + 1) as size_t) as *mut c_char;
                 memmove(
                     newp as *mut c_void,
                     oldp as *const c_void,
