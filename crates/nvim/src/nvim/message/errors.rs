@@ -18,7 +18,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use core::ffi::{VaList, c_char, c_int, c_long, c_void};
+use core::ffi::{c_char, c_int, c_long, c_void};
 use core::ptr;
 
 /// The script/function the last error was reported from.
@@ -350,7 +350,7 @@ pub unsafe extern "C" fn emsg(s: *const c_char) -> bool {
 /// Only that `name` is a character code.
 pub unsafe fn emsg_invreg(name: c_int) {
     unsafe {
-        semsg(
+        crate::semsg_c!(
             gettext(c"E354: Invalid register name: '%s'".as_ptr()),
             transchar_buf(ptr::null(), name),
         );
@@ -418,56 +418,6 @@ pub unsafe fn semsg_multiline_finish(kind: *const c_char) -> bool {
     }
 }
 
-/// [`emsg`] with `printf` formatting.
-///
-/// Superseded by [`semsg_c!`](crate::semsg_c); kept only while call sites
-/// still spell it as a call.
-///
-/// # Safety
-/// `fmt` and the arguments must agree, as for `printf`.
-pub unsafe extern "C" fn semsg(fmt: *const c_char, mut c2rust_args: ...) -> bool {
-    unsafe { semsgv(fmt, c2rust_args.clone()) }
-}
-
-/// [`emsg_multiline`] with `printf` formatting.
-///
-/// Superseded by [`semsg_multiline_c!`](crate::semsg_multiline_c).
-///
-/// # Safety
-/// As [`semsg`].
-pub unsafe extern "C" fn semsg_multiline(
-    kind: *const c_char,
-    fmt: *const c_char,
-    mut c2rust_args: ...
-) -> bool {
-    unsafe {
-        if emsg_not_now() {
-            return true;
-        }
-        vim_vsnprintf(
-            semsg_multiline_errbuf(),
-            SEMSG_MULTILINE_ERRBUF_LEN,
-            fmt,
-            c2rust_args.clone(),
-        );
-        emsg_multiline(semsg_multiline_errbuf(), kind, HLF_E, true)
-    }
-}
-
-/// The `va_list` half of [`semsg`], shared with [`siemsg`].
-///
-/// # Safety
-/// `fmt` and `ap` must agree, as for `vprintf`.
-pub(crate) unsafe fn semsgv(fmt: *const c_char, ap: VaList) -> bool {
-    unsafe {
-        if emsg_not_now() {
-            return true;
-        }
-        vim_vsnprintf(semsg_errbuf(), SEMSG_ERRBUF_LEN, fmt, ap);
-        emsg(semsg_errbuf())
-    }
-}
-
 /// An internal error: same as [`emsg`], but skipped when errors are off.
 ///
 /// # Safety
@@ -481,26 +431,13 @@ pub unsafe fn iemsg(s: *const c_char) {
     }
 }
 
-/// [`iemsg`] with `printf` formatting.
-///
-/// # Safety
-/// As [`semsg`].
-pub unsafe extern "C" fn siemsg(s: *const c_char, mut c2rust_args: ...) {
-    unsafe {
-        if emsg_not_now() {
-            return;
-        }
-        semsgv(s, c2rust_args.clone());
-    }
-}
-
 /// "E5555: API call: <where>", for a reached-the-unreachable case.
 ///
 /// # Safety
 /// `where_0` must be a valid C string.
 pub unsafe fn internal_error(where_0: *const c_char) {
     unsafe {
-        siemsg(gettext(&raw const e_intern2 as *const c_char), where_0);
+        crate::siemsg_c!(gettext(&raw const e_intern2 as *const c_char), where_0);
     }
 }
 
@@ -513,20 +450,6 @@ pub(crate) unsafe extern "C" fn msg_semsg_event(argv: *mut *mut c_void) {
         let s: *mut c_char = (*argv).cast();
         emsg(s);
         xfree(s.cast());
-    }
-}
-
-/// [`semsg`], but deferred to the main loop.
-///
-/// For the places that cannot show a message where they are -- inside a
-/// libuv callback, or with the screen mid-update.
-///
-/// # Safety
-/// As [`semsg`].
-pub unsafe extern "C" fn msg_schedule_semsg(fmt: *const c_char, mut c2rust_args: ...) {
-    unsafe {
-        vim_vsnprintf(msg_iobuff(), MSG_IOBUFF_LEN, fmt, c2rust_args.clone());
-        msg_schedule_semsg_finish();
     }
 }
 
@@ -556,17 +479,6 @@ pub(crate) unsafe extern "C" fn msg_semsg_multiline_event(argv: *mut *mut c_void
         let s: *mut c_char = (*argv).cast();
         emsg_multiline(s, c"emsg".as_ptr(), HLF_E, true);
         xfree(s.cast());
-    }
-}
-
-/// [`semsg_multiline`], but deferred to the main loop.
-///
-/// # Safety
-/// As [`semsg`].
-pub unsafe extern "C" fn msg_schedule_semsg_multiline(fmt: *const c_char, mut c2rust_args: ...) {
-    unsafe {
-        vim_vsnprintf(msg_iobuff(), MSG_IOBUFF_LEN, fmt, c2rust_args.clone());
-        msg_schedule_semsg_multiline_finish();
     }
 }
 
@@ -619,17 +531,6 @@ pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
 
         no_wait_return.set(no_wait_return.get() - 1);
         msg_hist_off.set(save_msg_hist_off);
-    }
-}
-
-/// [`give_warning`] with `printf` formatting.
-///
-/// # Safety
-/// As [`semsg`].
-pub unsafe extern "C" fn swmsg(hl: bool, fmt: *const c_char, mut c2rust_args: ...) {
-    unsafe {
-        vim_vsnprintf(msg_iobuff(), MSG_IOBUFF_LEN, fmt, c2rust_args.clone());
-        swmsg_finish(hl);
     }
 }
 

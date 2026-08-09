@@ -90,7 +90,7 @@ use crate::src::nvim::runtime::{estack_sfile, exestack};
 use crate::src::nvim::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE,
 };
-use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, vim_vsnprintf};
+use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::ui::{kUIMessages, kUIMultigrid};
 use crate::src::nvim::types::{
     Arena, Array, Dict, Error, Event, FILE, HlMessage, HlMessageChunk, Integer, KeyDict_echo_opts,
@@ -710,20 +710,6 @@ pub unsafe extern "C" fn trunc_string(
     }
 }
 
-/// [`msg`] with `printf` formatting. See the note on the variadics in
-/// [`crate::src::nvim::message::errors`].
-///
-/// The caller must check the result is shorter than `IOSIZE`.
-///
-/// # Safety
-/// `s` and the arguments must agree, as for `printf`.
-pub unsafe extern "C" fn smsg(hl_id: c_int, s: *const c_char, mut c2rust_args: ...) -> c_int {
-    unsafe {
-        vim_vsnprintf(msg_iobuff(), MSG_IOBUFF_LEN, s, c2rust_args.clone());
-        smsg_finish(hl_id)
-    }
-}
-
 /// How much of a message the `*_c!` macros that format through
 /// [`msg_iobuff`] keep.
 pub const MSG_IOBUFF_LEN: size_t = IOSIZE as size_t;
@@ -753,17 +739,6 @@ pub unsafe fn smsg_finish(hl_id: c_int) -> c_int {
 #[doc(hidden)]
 pub unsafe fn smsg_keep_finish(hl_id: c_int) -> c_int {
     unsafe { msg_keep(msg_iobuff(), hl_id, true, false) as c_int }
-}
-
-/// [`msg_keep`] with `printf` formatting, keeping the message displayed.
-///
-/// # Safety
-/// As [`smsg`].
-pub unsafe extern "C" fn smsg_keep(hl_id: c_int, s: *const c_char, mut c2rust_args: ...) -> c_int {
-    unsafe {
-        vim_vsnprintf(msg_iobuff(), MSG_IOBUFF_LEN, s, c2rust_args.clone());
-        smsg_keep_finish(hl_id)
-    }
 }
 
 /// Show `s`, truncated at the head if it does not fit the message area.
