@@ -719,14 +719,40 @@ pub unsafe extern "C" fn trunc_string(
 /// `s` and the arguments must agree, as for `printf`.
 pub unsafe extern "C" fn smsg(hl_id: c_int, s: *const c_char, mut c2rust_args: ...) -> c_int {
     unsafe {
-        vim_vsnprintf(
-            IObuff.ptr().cast(),
-            IOSIZE as size_t,
-            s,
-            c2rust_args.clone(),
-        );
-        msg(IObuff.ptr().cast(), hl_id) as c_int
+        vim_vsnprintf(msg_iobuff(), MSG_IOBUFF_LEN, s, c2rust_args.clone());
+        smsg_finish(hl_id)
     }
+}
+
+/// How much of a message the `*_c!` macros that format through
+/// [`msg_iobuff`] keep.
+pub const MSG_IOBUFF_LEN: size_t = IOSIZE as size_t;
+
+/// The shared I/O buffer the `smsg`/`swmsg`/`msg_schedule_semsg` macros
+/// format into. Their first half; not meant to be called directly.
+#[doc(hidden)]
+pub fn msg_iobuff() -> *mut c_char {
+    IObuff.ptr().cast()
+}
+
+/// Show whatever was formatted into [`msg_iobuff`]. The second half of
+/// [`smsg_c!`](crate::smsg_c); not meant to be called directly.
+///
+/// # Safety
+/// Only that the message state is the main thread's.
+#[doc(hidden)]
+pub unsafe fn smsg_finish(hl_id: c_int) -> c_int {
+    unsafe { msg(msg_iobuff(), hl_id) as c_int }
+}
+
+/// Show whatever was formatted into [`msg_iobuff`] and keep it displayed.
+/// The second half of [`smsg_keep_c!`](crate::smsg_keep_c).
+///
+/// # Safety
+/// Only that the message state is the main thread's.
+#[doc(hidden)]
+pub unsafe fn smsg_keep_finish(hl_id: c_int) -> c_int {
+    unsafe { msg_keep(msg_iobuff(), hl_id, true, false) as c_int }
 }
 
 /// [`msg_keep`] with `printf` formatting, keeping the message displayed.
@@ -735,13 +761,8 @@ pub unsafe extern "C" fn smsg(hl_id: c_int, s: *const c_char, mut c2rust_args: .
 /// As [`smsg`].
 pub unsafe extern "C" fn smsg_keep(hl_id: c_int, s: *const c_char, mut c2rust_args: ...) -> c_int {
     unsafe {
-        vim_vsnprintf(
-            IObuff.ptr().cast(),
-            IOSIZE as size_t,
-            s,
-            c2rust_args.clone(),
-        );
-        msg_keep(IObuff.ptr().cast(), hl_id, true, false) as c_int
+        vim_vsnprintf(msg_iobuff(), MSG_IOBUFF_LEN, s, c2rust_args.clone());
+        smsg_keep_finish(hl_id)
     }
 }
 

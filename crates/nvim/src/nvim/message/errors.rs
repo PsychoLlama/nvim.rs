@@ -5,10 +5,14 @@
 //! [`get_emsg_source`] is what prefixes the message with the script and line
 //! that raised it.
 //!
-//! The `s`-prefixed entry points ([`semsg`], [`siemsg`], [`swmsg`],
-//! [`msg_schedule_semsg`] and friends) stay C variadics. They are called
-//! ~650 times across the tree as `printf`-style forwarders; turning them into
-//! Rust macros is a tree-wide change, not a rewrite of this file.
+//! The `s`-prefixed entry points (`semsg`, `siemsg`, `swmsg`,
+//! `msg_schedule_semsg` and friends) were C variadics, called ~700 times
+//! across the tree as `printf`-style forwarders. They are macros now
+//! ([`semsg_c!`](crate::semsg_c) and friends, defined in
+//! [`crate::src::nvim::message_fmt`]): each expands to a `vim_snprintf` into
+//! the scratch buffer the wrapper owned, then the `*_finish` tail below that
+//! reports it. Same bytes, same buffer sizes, same truncation — and no
+//! C-variadic definition, which only a nightly compiler can write.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -353,7 +357,71 @@ pub unsafe fn emsg_invreg(name: c_int) {
     }
 }
 
+/// The scratch buffer [`semsg_c!`](crate::semsg_c) formats one error into.
+static semsg_buf: GlobalCell<[c_char; SEMSG_ERRBUF_LEN]> = GlobalCell::new([0; SEMSG_ERRBUF_LEN]);
+
+/// The scratch buffer [`semsg_multiline_c!`](crate::semsg_multiline_c) formats
+/// one error into. A multiline error can be much longer than one line's worth.
+static semsg_multiline_buf: GlobalCell<[c_char; SEMSG_MULTILINE_ERRBUF_LEN]> =
+    GlobalCell::new([0; SEMSG_MULTILINE_ERRBUF_LEN]);
+
+/// How much of an error message [`semsg_c!`](crate::semsg_c) keeps.
+pub const SEMSG_ERRBUF_LEN: size_t = 1025;
+
+/// How much of an error message [`semsg_multiline_c!`](crate::semsg_multiline_c)
+/// keeps.
+pub const SEMSG_MULTILINE_ERRBUF_LEN: size_t = 8192;
+
+/// Where [`semsg_c!`](crate::semsg_c) formats. The macro's first half; not
+/// meant to be called directly.
+#[doc(hidden)]
+pub fn semsg_errbuf() -> *mut c_char {
+    semsg_buf.ptr().cast()
+}
+
+/// Where [`semsg_multiline_c!`](crate::semsg_multiline_c) formats. The macro's
+/// first half; not meant to be called directly.
+#[doc(hidden)]
+pub fn semsg_multiline_errbuf() -> *mut c_char {
+    semsg_multiline_buf.ptr().cast()
+}
+
+/// Report whatever was formatted into [`semsg_errbuf`] as an error. The
+/// second half of [`semsg_c!`](crate::semsg_c); not meant to be called
+/// directly.
+///
+/// # Safety
+/// Only that the message state is the main thread's.
+#[doc(hidden)]
+pub unsafe fn semsg_finish() -> bool {
+    unsafe {
+        if emsg_not_now() {
+            return true;
+        }
+        emsg(semsg_errbuf())
+    }
+}
+
+/// Report whatever was formatted into [`semsg_multiline_errbuf`] as a
+/// multiline error of kind `kind`. The second half of
+/// [`semsg_multiline_c!`](crate::semsg_multiline_c).
+///
+/// # Safety
+/// `kind` must be a valid C string.
+#[doc(hidden)]
+pub unsafe fn semsg_multiline_finish(kind: *const c_char) -> bool {
+    unsafe {
+        if emsg_not_now() {
+            return true;
+        }
+        emsg_multiline(semsg_multiline_errbuf(), kind, HLF_E, true)
+    }
+}
+
 /// [`emsg`] with `printf` formatting.
+///
+/// Superseded by [`semsg_c!`](crate::semsg_c); kept only while call sites
+/// still spell it as a call.
 ///
 /// # Safety
 /// `fmt` and the arguments must agree, as for `printf`.
@@ -363,6 +431,8 @@ pub unsafe extern "C" fn semsg(fmt: *const c_char, mut c2rust_args: ...) -> bool
 
 /// [`emsg_multiline`] with `printf` formatting.
 ///
+/// Superseded by [`semsg_multiline_c!`](crate::semsg_multiline_c).
+///
 /// # Safety
 /// As [`semsg`].
 pub unsafe extern "C" fn semsg_multiline(
@@ -371,18 +441,16 @@ pub unsafe extern "C" fn semsg_multiline(
     mut c2rust_args: ...
 ) -> bool {
     unsafe {
-        // A multiline error can be much longer than one line's worth.
-        static errbuf: GlobalCell<[c_char; 8192]> = GlobalCell::new([0; 8192]);
         if emsg_not_now() {
             return true;
         }
         vim_vsnprintf(
-            errbuf.ptr().cast(),
-            ::core::mem::size_of::<[c_char; 8192]>(),
+            semsg_multiline_errbuf(),
+            SEMSG_MULTILINE_ERRBUF_LEN,
             fmt,
             c2rust_args.clone(),
         );
-        emsg_multiline(errbuf.ptr().cast(), kind, HLF_E, true)
+        emsg_multiline(semsg_multiline_errbuf(), kind, HLF_E, true)
     }
 }
 
@@ -392,17 +460,11 @@ pub unsafe extern "C" fn semsg_multiline(
 /// `fmt` and `ap` must agree, as for `vprintf`.
 pub(crate) unsafe fn semsgv(fmt: *const c_char, ap: VaList) -> bool {
     unsafe {
-        static errbuf: GlobalCell<[c_char; 1025]> = GlobalCell::new([0; 1025]);
         if emsg_not_now() {
             return true;
         }
-        vim_vsnprintf(
-            errbuf.ptr().cast(),
-            ::core::mem::size_of::<[c_char; 1025]>(),
-            fmt,
-            ap,
-        );
-        emsg(errbuf.ptr().cast())
+        vim_vsnprintf(semsg_errbuf(), SEMSG_ERRBUF_LEN, fmt, ap);
+        emsg(semsg_errbuf())
     }
 }
 
@@ -463,13 +525,21 @@ pub(crate) unsafe extern "C" fn msg_semsg_event(argv: *mut *mut c_void) {
 /// As [`semsg`].
 pub unsafe extern "C" fn msg_schedule_semsg(fmt: *const c_char, mut c2rust_args: ...) {
     unsafe {
-        vim_vsnprintf(
-            IObuff.ptr().cast(),
-            IOSIZE as size_t,
-            fmt,
-            c2rust_args.clone(),
-        );
-        let s = xstrdup(IObuff.ptr().cast());
+        vim_vsnprintf(msg_iobuff(), MSG_IOBUFF_LEN, fmt, c2rust_args.clone());
+        msg_schedule_semsg_finish();
+    }
+}
+
+/// Hand whatever was formatted into [`msg_iobuff`] to the main loop as an
+/// error. The second half of
+/// [`msg_schedule_semsg_c!`](crate::msg_schedule_semsg_c).
+///
+/// # Safety
+/// Only that the main loop is live.
+#[doc(hidden)]
+pub unsafe fn msg_schedule_semsg_finish() {
+    unsafe {
+        let s = xstrdup(msg_iobuff());
         loop_schedule_deferred(
             main_loop.ptr(),
             Event::new(Some(msg_semsg_event), [s.cast::<c_void>()]),
@@ -495,13 +565,21 @@ pub(crate) unsafe extern "C" fn msg_semsg_multiline_event(argv: *mut *mut c_void
 /// As [`semsg`].
 pub unsafe extern "C" fn msg_schedule_semsg_multiline(fmt: *const c_char, mut c2rust_args: ...) {
     unsafe {
-        vim_vsnprintf(
-            IObuff.ptr().cast(),
-            IOSIZE as size_t,
-            fmt,
-            c2rust_args.clone(),
-        );
-        let s = xstrdup(IObuff.ptr().cast());
+        vim_vsnprintf(msg_iobuff(), MSG_IOBUFF_LEN, fmt, c2rust_args.clone());
+        msg_schedule_semsg_multiline_finish();
+    }
+}
+
+/// Hand whatever was formatted into [`msg_iobuff`] to the main loop as a
+/// multiline error. The second half of
+/// [`msg_schedule_semsg_multiline_c!`](crate::msg_schedule_semsg_multiline_c).
+///
+/// # Safety
+/// Only that the main loop is live.
+#[doc(hidden)]
+pub unsafe fn msg_schedule_semsg_multiline_finish() {
+    unsafe {
+        let s = xstrdup(msg_iobuff());
         loop_schedule_deferred(
             main_loop.ptr(),
             Event::new(Some(msg_semsg_multiline_event), [s.cast::<c_void>()]),
@@ -550,12 +628,17 @@ pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
 /// As [`semsg`].
 pub unsafe extern "C" fn swmsg(hl: bool, fmt: *const c_char, mut c2rust_args: ...) {
     unsafe {
-        vim_vsnprintf(
-            IObuff.ptr().cast(),
-            IOSIZE as size_t,
-            fmt,
-            c2rust_args.clone(),
-        );
-        give_warning(IObuff.ptr().cast(), hl, true);
+        vim_vsnprintf(msg_iobuff(), MSG_IOBUFF_LEN, fmt, c2rust_args.clone());
+        swmsg_finish(hl);
     }
+}
+
+/// Show whatever was formatted into [`msg_iobuff`] as a warning. The second
+/// half of [`swmsg_c!`](crate::swmsg_c).
+///
+/// # Safety
+/// Only that the message state is the main thread's.
+#[doc(hidden)]
+pub unsafe fn swmsg_finish(hl: bool) {
+    unsafe { give_warning(msg_iobuff(), hl, true) }
 }

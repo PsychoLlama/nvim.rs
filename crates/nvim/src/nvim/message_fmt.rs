@@ -1,12 +1,22 @@
 //! Compile-checked message formatting: the Rust-side face of the message.rs
 //! entry points.
 //!
-//! The transpiled tree reports messages through variadic C-style calls
-//! (`semsg(fmt, ...)`, `smsg(hl_id, fmt, ...)`) whose format strings the
-//! compiler cannot check against their arguments. Rewritten modules migrate
-//! those call sites to the [`semsg!`]/[`smsg!`] macros, which format with
-//! `format_args!` (checked at compile time) and hand the finished message to
-//! the same non-variadic cores (`emsg`, `msg`) the variadic wrappers use.
+//! The transpiled tree reports messages through `printf`-style calls whose
+//! format strings the compiler cannot check against their arguments. Two
+//! macro families live here, and they are the two ends of that migration:
+//!
+//! - [`semsg!`]/[`smsg!`] format with `format_args!` — checked at compile
+//!   time — and hand the finished message to the same non-variadic cores
+//!   (`emsg`, `msg`) the C wrappers used. This is where a call site lands
+//!   once its module is rewritten.
+//! - [`semsg_c!`] and its seven siblings still speak vim's own `printf`,
+//!   formatting through `vim_snprintf` exactly as the C wrapper did. This is
+//!   where the ~700 unrewritten call sites sit today, and the `_c` suffix is
+//!   how to find them.
+//!
+//! Both families exist so that the wrappers themselves need not be C
+//! *variadic functions*: a variadic call is stable Rust, a variadic
+//! definition is not.
 //!
 //! On gettext: the variadic call sites translate their format strings through
 //! `gettext()` at runtime, which a compile-time format string cannot express.
@@ -79,4 +89,142 @@ macro_rules! smsg {
     ($hl_id:expr, $($arg:tt)*) => {
         $crate::src::nvim::message_fmt::msg_fmt($hl_id, ::core::format_args!($($arg)*))
     };
+}
+
+// The `_c` family: the same entry points, still speaking vim's own printf
+// (the format language `vim_snprintf` implements, which is not Rust's), for
+// the call sites that have not been rewritten yet.
+//
+// Each expands to the two halves the variadic wrapper used to sit between: a
+// `vim_snprintf` into the wrapper's own scratch buffer, then the non-variadic
+// tail that reports it. That leaves the message bytes, the buffer sizes and
+// so the truncation identical, and takes the C-variadic *definitions* — which
+// only a nightly compiler can write — out of the tree; a variadic *call* is
+// stable Rust.
+//
+// The `_c` suffix marks a call site as unmigrated, and is how to find them:
+// a rewrite replaces `semsg_c!(gettext(c"E1: %s".as_ptr()), p)` with
+// `semsg!("E1: {}", …)`, whose format string the compiler checks.
+//
+// One deliberate divergence: the wrappers tested `emsg_not_now()` *before*
+// formatting, and the macros test it in the tail instead, so a suppressed
+// error is now formatted into the (private) scratch buffer and dropped. That
+// keeps the arguments evaluated exactly once, in source order, exactly as the
+// call they replace — the alternative short-circuits argument expressions
+// that the C call always evaluated.
+
+/// `semsg()`: report a `printf`-formatted error. Evaluates to `bool`.
+#[macro_export]
+macro_rules! semsg_c {
+    ($fmt:expr $(, $arg:expr)* $(,)?) => {{
+        $crate::src::nvim::strings::vim_snprintf(
+            $crate::src::nvim::message::semsg_errbuf(),
+            $crate::src::nvim::message::SEMSG_ERRBUF_LEN,
+            $fmt,
+            $($arg,)*
+        );
+        $crate::src::nvim::message::semsg_finish()
+    }};
+}
+
+/// `siemsg()`: report a `printf`-formatted *internal* error. Same effect as
+/// [`semsg_c!`] — the name is the intent.
+#[macro_export]
+macro_rules! siemsg_c {
+    ($($arg:tt)*) => {{
+        let _: bool = $crate::semsg_c!($($arg)*);
+    }};
+}
+
+/// `semsg_multiline()`: report a `printf`-formatted error of `ext_messages`
+/// kind `kind`, keeping embedded newlines. Evaluates to `bool`.
+#[macro_export]
+macro_rules! semsg_multiline_c {
+    ($kind:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {{
+        let kind = $kind;
+        $crate::src::nvim::strings::vim_snprintf(
+            $crate::src::nvim::message::semsg_multiline_errbuf(),
+            $crate::src::nvim::message::SEMSG_MULTILINE_ERRBUF_LEN,
+            $fmt,
+            $($arg,)*
+        );
+        $crate::src::nvim::message::semsg_multiline_finish(kind)
+    }};
+}
+
+/// `msg_schedule_semsg()`: report a `printf`-formatted error from the main
+/// loop, for callers that cannot show one where they are.
+#[macro_export]
+macro_rules! msg_schedule_semsg_c {
+    ($fmt:expr $(, $arg:expr)* $(,)?) => {{
+        $crate::src::nvim::strings::vim_snprintf(
+            $crate::src::nvim::message::msg_iobuff(),
+            $crate::src::nvim::message::MSG_IOBUFF_LEN,
+            $fmt,
+            $($arg,)*
+        );
+        $crate::src::nvim::message::msg_schedule_semsg_finish();
+    }};
+}
+
+/// `msg_schedule_semsg_multiline()`: [`msg_schedule_semsg_c!`] keeping
+/// embedded newlines.
+#[macro_export]
+macro_rules! msg_schedule_semsg_multiline_c {
+    ($fmt:expr $(, $arg:expr)* $(,)?) => {{
+        $crate::src::nvim::strings::vim_snprintf(
+            $crate::src::nvim::message::msg_iobuff(),
+            $crate::src::nvim::message::MSG_IOBUFF_LEN,
+            $fmt,
+            $($arg,)*
+        );
+        $crate::src::nvim::message::msg_schedule_semsg_multiline_finish();
+    }};
+}
+
+/// `swmsg()`: show a `printf`-formatted warning, `hl` selecting
+/// `'warningmsg'` highlighting.
+#[macro_export]
+macro_rules! swmsg_c {
+    ($hl:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {{
+        let hl = $hl;
+        $crate::src::nvim::strings::vim_snprintf(
+            $crate::src::nvim::message::msg_iobuff(),
+            $crate::src::nvim::message::MSG_IOBUFF_LEN,
+            $fmt,
+            $($arg,)*
+        );
+        $crate::src::nvim::message::swmsg_finish(hl);
+    }};
+}
+
+/// `smsg()`: show a `printf`-formatted message with the given highlight id.
+/// Evaluates to `c_int`, as the wrapper did.
+#[macro_export]
+macro_rules! smsg_c {
+    ($hl_id:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {{
+        let hl_id = $hl_id;
+        $crate::src::nvim::strings::vim_snprintf(
+            $crate::src::nvim::message::msg_iobuff(),
+            $crate::src::nvim::message::MSG_IOBUFF_LEN,
+            $fmt,
+            $($arg,)*
+        );
+        $crate::src::nvim::message::smsg_finish(hl_id)
+    }};
+}
+
+/// `smsg_keep()`: [`smsg_c!`], keeping the message displayed.
+#[macro_export]
+macro_rules! smsg_keep_c {
+    ($hl_id:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {{
+        let hl_id = $hl_id;
+        $crate::src::nvim::strings::vim_snprintf(
+            $crate::src::nvim::message::msg_iobuff(),
+            $crate::src::nvim::message::MSG_IOBUFF_LEN,
+            $fmt,
+            $($arg,)*
+        );
+        $crate::src::nvim::message::smsg_keep_finish(hl_id)
+    }};
 }
