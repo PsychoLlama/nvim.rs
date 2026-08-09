@@ -18,6 +18,19 @@ and this project adheres to [CalVer](https://calver.org/).
   now names the port and the version it was built from, and reports the
   real build profile and compiler instead of the CMake-era text the
   transpiler baked in; `Build type:` and `Compilation:` are gone.
+- Internal consistency checks that came from the original's `assert()` no
+  longer abort a release build: 237 of them across the tree are debug-only
+  now, as they are in the original, where a release build compiles them
+  out. A release `nvim` carries on past the cases it used to die on.
+
+### Fixed
+
+- A number too large for the option it appears in no longer kills the
+  editor. `'cinoptions'`, `'breakindentopt'`, `'comments'`, `'spellsuggest'`,
+  `'rulerformat'`, `:sign place`, `:breakadd` and the `:syntax` offsets all
+  read their numeric fields the same way, and anything outside the
+  representable range aborted the process -- from a modeline, in a release
+  build. Such a number is clamped now.
 
 ## [2026.08.08-0be4297933]
 
