@@ -361,8 +361,11 @@ pub unsafe fn parse_command_modifiers(
                     } else if checkforcmd(&raw mut p, c"verbose".as_ptr(), 4) {
                         // The count is read from `eap->cmd`, which
                         // `checkforcmd` left *before* the word: `:5verbose`.
+                        // Saturating: the count is whatever the user typed,
+                        // so `:2147483647verbose set` would otherwise add one
+                        // to `INT_MAX` and end the process.  C wraps here.
                         cm.cmod_verbose = if ascii_isdigit(*ea.cmd as c_int) {
-                            atoi(ea.cmd) + 1
+                            atoi(ea.cmd).saturating_add(1)
                         } else {
                             2
                         };

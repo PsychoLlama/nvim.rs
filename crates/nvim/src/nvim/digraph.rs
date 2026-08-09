@@ -253,8 +253,10 @@ fn split_at_white(s: &[u8]) -> (&[u8], &[u8]) {
     s.split_at(n)
 }
 
-/// Parse a decimal number like strict `getdigits_int`: values that don't
-/// fit in an int abort in C, so panicking here preserves behavior.
+/// Parse a decimal number like strict `getdigits_int`, which saturates at
+/// `INT_MAX` rather than failing: the digits come straight from a
+/// `:digraph a: 4294967296` command line, so an out-of-range value is
+/// ordinary user input and must not end the process.
 fn parse_digits(s: &[u8]) -> (c_int, &[u8]) {
     let n = s.iter().take_while(|b| b.is_ascii_digit()).count();
     let (digits, rest) = s.split_at(n);
@@ -262,8 +264,7 @@ fn parse_digits(s: &[u8]) -> (c_int, &[u8]) {
     for &d in digits {
         value = value.saturating_mul(10).saturating_add((d - b'0') as i64);
     }
-    assert!(value <= c_int::MAX as i64, "digraph value out of range");
-    (value as c_int, rest)
+    (value.min(c_int::MAX as i64) as c_int, rest)
 }
 
 /// Add digraphs from a `:digraph {char1}{char2} {number} ...` argument.

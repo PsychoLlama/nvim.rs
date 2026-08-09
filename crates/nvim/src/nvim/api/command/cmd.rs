@@ -571,9 +571,11 @@ pub unsafe extern "C" fn nvim_cmd(
                                     if (*mods_p).tab as ::core::ffi::c_int
                                         >= 0 as ::core::ffi::c_int
                                     {
-                                        cmdinfo.cmdmod.cmod_tab = (*mods_p).tab
-                                            as ::core::ffi::c_int
-                                            + 1 as ::core::ffi::c_int;
+                                        // Saturating: `mods.tab` is caller
+                                        // input, so INT_MAX would otherwise
+                                        // end the process here.  C wraps.
+                                        cmdinfo.cmdmod.cmod_tab =
+                                            ((*mods_p).tab as ::core::ffi::c_int).saturating_add(1);
                                     }
                                 }
                                 if has_key(
@@ -583,9 +585,11 @@ pub unsafe extern "C" fn nvim_cmd(
                                     if (*mods_p).verbose as ::core::ffi::c_int
                                         >= 0 as ::core::ffi::c_int
                                     {
-                                        cmdinfo.cmdmod.cmod_verbose = (*mods_p).verbose
-                                            as ::core::ffi::c_int
-                                            + 1 as ::core::ffi::c_int;
+                                        // Saturating, for the same reason as
+                                        // `cmod_tab` above.
+                                        cmdinfo.cmdmod.cmod_verbose = ((*mods_p).verbose
+                                            as ::core::ffi::c_int)
+                                            .saturating_add(1);
                                     }
                                 }
                                 cmdinfo.cmdmod.cmod_split |=

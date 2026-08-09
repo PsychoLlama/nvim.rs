@@ -24,7 +24,7 @@
     "crates/nvim/src/nvim/api/buffer/marks.rs": {"unsafe_lines": 100},
     "crates/nvim/src/nvim/api/buffer/props.rs": {"cell_ptr": 2, "unsafe_lines": 178},
     "crates/nvim/src/nvim/api/buffer/text.rs": {"cell_ptr": 1, "unsafe_lines": 472},
-    "crates/nvim/src/nvim/api/command/cmd.rs": {"cell_ptr": 1, "unsafe_lines": 805},
+    "crates/nvim/src/nvim/api/command/cmd.rs": {"cell_ptr": 1, "unsafe_lines": 804},
     "crates/nvim/src/nvim/api/command/cmdline.rs": {"unsafe_lines": 153},
     "crates/nvim/src/nvim/api/command/parse.rs": {"cell_ptr": 1, "unsafe_lines": 212},
     "crates/nvim/src/nvim/api/command/user.rs": {"cell_ptr": 1, "unsafe_lines": 494},
