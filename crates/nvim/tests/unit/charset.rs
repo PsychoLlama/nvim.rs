@@ -553,6 +553,7 @@ mod getdigits {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "strtoimax is a foreign function")]
     fn strict_saturates_at_the_target_width() {
         // SAFETY: every string below is NUL-terminated by `CString`.
         unsafe {
@@ -582,6 +583,7 @@ mod getdigits {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "strtoimax is a foreign function")]
     fn non_strict_still_answers_the_default() {
         // SAFETY: as above.
         unsafe {
@@ -595,6 +597,7 @@ mod getdigits {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "strtoimax is a foreign function")]
     fn an_in_range_number_is_unmoved_and_the_pointer_advances() {
         // SAFETY: as above.
         unsafe {
