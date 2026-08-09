@@ -87,7 +87,7 @@ use crate::src::nvim::optionstr::check_stl_option;
 use crate::src::nvim::os::input::{
     input_blocking, input_enqueue, input_enqueue_mouse, input_enqueue_raw,
 };
-use crate::src::nvim::os::libc::{__assert_fail, labs, memcmp, memcpy, snprintf, strlen};
+use crate::src::nvim::os::libc::{labs, memcmp, memcpy, snprintf, strlen};
 use crate::src::nvim::os::proc::os_proc_children;
 use crate::src::nvim::popupmenu::{pum_ext_select_item, pum_set_info};
 use crate::src::nvim::register::{do_put, finish_yankreg_from_object, prepare_yankreg_from_object};

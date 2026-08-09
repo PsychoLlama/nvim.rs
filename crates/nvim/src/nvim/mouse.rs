@@ -47,7 +47,7 @@ use crate::src::nvim::normal::{
 };
 use crate::src::nvim::ops::clear_oparg;
 use crate::src::nvim::option::get_scrolloff_value;
-use crate::src::nvim::os::libc::{__assert_fail, abs, memset, strcmp};
+use crate::src::nvim::os::libc::{abs, memset, strcmp};
 use crate::src::nvim::plines::{
     getvcol, getvcols, init_charsize_arg, plines_win, plines_win_nofill, win_charsize,
     win_chartabsize, win_get_fill, win_may_fill,
@@ -822,20 +822,10 @@ pub unsafe extern "C" fn do_mouse(
                     call_click_def_func(click_defs, click_col, which_button);
                 }
                 _ => {
-                    '_c2rust_label: {
-                        if false {
-                        } else {
-                            __assert_fail(
-                                b"false && \"winbar, statusline and statuscolumn only support %@ for clicks\"\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                                b"src/nvim/mouse.rs\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                                716 as ::core::ffi::c_uint,
-                                b"_Bool do_mouse(oparg_T *, int, int, int, _Bool)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
+                    debug_assert!(
+                        false,
+                        "false && \\\"winbar, statusline and statuscolumn only support %@ for clicks\\\""
+                    );
                 }
             }
         }

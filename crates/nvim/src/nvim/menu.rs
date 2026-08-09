@@ -31,8 +31,7 @@ use crate::src::nvim::message::{
     msg_puts_title, str2special_save,
 };
 use crate::src::nvim::os::libc::{
-    __assert_fail, gettext, memmove, strcasecmp, strcat, strcmp, strcpy, strlen, strncasecmp,
-    strncmp,
+    gettext, memmove, strcasecmp, strcat, strcmp, strcpy, strlen, strncasecmp, strncmp,
 };
 use crate::src::nvim::popupmenu::pum_show_popupmenu;
 use crate::src::nvim::pos::MAXCOL;
@@ -996,18 +995,7 @@ unsafe extern "C" fn find_menu(
     mut path_name: *const ::core::ffi::c_char,
     mut modes: ::core::ffi::c_int,
 ) -> *mut vimmenu_T {
-    '_c2rust_label: {
-        if *path_name != 0 {
-        } else {
-            __assert_fail(
-                b"*path_name\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/menu.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                760 as ::core::ffi::c_uint,
-                b"vimmenu_T *find_menu(vimmenu_T *, const char *, int)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(*path_name != 0, "*path_name");
     let saved_name: *mut ::core::ffi::c_char = xstrdup(path_name);
     let mut name: *mut ::core::ffi::c_char = saved_name;
     '_theend: while *name != 0 {
@@ -1043,18 +1031,7 @@ unsafe extern "C" fn find_menu(
             break;
         } else {
             name = p;
-            '_c2rust_label_0: {
-                if *name != 0 {
-                } else {
-                    __assert_fail(
-                        b"*name\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/menu.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        792 as ::core::ffi::c_uint,
-                        b"vimmenu_T *find_menu(vimmenu_T *, const char *, int)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(*name != 0, "*name");
             menu = (*menu).children;
         }
     }
@@ -1624,17 +1601,7 @@ unsafe extern "C" fn popup_mode_name(
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     let mut len: size_t = strlen(name);
-    '_c2rust_label: {
-        if len >= 4 as size_t {
-        } else {
-            __assert_fail(
-                b"len >= 4\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/menu.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                1296 as ::core::ffi::c_uint,
-                b"char *popup_mode_name(char *, int)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(len >= 4 as size_t, "len >= 4");
     let mut mode_chars: *mut ::core::ffi::c_char = (*menu_mode_chars.ptr())[idx as usize];
     let mut mode_chars_len: size_t = strlen(mode_chars);
     let mut p: *mut ::core::ffi::c_char = xstrnsave(name, len.wrapping_add(mode_chars_len));
@@ -1663,18 +1630,7 @@ unsafe extern "C" fn menu_text(
         if !actext.is_null() {
             *actext = xstrdup(p.offset(1 as ::core::ffi::c_int as isize));
         }
-        '_c2rust_label: {
-            if p >= str as *mut ::core::ffi::c_char {
-            } else {
-                __assert_fail(
-                    b"p >= str\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/menu.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1332 as ::core::ffi::c_uint,
-                    b"char *menu_text(const char *, int *, char **)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(p >= str as *mut ::core::ffi::c_char, "p >= str");
         text = xmemdupz(
             str as *const ::core::ffi::c_void,
             p.offset_from(str) as size_t,
@@ -2165,18 +2121,7 @@ pub unsafe fn ex_menutranslate(mut eap: *mut exarg_T) {
                 ::core::ptr::null_mut::<::core::ffi::c_int>(),
                 ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
             );
-            '_c2rust_label: {
-                if arg >= to {
-                } else {
-                    __assert_fail(
-                        b"arg >= to\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/menu.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        1754 as ::core::ffi::c_uint,
-                        b"void ex_menutranslate(exarg_T *)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(arg >= to, "arg >= to");
             to = xmemdupz(
                 to as *const ::core::ffi::c_void,
                 arg.offset_from(to) as size_t,

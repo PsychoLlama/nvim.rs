@@ -86,17 +86,7 @@ pub unsafe extern "C" fn nvim_set_decoration_provider(
 ) {
     unsafe {
         let mut p: *mut DecorProvider = get_decor_provider(ns_id as NS, true);
-        '_c2rust_label: {
-            if !p.is_null() {
-            } else {
-                __assert_fail(
-                    c"p != NULL".as_ptr(),
-                    c"src/nvim/api/extmark.rs".as_ptr(),
-                    1083 as ::core::ffi::c_uint,
-                    __ASSERT_FUNCTION.as_ptr(),
-                );
-            }
-        };
+        debug_assert!(!p.is_null(), "p != NULL");
         decor_provider_clear(p);
         redraw_all_later(UPD_NOT_VALID);
         let mut cbs: [C2Rust_Unnamed_26; 10] = [

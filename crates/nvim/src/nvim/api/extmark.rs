@@ -40,7 +40,6 @@ use crate::src::nvim::mbyte::{mb_string2cells, utfc_ptr2schar};
 use crate::src::nvim::memline::ml_get_buf_len;
 use crate::src::nvim::memory::{strequal, xfree, xrealloc};
 use crate::src::nvim::r#move::changed_window_setting;
-use crate::src::nvim::os::libc::__assert_fail;
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
 use crate::src::nvim::sign::init_sign_text;
 use crate::src::nvim::types::{
@@ -90,14 +89,6 @@ pub struct C2Rust_Unnamed_26 {
     pub source: *mut LuaRef,
     pub dest: *mut LuaRef,
 }
-pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 87] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 87],
-        [::core::ffi::c_char; 87],
-    >(
-        *b"void nvim_set_decoration_provider(Integer, KeyDict_set_decoration_provider *, Error *)\0",
-    )
-};
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;

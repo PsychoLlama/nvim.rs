@@ -29,7 +29,7 @@ use crate::src::nvim::mouse::vcol2col;
 use crate::src::nvim::normal::{nv_g_home_m_cmd, nv_screengo};
 use crate::src::nvim::option::{get_scrolloff_value, get_showbreak_value, get_sidescrolloff_value};
 use crate::src::nvim::options::kOptCuloptFlagScreenline;
-use crate::src::nvim::os::libc::{__assert_fail, gettext, labs};
+use crate::src::nvim::os::libc::{gettext, labs};
 use crate::src::nvim::plines::{
     getvcol, getvvcol, linetabsize_eol, plines_m_win, plines_win, plines_win_full,
     plines_win_nofill, win_get_fill, win_may_fill,
@@ -284,18 +284,7 @@ pub unsafe extern "C" fn update_topline(mut wp: *mut win_T) {
                 n = 0 as int64_t;
                 let mut lnum: linenr_T = (*wp).w_cursor.lnum;
                 while (lnum as OptInt) < (*wp).w_topline as OptInt + *so_ptr {
-                    '_c2rust_label: {
-                        if !(*wp).w_buffer.is_null() {
-                        } else {
-                            __assert_fail(
-                                b"wp->w_buffer != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"src/nvim/move.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                338 as ::core::ffi::c_uint,
-                                b"void update_topline(win_T *)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
+                    debug_assert!(!(*wp).w_buffer.is_null(), "wp->w_buffer != 0");
                     if lnum >= (*(*wp).w_buffer).b_ml.ml_line_count || {
                         n += !decor_conceal_line(wp, lnum as ::core::ffi::c_int, false_0 != 0)
                             as ::core::ffi::c_int as int64_t;
@@ -330,17 +319,7 @@ pub unsafe extern "C" fn update_topline(mut wp: *mut win_T) {
         if (*wp).w_valid & VALID_BOTLINE_AP == 0 {
             validate_botline_win(wp);
         }
-        '_c2rust_label_0: {
-            if !(*wp).w_buffer.is_null() {
-            } else {
-                __assert_fail(
-                    b"wp->w_buffer != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/move.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    376 as ::core::ffi::c_uint,
-                    b"void update_topline(win_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(!(*wp).w_buffer.is_null(), "wp->w_buffer != 0");
         if (*wp).w_botline <= (*(*wp).w_buffer).b_ml.ml_line_count {
             if (*wp).w_cursor.lnum < (*wp).w_botline {
                 if (*wp).w_cursor.lnum as OptInt >= (*wp).w_botline as OptInt - *so_ptr
@@ -852,18 +831,7 @@ pub unsafe extern "C" fn curs_columns(mut wp: *mut win_T, mut may_scroll: ::core
                 new_leftcol = (*wp).w_wcol - extra - width1 / 2 as ::core::ffi::c_int;
             } else {
                 if diff < p_ss.get() {
-                    '_c2rust_label: {
-                        if p_ss.get() <= 2147483647 as OptInt {
-                        } else {
-                            __assert_fail(
-                                b"p_ss <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"src/nvim/move.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                903 as ::core::ffi::c_uint,
-                                b"void curs_columns(win_T *, int)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
+                    debug_assert!(p_ss.get() <= 2147483647 as OptInt, "p_ss <= INT_MAX");
                     diff = p_ss.get() as int64_t;
                 }
                 if off_left < 0 as int64_t {
@@ -920,17 +888,10 @@ pub unsafe extern "C" fn curs_columns(mut wp: *mut win_T, mut may_scroll: ::core
         }
         plines -= 1;
         if plines as int64_t > (*wp).w_wrow as int64_t + so {
-            '_c2rust_label_0: {
-                if (*wp).w_wrow as int64_t + so <= 2147483647 as int64_t {
-                } else {
-                    __assert_fail(
-                        b"wp->w_wrow + so <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/move.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        964 as ::core::ffi::c_uint,
-                        b"void curs_columns(win_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(
+                (*wp).w_wrow as int64_t + so <= 2147483647 as int64_t,
+                "wp->w_wrow + so <= INT_MAX"
+            );
             n = ((*wp).w_wrow as int64_t + so) as ::core::ffi::c_int;
         } else {
             n = plines;
@@ -957,17 +918,7 @@ pub unsafe extern "C" fn curs_columns(mut wp: *mut win_T, mut may_scroll: ::core
                 0 as ::core::ffi::c_int
             }) as colnr_T;
         } else if extra == 1 as ::core::ffi::c_int {
-            '_c2rust_label_1: {
-                if so <= 2147483647 as int64_t {
-                } else {
-                    __assert_fail(
-                        b"so <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/move.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        989 as ::core::ffi::c_uint,
-                        b"void curs_columns(win_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(so <= 2147483647 as int64_t, "so <= INT_MAX");
             extra = (((*wp).w_skipcol as int64_t + so * width2 as int64_t
                 - (*wp).w_virtcol as int64_t
                 + width2 as int64_t
@@ -1069,19 +1020,7 @@ pub unsafe extern "C" fn textpos2screenpos(
             }) + 1 as colnr_T
                 + off;
         } else {
-            '_c2rust_label: {
-                if lnum == (*pos).lnum {
-                } else {
-                    __assert_fail(
-                        b"lnum == pos->lnum\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/move.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        1087 as ::core::ffi::c_uint,
-                        b"void textpos2screenpos(win_T *, pos_T *, int *, int *, int *, int *, _Bool)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(lnum == (*pos).lnum, "lnum == pos->lnum");
             getvcol(wp, pos, &raw mut scol, &raw mut ccol, &raw mut ecol);
             let mut col: colnr_T = scol;
             col += off;
@@ -1857,18 +1796,7 @@ unsafe extern "C" fn botline_forw(mut wp: *mut win_T, mut lp: *mut lineoff_T) {
     } else {
         (*lp).lnum += 1;
         (*lp).fill = 0 as ::core::ffi::c_int;
-        '_c2rust_label: {
-            if !(*wp).w_buffer.is_null() {
-            } else {
-                __assert_fail(
-                    b"wp->w_buffer != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/move.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1768 as ::core::ffi::c_uint,
-                    b"void botline_forw(win_T *, lineoff_T *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(!(*wp).w_buffer.is_null(), "wp->w_buffer != 0");
         if (*lp).lnum > (*(*wp).w_buffer).b_ml.ml_line_count {
             (*lp).height = MAXCOL as ::core::ffi::c_int;
         } else if hasFolding(
@@ -2152,18 +2080,10 @@ pub unsafe extern "C" fn scroll_cursor_bot(
             continue;
         }
         botline_forw(wp, &raw mut boff);
-        '_c2rust_label: {
-            if boff.height != MAXCOL as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"boff.height != MAXCOL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/move.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    2067 as ::core::ffi::c_uint,
-                    b"void scroll_cursor_bot(win_T *, int, _Bool)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(
+            boff.height != MAXCOL as ::core::ffi::c_int,
+            "boff.height != MAXCOL"
+        );
         used_0 += boff.height;
         if used_0 > (*wp).w_view_height {
             break;

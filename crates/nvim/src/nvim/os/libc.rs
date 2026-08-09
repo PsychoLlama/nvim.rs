@@ -13,12 +13,6 @@
 use crate::src::nvim::types::*;
 
 unsafe extern "C" {
-    pub fn __assert_fail(
-        __assertion: *const ::core::ffi::c_char,
-        __file: *const ::core::ffi::c_char,
-        __line: ::core::ffi::c_uint,
-        __function: *const ::core::ffi::c_char,
-    ) -> !;
     pub fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;
     pub fn __errno_location() -> *mut ::core::ffi::c_int;
     pub fn _exit(__status: ::core::ffi::c_int) -> !;

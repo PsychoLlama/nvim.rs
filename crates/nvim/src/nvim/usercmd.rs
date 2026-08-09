@@ -24,8 +24,7 @@ use crate::src::nvim::message::{
 };
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, gettext, memmove, snprintf, strcat, strchr, strcmp, strcpy, strlen, strncasecmp,
-    strncmp,
+    gettext, memmove, snprintf, strcat, strchr, strcmp, strcpy, strlen, strncasecmp, strncmp,
 };
 use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::strings::{arena_printf, vim_strchr, xstrnsave};
@@ -782,18 +781,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                             b"%ldc\0".as_ptr() as *const ::core::ffi::c_char,
                             (*cmd).uc_def,
                         );
-                        '_c2rust_label: {
-                            if rc > 0 as ::core::ffi::c_int {
-                            } else {
-                                __assert_fail(
-                                    b"rc > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"src/nvim/usercmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                    563 as ::core::ffi::c_uint,
-                                    b"void uc_list(char *, size_t)\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                );
-                            }
-                        };
+                        debug_assert!(rc > 0 as ::core::ffi::c_int, "rc > 0");
                         len = len.wrapping_add(rc as size_t);
                     } else if a & EX_DFLALL as uint32_t != 0 {
                         let c2rust_fresh8 = len;
@@ -806,18 +794,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                             b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
                             (*cmd).uc_def,
                         );
-                        '_c2rust_label_0: {
-                            if rc_0 > 0 as ::core::ffi::c_int {
-                            } else {
-                                __assert_fail(
-                                    b"rc > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"src/nvim/usercmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                    570 as ::core::ffi::c_uint,
-                                    b"void uc_list(char *, size_t)\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                );
-                            }
-                        };
+                        debug_assert!(rc_0 > 0 as ::core::ffi::c_int, "rc > 0");
                         len = len.wrapping_add(rc_0 as size_t);
                     } else {
                         let c2rust_fresh9 = len;
@@ -848,18 +825,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                             b"%s\0".as_ptr() as *const ::core::ffi::c_char,
                             (*addr_type_complete.ptr())[j as usize].shortname,
                         );
-                        '_c2rust_label_1: {
-                            if rc_1 > 0 as ::core::ffi::c_int {
-                            } else {
-                                __assert_fail(
-                                    b"rc > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"src/nvim/usercmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                    586 as ::core::ffi::c_uint,
-                                    b"void uc_list(char *, size_t)\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                );
-                            }
-                        };
+                        debug_assert!(rc_1 > 0 as ::core::ffi::c_int, "rc > 0");
                         len = len.wrapping_add(rc_1 as size_t);
                         break;
                     } else {
@@ -882,18 +848,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                         b"%s\0".as_ptr() as *const ::core::ffi::c_char,
                         get_command_complete((*cmd).uc_compl),
                     );
-                    '_c2rust_label_2: {
-                        if rc_2 > 0 as ::core::ffi::c_int {
-                        } else {
-                            __assert_fail(
-                                b"rc > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"src/nvim/usercmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                600 as ::core::ffi::c_uint,
-                                b"void uc_list(char *, size_t)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
+                    debug_assert!(rc_2 > 0 as ::core::ffi::c_int, "rc > 0");
                     len = len.wrapping_add(rc_2 as size_t);
                 }
                 loop {
@@ -2473,17 +2428,10 @@ pub unsafe extern "C" fn do_ucmd(mut eap: *mut exarg_T, mut preview: bool) -> ::
             .offset((*eap).useridx as isize);
     }
     if preview {
-        '_c2rust_label: {
-            if (*cmd).uc_preview_luaref > 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"cmd->uc_preview_luaref > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/usercmd.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1663 as ::core::ffi::c_uint,
-                    b"int do_ucmd(exarg_T *, _Bool)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(
+            (*cmd).uc_preview_luaref > 0 as ::core::ffi::c_int,
+            "cmd->uc_preview_luaref > 0"
+        );
         return nlua_do_ucmd(cmd, eap, true_0 != 0);
     }
     if (*cmd).uc_luaref > 0 as ::core::ffi::c_int {

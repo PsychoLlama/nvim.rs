@@ -13,7 +13,7 @@ use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::memory::{strequal, xfree, xmalloc, xrealloc};
 use crate::src::nvim::option::{get_option_value, optval_free, set_option_value};
 use crate::src::nvim::options::kOptShada;
-use crate::src::nvim::os::libc::{__assert_fail, snprintf, strlen, strncmp};
+use crate::src::nvim::os::libc::{snprintf, strlen, strncmp};
 use crate::src::nvim::shada::{
     shada_encode_buflist, shada_encode_gvars, shada_encode_jumps, shada_encode_regs,
     shada_read_string,
@@ -335,19 +335,11 @@ unsafe extern "C" fn array_to_string(mut array: Array, mut err: *mut Error) -> S
         &raw mut list_tv,
         err,
     );
-    '_c2rust_label: {
-        if list_tv.v_type as ::core::ffi::c_uint
-            == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-        } else {
-            __assert_fail(
-                b"list_tv.v_type == VAR_LIST\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/context.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                257 as ::core::ffi::c_uint,
-                b"String array_to_string(Array, Error *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(
+        list_tv.v_type as ::core::ffi::c_uint
+            == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint,
+        "list_tv.v_type == VAR_LIST"
+    );
     if !encode_vim_list_to_buf(list_tv.vval.v_list, &raw mut sbuf.size, &raw mut sbuf.data) {
         api_set_error(
             err,
@@ -361,17 +353,7 @@ unsafe extern "C" fn array_to_string(mut array: Array, mut err: *mut Error) -> S
     return sbuf;
 }
 pub unsafe extern "C" fn ctx_to_dict(mut ctx: *mut Context, mut arena: *mut Arena) -> Dict {
-    '_c2rust_label: {
-        if !ctx.is_null() {
-        } else {
-            __assert_fail(
-                b"ctx != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/context.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                275 as ::core::ffi::c_uint,
-                b"Dict ctx_to_dict(Context *, Arena *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(!ctx.is_null(), "ctx != NULL");
     let mut rv: Dict = arena_dict(arena, 5 as size_t);
     let c2rust_fresh2 = rv.size;
     rv.size = rv.size.wrapping_add(1);
@@ -435,18 +417,7 @@ pub unsafe extern "C" fn ctx_from_dict(
     mut ctx: *mut Context,
     mut err: *mut Error,
 ) -> ::core::ffi::c_int {
-    '_c2rust_label: {
-        if !ctx.is_null() {
-        } else {
-            __assert_fail(
-                b"ctx != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/context.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                298 as ::core::ffi::c_uint,
-                b"int ctx_from_dict(Dict, Context *, Error *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(!ctx.is_null(), "ctx != NULL");
     let mut types: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut i: size_t = 0 as size_t;
     while i < dict.size

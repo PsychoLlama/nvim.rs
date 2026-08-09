@@ -9,8 +9,8 @@ use crate::src::nvim::memory::{strequal, xfree, xstrlcpy};
 use crate::src::nvim::os::env::{expand_env, os_get_pid, os_getenv_buf, os_setenv};
 use crate::src::nvim::os::fs::{os_isdir, os_mkdir_recurse};
 use crate::src::nvim::os::libc::{
-    __assert_fail, __errno_location, fclose, fflush, fopen, fprintf, fputc, fputs, snprintf,
-    stderr, stdout, strerror, strftime, vfprintf,
+    __errno_location, fclose, fflush, fopen, fprintf, fputc, fputs, snprintf, stderr, stdout,
+    strerror, strftime, vfprintf,
 };
 use crate::src::nvim::os::stdpaths::{get_xdg_home, stdpaths_user_state_subpath};
 use crate::src::nvim::os::time::{os_localtime, tm_zeroed};
@@ -304,19 +304,10 @@ unsafe extern "C" fn log_write_prefix(
         b"WRN\0".as_ptr() as *const ::core::ffi::c_char,
         b"ERR\0".as_ptr() as *const ::core::ffi::c_char,
     ]);
-    '_c2rust_label: {
-        if log_level >= 1 as ::core::ffi::c_int && log_level <= 4 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"log_level >= LOGLVL_DBG && log_level <= LOGLVL_ERR\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/log.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                313 as ::core::ffi::c_uint,
-                b"_Bool log_write_prefix(FILE *, int, const char *, const char *, int)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(
+        log_level >= 1 as ::core::ffi::c_int && log_level <= 4 as ::core::ffi::c_int,
+        "log_level >= LOGLVL_DBG && log_level <= LOGLVL_ERR"
+    );
     let mut local_time: tm = tm_zeroed();
     if !os_localtime(&mut local_time) {
         return false_0 != 0;

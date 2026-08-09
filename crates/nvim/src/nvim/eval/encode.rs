@@ -10,7 +10,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::IObuff;
 use crate::src::nvim::mbyte::{utf_char2len, utf_printable, utf_ptr2char, utf_ptr2len};
 use crate::src::nvim::memory::{memchrsub, xfree, xmalloc, xmemdupz, xmemscan, xrealloc};
-use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memcpy, strlen};
+use crate::src::nvim::os::libc::{abort, gettext, memcpy, strlen};
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
     ListReaderState, MPConvPartialStage, MPConvStackValType, MessagePackType, VAR_DICT, VAR_FUNC,
@@ -280,18 +280,7 @@ pub unsafe extern "C" fn encode_vim_list_to_buf(
     if encode_read_from_list(&raw mut lrstate, buf, len, &raw mut read_bytes) != OK {
         abort();
     }
-    '_c2rust_label: {
-        if len == read_bytes {
-        } else {
-            __assert_fail(
-                b"len == read_bytes\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/eval/encode.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                240 as ::core::ffi::c_uint,
-                b"_Bool encode_vim_list_to_buf(const list_T *const, size_t *const, char **const)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(len == read_bytes, "len == read_bytes");
     *ret_buf = buf;
     return true_0 != 0;
 }
@@ -304,36 +293,16 @@ pub unsafe extern "C" fn encode_read_from_list(
     let buf_end: *mut ::core::ffi::c_char = buf.offset(nbuf as isize);
     let mut p: *mut ::core::ffi::c_char = buf;
     while p < buf_end {
-        '_c2rust_label: {
-            if (*state).li_length == 0 as size_t || !(*(*state).li).li_tv.vval.v_string.is_null() {
-            } else {
-                __assert_fail(
-                    b"state->li_length == 0 || TV_LIST_ITEM_TV(state->li)->vval.v_string != NULL\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/eval/encode.rs\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    265 as ::core::ffi::c_uint,
-                    b"int encode_read_from_list(ListReaderState *const, char *const, const size_t, size_t *const)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(
+            (*state).li_length == 0 as size_t || !(*(*state).li).li_tv.vval.v_string.is_null(),
+            "state->li_length == 0 || TV_LIST_ITEM_TV(state->li)->vval.v_string != NULL"
+        );
         let mut i: size_t = (*state).offset;
         while i < (*state).li_length && p < buf_end {
-            '_c2rust_label_0: {
-                if !(*(*state).li).li_tv.vval.v_string.is_null() {
-                } else {
-                    __assert_fail(
-                        b"TV_LIST_ITEM_TV(state->li)->vval.v_string != NULL\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                        b"src/nvim/eval/encode.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        267 as ::core::ffi::c_uint,
-                        b"int encode_read_from_list(ListReaderState *const, char *const, const size_t, size_t *const)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(
+                !(*(*state).li).li_tv.vval.v_string.is_null(),
+                "TV_LIST_ITEM_TV(state->li)->vval.v_string != NULL"
+            );
             let c2rust_fresh27 = (*state).offset;
             (*state).offset = (*state).offset.wrapping_add(1);
             let ch: ::core::ffi::c_char = *(*(*state).li)
@@ -508,19 +477,7 @@ pub(crate) unsafe extern "C" fn convert_to_json_string(
             } else {
                 utf_ptr2len(utf_buf.offset(i as isize)) as size_t
             };
-            '_c2rust_label: {
-                if shift > 0 as size_t {
-                } else {
-                    __assert_fail(
-                        b"shift > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/eval/encode.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        643 as ::core::ffi::c_uint,
-                        b"int convert_to_json_string(garray_T *const, const char *const, const size_t)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(shift > 0 as size_t, "shift > 0");
             i = i.wrapping_add(shift);
             match ch {
                 BS | TAB | NL | FF | CAR | 34 | 92 => {
@@ -581,35 +538,12 @@ pub(crate) unsafe extern "C" fn convert_to_json_string(
             } else {
                 utf_char2len(ch_0) as size_t
             };
-            '_c2rust_label_0: {
-                if shift_0 > 0 as size_t {
-                } else {
-                    __assert_fail(
-                        b"shift > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/eval/encode.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        683 as ::core::ffi::c_uint,
-                        b"int convert_to_json_string(garray_T *const, const char *const, const size_t)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            '_c2rust_label_1: {
-                if ch_0 == 0 as ::core::ffi::c_int
-                    || shift_0 == utf_ptr2len(utf_buf.offset(i_0 as isize)) as size_t
-                {
-                } else {
-                    __assert_fail(
-                        b"ch == 0 || shift == ((size_t)utf_ptr2len(utf_buf + i))\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/eval/encode.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        685 as ::core::ffi::c_uint,
-                        b"int convert_to_json_string(garray_T *const, const char *const, const size_t)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(shift_0 > 0 as size_t, "shift > 0");
+            debug_assert!(
+                ch_0 == 0 as ::core::ffi::c_int
+                    || shift_0 == utf_ptr2len(utf_buf.offset(i_0 as isize)) as size_t,
+                "ch == 0 || shift == ((size_t)utf_ptr2len(utf_buf + i))"
+            );
             match ch_0 {
                 BS | TAB | NL | FF | CAR | 34 | 92 => {
                     ga_concat_len(

@@ -66,8 +66,8 @@ use crate::src::nvim::os::env::{
 use crate::src::nvim::os::fs::{os_file_is_readable, os_isdir, os_open, os_set_cloexec};
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, __errno_location, fclose, fdopen, fgets, gettext, memchr, memcpy, memmove,
-    memset, snprintf, strcasecmp, strcat, strcmp, strcpy, strlen, strncasecmp, strncmp, strstr,
+    __errno_location, fclose, fdopen, fgets, gettext, memchr, memcpy, memmove, memset, snprintf,
+    strcasecmp, strcat, strcmp, strcpy, strlen, strncasecmp, strncmp, strstr,
 };
 use crate::src::nvim::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::src::nvim::path::{
@@ -699,17 +699,7 @@ pub unsafe fn ex_runtime(mut eap: *mut exarg_T) {
     };
     let mut p: *mut ::core::ffi::c_char = skiptowhite(arg);
     flags += get_runtime_cmd_flags(&raw mut arg, p.offset_from(arg) as size_t);
-    '_c2rust_label: {
-        if !arg.is_null() {
-        } else {
-            __assert_fail(
-                b"arg != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/runtime.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                345 as ::core::ffi::c_uint,
-                b"void ex_runtime(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(!arg.is_null(), "arg != NULL");
     source_runtime(arg, flags);
 }
 static runtime_expand_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -892,20 +882,10 @@ pub unsafe extern "C" fn do_in_path(
             while *np as ::core::ffi::c_int != NUL
                 && (do_all as ::core::ffi::c_int != 0 || !did_one)
             {
-                '_c2rust_label: {
-                    if 4096 as isize >= tail.offset_from(buf) {
-                    } else {
-                        __assert_fail(
-                            b"MAXPATHL >= (tail - buf)\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                            b"src/nvim/runtime.rs\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                            482 as ::core::ffi::c_uint,
-                            b"int do_in_path(const char *, const char *, char *, int, DoInRuntimepathCB, void *)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                        );
-                    }
-                };
+                debug_assert!(
+                    4096 as isize >= tail.offset_from(buf),
+                    "MAXPATHL >= (tail - buf)"
+                );
                 copy_option_part(
                     &raw mut np,
                     tail,
@@ -1087,22 +1067,10 @@ unsafe extern "C" fn do_in_cached_path(
                 while *np as ::core::ffi::c_int != NUL
                     && (do_all as ::core::ffi::c_int != 0 || !did_one)
                 {
-                    '_c2rust_label: {
-                        if 4096 as isize
-                            >= tail.offset_from(&raw mut buf as *mut ::core::ffi::c_char)
-                        {
-                        } else {
-                            __assert_fail(
-                                b"MAXPATHL >= (tail - buf)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                b"src/nvim/runtime.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                606 as ::core::ffi::c_uint,
-                                b"int do_in_cached_path(char *, int, DoInRuntimepathCB, void *)\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
+                    debug_assert!(
+                        4096 as isize >= tail.offset_from(&raw mut buf as *mut ::core::ffi::c_char),
+                        "MAXPATHL >= (tail - buf)"
+                    );
                     copy_option_part(
                         &raw mut np,
                         tail,
@@ -2097,18 +2065,10 @@ unsafe extern "C" fn add_pack_dir_to_rtp(
                 },
                 0 as ::core::ffi::c_int,
             );
-            '_c2rust_label: {
-                if !runtime_search_path_valid.get() {
-                } else {
-                    __assert_fail(
-                        b"!runtime_search_path_valid\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/runtime.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        1174 as ::core::ffi::c_uint,
-                        b"int add_pack_dir_to_rtp(char *, _Bool)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(
+                !runtime_search_path_valid.get(),
+                "!runtime_search_path_valid"
+            );
             if was_valid as ::core::ffi::c_int != 0
                 && !is_pack
                 && (*runtime_search_path_ref.ptr()).is_null()
@@ -2797,18 +2757,10 @@ unsafe extern "C" fn ExpandRTDir_int(
         }
         s = s.offset(1);
         if s != match_0 {
-            '_c2rust_label: {
-                if e.offset_from(s) + 1 as isize >= 0 as isize {
-                } else {
-                    __assert_fail(
-                        b"(e - s) + 1 >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/runtime.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        1515 as ::core::ffi::c_uint,
-                        b"void ExpandRTDir_int(char *, size_t, int, _Bool, garray_T *, char **)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(
+                e.offset_from(s) + 1 as isize >= 0 as isize,
+                "(e - s) + 1 >= 0"
+            );
             memmove(
                 match_0 as *mut ::core::ffi::c_void,
                 s as *const ::core::ffi::c_void,
@@ -3165,23 +3117,12 @@ unsafe extern "C" fn add_dir(
         }
         let mut appname: *const ::core::ffi::c_char = get_appname(false_0 != 0);
         let mut appname_len: size_t = strlen(appname);
-        '_c2rust_label: {
-            if appname_len
+        debug_assert!(
+            appname_len
                 < ((1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as usize)
-                    .wrapping_sub(::core::mem::size_of::<[::core::ffi::c_char; 6]>())
-            {
-            } else {
-                __assert_fail(
-                    b"appname_len < (IOSIZE - sizeof(\"-data\"))\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                    b"src/nvim/runtime.rs\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    1773 as ::core::ffi::c_uint,
-                    b"char *add_dir(char *, const char *const, const size_t, const XDGVarType, const char *const, const size_t, const char *const, const size_t)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+                    .wrapping_sub(::core::mem::size_of::<[::core::ffi::c_char; 6]>()),
+            "appname_len < (IOSIZE - sizeof(\\\"-data\\\"))"
+        );
         xmemcpyz(
             IObuff.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
             appname as *const ::core::ffi::c_void,
@@ -3451,17 +3392,10 @@ pub unsafe extern "C" fn runtimepath_default(mut clean_arg: bool) -> *mut ::core
             0 as size_t,
         );
         *rtp_cur.offset(-1 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
-        '_c2rust_label: {
-            if rtp_cur.offset_from(rtp) as size_t == rtp_size {
-            } else {
-                __assert_fail(
-                    b"(size_t)(rtp_cur - rtp) == rtp_size\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/runtime.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1908 as ::core::ffi::c_uint,
-                    b"char *runtimepath_default(_Bool)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(
+            rtp_cur.offset_from(rtp) as size_t == rtp_size,
+            "(size_t)(rtp_cur - rtp) == rtp_size"
+        );
     }
     xfree(data_dirs as *mut ::core::ffi::c_void);
     xfree(config_dirs as *mut ::core::ffi::c_void);
@@ -3797,19 +3731,7 @@ unsafe extern "C" fn do_source_ext(
     let mut fname_exp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     '_theend: {
         if fname.is_null() {
-            '_c2rust_label: {
-                if str.is_null() {
-                } else {
-                    __assert_fail(
-                        b"str == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/runtime.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        2184 as ::core::ffi::c_uint,
-                        b"int do_source_ext(char *const, const _Bool, const int, int *const, const exarg_T *const, const _Bool, const char *const)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(str.is_null(), "str == NULL");
             fname_exp = do_source_buffer_init(&raw mut cookie, eap, ex_lua);
             if fname_exp.is_null() {
                 return FAIL;
@@ -4009,20 +3931,10 @@ unsafe extern "C" fn do_source_ext(
                         *ret_sid = sid;
                     }
                 }
-                '_c2rust_label_0: {
-                    if !si.is_null() as ::core::ffi::c_int == str.is_null() as ::core::ffi::c_int {
-                    } else {
-                        __assert_fail(
-                            b"(si != NULL) == (str == NULL)\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                            b"src/nvim/runtime.rs\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                            2332 as ::core::ffi::c_uint,
-                            b"int do_source_ext(char *const, const _Bool, const int, int *const, const exarg_T *const, const _Bool, const char *const)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                        );
-                    }
-                };
+                debug_assert!(
+                    !si.is_null() as ::core::ffi::c_int == str.is_null() as ::core::ffi::c_int,
+                    "(si != NULL) == (str == NULL)"
+                );
                 if str.is_null() || !script_is_lua((*current_sctx.ptr()).sc_sid) {
                     (*current_sctx.ptr()).sc_sid = sid as scid_T;
                     (*current_sctx.ptr()).sc_lnum = 0 as ::core::ffi::c_int as linenr_T;
@@ -4324,17 +4236,10 @@ pub unsafe extern "C" fn script_is_lua(mut sid: scid_T) -> bool {
 pub unsafe extern "C" fn find_script_by_name(
     mut name: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    '_c2rust_label: {
-        if (*script_items.ptr()).ga_len >= 0 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"script_items.ga_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/runtime.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                2498 as ::core::ffi::c_uint,
-                b"int find_script_by_name(char *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(
+        (*script_items.ptr()).ga_len >= 0 as ::core::ffi::c_int,
+        "script_items.ga_len >= 0"
+    );
     let mut sid: ::core::ffi::c_int = (*script_items.ptr()).ga_len;
     while sid > 0 as ::core::ffi::c_int {
         let mut si: *mut scriptitem_T = *((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)

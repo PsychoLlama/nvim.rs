@@ -98,17 +98,7 @@ unsafe extern "C" fn win_config_split(
                 '_restore_curwin: {
                     if curwin_moving_tp {
                         let mut altwin: *mut win_T = win_find_altwin(win, win_tp);
-                        '_c2rust_label: {
-                            if !altwin.is_null() {
-                            } else {
-                                __assert_fail(
-                                c"altwin".as_ptr(),
-                                c"src/nvim/api/win_config.rs".as_ptr(),
-                                492 as ::core::ffi::c_uint,
-                                c"_Bool win_config_split(win_T *, const KeyDict_win_config *, WinConfig *, Error *)".as_ptr(),
-                            );
-                            }
-                        };
+                        debug_assert!(!altwin.is_null(), "altwin");
                         win_goto(altwin);
                         if curwin.get() == win {
                             api_set_error(
@@ -265,17 +255,7 @@ unsafe extern "C" fn win_config_split(
                     if need_switch {
                         let result: ::core::ffi::c_int =
                             switch_win(&raw mut switchwin, parent, parent_tp, true);
-                        '_c2rust_label_0: {
-                            if result == 1 as ::core::ffi::c_int {
-                            } else {
-                                __assert_fail(
-                                c"result == OK".as_ptr(),
-                                c"src/nvim/api/win_config.rs".as_ptr(),
-                                594 as ::core::ffi::c_uint,
-                                c"_Bool win_config_split(win_T *, const KeyDict_win_config *, WinConfig *, Error *)".as_ptr(),
-                            );
-                            }
-                        };
+                        debug_assert!(result == 1 as ::core::ffi::c_int, "result == OK");
                     }
                     to_split_ok = !win_split_ins(
                         0 as ::core::ffi::c_int,
@@ -374,17 +354,7 @@ unsafe extern "C" fn win_config_float_tp(
                     return false;
                 }
                 altwin = win_find_altwin(win, win_tp);
-                '_c2rust_label: {
-                    if !altwin.is_null() {
-                    } else {
-                        __assert_fail(
-                        c"altwin".as_ptr(),
-                        c"src/nvim/api/win_config.rs".as_ptr(),
-                        671 as ::core::ffi::c_uint,
-                        c"_Bool win_config_float_tp(win_T *, const KeyDict_win_config *, const WinConfig *, Error *)".as_ptr(),
-                    );
-                    }
-                };
+                debug_assert!(!altwin.is_null(), "altwin");
                 if curwin.get() == win {
                     curwin_moving_tp = true;
                     win_goto(altwin);
@@ -410,17 +380,7 @@ unsafe extern "C" fn win_config_float_tp(
                         break '_restore_curwin;
                     }
                     altwin = win_find_altwin(win, win_tp);
-                    '_c2rust_label_0: {
-                        if !altwin.is_null() {
-                        } else {
-                            __assert_fail(
-                            c"altwin".as_ptr(),
-                            c"src/nvim/api/win_config.rs".as_ptr(),
-                            696 as ::core::ffi::c_uint,
-                            c"_Bool win_config_float_tp(win_T *, const KeyDict_win_config *, const WinConfig *, Error *)".as_ptr(),
-                        );
-                        }
-                    };
+                    debug_assert!(!altwin.is_null(), "altwin");
                 }
             }
             if !(*win).w_floating {

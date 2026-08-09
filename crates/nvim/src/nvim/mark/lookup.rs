@@ -5,7 +5,6 @@ use crate::src::nvim::edit::beginline;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{curbuf, curwin, listcmd_busy, namedfm};
 use crate::src::nvim::message::emsg;
-use crate::src::nvim::os::libc::__assert_fail;
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM, lt};
 use crate::src::nvim::textobject::{findpar, findsent};
 use core::ffi::{c_char, c_int, c_uint};
@@ -63,14 +62,12 @@ pub unsafe extern "C" fn mark_get_global(mut resolve: bool, mut name: c_int) -> 
     } else if name as c_uint >= 'A' as c_uint && name as c_uint <= 'Z' as c_uint {
         name -= 'A' as c_int;
     } else {
-        '_c2rust_label: {
-            __assert_fail(
-                c"false".as_ptr(),
-                c"src/nvim/mark.rs".as_ptr(),
-                453,
-                c"xfmark_T *mark_get_global(_Bool, int)".as_ptr(),
-            );
-        };
+        // Deliberately a hard failure, not a `debug_assert!`: `name` is the
+        // index into `namedfm` two lines down, and neither branch above has
+        // clamped it, so falling through reads out of bounds. Both callers
+        // (`mark_get` and `nvim_get_mark`) reject anything that is not a
+        // digit or an uppercase letter before they get here.
+        unreachable!("mark name is neither a digit nor an uppercase letter");
     }
     mark = (namedfm.ptr() as *mut xfmark_T).offset(name as isize);
     if resolve && (*mark).fmark.fnum == 0 {

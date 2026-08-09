@@ -21,7 +21,7 @@ use crate::src::nvim::marktree::{
 };
 use crate::src::nvim::memline::ml_find_line_or_offset;
 use crate::src::nvim::memory::{xfree, xrealloc};
-use crate::src::nvim::os::libc::{__assert_fail, memset};
+use crate::src::nvim::os::libc::memset;
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::types::{
     DecorHighlightInline, DecorInline, DecorInlineData, Error, ExtmarkInfoArray, ExtmarkMove,
@@ -134,20 +134,10 @@ pub unsafe extern "C" fn extmark_set(
                 {
                     extmark_del_id(buf, ns_id, id);
                 } else {
-                    '_c2rust_label: {
-                        if !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null() {
-                        } else {
-                            __assert_fail(
-                                b"marktree_itr_valid(itr)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                b"src/nvim/extmark.rs\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                                70 as ::core::ffi::c_uint,
-                                b"void extmark_set(buf_T *, uint32_t, uint32_t *, int, colnr_T, int, colnr_T, DecorInline, uint16_t, _Bool, _Bool, _Bool, _Bool, Error *)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
+                    debug_assert!(
+                        !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null(),
+                        "marktree_itr_valid(itr)"
+                    );
                     if old_mark.pos.row == row as int32_t && old_mark.pos.col == col as int32_t {
                         if !mt_invalid(old_mark)
                             && mt_decor_any(old_mark) as ::core::ffi::c_int != 0
@@ -441,18 +431,7 @@ pub unsafe extern "C" fn extmark_del(
     mut key: MTKey,
     mut restore: bool,
 ) {
-    '_c2rust_label: {
-        if key.pos.row >= 0 as int32_t {
-        } else {
-            __assert_fail(
-                b"key.pos.row >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/extmark.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                167 as ::core::ffi::c_uint,
-                b"void extmark_del(buf_T *, MarkTreeIter *, MTKey, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(key.pos.row >= 0 as int32_t, "key.pos.row >= 0");
     let mut key2: MTKey = key;
     let mut other: uint64_t = marktree_del_itr(
         &raw mut (*buf).b_marktree as *mut MarkTree,
@@ -461,18 +440,7 @@ pub unsafe extern "C" fn extmark_del(
     );
     if other != 0 {
         key2 = marktree_lookup(&raw mut (*buf).b_marktree as *mut MarkTree, other, itr);
-        '_c2rust_label_0: {
-            if key2.pos.row >= 0 as int32_t {
-            } else {
-                __assert_fail(
-                    b"key2.pos.row >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/extmark.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    173 as ::core::ffi::c_uint,
-                    b"void extmark_del(buf_T *, MarkTreeIter *, MTKey, _Bool)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(key2.pos.row >= 0 as int32_t, "key2.pos.row >= 0");
         marktree_del_itr(
             &raw mut (*buf).b_marktree as *mut MarkTree,
             itr,
@@ -759,18 +727,7 @@ pub unsafe extern "C" fn extmark_from_id(
     if mark.id == 0 {
         return mtpair_from(mark, mark);
     }
-    '_c2rust_label: {
-        if mark.pos.row >= 0 as int32_t {
-        } else {
-            __assert_fail(
-                b"mark.pos.row >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/extmark.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                328 as ::core::ffi::c_uint,
-                b"MTPair extmark_from_id(buf_T *, uint32_t, uint32_t)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(mark.pos.row >= 0 as int32_t, "mark.pos.row >= 0");
     let mut end: MTKey = marktree_get_alt(
         &raw mut (*buf).b_marktree as *mut MarkTree,
         mark,
@@ -1100,19 +1057,10 @@ pub unsafe extern "C" fn extmark_adjust(
         old_byte = (*buf).deleted_bytes2 as bcount_t;
         new_row = (amount_after + old_row as linenr_T) as ::core::ffi::c_int;
     } else {
-        '_c2rust_label: {
-            if line2 == MAXLNUM as ::core::ffi::c_int as linenr_T {
-            } else {
-                __assert_fail(
-                    b"line2 == MAXLNUM\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/extmark.rs\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    500 as ::core::ffi::c_uint,
-                    b"void extmark_adjust(buf_T *, linenr_T, linenr_T, linenr_T, linenr_T, ExtmarkOp)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(
+            line2 == MAXLNUM as ::core::ffi::c_int as linenr_T,
+            "line2 == MAXLNUM"
+        );
         old_row = 0 as ::core::ffi::c_int;
         new_row = amount as ::core::ffi::c_int;
     }

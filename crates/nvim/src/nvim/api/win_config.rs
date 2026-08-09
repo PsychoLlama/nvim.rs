@@ -30,7 +30,7 @@ use crate::src::nvim::memory::{strequal, xrealloc, xstrdup};
 use crate::src::nvim::r#move::changed_window_setting;
 use crate::src::nvim::option::{copy_option_part, didset_window_options};
 use crate::src::nvim::options::opt_winborder_values;
-use crate::src::nvim::os::libc::{__assert_fail, memcpy, memset, strchr};
+use crate::src::nvim::os::libc::{memcpy, memset, strchr};
 use crate::src::nvim::strings::striequal;
 use crate::src::nvim::types::ui::kUIMultigrid;
 use crate::src::nvim::types::{

@@ -28,7 +28,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::mbyte::{mb_strnicmp, utfc_ptr2len};
 use crate::src::nvim::memory::xmemdupz;
 use crate::src::nvim::message::emsg;
-use crate::src::nvim::os::libc::{__assert_fail, memmove, strcmp, strlen, strstr};
+use crate::src::nvim::os::libc::{memmove, strcmp, strlen, strstr};
 use crate::src::nvim::strings::reverse_text;
 use crate::src::nvim::types::{
     EvalFuncData, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_LOCKED, VAR_NUMBER,
@@ -629,20 +629,11 @@ unsafe extern "C" fn filter_map(
             rettv,
         );
     } else {
-        '_c2rust_label: {
-            if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-            } else {
-                __assert_fail(
-                    b"argvars[0].v_type == VAR_LIST\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/eval/list.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    393 as ::core::ffi::c_uint,
-                    b"void filter_map(typval_T *, typval_T *, filtermap_T)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(
+            (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
+                == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint,
+            "argvars[0].v_type == VAR_LIST"
+        );
         filter_map_list(
             (*argvars.offset(0 as ::core::ffi::c_int as isize))
                 .vval
@@ -918,18 +909,10 @@ unsafe extern "C" fn extend_dict(
         .v_dict;
     if d1.is_null() {
         let locked: bool = value_check_lock(VAR_FIXED, arg_errmsg, TV_TRANSLATE as size_t);
-        '_c2rust_label: {
-            if locked as ::core::ffi::c_int == 1 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"locked == true\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/eval/list.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    584 as ::core::ffi::c_uint,
-                    b"void extend_dict(typval_T *, const char *, _Bool, typval_T *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(
+            locked as ::core::ffi::c_int == 1 as ::core::ffi::c_int,
+            "locked == true"
+        );
         return;
     }
     let d2: *mut dict_T = (*argvars.offset(1 as ::core::ffi::c_int as isize))

@@ -22,7 +22,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::lua::executor::{api_new_luaref, nlua_ref_is_function};
 use crate::src::nvim::main::{curbuf, current_sctx};
 use crate::src::nvim::memory::{strequal, xfree};
-use crate::src::nvim::os::libc::{__assert_fail, abort, strlen};
+use crate::src::nvim::os::libc::{abort, strlen};
 use crate::src::nvim::strings::arena_printf;
 use crate::src::nvim::types::{
     Arena, Array, ArrayBuilder, AutoCmd, AutoCmdVec, AutoPat, Buffer, Callback,

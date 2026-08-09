@@ -51,7 +51,7 @@ use crate::src::nvim::options::{
 };
 use crate::src::nvim::os::env::home_replace;
 use crate::src::nvim::os::libc::{
-    __assert_fail, abs, atoi, gettext, memcpy, memmove, memset, strchr, strlen, toupper,
+    abs, atoi, gettext, memcpy, memmove, memset, strchr, strlen, toupper,
 };
 use crate::src::nvim::path::{path_tail, shorten_dir};
 use crate::src::nvim::plines::getvvcol;
@@ -299,19 +299,7 @@ pub unsafe extern "C" fn stl_fill_click_defs(
             buf,
             (*click_recs.offset(i as isize)).start.offset_from(buf) as ::core::ffi::c_int,
         );
-        '_c2rust_label: {
-            if len <= width {
-            } else {
-                __assert_fail(
-                    b"len <= width\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/statusline.rs\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    187 as ::core::ffi::c_uint,
-                    b"void stl_fill_click_defs(StlClickDefinition *, StlClickRecord *, const char *, int, _Bool)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(len <= width, "len <= width");
         if col < len {
             while col < len {
                 let c2rust_fresh5 = col;
@@ -911,17 +899,10 @@ pub unsafe extern "C" fn redraw_ruler() {
                 integer: HLF_MSG as Integer,
             },
         };
-        '_c2rust_label: {
-            if attr == *(*hl_attr_active.ptr()).offset(HLF_MSG as isize) {
-            } else {
-                __assert_fail(
-                    b"attr == HL_ATTR(HLF_MSG)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/statusline.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    546 as ::core::ffi::c_uint,
-                    b"void redraw_ruler(void)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(
+            attr == *(*hl_attr_active.ptr()).offset(HLF_MSG as isize),
+            "attr == HL_ATTR(HLF_MSG)"
+        );
         let c2rust_fresh38 = content.size;
         content.size = content.size.wrapping_add(1);
         *content.items.offset(c2rust_fresh38 as isize) = object {
@@ -1107,18 +1088,10 @@ pub unsafe extern "C" fn draw_tabline() {
     if tabline_height() < 1 as ::core::ffi::c_int {
         return;
     }
-    '_c2rust_label: {
-        if tab_page_click_defs_size.get() >= Columns.get() as size_t {
-        } else {
-            __assert_fail(
-                b"tab_page_click_defs_size >= (size_t)Columns\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/statusline.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                672 as ::core::ffi::c_uint,
-                b"void draw_tabline(void)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(
+        tab_page_click_defs_size.get() >= Columns.get() as size_t,
+        "tab_page_click_defs_size >= (size_t)Columns"
+    );
     stl_clear_click_defs(tab_page_click_defs.get(), tab_page_click_defs_size.get());
     if *p_tal.get() as ::core::ffi::c_int != NUL {
         win_redr_custom(
@@ -2789,20 +2762,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                             if opt as ::core::ffi::c_int == STL_VIRTCOL_ALT as ::core::ffi::c_int {
                                 num_chars += 1;
                             }
-                            '_c2rust_label: {
-                                if out_end_p >= out_p {
-                                } else {
-                                    __assert_fail(
-                                        b"out_end_p >= out_p\0".as_ptr()
-                                            as *const ::core::ffi::c_char,
-                                        b"src/nvim/statusline.rs\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
-                                        1856 as ::core::ffi::c_uint,
-                                        b"int build_stl_str_hl(win_T *, char *, size_t, char *, OptIndex, int, schar_T, int, stl_hlrec_t **, size_t *, StlClickRecord **, statuscol_T *)\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
-                                    );
-                                }
-                            };
+                            debug_assert!(out_end_p >= out_p, "out_end_p >= out_p");
                             let mut remaining_buf_len: size_t =
                                 (out_end_p.offset_from(out_p) as size_t).wrapping_add(1 as size_t);
                             if num_chars > maxwid_0 {

@@ -101,18 +101,7 @@ pub unsafe extern "C" fn nvim_open_win(
         }
         let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
         let mut tp: *mut tabpage_T = curtab.get();
-        '_c2rust_label: {
-            if !(*curwin.ptr()).is_null() {
-            } else {
-                __assert_fail(
-                    c"curwin != NULL".as_ptr(),
-                    c"src/nvim/api/win_config.rs".as_ptr(),
-                    229 as ::core::ffi::c_uint,
-                    c"Window nvim_open_win(Buffer, Boolean, KeyDict_win_config *, Error *)"
-                        .as_ptr(),
-                );
-            }
-        };
+        debug_assert!(!(*curwin.ptr()).is_null(), "curwin != NULL");
         let mut parent: *mut win_T = if (*config).win == 0 as ::core::ffi::c_int {
             curwin.get()
         } else {
@@ -202,18 +191,7 @@ pub unsafe extern "C" fn nvim_open_win(
                     };
                     let result: ::core::ffi::c_int =
                         switch_win(&raw mut switchwin, parent, tp, true);
-                    '_c2rust_label_0: {
-                        if result == 1 as ::core::ffi::c_int {
-                        } else {
-                            __assert_fail(
-                            c"result == OK".as_ptr(),
-                            c"src/nvim/api/win_config.rs".as_ptr(),
-                            264 as ::core::ffi::c_uint,
-                            c"Window nvim_open_win(Buffer, Boolean, KeyDict_win_config *, Error *)"
-                                .as_ptr(),
-                        );
-                        }
-                    };
+                    debug_assert!(result == 1 as ::core::ffi::c_int, "result == OK");
                     wp = win_split_ins(
                         size,
                         flags,
@@ -269,18 +247,7 @@ pub unsafe extern "C" fn nvim_open_win(
                     };
                     let result_0: ::core::ffi::c_int =
                         switch_win_noblock(&raw mut switchwin_0, wp, tp, true);
-                    '_c2rust_label_1: {
-                        if result_0 == 1 as ::core::ffi::c_int {
-                        } else {
-                            __assert_fail(
-                            c"result == OK".as_ptr(),
-                            c"src/nvim/api/win_config.rs".as_ptr(),
-                            311 as ::core::ffi::c_uint,
-                            c"Window nvim_open_win(Buffer, Boolean, KeyDict_win_config *, Error *)"
-                                .as_ptr(),
-                        );
-                        }
-                    };
+                    debug_assert!(result_0 == 1 as ::core::ffi::c_int, "result == OK");
                     if apply_autocmds(
                         EVENT_WINNEW,
                         ::core::ptr::null_mut::<::core::ffi::c_char>(),

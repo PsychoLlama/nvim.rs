@@ -113,9 +113,8 @@ use crate::src::nvim::os::fs::{
 };
 use crate::src::nvim::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, atoi, atol, gettext, log10, memcpy, memmove, memset, ngettext,
-    qsort, snprintf, strcasecmp, strcat, strchr, strcmp, strcoll, strcpy, strlen, strncmp, strtod,
-    time,
+    __ctype_b_loc, atoi, atol, gettext, log10, memcpy, memmove, memset, ngettext, qsort, snprintf,
+    strcasecmp, strcat, strchr, strcmp, strcoll, strcpy, strlen, strncmp, strtod, time,
 };
 use crate::src::nvim::os::shell::call_shell;
 use crate::src::nvim::os::time::os_time;
@@ -3122,20 +3121,7 @@ pub unsafe extern "C" fn do_ecmd(
                         solcol = (*pos).col as ::core::ffi::c_int;
                     }
                     if buf != curbuf.get() {
-                        '_c2rust_label: {
-                            if (*cmdwin_buf.ptr()).is_null() {
-                            } else {
-                                __assert_fail(
-                                    b"cmdwin_buf == NULL\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                    b"src/nvim/ex_cmds.rs\0"
-                                        .as_ptr() as *const ::core::ffi::c_char,
-                                    2549 as ::core::ffi::c_uint,
-                                    b"int do_ecmd(int, char *, char *, exarg_T *, linenr_T, int, win_T *)\0"
-                                        .as_ptr() as *const ::core::ffi::c_char,
-                                );
-                            }
-                        };
+                        debug_assert!((*cmdwin_buf.ptr()).is_null(), "cmdwin_buf == NULL");
                         let save_cmdwin_type: ::core::ffi::c_int = cmdwin_type.get();
                         let save_cmdwin_win: *mut win_T = cmdwin_win.get();
                         let save_cmdwin_old_curwin: *mut win_T = cmdwin_old_curwin.get();
@@ -4322,18 +4308,7 @@ unsafe extern "C" fn do_sub(
         regmatch.rmm_ic = false_0;
     }
     sub_firstline = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    '_c2rust_label: {
-        if !sub.is_null() {
-        } else {
-            __assert_fail(
-                b"sub != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/ex_cmds.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                3738 as ::core::ffi::c_uint,
-                b"int do_sub(exarg_T *, const proftime_T, const int, const handle_T)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(!sub.is_null(), "sub != NULL");
     if *sub.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '\\' as ::core::ffi::c_int
         && *sub.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -5712,18 +5687,7 @@ unsafe extern "C" fn show_sub(
         && ((*eap).line1 != old_cusr.lnum || (*eap).line2 != old_cusr.lnum);
     if preview {
         cmdpreview_buf = buflist_findnr(cmdpreview_bufnr as ::core::ffi::c_int);
-        '_c2rust_label: {
-            if !cmdpreview_buf.is_null() {
-            } else {
-                __assert_fail(
-                    b"cmdpreview_buf != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/ex_cmds.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    4886 as ::core::ffi::c_uint,
-                    b"int show_sub(exarg_T *, pos_T, PreviewLines *, int, int, handle_T)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(!cmdpreview_buf.is_null(), "cmdpreview_buf != NULL");
         if lines.subresults.size > 0 as size_t {
             let mut last_match: SubResult = *lines.subresults.items.offset(
                 lines
@@ -5737,18 +5701,7 @@ unsafe extern "C" fn show_sub(
             } else {
                 last_match.end.lnum
             };
-            '_c2rust_label_0: {
-                if highest_lnum > 0 as linenr_T {
-                } else {
-                    __assert_fail(
-                        b"highest_lnum > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/ex_cmds.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        4892 as ::core::ffi::c_uint,
-                        b"int show_sub(exarg_T *, pos_T, PreviewLines *, int, int, handle_T)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(highest_lnum > 0 as linenr_T, "highest_lnum > 0");
             col_width = log10(highest_lnum as ::core::ffi::c_double) as ::core::ffi::c_int
                 + 1 as ::core::ffi::c_int
                 + 3 as ::core::ffi::c_int;

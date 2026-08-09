@@ -101,9 +101,7 @@ use crate::src::nvim::options::{
     kOptWindow,
 };
 use crate::src::nvim::os::fs::{os_chdir, os_dirname};
-use crate::src::nvim::os::libc::{
-    __assert_fail, abort, abs, gettext, memmove, memset, qsort, strncmp,
-};
+use crate::src::nvim::os::libc::{abort, abs, gettext, memmove, memset, qsort, strncmp};
 use crate::src::nvim::path::pathcmp;
 use crate::src::nvim::plines::{plines_win, plines_win_col, plines_win_nofill, win_text_height};
 use crate::src::nvim::popupmenu::pum_ui_flush;
@@ -2673,31 +2671,14 @@ unsafe extern "C" fn win_rotate(mut upwards: bool, mut count: ::core::ffi::c_int
         }
         if upwards {
             frp = (*(*(*curwin.get()).w_frame).fr_parent).fr_child;
-            '_c2rust_label: {
-                if !frp.is_null() {
-                } else {
-                    __assert_fail(
-                        b"frp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        2008 as ::core::ffi::c_uint,
-                        b"void win_rotate(_Bool, int)\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(!frp.is_null(), "frp != NULL");
             wp1 = (*frp).fr_win;
             win_remove(wp1, ::core::ptr::null_mut::<tabpage_T>());
             frame_remove(frp);
-            '_c2rust_label_0: {
-                if !(*(*frp).fr_parent).fr_child.is_null() {
-                } else {
-                    __assert_fail(
-                        b"frp->fr_parent->fr_child\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        2012 as ::core::ffi::c_uint,
-                        b"void win_rotate(_Bool, int)\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(
+                !(*(*frp).fr_parent).fr_child.is_null(),
+                "frp->fr_parent->fr_child"
+            );
             while !(*frp).fr_next.is_null() {
                 frp = (*frp).fr_next;
             }
@@ -2713,17 +2694,10 @@ unsafe extern "C" fn win_rotate(mut upwards: bool, mut count: ::core::ffi::c_int
             wp2 = (*wp1).w_prev;
             win_remove(wp1, ::core::ptr::null_mut::<tabpage_T>());
             frame_remove(frp);
-            '_c2rust_label_1: {
-                if !(*(*frp).fr_parent).fr_child.is_null() {
-                } else {
-                    __assert_fail(
-                        b"frp->fr_parent->fr_child\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        2028 as ::core::ffi::c_uint,
-                        b"void win_rotate(_Bool, int)\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(
+                !(*(*frp).fr_parent).fr_child.is_null(),
+                "frp->fr_parent->fr_child"
+            );
             win_append(
                 (*(*(*(*frp).fr_parent).fr_child).fr_win).w_prev,
                 wp1,
@@ -2773,36 +2747,14 @@ pub unsafe extern "C" fn win_splitmove(
             ::core::ptr::null_mut::<tabpage_T>(),
             &raw mut unflat_altfr,
         );
-        '_c2rust_label: {
-            if !unflat_altfr.is_null() {
-            } else {
-                __assert_fail(
-                    b"unflat_altfr != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    2083 as ::core::ffi::c_uint,
-                    b"int win_splitmove(win_T *, int, int)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(!unflat_altfr.is_null(), "unflat_altfr != NULL");
         win_remove(wp, ::core::ptr::null_mut::<tabpage_T>());
         last_status(false_0 != 0);
         win_comp_pos();
     }
     if win_split_ins(size, flags, wp, dir, unflat_altfr).is_null() {
         if !(*wp).w_floating {
-            '_c2rust_label_0: {
-                if !unflat_altfr.is_null() {
-                } else {
-                    __assert_fail(
-                        b"unflat_altfr != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        2092 as ::core::ffi::c_uint,
-                        b"int win_splitmove(win_T *, int, int)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(!unflat_altfr.is_null(), "unflat_altfr != NULL");
             winframe_restore(wp, dir, unflat_altfr);
         }
         win_append((*wp).w_prev, wp, ::core::ptr::null_mut::<tabpage_T>());
@@ -3361,35 +3313,18 @@ pub unsafe extern "C" fn one_window(mut win: *mut win_T, mut tp: *mut tabpage_T)
     } else {
         firstwin.get()
     };
-    '_c2rust_label: {
-        if (tp.is_null() || tp != curtab.get()) && !(*first).w_floating {
-        } else {
-            __assert_fail(
-                b"(!tp || tp != curtab) && !first->w_floating\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                2665 as ::core::ffi::c_uint,
-                b"_Bool one_window(win_T *, tabpage_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(
+        (tp.is_null() || tp != curtab.get()) && !(*first).w_floating,
+        "(!tp || tp != curtab) && !first->w_floating"
+    );
     return first == win
         && ((*win).w_next.is_null() || (*(*win).w_next).w_floating as ::core::ffi::c_int != 0);
 }
 unsafe extern "C" fn can_close_floating_windows(mut tp: *mut tabpage_T) -> bool {
-    '_c2rust_label: {
-        if tp != curtab.get() && (!tp.is_null() || !is_aucmd_win(lastwin.get())) {
-        } else {
-            __assert_fail(
-                b"tp != curtab && (tp || !is_aucmd_win(lastwin))\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                2676 as ::core::ffi::c_uint,
-                b"_Bool can_close_floating_windows(tabpage_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(
+        tp != curtab.get() && (!tp.is_null() || !is_aucmd_win(lastwin.get())),
+        "tp != curtab && (tp || !is_aucmd_win(lastwin))"
+    );
     let mut wp: *mut win_T = if !tp.is_null() {
         (*tp).tp_lastwin
     } else {
@@ -3718,18 +3653,7 @@ pub unsafe extern "C" fn win_close(
     }
     if (*win).w_floating {
         ui_comp_remove_grid(&raw mut (*win).w_grid_alloc);
-        '_c2rust_label: {
-            if !(*first_tabpage.ptr()).is_null() {
-            } else {
-                __assert_fail(
-                    b"first_tabpage != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    2999 as ::core::ffi::c_uint,
-                    b"int win_close(win_T *, _Bool, _Bool)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(!(*first_tabpage.ptr()).is_null(), "first_tabpage != NULL");
         if (*win).w_config.external {
             let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
             while !tp.is_null() {
@@ -3950,18 +3874,7 @@ pub unsafe extern "C" fn win_close_othertab(
     let mut bufref: bufref_T = bufref_T::default();
     let mut free_tp_idx: ::core::ffi::c_int = 0;
     let mut dir: ::core::ffi::c_int = 0;
-    '_c2rust_label: {
-        if tp != curtab.get() {
-        } else {
-            __assert_fail(
-                b"tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                3194 as ::core::ffi::c_uint,
-                b"_Bool win_close_othertab(win_T *, int, tabpage_T *, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(tp != curtab.get(), "tp != curtab");
     let mut did_decrement: bool = false_0 != 0;
     if window_layout_locked(CMD_SIZE) {
         return false_0 != 0;
@@ -4162,18 +4075,7 @@ pub unsafe extern "C" fn winframe_remove(
             false_0 != 0,
         );
     } else {
-        '_c2rust_label: {
-            if *dirp == 'h' as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"*dirp == 'h'\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    3457 as ::core::ffi::c_uint,
-                    b"win_T *winframe_remove(win_T *, int *, tabpage_T *, frame_T **)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(*dirp == 'h' as ::core::ffi::c_int, "*dirp == 'h'");
         frame_new_width(
             altfr,
             (*altfr).fr_width + (*frp_close).fr_width,
@@ -4198,18 +4100,10 @@ pub unsafe extern "C" fn winframe_find_altwin(
     mut tp: *mut tabpage_T,
     mut altfr: *mut *mut frame_T,
 ) -> *mut win_T {
-    '_c2rust_label: {
-        if tp.is_null() || tp != curtab.get() {
-        } else {
-            __assert_fail(
-                b"tp == NULL || tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                3492 as ::core::ffi::c_uint,
-                b"win_T *winframe_find_altwin(win_T *, int *, tabpage_T *, frame_T **)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(
+        tp.is_null() || tp != curtab.get(),
+        "tp == NULL || tp != curtab"
+    );
     if one_window(win, tp) {
         return ::core::ptr::null_mut::<win_T>();
     }
@@ -4271,18 +4165,10 @@ pub unsafe extern "C" fn winframe_find_altwin(
         }
         *dirp = 'h' as ::core::ffi::c_int;
     }
-    '_c2rust_label_0: {
-        if wp != win && frp2 != frp_close {
-        } else {
-            __assert_fail(
-                b"wp != win && frp2 != frp_close\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                3561 as ::core::ffi::c_uint,
-                b"win_T *winframe_find_altwin(win_T *, int *, tabpage_T *, frame_T **)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(
+        wp != win && frp2 != frp_close,
+        "wp != win && frp2 != frp_close"
+    );
     if !altfr.is_null() {
         *altfr = frp2;
     }
@@ -4316,17 +4202,7 @@ unsafe extern "C" fn frame_flatten(mut frp: *mut frame_T) {
         if (*frp).fr_child == frp2 {
             (*frp).fr_child = (*frp2).fr_child;
         }
-        '_c2rust_label: {
-            if !(*frp2).fr_child.is_null() {
-            } else {
-                __assert_fail(
-                    b"frp2->fr_child\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    3604 as ::core::ffi::c_uint,
-                    b"void frame_flatten(frame_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(!(*frp2).fr_child.is_null(), "frp2->fr_child");
         (*(*frp2).fr_child).fr_prev = (*frp2).fr_prev;
         if !(*frp2).fr_prev.is_null() {
             (*(*frp2).fr_prev).fr_next = (*frp2).fr_child;
@@ -4402,18 +4278,10 @@ pub unsafe extern "C" fn winframe_restore(
     }
 }
 unsafe extern "C" fn win_altframe(mut win: *mut win_T, mut tp: *mut tabpage_T) -> *mut frame_T {
-    '_c2rust_label: {
-        if tp.is_null() || tp != curtab.get() {
-        } else {
-            __assert_fail(
-                b"tp == NULL || tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                3690 as ::core::ffi::c_uint,
-                b"frame_T *win_altframe(win_T *, tabpage_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(
+        tp.is_null() || tp != curtab.get(),
+        "tp == NULL || tp != curtab"
+    );
     if one_window(win, tp) {
         return (*(*alt_tabpage()).tp_curwin).w_frame;
     }
@@ -4700,18 +4568,10 @@ unsafe extern "C" fn frame_add_statusline(mut frp: *mut frame_T) {
             frp = (*frp).fr_next;
         }
     } else {
-        '_c2rust_label: {
-            if (*frp).fr_layout as ::core::ffi::c_int == 2 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"frp->fr_layout == FR_COL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    3986 as ::core::ffi::c_uint,
-                    b"void frame_add_statusline(frame_T *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(
+            (*frp).fr_layout as ::core::ffi::c_int == 2 as ::core::ffi::c_int,
+            "frp->fr_layout == FR_COL"
+        );
         frp = (*frp).fr_child;
         while !(*frp).fr_next.is_null() {
             frp = (*frp).fr_next;
@@ -4840,18 +4700,10 @@ unsafe extern "C" fn frame_set_vsep(mut frp: *const frame_T, mut add: bool) {
             frp = (*frp).fr_next;
         }
     } else {
-        '_c2rust_label: {
-            if (*frp).fr_layout as ::core::ffi::c_int == 1 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"frp->fr_layout == FR_ROW\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    4112 as ::core::ffi::c_uint,
-                    b"void frame_set_vsep(const frame_T *, _Bool)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(
+            (*frp).fr_layout as ::core::ffi::c_int == 1 as ::core::ffi::c_int,
+            "frp->fr_layout == FR_ROW"
+        );
         frp = (*frp).fr_child;
         while !(*frp).fr_next.is_null() {
             frp = (*frp).fr_next;
@@ -4870,18 +4722,10 @@ unsafe extern "C" fn frame_add_hsep(mut frp: *const frame_T) {
             frp = (*frp).fr_next;
         }
     } else {
-        '_c2rust_label: {
-            if (*frp).fr_layout as ::core::ffi::c_int == 2 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"frp->fr_layout == FR_COL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    4136 as ::core::ffi::c_uint,
-                    b"void frame_add_hsep(const frame_T *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(
+            (*frp).fr_layout as ::core::ffi::c_int == 2 as ::core::ffi::c_int,
+            "frp->fr_layout == FR_COL"
+        );
         frp = (*frp).fr_child;
         while !(*frp).fr_next.is_null() {
             frp = (*frp).fr_next;
@@ -5270,18 +5114,7 @@ pub unsafe extern "C" fn win_new_tabpage(
     };
     curtab.set(newtp);
     let result: ::core::ffi::c_int = win_alloc_firstwin((*old_curtab).tp_curwin);
-    '_c2rust_label: {
-        if result == 1 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"result == OK\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                4520 as ::core::ffi::c_uint,
-                b"tabpage_T *win_new_tabpage(int, char *, _Bool, win_T **)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(result == 1 as ::core::ffi::c_int, "result == OK");
     if !first.is_null() {
         *first = curwin.get();
     }
@@ -5360,18 +5193,7 @@ pub unsafe extern "C" fn win_new_tabpage(
         };
         let sw_result: ::core::ffi::c_int =
             switch_win_noblock(&raw mut switchwin, (*newtp).tp_curwin, newtp, true_0 != 0);
-        '_c2rust_label_0: {
-            if sw_result == 1 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"sw_result == OK\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    4582 as ::core::ffi::c_uint,
-                    b"tabpage_T *win_new_tabpage(int, char *, _Bool, win_T **)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(sw_result == 1 as ::core::ffi::c_int, "sw_result == OK");
         apply_autocmds(
             EVENT_WINNEW,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -5485,17 +5307,7 @@ pub unsafe extern "C" fn close_tabpage(mut tab: *mut tabpage_T) {
         while !ptp.is_null() && (*ptp).tp_next != tab {
             ptp = (*ptp).tp_next;
         }
-        '_c2rust_label: {
-            if !ptp.is_null() {
-            } else {
-                __assert_fail(
-                    b"ptp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    4684 as ::core::ffi::c_uint,
-                    b"void close_tabpage(tabpage_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(!ptp.is_null(), "ptp != NULL");
         (*ptp).tp_next = (*tab).tp_next;
     }
     goto_tabpage_tp(ptp, false_0 != 0, false_0 != 0);
@@ -5792,17 +5604,7 @@ pub unsafe extern "C" fn goto_tabpage_win(mut tp: *mut tabpage_T, mut wp: *mut w
     }
 }
 pub unsafe extern "C" fn tabpage_move(mut nr: ::core::ffi::c_int) {
-    '_c2rust_label: {
-        if !(*curtab.ptr()).is_null() {
-        } else {
-            __assert_fail(
-                b"curtab != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                4971 as ::core::ffi::c_uint,
-                b"void tabpage_move(int)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(!(*curtab.ptr()).is_null(), "curtab != NULL");
     if (*first_tabpage.get()).tp_next.is_null() {
         return;
     }
@@ -6542,18 +6344,10 @@ pub unsafe extern "C" fn win_append(
     mut wp: *mut win_T,
     mut tp: *mut tabpage_T,
 ) {
-    '_c2rust_label: {
-        if tp.is_null() || tp != curtab.get() {
-        } else {
-            __assert_fail(
-                b"tp == NULL || tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                5674 as ::core::ffi::c_uint,
-                b"void win_append(win_T *, win_T *, tabpage_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(
+        tp.is_null() || tp != curtab.get(),
+        "tp == NULL || tp != curtab"
+    );
     let mut first: *mut *mut win_T = if tp.is_null() {
         firstwin.ptr()
     } else {
@@ -6583,17 +6377,10 @@ pub unsafe extern "C" fn win_append(
     };
 }
 pub unsafe extern "C" fn win_remove(mut wp: *mut win_T, mut tp: *mut tabpage_T) {
-    '_c2rust_label: {
-        if tp.is_null() || tp != curtab.get() {
-        } else {
-            __assert_fail(
-                b"tp == NULL || tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                5702 as ::core::ffi::c_uint,
-                b"void win_remove(win_T *, tabpage_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(
+        tp.is_null() || tp != curtab.get(),
+        "tp == NULL || tp != curtab"
+    );
     if !(*wp).w_prev.is_null() {
         (*(*wp).w_prev).w_next = (*wp).w_next;
     } else if tp.is_null() {
@@ -6836,20 +6623,10 @@ unsafe extern "C" fn check_window_scroll_resize(
                     };
                     tv_list_append_owned_tv(winlist, tv);
                 } else if !size_count.is_null() {
-                    '_c2rust_label: {
-                        if !first_size_win.is_null() && !first_scroll_win.is_null() {
-                        } else {
-                            __assert_fail(
-                                b"first_size_win != NULL && first_scroll_win != NULL\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                                b"src/nvim/window.rs\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                                5942 as ::core::ffi::c_uint,
-                                b"void check_window_scroll_resize(int *, win_T **, win_T **, list_T *, dict_T *)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
+                    debug_assert!(
+                        !first_size_win.is_null() && !first_scroll_win.is_null(),
+                        "first_size_win != NULL && first_scroll_win != NULL"
+                    );
                     *size_count += 1;
                     if (*first_size_win).is_null() {
                         *first_size_win = wp;
@@ -8331,17 +8108,7 @@ pub unsafe extern "C" fn tabline_height() -> ::core::ffi::c_int {
     if ui_has(kUITabline) {
         return 0 as ::core::ffi::c_int;
     }
-    '_c2rust_label: {
-        if !(*first_tabpage.ptr()).is_null() {
-        } else {
-            __assert_fail(
-                b"first_tabpage\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                7349 as ::core::ffi::c_uint,
-                b"int tabline_height(void)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(!(*first_tabpage.ptr()).is_null(), "first_tabpage");
     match p_stal.get() {
         0 => return 0 as ::core::ffi::c_int,
         1 => {
@@ -8741,8 +8508,8 @@ pub unsafe extern "C" fn check_colorcolumn(
                 if tw == 0 as OptInt {
                     break '_skip;
                 } else {
-                    '_c2rust_label: {
-                        if col >= 0 as ::core::ffi::c_int
+                    debug_assert!(
+                        col >= 0 as ::core::ffi::c_int
                             && tw <= (2147483647 as ::core::ffi::c_int - col) as OptInt
                             && tw + col as OptInt
                                 >= (-2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
@@ -8752,20 +8519,9 @@ pub unsafe extern "C" fn check_colorcolumn(
                                     >= (-2147483647 as ::core::ffi::c_int
                                         - 1 as ::core::ffi::c_int
                                         - col) as OptInt
-                                && tw + col as OptInt <= 2147483647 as OptInt
-                        {
-                        } else {
-                            __assert_fail(
-                                b"(col >= 0 && tw <= INT_MAX - col && tw + col >= INT_MIN) || (col < 0 && tw >= INT_MIN - col && tw + col <= INT_MAX)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                                b"src/nvim/window.rs\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                                7748 as ::core::ffi::c_uint,
-                                b"const char *check_colorcolumn(char *, win_T *)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
+                                && tw + col as OptInt <= 2147483647 as OptInt,
+                        "(col >= 0 && tw <= INT_MAX - col && tw + col >= INT_MIN) || (col < 0 && tw >= INT_MIN - col && tw + col <= INT_MAX)"
+                    );
                     col += tw as ::core::ffi::c_int;
                     if col < 0 as ::core::ffi::c_int {
                         break '_skip;
@@ -8903,17 +8659,7 @@ pub unsafe extern "C" fn win_ui_flush(mut validate: bool) {
     msg_ui_flush();
 }
 pub unsafe extern "C" fn lastwin_nofloating(mut tp: *mut tabpage_T) -> *mut win_T {
-    '_c2rust_label: {
-        if tp != curtab.get() || tp.is_null() {
-        } else {
-            __assert_fail(
-                b"tp != curtab || !tp\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/window.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                7858 as ::core::ffi::c_uint,
-                b"win_T *lastwin_nofloating(tabpage_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(tp != curtab.get() || tp.is_null(), "tp != curtab || !tp");
     let mut res: *mut win_T = if !tp.is_null() {
         (*tp).tp_lastwin
     } else {

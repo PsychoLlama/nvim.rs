@@ -18,17 +18,10 @@ pub unsafe extern "C" fn nvim_get_api_info(
 ) -> Array {
     unsafe {
         let mut rv: Array = arena_array(arena, 2 as size_t);
-        '_c2rust_label: {
-            if channel_id <= 9223372036854775807 as uint64_t {
-            } else {
-                __assert_fail(
-                    c"channel_id <= INT64_MAX".as_ptr(),
-                    c"src/nvim/api/vim.rs".as_ptr(),
-                    1658 as ::core::ffi::c_uint,
-                    c"Array nvim_get_api_info(uint64_t, Arena *)".as_ptr(),
-                );
-            }
-        };
+        debug_assert!(
+            channel_id <= 9223372036854775807 as uint64_t,
+            "channel_id <= INT64_MAX"
+        );
         array_add(&mut rv, Object::integer(channel_id as int64_t));
         array_add(&mut rv, api_metadata());
         return rv;
@@ -135,17 +128,10 @@ pub unsafe extern "C" fn nvim_get_chan_info(
             };
         }
         if chan == 0 as Integer && !is_internal_call(channel_id) {
-            '_c2rust_label: {
-                if channel_id <= 9223372036854775807 as uint64_t {
-                } else {
-                    __assert_fail(
-                        c"channel_id <= INT64_MAX".as_ptr(),
-                        c"src/nvim/api/vim.rs".as_ptr(),
-                        1800 as ::core::ffi::c_uint,
-                        c"Dict nvim_get_chan_info(uint64_t, Integer, Arena *, Error *)".as_ptr(),
-                    );
-                }
-            };
+            debug_assert!(
+                channel_id <= 9223372036854775807 as uint64_t,
+                "channel_id <= INT64_MAX"
+            );
             chan = channel_id as Integer;
         }
         return channel_info(chan as uint64_t, arena);

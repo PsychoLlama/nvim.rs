@@ -212,17 +212,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(
         let mut lang: *mut TSLanguage = lang_check(L, 1 as ::core::ffi::c_int);
         lua_createtable(L, 0 as ::core::ffi::c_int, 2 as ::core::ffi::c_int);
         let mut nsymbols: uint32_t = ts_language_symbol_count(lang);
-        '_c2rust_label: {
-            if nsymbols < 2147483647 as uint32_t {
-            } else {
-                __assert_fail(
-                    c"nsymbols < INT_MAX".as_ptr(),
-                    c"src/nvim/lua/treesitter.rs".as_ptr(),
-                    276 as ::core::ffi::c_uint,
-                    c"int tslua_inspect_lang(lua_State *)".as_ptr(),
-                );
-            }
-        };
+        debug_assert!(nsymbols < 2147483647 as uint32_t, "nsymbols < INT_MAX");
         lua_createtable(
             L,
             nsymbols.wrapping_sub(1 as uint32_t) as ::core::ffi::c_int,

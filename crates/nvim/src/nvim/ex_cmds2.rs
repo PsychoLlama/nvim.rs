@@ -36,7 +36,7 @@ use crate::src::nvim::message::{
 };
 use crate::src::nvim::r#move::validate_cursor;
 use crate::src::nvim::normal::do_check_scrollbind;
-use crate::src::nvim::os::libc::{__assert_fail, gettext, snprintf, strlen};
+use crate::src::nvim::os::libc::{gettext, snprintf, strlen};
 use crate::src::nvim::path::vim_FullName;
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
@@ -710,17 +710,7 @@ pub unsafe fn ex_listdo(mut eap: *mut exarg_T) {
             || (*eap).cmdidx as ::core::ffi::c_int == CMD_lfdo as ::core::ffi::c_int
         {
             qf_size = qf_get_valid_size(eap);
-            '_c2rust_label: {
-                if (*eap).line1 >= 0 as linenr_T {
-                } else {
-                    __assert_fail(
-                        b"eap->line1 >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/ex_cmds2.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        550 as ::core::ffi::c_uint,
-                        b"void ex_listdo(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!((*eap).line1 >= 0 as linenr_T, "eap->line1 >= 0");
             if qf_size == 0 as size_t || (*eap).line1 as size_t > qf_size {
                 buf_0 = ::core::ptr::null_mut::<buf_T>();
             } else {
@@ -728,18 +718,10 @@ pub unsafe fn ex_listdo(mut eap: *mut exarg_T) {
                 buf_0 = curbuf.get();
                 i = (*eap).line1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
                 if (*eap).addr_count <= 0 as ::core::ffi::c_int {
-                    '_c2rust_label_0: {
-                        if qf_size < MAXLNUM as ::core::ffi::c_int as size_t {
-                        } else {
-                            __assert_fail(
-                                b"qf_size < MAXLNUM\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"src/nvim/ex_cmds2.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                560 as ::core::ffi::c_uint,
-                                b"void ex_listdo(exarg_T *)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
+                    debug_assert!(
+                        qf_size < MAXLNUM as ::core::ffi::c_int as size_t,
+                        "qf_size < MAXLNUM"
+                    );
                     (*eap).line2 = qf_size as linenr_T;
                 }
             }
@@ -763,17 +745,7 @@ pub unsafe fn ex_listdo(mut eap: *mut exarg_T) {
                 if !win_valid(wp) {
                     break;
                 }
-                '_c2rust_label_1: {
-                    if !wp.is_null() {
-                    } else {
-                        __assert_fail(
-                            b"wp\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/ex_cmds2.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                            591 as ::core::ffi::c_uint,
-                            b"void ex_listdo(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
-                    }
-                };
+                debug_assert!(!wp.is_null(), "wp");
                 execute = !(*wp).w_floating
                     || !(*wp).w_config.hide && (*wp).w_config.focusable as ::core::ffi::c_int != 0;
                 if execute {
@@ -787,17 +759,7 @@ pub unsafe fn ex_listdo(mut eap: *mut exarg_T) {
                 if !valid_tabpage(tp) {
                     break;
                 }
-                '_c2rust_label_2: {
-                    if !tp.is_null() {
-                    } else {
-                        __assert_fail(
-                            b"tp\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/ex_cmds2.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                            605 as ::core::ffi::c_uint,
-                            b"void ex_listdo(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
-                    }
-                };
+                debug_assert!(!tp.is_null(), "tp");
                 goto_tabpage_tp(tp, true_0 != 0, true_0 != 0);
                 tp = (*tp).tp_next;
             } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_bufdo as ::core::ffi::c_int {
@@ -853,17 +815,7 @@ pub unsafe fn ex_listdo(mut eap: *mut exarg_T) {
                 || (*eap).cmdidx as ::core::ffi::c_int == CMD_cfdo as ::core::ffi::c_int
                 || (*eap).cmdidx as ::core::ffi::c_int == CMD_lfdo as ::core::ffi::c_int
             {
-                '_c2rust_label_3: {
-                    if i >= 0 as ::core::ffi::c_int {
-                    } else {
-                        __assert_fail(
-                            b"i >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/ex_cmds2.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                            655 as ::core::ffi::c_uint,
-                            b"void ex_listdo(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
-                    }
-                };
+                debug_assert!(i >= 0 as ::core::ffi::c_int, "i >= 0");
                 if i as size_t >= qf_size || i as linenr_T >= (*eap).line2 {
                     break;
                 }

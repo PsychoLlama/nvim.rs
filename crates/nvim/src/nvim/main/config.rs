@@ -25,7 +25,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::memory::{strequal, xfree, xmalloc};
 use crate::src::nvim::os::env::vim_env_iter;
 use crate::src::nvim::os::fs::os_path_exists;
-use crate::src::nvim::os::libc::{__assert_fail, fprintf, gettext, memcpy, stderr, strlen};
+use crate::src::nvim::os::libc::{fprintf, gettext, memcpy, stderr, strlen};
 use crate::src::nvim::os::stdpaths::get_appname;
 use crate::src::nvim::os::stdpaths::{stdpaths_get_xdg_var, stdpaths_user_conf_subpath};
 use crate::src::nvim::path::path_full_compare;
@@ -301,14 +301,10 @@ pub(crate) unsafe fn do_exrc_initialization() {
     // SAFETY: the Lua state exists by now -- `nlua_init` ran in `main_0`.
     unsafe {
         let lstate: *mut lua_State = get_global_lstate();
-        if lstate.is_null() {
-            __assert_fail(
-                c"L".as_ptr(),
-                c"src/nvim/main.rs".as_ptr(),
-                2207,
-                c"void do_exrc_initialization(void)".as_ptr(),
-            );
-        }
+        // Deliberately a hard failure, not a `debug_assert!`: every line
+        // below dereferences `lstate`, so a release build that carried on
+        // would fault instead of saying what went wrong.
+        assert!(!lstate.is_null(), "the Lua state is not initialised");
         lua_getfield(lstate, LUA_GLOBALSINDEX, c"require".as_ptr());
         lua_pushstring(lstate, c"vim._core.exrc".as_ptr());
         if nlua_pcall(lstate, 1, 0) != 0 {

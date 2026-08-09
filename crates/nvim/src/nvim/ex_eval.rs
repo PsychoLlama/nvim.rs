@@ -22,9 +22,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc, xstrdup, xstrlcpy};
 use crate::src::nvim::message::{emsg, internal_error, msg_puts, verbose_enter, verbose_leave};
 use crate::src::nvim::option::p_vfile;
-use crate::src::nvim::os::libc::{
-    __assert_fail, gettext, snprintf, strcat, strcpy, strlen, strncmp,
-};
+use crate::src::nvim::os::libc::{gettext, snprintf, strcat, strcpy, strlen, strncmp};
 use crate::src::nvim::regexp::{
     RE_MAGIC, RE_STRING, skip_regexp_err, vim_regcomp, vim_regexec_nl, vim_regfree,
 };
@@ -672,17 +670,10 @@ unsafe extern "C" fn report_pending(
 ) {
     let mut mesg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    '_c2rust_label: {
-        if !value.is_null() || pending & CSTP_THROW as ::core::ffi::c_int == 0 {
-        } else {
-            __assert_fail(
-                b"value || !(pending & CSTP_THROW)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/ex_eval.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                723 as ::core::ffi::c_uint,
-                b"void report_pending(int, int, void *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(
+        !value.is_null() || pending & CSTP_THROW as ::core::ffi::c_int == 0,
+        "value || !(pending & CSTP_THROW)"
+    );
     match action {
         RP_MAKE => {
             mesg = gettext(b"%s made pending\0".as_ptr() as *const ::core::ffi::c_char);
@@ -1020,17 +1011,7 @@ pub unsafe fn ex_continue(mut eap: *mut exarg_T) {
             CSF_WHILE as ::core::ffi::c_int | CSF_FOR as ::core::ffi::c_int,
             false_0,
         );
-        '_c2rust_label: {
-            if idx >= 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"idx >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/ex_eval.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1069 as ::core::ffi::c_uint,
-                    b"void ex_continue(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(idx >= 0 as ::core::ffi::c_int, "idx >= 0");
         if (*cstack).cs_flags[idx as usize]
             & (CSF_WHILE as ::core::ffi::c_int | CSF_FOR as ::core::ffi::c_int)
             != 0
@@ -1435,20 +1416,11 @@ pub unsafe fn ex_finally(mut eap: *mut exarg_T) {
             } else {
                 0 as ::core::ffi::c_int
             };
-            '_c2rust_label: {
-                if pending >= -127 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-                    && pending <= 127 as ::core::ffi::c_int
-                {
-                } else {
-                    __assert_fail(
-                        b"pending >= CHAR_MIN && pending <= CHAR_MAX\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                        b"src/nvim/ex_eval.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        1535 as ::core::ffi::c_uint,
-                        b"void ex_finally(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(
+                pending >= -127 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                    && pending <= 127 as ::core::ffi::c_int,
+                "pending >= CHAR_MIN && pending <= CHAR_MAX"
+            );
             (*cstack).cs_pending[(*cstack).cs_idx as usize] = pending as ::core::ffi::c_char;
             if did_throw.get() as ::core::ffi::c_int != 0
                 && (*cstack).cs_pend.csp_ex[(*cstack).cs_idx as usize]

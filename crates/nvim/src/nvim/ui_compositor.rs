@@ -9,7 +9,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
 use crate::src::nvim::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
-use crate::src::nvim::os::libc::{__assert_fail, abort, llabs, memcpy};
+use crate::src::nvim::os::libc::{abort, llabs, memcpy};
 use crate::src::nvim::os::time::os_sleep;
 use crate::src::nvim::types::ui::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
 use crate::src::nvim::types::{
@@ -294,17 +294,7 @@ pub unsafe extern "C" fn ui_comp_put_grid(
     return moved;
 }
 pub unsafe extern "C" fn ui_comp_remove_grid(mut grid: *mut ScreenGrid) {
-    '_c2rust_label: {
-        if grid != default_grid.ptr() {
-        } else {
-            __assert_fail(
-                b"grid != &default_grid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/ui_compositor.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                217 as ::core::ffi::c_uint,
-                b"void ui_comp_remove_grid(ScreenGrid *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(grid != default_grid.ptr(), "grid != &default_grid");
     if (*grid).comp_index == 0 as size_t {
         return;
     }
@@ -561,42 +551,12 @@ unsafe extern "C" fn compose_line(
         } else {
             endcol as ::core::ffi::c_int
         };
-        '_c2rust_label: {
-            if !grid.is_null() {
-            } else {
-                __assert_fail(
-                    b"grid != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/ui_compositor.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    408 as ::core::ffi::c_uint,
-                    b"void compose_line(Integer, Integer, Integer, LineFlags)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        '_c2rust_label_0: {
-            if until > col {
-            } else {
-                __assert_fail(
-                    b"until > col\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/ui_compositor.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    409 as ::core::ffi::c_uint,
-                    b"void compose_line(Integer, Integer, Integer, LineFlags)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        '_c2rust_label_1: {
-            if until <= (*default_grid.ptr()).cols {
-            } else {
-                __assert_fail(
-                    b"until <= default_grid.cols\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/ui_compositor.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    410 as ::core::ffi::c_uint,
-                    b"void compose_line(Integer, Integer, Integer, LineFlags)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(!grid.is_null(), "grid != NULL");
+        debug_assert!(until > col, "until > col");
+        debug_assert!(
+            until <= (*default_grid.ptr()).cols,
+            "until <= default_grid.cols"
+        );
         let mut n: size_t = (until - col) as size_t;
         if row == msg_sep_row.get() as Integer && (*grid).comp_index <= (*msg_grid.ptr()).comp_index
         {
@@ -701,30 +661,8 @@ unsafe extern "C" fn compose_line(
     if *(*linebuf.ptr()).offset((endcol - startcol - 1 as Integer) as isize) == NUL as schar_T {
         skipend = 0 as ::core::ffi::c_int;
     }
-    '_c2rust_label_2: {
-        if endcol <= chk_width.get() as Integer {
-        } else {
-            __assert_fail(
-                b"endcol <= chk_width\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/ui_compositor.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                477 as ::core::ffi::c_uint,
-                b"void compose_line(Integer, Integer, Integer, LineFlags)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    '_c2rust_label_3: {
-        if row < chk_height.get() as Integer {
-        } else {
-            __assert_fail(
-                b"row < chk_height\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/ui_compositor.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                478 as ::core::ffi::c_uint,
-                b"void compose_line(Integer, Integer, Integer, LineFlags)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(endcol <= chk_width.get() as Integer, "endcol <= chk_width");
+    debug_assert!(row < chk_height.get() as Integer, "row < chk_height");
     if !(!grid.is_null()
         && (grid == default_grid.ptr()
             || (*grid).comp_col == 0 as ::core::ffi::c_int && (*grid).cols == Columns.get()))
@@ -890,19 +828,7 @@ pub unsafe extern "C" fn ui_comp_raw_line(
     if curgrid.get() != default_grid.ptr() {
         flags = (flags as ::core::ffi::c_int & !(kLineFlagWrap as ::core::ffi::c_int)) as LineFlags;
     }
-    '_c2rust_label: {
-        if endcol <= clearcol {
-        } else {
-            __assert_fail(
-                b"endcol <= clearcol\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/ui_compositor.rs\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-                574 as ::core::ffi::c_uint,
-                b"void ui_comp_raw_line(Integer, Integer, Integer, Integer, Integer, Integer, LineFlags, const schar_T *, const sattr_T *)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(endcol <= clearcol, "endcol <= clearcol");
     if row >= (*default_grid.ptr()).rows as Integer {
         logmsg(
             LOGLVL_DBG,
@@ -967,19 +893,7 @@ pub unsafe extern "C" fn ui_comp_raw_line(
         );
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while (i as Integer) < endcol - startcol {
-            '_c2rust_label_0: {
-                if *attrs.offset(i as isize) >= 0 as sattr_T {
-                } else {
-                    __assert_fail(
-                        b"attrs[i] >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/ui_compositor.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        604 as ::core::ffi::c_uint,
-                        b"void ui_comp_raw_line(Integer, Integer, Integer, Integer, Integer, Integer, LineFlags, const schar_T *, const sattr_T *)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(*attrs.offset(i as isize) >= 0 as sattr_T, "attrs[i] >= 0");
             i += 1;
         }
         ui_composed_call_raw_line(

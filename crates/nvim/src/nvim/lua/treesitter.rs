@@ -19,9 +19,7 @@ use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{
     memchrsub, strequal, xcalloc, xfree, xmalloc, xrealloc, xstrdup, xstrlcpy,
 };
-use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, abort, memcmp, memcpy, snprintf, strchr, strlen,
-};
+use crate::src::nvim::os::libc::{__ctype_b_loc, abort, memcmp, memcpy, snprintf, strchr, strlen};
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{

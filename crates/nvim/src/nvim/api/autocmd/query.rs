@@ -370,28 +370,14 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                 let mut j: ::core::ffi::c_int =
                                                     0 as ::core::ffi::c_int;
                                                 while j < pattern_filter_count {
-                                                    '_c2rust_label: {
-                                                        if j < 256 as ::core::ffi::c_int {
-                                                        } else {
-                                                            __assert_fail(
-                                                            c"j < AUCMD_MAX_PATTERNS".as_ptr(),
-                                                            c"src/nvim/api/autocmd.rs".as_ptr(),
-                                                            256 as ::core::ffi::c_uint,
-                                                            c"Array nvim_get_autocmds(KeyDict_get_autocmds *, Arena *, Error *)".as_ptr(),
-                                                        );
-                                                        }
-                                                    };
-                                                    '_c2rust_label_0: {
-                                                        if !pattern_filters[j as usize].is_null() {
-                                                        } else {
-                                                            __assert_fail(
-                                                            c"pattern_filters[j]".as_ptr(),
-                                                            c"src/nvim/api/autocmd.rs".as_ptr(),
-                                                            257 as ::core::ffi::c_uint,
-                                                            c"Array nvim_get_autocmds(KeyDict_get_autocmds *, Arena *, Error *)".as_ptr(),
-                                                        );
-                                                        }
-                                                    };
+                                                    debug_assert!(
+                                                        j < 256 as ::core::ffi::c_int,
+                                                        "j < AUCMD_MAX_PATTERNS"
+                                                    );
+                                                    debug_assert!(
+                                                        !pattern_filters[j as usize].is_null(),
+                                                        "pattern_filters[j]"
+                                                    );
                                                     let mut pat_0: *mut ::core::ffi::c_char =
                                                         pattern_filters[j as usize];
                                                     let mut patlen: ::core::ffi::c_int =

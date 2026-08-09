@@ -27,7 +27,7 @@ use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::reset_VIsual_and_resel;
 use crate::src::nvim::option::magic_isset;
 use crate::src::nvim::os::input::os_breakcheck;
-use crate::src::nvim::os::libc::{__assert_fail, gettext, memmove, strlen};
+use crate::src::nvim::os::libc::{gettext, memmove, strlen};
 use crate::src::nvim::path::{
     FullName_save, expand_wildcards, fix_fname, gen_expand_wildcards, path_fnamecmp,
     path_full_compare,
@@ -502,17 +502,7 @@ unsafe extern "C" fn do_arglist(
             alist_add_list(exp_count, exp_files, after, will_edit);
             xfree(exp_files as *mut c_void);
         } else {
-            '_c2rust_label: {
-                if what == AL_SET as c_int {
-                } else {
-                    __assert_fail(
-                        c"what == AL_SET".as_ptr(),
-                        c"src/nvim/arglist.rs".as_ptr(),
-                        471,
-                        c"int do_arglist(char *, int, int, _Bool)".as_ptr(),
-                    );
-                }
-            };
+            debug_assert!(what == AL_SET as c_int, "what == AL_SET");
             alist_set(
                 (*curwin.get()).w_alist,
                 exp_count,

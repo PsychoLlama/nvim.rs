@@ -23,8 +23,8 @@ use crate::src::nvim::optionstr::check_buf_options;
 use crate::src::nvim::os::fs::{os_fopen, os_isdir};
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, fclose, fprintf, fputs, gettext, memcpy, putc, qsort, snprintf, strcasecmp,
-    strchr, strcmp, strcpy, strlen, strncmp,
+    fclose, fprintf, fputs, gettext, memcpy, putc, qsort, snprintf, strcasecmp, strchr, strcmp,
+    strcpy, strlen, strncmp,
 };
 use crate::src::nvim::path::{FreeWild, add_pathsep, gen_expand_wildcards, path_full_compare};
 use crate::src::nvim::pos::MAXCOL;
@@ -89,11 +89,6 @@ pub const KV_INITIAL_VALUE: Array = Array {
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 57] = unsafe {
-    ::core::mem::transmute::<[u8; 57], [::core::ffi::c_char; 57]>(
-        *b"int find_help_tags(const char *, int *, char ***, _Bool)\0",
-    )
-};
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub unsafe fn ex_help(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -515,19 +510,11 @@ pub unsafe extern "C" fn find_help_tags(
         return FAIL;
     }
     api_clear_error(&raw mut err);
-    '_c2rust_label: {
-        if res.type_0 as ::core::ffi::c_uint
-            == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-        } else {
-            __assert_fail(
-                b"res.type == kObjectTypeString\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/help.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                353 as ::core::ffi::c_uint,
-                __ASSERT_FUNCTION.as_ptr(),
-            );
-        }
-    };
+    debug_assert!(
+        res.type_0 as ::core::ffi::c_uint
+            == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint,
+        "res.type == kObjectTypeString"
+    );
     xstrlcpy(
         IObuff.ptr() as *mut ::core::ffi::c_char,
         res.data.string.data,

@@ -254,17 +254,7 @@ unsafe extern "C" fn do_arg_all(mut count: c_int, mut forceit: c_int, mut keep_t
     let mut last_curwin: *mut win_T = ptr::null_mut();
     let mut last_curtab: *mut tabpage_T = ptr::null_mut();
     let mut prev_arglist_locked: bool = arglist_locked.get();
-    '_c2rust_label: {
-        if !(*firstwin.ptr()).is_null() {
-        } else {
-            __assert_fail(
-                c"firstwin != NULL".as_ptr(),
-                c"src/nvim/arglist.rs".as_ptr(),
-                1068,
-                c"void do_arg_all(int, int, int)".as_ptr(),
-            );
-        }
-    };
+    debug_assert!(!(*firstwin.ptr()).is_null(), "firstwin != NULL");
     if cmdwin_type.get() != 0 {
         emsg(gettext(&raw const e_cmdwin as *const c_char));
         return;

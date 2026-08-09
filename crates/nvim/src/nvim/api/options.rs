@@ -17,7 +17,7 @@ use crate::src::nvim::option::{
     find_option, get_all_vimoptions, get_option_value_for, get_vimoption, object_as_optval,
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
 };
-use crate::src::nvim::os::libc::{__assert_fail, strcmp};
+use crate::src::nvim::os::libc::strcmp;
 use crate::src::nvim::types::{
     Arena, Dict, Error, KeyDict_option, KeyValuePair, Object, OptIndex, OptScope, OptVal,
     OptValData, OptValType, String_0, TryState, aco_save_T, bln_values, buf_T, bufref_T, except_T,
@@ -243,17 +243,10 @@ unsafe extern "C" fn do_ft_buf(
         OPT_LOCAL as ::core::ffi::c_int,
         SID_NONE,
     );
-    '_c2rust_label: {
-        if (*(*ftbuf).b_ml.ml_mfp).mf_fd < 0 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                c"ftbuf->b_ml.ml_mfp->mf_fd < 0".as_ptr(),
-                c"src/nvim/api/options.rs".as_ptr(),
-                134 as ::core::ffi::c_uint,
-                c"buf_T *do_ft_buf(const char *, aco_save_T *, _Bool *, Error *)".as_ptr(),
-            );
-        }
-    };
+    debug_assert!(
+        (*(*ftbuf).b_ml.ml_mfp).mf_fd < 0 as ::core::ffi::c_int,
+        "ftbuf->b_ml.ml_mfp->mf_fd < 0"
+    );
     (*ftbuf).b_p_swf = false_0;
     (*ftbuf).b_p_ml = false_0;
     (*ftbuf).b_p_ft = xstrdup(filetype);
@@ -351,17 +344,7 @@ pub unsafe extern "C" fn nvim_get_option_value(
         };
     }
     if !ftbuf.is_null() {
-        '_c2rust_label: {
-            if from.is_null() {
-            } else {
-                __assert_fail(
-                    c"!from".as_ptr(),
-                    c"src/nvim/api/options.rs".as_ptr(),
-                    230 as ::core::ffi::c_uint,
-                    c"Object nvim_get_option_value(String, KeyDict_option *, Error *)".as_ptr(),
-                );
-            }
-        };
+        debug_assert!(from.is_null(), "!from");
         from = ftbuf as *mut ::core::ffi::c_void;
     }
     let mut value: OptVal = get_option_value_for(opt_idx, opt_flags, scope, from, err);

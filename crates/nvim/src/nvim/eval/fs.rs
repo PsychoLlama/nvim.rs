@@ -37,8 +37,7 @@ use crate::src::nvim::os::fs::{
     os_remove, os_rmdir,
 };
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, fclose, fileno, fread, fseeko, gettext, memcpy, memmove, readlink,
-    strcmp, strlen,
+    abort, fclose, fileno, fread, fseeko, gettext, memcpy, memmove, readlink, strcmp, strlen,
 };
 use crate::src::nvim::path::{
     FullName_save, add_pathsep, after_pathsep, get_past_head, path_fnamencmp, path_is_absolute,
@@ -249,19 +248,7 @@ pub unsafe extern "C" fn modify_fname(
                         == '~' as ::core::ffi::c_int
                     {
                         s = xstrdup(&raw mut dirname as *mut ::core::ffi::c_char);
-                        '_c2rust_label: {
-                            if !s.is_null() {
-                            } else {
-                                __assert_fail(
-                                    b"s != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"src/nvim/eval/fs.rs\0"
-                                        .as_ptr() as *const ::core::ffi::c_char,
-                                    195 as ::core::ffi::c_uint,
-                                    b"int modify_fname(char *, _Bool, size_t *, char **, char **, size_t *)\0"
-                                        .as_ptr() as *const ::core::ffi::c_char,
-                                );
-                            }
-                        };
+                        debug_assert!(!s.is_null(), "s != NULL");
                         *fnamep = s;
                         xfree(*bufp as *mut ::core::ffi::c_void);
                         *bufp = s;
@@ -906,19 +893,7 @@ pub unsafe extern "C" fn f_getcwd(
             'c_30005: {
                 match scope as ::core::ffi::c_int {
                     0 => {
-                        '_c2rust_label: {
-                            if !win.is_null() {
-                            } else {
-                                __assert_fail(
-                                    b"win\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"src/nvim/eval/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                    701 as ::core::ffi::c_uint,
-                                    b"void f_getcwd(typval_T *, typval_T *, EvalFuncData)\0"
-                                        .as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                );
-                            }
-                        };
+                        debug_assert!(!win.is_null(), "win");
                         from = (*win).w_localdir;
                         if !from.is_null() {
                             break 's_250;
@@ -935,18 +910,7 @@ pub unsafe extern "C" fn f_getcwd(
                         break 's_250;
                     }
                 }
-                '_c2rust_label_0: {
-                    if !tp.is_null() {
-                    } else {
-                        __assert_fail(
-                            b"tp\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/eval/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                            708 as ::core::ffi::c_uint,
-                            b"void f_getcwd(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        );
-                    }
-                };
+                debug_assert!(!tp.is_null(), "tp");
                 from = (*tp).tp_localdir;
                 if !from.is_null() {
                     break 's_250;
@@ -1444,18 +1408,7 @@ pub unsafe extern "C" fn f_haslocaldir(
     }
     match scope as ::core::ffi::c_int {
         0 => {
-            '_c2rust_label: {
-                if !win.is_null() {
-                } else {
-                    __assert_fail(
-                        b"win\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/eval/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        1021 as ::core::ffi::c_uint,
-                        b"void f_haslocaldir(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(!win.is_null(), "win");
             (*rettv).vval.v_number = (if !(*win).w_localdir.is_null() {
                 1 as ::core::ffi::c_int
             } else {
@@ -1463,18 +1416,7 @@ pub unsafe extern "C" fn f_haslocaldir(
             }) as varnumber_T;
         }
         1 => {
-            '_c2rust_label_0: {
-                if !tp.is_null() {
-                } else {
-                    __assert_fail(
-                        b"tp\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/eval/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        1025 as ::core::ffi::c_uint,
-                        b"void f_haslocaldir(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(!tp.is_null(), "tp");
             (*rettv).vval.v_number = (if !(*tp).tp_localdir.is_null() {
                 1 as ::core::ffi::c_int
             } else {
@@ -1943,18 +1885,10 @@ unsafe extern "C" fn read_file_or_blob(
                     }
                 }
                 if prevlen == 0 as ptrdiff_t {
-                    '_c2rust_label: {
-                        if len < 2147483647 as ::core::ffi::c_int as size_t {
-                        } else {
-                            __assert_fail(
-                                b"len < INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"src/nvim/eval/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                1349 as ::core::ffi::c_uint,
-                                b"void read_file_or_blob(typval_T *, typval_T *, _Bool)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
+                    debug_assert!(
+                        len < 2147483647 as ::core::ffi::c_int as size_t,
+                        "len < INT_MAX"
+                    );
                     s = xmemdupz(start as *const ::core::ffi::c_void, len)
                         as *mut ::core::ffi::c_char;
                 } else {
@@ -1986,36 +1920,17 @@ unsafe extern "C" fn read_file_or_blob(
                 start = p.offset(1 as ::core::ffi::c_int as isize);
                 if maxline < 0 as int64_t {
                     if tv_list_len(l) as int64_t > -maxline {
-                        '_c2rust_label_0: {
-                            if tv_list_len(l) as int64_t == 1 as int64_t + -maxline {
-                            } else {
-                                __assert_fail(
-                                    b"tv_list_len(l) == 1 + (-maxline)\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                    b"src/nvim/eval/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                    1371 as ::core::ffi::c_uint,
-                                    b"void read_file_or_blob(typval_T *, typval_T *, _Bool)\0"
-                                        .as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                );
-                            }
-                        };
+                        debug_assert!(
+                            tv_list_len(l) as int64_t == 1 as int64_t + -maxline,
+                            "tv_list_len(l) == 1 + (-maxline)"
+                        );
                         tv_list_item_remove(l, tv_list_first(l));
                     }
                 } else if tv_list_len(l) as int64_t >= maxline {
-                    '_c2rust_label_1: {
-                        if tv_list_len(l) as int64_t == maxline {
-                        } else {
-                            __assert_fail(
-                                b"tv_list_len(l) == maxline\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                b"src/nvim/eval/fs.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                1375 as ::core::ffi::c_uint,
-                                b"void read_file_or_blob(typval_T *, typval_T *, _Bool)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
-                        }
-                    };
+                    debug_assert!(
+                        tv_list_len(l) as int64_t == maxline,
+                        "tv_list_len(l) == maxline"
+                    );
                     break;
                 }
                 if readlen <= 0 as ::core::ffi::c_int {

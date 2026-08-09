@@ -57,17 +57,10 @@ pub(crate) unsafe extern "C-unwind" fn push_node(
     mut uindex: ::core::ffi::c_int,
 ) {
     unsafe {
-        '_c2rust_label: {
-            if uindex > 0 as ::core::ffi::c_int || uindex < -20 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    c"uindex > 0 || uindex < -LUA_MINSTACK".as_ptr(),
-                    c"src/nvim/lua/treesitter.rs".as_ptr(),
-                    941 as ::core::ffi::c_uint,
-                    c"void push_node(lua_State *, TSNode, int)".as_ptr(),
-                );
-            }
-        };
+        debug_assert!(
+            uindex > 0 as ::core::ffi::c_int || uindex < -20 as ::core::ffi::c_int,
+            "uindex > 0 || uindex < -LUA_MINSTACK"
+        );
         if ts_node_is_null(node) {
             lua_pushnil(L);
             return;

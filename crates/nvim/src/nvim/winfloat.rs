@@ -17,7 +17,7 @@ use crate::src::nvim::mouse::mouse_find_win_inner;
 use crate::src::nvim::r#move::textpos2screenpos;
 use crate::src::nvim::option::{parse_winhl_opt, set_option_direct_for};
 use crate::src::nvim::optionstr::free_string_option;
-use crate::src::nvim::os::libc::{__assert_fail, memcmp, qsort, strlen};
+use crate::src::nvim::os::libc::{memcmp, qsort, strlen};
 use crate::src::nvim::strings::concat_str;
 use crate::src::nvim::types::ui::kUIMultigrid;
 use crate::src::nvim::types::{
@@ -75,18 +75,7 @@ pub unsafe extern "C" fn win_new_float(
             lastwin_nofloating(::core::ptr::null_mut::<tabpage_T>())
         };
         if fconfig.window != 0 as ::core::ffi::c_int {
-            '_c2rust_label: {
-                if !last {
-                } else {
-                    __assert_fail(
-                        b"!last\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/winfloat.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        50 as ::core::ffi::c_uint,
-                        b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(!last, "!last");
             let mut parent_wp: *mut win_T = find_window_by_handle(fconfig.window, err);
             if parent_wp.is_null() {
                 return ::core::ptr::null_mut::<win_T>();
@@ -116,43 +105,10 @@ pub unsafe extern "C" fn win_new_float(
             (*wp).w_onebuf_opt.wo_stl = empty_string_option.ptr() as *mut ::core::ffi::c_char;
         }
     } else {
-        '_c2rust_label_0: {
-            if !last {
-            } else {
-                __assert_fail(
-                    b"!last\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/winfloat.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    74 as ::core::ffi::c_uint,
-                    b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        '_c2rust_label_1: {
-            if !(*wp).w_floating {
-            } else {
-                __assert_fail(
-                    b"!wp->w_floating\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/winfloat.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    75 as ::core::ffi::c_uint,
-                    b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(!last, "!last");
+        debug_assert!(!(*wp).w_floating, "!wp->w_floating");
         let mut win_tp: *mut tabpage_T = win_find_tabpage(wp);
-        '_c2rust_label_2: {
-            if !win_tp.is_null() {
-            } else {
-                __assert_fail(
-                    b"win_tp\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/winfloat.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    77 as ::core::ffi::c_uint,
-                    b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(!win_tp.is_null(), "win_tp");
         if win_tp == curtab.get()
             && firstwin.get() == wp
             && lastwin_nofloating(::core::ptr::null_mut::<tabpage_T>()) == wp
@@ -602,18 +558,7 @@ pub unsafe extern "C" fn win_float_find_altwin(
             firstwin.get()
         };
     }
-    '_c2rust_label: {
-        if tp != curtab.get() as *const tabpage_T {
-        } else {
-            __assert_fail(
-                b"tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/winfloat.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                402 as ::core::ffi::c_uint,
-                b"win_T *win_float_find_altwin(const win_T *, const tabpage_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    debug_assert!(tp != curtab.get() as *const tabpage_T, "tp != curtab");
     wp = if tabpage_win_valid(tp, (*tp).tp_prevwin) as ::core::ffi::c_int != 0 {
         (*tp).tp_prevwin
     } else {

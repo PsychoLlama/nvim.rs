@@ -203,17 +203,10 @@ pub unsafe extern "C" fn nvim_create_buf(
                     kOptScopeBuf,
                     buf as *mut ::core::ffi::c_void,
                 );
-                '_c2rust_label: {
-                    if (*(*buf).b_ml.ml_mfp).mf_fd < 0 as ::core::ffi::c_int {
-                    } else {
-                        __assert_fail(
-                            c"buf->b_ml.ml_mfp->mf_fd < 0".as_ptr(),
-                            c"src/nvim/api/vim.rs".as_ptr(),
-                            1077 as ::core::ffi::c_uint,
-                            c"Buffer nvim_create_buf(Boolean, Boolean, Error *)".as_ptr(),
-                        );
-                    }
-                };
+                debug_assert!(
+                    (*(*buf).b_ml.ml_mfp).mf_fd < 0 as ::core::ffi::c_int,
+                    "buf->b_ml.ml_mfp->mf_fd < 0"
+                );
                 (*buf).b_p_swf = 0 as ::core::ffi::c_int;
                 (*buf).b_p_ml = 0 as ::core::ffi::c_int;
             }
