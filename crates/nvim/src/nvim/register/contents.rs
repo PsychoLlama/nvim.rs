@@ -314,7 +314,7 @@ unsafe fn str_to_reg(
                         ) as isize);
                     }
                 }
-                assert!(line_end.offset_from(start) >= 0);
+                debug_assert!(line_end.offset_from(start) >= 0);
                 let line_len = line_end.offset_from(start) as size_t;
                 maxlen = maxlen.max(charlen as size_t);
 

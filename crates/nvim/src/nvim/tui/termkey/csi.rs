@@ -99,7 +99,7 @@ pub fn param_groups(param: Option<&[u8]>) -> (c_int, Option<c_int>) {
         let mut value: c_int = 0;
         for &byte in group {
             // `parse` only ever admits digits and ':' into a parameter.
-            assert!(byte.is_ascii_digit());
+            debug_assert!(byte.is_ascii_digit());
             // A terminal can send arbitrarily many digits; upstream wrapped
             // rather than trapping, and a debug build of this tree would panic.
             value = value.wrapping_mul(10).wrapping_add((byte - b'0') as c_int);

@@ -113,7 +113,7 @@ pub unsafe extern "C" fn mh_put_glyph(
     } else {
         *new = kMHExisting;
         let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
-        assert!(cstr_as_string((*set).keys.offset(pos_0 as isize)).map_eq(&key));
+        debug_assert!(cstr_as_string((*set).keys.offset(pos_0 as isize)).map_eq(&key));
         return pos_0;
     };
 }

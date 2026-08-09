@@ -452,7 +452,7 @@ unsafe fn shift_block_right(bd: &mut block_def, mut total: c_int) -> ShiftedLine
             old_len: bd.textstart.offset_from(old_textstart) as c_int + col_pre,
             new_len: tabs + spaces,
         };
-        assert!(shifted.new_len - shifted.old_len == new_line_len - old_line_len);
+        debug_assert!(shifted.new_len - shifted.old_len == new_line_len - old_line_len);
         shifted
     }
 }
@@ -532,10 +532,10 @@ unsafe fn shift_block_left(oap: *mut oparg_T, bd: &mut block_def, total: c_int) 
         let verbatim_copy_end = ci.ptr;
 
         // A destination inside a TAB leaves a gap the TAB used to cover.
-        assert!(destination_col - verbatim_copy_width >= 0);
+        debug_assert!(destination_col - verbatim_copy_width >= 0);
         let fill = destination_col - verbatim_copy_width;
 
-        assert!(verbatim_copy_end.offset_from(old_p) >= 0);
+        debug_assert!(verbatim_copy_end.offset_from(old_p) >= 0);
         // The part of the line left of the shift, which is not being shifted.
         let fixedlen = verbatim_copy_end.offset_from(old_p) as c_int;
         // The replacement line is that part, then `fill` spaces, then the rest
@@ -561,7 +561,7 @@ unsafe fn shift_block_left(oap: *mut oparg_T, bd: &mut block_def, total: c_int) 
             old_len: bd.textcol + non_white.offset_from(bd.textstart) as c_int - fixedlen,
             new_len: fill,
         };
-        assert!(shifted.new_len - shifted.old_len == new_line_len - old_line_len);
+        debug_assert!(shifted.new_len - shifted.old_len == new_line_len - old_line_len);
         shifted
     }
 }

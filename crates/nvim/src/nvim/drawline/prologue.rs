@@ -849,7 +849,7 @@ impl LineSetup {
                     as ::core::ffi::c_int;
             } else {
                 // Bad word found: its attribute applies to the end of it.
-                assert!(len <= ::core::ffi::c_int::MAX as size_t);
+                debug_assert!(len <= ::core::ffi::c_int::MAX as size_t);
                 self.word_end = (*wp).w_cursor.col + len as ::core::ffi::c_int + 1;
                 if spell_hlf != HLF_COUNT {
                     self.spell_attr = (*highlight_attr.ptr())[spell_hlf as usize];

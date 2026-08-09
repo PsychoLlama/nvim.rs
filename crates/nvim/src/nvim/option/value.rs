@@ -158,7 +158,7 @@ pub(crate) unsafe fn set_option_varp(
     value: OptVal,
     free_oldval: bool,
 ) {
-    assert!(option_has_type(opt_idx, value.type_0));
+    debug_assert!(option_has_type(opt_idx, value.type_0));
     if free_oldval {
         // SAFETY: the caller's `varp` is this option's variable.
         optval_free(unsafe { optval_from_varp(opt_idx, varp) });

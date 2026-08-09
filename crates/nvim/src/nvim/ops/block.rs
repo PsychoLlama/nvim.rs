@@ -109,7 +109,7 @@ pub(crate) unsafe fn block_insert(
             }
             // Can go negative when the cursor was moved.
             spaces = spaces.max(0);
-            assert!(count >= 0);
+            debug_assert!(count >= 0);
 
             // The allocation has to match exactly what is copied below.
             let extra = if spaces > 0 && (*bdp).is_short == 0 {

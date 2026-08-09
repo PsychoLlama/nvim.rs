@@ -213,7 +213,7 @@ unsafe extern "C-unwind" fn api_parse_enter(parser: *mut mpack_parser_t, node: *
             (*node).data[0].p = result.cast::<c_void>();
         }
         TOKEN_CHUNK => {
-            assert!(!parent.is_null());
+            debug_assert!(!parent.is_null());
             let len = (*node).tok.length as size_t;
             let chunk = (*node).tok.data.chunk_ptr;
             if (*parent).tok.type_0 == TOKEN_STR || (*parent).tok.type_0 == TOKEN_BIN {
@@ -331,7 +331,7 @@ pub unsafe extern "C" fn unpacker_teardown(p: *mut Unpacker) {
 /// — so rather than tracking sub-states it refuses to advance the stream
 /// until the whole thing has arrived.
 unsafe fn unpacker_parse_header(p: *mut Unpacker) -> bool {
-    assert!((*p).unpack_error.type_0 == kErrorTypeNone);
+    debug_assert!((*p).unpack_error.type_0 == kErrorTypeNone);
     let mut data: *const c_char = (*p).read_ptr;
     let mut size: size_t = (*p).read_size;
     let mut tok: mpack_token_t = core::mem::zeroed();
@@ -474,7 +474,7 @@ pub unsafe extern "C" fn unpacker_advance(p: *mut Unpacker) -> bool {
             (*p).has_grid_line_event = true;
             body_is_unpacked = true;
         } else {
-            assert!((*p).state == protocol::REDRAW_ARGS);
+            debug_assert!((*p).state == protocol::REDRAW_ARGS);
             (*p).arena = ARENA_EMPTY;
             (*p).state = protocol::REDRAW_ARGS_DONE;
         }

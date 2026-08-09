@@ -39,7 +39,7 @@ unsafe fn yank_copy_line(
             (*bd).endspaces = 0;
         }
         let size = (*bd).startspaces + (*bd).endspaces + (*bd).textlen;
-        assert!(size >= 0);
+        debug_assert!(size >= 0);
         let start = xmallocz(size as size_t) as *mut c_char;
         (*(*reg).y_array.add(y_idx)).data = start;
 
@@ -322,7 +322,7 @@ pub unsafe fn format_reg_type(
     buf_len: size_t,
 ) {
     unsafe {
-        assert!(buf_len > 1);
+        debug_assert!(buf_len > 1);
         match reg_type {
             kMTLineWise => {
                 *buf = 'V' as c_char;

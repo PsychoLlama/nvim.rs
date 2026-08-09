@@ -323,7 +323,7 @@ unsafe fn init_child(ptyproc: *mut PtyProc) -> ! {
     }
 
     let prog = proc_get_exepath(proc);
-    assert!(!(*proc).env.is_null());
+    debug_assert!(!(*proc).env.is_null());
     environ = tv_dict_to_env((*proc).env);
     execvp(prog, (*proc).argv as *const *mut c_char);
     logmsg(

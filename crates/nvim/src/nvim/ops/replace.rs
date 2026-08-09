@@ -28,7 +28,7 @@ use super::*;
 /// `lp` must name a line of the current buffer.
 pub(crate) unsafe fn pbyte(mut lp: pos_T, c: c_int) {
     unsafe {
-        assert!(c <= c_int::from(u8::MAX));
+        debug_assert!(c <= c_int::from(u8::MAX));
         let p = ml_get_buf_mut(curbuf.get(), lp.lnum);
         let len = (*curbuf.get()).b_ml.ml_line_textlen;
 
@@ -215,7 +215,7 @@ unsafe fn replace_block_line(oap: *mut oparg_T, bd: &mut block_def, c: c_int, ha
 
         // What is left of the line after the block, NUL included.
         let col = oldlen - bd.textcol - bd.textlen + 1;
-        assert!(col >= 0);
+        debug_assert!(col >= 0);
 
         let mut after_p: *mut c_char = ::core::ptr::null_mut();
         let mut after_p_len: size_t = 0;

@@ -412,7 +412,7 @@ pub unsafe extern "C" fn did_set_lines_or_columns(args: *mut optset_T) -> *const
                 check_screensize();
                 let new_row = (Rows.get() as OptInt - p_ch.get().max(1)) as c_int;
                 if cmdline_row.get() > new_row && Rows.get() as OptInt > p_ch.get() {
-                    assert!(p_ch.get() >= 0);
+                    debug_assert!(p_ch.get() >= 0);
                     cmdline_row.set(new_row);
                 }
             }

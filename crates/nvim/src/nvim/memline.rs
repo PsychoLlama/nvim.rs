@@ -373,7 +373,7 @@ unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhd
 
         // Block one: the root pointer block, pointing at the one data block.
         *hp = ml_new_ptr(mfp);
-        assert!(!(*hp).is_null());
+        debug_assert!(!(*hp).is_null());
         if (**hp).bh_bnum != 1 {
             iemsg(gettext(c"E298: Didn't get block nr 1?".as_ptr()));
             return false;

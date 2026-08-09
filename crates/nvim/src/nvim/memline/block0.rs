@@ -311,7 +311,7 @@ unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: varnumber_T) {
 /// Returns the swap file's own timestamp, or 0 if it could not be stat'ed.
 pub(crate) unsafe fn swapfile_info(fname: *const c_char, msg: *mut StringBuilder) -> time_t {
     unsafe {
-        assert!(!fname.is_null());
+        debug_assert!(!fname.is_null());
         let mut x: time_t = 0;
 
         // The swap file's date, and on unix the name of whoever owns it.

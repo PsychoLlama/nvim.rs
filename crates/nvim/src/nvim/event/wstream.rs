@@ -113,7 +113,7 @@ unsafe fn write_file(stream: *mut Stream, buffer: *mut WBuffer, uvbuf: *const uv
     );
     uv_fs_req_cleanup(&raw mut req);
     wstream_release_wbuffer(buffer);
-    assert!((*stream).write_cb.is_none());
+    debug_assert!((*stream).write_cb.is_none());
     (*stream).fpos += req.result.max(0) as i64;
     if req.result > 0 {
         0

@@ -91,26 +91,26 @@ fn open_flags(flags: c_int) -> c_int {
         oflags |= O_CREAT | O_EXCL | O_WRONLY;
     }
     if has(flags, kFileCreate) {
-        assert!(!has(flags, kFileCreateOnly));
+        debug_assert!(!has(flags, kFileCreateOnly));
         oflags |= O_CREAT | O_WRONLY;
     }
     if has(flags, kFileTruncate) {
-        assert!(!has(flags, kFileCreateOnly));
+        debug_assert!(!has(flags, kFileCreateOnly));
         oflags |= O_TRUNC | O_WRONLY;
     }
     if has(flags, kFileAppend) {
-        assert!(!has(flags, kFileCreateOnly));
+        debug_assert!(!has(flags, kFileCreateOnly));
         oflags |= O_APPEND | O_WRONLY;
     }
     if has(flags, kFileReadOnly) {
-        assert!(!has(flags, WRITING));
+        debug_assert!(!has(flags, WRITING));
         oflags |= O_RDONLY;
     }
     if has(flags, kFileNoSymlink) {
         oflags |= O_NOFOLLOW;
     }
     if has(flags, kFileMkDir) {
-        assert!(!has(flags, kFileCreateOnly));
+        debug_assert!(!has(flags, kFileCreateOnly));
         oflags |= O_CREAT | O_WRONLY;
     }
     oflags

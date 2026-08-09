@@ -75,7 +75,7 @@ impl Cells {
                 self.char_code = schar_get_first_codepoint(self.cell_char);
                 wlv.extra_todo -= 1;
             } else {
-                assert!(!wlv.extra_text.is_null());
+                debug_assert!(!wlv.extra_text.is_null());
                 self.char_len = utfc_ptr2len(wlv.extra_text);
                 self.cell_char = utfc_ptr2schar(wlv.extra_text, &raw mut self.char_code);
                 // `char_len` is 0 at the end-of-line NUL.
@@ -147,8 +147,8 @@ impl Cells {
                 wlv.extra_is_virt_text = false;
             } else {
                 // A `<` filler interrupted a longer run; resume it.
-                assert!(wlv.extra_fill != NUL as schar_T || wlv.extra_last != NUL as schar_T);
-                assert!(!wlv.extra_text.is_null());
+                debug_assert!(wlv.extra_fill != NUL as schar_T || wlv.extra_last != NUL as schar_T);
+                debug_assert!(!wlv.extra_text.is_null());
                 wlv.extra_fill = NUL as schar_T;
                 wlv.extra_last = NUL as schar_T;
                 wlv.extra_todo = self.extra_todo_next;
@@ -449,7 +449,7 @@ impl Cells {
                 &raw mut (*f.spv).spv_cap_col,
                 (*f.spv).spv_unchanged,
             );
-            assert!(tmplen <= ::core::ffi::c_int::MAX as size_t);
+            debug_assert!(tmplen <= ::core::ffi::c_int::MAX as size_t);
             let len = tmplen as ::core::ffi::c_int;
             self.word_end = at + len;
 

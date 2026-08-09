@@ -438,7 +438,7 @@ pub unsafe extern "C" fn msg_add_lines(insert_space: c_int, lnum: linenr_T, ncha
 /// @return  true for EOF or error
 pub unsafe extern "C" fn vim_fgets(buf: *mut c_char, size: c_int, fp: *mut FILE) -> bool {
     unsafe {
-        assert!(size > 0);
+        debug_assert!(size > 0);
         // The last-but-one byte tells us whether the line fitted: `fgets`
         // leaves it alone if the line was shorter than the buffer.
         let last = (size - 2) as isize;

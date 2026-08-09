@@ -77,7 +77,7 @@ unsafe fn items<'a>(queue: *mut MultiQueue) -> &'a mut ItemList {
 /// did upstream; nothing does that while children are alive.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn multiqueue_free(queue: *mut MultiQueue) {
-    assert!(!queue.is_null());
+    debug_assert!(!queue.is_null());
     // Both boxes stay alive until the end of the scope: the parent is read
     // out of `owned` while its items are being unlinked.
     let owned = Box::from_raw(queue);
@@ -105,7 +105,7 @@ pub unsafe extern "C" fn multiqueue_get(queue: *mut MultiQueue) -> Event {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn multiqueue_put_event(queue: *mut MultiQueue, event: Event) {
-    assert!(!queue.is_null());
+    debug_assert!(!queue.is_null());
     let parent = (*queue).parent;
     let parent_slot = if parent.is_null() {
         None
@@ -154,7 +154,7 @@ unsafe fn take_event(queue: *mut MultiQueue) -> Event {
 }
 
 pub unsafe fn multiqueue_empty(queue: *mut MultiQueue) -> bool {
-    assert!(!queue.is_null());
+    debug_assert!(!queue.is_null());
     items(queue).is_empty()
 }
 
@@ -166,7 +166,7 @@ pub unsafe fn multiqueue_move_events(dest: *mut MultiQueue, src: *mut MultiQueue
 }
 
 pub unsafe fn multiqueue_process_events(queue: *mut MultiQueue) {
-    assert!(!queue.is_null());
+    debug_assert!(!queue.is_null());
     while !multiqueue_empty(queue) {
         let mut event = take_event(queue);
         if let Some(handler) = event.handler {
@@ -176,14 +176,14 @@ pub unsafe fn multiqueue_process_events(queue: *mut MultiQueue) {
 }
 
 pub unsafe fn multiqueue_purge_events(queue: *mut MultiQueue) {
-    assert!(!queue.is_null());
+    debug_assert!(!queue.is_null());
     while !multiqueue_empty(queue) {
         take_event(queue);
     }
 }
 
 pub unsafe fn multiqueue_replace_parent(queue: *mut MultiQueue, new_parent: *mut MultiQueue) {
-    assert!(multiqueue_empty(queue));
+    debug_assert!(multiqueue_empty(queue));
     (*queue).parent = new_parent;
 }
 

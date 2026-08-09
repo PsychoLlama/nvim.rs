@@ -228,7 +228,7 @@ pub unsafe fn ins_str(s: *mut c_char, slen: size_t) {
         // The tail, including the NUL. The cursor is inside the line, so this
         // is never negative.
         let bytes = oldlen - col + 1;
-        assert!(bytes >= 0);
+        debug_assert!(bytes >= 0);
         memmove(
             newp.offset(col as isize).add(slen) as *mut c_void,
             oldp.offset(col as isize) as *const c_void,

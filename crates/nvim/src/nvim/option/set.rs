@@ -742,7 +742,7 @@ pub fn set_option_direct(opt_idx: OptIndex, value: OptVal, opt_flags: c_int, set
             IOSIZE as size_t,
         )
     };
-    assert!(errmsg.is_null());
+    debug_assert!(errmsg.is_null());
 }
 
 /// Give an option a new value the way a script would. Takes ownership of

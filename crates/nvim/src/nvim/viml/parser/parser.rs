@@ -167,7 +167,7 @@ pub unsafe fn viml_parser_get_remaining_line(pstate: *mut ParserState) -> Option
     } else {
         lines_vec(&mut (*reader).lines).last()
     };
-    assert!(pos.line == (*reader).lines.size - 1);
+    debug_assert!(pos.line == (*reader).lines.size - 1);
     if pline.data.is_null() {
         return None;
     }
@@ -183,7 +183,7 @@ pub unsafe fn viml_parser_get_remaining_line(pstate: *mut ParserState) -> Option
 /// Takes the cursor and the reader rather than the whole `ParserState`, so
 /// that the reborrow does not reach the stack the caller is pushing onto.
 pub fn viml_parser_advance(pos: &mut ParserPosition, reader: &mut ParserInputReader, len: usize) {
-    assert!(pos.line == reader.lines.size - 1);
+    debug_assert!(pos.line == reader.lines.size - 1);
     let pline = lines_vec(&mut reader.lines).last();
     if pos.col.wrapping_add(len) >= pline.size {
         pos.line += 1;

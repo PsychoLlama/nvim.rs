@@ -43,7 +43,7 @@ pub unsafe fn channel_create_event(chan: *mut Channel, ext_source: *const c_char
     } else {
         ext_source
     };
-    assert!((*chan).id <= i64::MAX as uint64_t);
+    debug_assert!((*chan).id <= i64::MAX as uint64_t);
 
     let mut arena: Arena = ARENA_EMPTY;
     let info = channel_info((*chan).id, &raw mut arena);

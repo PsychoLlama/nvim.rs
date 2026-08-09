@@ -317,7 +317,7 @@ pub unsafe fn decor_providers_invoke_win(wp: *mut win_T) {
     unsafe {
         // This might change in the future; then this would need
         // `decor_state.running_decor_provider` just like "on_line" below.
-        assert!(
+        debug_assert!(
             (*decor_state.ptr()).current_end == 0
                 && (*decor_state.ptr()).future_begin == decor_range_count(decor_state.ptr())
         );

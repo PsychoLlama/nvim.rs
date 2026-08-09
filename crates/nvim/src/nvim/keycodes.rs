@@ -272,7 +272,7 @@ pub unsafe fn special_to_buf(
         } else if escape_ks {
             let after = add_char2buf(key, dst.add(dlen));
             let written = after.offset_from(dst);
-            assert!(written >= 0 && written as usize <= c_uint::MAX as usize);
+            debug_assert!(written >= 0 && written as usize <= c_uint::MAX as usize);
             dlen = written as usize;
         } else {
             dlen += utf_char2bytes(key, dst.add(dlen)) as usize;

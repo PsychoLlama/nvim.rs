@@ -518,7 +518,7 @@ pub(crate) unsafe fn build_leader(
             + extra_len
             + second_line_indent.max(0)
             + 1;
-        assert!(bytes >= 0);
+        debug_assert!(bytes >= 0);
         let leader = xmalloc(bytes as size_t) as *mut c_char;
         let allocated = leader;
         xmemcpyz(

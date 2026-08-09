@@ -211,7 +211,7 @@ unsafe extern "C" fn read_event(argv: *mut *mut c_void) {
             (*stream).s.cb_data,
             (*stream).did_eof,
         );
-        assert!(consumed <= available);
+        debug_assert!(consumed <= available);
         rstream_consume(stream, consumed);
     }
     (*stream).s.pending_reqs -= 1;
@@ -238,7 +238,7 @@ pub unsafe fn rstream_consume(stream: *mut RStream, consumed: size_t) {
         (*stream).read_pos = (*stream).write_pos;
     }
     if (*stream).want_read && (*stream).paused_full && rstream_space(stream) != 0 {
-        assert!((*stream).read_cb.is_some());
+        debug_assert!((*stream).read_cb.is_some());
         (*stream).paused_full = false;
         rstream_start_inner(stream);
     }
@@ -247,7 +247,7 @@ pub unsafe fn rstream_consume(stream: *mut RStream, consumed: size_t) {
 /// The stream's close callback: give the arena block back.
 unsafe extern "C" fn rstream_close_cb(s: *mut Stream, data: *mut c_void) {
     let stream = data as *mut RStream;
-    assert!(!stream.is_null() && s == &raw mut (*stream).s);
+    debug_assert!(!stream.is_null() && s == &raw mut (*stream).s);
     if !(*stream).buffer.is_null() {
         free_block((*stream).buffer as *mut c_void);
     }

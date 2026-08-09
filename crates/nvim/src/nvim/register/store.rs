@@ -221,7 +221,7 @@ pub unsafe fn update_yankreg_width(reg: *mut yankreg_T) {
             let line = *(*reg).y_array.add(i);
             maxlen = maxlen.max(mb_string2cells_len(line.data, line.size));
         }
-        assert!(maxlen <= c_int::MAX as size_t);
+        debug_assert!(maxlen <= c_int::MAX as size_t);
         (*reg).y_width = (*reg).y_width.max(maxlen as c_int - 1);
     }
 }

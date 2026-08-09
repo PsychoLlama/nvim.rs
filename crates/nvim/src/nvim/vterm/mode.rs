@@ -231,7 +231,7 @@ pub(super) fn set_key_encoding_flags(state: &mut VTermState, arg: c_int, mode: c
 pub(super) fn push_key_encoding_flags(state: &mut VTermState, arg: c_int) {
     let stack = flag_stack(state);
     let depth = stack.items.len();
-    assert!(usize::from(stack.size) <= depth);
+    debug_assert!(usize::from(stack.size) <= depth);
     if usize::from(stack.size) == depth {
         stack.items.rotate_left(1);
     } else {

@@ -536,7 +536,7 @@ pub(crate) unsafe fn option_value2string(opt: *mut vimoption_T, opt_flags: c_int
     // SAFETY: the caller's table row, and `NameBuff` is `MAXPATHL` bytes.
     unsafe {
         let varp = get_varp_scope(opt, opt_flags);
-        assert!(!varp.is_null());
+        debug_assert!(!varp.is_null());
         let buf = NameBuff.ptr().cast::<c_char>();
         let cap = core::mem::size_of::<[c_char; 4096]>();
 

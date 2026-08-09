@@ -81,7 +81,7 @@ pub unsafe fn stream_init(
             uv_idle_init(&raw mut (*uv_loop).uv, &raw mut (*stream).uv.idle);
             (*stream).uv.idle.data = stream as *mut c_void;
         } else {
-            assert!(handle_type == UV_NAMED_PIPE || handle_type == UV_TTY);
+            debug_assert!(handle_type == UV_NAMED_PIPE || handle_type == UV_TTY);
             uv_pipe_init(&raw mut (*uv_loop).uv, &raw mut (*stream).uv.pipe, 0);
             uv_pipe_open(&raw mut (*stream).uv.pipe, fd as uv_file);
             (*stream).uvstream = &raw mut (*stream).uv.pipe as *mut uv_stream_t;

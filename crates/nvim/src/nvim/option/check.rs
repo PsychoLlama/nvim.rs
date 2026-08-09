@@ -219,7 +219,7 @@ pub unsafe fn insecure_flag(wp: *mut win_T, opt_idx: OptIndex, opt_flags: c_int)
     // SAFETY: the caller's window is live where the arms below need it.
     unsafe {
         if opt_flags & OPT_LOCAL != 0 {
-            assert!(!wp.is_null());
+            debug_assert!(!wp.is_null());
             match opt_idx {
                 kOptWrap => return &raw mut (*wp).w_onebuf_opt.wo_wrap_flags,
                 kOptStatusline => return &raw mut (*wp).w_onebuf_opt.wo_stl_flags,

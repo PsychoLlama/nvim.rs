@@ -198,7 +198,7 @@ pub fn get_xdg_home(idx: XDGVarType) -> *mut c_char {
         let appname_len = CStr::from_ptr(appname).to_bytes().len();
         // Windows appends "-data" to the data/state homes; the headroom is
         // asserted on every platform.
-        assert!(appname_len < IOSIZE - c"-data".count_bytes() - 1);
+        debug_assert!(appname_len < IOSIZE - c"-data".count_bytes() - 1);
         if dir.is_null() {
             return dir;
         }

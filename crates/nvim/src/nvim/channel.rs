@@ -209,7 +209,7 @@ pub unsafe fn channel_alloc(type_0: ChannelStreamType) -> *mut Channel {
         }
     };
     // Channel ids are handed to Vimscript as numbers.
-    assert!(id <= i64::MAX as uint64_t);
+    debug_assert!(id <= i64::MAX as uint64_t);
     let chan = Box::into_raw(Box::new(Channel {
         id,
         refcount: 1,

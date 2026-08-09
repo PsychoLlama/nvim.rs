@@ -271,7 +271,7 @@ unsafe fn get_option_newval(
     varp: *mut c_void,
     errmsg: &mut *const c_char,
 ) -> OptVal {
-    assert!(!varp.is_null());
+    debug_assert!(!varp.is_null());
 
     let nil = OptVal {
         type_0: kOptValTypeNil,
@@ -694,7 +694,7 @@ unsafe fn report(errmsg: *const c_char, start: *mut c_char, end: *mut c_char) {
         // Two past the message, leaving room for the ": " written back over
         // its terminator.
         let at = vim_snprintf(buf, IOSIZE as size_t, c"%s".as_ptr(), gettext(errmsg)) + 2;
-        assert!(end >= start);
+        debug_assert!(end >= start);
         let arglen = end.offset_from(start);
         if at as isize + arglen < IOSIZE as isize {
             xstrlcpy(

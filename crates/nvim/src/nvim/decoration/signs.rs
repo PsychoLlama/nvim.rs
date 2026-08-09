@@ -361,7 +361,7 @@ pub unsafe fn buf_signcols_count_range(
                 let slot = &mut (*buf).b_signcols.count[(prevwidth - 1) as usize];
                 *slot -= 1;
                 // TODO(bfredl): correct marktree splicing so that this doesn't fail
-                assert!(*slot >= 0);
+                debug_assert!(*slot >= 0);
             }
             let width = SIGN_SHOW_MAX.min(rowcount);
             if clear != kTrue && width > 0 {

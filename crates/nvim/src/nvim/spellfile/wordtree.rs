@@ -100,7 +100,7 @@ impl SpellArena {
 
     /// Hand out `len` zeroed bytes, aligned for a struct when `align`.
     pub fn alloc_bytes(&mut self, len: usize, align: bool) -> *mut c_char {
-        assert!(len <= SBLOCKSIZE);
+        debug_assert!(len <= SBLOCKSIZE);
         if align && !self.head.is_null() {
             self.used = self.used.next_multiple_of(mem::align_of::<*mut c_char>());
         }

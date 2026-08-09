@@ -267,7 +267,7 @@ unsafe fn put_reedit_in_typebuf(silent: c_int) {
 unsafe fn execreg_line_continuation(lines: *mut String_0, idx: *mut size_t) -> *mut c_char {
     unsafe {
         let mut cmd_start = *idx;
-        assert!(cmd_start > 0);
+        debug_assert!(cmd_start > 0);
         let cmd_end = cmd_start;
 
         // Find the first line of the run.

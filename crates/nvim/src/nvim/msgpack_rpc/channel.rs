@@ -182,7 +182,7 @@ pub unsafe fn rpc_close(channel: *mut Channel) {
 /// follow the peer out.
 unsafe extern "C" fn rpc_close_event(argv: *mut *mut c_void) {
     let channel = *argv as *mut Channel;
-    assert!(!channel.is_null());
+    debug_assert!(!channel.is_null());
     channel_decref(channel);
     remote_ui_disconnect((*channel).id, ptr::null_mut(), false);
 

@@ -260,7 +260,7 @@ pub(crate) fn reginsert_nr(op: c_int, val: int64_t, opnd: *mut uint8_t) {
         return;
     }
     let place = open_before(op, opnd, NODE_HDR + 4);
-    assert!((0..=uint32_t::MAX as int64_t).contains(&val));
+    debug_assert!((0..=uint32_t::MAX as int64_t).contains(&val));
     put_uint32(place, val as uint32_t);
 }
 
@@ -273,8 +273,8 @@ pub(crate) fn reginsert_limits(op: c_int, minval: int64_t, maxval: int64_t, opnd
         return;
     }
     let mut place = open_before(op, opnd, NODE_HDR + 8);
-    assert!((0..=uint32_t::MAX as int64_t).contains(&minval));
-    assert!((0..=uint32_t::MAX as int64_t).contains(&maxval));
+    debug_assert!((0..=uint32_t::MAX as int64_t).contains(&minval));
+    debug_assert!((0..=uint32_t::MAX as int64_t).contains(&maxval));
     place = put_uint32(place, minval as uint32_t);
     place = put_uint32(place, maxval as uint32_t);
     regtail(opnd, place);

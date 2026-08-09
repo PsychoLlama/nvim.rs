@@ -333,7 +333,7 @@ impl WinLineVars {
             {
                 // No sign on this row. The number column never gets here:
                 // `draw_lnum_col` only asks for `nrcol` when there is a sign.
-                assert!(!nrcol);
+                debug_assert!(!nrcol);
                 self.draw_col_fill(
                     schar_from_ascii(b' '),
                     SIGN_WIDTH as ::core::ffi::c_int,
@@ -364,7 +364,7 @@ impl WinLineVars {
             );
             let sign_pos =
                 self.off - SIGN_WIDTH as ::core::ffi::c_int - nrcol as ::core::ffi::c_int;
-            assert!(sign_pos >= 0);
+            debug_assert!(sign_pos >= 0);
             *linebuf_char.get().add(sign_pos as usize) = sattr.text[0];
             *linebuf_char.get().add(sign_pos as usize + 1) = sattr.text[1];
         }

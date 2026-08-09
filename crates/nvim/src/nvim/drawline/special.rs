@@ -47,7 +47,7 @@ impl Cells {
                 wlv.extra_fill = schar_from_ascii(MB_FILLER_CHAR);
                 wlv.extra_last = NUL as schar_T;
                 if wlv.extra_todo > 0 {
-                    assert!(!wlv.extra_text.is_null());
+                    debug_assert!(!wlv.extra_text.is_null());
                     self.extra_todo_next = wlv.extra_todo;
                     self.extra_attr_next = wlv.extra_attr;
                     wlv.n_attr = (wlv.n_attr + 1).max(2);
@@ -147,7 +147,7 @@ impl Cells {
                 );
                 wlv.extra_todo = strlen(wlv.extra_text) as ::core::ffi::c_int;
                 if wlv.extra_text != f.fold_buf {
-                    assert!(self.foldtext_free.is_null());
+                    debug_assert!(self.foldtext_free.is_null());
                     self.foldtext_free = wlv.extra_text;
                 }
                 wlv.extra_fill = NUL as schar_T;

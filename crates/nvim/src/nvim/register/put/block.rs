@@ -269,7 +269,7 @@ impl Put {
 
             // The rest of the old line, including its NUL.
             let columns = oldlen - land.textcol - land.delcount + 1;
-            assert!(columns >= 0);
+            debug_assert!(columns >= 0);
             memmove(
                 ptr as *mut c_void,
                 oldp.offset((land.textcol + land.delcount) as isize) as *const c_void,

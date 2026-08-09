@@ -44,7 +44,7 @@ pub(crate) unsafe fn line_putchar(
     unsafe {
         // The caller handles overwriting the right half of a double-width
         // character; a zero here means it did not.
-        assert!(*dest != 0);
+        debug_assert!(*dest != 0);
         debug_assert!(maxcells > 0);
 
         let p = *pp;
@@ -130,7 +130,7 @@ pub(crate) unsafe fn draw_virt_text(
             }
 
             let vt = if (*item).kind == kDecorKindVirtText {
-                assert!(!(*item).data.vt.is_null());
+                debug_assert!(!(*item).data.vt.is_null());
                 (*item).data.vt
             } else {
                 ::core::ptr::null_mut::<DecorVirtText>()
@@ -155,7 +155,7 @@ pub(crate) unsafe fn draw_virt_text(
                                     // always eol or overlay
                                     // (`decor_range_add_sh`). Upstream
                                     // dereferences unconditionally here.
-                                    assert!((*ahead).kind == kDecorKindVirtText);
+                                    debug_assert!((*ahead).kind == kDecorKindVirtText);
                                     // One space between neighbours.
                                     total_eol_right_width += (*(*ahead).data.vt).width + 1;
                                 }
@@ -312,7 +312,7 @@ pub(crate) unsafe fn draw_virt_text_item(
             // its left half too, and the right half itself so `line_putchar`
             // has a non-zero cell to start from.
             if !through && *linebuf_char.get().add(col as usize) == 0 {
-                assert!(col > 0);
+                debug_assert!(col > 0);
                 *linebuf_char.get().add(col as usize - 1) = schar_from_ascii(b' ');
                 *linebuf_char.get().add(col as usize) = schar_from_ascii(b' ');
             }
@@ -490,7 +490,7 @@ impl WinLineVars {
                     self.skip_cells = remaining;
                 }
 
-                assert!(self.extra_todo > 0);
+                debug_assert!(self.extra_todo > 0);
                 self.extra_is_virt_text = true;
             }
         }

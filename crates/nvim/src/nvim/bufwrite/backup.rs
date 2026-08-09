@@ -234,7 +234,7 @@ unsafe fn want_backup_copy(
         // group? Find a name that does not exist yet (some arbitrary
         // numbers) and try it out.
         let dirlen = path_tail(fname).offset_from(fname) as usize;
-        assert!(dirlen < MAXPATHL as usize);
+        debug_assert!(dirlen < MAXPATHL as usize);
         let mut tmp_fname = [0 as c_char; MAXPATHL as usize];
         xmemcpyz(
             tmp_fname.as_mut_ptr().cast(),

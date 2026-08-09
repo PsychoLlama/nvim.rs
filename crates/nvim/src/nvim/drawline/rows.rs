@@ -51,7 +51,7 @@ impl Cells {
                 let index = wlv.filler_todo - (wlv.filler_lines - wlv.n_virt_lines);
                 if index > 0 {
                     self.virt_line_index = self.virt_lines.size as ::core::ffi::c_int - index;
-                    assert!(self.virt_line_index >= 0);
+                    debug_assert!(self.virt_line_index >= 0);
                     self.virt_line_flags =
                         (*self.virt_lines.items.offset(self.virt_line_index as isize)).flags;
                 }

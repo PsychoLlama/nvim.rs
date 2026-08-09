@@ -231,7 +231,7 @@ pub(crate) unsafe fn try_enter(tstate: *mut TryState) {
 pub(crate) unsafe fn try_leave(tstate: *const TryState, err: *mut Error) {
     // SAFETY: `tstate` is what the matching `try_enter` filled in.
     unsafe {
-        assert!(trylevel.get() > 0);
+        debug_assert!(trylevel.get() > 0);
         (*trylevel.ptr()) -= 1;
         did_emsg.set(0);
         force_abort.set(false);
@@ -299,7 +299,7 @@ pub(crate) unsafe extern "C" fn api_set_error(
     // SAFETY: `format` and the variadic arguments are the caller's, and are
     // a valid printf call by construction — every call site is in-tree.
     unsafe {
-        assert!(err_type != kErrorTypeNone);
+        debug_assert!(err_type != kErrorTypeNone);
         let measure: VaList = args.clone();
         let write: VaList = args.clone();
         let len = vsnprintf(ptr::null_mut(), 0, format, measure);
@@ -354,7 +354,7 @@ pub(crate) unsafe fn set_mark(
                 return false;
             }
         }
-        assert!((i32::MIN as Integer..=i32::MAX as Integer).contains(&line));
+        debug_assert!((i32::MIN as Integer..=i32::MAX as Integer).contains(&line));
 
         let mut pos = pos_T {
             lnum: line as linenr_T,

@@ -123,7 +123,7 @@ pub unsafe fn do_join(
     setmark: bool,
 ) -> c_int {
     unsafe {
-        assert!(count >= 1);
+        debug_assert!(count >= 1);
         let remove_comments = use_formatoptions && has_format_option(FO_REMOVE_COMS);
 
         if save_undo

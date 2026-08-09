@@ -889,7 +889,7 @@ unsafe fn mf_do_open(mfp: *mut memfile_T, fname: *mut c_char, mut flags: c_int) 
     unsafe {
         // `fname` cannot be NameBuff: it has to have been allocated.
         mf_set_fnames(mfp, fname);
-        assert!(!mf_fname(mfp).is_null());
+        debug_assert!(!mf_fname(mfp).is_null());
 
         // A swap file being created really should not exist yet. If it does
         // and it is a symlink, this is most likely an attack.

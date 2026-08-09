@@ -289,7 +289,7 @@ unsafe fn wlv_put_linebuf(
             endcol
         };
 
-        assert!(flags & SLF_RIGHTLEFT as ::core::ffi::c_int == 0);
+        debug_assert!(flags & SLF_RIGHTLEFT as ::core::ffi::c_int == 0);
         if (*wp).w_onebuf_opt.wo_rl != 0 {
             linebuf_mirror(
                 &mut startcol,

@@ -277,7 +277,7 @@ unsafe fn attention_message(
     msg: *mut StringBuilder,
 ) {
     unsafe {
-        assert!(!(*buf).b_fname.is_null());
+        debug_assert!(!(*buf).b_fname.is_null());
 
         emsg(gettext(c"E325: ATTENTION".as_ptr()));
         kv_puts(msg, c"Found a swap file by the name \"");
