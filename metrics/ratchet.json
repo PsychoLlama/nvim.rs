@@ -449,7 +449,7 @@
     "crates/nvim/src/nvim/insexpand/vimscript.rs": {"cell_ptr": 5, "unsafe_lines": 390},
     "crates/nvim/src/nvim/keycodes.rs": {"cell_ptr": 3, "unsafe_lines": 351},
     "crates/nvim/src/nvim/kvec.rs": {"unsafe_lines": 48},
-    "crates/nvim/src/nvim/log.rs": {"cell_ptr": 30, "unsafe_lines": 360, "variadic": 1},
+    "crates/nvim/src/nvim/log.rs": {"cell_ptr": 30, "unsafe_lines": 341},
     "crates/nvim/src/nvim/lua/api_wrappers/autocmd.rs": {"cell_ptr": 5, "unsafe_lines": 359},
     "crates/nvim/src/nvim/lua/api_wrappers/buffer.rs": {"cell_ptr": 4, "unsafe_lines": 891},
     "crates/nvim/src/nvim/lua/api_wrappers/buffer_2.rs": {"cell_ptr": 1, "unsafe_lines": 308},

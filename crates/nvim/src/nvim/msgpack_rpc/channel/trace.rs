@@ -3,10 +3,10 @@
 //! Nothing is written unless a debug log level is in force, so the formatting
 //! is left to `logmsg` rather than done at the call sites.
 
+use crate::src::nvim::log::logmsg_c;
 use core::ffi::{CStr, c_char};
 use core::ptr;
 
-use crate::src::nvim::log::logmsg;
 use crate::src::nvim::types::{uint32_t, uint64_t};
 
 /// Fixed-width columns, so consecutive lines align. The trailing spaces are
@@ -45,7 +45,7 @@ pub unsafe fn log_call(
     name: *const c_char,
 ) {
     if let Some(id) = req_id {
-        logmsg(
+        logmsg_c!(
             column::LOGLVL_DBG,
             column::TAG.as_ptr(),
             ptr::null(),
@@ -59,7 +59,7 @@ pub unsafe fn log_call(
             name,
         );
     } else {
-        logmsg(
+        logmsg_c!(
             column::LOGLVL_DBG,
             column::TAG.as_ptr(),
             ptr::null(),
@@ -81,7 +81,7 @@ pub unsafe fn log_response(dir: &CStr, channel_id: uint64_t, errored: bool, req_
     } else {
         column::RESPONSE
     };
-    logmsg(
+    logmsg_c!(
         column::LOGLVL_DBG,
         column::TAG.as_ptr(),
         ptr::null(),

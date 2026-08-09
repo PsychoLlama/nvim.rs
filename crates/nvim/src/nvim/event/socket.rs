@@ -22,7 +22,7 @@ use crate::src::nvim::event::r#loop::{one_arg_event, process_events_until};
 use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 use crate::src::nvim::event::socket::address::{SOCKET_ADDR_LEN, port_suffix, tcp_host_end};
 use crate::src::nvim::event::stream::{stream_init, stream_may_close};
-use crate::src::nvim::log::{LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, logmsg_c};
 use crate::src::nvim::main::main_loop;
 use crate::src::nvim::memory::{xfree, xstrdup, xstrlcpy};
 use crate::src::nvim::os::fs::{os_path_exists, os_remove};
@@ -127,7 +127,7 @@ pub unsafe fn socket_watcher_init(
             let mut scan = port;
             let ok = try_getdigits(&raw mut scan, &raw mut iport);
             if !ok || iport < 0 || iport > u16::MAX as intmax_t {
-                logmsg(
+                logmsg_c!(
                     LOGLVL_ERR,
                     ptr::null(),
                     c"socket_watcher_init".as_ptr(),
@@ -159,7 +159,7 @@ pub unsafe fn socket_watcher_init(
                 &raw const hints,
             );
             if retval != 0 {
-                logmsg(
+                logmsg_c!(
                     LOGLVL_ERR,
                     ptr::null(),
                     c"socket_watcher_init".as_ptr(),
@@ -277,7 +277,7 @@ unsafe fn rebind_stale_socket(watcher: *mut SocketWatcher, failure: c_int) -> c_
     let uv_loop: *mut Loop = (*(*(*watcher).stream).loop_0).data.cast();
 
     if socket_alive(uv_loop, addr) {
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             ptr::null(),
             c"socket_watcher_start".as_ptr(),
@@ -289,7 +289,7 @@ unsafe fn rebind_stale_socket(watcher: *mut SocketWatcher, failure: c_int) -> c_
         return failure;
     }
 
-    logmsg(
+    logmsg_c!(
         LOGLVL_INF,
         ptr::null(),
         c"socket_watcher_start".as_ptr(),
@@ -300,7 +300,7 @@ unsafe fn rebind_stale_socket(watcher: *mut SocketWatcher, failure: c_int) -> c_
     );
     let rm_result = os_remove(addr);
     if rm_result != 0 {
-        logmsg(
+        logmsg_c!(
             LOGLVL_WRN,
             ptr::null(),
             c"socket_watcher_start".as_ptr(),

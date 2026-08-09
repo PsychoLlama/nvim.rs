@@ -16,8 +16,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::log::logmsg_c;
+#[allow(unused_imports)]
 use core::ffi::{c_char, c_int, c_long, c_void};
 use core::ptr;
 
@@ -247,7 +248,7 @@ pub unsafe fn emsg_multiline(
                     redir_write(s, strlen(s) as ptrdiff_t);
                 }
                 if !(*sourcing_top()).es_name.is_null() && (*sourcing_top()).es_lnum != 0 {
-                    logmsg(
+                    logmsg_c!(
                         LOGLVL_DBG,
                         ptr::null(),
                         c"emsg_multiline".as_ptr(),
@@ -259,7 +260,7 @@ pub unsafe fn emsg_multiline(
                         (*sourcing_top()).es_lnum,
                     );
                 } else {
-                    logmsg(
+                    logmsg_c!(
                         LOGLVL_DBG,
                         ptr::null(),
                         c"emsg_multiline".as_ptr(),
@@ -273,7 +274,7 @@ pub unsafe fn emsg_multiline(
             }
 
             if !(*sourcing_top()).es_name.is_null() && (*sourcing_top()).es_lnum != 0 {
-                logmsg(
+                logmsg_c!(
                     LOGLVL_INF,
                     ptr::null(),
                     c"emsg_multiline".as_ptr(),
@@ -285,7 +286,7 @@ pub unsafe fn emsg_multiline(
                     (*sourcing_top()).es_lnum,
                 );
             } else {
-                logmsg(
+                logmsg_c!(
                     LOGLVL_INF,
                     ptr::null(),
                     c"emsg_multiline".as_ptr(),

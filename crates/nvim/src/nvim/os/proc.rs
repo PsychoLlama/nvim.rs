@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::event::libuv::uv_kill;
-use crate::src::nvim::log::{LOGLVL_INF, logmsg};
+use crate::src::nvim::log::{LOGLVL_INF, logmsg_c};
 use core::ffi::c_int;
 use core::ptr;
 use std::ffi::CString;
@@ -39,7 +39,7 @@ pub fn os_proc_tree_kill(pid: c_int, sig: c_int) -> bool {
     // through `%s` rather than becoming the format string itself; both
     // pointers outlive the call. `uv_kill` takes no pointers.
     unsafe {
-        logmsg(
+        logmsg_c!(
             LOGLVL_INF,
             ptr::null(),
             c"os_proc_tree_kill".as_ptr(),

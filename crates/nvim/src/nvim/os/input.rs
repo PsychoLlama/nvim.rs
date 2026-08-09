@@ -36,7 +36,7 @@ use crate::src::nvim::keycodes::{
     KE_X2MOUSE, KE_X2RELEASE, KS_EXTRA, KS_MODIFIER, KS_SPECIAL, MOD_MASK_2CLICK, MOD_MASK_3CLICK,
     MOD_MASK_4CLICK, MOD_MASK_CTRL, trans_special,
 };
-use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
+use crate::src::nvim::log::{LOGLVL_DBG, logmsg_c};
 use crate::src::nvim::main::{
     Columns, Rows, State, ch_before_blocking_events, ctrl_c_interrupts, curbuf, current_ui,
     did_cursorhold, do_profiling, getout, got_int, main_loop, mapped_ctrl_c, mouse_col, mouse_grid,
@@ -688,7 +688,7 @@ fn inbuf_poll(ms: c_int, events: *mut MultiQueue) -> TriState {
             blocking.set(true);
             multiqueue_process_events(ch_before_blocking_events.get());
         }
-        logmsg(
+        logmsg_c!(
             LOGLVL_DBG,
             ptr::null(),
             c"inbuf_poll".as_ptr(),

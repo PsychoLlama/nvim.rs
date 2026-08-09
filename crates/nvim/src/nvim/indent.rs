@@ -25,7 +25,7 @@ use crate::src::nvim::charset::{byte2cells, char2cells, getwhitecols_curline, sk
 use crate::src::nvim::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::src::nvim::edit::get_nolist_virtcol;
 use crate::src::nvim::extmark::extmark_splice_cols;
-use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg_c};
 use crate::src::nvim::main::{State, curbuf, curwin, e_invarg2, e_positive, saved_cursor};
 use crate::src::nvim::memline::{ml_get, ml_get_buf, ml_get_pos, ml_replace};
 use crate::src::nvim::memory::{xfree, xmalloc};
@@ -618,7 +618,7 @@ pub unsafe extern "C" fn set_indent(size: c_int, flags: c_int) -> bool {
         // `unsafe` block inherits it and so costs the ratchet nothing.
         let strict = |v: Option<c_int>, line: c_int, what: &CStr| -> c_int {
             v.unwrap_or_else(|| {
-                logmsg(
+                logmsg_c!(
                     LOGLVL_ERR,
                     ::core::ptr::null::<c_char>(),
                     c"set_indent".as_ptr(),

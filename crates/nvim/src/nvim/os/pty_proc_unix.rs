@@ -24,7 +24,7 @@ use crate::src::nvim::event::libuv::{
 use crate::src::nvim::event::r#loop::loop_children;
 use crate::src::nvim::event::proc::{kProcTypePty, proc_get_exepath, proc_init};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg_c};
 use crate::src::nvim::os::fs::os_set_cloexec;
 use crate::src::nvim::os::libc::{
     __errno_location, _exit, cfsetispeed, cfsetospeed, close, dup, environ, execvp, fcntl, forkpty,
@@ -139,7 +139,7 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
     );
     if pid < 0 {
         let status = -errno();
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             ptr::null(),
             c"pty_proc_spawn".as_ptr(),
@@ -160,7 +160,7 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
         if flags == -1 {
             // Captured before the logging, which does I/O of its own.
             let status = -errno();
-            logmsg(
+            logmsg_c!(
                 LOGLVL_ERR,
                 ptr::null(),
                 c"pty_proc_spawn".as_ptr(),
@@ -173,7 +173,7 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
         }
         if fcntl(master, F_SETFL, flags | O_NONBLOCK) == -1 {
             let status = -errno();
-            logmsg(
+            logmsg_c!(
                 LOGLVL_ERR,
                 ptr::null(),
                 c"pty_proc_spawn".as_ptr(),
@@ -187,7 +187,7 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
         // Other jobs and providers must not get a copy of this descriptor.
         if os_set_cloexec(master) == -1 {
             let status = -errno();
-            logmsg(
+            logmsg_c!(
                 LOGLVL_ERR,
                 ptr::null(),
                 c"pty_proc_spawn".as_ptr(),
@@ -308,7 +308,7 @@ unsafe fn init_child(ptyproc: *mut PtyProc) -> ! {
     if !(*proc).cwd.is_null() {
         let err = uv_chdir((*proc).cwd);
         if err != 0 {
-            logmsg(
+            logmsg_c!(
                 LOGLVL_ERR,
                 ptr::null(),
                 c"init_child".as_ptr(),
@@ -326,7 +326,7 @@ unsafe fn init_child(ptyproc: *mut PtyProc) -> ! {
     debug_assert!(!(*proc).env.is_null());
     environ = tv_dict_to_env((*proc).env);
     execvp(prog, (*proc).argv as *const *mut c_char);
-    logmsg(
+    logmsg_c!(
         LOGLVL_ERR,
         ptr::null(),
         c"init_child".as_ptr(),
@@ -344,7 +344,7 @@ unsafe fn open_duplicate(fd: c_int, pipe: *mut uv_pipe_t) -> c_int {
     let fd_dup = dup(fd);
     if fd_dup < 0 {
         let status = -errno();
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             ptr::null(),
             c"open_duplicate".as_ptr(),
@@ -359,7 +359,7 @@ unsafe fn open_duplicate(fd: c_int, pipe: *mut uv_pipe_t) -> c_int {
 
     let status = if os_set_cloexec(fd_dup) == -1 {
         let status = -errno();
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             ptr::null(),
             c"open_duplicate".as_ptr(),
@@ -373,7 +373,7 @@ unsafe fn open_duplicate(fd: c_int, pipe: *mut uv_pipe_t) -> c_int {
         if status == 0 {
             return 0;
         }
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             ptr::null(),
             c"open_duplicate".as_ptr(),

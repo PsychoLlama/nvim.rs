@@ -146,7 +146,7 @@ use crate::src::nvim::api::window::{
 };
 use crate::src::nvim::ex_docmd::expr_map_locked;
 use crate::src::nvim::ex_getln::{get_text_locked_msg, text_locked};
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::logmsg_c;
 use crate::src::nvim::main::{e_textlock, textlock};
 use crate::src::nvim::types::{
     Arena, Array, Boolean, Dict, Error, Float, Integer, KeyDict_buf_attach, KeyDict_buf_delete,
@@ -198,10 +198,10 @@ const fn obj(type_0: ObjectType, data: object_data) -> Object {
 /// level — the default — this is a load and a compare.
 ///
 /// # Safety
-/// Both strings outlive the call; `logmsg` is variadic C.
+/// Both strings outlive the call; the payload is formatted by C `printf`.
 unsafe fn log_invoke(handler: &CStr, fmt: &CStr, line: c_int, channel_id: uint64_t) {
     unsafe {
-        logmsg(
+        logmsg_c!(
             LOGLVL_DBG,
             core::ptr::null(),
             handler.as_ptr(),

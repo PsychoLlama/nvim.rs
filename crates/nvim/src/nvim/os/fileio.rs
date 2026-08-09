@@ -17,7 +17,7 @@
 //! than becoming a slice and an index.
 
 use crate::src::nvim::event::libuv::uv_strerror;
-use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg_c};
 use crate::src::nvim::memory::{alloc_block, free_block};
 use crate::src::nvim::os::fs::{
     os_close, os_file_mkdir, os_fsync, os_open, os_open_stdin_fd, os_read, os_readv, os_write,
@@ -169,7 +169,7 @@ pub unsafe extern "C" fn file_open_stdin(fp: *mut FileDescriptor) -> c_int {
         (kFileReadOnly | kFileNonBlocking) as c_int,
     );
     if error != 0 {
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             ptr::null(),
             c"file_open_stdin".as_ptr(),

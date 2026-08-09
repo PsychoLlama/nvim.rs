@@ -18,7 +18,7 @@ use crate::src::nvim::eval::{eval_fmt_source_name_line, get_v_event, restore_v_e
 use crate::src::nvim::event::r#loop::one_arg_event;
 use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 use crate::src::nvim::event::proc::proc_is_stopped;
-use crate::src::nvim::log::{LOGLVL_INF, logmsg};
+use crate::src::nvim::log::{LOGLVL_INF, logmsg_c};
 use crate::src::nvim::main::{IObuff, channels, curbuf, main_loop};
 use crate::src::nvim::memory::{ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xfree};
 use crate::src::nvim::os::libc::qsort;
@@ -58,7 +58,7 @@ pub unsafe fn channel_create_event(chan: *mut Channel, ext_source: *const c_char
     );
     debug_assert!(tv.v_type == VAR_DICT);
     let str = encode_tv2json(&raw mut tv, ptr::null_mut());
-    logmsg(
+    logmsg_c!(
         LOGLVL_INF,
         ptr::null(),
         c"channel_create_event".as_ptr(),

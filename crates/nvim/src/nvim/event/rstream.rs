@@ -20,7 +20,7 @@ use crate::src::nvim::event::libuv::{
 };
 use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 use crate::src::nvim::event::stream::{stream_close_handle, stream_init, stream_may_close};
-use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
+use crate::src::nvim::log::{LOGLVL_DBG, logmsg_c};
 use crate::src::nvim::memory::{alloc_block, free_block};
 use crate::src::nvim::os::libc::memmove;
 use crate::src::nvim::types::{
@@ -126,7 +126,7 @@ unsafe extern "C" fn read_cb(uvstream: *mut uv_stream_t, cnt: ssize_t, _buf: *co
         invoke_read_cb(stream, true);
         return;
     }
-    logmsg(
+    logmsg_c!(
         LOGLVL_DBG,
         ptr::null(),
         c"read_cb".as_ptr(),

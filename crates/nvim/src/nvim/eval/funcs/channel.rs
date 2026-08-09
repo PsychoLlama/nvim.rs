@@ -22,7 +22,7 @@ use crate::src::nvim::eval::userfunc::{restore_funccal, save_funccal, set_curren
 use crate::src::nvim::event::libuv::uv_strerror;
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::garray::ga_grow;
-use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg_c};
 use crate::src::nvim::lua::executor::nlua_exec;
 use crate::src::nvim::main::{
     autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx, e_invarg,
@@ -473,7 +473,7 @@ pub unsafe extern "C" fn f_serverlist(
             if err.type_0 != kErrorTypeNone {
                 // A missing or broken helper is logged, not reported: the
                 // local addresses above are still a useful answer.
-                logmsg(
+                logmsg_c!(
                     LOGLVL_ERR,
                     ptr::null(),
                     c"f_serverlist".as_ptr(),

@@ -9,7 +9,7 @@
 use crate::src::nvim::eval::typval::tv_dict_to_env;
 use crate::src::nvim::event::libuv::{uv_close, uv_pipe, uv_pipe_open, uv_spawn, uv_strerror};
 use crate::src::nvim::event::proc::{kProcTypeUv, proc_get_exepath, proc_init};
-use crate::src::nvim::log::{LOGLVL_INF, logmsg};
+use crate::src::nvim::log::{LOGLVL_INF, logmsg_c};
 use crate::src::nvim::main::ui_client_forward_stdin;
 use crate::src::nvim::os::env::os_free_fullenv;
 use crate::src::nvim::os::libc::close;
@@ -127,7 +127,7 @@ pub unsafe fn libuv_proc_spawn(uvproc: *mut LibuvProc) -> c_int {
 
     let status = uv_spawn(&raw mut (*(*proc).loop_0).uv, &raw mut (*uvproc).uv, opts);
     if status != 0 {
-        logmsg(
+        logmsg_c!(
             LOGLVL_INF,
             ptr::null(),
             c"libuv_proc_spawn".as_ptr(),

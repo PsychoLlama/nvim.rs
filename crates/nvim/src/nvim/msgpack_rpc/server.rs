@@ -12,7 +12,7 @@ use crate::src::nvim::event::socket::{
     socket_watcher_close, socket_watcher_init, socket_watcher_start,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg_c};
 use crate::src::nvim::main::{IObuff, NameBuff, main_loop};
 use crate::src::nvim::memory::{strequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::src::nvim::os::env::{os_env_exists, os_get_pid, os_getenv, os_unsetenv};
@@ -81,7 +81,7 @@ pub unsafe fn server_init(listen_addr: *const c_char) -> bool {
     let rv = server_start(listen_addr);
 
     if os_env_exists(c"__NVIM_TEST_LOG".as_ptr(), false) {
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             core::ptr::null(),
             c"server_init".as_ptr(),
@@ -178,7 +178,7 @@ pub unsafe fn server_address_new(name: *const c_char) -> *mut c_char {
     );
     xfree(dir.cast::<c_void>());
     if written as size_t >= SOCKET_ADDR_LEN {
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             core::ptr::null(),
             c"server_address_new".as_ptr(),
@@ -221,7 +221,7 @@ pub unsafe fn server_owns_pipe_address(address: *const c_char) -> bool {
 /// `addr` is either null or a NUL-terminated string.
 pub unsafe fn server_start(addr: *const c_char) -> c_int {
     if addr.is_null() || *addr == 0 {
-        logmsg(
+        logmsg_c!(
             LOGLVL_WRN,
             core::ptr::null(),
             c"server_start".as_ptr(),
@@ -260,7 +260,7 @@ pub unsafe fn server_start(addr: *const c_char) -> c_int {
             .any(|&other| strequal(watcher_addr(watcher), watcher_addr(other)))
     });
     if already_listening {
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             core::ptr::null(),
             c"server_start".as_ptr(),
@@ -278,7 +278,7 @@ pub unsafe fn server_start(addr: *const c_char) -> c_int {
 
     let result = socket_watcher_start(watcher, MAX_CONNECTIONS, Some(connection_cb));
     if result < 0 {
-        logmsg(
+        logmsg_c!(
             LOGLVL_WRN,
             core::ptr::null(),
             c"server_start".as_ptr(),
@@ -326,7 +326,7 @@ pub unsafe fn server_stop(endpoint: *const c_char, keep_vservername: bool) -> bo
         Some(watchers.swap_remove(index))
     });
     let Some(watcher) = found else {
-        logmsg(
+        logmsg_c!(
             LOGLVL_WRN,
             core::ptr::null(),
             c"server_stop".as_ptr(),
@@ -366,7 +366,7 @@ pub unsafe fn server_address_list(size: *mut size_t) -> *mut *mut c_char {
 
 unsafe extern "C" fn connection_cb(watcher: *mut SocketWatcher, result: c_int, _data: *mut c_void) {
     if result != 0 {
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             core::ptr::null(),
             c"connection_cb".as_ptr(),

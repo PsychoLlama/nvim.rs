@@ -8,9 +8,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
 use crate::src::nvim::api::private::helpers::{array_add, dict_put};
+use crate::src::nvim::log::logmsg_c;
 
 pub unsafe extern "C" fn nvim__id(mut obj: Object, mut arena: *mut Arena) -> Object {
     unsafe {
@@ -91,7 +92,7 @@ pub unsafe extern "C" fn nvim_get_proc_children(
                 None => rv = 2 as ::core::ffi::c_int,
             }
             if rv == 2 as ::core::ffi::c_int {
-                logmsg(
+                logmsg_c!(
                     LOGLVL_DBG,
                     ::core::ptr::null::<::core::ffi::c_char>(),
                     c"nvim_get_proc_children".as_ptr(),

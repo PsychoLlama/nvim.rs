@@ -22,7 +22,7 @@ use crate::src::nvim::arabic::arabic_shape;
 use crate::src::nvim::decoration::{decor_check_invalid_glyphs, next_virt_text_chunk};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::{hl_apply_winblend, hl_combine_attr};
-use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
+use crate::src::nvim::log::LOGLVL_DBG;
 use crate::src::nvim::main::{
     default_grid, exmode_active, firstwin, full_screen, hl_attr_active, linebuf_attr, linebuf_char,
     linebuf_scratch, linebuf_vcol, p_arshape, p_tbidi, rdb_flags, resizing_screen,

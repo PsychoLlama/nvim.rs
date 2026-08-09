@@ -43,7 +43,7 @@ use crate::src::nvim::api::ui::{
     remote_ui_win_viewport_margins,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::logmsg_c;
 use crate::src::nvim::types::builders::ArrayBuf;
 use crate::src::nvim::types::{
     Array, Boolean, Buffer, Float, HlAttrs, Integer, LineFlags, Object, RemoteUI, String_0,
@@ -163,7 +163,7 @@ pub(super) fn log_event(name: &'static CStr) {
 unsafe fn log(format: *const core::ffi::c_char, name: *const core::ffi::c_char, count: usize) {
     const LOGLVL_DBG: c_int = 1;
     unsafe {
-        logmsg(
+        logmsg_c!(
             LOGLVL_DBG,
             c"UI: ".as_ptr(),
             core::ptr::null(),

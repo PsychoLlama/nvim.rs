@@ -25,7 +25,7 @@ use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga
 use crate::src::nvim::hashtab::{
     hash_add_item, hash_clear_all, hash_hash, hash_init, hash_lookup, hash_removed,
 };
-use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg_c};
 use crate::src::nvim::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::memline::{ml_close, ml_open, ml_open_file};
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
@@ -333,7 +333,7 @@ pub unsafe fn open_spellbuf() -> *mut buf_T {
         (*buf).b_spell = true;
         (*buf).b_p_swf = 1;
         if ml_open(buf) == FAIL {
-            logmsg(
+            logmsg_c!(
                 LOGLVL_ERR,
                 core::ptr::null(),
                 c"open_spellbuf".as_ptr(),

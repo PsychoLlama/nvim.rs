@@ -54,7 +54,7 @@ use crate::src::nvim::highlight_group::{
 };
 use crate::src::nvim::insexpand::get_cot_flags;
 use crate::src::nvim::keycodes::{name_to_mod_mask, replace_termcodes, vim_strsave_escape_ks};
-use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
+use crate::src::nvim::log::LOGLVL_DBG;
 use crate::src::nvim::lua::executor::{
     api_free_luaref, nlua_call_ref, nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe,
 };

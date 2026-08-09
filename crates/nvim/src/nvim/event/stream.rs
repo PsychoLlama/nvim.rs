@@ -14,7 +14,7 @@ use crate::src::nvim::event::libuv::{
     uv_close, uv_guess_handle, uv_idle_init, uv_is_closing, uv_loop_close, uv_loop_init,
     uv_pipe_init, uv_pipe_open, uv_run, uv_stream_get_write_queue_size, uv_stream_set_blocking,
 };
-use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg_c};
 use crate::src::nvim::types::{
     Loop, Stream, uv_file, uv_handle_t, uv_handle_type, uv_loop_t, uv_pipe_t, uv_run_mode,
     uv_stream_t,
@@ -110,7 +110,7 @@ pub unsafe fn stream_may_close(stream: *mut Stream) {
     if (*stream).closed {
         return;
     }
-    logmsg(
+    logmsg_c!(
         LOGLVL_DBG,
         ptr::null(),
         c"stream_may_close".as_ptr(),
@@ -131,7 +131,7 @@ pub unsafe fn stream_close_handle(stream: *mut Stream) {
     } else {
         let unwritten = uv_stream_get_write_queue_size((*stream).uvstream);
         if unwritten > 0 {
-            logmsg(
+            logmsg_c!(
                 LOGLVL_WRN,
                 ptr::null(),
                 c"stream_close_handle".as_ptr(),

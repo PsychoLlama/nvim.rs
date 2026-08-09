@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::src::nvim::log::logmsg_c;
 use crate::{msg_schedule_semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::{CStr, CString};
@@ -39,7 +40,7 @@ static VIM_TEMPDIR_DP: GlobalCell<*mut DIR> = GlobalCell::new(core::ptr::null_mu
 /// `fileio.c`, so that moving this code does not move the log output.
 macro_rules! log_at {
     ($level:expr, $func:literal, $line:literal, $fmt:literal $(, $arg:expr)* $(,)?) => {
-        logmsg(
+        logmsg_c!(
             $level,
             core::ptr::null(),
             concat!($func, "\0").as_ptr().cast::<c_char>(),

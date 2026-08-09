@@ -1,3 +1,7 @@
+/// `#[macro_export]` publishes at the crate root; this re-export lets callers
+/// name the macro where the rest of the logging API lives, and brings it into
+/// scope here ahead of its own textual definition.
+pub use crate::logmsg_c;
 use crate::msg_schedule_semsg_c;
 use crate::src::nvim::eval::vars::get_vim_var_str;
 use crate::src::nvim::event::libuv::{
@@ -10,7 +14,7 @@ use crate::src::nvim::os::env::{expand_env, os_get_pid, os_getenv_buf, os_setenv
 use crate::src::nvim::os::fs::{os_isdir, os_mkdir_recurse};
 use crate::src::nvim::os::libc::{
     __errno_location, fclose, fflush, fopen, fprintf, fputc, fputs, snprintf, stderr, stdout,
-    strerror, strftime, vfprintf,
+    strerror, strftime,
 };
 use crate::src::nvim::os::stdpaths::{get_xdg_home, stdpaths_user_state_subpath};
 use crate::src::nvim::os::time::{os_localtime, tm_zeroed};
@@ -136,7 +140,7 @@ unsafe extern "C" fn log_path_init() {
             true_0,
         );
         if log_dir_failure != 0 {
-            logmsg(
+            logmsg_c!(
                 LOGLVL_WRN,
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 c"log_path_init".as_ptr(),
@@ -165,28 +169,42 @@ pub unsafe extern "C" fn log_lock() {
 pub unsafe extern "C" fn log_unlock() {
     uv_mutex_unlock(mutex.ptr());
 }
-pub unsafe extern "C" fn logmsg(
-    mut log_level: ::core::ffi::c_int,
-    mut context: *const ::core::ffi::c_char,
-    mut func_name: *const ::core::ffi::c_char,
-    mut line_num: ::core::ffi::c_int,
-    mut eol: bool,
-    mut fmt: *const ::core::ffi::c_char,
-    mut c2rust_args: ...
-) -> bool {
-    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-    static did_msg: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+/// Set while a log line is being written, so a log call made from inside one
+/// is refused rather than interleaved. `did_recursion_msg` keeps that refusal
+/// to a single user-visible complaint per session.
+static logging: GlobalCell<bool> = GlobalCell::new(false);
+static did_recursion_msg: GlobalCell<bool> = GlobalCell::new(false);
+
+/// The half of a log line that runs before its payload: the initialisation,
+/// level and recursion guards, the log lock, the file handle, and the
+/// date/level/name/location prefix.
+///
+/// Returns the open log file with the lock held and the prefix already
+/// written, or null when the line is not going to be written at all — in
+/// which case nothing is held and the caller is done. **Every non-null
+/// return has to be paired with a [`logmsg_finish`]**; [`logmsg_c!`] is that
+/// pairing, and is how this should be called.
+///
+/// # Safety
+/// `context` and `func_name` are NUL-terminated or null, and outlive the
+/// call.
+pub unsafe fn logmsg_begin(
+    log_level: ::core::ffi::c_int,
+    context: *const ::core::ffi::c_char,
+    func_name: *const ::core::ffi::c_char,
+    line_num: ::core::ffi::c_int,
+) -> *mut FILE {
     if !did_log_init.get() {
         (*g_stats.ptr()).log_skip += 1;
-        return false_0 != 0;
+        return ::core::ptr::null_mut();
     }
     if log_level < g_min_log_level.get() {
-        return false_0 != 0;
+        return ::core::ptr::null_mut();
     }
     log_lock();
-    if recursive.get() {
-        if !did_msg.get() {
-            did_msg.set(true_0 != 0);
+    if logging.get() {
+        if !did_recursion_msg.get() {
+            did_recursion_msg.set(true);
             msg_schedule_semsg_c!(
                 c"E5430: %s:%d: recursive log!".as_ptr(),
                 if !func_name.is_null() {
@@ -199,22 +217,83 @@ pub unsafe extern "C" fn logmsg(
         }
         (*g_stats.ptr()).log_skip += 1;
         log_unlock();
-        return false_0 != 0;
+        return ::core::ptr::null_mut();
     }
-    recursive.set(true_0 != 0);
-    let mut ret: bool = false_0 != 0;
-    let mut log_file: *mut FILE = open_log_file();
-    let mut args: ::core::ffi::VaList;
-    args = c2rust_args.clone();
-    ret = v_do_log_to_file(
-        log_file, log_level, context, func_name, line_num, eol, fmt, args,
-    );
+    logging.set(true);
+    let log_file: *mut FILE = open_log_file();
+    if !log_write_prefix(log_file, log_level, context, func_name, line_num) {
+        // The prefix is the head of the line; with none written there is
+        // nothing to append to, so release everything here and report the
+        // same failure the payload would have.
+        logmsg_finish(log_file, false, false);
+        return ::core::ptr::null_mut();
+    }
+    log_file
+}
+
+/// The half of a log line that runs after its payload: the end-of-line, the
+/// flush, and releasing what [`logmsg_begin`] took.
+///
+/// `payload_ok` says whether the payload was written; a failed payload skips
+/// the terminator and the flush but still releases. Returns whether the whole
+/// line landed.
+///
+/// # Safety
+/// `log_file` is the non-null handle a [`logmsg_begin`] call returned, and
+/// this is its first `logmsg_finish`.
+pub unsafe fn logmsg_finish(log_file: *mut FILE, eol: bool, payload_ok: bool) -> bool {
+    let mut ret = payload_ok;
+    if ret {
+        if eol {
+            fputc('\n' as ::core::ffi::c_int, log_file);
+        }
+        if fflush(log_file) == EOF {
+            ret = false;
+        }
+    }
     if log_file != stderr && log_file != stdout {
         fclose(log_file);
     }
-    recursive.set(false_0 != 0);
+    logging.set(false);
     log_unlock();
-    return ret;
+    ret
+}
+
+/// Write one `printf`-formatted line to the log file, at `log_level`, tagged
+/// with `context`/`func_name`/`line_num` and terminated by a newline when
+/// `eol`. Evaluates to `bool`: whether the line landed.
+///
+/// This is `logmsg()` split at the seam it already had — [`logmsg_begin`]
+/// takes the lock and writes the prefix, the expansion writes the payload
+/// with a direct `fprintf`, [`logmsg_finish`] terminates it and releases.
+/// Same handle, same order, same bytes as the C wrapper, without a C-variadic
+/// definition. As with the function, the *call site* supplies the `unsafe`.
+///
+/// The payload arguments appear in both arms, so a log the guards refuse
+/// still evaluates them — C evaluated every argument before the callee could
+/// decide. They are evaluated *after* the guards rather than before, which
+/// only a payload argument that itself logs could observe; none does.
+#[macro_export]
+macro_rules! logmsg_c {
+    ($log_level:expr, $context:expr, $func_name:expr, $line_num:expr,
+     $eol:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {{
+        let log_level = $log_level;
+        let context = $context;
+        let func_name = $func_name;
+        let line_num = $line_num;
+        let eol = $eol;
+        let fmt = $fmt;
+        let log_file =
+            $crate::src::nvim::log::logmsg_begin(log_level, context, func_name, line_num);
+        if log_file.is_null() {
+            $(let _ = $arg;)*
+            false
+        } else {
+            let payload_ok =
+                $crate::src::nvim::os::libc::fprintf(log_file, fmt $(, $arg)*) >= 0;
+            $crate::src::nvim::log::logmsg_finish(log_file, eol, payload_ok)
+        }
+    }};
 }
 pub unsafe extern "C" fn log_uv_handles(mut loop_0: *mut ::core::ffi::c_void) {
     let mut l: *mut uv_loop_t = loop_0 as *mut uv_loop_t;
@@ -256,30 +335,6 @@ pub unsafe extern "C" fn open_log_file() -> *mut FILE {
         fflush(stderr);
     }
     return stderr;
-}
-unsafe extern "C" fn v_do_log_to_file(
-    mut log_file: *mut FILE,
-    mut log_level: ::core::ffi::c_int,
-    mut context: *const ::core::ffi::c_char,
-    mut func_name: *const ::core::ffi::c_char,
-    mut line_num: ::core::ffi::c_int,
-    mut eol: bool,
-    mut fmt: *const ::core::ffi::c_char,
-    mut args: ::core::ffi::VaList,
-) -> bool {
-    if !log_write_prefix(log_file, log_level, context, func_name, line_num) {
-        return false_0 != 0;
-    }
-    if vfprintf(log_file, fmt, args) < 0 as ::core::ffi::c_int {
-        return false_0 != 0;
-    }
-    if eol {
-        fputc('\n' as ::core::ffi::c_int, log_file);
-    }
-    if fflush(log_file) == EOF {
-        return false_0 != 0;
-    }
-    return true_0 != 0;
 }
 /// The date/level/name/source-location head of a log line, up to where the
 /// payload starts. Split out of `v_do_log_to_file` so a preformatted message

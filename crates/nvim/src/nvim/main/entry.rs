@@ -36,7 +36,7 @@ use crate::src::nvim::getchar::{open_scriptin, stuffcharReadbuff};
 use crate::src::nvim::highlight::highlight_init;
 use crate::src::nvim::highlight_group::init_highlight;
 use crate::src::nvim::keycodes::KE_NOP;
-use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_INF, log_init, logmsg};
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_INF, log_init, logmsg_c};
 use crate::src::nvim::lua::executor::{
     nlua_exec_file, nlua_init, nlua_init_defaults, nlua_run_script,
 };
@@ -555,7 +555,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         if !params.luaf.is_null() {
             // `-l`: run the script and leave, with its status.
             msg_scroll.set(1);
-            logmsg(
+            logmsg_c!(
                 LOGLVL_DBG,
                 ptr::null(),
                 c"main".as_ptr(),
@@ -573,7 +573,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         }
 
         time_msg_at(c"before starting main loop");
-        logmsg(
+        logmsg_c!(
             LOGLVL_INF,
             ptr::null(),
             c"main".as_ptr(),

@@ -11,7 +11,7 @@ use crate::src::nvim::event::libuv::uv_hrtime;
 use crate::src::nvim::event::libuv::{uv_clock_gettime, uv_err_name, uv_now, uv_sleep};
 use crate::src::nvim::event::r#loop::process_events_until;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_ERR, logmsg};
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_ERR, logmsg_c};
 use crate::src::nvim::main::{got_int, main_loop};
 use crate::src::nvim::memory::{xstrlcat, xstrlcpy};
 use crate::src::nvim::os::env::os_getenv_noalloc;
@@ -77,7 +77,7 @@ pub fn os_realtime() -> i64 {
     let error_number = unsafe {
         let error_number = uv_clock_gettime(UV_CLOCK_REALTIME, &raw mut ts);
         if error_number != 0 {
-            logmsg(
+            logmsg_c!(
                 LOGLVL_ERR,
                 ptr::null(),
                 c"os_realtime".as_ptr(),
@@ -117,7 +117,7 @@ pub fn os_delay(ms: u64, ignoreinput: bool) {
     // SAFETY: the main loop is live; the log call's format matches its one
     // argument; os_input_ready accepts a null queue.
     unsafe {
-        logmsg(
+        logmsg_c!(
             LOGLVL_DBG,
             ptr::null(),
             c"os_delay".as_ptr(),

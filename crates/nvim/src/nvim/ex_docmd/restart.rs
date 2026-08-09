@@ -15,7 +15,7 @@ use crate::src::nvim::eval::typval::{kCallbackNone, tv_get_string, tv_list_len};
 use crate::src::nvim::eval::vars::{get_vim_var_list, get_vim_var_str, set_vim_var_string};
 use crate::src::nvim::event::proc::{proc_stop, proc_wait};
 use crate::src::nvim::ex_docmd::{GA_EMPTY_INIT_VALUE, NUL, kChannelPartAll};
-use crate::src::nvim::log::{LOGLVL_INF, logmsg};
+use crate::src::nvim::log::{LOGLVL_INF, logmsg_c};
 use crate::src::nvim::main::{cmdmod, current_ui, e_invchan, exiting, getout};
 use crate::src::nvim::memory::{arena_mem_free, strequal, xcalloc, xfree, xmemdupz, xstrdup};
 use crate::src::nvim::message::emsg;
@@ -396,7 +396,7 @@ pub(crate) unsafe fn ex_detach(eap: *mut exarg_T) {
             emsg(close_err);
             return;
         }
-        logmsg(
+        logmsg_c!(
             LOGLVL_INF,
             ptr::null(),
             c"ex_detach".as_ptr(),

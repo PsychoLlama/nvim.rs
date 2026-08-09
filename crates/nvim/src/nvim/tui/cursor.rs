@@ -12,7 +12,7 @@
 use crate::src::nvim::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_VER, shape_table};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::HL_INVERSE;
-use crate::src::nvim::log::{LOGLVL_WRN, logmsg};
+use crate::src::nvim::log::{LOGLVL_WRN, logmsg_c};
 use crate::src::nvim::tui::output::{terminfo_out, terminfo_print_nums, terminfo_print_str};
 use crate::src::nvim::tui::terminfo::caps::{
     kTerm_reset_cursor_color, kTerm_reset_cursor_style, kTerm_set_cursor_color,
@@ -70,7 +70,7 @@ unsafe fn decode_shape(shape_str: *const core::ffi::c_char) -> CursorShape {
         _ => {
             // SAFETY: a NUL-terminated format and argument.
             unsafe {
-                logmsg(
+                logmsg_c!(
                     LOGLVL_WRN,
                     core::ptr::null(),
                     c"tui_cursor_decode_shape".as_ptr(),

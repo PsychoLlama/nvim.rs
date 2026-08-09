@@ -2,7 +2,7 @@ use crate::src::nvim::api::buffer::buf_collect_lines;
 use crate::src::nvim::api::private::helpers::arena_array;
 use crate::src::nvim::buffer::buf_get_changedtick;
 
-use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg_c};
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref};
 use crate::src::nvim::main::{cmdpreview, curbuf, curwin, textlock};
 use crate::src::nvim::memline::ml_flush_deleted_bytes;
@@ -407,7 +407,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
         i = i.wrapping_add(1);
     }
     if badchannelid != 0 as uint64_t {
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             ::core::ptr::null::<::core::ffi::c_char>(),
             c"buf_updates_send_changes".as_ptr(),

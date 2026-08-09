@@ -26,7 +26,7 @@ use crate::src::nvim::fold::{foldUpdateAll, foldmethodIsManual};
 use crate::src::nvim::garray::{ga_clear_strings, ga_grow, ga_init};
 use crate::src::nvim::getchar::{stuff_empty, typebuf_typed};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN, logmsg};
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::src::nvim::main::{
     IObuff, State, allbuf_lock, autocmd_busy, cmdmod, curbuf, curtab, curwin, did_check_timestamps,
     e_interr, e_notopen, emsg_silent, ex_no_reprint, exiting, exmode_active, first_tabpage,

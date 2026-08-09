@@ -42,7 +42,7 @@ use crate::src::nvim::input::{get_keystroke, prompt_for_input};
 use crate::src::nvim::keycodes::{
     K_BS, K_DOWN, K_EVENT, K_PAGEDOWN, K_PAGEUP, K_SPECIAL, K_UP, K_ZERO, get_special_key_name,
 };
-use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_INF, logmsg};
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_INF};
 use crate::src::nvim::main::{
     Columns, IObuff, KeyTyped, Rows, State, allow_keys, called_emsg, capture_ga, clear_cmdline,
     cmd_silent, cmdline_row, cmdline_was_last_drawn, cmdmod, cmdmsg_rl, curbuf, curwin,

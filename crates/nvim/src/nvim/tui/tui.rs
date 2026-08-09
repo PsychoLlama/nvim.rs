@@ -31,7 +31,7 @@ use crate::src::nvim::event::signal::{
     signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
 };
 use crate::src::nvim::event::stream::stream_set_blocking;
-use crate::src::nvim::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg_c};
 use crate::src::nvim::main::{main_loop, t_colors, ui_client_error_exit, ui_client_exit_status};
 use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, arena_strdup, xfree};
 use crate::src::nvim::os::env::{os_getenv, os_getenv_noalloc};
@@ -403,7 +403,7 @@ unsafe fn log_uv_error(ret: c_int, message: &CStr) {
     // SAFETY: the caller guarantees the format string's one `%s`, which
     // `uv_strerror` fills with a static string.
     unsafe {
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             core::ptr::null(),
             c"tui".as_ptr(),
@@ -541,7 +541,7 @@ pub unsafe fn tui_stop(tui: *mut TUIData) {
     // SAFETY: the caller guarantees `tui`.
     unsafe {
         if uv_is_closing((&raw mut (*tui).output_handle).cast::<uv_handle_t>()) != 0 {
-            logmsg(
+            logmsg_c!(
                 LOGLVL_ERR,
                 core::ptr::null(),
                 c"tui_stop".as_ptr(),
@@ -563,7 +563,7 @@ pub unsafe fn tui_stop(tui: *mut TUIData) {
             || (*tui).stopped || (*tui).input.read_stream.did_eof,
         );
         if !(*tui).stopped && !(*tui).input.read_stream.did_eof {
-            logmsg(
+            logmsg_c!(
                 LOGLVL_WRN,
                 core::ptr::null(),
                 c"tui_stop".as_ptr(),

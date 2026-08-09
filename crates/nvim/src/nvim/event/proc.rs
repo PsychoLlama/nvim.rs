@@ -38,7 +38,7 @@ use crate::src::nvim::event::multiqueue::{
 use crate::src::nvim::event::rstream::rstream_may_close;
 use crate::src::nvim::event::stream::{stream_init, stream_may_close};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_INF, logmsg};
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_INF, logmsg_c};
 use crate::src::nvim::main::{
     exiting, got_int, main_loop, os_exit, preserve_exit, ui_client_channel_id,
     ui_client_exit_status,
@@ -186,7 +186,7 @@ pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: 
     (*proc).refcount += 1;
 
     (*loop_children((*proc).loop_0)).push(proc);
-    logmsg(
+    logmsg_c!(
         LOGLVL_DBG,
         ptr::null(),
         c"proc_spawn".as_ptr(),
@@ -319,7 +319,7 @@ pub unsafe fn proc_free(proc: *mut Proc) {
 pub fn exit_on_closed_chan(status: c_int) {
     // SAFETY: `main_loop.fast_events` is live for as long as the editor is.
     unsafe {
-        logmsg(
+        logmsg_c!(
             LOGLVL_DBG,
             ptr::null(),
             c"exit_on_closed_chan".as_ptr(),
@@ -568,7 +568,7 @@ unsafe extern "C" fn exit_event(argv: *mut *mut c_void) {
 /// cannot poll for more from here — so the draining is queued as an event.
 unsafe extern "C" fn on_proc_exit(proc: *mut Proc) {
     let uv_loop = (*proc).loop_0;
-    logmsg(
+    logmsg_c!(
         LOGLVL_INF,
         ptr::null(),
         c"on_proc_exit".as_ptr(),

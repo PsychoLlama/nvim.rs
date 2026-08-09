@@ -18,7 +18,7 @@ use crate::src::nvim::event::multiqueue::{
     multiqueue_new_child, multiqueue_process_events, multiqueue_purge_events, multiqueue_put_event,
     multiqueue_size,
 };
-use crate::src::nvim::log::{LOGLVL_ERR, log_uv_handles, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, log_uv_handles, logmsg_c};
 use crate::src::nvim::os::libc::abort;
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::types::{
@@ -105,7 +105,7 @@ pub unsafe fn loop_close(uv_loop: *mut Loop, wait: bool) -> bool {
         }
         if os_hrtime().wrapping_sub(start).wrapping_div(1_000_000_000) >= 2 {
             rv = false;
-            logmsg(
+            logmsg_c!(
                 LOGLVL_ERR,
                 ptr::null(),
                 c"loop_close".as_ptr(),

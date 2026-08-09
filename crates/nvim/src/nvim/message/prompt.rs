@@ -13,13 +13,14 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
 use crate::src::nvim::keycodes::{
     Ctrl_B, Ctrl_C, Ctrl_F, K_IGNORE, K_LEFTDRAG, K_LEFTMOUSE, K_LEFTRELEASE, K_MIDDLEDRAG,
     K_MIDDLEMOUSE, K_MIDDLERELEASE, K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP,
     K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_X1MOUSE, K_X2MOUSE,
 };
+use crate::src::nvim::log::logmsg_c;
 use core::ffi::c_int;
 use core::ptr;
 
@@ -628,7 +629,7 @@ pub unsafe fn msg_delay(ms: uint64_t, ignoreinput: bool) {
         }
         // Under the test harness a real delay would just be slow.
         let ms = if nvim_testing.get() { 100 } else { ms };
-        logmsg(
+        logmsg_c!(
             LOGLVL_DBG,
             ptr::null(),
             c"msg_delay".as_ptr(),

@@ -28,7 +28,7 @@ use crate::src::nvim::event::libuv::{
     uv_err_name, uv_os_getenv, uv_os_homedir, uv_os_setenv, uv_os_unsetenv, uv_strerror,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg_c};
 use crate::src::nvim::main::{
     IObuff, NameBuff, didset_vim, didset_vimruntime, nvim_testing, os_buf,
 };
@@ -104,7 +104,7 @@ unsafe fn log_uv_failure(func: &CStr, fmt: &CStr, name: *const c_char, r: c_int)
     // SAFETY: the caller's contract; `logmsg` is printf-shaped, and
     // `uv_err_name` answers a static string.
     unsafe {
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             ptr::null(),
             func.as_ptr(),
@@ -436,7 +436,7 @@ fn os_uv_homedir() -> *mut c_char {
         if ret_value == 0 && homedir_size < MAXPATHL {
             return buf;
         }
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             ptr::null(),
             c"os_uv_homedir".as_ptr(),

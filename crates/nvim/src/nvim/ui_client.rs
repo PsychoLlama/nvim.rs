@@ -34,7 +34,7 @@ use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 use crate::src::nvim::event::socket::socket_address_is_tcp;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::{HLATTRS_INIT, dict2hlattrs};
-use crate::src::nvim::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, LOGLVL_INF, logmsg_c};
 use crate::src::nvim::main::{
     grid_line_buf_attr, grid_line_buf_char, grid_line_buf_size, main_loop, os_exit, stderr_isatty,
     stdin_isatty, stdout_isatty, t_colors, time_fd, ui_client_attached, ui_client_channel_id,
@@ -327,7 +327,7 @@ pub unsafe fn ui_client_run() -> ! {
         // The test harness waits for a line in the log before it starts
         // driving the terminal, so that it is not racing startup.
         if os_env_exists(c"__NVIM_TEST_LOG".as_ptr(), true) {
-            logmsg(
+            logmsg_c!(
                 LOGLVL_ERR,
                 core::ptr::null(),
                 c"ui_client_run".as_ptr(),
@@ -513,7 +513,7 @@ unsafe fn arg(args: Array, index: usize, want: Option<ObjectType>) -> Option<Obj
 fn bad_event(event: &'static CStr, wrapper: &'static CStr) {
     // SAFETY: both names are static C strings and the format takes one.
     unsafe {
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             core::ptr::null(),
             wrapper.as_ptr(),
@@ -850,7 +850,7 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
             &raw mut err,
         );
         if !strequal(err, c"".as_ptr()) {
-            logmsg(
+            logmsg_c!(
                 LOGLVL_ERR,
                 core::ptr::null(),
                 c"channel_connect_event".as_ptr(),
@@ -871,7 +871,7 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
             tui_term.get(),
             tui_rgb.get(),
         );
-        logmsg(
+        logmsg_c!(
             LOGLVL_INF,
             core::ptr::null(),
             c"channel_connect_event".as_ptr(),
@@ -940,7 +940,7 @@ pub unsafe fn ui_client_attach_to_restarted_server() {
                     &raw mut err,
                 );
                 if !strequal(err, c"".as_ptr()) {
-                    logmsg(
+                    logmsg_c!(
                         LOGLVL_ERR,
                         core::ptr::null(),
                         c"ui_client_attach_to_restarted_server".as_ptr(),
@@ -958,7 +958,7 @@ pub unsafe fn ui_client_attach_to_restarted_server() {
                         tui_term.get(),
                         tui_rgb.get(),
                     );
-                    logmsg(
+                    logmsg_c!(
                         LOGLVL_INF,
                         core::ptr::null(),
                         c"ui_client_attach_to_restarted_server".as_ptr(),

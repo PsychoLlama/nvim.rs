@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg_c};
 use crate::src::nvim::main::nvim_testing;
 use crate::src::nvim::memory::strequal;
 use crate::src::nvim::os::libc::tcgetattr;
@@ -109,7 +109,7 @@ fn log_mode(message: &CStr, mode: TermMode, state: TermModeState) {
     }
     // SAFETY: `message` holds the two `%d` these arguments fill.
     unsafe {
-        logmsg(
+        logmsg_c!(
             LOGLVL_WRN,
             core::ptr::null(),
             c"tui_handle_term_mode".as_ptr(),
@@ -236,7 +236,7 @@ unsafe fn tui_get_stty_erase(input: *mut TermInput) -> *const c_char {
         if tcgetattr((*input).in_fd, &raw mut t) != -1 {
             (*STTY_ERASE.ptr())[0] = t.c_cc[VERASE] as c_char;
             (*STTY_ERASE.ptr())[1] = 0;
-            logmsg(
+            logmsg_c!(
                 LOGLVL_DBG,
                 core::ptr::null(),
                 c"tui_get_stty_erase".as_ptr(),
@@ -311,7 +311,7 @@ fn log_termkey(message: &CStr, value: *const c_char) {
     // SAFETY: `message` holds the one `%s` `value` fills, and `value` is
     // libtermkey's own NUL-terminated capability string.
     unsafe {
-        logmsg(
+        logmsg_c!(
             LOGLVL_DBG,
             core::ptr::null(),
             c"tui_tk_ti_getstr".as_ptr(),

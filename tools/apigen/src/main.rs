@@ -1060,10 +1060,10 @@ const fn obj(type_0: ObjectType, data: object_data) -> Object {
 /// level — the default — this is a load and a compare.
 ///
 /// # Safety
-/// Both strings outlive the call; `logmsg` is variadic C.
+/// Both strings outlive the call; the payload is formatted by C `printf`.
 unsafe fn log_invoke(handler: &CStr, fmt: &CStr, line: c_int, channel_id: uint64_t) {
     unsafe {
-        logmsg(
+        logmsg_c!(
             LOGLVL_DBG,
             core::ptr::null(),
             handler.as_ptr(),
@@ -1448,7 +1448,7 @@ fn generate(
     if referenced.contains("text_locked") {
         uses.push("use crate::src::nvim::ex_getln::{get_text_locked_msg, text_locked};".into());
     }
-    uses.push("use crate::src::nvim::log::logmsg;".into());
+    uses.push("use crate::src::nvim::log::logmsg_c;".into());
     // `mod known` names its constants' types, so it counts as a reference.
     let referenced_all = idents(&format!("{support}{body}{known}"));
     let types: Vec<String> = TYPE_NAMES

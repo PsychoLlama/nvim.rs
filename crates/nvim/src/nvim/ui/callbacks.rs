@@ -20,7 +20,7 @@ use crate::src::nvim::api::extmark::describe_ns;
 use crate::src::nvim::api::private::helpers::api_clear_error;
 use crate::src::nvim::api::ui::remote_ui_event;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg_c};
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref_ctx};
 use crate::src::nvim::main::{expr_map_lock, textlock, ui_event_ns_id};
 use crate::src::nvim::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
@@ -272,7 +272,7 @@ unsafe fn report_error(ns_id: u32, name: *const c_char, msg: *const c_char) {
     let ns = unsafe { describe_ns(ns_id as NS, c"(UNKNOWN PLUGIN)".as_ptr()) };
     let format = c"Error in \"%s\" UI event handler (ns=%s):\n%s".as_ptr();
     unsafe {
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             core::ptr::null(),
             c"report_error".as_ptr(),

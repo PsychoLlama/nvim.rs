@@ -26,7 +26,7 @@ use crate::src::nvim::eval::vars::{
 };
 use crate::src::nvim::event::stream::stream_set_blocking;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::{LOGLVL_INF, logmsg};
+use crate::src::nvim::log::{LOGLVL_INF, logmsg_c};
 use crate::src::nvim::main::entry::event_teardown;
 use crate::src::nvim::main::{
     NUL, curbuf, curtab, did_emsg, ex_exitval, exiting, exmode_active, first_tabpage, firstbuf,
@@ -92,7 +92,7 @@ pub unsafe fn os_exit(mut r: c_int) -> ! {
             stream_set_blocking(STDIN_FILENO, true);
         }
 
-        logmsg(
+        logmsg_c!(
             LOGLVL_INF,
             ptr::null(),
             c"os_exit".as_ptr(),

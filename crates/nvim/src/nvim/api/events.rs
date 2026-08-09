@@ -2,7 +2,7 @@ use crate::src::nvim::api::private::helpers::api_typename;
 use crate::src::nvim::api::private::validate::api_err_exp;
 use crate::src::nvim::autocmd::do_termresponse_autocmd;
 use crate::src::nvim::eval::vars::set_vim_var_string;
-use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg_c};
 use crate::src::nvim::memory::strequal;
 use crate::src::nvim::types::{
     Error, Integer, Object, String_0, VV_TERMRESPONSE, kObjectTypeString, ptrdiff_t, uint64_t,
@@ -13,7 +13,7 @@ pub unsafe extern "C" fn nvim_error_event(
     mut _type_0: Integer,
     mut msg: String_0,
 ) {
-    logmsg(
+    logmsg_c!(
         LOGLVL_ERR,
         ::core::ptr::null::<::core::ffi::c_char>(),
         c"nvim_error_event".as_ptr(),

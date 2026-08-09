@@ -10,7 +10,7 @@ use crate::src::nvim::getchar::{
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
 use crate::src::nvim::keycodes::{Ctrl_V, KE_EVENT, get_special_key_name};
-use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
+use crate::src::nvim::log::{LOGLVL_DBG, logmsg_c};
 use crate::src::nvim::main::{
     State, VIsual_active, VIsual_mode, VIsual_select, curbuf, debug_mode, exmode_active, finish_op,
     global_busy, got_int, last_mode, main_loop, mod_mask, motion_force, must_redraw,
@@ -110,7 +110,7 @@ pub unsafe extern "C" fn state_enter(mut s: *mut VimState) {
             } else {
                 get_special_key_name(key, mod_mask.get()) as *const ::core::ffi::c_char
             }) as *mut ::core::ffi::c_char;
-            logmsg(
+            logmsg_c!(
                 LOGLVL_DBG,
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 c"state_enter".as_ptr(),
@@ -369,7 +369,7 @@ pub unsafe extern "C" fn may_trigger_safestate(mut safe: bool) {
     let mut is_safe: bool =
         safe as ::core::ffi::c_int != 0 && is_safe_now() as ::core::ffi::c_int != 0;
     if was_safe.get() as ::core::ffi::c_int != is_safe as ::core::ffi::c_int {
-        logmsg(
+        logmsg_c!(
             LOGLVL_DBG,
             ::core::ptr::null::<::core::ffi::c_char>(),
             c"may_trigger_safestate".as_ptr(),
@@ -395,7 +395,7 @@ pub unsafe extern "C" fn may_trigger_safestate(mut safe: bool) {
 }
 pub unsafe extern "C" fn state_no_longer_safe(mut reason: *const ::core::ffi::c_char) {
     if was_safe.get() as ::core::ffi::c_int != 0 && !reason.is_null() {
-        logmsg(
+        logmsg_c!(
             LOGLVL_DBG,
             ::core::ptr::null::<::core::ffi::c_char>(),
             c"state_no_longer_safe".as_ptr(),

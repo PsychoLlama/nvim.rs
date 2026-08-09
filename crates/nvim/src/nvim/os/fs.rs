@@ -32,7 +32,7 @@ use crate::src::nvim::event::libuv::{
     uv_translate_sys_error,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg_c};
 use crate::src::nvim::main::{e_mkdir, e_noname, g_stats, p_verbose, stdin_fd};
 use crate::src::nvim::memory::{
     memcnt, xfree, xmalloc, xmemcpyz, xmemdupz, xstrchrnul, xstrdup, xstrlcpy,
@@ -453,7 +453,7 @@ pub unsafe extern "C" fn os_set_cloexec(fd: ::core::ffi::c_int) -> ::core::ffi::
     let mut fdflags: ::core::ffi::c_int = fcntl(fd, F_GETFD);
     if fdflags < 0 as ::core::ffi::c_int {
         e = *__errno_location();
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             ::core::ptr::null::<::core::ffi::c_char>(),
             c"os_set_cloexec".as_ptr(),
@@ -470,7 +470,7 @@ pub unsafe extern "C" fn os_set_cloexec(fd: ::core::ffi::c_int) -> ::core::ffi::
         && fcntl(fd, F_SETFD, fdflags | FD_CLOEXEC) == -1 as ::core::ffi::c_int
     {
         e = *__errno_location();
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             ::core::ptr::null::<::core::ffi::c_char>(),
             c"os_set_cloexec".as_ptr(),

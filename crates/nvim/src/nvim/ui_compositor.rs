@@ -2,7 +2,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{schar_from_buf, schar_from_char};
 use crate::src::nvim::highlight::hl_blend_attrs;
 use crate::src::nvim::highlight_group::{HLF_MSGSEP, syn_check_group, syn_id2attr};
-use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
+use crate::src::nvim::log::{LOGLVL_DBG, logmsg_c};
 use crate::src::nvim::main::{
     Columns, Rows, curtab, curwin, default_grid, firstwin, hl_attr_active, msg_grid, p_wd,
     rdb_flags,
@@ -821,7 +821,7 @@ pub unsafe extern "C" fn ui_comp_raw_line(
     }
     debug_assert!(endcol <= clearcol, "endcol <= clearcol");
     if row >= (*default_grid.ptr()).rows as Integer {
-        logmsg(
+        logmsg_c!(
             LOGLVL_DBG,
             ::core::ptr::null::<::core::ffi::c_char>(),
             c"ui_comp_raw_line".as_ptr(),
@@ -834,7 +834,7 @@ pub unsafe extern "C" fn ui_comp_raw_line(
         return;
     }
     if clearcol > (*default_grid.ptr()).cols as Integer {
-        logmsg(
+        logmsg_c!(
             LOGLVL_DBG,
             ::core::ptr::null::<::core::ffi::c_char>(),
             c"ui_comp_raw_line".as_ptr(),

@@ -24,7 +24,7 @@ use crate::src::nvim::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
 use crate::src::nvim::drawscreen::comp_col;
 use crate::src::nvim::garray::{ga_grow, ga_init};
 use crate::src::nvim::indent_c::parse_cino;
-use crate::src::nvim::log::{LOGLVL_INF, logmsg};
+use crate::src::nvim::log::{LOGLVL_INF, logmsg_c};
 use crate::src::nvim::main::{
     Rows, curbuf, current_sctx, curtab, curwin, fenc_default, first_tabpage, firstwin, p_ch, p_enc,
     p_hlg, p_icon, p_rtp, p_sh, p_title, p_window,
@@ -557,7 +557,7 @@ pub(crate) unsafe fn find_dup_item(
 pub fn set_init_2(_headless: bool) {
     // SAFETY: the option table and the screen are the editor's own.
     unsafe {
-        logmsg(
+        logmsg_c!(
             LOGLVL_INF,
             ptr::null(),
             c"set_init_2".as_ptr(),

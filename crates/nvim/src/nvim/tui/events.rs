@@ -11,7 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_strerror, uv_write};
-use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg_c};
 use crate::src::nvim::main::{stdin_isatty, ui_client_channel_id};
 use crate::src::nvim::memory::{strequal, xfree};
 use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
@@ -129,7 +129,7 @@ pub fn tui_mode_change(tui: &mut TUIData, _mode: String_0, mode_idx: Integer) {
             if ret != 0 {
                 // SAFETY: the format string holds the one `%s` filled here.
                 unsafe {
-                    logmsg(
+                    logmsg_c!(
                         LOGLVL_ERR,
                         core::ptr::null(),
                         c"tui_mode_change".as_ptr(),
@@ -201,7 +201,7 @@ pub unsafe fn tui_ui_send(tui: &mut TUIData, content: String_0) {
             None,
         );
         if ret != 0 {
-            logmsg(
+            logmsg_c!(
                 LOGLVL_ERR,
                 core::ptr::null(),
                 c"tui_ui_send".as_ptr(),
@@ -231,7 +231,7 @@ pub unsafe fn tui_set_title(tui: &mut TUIData, title: String_0) {
     if too_long {
         // SAFETY: the format string takes no arguments.
         unsafe {
-            logmsg(
+            logmsg_c!(
                 LOGLVL_ERR,
                 core::ptr::null(),
                 c"tui_set_title".as_ptr(),
@@ -331,7 +331,7 @@ pub unsafe fn tui_chdir(_tui: &mut TUIData, path: String_0) {
     unsafe {
         let err = uv_chdir(path.data);
         if err != 0 {
-            logmsg(
+            logmsg_c!(
                 LOGLVL_ERR,
                 core::ptr::null(),
                 c"tui_chdir".as_ptr(),

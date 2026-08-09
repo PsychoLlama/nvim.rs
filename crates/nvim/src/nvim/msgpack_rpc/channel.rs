@@ -34,7 +34,7 @@ use crate::src::nvim::event::multiqueue::{
 use crate::src::nvim::event::proc::exit_on_closed_chan;
 use crate::src::nvim::event::rstream::rstream_start;
 use crate::src::nvim::event::wstream::{wstream_release_wbuffer, wstream_write};
-use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg_c};
 use crate::src::nvim::main::{
     ch_before_blocking_events, channels, main_loop, resize_events, ui_client_attached,
     ui_client_channel_id, ui_client_error_exit,
@@ -148,7 +148,7 @@ pub unsafe fn rpc_start(channel: *mut Channel) {
     if (*channel).streamtype != kChannelStreamInternal {
         let out = channel_outstream(channel);
         let in_0 = channel_instream(channel);
-        logmsg(
+        logmsg_c!(
             LOGLVL_DBG,
             ptr::null(),
             c"rpc_start".as_ptr(),
@@ -242,7 +242,7 @@ unsafe fn chan_close_on_err(channel: *mut Channel, msg: *mut c_char, loglevel: c
         }
     }
     channel_close((*channel).id, kChannelPartRpc, ptr::null_mut());
-    logmsg(
+    logmsg_c!(
         loglevel,
         ptr::null(),
         c"chan_close_on_err".as_ptr(),
@@ -501,7 +501,7 @@ unsafe extern "C" fn receive_msgpack(
 ) -> size_t {
     let channel = data as *mut Channel;
     channel_incref(channel);
-    logmsg(
+    logmsg_c!(
         LOGLVL_DBG,
         ptr::null(),
         c"receive_msgpack".as_ptr(),
@@ -714,7 +714,7 @@ unsafe fn handle_request(channel: *mut Channel, p: *mut Unpacker, args: Array) {
         multiqueue_put_event(resize_events.get(), ev);
     } else {
         multiqueue_put_event((*channel).events, event);
-        logmsg(
+        logmsg_c!(
             LOGLVL_DBG,
             ptr::null(),
             c"handle_request".as_ptr(),

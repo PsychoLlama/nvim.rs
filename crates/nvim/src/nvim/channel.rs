@@ -36,7 +36,7 @@ use crate::src::nvim::event::wstream::{
     wstream_init, wstream_init_fd, wstream_new_buffer, wstream_write,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::{LOGLVL_INF, logmsg};
+use crate::src::nvim::log::{LOGLVL_INF, logmsg_c};
 use crate::src::nvim::lua::executor::api_free_luaref;
 use crate::src::nvim::main::{
     channels, e_invarg2, e_invchan, e_invstream, e_invstreamrpc, e_jobspawn, embedded_mode,
@@ -844,7 +844,7 @@ unsafe extern "C" fn term_write(buf: *const c_char, size: size_t, data: *mut c_v
     let chan = data as *mut Channel;
     let in_0 = &raw mut (*chan).stream.proc.in_0;
     if (*in_0).closed {
-        logmsg(
+        logmsg_c!(
             LOGLVL_INF,
             ptr::null(),
             c"term_write".as_ptr(),

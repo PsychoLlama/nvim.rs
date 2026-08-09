@@ -11,7 +11,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::slice;
 
-use crate::src::nvim::log::{LOGLVL_WRN, logmsg};
+use crate::src::nvim::log::{LOGLVL_WRN, logmsg_c};
 use crate::src::nvim::memory::{xfree, xmallocz, xrealloc, xstrdup};
 use crate::src::nvim::path::path_fnamecmp;
 use crate::src::nvim::strings::sort_strings;
@@ -94,7 +94,7 @@ pub unsafe extern "C" fn ga_init(gap: *mut garray_T, itemsize: c_int, growsize: 
 
 pub unsafe extern "C" fn ga_set_growsize(gap: *mut garray_T, growsize: c_int) {
     if growsize < 1 {
-        logmsg(
+        logmsg_c!(
             LOGLVL_WRN,
             ptr::null(),
             c"ga_set_growsize".as_ptr(),
@@ -114,7 +114,7 @@ pub unsafe extern "C" fn ga_grow(gap: *mut garray_T, n: c_int) {
         return;
     };
     if (*gap).ga_growsize < 1 {
-        logmsg(
+        logmsg_c!(
             LOGLVL_WRN,
             ptr::null(),
             c"ga_grow".as_ptr(),
@@ -199,7 +199,7 @@ pub unsafe extern "C" fn ga_append(gap: *mut garray_T, c: u8) {
 
 pub unsafe extern "C" fn ga_append_via_ptr(gap: *mut garray_T, item_size: usize) -> *mut c_void {
     if item_size as c_int != (*gap).ga_itemsize {
-        logmsg(
+        logmsg_c!(
             LOGLVL_WRN,
             ptr::null(),
             c"ga_append_via_ptr".as_ptr(),

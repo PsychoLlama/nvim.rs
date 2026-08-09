@@ -29,7 +29,7 @@ use crate::src::nvim::api::private::helpers::{
 use crate::src::nvim::decoration::{decor_check_to_be_deleted, decor_range_count};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::hl_check_ns;
-use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg_c};
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref};
 use crate::src::nvim::main::{decor_state, display_tick, ns_hl_active, textlock};
 use crate::src::nvim::r#move::validate_botline_win;
@@ -105,7 +105,7 @@ unsafe fn decor_provider_error(ns_id: NS, name: *const c_char, msg: *const c_cha
     // namespace table.
     unsafe {
         let ns = describe_ns(ns_id, c"(UNKNOWN PLUGIN)".as_ptr());
-        logmsg(
+        logmsg_c!(
             LOGLVL_ERR,
             ptr::null(),
             c"decor_provider_error".as_ptr(),

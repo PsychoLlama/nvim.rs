@@ -14,6 +14,7 @@
 
 use super::*;
 use crate::src::nvim::grid::{SLF_INC_VCOL, SLF_RIGHTLEFT, SLF_WRAP};
+use crate::src::nvim::log::logmsg_c;
 
 /// The line batch in progress. Only one exists at a time; `grid` being null
 /// means there is none.
@@ -752,7 +753,7 @@ pub unsafe fn grid_put_linebuf(
 
         // Safety check; avoids clang warnings down the call stack.
         if (*grid).chars.is_null() || row >= (*grid).rows || coloff >= (*grid).cols {
-            logmsg(
+            logmsg_c!(
                 LOGLVL_DBG,
                 ::core::ptr::null(),
                 c"grid_put_linebuf".as_ptr(),
