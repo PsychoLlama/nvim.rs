@@ -1,7 +1,7 @@
 {
   "internal_exports": 34,
   "files_without_forbid_unsafe": 932,
-  "files_without_deny_unsafe_op": 149,
+  "files_without_deny_unsafe_op": 146,
   "files": {
     "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe_lines": 54},
     "crates/nvim/src/cjson/lua_cjson/decode.rs": {"unsafe_lines": 175},
@@ -650,9 +650,9 @@
     "crates/nvim/src/nvim/os/env/dirs.rs": {"unsafe_lines": 254},
     "crates/nvim/src/nvim/os/env/expand.rs": {"no_mangle": 1, "unsafe_lines": 184},
     "crates/nvim/src/nvim/os/fileio.rs": {"no_mangle": 8, "unsafe_lines": 254},
-    "crates/nvim/src/nvim/os/fs.rs": {"cell_ptr": 1, "no_mangle": 11, "unsafe_lines": 484},
-    "crates/nvim/src/nvim/os/fs/dir.rs": {"no_mangle": 6, "unsafe_lines": 195},
-    "crates/nvim/src/nvim/os/fs/meta.rs": {"no_mangle": 17, "unsafe_lines": 396},
+    "crates/nvim/src/nvim/os/fs.rs": {"no_mangle": 11, "unsafe_lines": 104},
+    "crates/nvim/src/nvim/os/fs/dir.rs": {"no_mangle": 6, "unsafe_lines": 56},
+    "crates/nvim/src/nvim/os/fs/meta.rs": {"no_mangle": 17, "unsafe_lines": 70},
     "crates/nvim/src/nvim/os/input.rs": {"cell_ptr": 14, "unsafe_lines": 173},
     "crates/nvim/src/nvim/os/lang.rs": {"static_mut": 1, "unsafe_lines": 89},
     "crates/nvim/src/nvim/os/libc.rs": {"static_mut": 3, "unsafe_lines": 436, "variadic": 1},

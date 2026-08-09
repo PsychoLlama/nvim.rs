@@ -1,212 +1,268 @@
 //! Creating, removing and walking directories, and moving files between
 //! them.
 //!
-//! Same shape as the rest of `os/fs`: a `uv_fs_t` per call, `req.result`
-//! read back, `uv_fs_req_cleanup` on the way out.
+//! Same shape as the rest of `os/fs`: one [`fs_request`] per call, with
+//! `req.result` read back and the request cleaned up on the way out. The
+//! two exceptions are [`os_mkdir_recurse`] and [`os_file_mkdir`], which walk
+//! a path apart and put it back together and are the only string work here.
 
-#![allow(unsafe_op_in_unsafe_fn)]
+#![deny(unsafe_op_in_unsafe_fn)]
 
-use super::*;
+use ::core::ffi::{CStr, c_char, c_int};
+use ::core::ptr;
+
+use super::{
+    LIBUV_SUCCESS, NO_LOOP, PATHSEP, TEMP_FILE_PATH_MAXLEN, UV_EOF, UV_STAT_T_INIT, fs_ok,
+    fs_request, fs_result, os_isdir, os_stat,
+};
 use crate::semsg_c;
+use crate::src::nvim::event::libuv::{
+    uv_fs_mkdir, uv_fs_mkdtemp, uv_fs_rename, uv_fs_req_cleanup, uv_fs_rmdir, uv_fs_scandir,
+    uv_fs_scandir_next, uv_fs_unlink, uv_strerror,
+};
+use crate::src::nvim::main::{e_mkdir, e_noname};
+use crate::src::nvim::memory::{xfree, xmemdupz, xstrlcpy};
+use crate::src::nvim::message::emsg;
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::path::{
+    FullName_save, dir_of_file_exists, get_past_head, path_tail_with_sep, vim_ispathsep,
+};
+use crate::src::nvim::types::{Directory, int32_t, size_t};
+
+/// Whether `path` names anything at all.
+///
+/// # Safety
+/// `path` must be null or a NUL-terminated string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_path_exists(mut path: *const ::core::ffi::c_char) -> bool {
-    let mut statbuf: uv_stat_t = uv_stat_t {
-        st_dev: 0,
-        st_mode: 0,
-        st_nlink: 0,
-        st_uid: 0,
-        st_gid: 0,
-        st_rdev: 0,
-        st_ino: 0,
-        st_size: 0,
-        st_blksize: 0,
-        st_blocks: 0,
-        st_flags: 0,
-        st_gen: 0,
-        st_atim: uv_timespec_t {
-            tv_sec: 0,
-            tv_nsec: 0,
-        },
-        st_mtim: uv_timespec_t {
-            tv_sec: 0,
-            tv_nsec: 0,
-        },
-        st_ctim: uv_timespec_t {
-            tv_sec: 0,
-            tv_nsec: 0,
-        },
-        st_birthtim: uv_timespec_t {
-            tv_sec: 0,
-            tv_nsec: 0,
-        },
-    };
-    return os_stat(path, &raw mut statbuf) == kLibuvSuccess.get();
+pub unsafe extern "C" fn os_path_exists(path: *const c_char) -> bool {
+    let mut statbuf = UV_STAT_T_INIT;
+    // SAFETY: the caller's path; `statbuf` is this frame's.
+    unsafe { os_stat(path, &raw mut statbuf) == LIBUV_SUCCESS }
 }
+
+/// Renames `path` to `new_path`. Answers `OK` or `FAIL`.
+///
+/// # Safety
+/// Both must be NUL-terminated strings.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_rename(
-    mut path: *const ::core::ffi::c_char,
-    mut new_path: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    fs_ok(|req| {
-        uv_fs_rename(
-            ::core::ptr::null_mut::<uv_loop_t>(),
-            req,
-            path,
-            new_path,
-            None,
-        )
-    })
+pub unsafe extern "C" fn os_rename(path: *const c_char, new_path: *const c_char) -> c_int {
+    // SAFETY: the caller's NUL-terminated paths.
+    fs_ok(|req| unsafe { uv_fs_rename(NO_LOOP, req, path, new_path, None) })
 }
+
+/// Makes one directory. Answers 0 or a libuv error code.
+///
+/// # Safety
+/// `path` must be a NUL-terminated string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_mkdir(
-    mut path: *const ::core::ffi::c_char,
-    mut mode: int32_t,
-) -> ::core::ffi::c_int {
-    fs_result(|req| {
-        uv_fs_mkdir(
-            ::core::ptr::null_mut::<uv_loop_t>(),
-            req,
-            path,
-            mode as ::core::ffi::c_int,
-            None,
-        )
-    })
+pub unsafe extern "C" fn os_mkdir(path: *const c_char, mode: int32_t) -> c_int {
+    // SAFETY: the caller's NUL-terminated path.
+    fs_result(|req| unsafe { uv_fs_mkdir(NO_LOOP, req, path, mode as c_int, None) })
 }
+
+/// Makes `dir` and every missing directory above it. Answers 0, or the
+/// libuv error code of the first `mkdir` that failed.
+///
+/// Two walks over one buffer: the first truncates `dir` at each separator
+/// until what is left is a directory that exists, and the second puts the
+/// components back one at a time, creating each. `failed_dir` receives an
+/// allocated copy of the path that could not be made; a non-null `created`
+/// receives the full name of the *first* directory that was.
+///
+/// # Safety
+/// `dir` must be a NUL-terminated string and `failed_dir` writable;
+/// `created` must be null or point at a pointer that is null or owned.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_mkdir_recurse(
-    dir: *const ::core::ffi::c_char,
-    mut mode: int32_t,
-    failed_dir: *mut *mut ::core::ffi::c_char,
-    created: *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let dirlen: size_t = strlen(dir);
-    let curdir: *mut ::core::ffi::c_char =
-        xmemdupz(dir as *const ::core::ffi::c_void, dirlen) as *mut ::core::ffi::c_char;
-    let past_head: *mut ::core::ffi::c_char = get_past_head(curdir);
-    let mut e: *mut ::core::ffi::c_char = curdir.add(dirlen);
-    let real_end: *const ::core::ffi::c_char = e;
-    let past_head_save: ::core::ffi::c_char = *past_head;
-    while !os_isdir(curdir) {
-        e = path_tail_with_sep(curdir);
+    dir: *const c_char,
+    mode: int32_t,
+    failed_dir: *mut *mut c_char,
+    created: *mut *mut c_char,
+) -> c_int {
+    // SAFETY: the caller's NUL-terminated directory name.
+    let mut curdir: Vec<u8> = unsafe { CStr::from_ptr(dir) }.to_bytes_with_nul().to_vec();
+    let real_end = curdir.len() - 1;
+    // Where the walk back has to stop: "/" on Unix, "c:/" on Windows.
+    // SAFETY: `curdir` is a NUL-terminated string this frame owns, and
+    // `get_past_head` answers a pointer inside it.
+    let past_head = unsafe {
+        get_past_head(curdir.as_ptr().cast()).offset_from(curdir.as_ptr().cast::<c_char>())
+    } as usize;
+    let past_head_save = curdir[past_head];
+
+    let mut e = real_end;
+    // SAFETY: `curdir` is NUL-terminated throughout, and
+    // `path_tail_with_sep` answers a pointer inside it.
+    while !unsafe { os_isdir(curdir.as_ptr().cast()) } {
+        // SAFETY: as above.
+        e = unsafe {
+            path_tail_with_sep(curdir.as_mut_ptr().cast())
+                .offset_from(curdir.as_ptr().cast::<c_char>())
+        } as usize;
         if e <= past_head {
-            *past_head = NUL as ::core::ffi::c_char;
+            curdir[past_head] = 0;
             break;
-        } else {
-            *e = NUL as ::core::ffi::c_char;
         }
+        curdir[e] = 0;
     }
-    while e != real_end as *mut ::core::ffi::c_char {
+
+    while e != real_end {
         if e > past_head {
-            *e = PATHSEP as ::core::ffi::c_char;
+            curdir[e] = PATHSEP as u8;
         } else {
-            *past_head = past_head_save;
+            curdir[past_head] = past_head_save;
         }
-        let component_len: size_t = strlen(e);
-        e = e.add(component_len);
-        if e == real_end as *mut ::core::ffi::c_char
-            && memcnt(
-                e.offset(-(component_len as isize)) as *const ::core::ffi::c_void,
-                PATHSEP as ::core::ffi::c_char,
-                component_len,
-            ) == component_len
-        {
+        // The component the last truncation cut off, which putting the
+        // separator back has just re-joined.
+        let component_len = curdir[e..]
+            .iter()
+            .position(|&b| b == 0)
+            // `curdir` always ends in the NUL it was copied with.
+            .unwrap_or(real_end - e);
+        let component = &curdir[e..e + component_len];
+        let all_separators = component.iter().all(|&b| b == PATHSEP as u8);
+        e += component_len;
+        if e == real_end && all_separators {
+            // The path ends with something like "////". Ignore this.
             break;
         }
-        let mut ret: ::core::ffi::c_int = 0;
-        ret = os_mkdir(curdir, mode);
-        if ret != 0 as ::core::ffi::c_int {
-            *failed_dir = curdir;
+        // SAFETY: `curdir` is NUL-terminated at `e`.
+        let ret = unsafe { os_mkdir(curdir.as_ptr().cast(), mode) };
+        if ret != 0 {
+            // SAFETY: the caller's out-parameter, which takes the copy over.
+            unsafe { *failed_dir = xmemdupz(curdir.as_ptr().cast(), e).cast() };
             return ret;
-        } else if !created.is_null() && (*created).is_null() {
-            *created = FullName_save(curdir, false_0 != 0);
+        }
+        // SAFETY: the caller's out-parameter, checked non-null.
+        if !created.is_null() && unsafe { (*created).is_null() } {
+            // SAFETY: same; it takes the allocation over.
+            unsafe { *created = FullName_save(curdir.as_ptr().cast(), false) };
         }
     }
-    xfree(curdir as *mut ::core::ffi::c_void);
-    return 0 as ::core::ffi::c_int;
+    0
 }
-pub unsafe extern "C" fn os_file_mkdir(
-    mut fname: *mut ::core::ffi::c_char,
-    mut mode: int32_t,
-) -> ::core::ffi::c_int {
-    if !dir_of_file_exists(fname) {
-        let mut tail: *mut ::core::ffi::c_char = path_tail_with_sep(fname);
-        let mut last_char: *mut ::core::ffi::c_char = tail.add(strlen(tail)).sub(1);
-        if vim_ispathsep(*last_char as ::core::ffi::c_int) {
-            emsg(gettext(&raw const e_noname as *const ::core::ffi::c_char));
-            return -1 as ::core::ffi::c_int;
+
+/// Makes the directory `fname` would live in, if it is missing.
+///
+/// Answers 0, or the libuv error code — having reported it — when the
+/// directories could not be made. `fname` is left as it was found.
+///
+/// # Safety
+/// `fname` must be a writable NUL-terminated string.
+pub unsafe extern "C" fn os_file_mkdir(fname: *mut c_char, mode: int32_t) -> c_int {
+    // SAFETY: the caller's writable NUL-terminated file name. The tail is
+    // cut off with a NUL for the duration and put back before returning.
+    unsafe {
+        if dir_of_file_exists(fname) {
+            return 0;
         }
-        let mut c: ::core::ffi::c_char = *tail;
-        *tail = NUL as ::core::ffi::c_char;
-        let mut r: ::core::ffi::c_int = 0;
-        let mut failed_dir: *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<::core::ffi::c_char>();
-        r = os_mkdir_recurse(
-            fname,
-            mode,
-            &raw mut failed_dir,
-            ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-        );
-        if r < 0 as ::core::ffi::c_int {
+        let tail = path_tail_with_sep(fname);
+        // `tail` is past `fname`'s start here (`dir_of_file_exists`
+        // answers true when they are equal), so the byte before it exists
+        // even when the tail itself is empty — which is the case upstream's
+        // `tail + strlen(tail) - 1` is written for.
+        let last_char = *tail.add(CStr::from_ptr(tail).to_bytes().len()).sub(1);
+        if vim_ispathsep(last_char as c_int) {
+            emsg(gettext((&raw const e_noname).cast()));
+            return -1;
+        }
+        let c = *tail;
+        *tail = 0;
+        let mut failed_dir: *mut c_char = ptr::null_mut();
+        let r = os_mkdir_recurse(fname, mode, &raw mut failed_dir, ptr::null_mut());
+        if r < 0 {
             semsg_c!(
-                gettext(&raw const e_mkdir as *const ::core::ffi::c_char),
+                gettext((&raw const e_mkdir).cast()),
                 failed_dir,
                 uv_strerror(r),
             );
-            xfree(failed_dir as *mut ::core::ffi::c_void);
+            xfree(failed_dir.cast());
         }
         *tail = c;
-        return r;
+        r
     }
-    return 0 as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn os_mkdtemp(
-    mut templ: *const ::core::ffi::c_char,
-    mut path: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+
+/// Makes a uniquely named temporary directory from `templ`, whose trailing
+/// `XXXXXX` is replaced, and writes its path into `path`.
+///
+/// # Safety
+/// `templ` must be a NUL-terminated string and `path` must address
+/// [`TEMP_FILE_PATH_MAXLEN`] writable bytes.
+pub unsafe extern "C" fn os_mkdtemp(templ: *const c_char, path: *mut c_char) -> c_int {
     // `request.path` is the directory libuv made, and cleanup frees it.
     fs_request(
-        |request| uv_fs_mkdtemp(::core::ptr::null_mut::<uv_loop_t>(), request, templ, None),
+        // SAFETY: the caller's NUL-terminated template.
+        |request| unsafe { uv_fs_mkdtemp(NO_LOOP, request, templ, None) },
         |result, request| {
-            if result == kLibuvSuccess.get() {
-                xstrlcpy(path, request.path, TEMP_FILE_PATH_MAXLEN as size_t);
+            if result == LIBUV_SUCCESS {
+                // SAFETY: `request.path` is libuv's NUL-terminated answer,
+                // alive until cleanup, and `path` is the caller's buffer.
+                unsafe { xstrlcpy(path, request.path, TEMP_FILE_PATH_MAXLEN as size_t) };
             }
             result
         },
     )
 }
+
+/// Removes an empty directory. Answers 0 or a libuv error code.
+///
+/// # Safety
+/// `path` must be a NUL-terminated string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_rmdir(mut path: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    fs_result(|req| uv_fs_rmdir(::core::ptr::null_mut::<uv_loop_t>(), req, path, None))
+pub unsafe extern "C" fn os_rmdir(path: *const c_char) -> c_int {
+    // SAFETY: the caller's NUL-terminated path.
+    fs_result(|req| unsafe { uv_fs_rmdir(NO_LOOP, req, path, None) })
 }
-pub unsafe extern "C" fn os_scandir(
-    mut dir: *mut Directory,
-    mut path: *const ::core::ffi::c_char,
-) -> bool {
-    let mut r: ::core::ffi::c_int = uv_fs_scandir(
-        ::core::ptr::null_mut::<uv_loop_t>(),
-        &raw mut (*dir).request,
-        path,
-        0 as ::core::ffi::c_int,
-        None,
-    );
-    if r < 0 as ::core::ffi::c_int {
-        os_closedir(dir);
+
+/// Opens `path` for walking, answering whether it holds anything.
+///
+/// The `Directory` owns a live `uv_fs_t` until [`os_closedir`] runs, which
+/// is why this one is not an [`fs_request`].
+///
+/// # Safety
+/// `dir` must be writable and `path` a NUL-terminated string.
+pub unsafe extern "C" fn os_scandir(dir: *mut Directory, path: *const c_char) -> bool {
+    // SAFETY: the caller's `Directory` and NUL-terminated path.
+    let r = unsafe { uv_fs_scandir(NO_LOOP, &raw mut (*dir).request, path, 0, None) };
+    if r < 0 {
+        // SAFETY: the request is the one just started, however it went.
+        unsafe { os_closedir(dir) };
     }
-    return r >= 0 as ::core::ffi::c_int;
+    r >= 0
 }
-pub unsafe extern "C" fn os_scandir_next(mut dir: *mut Directory) -> *const ::core::ffi::c_char {
-    let mut err: ::core::ffi::c_int =
-        uv_fs_scandir_next(&raw mut (*dir).request, &raw mut (*dir).ent);
-    return if err != UV_EOF as ::core::ffi::c_int {
-        (*dir).ent.name
-    } else {
-        ::core::ptr::null::<::core::ffi::c_char>()
-    };
+
+/// The next entry's name, or null when the walk is over.
+///
+/// # Safety
+/// `dir` must be a `Directory` [`os_scandir`] succeeded on.
+pub unsafe extern "C" fn os_scandir_next(dir: *mut Directory) -> *const c_char {
+    // SAFETY: the caller's open `Directory`; the name lives in its request.
+    unsafe {
+        let err = uv_fs_scandir_next(&raw mut (*dir).request, &raw mut (*dir).ent);
+        if err != UV_EOF {
+            (*dir).ent.name
+        } else {
+            ptr::null()
+        }
+    }
 }
-pub unsafe extern "C" fn os_closedir(mut dir: *mut Directory) {
-    uv_fs_req_cleanup(&raw mut (*dir).request);
+
+/// Releases what [`os_scandir`] allocated.
+///
+/// # Safety
+/// `dir` must be a `Directory` [`os_scandir`] was called on.
+pub unsafe extern "C" fn os_closedir(dir: *mut Directory) {
+    // SAFETY: the caller's `Directory`, whose request is theirs to clean up.
+    unsafe { uv_fs_req_cleanup(&raw mut (*dir).request) };
 }
+
+/// Removes a file. Answers 0 or a libuv error code.
+///
+/// # Safety
+/// `path` must be a NUL-terminated string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn os_remove(mut path: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    fs_result(|req| uv_fs_unlink(::core::ptr::null_mut::<uv_loop_t>(), req, path, None))
+pub unsafe extern "C" fn os_remove(path: *const c_char) -> c_int {
+    // SAFETY: the caller's NUL-terminated path.
+    fs_result(|req| unsafe { uv_fs_unlink(NO_LOOP, req, path, None) })
 }
