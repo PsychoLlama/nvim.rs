@@ -16,7 +16,7 @@ pub(super) fn scale_number(
     if num == 0 as ::core::ffi::c_int as float_T || exponent == 0 as uvarnumber_T {
         return num;
     }
-    assert!(base != 0, "base");
+    debug_assert!(base != 0, "base");
     let mut exp: uvarnumber_T = exponent;
     let mut p_base: float_T = base as float_T;
     let mut ret: float_T = num;

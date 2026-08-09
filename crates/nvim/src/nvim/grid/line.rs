@@ -106,7 +106,7 @@ pub unsafe fn grid_line_start(view: *mut GridView, mut row: c_int) {
 pub unsafe fn screengrid_line_start(grid: *mut ScreenGrid, row: c_int, col: c_int) {
     unsafe {
         let b = BATCH.ptr();
-        assert!((*b).grid.is_null(), "grid_line_grid == NULL");
+        debug_assert!((*b).grid.is_null(), "grid_line_grid == NULL");
         *b = LineBatch {
             grid,
             row,
@@ -119,13 +119,13 @@ pub unsafe fn screengrid_line_start(grid: *mut ScreenGrid, row: c_int, col: c_in
             clear_attr: 0,
             flags: 0,
         };
-        assert!(
+        debug_assert!(
             (*b).maxcol as size_t <= LINEBUF_SIZE.get(),
             "(size_t)grid_line_maxcol <= linebuf_size"
         );
 
         if full_screen.get() && rdb_flags.get() & kOptRdbFlagInvalid != 0 {
-            assert!(!linebuf_char.get().is_null(), "linebuf_char");
+            debug_assert!(!linebuf_char.get().is_null(), "linebuf_char");
             // This batch must not depend on the previous contents of
             // linebuf_char. Poison it so that any such dependency trips an
             // assertion further down.
@@ -172,7 +172,7 @@ pub unsafe fn grid_line_getchar(mut col: c_int, attr: *mut c_int) -> schar_T {
 pub unsafe fn grid_line_put_schar(col: c_int, schar: schar_T, attr: c_int) {
     unsafe {
         let b = BATCH.ptr();
-        assert!(!(*b).grid.is_null(), "grid_line_grid");
+        debug_assert!(!(*b).grid.is_null(), "grid_line_grid");
         if col >= (*b).maxcol {
             return;
         }
@@ -203,7 +203,7 @@ pub unsafe fn grid_line_puts(
 ) -> c_int {
     unsafe {
         let b = BATCH.ptr();
-        assert!(!(*b).grid.is_null(), "grid_line_grid");
+        debug_assert!(!(*b).grid.is_null(), "grid_line_grid");
 
         let chars = linebuf_char.get();
         let attrs = linebuf_attr.get();
@@ -444,7 +444,7 @@ pub unsafe fn grid_line_flush() {
         let grid = (*b).grid;
         (*b).grid = ::core::ptr::null_mut();
         (*b).clear_to = (*b).last.max((*b).clear_to);
-        assert!(
+        debug_assert!(
             (*b).clear_to <= (*b).maxcol,
             "grid_line_clear_to <= grid_line_maxcol"
         );
@@ -743,7 +743,7 @@ pub unsafe fn grid_put_linebuf(
             mut endcol,
             mut clear_width,
         } = span;
-        assert!(
+        debug_assert!(
             0 <= row && row < (*grid).rows,
             "0 <= row && row < grid->rows"
         );

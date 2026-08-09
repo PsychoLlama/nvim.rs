@@ -420,7 +420,7 @@ pub(crate) fn match_with_backref(
             }
 
             let p = reg_getline(clnum);
-            assert!(!p.is_null(), "p");
+            debug_assert!(!p.is_null(), "p");
             let mut len = if clnum == end_lnum {
                 end_col - ccol
             } else {

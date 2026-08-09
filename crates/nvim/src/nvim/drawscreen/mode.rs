@@ -343,11 +343,11 @@ pub unsafe fn comp_col() {
             }
         }
 
-        assert!(
+        debug_assert!(
             sc_width >= 0 && c_int::MIN + sc_width <= Columns.get(),
             "sc_col >= 0 && INT_MIN + sc_col <= Columns"
         );
-        assert!(
+        debug_assert!(
             ru_width >= 0 && c_int::MIN + ru_width <= Columns.get(),
             "ru_col >= 0 && INT_MIN + ru_col <= Columns"
         );

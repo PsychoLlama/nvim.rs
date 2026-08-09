@@ -467,7 +467,7 @@ pub unsafe fn vim_strsize(s: *const c_char) -> c_int {
 /// # Safety
 /// `s` must be a NUL-terminated string.
 pub unsafe fn vim_strnsize(s: *const c_char, len: c_int) -> c_int {
-    assert!(!s.is_null(), "s != NULL");
+    debug_assert!(!s.is_null(), "s != NULL");
     let mut s = s;
     let mut len = len;
     let mut size = 0;

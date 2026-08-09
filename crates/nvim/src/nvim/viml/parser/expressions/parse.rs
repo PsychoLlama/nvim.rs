@@ -265,7 +265,7 @@ impl ExprParser {
         if self.flags & kExprFlagsMulti as c_int != 0 && self.may_have_next_expr() {
             return Flow::Stop;
         }
-        assert!(!(*self.top_node_p).is_null(), "*top_node_p != NULL");
+        debug_assert!(!(*self.top_node_p).is_null(), "*top_node_p != NULL");
         self.error(c"E15: Missing operator: %.*s");
         let node = self.new_node(kExprNodeOpMissing);
         (*node).len = 0;
@@ -304,7 +304,7 @@ impl ExprParser {
     /// and the caller must report a missing operator: either there is spacing
     /// before it, or what precedes it is not an identifier.
     pub(super) unsafe fn open_complex_identifier(&mut self) -> Option<*mut *mut ExprASTNode> {
-        assert!(
+        debug_assert!(
             self.want_node == kENodeOperator,
             "want_node == kENodeOperator"
         );
@@ -327,7 +327,7 @@ impl ExprParser {
         *self.top_node_p = node;
         self.ast_stack.push(&raw mut (*(*node).children).next);
         let slot = stack_top(&self.ast_stack, 0);
-        assert!((*slot).is_null(), "*new_top_node_p == NULL");
+        debug_assert!((*slot).is_null(), "*new_top_node_p == NULL");
         Some(slot)
     }
 
@@ -409,7 +409,7 @@ impl ExprParser {
             .items
             .add(self.cur_token.start.line);
         self.top_node_p = stack_top(&self.ast_stack, 0);
-        assert!(!self.ast_stack.is_empty(), "kv_size(ast_stack) >= 1");
+        debug_assert!(!self.ast_stack.is_empty(), "kv_size(ast_stack) >= 1");
         self.check_stack_invariants();
 
         // Note: in Vim whether expression "cond?d.a:2" is valid depends both
@@ -443,9 +443,9 @@ impl ExprParser {
         if let Some(flow) = self.reconcile_parse_type() {
             return flow;
         }
-        assert!(!self.pt_stack.is_empty(), "kv_size(pt_stack)");
+        debug_assert!(!self.pt_stack.is_empty(), "kv_size(pt_stack)");
         self.cur_pt = self.pt_top();
-        assert!(
+        debug_assert!(
             self.lambda_node.is_null() || self.cur_pt == kEPTLambdaArguments,
             "lambda_node == NULL || cur_pt == kEPTLambdaArguments"
         );
@@ -456,11 +456,11 @@ impl ExprParser {
     /// the root slot, and item i + 1 points at item i's *last* child.
     unsafe fn check_stack_invariants(&self) {
         let want_value = self.want_node == kENodeValue;
-        assert!(
+        debug_assert!(
             want_value == (*self.top_node_p).is_null(),
             "want_value == (*top_node_p == NULL)"
         );
-        assert!(
+        debug_assert!(
             self.ast_stack[0] == &raw mut (*self.ast).root,
             "kv_A(ast_stack, 0) == &ast.root"
         );
@@ -555,7 +555,7 @@ impl ExprParser {
                     self.error(c"E15: Expected assignment operator or subscript: %.*s");
                     self.pt_stack.truncate(self.pt_stack.len() - 1);
                 }
-                assert!(!self.pt_stack.is_empty(), "kv_size(pt_stack)");
+                debug_assert!(!self.pt_stack.is_empty(), "kv_size(pt_stack)");
             }
             _ => {}
         }
@@ -600,8 +600,8 @@ impl ExprParser {
 
     /// End of the expression: report whatever the stack was still waiting for.
     unsafe fn finish(&mut self) {
-        assert!(!self.pt_stack.is_empty(), "kv_size(pt_stack)");
-        assert!(!self.ast_stack.is_empty(), "kv_size(ast_stack)");
+        debug_assert!(!self.pt_stack.is_empty(), "kv_size(pt_stack)");
+        debug_assert!(!self.ast_stack.is_empty(), "kv_size(ast_stack)");
         // kEPTLambdaArguments is blacklisted because its presence means a
         // better error message comes out of the other branch.
         if self.want_node == kENodeValue && self.pt_top() != kEPTLambdaArguments {
@@ -623,7 +623,7 @@ impl ExprParser {
         while (*self.ast).err.msg.is_null() && !self.ast_stack.is_empty() {
             let node: *const ExprASTNode = *self.ast_stack.pop().expect("the stack is not empty");
             // This should only happen when want_node == kENodeValue.
-            assert!(!node.is_null(), "cur_node != NULL");
+            debug_assert!(!node.is_null(), "cur_node != NULL");
             // TODO(ZyX-I): Rehighlight as invalid?
             let msg: &CStr = match (*node).type_0 {
                 // The error should've been already reported.

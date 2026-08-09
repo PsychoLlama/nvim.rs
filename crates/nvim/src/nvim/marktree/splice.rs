@@ -43,7 +43,7 @@ pub unsafe extern "C" fn check_damage(
         } else {
             &raw mut (*p).start
         };
-    assert!((*me).new.is_null(), "me->new == NULL");
+    debug_assert!((*me).new.is_null(), "me->new == NULL");
     *me = MTDamage {
         old: (*itr1).x,
         new: (*itr2).x,
@@ -219,7 +219,7 @@ pub unsafe extern "C" fn marktree_splice(
                 ::core::ptr::null_mut::<MTPos>(),
                 ::core::ptr::null::<uint32_t>(),
             );
-            assert!(
+            debug_assert!(
                 !(*(&raw mut enditr as *mut MarkTreeIter)).x.is_null(),
                 "enditr->x"
             );
@@ -392,7 +392,7 @@ pub unsafe extern "C" fn marktree_splice(
             [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
             .pos
             .row as ::core::ffi::c_int;
-        assert!(
+        debug_assert!(
             realrow as int32_t >= old_extent.row,
             "realrow >= old_extent.row"
         );

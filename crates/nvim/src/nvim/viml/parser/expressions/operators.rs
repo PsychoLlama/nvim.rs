@@ -153,12 +153,12 @@ pub(super) unsafe fn question(p: &mut ExprParser) -> Flow {
     p.hl_token(hl!(p, Ternary));
     let ter_val_node = p.new_node(kExprNodeTernaryValue);
     (*ter_val_node).data.ter.got_colon = false;
-    assert!(!(*node).children.is_null(), "cur_node->children != NULL");
-    assert!(
+    debug_assert!(!(*node).children.is_null(), "cur_node->children != NULL");
+    debug_assert!(
         (*(*node).children).next.is_null(),
         "cur_node->children->next == NULL"
     );
-    assert!(
+    debug_assert!(
         stack_top(&p.ast_stack, 0) == &raw mut (*(*node).children).next,
         "kv_last(ast_stack) == &cur_node->children->next"
     );
@@ -171,19 +171,19 @@ pub(super) unsafe fn question(p: &mut ExprParser) -> Flow {
 pub(super) unsafe fn arrow(p: &mut ExprParser) -> Flow {
     if p.cur_pt == kEPTLambdaArguments {
         p.pt_stack.truncate(p.pt_stack.len() - 1);
-        assert!(!p.pt_stack.is_empty(), "kv_size(pt_stack)");
+        debug_assert!(!p.pt_stack.is_empty(), "kv_size(pt_stack)");
         if p.want_node == kENodeValue {
             // Wanting a value means a trailing comma and NULL at the top of
             // the stack.
             p.ast_stack.truncate(p.ast_stack.len() - 1);
         }
-        assert!(!p.ast_stack.is_empty(), "kv_size(ast_stack) >= 1");
+        debug_assert!(!p.ast_stack.is_empty(), "kv_size(ast_stack) >= 1");
         while (**stack_top(&p.ast_stack, 0)).type_0 != kExprNodeLambda
             && (**stack_top(&p.ast_stack, 0)).type_0 != kExprNodeUnknownFigure
         {
             p.ast_stack.truncate(p.ast_stack.len() - 1);
         }
-        assert!(
+        debug_assert!(
             *stack_top(&p.ast_stack, 0) == p.lambda_node,
             "(*kv_last(ast_stack)) == lambda_node"
         );
@@ -195,7 +195,7 @@ pub(super) unsafe fn arrow(p: &mut ExprParser) -> Flow {
             (*lambda_node).children = node;
             p.ast_stack.push(&raw mut (*lambda_node).children);
         } else {
-            assert!(
+            debug_assert!(
                 (*(*lambda_node).children).next.is_null(),
                 "lambda_node->children->next == NULL"
             );
@@ -226,8 +226,8 @@ pub(super) unsafe fn assignment(p: &mut ExprParser) -> Flow {
     } else {
         p.error(c"E15: Misplaced assignment: %.*s");
     }
-    assert!(!p.pt_stack.is_empty(), "kv_size(pt_stack)");
-    assert!(p.pt_top() == kEPTExpr, "kv_last(pt_stack) == kEPTExpr");
+    debug_assert!(!p.pt_stack.is_empty(), "kv_size(pt_stack)");
+    debug_assert!(p.pt_top() == kEPTExpr, "kv_last(pt_stack) == kEPTExpr");
     p.add_value_if_missing(c"E15: Unexpected assignment: %.*s");
     let node = p.new_node(kExprNodeAssignment);
     (*node).data.ass.type_0 = p.cur_token.data.ass.type_0;

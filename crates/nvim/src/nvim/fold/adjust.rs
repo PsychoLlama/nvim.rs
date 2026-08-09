@@ -301,7 +301,7 @@ pub(super) unsafe extern "C" fn foldSplit(
     foldInsert(gap, i + 1);
     let fp: *mut fold_T = fold_at(&*gap, i);
     (*fp.offset(1)).fd_top = bot + 1;
-    assert!((*fp.offset(1)).fd_top > bot, "fp[1].fd_top > bot");
+    debug_assert!((*fp.offset(1)).fd_top > bot, "fp[1].fd_top > bot");
     (*fp.offset(1)).fd_len = (*fp).fd_len - ((*fp.offset(1)).fd_top - (*fp).fd_top);
     (*fp.offset(1)).fd_flags = (*fp).fd_flags;
     (*fp.offset(1)).fd_small = kNone;

@@ -139,7 +139,7 @@ unsafe fn closing_figure_brace(p: &mut ExprParser) -> Flow {
                     // No children of a curly braces node indicates an empty
                     // dictionary.
                     debug_assert!(p.want_node == kENodeValue, "want_node == kENodeValue");
-                    assert!(
+                    debug_assert!(
                         (*new_top_node).data.fig.type_guesses.allow_dict,
                         "new_top_node->data.fig.type_guesses.allow_dict"
                     );
@@ -176,14 +176,14 @@ unsafe fn closing_figure_brace(p: &mut ExprParser) -> Flow {
         }
     }
     if unexpected {
-        assert!(p.ast_stack.is_empty(), "!kv_size(ast_stack)");
+        debug_assert!(p.ast_stack.is_empty(), "!kv_size(ast_stack)");
         p.error(c"E15: Unexpected closing figure brace: %.*s");
         p.hl_token(hl!(p, FigureBrace));
     }
     p.ast_stack.push(new_top_node_p);
     p.want_node = kENodeOperator;
     if p.ast_stack.len() <= p.asgn_level {
-        assert!(
+        debug_assert!(
             p.ast_stack.len() == p.asgn_level,
             "kv_size(ast_stack) == asgn_level"
         );

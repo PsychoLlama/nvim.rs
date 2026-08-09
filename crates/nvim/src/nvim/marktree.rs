@@ -406,7 +406,7 @@ pub unsafe extern "C" fn marktree_del_itr(
         }
     }
     let mut x: *mut MTNode = (*itr).x;
-    assert!(
+    debug_assert!(
         (*x).level as ::core::ffi::c_int == 0 as ::core::ffi::c_int,
         "x->level == 0"
     );
@@ -442,7 +442,7 @@ pub unsafe extern "C" fn marktree_del_itr(
                 abort();
             }
             let mut i: ::core::ffi::c_int = (*itr).s[ilvl as usize].i;
-            assert!((*inner(p)).i_ptr[i as usize] == lnode, "p->ptr[i] == lnode");
+            debug_assert!((*inner(p)).i_ptr[i as usize] == lnode, "p->ptr[i] == lnode");
             if i > 0 as ::core::ffi::c_int {
                 unrelative(
                     (*p).key[(i - 1 as ::core::ffi::c_int) as usize].pos,
@@ -513,7 +513,7 @@ pub unsafe extern "C" fn marktree_del_itr(
         lnode_0 = (*lnode_0).parent;
     }
     for m in 0..META_COUNT {
-        assert!(
+        debug_assert!(
             (*b).meta_root[m] >= meta_inc[m],
             "b->meta_root[m] >= meta_inc[m]"
         );
@@ -530,7 +530,7 @@ pub unsafe extern "C" fn marktree_del_itr(
             break;
         }
         let mut pi_0: ::core::ffi::c_int = (*itr).s[rlvl as usize].i;
-        assert!((*inner(p_0)).i_ptr[pi_0 as usize] == x, "p->ptr[pi] == x");
+        debug_assert!((*inner(p_0)).i_ptr[pi_0 as usize] == x, "p->ptr[pi] == x");
         if pi_0 > 0 as ::core::ffi::c_int {
             ppos.row -= (*p_0).key[(pi_0 - 1 as ::core::ffi::c_int) as usize]
                 .pos
@@ -595,7 +595,7 @@ pub unsafe extern "C" fn marktree_del_itr(
         if (*(*b).root).level != 0 {
             let mut oldroot: *mut MTNode = (*b).root;
             (*b).root = (*inner((*b).root)).i_ptr[0 as ::core::ffi::c_int as usize];
-            assert!(
+            debug_assert!(
                 (*b).meta_root == (*inner(oldroot)).i_meta[0],
                 "b->meta_root[m] == oldroot->meta[0][m]"
             );
@@ -612,7 +612,7 @@ pub unsafe extern "C" fn marktree_del_itr(
         marktree_itr_next(b, itr);
         marktree_itr_next(b, itr);
     } else if !(*itr).x.is_null() && (*itr).i as int32_t >= (*(*itr).x).n {
-        assert!(
+        debug_assert!(
             (*(*itr).x).level as ::core::ffi::c_int == 0 as ::core::ffi::c_int,
             "itr->x->level == 0"
         );

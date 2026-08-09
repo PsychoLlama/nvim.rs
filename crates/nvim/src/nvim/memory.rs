@@ -278,7 +278,7 @@ fn lcat_copy(dlen: usize, slen: usize, dsize: usize) -> (usize, Option<usize>) {
 pub unsafe extern "C" fn xstrlcat(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize {
     debug_assert!(dsize > 0, "dsize > 0");
     let dlen = CStr::from_ptr(dst).to_bytes().len();
-    assert!(dlen < dsize, "dlen < dsize");
+    debug_assert!(dlen < dsize, "dlen < dsize");
     let slen = CStr::from_ptr(src).to_bytes().len();
     let (copy_len, nul_at) = lcat_copy(dlen, slen, dsize);
     ptr::copy(src, dst.add(dlen), copy_len);

@@ -734,7 +734,7 @@ pub unsafe fn pum_redraw() {
         let mut extra_space = false;
         if pum_rl.get() {
             col_off = pum_width.get() - 1;
-            assert!(State.get() & MODE_CMDLINE == 0, "!(State & MODE_CMDLINE)");
+            debug_assert!(State.get() & MODE_CMDLINE == 0, "!(State & MODE_CMDLINE)");
             let win_end_col = (*win).w_wincol + (*win).w_width;
             if pum_col.get() < win_end_col - 1 {
                 grid_width += 1;

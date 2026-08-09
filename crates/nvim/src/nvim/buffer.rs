@@ -641,7 +641,7 @@ unsafe extern "C" fn can_unload_buffer(mut buf: *mut buf_T) -> bool {
     return can_unload;
 }
 pub unsafe extern "C" fn buf_close_terminal(mut buf: *mut buf_T) {
-    assert!(!(*buf).terminal.is_null(), "buf->terminal");
+    debug_assert!(!(*buf).terminal.is_null(), "buf->terminal");
     (*buf).b_locked += 1;
     terminal_close(&raw mut (*buf).terminal, -1 as ::core::ffi::c_int);
     (*buf).b_locked -= 1;
@@ -1105,7 +1105,7 @@ unsafe extern "C" fn free_buffer_stuff(mut buf: *mut buf_T, mut free_flags: ::co
         &raw mut (*(*buf).b_vars).dv_hashtab,
         b"changedtick\0".as_ptr() as *const ::core::ffi::c_char,
     );
-    assert!(!changedtick_hi.is_null(), "changedtick_hi != NULL");
+    debug_assert!(!changedtick_hi.is_null(), "changedtick_hi != NULL");
     hash_remove(&raw mut (*(*buf).b_vars).dv_hashtab, changedtick_hi);
     vars_clear(&raw mut (*(*buf).b_vars).dv_hashtab);
     hash_init(&raw mut (*(*buf).b_vars).dv_hashtab);
@@ -2221,7 +2221,7 @@ pub unsafe extern "C" fn buflist_new(
     if flags & BLN_CURBUF as ::core::ffi::c_int != 0 && curbuf_reusable() as ::core::ffi::c_int != 0
     {
         let mut bufref_0: bufref_T = bufref_T::default();
-        assert!(!(*curbuf.ptr()).is_null(), "curbuf != NULL");
+        debug_assert!(!(*curbuf.ptr()).is_null(), "curbuf != NULL");
         buf = curbuf.get();
         set_bufref(&raw mut bufref_0, buf);
         trigger_undo_ftplugin(buf, curwin.get());
@@ -4876,7 +4876,7 @@ pub unsafe extern "C" fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnu
         b"changedtick\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
-    assert!(!changedtick_di.is_null(), "changedtick_di != NULL");
+    debug_assert!(!changedtick_di.is_null(), "changedtick_di != NULL");
     assert!(
         (*changedtick_di).di_tv.v_type as ::core::ffi::c_uint
             == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint,
@@ -4892,7 +4892,7 @@ pub unsafe extern "C" fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnu
             == DI_FLAGS_RO as ::core::ffi::c_int | DI_FLAGS_FIX as ::core::ffi::c_int,
         "changedtick_di->di_flags == (DI_FLAGS_RO|DI_FLAGS_FIX)"
     );
-    assert!(
+    debug_assert!(
         changedtick_di == &raw mut (*buf).changedtick_di as *mut dictitem_T,
         "changedtick_di == (dictitem_T *)&buf->changedtick_di"
     );
@@ -4914,8 +4914,8 @@ pub unsafe extern "C" fn read_buffer_into(
     mut end: linenr_T,
     mut sb: *mut StringBuilder,
 ) {
-    assert!(!buf.is_null(), "buf");
-    assert!(!sb.is_null(), "sb");
+    debug_assert!(!buf.is_null(), "buf");
+    debug_assert!(!sb.is_null(), "sb");
     if (*buf).b_ml.ml_flags & ML_EMPTY != 0 {
         return;
     }

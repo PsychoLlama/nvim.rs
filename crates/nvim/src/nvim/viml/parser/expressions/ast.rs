@@ -173,22 +173,22 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
         let cur_node: *mut *mut ExprASTNode = stack_top(&ast_stack, 0);
         let mut i: size_t = 0;
         while i < ast_stack.len().wrapping_sub(1) {
-            assert!(
+            debug_assert!(
                 *ast_stack[i] != *cur_node,
                 "*kv_A(ast_stack, i) != *cur_node"
             );
             i = i.wrapping_add(1);
         }
         if (*cur_node).is_null() {
-            assert!(ast_stack.len() == 1, "kv_size(ast_stack) == 1");
+            debug_assert!(ast_stack.len() == 1, "kv_size(ast_stack) == 1");
             ast_stack.truncate(ast_stack.len() - 1);
         } else if !(**cur_node).children.is_null() {
             let maxchildren: uint8_t = node_maxchildren[(**cur_node).type_0 as usize];
-            assert!(
+            debug_assert!(
                 maxchildren as ::core::ffi::c_int > 0 as ::core::ffi::c_int,
                 "maxchildren > 0"
             );
-            assert!(
+            debug_assert!(
                 maxchildren as ::core::ffi::c_int <= 2 as ::core::ffi::c_int,
                 "maxchildren <= 2"
             );
@@ -405,7 +405,7 @@ pub(super) unsafe extern "C" fn viml_pexpr_handle_bop(
     let mut top_node: *mut ExprASTNode = ::core::ptr::null_mut::<ExprASTNode>();
     let mut top_node_lvl: ExprOpLvl = kEOpLvlInvalid;
     let mut top_node_ass: ExprOpAssociativity = 0 as ExprOpAssociativity;
-    assert!(ast_stack.len() != 0, "kv_size(*ast_stack)");
+    debug_assert!(ast_stack.len() != 0, "kv_size(*ast_stack)");
     let bop_node_lvl: ExprOpLvl =
         (if (*bop_node).type_0 == kExprNodeCall || (*bop_node).type_0 == kExprNodeSubscript {
             kEOpLvlSubscript
@@ -415,7 +415,7 @@ pub(super) unsafe extern "C" fn viml_pexpr_handle_bop(
     loop {
         let mut new_top_node_p: *mut *mut ExprASTNode = stack_top(&ast_stack, 0);
         let mut new_top_node: *mut ExprASTNode = *new_top_node_p;
-        assert!(!new_top_node.is_null(), "new_top_node != NULL");
+        debug_assert!(!new_top_node.is_null(), "new_top_node != NULL");
         let new_top_node_lvl: ExprOpLvl = node_lvl(*new_top_node);
         let new_top_node_ass: ExprOpAssociativity = node_ass(*new_top_node);
         if !top_node_p.is_null()
@@ -444,7 +444,7 @@ pub(super) unsafe extern "C" fn viml_pexpr_handle_bop(
     {
         *top_node_p = bop_node;
         (*bop_node).children = top_node;
-        assert!(
+        debug_assert!(
             (*(*bop_node).children).next.is_null(),
             "bop_node->children->next == NULL"
         );
@@ -456,13 +456,13 @@ pub(super) unsafe extern "C" fn viml_pexpr_handle_bop(
                 && top_node_ass == kEOpAssRight,
             "top_node_lvl == bop_node_lvl && top_node_ass == kEOpAssRight"
         );
-        assert!(
+        debug_assert!(
             !(*top_node).children.is_null() && !(*(*top_node).children).next.is_null(),
             "top_node->children != NULL && top_node->children->next != NULL"
         );
         (*bop_node).children = (*(*top_node).children).next;
         (*(*top_node).children).next = bop_node;
-        assert!(
+        debug_assert!(
             (*(*bop_node).children).next.is_null(),
             "bop_node->children->next == NULL"
         );

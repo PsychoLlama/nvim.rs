@@ -188,7 +188,7 @@ pub fn pos_less(a: MTPos, b: MTPos) -> bool {
 /// same row keeps a column delta and drops to row zero; a later row keeps its
 /// absolute column, because a row delta already says the column restarts.
 pub fn relative(base: MTPos, val: &mut MTPos) {
-    assert!(pos_leq(base, *val), "pos_leq(base, *val)");
+    debug_assert!(pos_leq(base, *val), "pos_leq(base, *val)");
     if val.row == base.row {
         val.row = 0;
         val.col -= base.col;

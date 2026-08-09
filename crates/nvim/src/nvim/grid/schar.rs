@@ -148,7 +148,7 @@ pub unsafe fn schar_get_adv(buf_out: *mut *mut c_char, sc: schar_T) -> size_t {
     unsafe {
         let (src, len) = if schar_high(sc) {
             let idx = schar_idx(sc);
-            assert!(idx < (*GLYPH_CACHE.ptr()).h.n_keys, "idx < n_keys");
+            debug_assert!(idx < (*GLYPH_CACHE.ptr()).h.n_keys, "idx < n_keys");
             let key = (*GLYPH_CACHE.ptr()).keys.add(idx as usize);
             (key.cast_const(), strlen(key))
         } else {
@@ -169,7 +169,7 @@ pub unsafe fn schar_len(sc: schar_T) -> size_t {
     unsafe {
         if schar_high(sc) {
             let idx = schar_idx(sc);
-            assert!(idx < (*GLYPH_CACHE.ptr()).h.n_keys, "idx < n_keys");
+            debug_assert!(idx < (*GLYPH_CACHE.ptr()).h.n_keys, "idx < n_keys");
             strlen((*GLYPH_CACHE.ptr()).keys.add(idx as usize))
         } else {
             strnlen((&raw const sc).cast::<c_char>(), 4)
@@ -199,7 +199,7 @@ pub unsafe fn schar_cells(sc: schar_T) -> c_int {
 /// `sc` must be a glyph this process produced.
 unsafe fn schar_get_first_byte(sc: schar_T) -> c_char {
     unsafe {
-        assert!(
+        debug_assert!(
             !(schar_high(sc) && schar_idx(sc) >= (*GLYPH_CACHE.ptr()).h.n_keys),
             "!(schar_high(sc) && schar_idx(sc) >= glyph_cache.h.n_keys)"
         );

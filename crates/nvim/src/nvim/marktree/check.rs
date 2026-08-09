@@ -42,7 +42,7 @@ pub unsafe extern "C" fn marktree_check(mut b: *mut MarkTree) {
         &(*b).meta_root,
     );
     debug_assert!((*b).n_keys == nkeys, "b->n_keys == nkeys");
-    assert!(
+    debug_assert!(
         (*b).n_keys
             == (*(&raw mut (*b).id2node as *mut Map_uint64_t_ptr_t))
                 .set
@@ -59,7 +59,7 @@ pub unsafe extern "C" fn marktree_check_node(
     mut last_right: *mut bool,
     meta_node_ref: &MetaCount,
 ) -> size_t {
-    assert!(
+    debug_assert!(
         (*x).n <= 2 as int32_t * MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t - 1 as int32_t,
         "x->n <= 2 * T - 1"
     );
@@ -95,24 +95,24 @@ pub unsafe extern "C" fn marktree_check_node(
                 &mut *last,
             );
         }
-        assert!(
+        debug_assert!(
             pos_leq(*last, (*x).key[i as usize].pos),
             "pos_leq(*last, x->key[i].pos)"
         );
         if (*last).row == (*x).key[i as usize].pos.row
             && (*last).col == (*x).key[i as usize].pos.col
         {
-            assert!(
+            debug_assert!(
                 !*last_right || mt_right((*x).key[i as usize]) as ::core::ffi::c_int != 0,
                 "!*last_right || mt_right(x->key[i])"
             );
         }
         *last_right = mt_right((*x).key[i as usize]);
-        assert!(
+        debug_assert!(
             (*x).key[i as usize].pos.col >= 0 as int32_t,
             "x->key[i].pos.col >= 0"
         );
-        assert!(
+        debug_assert!(
             id2node(b, mt_lookup_key((*x).key[i as usize])) == x,
             "pmap_get(uint64_t)(b->id2node, mt_lookup_key(x->key[i])) == x"
         );
@@ -129,11 +129,11 @@ pub unsafe extern "C" fn marktree_check_node(
         unrelative((*x).key[((*x).n - 1 as int32_t) as usize].pos, &mut *last);
         let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while (i_0 as int32_t) < (*x).n + 1 as int32_t {
-            assert!(
+            debug_assert!(
                 (*(*inner(x)).i_ptr[i_0 as usize]).parent == x,
                 "x->ptr[i]->parent == x"
             );
-            assert!(
+            debug_assert!(
                 (*(*inner(x)).i_ptr[i_0 as usize]).p_idx as ::core::ffi::c_int == i_0,
                 "x->ptr[i]->p_idx == i"
             );
@@ -144,7 +144,7 @@ pub unsafe extern "C" fn marktree_check_node(
             );
             let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while j < i_0 {
-                assert!(
+                debug_assert!(
                     (*inner(x)).i_ptr[i_0 as usize] != (*inner(x)).i_ptr[j as usize],
                     "x->ptr[i] != x->ptr[j]"
                 );
@@ -155,7 +155,7 @@ pub unsafe extern "C" fn marktree_check_node(
     } else if (*x).n > 0 as int32_t {
         *last = (*x).key[((*x).n - 1 as int32_t) as usize].pos;
     }
-    assert!(
+    debug_assert!(
         *meta_node_ref == meta_describe_node(x),
         "meta_node_ref[m] == meta_node[m]"
     );
@@ -378,7 +378,7 @@ pub unsafe extern "C" fn marktree_del_pair_test(
     }; 1];
     marktree_lookup_ns(b, ns, id, false, &raw mut itr as *mut MarkTreeIter);
     let mut other: uint64_t = marktree_del_itr(b, &raw mut itr as *mut MarkTreeIter, false);
-    assert!(other != 0, "other");
+    debug_assert!(other != 0, "other");
     marktree_lookup(b, other, &raw mut itr as *mut MarkTreeIter);
     marktree_del_itr(b, &raw mut itr as *mut MarkTreeIter, false);
 }

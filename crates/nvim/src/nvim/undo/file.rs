@@ -546,7 +546,7 @@ pub(crate) unsafe extern "C" fn undo_write_bytes(
     undo_write(bi, buf.as_mut_ptr(), len)
 }
 pub(crate) unsafe extern "C" fn put_header_ptr(mut bi: *mut bufinfo_T, mut uhp: *mut u_header_T) {
-    assert!(
+    debug_assert!(
         uhp.is_null() || (*uhp).uh_seq >= 0,
         "uhp == NULL || uhp->uh_seq >= 0"
     );

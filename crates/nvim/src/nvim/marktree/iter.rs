@@ -225,7 +225,7 @@ pub unsafe extern "C" fn marktree_itr_next_skip(
                     *oldbase.offset((*itr).lvl as isize);
             }
             (*itr).s[(*itr).lvl as usize].i = (*itr).i;
-            assert!(
+            debug_assert!(
                 (*(*inner((*itr).x)).i_ptr[(*itr).i as usize]).parent == (*itr).x,
                 "itr->x->ptr[itr->i]->parent == itr->x"
             );
@@ -396,7 +396,7 @@ pub unsafe extern "C" fn marktree_itr_prev(
                 );
             }
             (*itr).s[(*itr).lvl as usize].i = (*itr).i;
-            assert!(
+            debug_assert!(
                 (*(*inner((*itr).x)).i_ptr[(*itr).i as usize]).parent == (*itr).x,
                 "itr->x->ptr[itr->i]->parent == itr->x"
             );
@@ -610,7 +610,7 @@ pub unsafe extern "C" fn marktree_itr_set_node(
     while !(*n).parent.is_null() {
         let mut p: *mut MTNode = (*n).parent;
         i = (*n).p_idx as ::core::ffi::c_int;
-        assert!((*inner(p)).i_ptr[i as usize] == n, "p->ptr[i] == n");
+        debug_assert!((*inner(p)).i_ptr[i as usize] == n, "p->ptr[i] == n");
         if !itr.is_null() {
             (*itr)
                 .s[((*(*b).root).level as ::core::ffi::c_int
@@ -647,7 +647,7 @@ pub unsafe extern "C" fn marktree_itr_fix_pos(mut b: *mut MarkTree, mut itr: *mu
                 (*x).key[(i - 1 as ::core::ffi::c_int) as usize].pos,
             );
         }
-        assert!((*x).level != 0, "x->level");
+        debug_assert!((*x).level != 0, "x->level");
         x = (*inner(x)).i_ptr[i as usize];
         lvl += 1;
     }

@@ -97,7 +97,7 @@ pub unsafe fn show_cursor_info_later(force: bool) {
 /// `must_redraw` is the maximum over all windows, so it only ever rises here;
 /// [`update_screen`] resets it.
 pub unsafe fn redraw_later(wp: *mut win_T, redr_type: c_int) {
-    assert!(!wp.is_null() || exiting.get(), "wp != NULL || exiting");
+    debug_assert!(!wp.is_null() || exiting.get(), "wp != NULL || exiting");
     // SAFETY: a live window, unless the editor is exiting -- in which case the
     // guard below returns before the pointer is used.
     unsafe {
@@ -330,7 +330,7 @@ pub unsafe fn win_redraw_last_status(frp: *const frame_T) {
                 }
             }
             layout => {
-                assert!(layout == FR_COL, "frp->fr_layout == FR_COL");
+                debug_assert!(layout == FR_COL, "frp->fr_layout == FR_COL");
                 let mut last = (*frp).fr_child;
                 while !(*last).fr_next.is_null() {
                     last = (*last).fr_next;

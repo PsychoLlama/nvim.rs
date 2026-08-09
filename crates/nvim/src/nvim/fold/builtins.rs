@@ -153,7 +153,7 @@ pub unsafe extern "C" fn f_foldtextresult(
             text = xstrdup(text);
         }
         if vt.size > 0 {
-            assert!(*text as c_int == '\0' as c_int, "*text == NUL");
+            debug_assert!(*text as c_int == '\0' as c_int, "*text == NUL");
             let mut i: size_t = 0;
             while i < vt.size {
                 let mut attr: c_int = 0;

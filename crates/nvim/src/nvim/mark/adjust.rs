@@ -370,7 +370,7 @@ pub unsafe extern "C" fn mark_col_adjust(
     // Upstream asserts this once per adjusted mark; `col_amount` does not
     // change, and the upper half is vacuous for a `colnr_T`. What it really
     // guards is `-col_amount` below.
-    assert!(col_amount > colnr_T::MIN, "col_amount > INT_MIN");
+    debug_assert!(col_amount > colnr_T::MIN, "col_amount > INT_MIN");
     let shift = ColShift {
         lnum,
         mincol,

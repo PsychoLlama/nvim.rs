@@ -137,7 +137,7 @@ pub unsafe extern "C" fn u_blockfree(mut buf: *mut buf_T) {
     while !(*buf).b_u_oldhead.is_null() {
         let mut previous_oldhead: *mut u_header_T = (*buf).b_u_oldhead;
         u_freeheader(buf, (*buf).b_u_oldhead, ptr::null_mut());
-        assert!(
+        debug_assert!(
             (*buf).b_u_oldhead != previous_oldhead,
             "buf->b_u_oldhead != previous_oldhead"
         );

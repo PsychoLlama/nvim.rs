@@ -811,7 +811,7 @@ pub unsafe fn win_draw_end(
     endrow: c_int,
     hl: hlf_T,
 ) {
-    assert!(hl >= 0 && hl < HLF_COUNT, "hl >= 0 && hl < HLF_COUNT");
+    debug_assert!(hl >= 0 && hl < HLF_COUNT, "hl >= 0 && hl < HLF_COUNT");
     // SAFETY: a live window; each grid batch is opened and flushed per row.
     unsafe {
         let view_width = (*wp).w_view_width;

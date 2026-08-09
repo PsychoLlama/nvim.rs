@@ -10,7 +10,7 @@ use super::*;
 
 /// `,`: valid inside a call, a lambda argument list, a list or a dictionary.
 pub(super) unsafe fn comma(p: &mut ExprParser) -> Flow {
-    assert!(
+    debug_assert!(
         !(p.want_node == kENodeValue && p.cur_pt == kEPTLambdaArguments),
         "!(want_node == kENodeValue && cur_pt == kEPTLambdaArguments)"
     );
@@ -24,8 +24,8 @@ pub(super) unsafe fn comma(p: &mut ExprParser) -> Flow {
         p.want_node = kENodeOperator;
     }
     if p.cur_pt == kEPTLambdaArguments {
-        assert!(!p.lambda_node.is_null(), "lambda_node != NULL");
-        assert!(
+        debug_assert!(!p.lambda_node.is_null(), "lambda_node != NULL");
+        debug_assert!(
             (*p.lambda_node).data.fig.type_guesses.allow_lambda,
             "lambda_node->data.fig.type_guesses.allow_lambda"
         );
@@ -55,7 +55,7 @@ unsafe fn comma_has_a_home(p: &ExprParser) -> bool {
         let node_type = (**slot).type_0;
         let lvl = node_lvl(**slot);
         if node_type == kExprNodeLambda {
-            assert!(
+            debug_assert!(
                 p.cur_pt == kEPTLambdaArguments && p.want_node == kENodeOperator,
                 "cur_pt == kEPTLambdaArguments && want_node == kENodeOperator"
             );
@@ -108,11 +108,11 @@ pub(super) unsafe fn colon(p: &mut ExprParser) -> Flow {
                 is_ternary = true;
                 (**slot).data.ter.got_colon = true;
                 p.add_value_if_missing(EXPECTED_VALUE);
-                assert!(
+                debug_assert!(
                     !(**slot).children.is_null(),
                     "(*eastnode_p)->children != NULL"
                 );
-                assert!(
+                debug_assert!(
                     (*(**slot).children).next.is_null(),
                     "(*eastnode_p)->children->next == NULL"
                 );
@@ -147,7 +147,7 @@ pub(super) unsafe fn colon(p: &mut ExprParser) -> Flow {
         true
     };
     if is_subscript {
-        assert!(p.ast_stack.len() > 1, "kv_size(ast_stack) > 1");
+        debug_assert!(p.ast_stack.len() > 1, "kv_size(ast_stack) > 1");
         if p.want_node == kENodeValue && (**stack_top(&p.ast_stack, 1)).type_0 == kExprNodeSubscript
         {
             // Colon immediately following the subscript start: an empty
@@ -276,20 +276,20 @@ unsafe fn closing_bracket(p: &mut ExprParser) -> Flow {
         }
     }
     if unexpected {
-        assert!(p.ast_stack.is_empty(), "!kv_size(ast_stack)");
+        debug_assert!(p.ast_stack.is_empty(), "!kv_size(ast_stack)");
         p.error(c"E15: Unexpected closing figure brace: %.*s");
         p.hl_token(hl!(p, List));
     }
     p.ast_stack.push(new_top_node_p);
     p.want_node = kENodeOperator;
     if p.ast_stack.len() <= p.asgn_level {
-        assert!(
+        debug_assert!(
             p.ast_stack.len() == p.asgn_level,
             "kv_size(ast_stack) == asgn_level"
         );
         p.asgn_level = 0;
         if p.cur_pt == kEPTAssignment {
-            assert!(!(*p.ast).err.msg.is_null(), "ast.err.msg");
+            debug_assert!(!(*p.ast).err.msg.is_null(), "ast.err.msg");
         } else if p.cur_pt == kEPTExpr
             && p.pt_stack.len() > 1
             && pt_is_assignment(p.pt_stack[p.pt_stack.len() - 2])
@@ -395,7 +395,7 @@ unsafe fn closing_parenthesis(p: &mut ExprParser) -> Flow {
         // enclosed in ().
         (*node).children = *new_top_node_p;
         *new_top_node_p = node;
-        assert!((*node).next.is_null(), "cur_node->next == NULL");
+        debug_assert!((*node).next.is_null(), "cur_node->next == NULL");
     }
     p.ast_stack.push(new_top_node_p);
     p.want_node = kENodeOperator;

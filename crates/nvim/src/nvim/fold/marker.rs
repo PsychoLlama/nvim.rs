@@ -181,7 +181,7 @@ pub(super) unsafe extern "C" fn foldDelMarker(
                         .wrapping_sub(len)
                         .wrapping_add(1),
                 ) as *mut c_char;
-                assert!(p >= line, "p >= line");
+                debug_assert!(p >= line, "p >= line");
                 memcpy(
                     newline as *mut c_void,
                     line as *const c_void,

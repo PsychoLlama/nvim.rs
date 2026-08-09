@@ -371,7 +371,7 @@ pub(super) unsafe extern "C" fn mark_line(mut mp: *mut pos_T, mut lead_len: c_in
     if (*mp).lnum == 0 || (*mp).lnum > (*curbuf.get()).b_ml.ml_line_count {
         return xstrdup(c"-invalid-".as_ptr());
     }
-    assert!(Columns.get() >= 0, "Columns >= 0");
+    debug_assert!(Columns.get() >= 0, "Columns >= 0");
     let mut s: *mut c_char = xstrnsave(
         skipwhite(ml_get((*mp).lnum)),
         (Columns.get() as size_t).wrapping_mul(5),

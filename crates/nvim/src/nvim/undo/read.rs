@@ -384,21 +384,21 @@ pub unsafe extern "C" fn u_read_undo(
                                                         && (old_idx as c_int) < 0
                                                         && (*uhp_0).uh_seq == old_header_seq
                                                     {
-                                                        assert!(i <= 32767, "i <= INT16_MAX");
+                                                        debug_assert!(i <= 32767, "i <= INT16_MAX");
                                                         old_idx = i as int16_t;
                                                     }
                                                     if new_header_seq > 0
                                                         && (new_idx as c_int) < 0
                                                         && (*uhp_0).uh_seq == new_header_seq
                                                     {
-                                                        assert!(i <= 32767, "i <= INT16_MAX");
+                                                        debug_assert!(i <= 32767, "i <= INT16_MAX");
                                                         new_idx = i as int16_t;
                                                     }
                                                     if cur_header_seq > 0
                                                         && (cur_idx as c_int) < 0
                                                         && (*uhp_0).uh_seq == cur_header_seq
                                                     {
-                                                        assert!(i <= 32767, "i <= INT16_MAX");
+                                                        debug_assert!(i <= 32767, "i <= INT16_MAX");
                                                         cur_idx = i as int16_t;
                                                     }
                                                 }

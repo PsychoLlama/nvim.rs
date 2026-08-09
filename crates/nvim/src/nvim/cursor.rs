@@ -127,7 +127,7 @@ unsafe fn coladvance2(
 ) -> bool {
     // Inserting the spaces edits the buffer, which only the current window
     // may do.
-    assert!(
+    debug_assert!(
         wp == curwin.get() || !addspaces,
         "wp == curwin || !addspaces"
     );
