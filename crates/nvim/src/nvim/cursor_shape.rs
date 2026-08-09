@@ -43,7 +43,7 @@ static e_digit_expected: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new
 });
 pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
     cursorentry_T {
-        full_name: b"normal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        full_name: c"normal".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -52,11 +52,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 250 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"n".as_ptr() as *mut ::core::ffi::c_char,
         used_for: (SHAPE_CURSOR + SHAPE_MOUSE) as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"visual\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        full_name: c"visual".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -65,11 +65,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 250 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"v\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"v".as_ptr() as *mut ::core::ffi::c_char,
         used_for: (SHAPE_CURSOR + SHAPE_MOUSE) as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"insert\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        full_name: c"insert".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -78,11 +78,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 250 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"i\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"i".as_ptr() as *mut ::core::ffi::c_char,
         used_for: (SHAPE_CURSOR + SHAPE_MOUSE) as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"replace\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        full_name: c"replace".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -91,12 +91,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 250 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"r\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"r".as_ptr() as *mut ::core::ffi::c_char,
         used_for: (SHAPE_CURSOR + SHAPE_MOUSE) as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"cmdline_normal\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: c"cmdline_normal".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -105,12 +104,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 250 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"c\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"c".as_ptr() as *mut ::core::ffi::c_char,
         used_for: (SHAPE_CURSOR + SHAPE_MOUSE) as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"cmdline_insert\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: c"cmdline_insert".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -119,12 +117,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 250 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"ci\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"ci".as_ptr() as *mut ::core::ffi::c_char,
         used_for: (SHAPE_CURSOR + SHAPE_MOUSE) as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"cmdline_replace\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: c"cmdline_replace".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -133,11 +130,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 250 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"cr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"cr".as_ptr() as *mut ::core::ffi::c_char,
         used_for: (SHAPE_CURSOR + SHAPE_MOUSE) as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"operator\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        full_name: c"operator".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -146,12 +143,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 250 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"o\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"o".as_ptr() as *mut ::core::ffi::c_char,
         used_for: (SHAPE_CURSOR + SHAPE_MOUSE) as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"visual_select\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: c"visual_select".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -160,12 +156,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 250 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"ve\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"ve".as_ptr() as *mut ::core::ffi::c_char,
         used_for: (SHAPE_CURSOR + SHAPE_MOUSE) as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"cmdline_hover\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: c"cmdline_hover".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -174,12 +169,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 0 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"e\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"e".as_ptr() as *mut ::core::ffi::c_char,
         used_for: SHAPE_MOUSE as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"statusline_hover\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: c"statusline_hover".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -188,12 +182,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 0 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"s\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"s".as_ptr() as *mut ::core::ffi::c_char,
         used_for: SHAPE_MOUSE as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"statusline_drag\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: c"statusline_drag".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -202,12 +195,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 0 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"sd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"sd".as_ptr() as *mut ::core::ffi::c_char,
         used_for: SHAPE_MOUSE as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"vsep_hover\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: c"vsep_hover".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -216,12 +208,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 0 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"vs\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"vs".as_ptr() as *mut ::core::ffi::c_char,
         used_for: SHAPE_MOUSE as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"vsep_drag\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: c"vsep_drag".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -230,11 +221,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 0 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"vd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"vd".as_ptr() as *mut ::core::ffi::c_char,
         used_for: SHAPE_MOUSE as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"more\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        full_name: c"more".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -243,12 +234,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 0 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"m\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"m".as_ptr() as *mut ::core::ffi::c_char,
         used_for: SHAPE_MOUSE as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"more_lastline\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: c"more_lastline".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -257,12 +247,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 0 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"ml\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"ml".as_ptr() as *mut ::core::ffi::c_char,
         used_for: SHAPE_MOUSE as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"showmatch\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: c"showmatch".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -271,11 +260,11 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 100 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"sm\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"sm".as_ptr() as *mut ::core::ffi::c_char,
         used_for: SHAPE_CURSOR as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"terminal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        full_name: c"terminal".as_ptr() as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -284,7 +273,7 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
         blinkoff: 0 as ::core::ffi::c_int,
         id: 0 as ::core::ffi::c_int,
         id_lm: 0 as ::core::ffi::c_int,
-        name: b"t\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"t".as_ptr() as *mut ::core::ffi::c_char,
         used_for: SHAPE_CURSOR as ::core::ffi::c_char,
     },
 ]);
@@ -306,7 +295,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
         let c2rust_fresh0 = dic.size;
         dic.size = dic.size.wrapping_add(1);
         *dic.items.add(c2rust_fresh0) = key_value_pair {
-            key: cstr_as_string(b"name\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"name".as_ptr()),
             value: object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed {
@@ -317,7 +306,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
         let c2rust_fresh1 = dic.size;
         dic.size = dic.size.wrapping_add(1);
         *dic.items.add(c2rust_fresh1) = key_value_pair {
-            key: cstr_as_string(b"short_name\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"short_name".as_ptr()),
             value: object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed {
@@ -329,7 +318,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             let c2rust_fresh2 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.add(c2rust_fresh2) = key_value_pair {
-                key: cstr_as_string(b"mouse_shape\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"mouse_shape".as_ptr()),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -345,24 +334,22 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             };
             match (*cur).shape as ::core::ffi::c_uint {
                 0 => {
-                    shape_str = cstr_as_string(b"block\0".as_ptr() as *const ::core::ffi::c_char);
+                    shape_str = cstr_as_string(c"block".as_ptr());
                 }
                 2 => {
-                    shape_str =
-                        cstr_as_string(b"vertical\0".as_ptr() as *const ::core::ffi::c_char);
+                    shape_str = cstr_as_string(c"vertical".as_ptr());
                 }
                 1 => {
-                    shape_str =
-                        cstr_as_string(b"horizontal\0".as_ptr() as *const ::core::ffi::c_char);
+                    shape_str = cstr_as_string(c"horizontal".as_ptr());
                 }
                 _ => {
-                    shape_str = cstr_as_string(b"unknown\0".as_ptr() as *const ::core::ffi::c_char);
+                    shape_str = cstr_as_string(c"unknown".as_ptr());
                 }
             }
             let c2rust_fresh3 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.add(c2rust_fresh3) = key_value_pair {
-                key: cstr_as_string(b"cursor_shape\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"cursor_shape".as_ptr()),
                 value: object {
                     type_0: kObjectTypeString,
                     data: C2Rust_Unnamed { string: shape_str },
@@ -371,7 +358,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             let c2rust_fresh4 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.add(c2rust_fresh4) = key_value_pair {
-                key: cstr_as_string(b"cell_percentage\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"cell_percentage".as_ptr()),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -382,7 +369,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             let c2rust_fresh5 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.add(c2rust_fresh5) = key_value_pair {
-                key: cstr_as_string(b"blinkwait\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"blinkwait".as_ptr()),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -393,7 +380,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             let c2rust_fresh6 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.add(c2rust_fresh6) = key_value_pair {
-                key: cstr_as_string(b"blinkon\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"blinkon".as_ptr()),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -404,7 +391,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             let c2rust_fresh7 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.add(c2rust_fresh7) = key_value_pair {
-                key: cstr_as_string(b"blinkoff\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"blinkoff".as_ptr()),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -415,7 +402,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             let c2rust_fresh8 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.add(c2rust_fresh8) = key_value_pair {
-                key: cstr_as_string(b"hl_id\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"hl_id".as_ptr()),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -426,7 +413,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             let c2rust_fresh9 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.add(c2rust_fresh9) = key_value_pair {
-                key: cstr_as_string(b"id_lm\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"id_lm".as_ptr()),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -437,7 +424,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             let c2rust_fresh10 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.add(c2rust_fresh10) = key_value_pair {
-                key: cstr_as_string(b"attr_id\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"attr_id".as_ptr()),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -452,7 +439,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             let c2rust_fresh11 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.add(c2rust_fresh11) = key_value_pair {
-                key: cstr_as_string(b"attr_id_lm\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"attr_id_lm".as_ptr()),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -496,10 +483,10 @@ pub unsafe extern "C" fn parse_shape_opt(
             let mut colonp: *mut ::core::ffi::c_char = vim_strchr(modep, ':' as ::core::ffi::c_int);
             let mut commap: *mut ::core::ffi::c_char = vim_strchr(modep, ',' as ::core::ffi::c_int);
             if colonp.is_null() || !commap.is_null() && commap < colonp {
-                return b"E545: Missing colon\0".as_ptr() as *const ::core::ffi::c_char;
+                return c"E545: Missing colon".as_ptr();
             }
             if colonp == modep {
-                return b"E546: Illegal mode\0".as_ptr() as *const ::core::ffi::c_char;
+                return c"E546: Illegal mode".as_ptr();
             }
             let mut all_idx: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
             while modep < colonp || all_idx >= 0 as ::core::ffi::c_int {
@@ -545,7 +532,7 @@ pub unsafe extern "C" fn parse_shape_opt(
                                 & what
                                 == 0 as ::core::ffi::c_int
                         {
-                            return b"E546: Illegal mode\0".as_ptr() as *const ::core::ffi::c_char;
+                            return c"E546: Illegal mode".as_ptr();
                         }
                         if len == 2 as ::core::ffi::c_int
                             && *modep.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -571,38 +558,35 @@ pub unsafe extern "C" fn parse_shape_opt(
                     len = 0 as ::core::ffi::c_int;
                     if strncasecmp(
                         p,
-                        b"ver\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                        c"ver".as_ptr() as *mut ::core::ffi::c_char,
                         3 as ::core::ffi::c_int as size_t,
                     ) == 0 as ::core::ffi::c_int
                     {
                         len = 3 as ::core::ffi::c_int;
                     } else if strncasecmp(
                         p,
-                        b"hor\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                        c"hor".as_ptr() as *mut ::core::ffi::c_char,
                         3 as ::core::ffi::c_int as size_t,
                     ) == 0 as ::core::ffi::c_int
                     {
                         len = 3 as ::core::ffi::c_int;
                     } else if strncasecmp(
                         p,
-                        b"blinkwait\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
+                        c"blinkwait".as_ptr() as *mut ::core::ffi::c_char,
                         9 as ::core::ffi::c_int as size_t,
                     ) == 0 as ::core::ffi::c_int
                     {
                         len = 9 as ::core::ffi::c_int;
                     } else if strncasecmp(
                         p,
-                        b"blinkon\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
+                        c"blinkon".as_ptr() as *mut ::core::ffi::c_char,
                         7 as ::core::ffi::c_int as size_t,
                     ) == 0 as ::core::ffi::c_int
                     {
                         len = 7 as ::core::ffi::c_int;
                     } else if strncasecmp(
                         p,
-                        b"blinkoff\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
+                        c"blinkoff".as_ptr() as *mut ::core::ffi::c_char,
                         8 as ::core::ffi::c_int as size_t,
                     ) == 0 as ::core::ffi::c_int
                     {
@@ -618,8 +602,7 @@ pub unsafe extern "C" fn parse_shape_opt(
                             getdigits_int(&raw mut p, false_0 != 0, 0 as ::core::ffi::c_int);
                         if len == 3 as ::core::ffi::c_int {
                             if n == 0 as ::core::ffi::c_int {
-                                return b"E549: Illegal percentage\0".as_ptr()
-                                    as *const ::core::ffi::c_char;
+                                return c"E549: Illegal percentage".as_ptr();
                             }
                             if round == 2 as ::core::ffi::c_int {
                                 if (if i < 'A' as ::core::ffi::c_int
@@ -647,8 +630,7 @@ pub unsafe extern "C" fn parse_shape_opt(
                         }
                     } else if strncasecmp(
                         p,
-                        b"block\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
+                        c"block".as_ptr() as *mut ::core::ffi::c_char,
                         5 as ::core::ffi::c_int as size_t,
                     ) == 0 as ::core::ffi::c_int
                     {

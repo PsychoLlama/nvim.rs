@@ -106,17 +106,17 @@ pub unsafe extern "C" fn state_enter(mut s: *mut VimState) {
                 == -(253 as ::core::ffi::c_int
                     + ((KE_EVENT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
             {
-                b"K_EVENT\0".as_ptr() as *const ::core::ffi::c_char
+                c"K_EVENT".as_ptr()
             } else {
                 get_special_key_name(key, mod_mask.get()) as *const ::core::ffi::c_char
             }) as *mut ::core::ffi::c_char;
             logmsg(
                 LOGLVL_DBG,
                 ::core::ptr::null::<::core::ffi::c_char>(),
-                b"state_enter\0".as_ptr() as *const ::core::ffi::c_char,
+                c"state_enter".as_ptr(),
                 97 as ::core::ffi::c_int,
                 true_0 != 0,
-                b"input: %s\0".as_ptr() as *const ::core::ffi::c_char,
+                c"input: %s".as_ptr(),
                 keyname,
             );
             let mut execute_result: ::core::ffi::c_int =
@@ -326,13 +326,13 @@ pub unsafe extern "C" fn may_trigger_modechanged() {
     let mut v_event: *mut dict_T = get_v_event(&raw mut save_v_event);
     tv_dict_add_str(
         v_event,
-        b"new_mode\0".as_ptr() as *const ::core::ffi::c_char,
+        c"new_mode".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
         &raw mut curr_mode as *mut ::core::ffi::c_char,
     );
     tv_dict_add_str(
         v_event,
-        b"old_mode\0".as_ptr() as *const ::core::ffi::c_char,
+        c"old_mode".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
         last_mode.ptr() as *mut ::core::ffi::c_char,
     );
@@ -340,7 +340,7 @@ pub unsafe extern "C" fn may_trigger_modechanged() {
     vim_snprintf(
         &raw mut pattern_buf as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 8]>(),
-        b"%s:%s\0".as_ptr() as *const ::core::ffi::c_char,
+        c"%s:%s".as_ptr(),
         last_mode.ptr() as *mut ::core::ffi::c_char,
         &raw mut curr_mode as *mut ::core::ffi::c_char,
     );
@@ -372,13 +372,13 @@ pub unsafe extern "C" fn may_trigger_safestate(mut safe: bool) {
         logmsg(
             LOGLVL_DBG,
             ::core::ptr::null::<::core::ffi::c_char>(),
-            b"may_trigger_safestate\0".as_ptr() as *const ::core::ffi::c_char,
+            c"may_trigger_safestate".as_ptr(),
             305 as ::core::ffi::c_int,
             true_0 != 0,
             if is_safe as ::core::ffi::c_int != 0 {
-                b"SafeState: Start triggering\0".as_ptr() as *const ::core::ffi::c_char
+                c"SafeState: Start triggering".as_ptr()
             } else {
-                b"SafeState: Stop triggering\0".as_ptr() as *const ::core::ffi::c_char
+                c"SafeState: Stop triggering".as_ptr()
             },
         );
     }
@@ -398,10 +398,10 @@ pub unsafe extern "C" fn state_no_longer_safe(mut reason: *const ::core::ffi::c_
         logmsg(
             LOGLVL_DBG,
             ::core::ptr::null::<::core::ffi::c_char>(),
-            b"state_no_longer_safe\0".as_ptr() as *const ::core::ffi::c_char,
+            c"state_no_longer_safe".as_ptr(),
             319 as ::core::ffi::c_int,
             true_0 != 0,
-            b"SafeState reset: %s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"SafeState reset: %s".as_ptr(),
             reason,
         );
     }

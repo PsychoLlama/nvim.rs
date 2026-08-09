@@ -90,7 +90,7 @@ unsafe extern "C" fn prepare_assert_error(mut gap: *mut garray_T) {
         .es_lnum
             > 0 as linenr_T
         {
-            ga_concat(gap, b" \0".as_ptr() as *const ::core::ffi::c_char);
+            ga_concat(gap, c" ".as_ptr());
         }
     }
     if (*((*exestack.ptr()).ga_data as *mut estack_T)
@@ -108,7 +108,7 @@ unsafe extern "C" fn prepare_assert_error(mut gap: *mut garray_T) {
                         .wrapping_rem(::core::mem::size_of::<::core::ffi::c_char>())
                         == 0) as ::core::ffi::c_int as size_t,
                 ),
-            b"line %ld\0".as_ptr() as *const ::core::ffi::c_char,
+            c"line %ld".as_ptr(),
             (*((*exestack.ptr()).ga_data as *mut estack_T)
                 .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
             .es_lnum as int64_t,
@@ -123,7 +123,7 @@ unsafe extern "C" fn prepare_assert_error(mut gap: *mut garray_T) {
     {
         ga_concat_len(
             gap,
-            b": \0".as_ptr() as *const ::core::ffi::c_char,
+            c": ".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
         );
     }
@@ -153,49 +153,49 @@ unsafe extern "C" fn ga_concat_esc(
         BS => {
             ga_concat_len(
                 gap,
-                b"\\b\0".as_ptr() as *const ::core::ffi::c_char,
+                c"\\b".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
             );
         }
         ESC => {
             ga_concat_len(
                 gap,
-                b"\\e\0".as_ptr() as *const ::core::ffi::c_char,
+                c"\\e".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
             );
         }
         FF => {
             ga_concat_len(
                 gap,
-                b"\\f\0".as_ptr() as *const ::core::ffi::c_char,
+                c"\\f".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
             );
         }
         NL => {
             ga_concat_len(
                 gap,
-                b"\\n\0".as_ptr() as *const ::core::ffi::c_char,
+                c"\\n".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
             );
         }
         TAB => {
             ga_concat_len(
                 gap,
-                b"\\t\0".as_ptr() as *const ::core::ffi::c_char,
+                c"\\t".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
             );
         }
         CAR => {
             ga_concat_len(
                 gap,
-                b"\\r\0".as_ptr() as *const ::core::ffi::c_char,
+                c"\\r".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
             );
         }
         92 => {
             ga_concat_len(
                 gap,
-                b"\\\\\0".as_ptr() as *const ::core::ffi::c_char,
+                c"\\\\".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
             );
         }
@@ -206,7 +206,7 @@ unsafe extern "C" fn ga_concat_esc(
                 let mut buflen: size_t = vim_snprintf_safelen(
                     &raw mut buf as *mut ::core::ffi::c_char,
                     NUMBUFLEN as ::core::ffi::c_int as size_t,
-                    b"\\x%02x\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"\\x%02x".as_ptr(),
                     *p as ::core::ffi::c_int,
                 );
                 ga_concat_len(gap, &raw mut buf as *mut ::core::ffi::c_char, buflen);
@@ -224,7 +224,7 @@ unsafe extern "C" fn ga_concat_shorten_esc(
     if str.is_null() {
         ga_concat_len(
             gap,
-            b"NULL\0".as_ptr() as *const ::core::ffi::c_char,
+            c"NULL".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
         );
         return;
@@ -242,25 +242,25 @@ unsafe extern "C" fn ga_concat_shorten_esc(
         if same_len > 20 as ::core::ffi::c_int {
             ga_concat_len(
                 gap,
-                b"\\[\0".as_ptr() as *const ::core::ffi::c_char,
+                c"\\[".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
             );
             ga_concat_esc(gap, p, clen);
             ga_concat_len(
                 gap,
-                b" occurs \0".as_ptr() as *const ::core::ffi::c_char,
+                c" occurs ".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
             );
             let mut buflen: size_t = vim_snprintf_safelen(
                 &raw mut buf as *mut ::core::ffi::c_char,
                 NUMBUFLEN as ::core::ffi::c_int as size_t,
-                b"%d\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%d".as_ptr(),
                 same_len,
             );
             ga_concat_len(gap, &raw mut buf as *mut ::core::ffi::c_char, buflen);
             ga_concat_len(
                 gap,
-                b" times]\0".as_ptr() as *const ::core::ffi::c_char,
+                c" times]".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
             );
             p = s;
@@ -295,7 +295,7 @@ unsafe extern "C" fn fill_assert_error(
         xfree(tofree as *mut ::core::ffi::c_void);
         ga_concat_len(
             gap,
-            b": \0".as_ptr() as *const ::core::ffi::c_char,
+            c": ".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
         );
     }
@@ -305,7 +305,7 @@ unsafe extern "C" fn fill_assert_error(
     {
         ga_concat_len(
             gap,
-            b"Pattern \0".as_ptr() as *const ::core::ffi::c_char,
+            c"Pattern ".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
         );
     } else if atype as ::core::ffi::c_uint
@@ -313,13 +313,13 @@ unsafe extern "C" fn fill_assert_error(
     {
         ga_concat_len(
             gap,
-            b"Expected not equal to \0".as_ptr() as *const ::core::ffi::c_char,
+            c"Expected not equal to ".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 23]>().wrapping_sub(1 as size_t),
         );
     } else {
         ga_concat_len(
             gap,
-            b"Expected \0".as_ptr() as *const ::core::ffi::c_char,
+            c"Expected ".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
         );
     }
@@ -414,7 +414,7 @@ unsafe extern "C" fn fill_assert_error(
         {
             ga_concat_len(
                 gap,
-                b"'\0".as_ptr() as *const ::core::ffi::c_char,
+                c"'".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as size_t),
             );
         }
@@ -423,7 +423,7 @@ unsafe extern "C" fn fill_assert_error(
         {
             ga_concat_len(
                 gap,
-                b"'\0".as_ptr() as *const ::core::ffi::c_char,
+                c"'".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as size_t),
             );
         }
@@ -434,7 +434,7 @@ unsafe extern "C" fn fill_assert_error(
         {
             ga_concat_len(
                 gap,
-                b" does not match \0".as_ptr() as *const ::core::ffi::c_char,
+                c" does not match ".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 17]>().wrapping_sub(1 as size_t),
             );
         } else if atype as ::core::ffi::c_uint
@@ -442,13 +442,13 @@ unsafe extern "C" fn fill_assert_error(
         {
             ga_concat_len(
                 gap,
-                b" does match \0".as_ptr() as *const ::core::ffi::c_char,
+                c" does match ".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 13]>().wrapping_sub(1 as size_t),
             );
         } else {
             ga_concat_len(
                 gap,
-                b" but got \0".as_ptr() as *const ::core::ffi::c_char,
+                c" but got ".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
             );
         }
@@ -461,12 +461,12 @@ unsafe extern "C" fn fill_assert_error(
             let mut buflen: size_t = vim_snprintf_safelen(
                 &raw mut buf as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 100]>(),
-                b" - %d equal item%s omitted\0".as_ptr() as *const ::core::ffi::c_char,
+                c" - %d equal item%s omitted".as_ptr(),
                 omitted,
                 if omitted == 1 as ::core::ffi::c_int {
-                    b"\0".as_ptr() as *const ::core::ffi::c_char
+                    c"".as_ptr()
                 } else {
-                    b"s\0".as_ptr() as *const ::core::ffi::c_char
+                    c"s".as_ptr()
                 },
             );
             ga_concat_len(gap, &raw mut buf as *mut ::core::ffi::c_char, buflen);
@@ -590,9 +590,9 @@ unsafe extern "C" fn assert_bool(
             &raw mut ga,
             argvars.offset(1 as ::core::ffi::c_int as isize),
             if is_true as ::core::ffi::c_int != 0 {
-                b"True\0".as_ptr() as *const ::core::ffi::c_char
+                c"True".as_ptr()
             } else {
-                b"False\0".as_ptr() as *const ::core::ffi::c_char
+                c"False".as_ptr()
             },
             ::core::ptr::null_mut::<typval_T>(),
             argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -652,13 +652,13 @@ unsafe extern "C" fn assert_beeps(
         if no_beep {
             ga_concat_len(
                 &raw mut ga,
-                b"command did beep: \0".as_ptr() as *const ::core::ffi::c_char,
+                c"command did beep: ".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 19]>().wrapping_sub(1 as size_t),
             );
         } else {
             ga_concat_len(
                 &raw mut ga,
-                b"command did not beep: \0".as_ptr() as *const ::core::ffi::c_char,
+                c"command did not beep: ".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 23]>().wrapping_sub(1 as size_t),
             );
         }
@@ -739,7 +739,7 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
                     if c2 != EOF {
                         IObufflen = xstrlcpy(
                             IObuff.ptr() as *mut ::core::ffi::c_char,
-                            b"first file is shorter\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"first file is shorter".as_ptr(),
                             IOSIZE as size_t,
                         );
                     }
@@ -747,7 +747,7 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
                 } else if c2 == EOF {
                     IObufflen = xstrlcpy(
                         IObuff.ptr() as *mut ::core::ffi::c_char,
-                        b"second file is shorter\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"second file is shorter".as_ptr(),
                         IOSIZE as size_t,
                     );
                     break;
@@ -759,8 +759,7 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
                         IObufflen = vim_snprintf_safelen(
                             IObuff.ptr() as *mut ::core::ffi::c_char,
                             IOSIZE as size_t,
-                            b"difference at byte %ld, line %ld\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            c"difference at byte %ld, line %ld".as_ptr(),
                             count,
                             linecount,
                         );
@@ -818,7 +817,7 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
             xfree(tofree as *mut ::core::ffi::c_void);
             ga_concat_len(
                 &raw mut ga,
-                b": \0".as_ptr() as *const ::core::ffi::c_char,
+                c": ".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
             );
         }
@@ -832,7 +831,7 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
             line2[lineidx as usize] = NUL as ::core::ffi::c_char;
             ga_concat_len(
                 &raw mut ga,
-                b" after \"\0".as_ptr() as *const ::core::ffi::c_char,
+                c" after \"".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
             );
             ga_concat_len(
@@ -847,7 +846,7 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
             {
                 ga_concat_len(
                     &raw mut ga,
-                    b"\" vs \"\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"\" vs \"".as_ptr(),
                     ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
                 );
                 ga_concat_len(
@@ -858,7 +857,7 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
             }
             ga_concat_len(
                 &raw mut ga,
-                b"\"\0".as_ptr() as *const ::core::ffi::c_char,
+                c"\"".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as size_t),
             );
         }
@@ -900,7 +899,7 @@ pub unsafe extern "C" fn f_assert_exception(
         prepare_assert_error(&raw mut ga);
         ga_concat_len(
             &raw mut ga,
-            b"v:exception is not set\0".as_ptr() as *const ::core::ffi::c_char,
+            c"v:exception is not set".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 23]>().wrapping_sub(1 as size_t),
         );
         assert_error(&raw mut ga);
@@ -965,7 +964,7 @@ pub unsafe extern "C" fn f_assert_fails(
             prepare_assert_error(&raw mut ga);
             ga_concat_len(
                 &raw mut ga,
-                b"command did not fail: \0".as_ptr() as *const ::core::ffi::c_char,
+                c"command did not fail: ".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 23]>().wrapping_sub(1 as size_t),
             );
             assert_append_cmd_or_arg(&raw mut ga, argvars, cmd);
@@ -984,7 +983,7 @@ pub unsafe extern "C" fn f_assert_fails(
             let mut error_found_index: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
             let mut actual: *mut ::core::ffi::c_char = (if (*emsg_assert_fails_msg.ptr()).is_null()
             {
-                b"[unknown]\0".as_ptr() as *const ::core::ffi::c_char
+                c"[unknown]".as_ptr()
             } else {
                 emsg_assert_fails_msg.get() as *const ::core::ffi::c_char
             }) as *mut ::core::ffi::c_char;
@@ -1119,7 +1118,7 @@ pub unsafe extern "C" fn f_assert_fails(
                 );
                 ga_concat_len(
                     &raw mut ga,
-                    b": \0".as_ptr() as *const ::core::ffi::c_char,
+                    c": ".as_ptr(),
                     ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
                 );
                 assert_append_cmd_or_arg(&raw mut ga, argvars, cmd);
@@ -1187,7 +1186,7 @@ unsafe extern "C" fn assert_inrange(mut argvars: *mut typval_T) -> ::core::ffi::
             vim_snprintf(
                 &raw mut expected_str as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 200]>(),
-                b"range %g - %g,\0".as_ptr() as *const ::core::ffi::c_char,
+                c"range %g - %g,".as_ptr(),
                 flower,
                 fupper,
             );
@@ -1232,7 +1231,7 @@ unsafe extern "C" fn assert_inrange(mut argvars: *mut typval_T) -> ::core::ffi::
             vim_snprintf(
                 &raw mut expected_str_0 as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 200]>(),
-                b"range %ld - %ld,\0".as_ptr() as *const ::core::ffi::c_char,
+                c"range %ld - %ld,".as_ptr(),
                 lower,
                 upper,
             );

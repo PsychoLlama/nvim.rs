@@ -275,7 +275,7 @@ pub unsafe extern "C" fn modify_fname(
             *fnamelen = tail.offset_from(*fnamep) as size_t;
             if *fnamelen == 0 as size_t {
                 xfree(*bufp as *mut ::core::ffi::c_void);
-                tail = xstrdup(b".\0".as_ptr() as *const ::core::ffi::c_char);
+                tail = xstrdup(c".".as_ptr());
                 *fnamep = tail;
                 *bufp = *fnamep;
                 *fnamelen = 1 as size_t;
@@ -356,13 +356,12 @@ pub unsafe extern "C" fn modify_fname(
             break;
         }
         let mut didit: bool = false_0 != 0;
-        let mut flags: *mut ::core::ffi::c_char =
-            b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        let mut flags: *mut ::core::ffi::c_char = c"".as_ptr() as *mut ::core::ffi::c_char;
         s = src.add(*usedlen).offset(2 as ::core::ffi::c_int as isize);
         if *src.add((*usedlen).wrapping_add(1 as size_t)) as ::core::ffi::c_int
             == 'g' as ::core::ffi::c_int
         {
-            flags = b"g\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            flags = c"g".as_ptr() as *mut ::core::ffi::c_char;
             s = s.offset(1);
         }
         let c2rust_fresh0 = s;
@@ -453,21 +452,16 @@ pub unsafe extern "C" fn f_chdir(
     {
         let mut s: *const ::core::ffi::c_char =
             tv_get_string(argvars.offset(1 as ::core::ffi::c_int as isize));
-        if strcmp(s, b"global\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int
-        {
+        if strcmp(s, c"global".as_ptr()) == 0 as ::core::ffi::c_int {
             scope = kCdScopeGlobal;
-        } else if strcmp(s, b"tabpage\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int
-        {
+        } else if strcmp(s, c"tabpage".as_ptr()) == 0 as ::core::ffi::c_int {
             scope = kCdScopeTabpage;
-        } else if strcmp(s, b"window\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int
-        {
+        } else if strcmp(s, c"window".as_ptr()) == 0 as ::core::ffi::c_int {
             scope = kCdScopeWindow;
         } else {
             semsg_c!(
                 gettext(&raw const e_invargNval as *const ::core::ffi::c_char),
-                b"scope\0".as_ptr() as *const ::core::ffi::c_char,
+                c"scope".as_ptr(),
                 s,
             );
             return;
@@ -515,7 +509,7 @@ pub unsafe extern "C" fn f_delete(
             &raw mut nbuf as *mut ::core::ffi::c_char,
         );
     } else {
-        flags = b"\0".as_ptr() as *const ::core::ffi::c_char;
+        flags = c"".as_ptr();
     }
     if *flags as ::core::ffi::c_int == NUL {
         (*rettv).vval.v_number = (if os_remove(name) == 0 as ::core::ffi::c_int {
@@ -523,17 +517,13 @@ pub unsafe extern "C" fn f_delete(
         } else {
             -1 as ::core::ffi::c_int
         }) as varnumber_T;
-    } else if strcmp(flags, b"d\0".as_ptr() as *const ::core::ffi::c_char)
-        == 0 as ::core::ffi::c_int
-    {
+    } else if strcmp(flags, c"d".as_ptr()) == 0 as ::core::ffi::c_int {
         (*rettv).vval.v_number = (if os_rmdir(name) == 0 as ::core::ffi::c_int {
             0 as ::core::ffi::c_int
         } else {
             -1 as ::core::ffi::c_int
         }) as varnumber_T;
-    } else if strcmp(flags, b"rf\0".as_ptr() as *const ::core::ffi::c_char)
-        == 0 as ::core::ffi::c_int
-    {
+    } else if strcmp(flags, c"rf".as_ptr()) == 0 as ::core::ffi::c_int {
         (*rettv).vval.v_number = delete_recursive(name) as varnumber_T;
     } else {
         semsg_c!(
@@ -726,7 +716,7 @@ unsafe extern "C" fn findfilendir(
                 find_what,
                 (*curbuf.get()).b_ffname,
                 (if find_what == FINDFILE_DIR as ::core::ffi::c_int {
-                    b"\0".as_ptr() as *const ::core::ffi::c_char
+                    c"".as_ptr()
                 } else {
                     (*curbuf.get()).b_p_sua as *const ::core::ffi::c_char
                 }) as *mut ::core::ffi::c_char,
@@ -858,26 +848,21 @@ pub unsafe extern "C" fn f_getcwd(
     if scope_number[kCdScopeTabpage as ::core::ffi::c_int as usize] > 0 as ::core::ffi::c_int {
         tp = find_tabpage(scope_number[kCdScopeTabpage as ::core::ffi::c_int as usize]);
         if tp.is_null() {
-            emsg(gettext(
-                b"E5000: Cannot find tab number.\0".as_ptr() as *const ::core::ffi::c_char
-            ));
+            emsg(gettext(c"E5000: Cannot find tab number.".as_ptr()));
             return;
         }
     }
     if scope_number[kCdScopeWindow as ::core::ffi::c_int as usize] >= 0 as ::core::ffi::c_int {
         if scope_number[kCdScopeTabpage as ::core::ffi::c_int as usize] < 0 as ::core::ffi::c_int {
             emsg(gettext(
-                b"E5001: Higher scope cannot be -1 if lower scope is >= 0.\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"E5001: Higher scope cannot be -1 if lower scope is >= 0.".as_ptr(),
             ));
             return;
         }
         if scope_number[kCdScopeWindow as ::core::ffi::c_int as usize] > 0 as ::core::ffi::c_int {
             win = find_win_by_nr(argvars.offset(0 as ::core::ffi::c_int as isize), tp);
             if win.is_null() {
-                emsg(gettext(
-                    b"E5002: Cannot find window number.\0".as_ptr() as *const ::core::ffi::c_char
-                ));
+                emsg(gettext(c"E5002: Cannot find window number.".as_ptr()));
                 return;
             }
         }
@@ -917,7 +902,7 @@ pub unsafe extern "C" fn f_getcwd(
             }
         }
         if os_dirname(cwd, MAXPATHL as size_t) == FAIL {
-            from = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            from = c"".as_ptr() as *mut ::core::ffi::c_char;
         }
     }
     if !from.is_null() {
@@ -938,7 +923,7 @@ pub unsafe extern "C" fn f_getfperm(
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
     let mut file_perm: int32_t = os_getperm(filename);
     if file_perm >= 0 as int32_t {
-        perm = xstrdup(b"---------\0".as_ptr() as *const ::core::ffi::c_char);
+        perm = xstrdup(c"---------".as_ptr());
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < 9 as ::core::ffi::c_int {
             if file_perm & (1 as int32_t) << 8 as ::core::ffi::c_int - i != 0 {
@@ -1094,21 +1079,21 @@ pub unsafe extern "C" fn f_getftype(
     if os_fileinfo_link(fname, &raw mut file_info) {
         let mut mode: uint64_t = file_info.stat.st_mode;
         if mode & __S_IFMT as uint64_t == 0o100000 as uint64_t {
-            t = b"file\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            t = c"file".as_ptr() as *mut ::core::ffi::c_char;
         } else if mode & __S_IFMT as uint64_t == 0o40000 as uint64_t {
-            t = b"dir\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            t = c"dir".as_ptr() as *mut ::core::ffi::c_char;
         } else if mode & __S_IFMT as uint64_t == 0o120000 as uint64_t {
-            t = b"link\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            t = c"link".as_ptr() as *mut ::core::ffi::c_char;
         } else if mode & __S_IFMT as uint64_t == 0o60000 as uint64_t {
-            t = b"bdev\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            t = c"bdev".as_ptr() as *mut ::core::ffi::c_char;
         } else if mode & __S_IFMT as uint64_t == 0o20000 as uint64_t {
-            t = b"cdev\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            t = c"cdev".as_ptr() as *mut ::core::ffi::c_char;
         } else if mode & __S_IFMT as uint64_t == 0o10000 as uint64_t {
-            t = b"fifo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            t = c"fifo".as_ptr() as *mut ::core::ffi::c_char;
         } else if mode & __S_IFMT as uint64_t == 0o140000 as uint64_t {
-            t = b"socket\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            t = c"socket".as_ptr() as *mut ::core::ffi::c_char;
         } else {
-            t = b"other\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            t = c"other".as_ptr() as *mut ::core::ffi::c_char;
         }
         type_0 = xstrdup(t);
     }
@@ -1293,8 +1278,7 @@ pub unsafe extern "C" fn f_globpath(
         if (*rettv).v_type as ::core::ffi::c_uint
             == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            (*rettv).vval.v_string =
-                ga_concat_strings(&raw mut ga, b"\n\0".as_ptr() as *const ::core::ffi::c_char);
+            (*rettv).vval.v_string = ga_concat_strings(&raw mut ga, c"\n".as_ptr());
         } else {
             tv_list_alloc_ret(rettv, ga.ga_len as ptrdiff_t);
             let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -1377,26 +1361,21 @@ pub unsafe extern "C" fn f_haslocaldir(
     if scope_number[kCdScopeTabpage as ::core::ffi::c_int as usize] > 0 as ::core::ffi::c_int {
         tp = find_tabpage(scope_number[kCdScopeTabpage as ::core::ffi::c_int as usize]);
         if tp.is_null() {
-            emsg(gettext(
-                b"E5000: Cannot find tab number.\0".as_ptr() as *const ::core::ffi::c_char
-            ));
+            emsg(gettext(c"E5000: Cannot find tab number.".as_ptr()));
             return;
         }
     }
     if scope_number[kCdScopeWindow as ::core::ffi::c_int as usize] >= 0 as ::core::ffi::c_int {
         if scope_number[kCdScopeTabpage as ::core::ffi::c_int as usize] < 0 as ::core::ffi::c_int {
             emsg(gettext(
-                b"E5001: Higher scope cannot be -1 if lower scope is >= 0.\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"E5001: Higher scope cannot be -1 if lower scope is >= 0.".as_ptr(),
             ));
             return;
         }
         if scope_number[kCdScopeWindow as ::core::ffi::c_int as usize] > 0 as ::core::ffi::c_int {
             win = find_win_by_nr(argvars.offset(0 as ::core::ffi::c_int as isize), tp);
             if win.is_null() {
-                emsg(gettext(
-                    b"E5002: Cannot find window number.\0".as_ptr() as *const ::core::ffi::c_char
-                ));
+                emsg(gettext(c"E5002: Cannot find window number.".as_ptr()));
                 return;
             }
         }
@@ -1537,12 +1516,12 @@ pub unsafe extern "C" fn f_mkdir(
         tv[1 as ::core::ffi::c_int as usize].v_lock = VAR_UNLOCKED;
         tv[1 as ::core::ffi::c_int as usize].vval.v_string =
             xstrdup(if defer_recurse as ::core::ffi::c_int != 0 {
-                b"rf\0".as_ptr() as *const ::core::ffi::c_char
+                c"rf".as_ptr()
             } else {
-                b"d\0".as_ptr() as *const ::core::ffi::c_char
+                c"d".as_ptr()
             });
         add_defer(
-            b"delete\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"delete".as_ptr() as *mut ::core::ffi::c_char,
             2 as ::core::ffi::c_int,
             &raw mut tv as *mut typval_T,
         );
@@ -1781,13 +1760,13 @@ unsafe extern "C" fn read_file_or_blob(
         } else {
             if strcmp(
                 tv_get_string(argvars.offset(1 as ::core::ffi::c_int as isize)),
-                b"b\0".as_ptr() as *const ::core::ffi::c_char,
+                c"b".as_ptr(),
             ) == 0 as ::core::ffi::c_int
             {
                 binary = true_0 != 0;
             } else if strcmp(
                 tv_get_string(argvars.offset(1 as ::core::ffi::c_int as isize)),
-                b"B\0".as_ptr() as *const ::core::ffi::c_char,
+                c"B".as_ptr(),
             ) == 0 as ::core::ffi::c_int
             {
                 blob = true_0 != 0;
@@ -1821,8 +1800,7 @@ unsafe extern "C" fn read_file_or_blob(
         semsg_c!(
             gettext(&raw const e_notopen as *const ::core::ffi::c_char),
             if *fname as ::core::ffi::c_int == NUL {
-                gettext(b"<empty>\0".as_ptr() as *const ::core::ffi::c_char)
-                    as *const ::core::ffi::c_char
+                gettext(c"<empty>".as_ptr()) as *const ::core::ffi::c_char
             } else {
                 fname
             },
@@ -2111,10 +2089,7 @@ pub unsafe extern "C" fn f_resolve(
             if c2rust_fresh1 == 0 as ::core::ffi::c_int {
                 xfree(p as *mut ::core::ffi::c_void);
                 xfree(remain as *mut ::core::ffi::c_void);
-                emsg(gettext(
-                    b"E655: Too many symbolic links (cycle?)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ));
+                emsg(gettext(c"E655: Too many symbolic links (cycle?)".as_ptr()));
                 (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
                 xfree(buf as *mut ::core::ffi::c_void);
                 return;
@@ -2216,7 +2191,7 @@ pub unsafe extern "C" fn f_resolve(
                             ) as ::core::ffi::c_int
                                 != 0)))
         {
-            cpy = concat_str(b"./\0".as_ptr() as *const ::core::ffi::c_char, p);
+            cpy = concat_str(c"./".as_ptr(), p);
             xfree(p as *mut ::core::ffi::c_void);
             p = cpy;
         } else if !is_relative_to_current {
@@ -2319,11 +2294,7 @@ unsafe extern "C" fn write_list(
                         p = p.offset(1);
                     }
                     if !binary || !(*li).li_next.is_null() {
-                        let written_1: ptrdiff_t = file_write(
-                            fp,
-                            b"\n\0".as_ptr() as *const ::core::ffi::c_char,
-                            1 as size_t,
-                        );
+                        let written_1: ptrdiff_t = file_write(fp, c"\n".as_ptr(), 1 as size_t);
                         if written_1 < 0 as ptrdiff_t {
                             error = written_1 as ::core::ffi::c_int;
                             break '_write_list_error;
@@ -2414,10 +2385,7 @@ pub unsafe extern "C" fn f_writefile(
     {
         semsg_c!(
             gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-            gettext(
-                b"writefile() first argument must be a List or a Blob\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
+            gettext(c"writefile() first argument must be a List or a Blob".as_ptr(),),
         );
         return;
     }
@@ -2456,10 +2424,7 @@ pub unsafe extern "C" fn f_writefile(
                     mkdir_p = true_0 != 0;
                 }
                 _ => {
-                    semsg_c!(
-                        gettext(b"E5060: Unknown flag: %s\0".as_ptr() as *const ::core::ffi::c_char),
-                        p,
-                    );
+                    semsg_c!(gettext(c"E5060: Unknown flag: %s".as_ptr()), p,);
                     return;
                 }
             }
@@ -2490,7 +2455,7 @@ pub unsafe extern "C" fn f_writefile(
     let mut error: ::core::ffi::c_int = 0;
     if *fname as ::core::ffi::c_int == NUL {
         emsg(gettext(
-            b"E482: Can't open file with an empty name\0".as_ptr() as *const ::core::ffi::c_char,
+            c"E482: Can't open file with an empty name".as_ptr(),
         ));
     } else {
         error = file_open(
@@ -2509,8 +2474,7 @@ pub unsafe extern "C" fn f_writefile(
         );
         if error != 0 as ::core::ffi::c_int {
             semsg_c!(
-                gettext(b"E482: Can't open file %s for writing: %s\0".as_ptr()
-                    as *const ::core::ffi::c_char),
+                gettext(c"E482: Can't open file %s for writing: %s".as_ptr()),
                 fname,
                 uv_strerror(error),
             );
@@ -2524,7 +2488,7 @@ pub unsafe extern "C" fn f_writefile(
                     },
                 };
                 add_defer(
-                    b"delete\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                    c"delete".as_ptr() as *mut ::core::ffi::c_char,
                     1 as ::core::ffi::c_int,
                     &raw mut tv,
                 );
@@ -2569,8 +2533,7 @@ pub unsafe extern "C" fn f_writefile(
             error = file_close(&raw mut fp, do_fsync);
             if error != 0 as ::core::ffi::c_int {
                 semsg_c!(
-                    gettext(b"E80: Error when closing file %s: %s\0".as_ptr()
-                        as *const ::core::ffi::c_char),
+                    gettext(c"E80: Error when closing file %s: %s".as_ptr()),
                     fname,
                     uv_strerror(error),
                 );

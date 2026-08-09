@@ -224,7 +224,7 @@ pub unsafe fn ex_profile(eap: *mut exarg_T) {
         set_vim_var_nr(VV_PROFILING, 1 as varnumber_T);
     } else if do_profiling.get() == PROF_NONE {
         emsg(gettext(
-            b"E750: First use \":profile start {fname}\"\0".as_ptr() as *const c_char,
+            c"E750: First use \":profile start {fname}\"".as_ptr(),
         ));
     } else if full == b"stop" {
         profile_dump();
@@ -779,7 +779,7 @@ unsafe fn script_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
         write!(fd, " Self time: {}\n", profile_msg_str((*si).sn_pr_self))?;
         write!(fd, "\ncount  total (s)   self (s)\n")?;
 
-        let sfd = os_fopen((*si).sn_name, b"r\0".as_ptr() as *const c_char);
+        let sfd = os_fopen((*si).sn_name, c"r".as_ptr());
         if sfd.is_null() {
             write!(fd, "Cannot open file!\n")?;
         } else {
@@ -866,7 +866,7 @@ fn write_startup(bytes: &[u8]) {
     if let Ok(line) = CString::new(bytes) {
         // SAFETY: fd is the open startuptime stream; "%s" consumes the one
         // string argument.
-        unsafe { fprintf(fd, b"%s\0".as_ptr() as *const c_char, line.as_ptr()) };
+        unsafe { fprintf(fd, c"%s".as_ptr(), line.as_ptr()) };
     }
 }
 
@@ -914,7 +914,7 @@ pub unsafe fn time_msg(mesg: *const c_char, start: *const proftime_T) {
 pub unsafe fn time_init(fname: *const c_char, proc_name: *const c_char) {
     const BUFSIZE: usize = 8192; // Big enough for the entire report.
     const _IOFBF: c_int = 0;
-    time_fd.set(fopen(fname, b"a\0".as_ptr() as *const c_char));
+    time_fd.set(fopen(fname, c"a".as_ptr()));
     if time_fd.get().is_null() {
         fprintf(stderr, gettext(e_notopen.ptr() as *const c_char), fname);
         return;
@@ -927,7 +927,7 @@ pub unsafe fn time_init(fname: *const c_char, proc_name: *const c_char) {
         time_fd.set(core::ptr::null_mut());
         fprintf(
             stderr,
-            b"time_init: setvbuf failed: %d %s\0".as_ptr() as *const c_char,
+            c"time_init: setvbuf failed: %d %s".as_ptr(),
             r,
             uv_err_name(r),
         );
@@ -948,10 +948,7 @@ pub fn time_finish() {
     // SAFETY: the stream and its buffer were set up by time_init; nothing
     // touches them after the fd is cleared.
     unsafe {
-        time_msg(
-            b"--- NVIM STARTED ---\n\0".as_ptr() as *const c_char,
-            core::ptr::null(),
-        );
+        time_msg(c"--- NVIM STARTED ---\n".as_ptr(), core::ptr::null());
         fclose(time_fd.get());
         time_fd.set(core::ptr::null_mut());
         xfree(STARTUPTIME_BUF.replace(core::ptr::null_mut()) as *mut c_void);

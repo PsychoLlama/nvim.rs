@@ -119,7 +119,7 @@ pub unsafe extern "C" fn win_new_float(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"Cannot change last window into float\0".as_ptr() as *const ::core::ffi::c_char,
+                c"Cannot change last window into float".as_ptr(),
             );
             return ::core::ptr::null_mut::<win_T>();
         } else if !(*cmdwin_win.ptr()).is_null() && !(*cmdwin_win.get()).w_floating {
@@ -144,7 +144,7 @@ pub unsafe extern "C" fn win_new_float(
                 api_set_error(
                     err,
                     kErrorTypeException,
-                    b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"%s".as_ptr(),
                     &raw const e_cmdwin as *const ::core::ffi::c_char,
                 );
                 return ::core::ptr::null_mut::<win_T>();
@@ -200,20 +200,17 @@ pub unsafe extern "C" fn win_set_minimal_style(mut wp: *mut win_T) {
     if (*wp).w_p_fcs_chars.eob != ' ' as schar_T {
         let mut old: *mut ::core::ffi::c_char = (*wp).w_onebuf_opt.wo_fcs;
         (*wp).w_onebuf_opt.wo_fcs = if *old as ::core::ffi::c_int == NUL {
-            xstrdup(b"eob: \0".as_ptr() as *const ::core::ffi::c_char)
+            xstrdup(c"eob: ".as_ptr())
         } else {
-            concat_str(old, b",eob: \0".as_ptr() as *const ::core::ffi::c_char)
+            concat_str(old, c",eob: ".as_ptr())
         };
         free_string_option(old);
     }
     let mut old_0: *mut ::core::ffi::c_char = (*wp).w_onebuf_opt.wo_winhl;
     (*wp).w_onebuf_opt.wo_winhl = if *old_0 as ::core::ffi::c_int == NUL {
-        xstrdup(b"EndOfBuffer:\0".as_ptr() as *const ::core::ffi::c_char)
+        xstrdup(c"EndOfBuffer:".as_ptr())
     } else {
-        concat_str(
-            old_0,
-            b",EndOfBuffer:\0".as_ptr() as *const ::core::ffi::c_char,
-        )
+        concat_str(old_0, c",EndOfBuffer:".as_ptr())
     };
     free_string_option(old_0);
     parse_winhl_opt(::core::ptr::null::<::core::ffi::c_char>(), wp);
@@ -225,7 +222,7 @@ pub unsafe extern "C" fn win_set_minimal_style(mut wp: *mut win_T) {
         || strlen((*wp).w_onebuf_opt.wo_scl) >= 8 as size_t
     {
         free_string_option((*wp).w_onebuf_opt.wo_scl);
-        (*wp).w_onebuf_opt.wo_scl = xstrdup(b"auto\0".as_ptr() as *const ::core::ffi::c_char);
+        (*wp).w_onebuf_opt.wo_scl = xstrdup(c"auto".as_ptr());
     }
     if *(*wp)
         .w_onebuf_opt
@@ -234,12 +231,12 @@ pub unsafe extern "C" fn win_set_minimal_style(mut wp: *mut win_T) {
         != '0' as ::core::ffi::c_int
     {
         free_string_option((*wp).w_onebuf_opt.wo_fdc);
-        (*wp).w_onebuf_opt.wo_fdc = xstrdup(b"0\0".as_ptr() as *const ::core::ffi::c_char);
+        (*wp).w_onebuf_opt.wo_fdc = xstrdup(c"0".as_ptr());
     }
     if !(*wp).w_onebuf_opt.wo_cc.is_null() && *(*wp).w_onebuf_opt.wo_cc as ::core::ffi::c_int != NUL
     {
         free_string_option((*wp).w_onebuf_opt.wo_cc);
-        (*wp).w_onebuf_opt.wo_cc = xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);
+        (*wp).w_onebuf_opt.wo_cc = xstrdup(c"".as_ptr());
     }
     if !(*wp).w_onebuf_opt.wo_stc.is_null()
         && *(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int != NUL
@@ -673,8 +670,7 @@ pub unsafe extern "C" fn win_float_create_preview(
                 type_0: kOptValTypeString,
                 data: OptValData {
                     string: String_0 {
-                        data: b"wipe\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
+                        data: c"wipe".as_ptr() as *mut ::core::ffi::c_char,
                         size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
                             .wrapping_sub(1 as size_t),
                     },

@@ -57,8 +57,7 @@ unsafe extern "C" fn log_try_create(mut fname: *mut ::core::ffi::c_char) -> bool
     {
         return false_0 != 0;
     }
-    let mut log_file: *mut FILE =
-        fopen(fname, b"a\0".as_ptr() as *const ::core::ffi::c_char) as *mut FILE;
+    let mut log_file: *mut FILE = fopen(fname, c"a".as_ptr()) as *mut FILE;
     if log_file.is_null() {
         return false_0 != 0;
     }
@@ -68,12 +67,12 @@ unsafe extern "C" fn log_try_create(mut fname: *mut ::core::ffi::c_char) -> bool
 unsafe extern "C" fn log_path_init() {
     let mut size: size_t = ::core::mem::size_of::<[::core::ffi::c_char; 4097]>();
     expand_env(
-        b"$NVIM_LOG_FILE\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        c"$NVIM_LOG_FILE".as_ptr() as *mut ::core::ffi::c_char,
         log_file_path.ptr() as *mut ::core::ffi::c_char,
         size as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
     );
     let mut user_set: bool = !strequal(
-        b"$NVIM_LOG_FILE\0".as_ptr() as *const ::core::ffi::c_char,
+        c"$NVIM_LOG_FILE".as_ptr(),
         log_file_path.ptr() as *mut ::core::ffi::c_char,
     );
     if !user_set
@@ -83,7 +82,7 @@ unsafe extern "C" fn log_path_init() {
     {
         if user_set {
             os_setenv(
-                b"__NVIM_LOG_FILE_WANT\0".as_ptr() as *const ::core::ffi::c_char,
+                c"__NVIM_LOG_FILE_WANT".as_ptr(),
                 log_file_path.ptr() as *mut ::core::ffi::c_char,
                 true_0,
             );
@@ -105,11 +104,8 @@ unsafe extern "C" fn log_path_init() {
         xfree(*ptr_);
         *ptr_ = NULL;
         let _ = *ptr_;
-        let mut defaultpath: *mut ::core::ffi::c_char = stdpaths_user_state_subpath(
-            b"nvim.log\0".as_ptr() as *const ::core::ffi::c_char,
-            0 as size_t,
-            true_0 != 0,
-        );
+        let mut defaultpath: *mut ::core::ffi::c_char =
+            stdpaths_user_state_subpath(c"nvim.log".as_ptr(), 0 as size_t, true_0 != 0);
         let mut len: size_t = xstrlcpy(
             log_file_path.ptr() as *mut ::core::ffi::c_char,
             defaultpath,
@@ -119,14 +115,14 @@ unsafe extern "C" fn log_path_init() {
         if len >= size || !log_try_create(log_file_path.ptr() as *mut ::core::ffi::c_char) {
             if !user_set {
                 os_setenv(
-                    b"__NVIM_LOG_FILE_WANT\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"__NVIM_LOG_FILE_WANT".as_ptr(),
                     log_file_path.ptr() as *mut ::core::ffi::c_char,
                     true_0,
                 );
             }
             len = xstrlcpy(
                 log_file_path.ptr() as *mut ::core::ffi::c_char,
-                b"nvim.log\0".as_ptr() as *const ::core::ffi::c_char,
+                c"nvim.log".as_ptr(),
                 size,
             );
         }
@@ -143,11 +139,10 @@ unsafe extern "C" fn log_path_init() {
             logmsg(
                 LOGLVL_WRN,
                 ::core::ptr::null::<::core::ffi::c_char>(),
-                b"log_path_init\0".as_ptr() as *const ::core::ffi::c_char,
+                c"log_path_init".as_ptr(),
                 106 as ::core::ffi::c_int,
                 true_0 != 0,
-                b"Failed to create directory %s for writing logs: %s\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"Failed to create directory %s for writing logs: %s".as_ptr(),
                 failed_dir,
                 uv_strerror(log_dir_failure),
             );
@@ -193,7 +188,7 @@ pub unsafe extern "C" fn logmsg(
         if !did_msg.get() {
             did_msg.set(true_0 != 0);
             msg_schedule_semsg_c!(
-                b"E5430: %s:%d: recursive log!\0".as_ptr() as *const ::core::ffi::c_char,
+                c"E5430: %s:%d: recursive log!".as_ptr(),
                 if !func_name.is_null() {
                     func_name
                 } else {
@@ -236,7 +231,7 @@ pub unsafe extern "C" fn open_log_file() -> *mut FILE {
     if (*log_file_path.ptr())[0 as ::core::ffi::c_int as usize] != 0 {
         let mut f: *mut FILE = fopen(
             log_file_path.ptr() as *mut ::core::ffi::c_char,
-            b"a\0".as_ptr() as *const ::core::ffi::c_char,
+            c"a".as_ptr(),
         ) as *mut FILE;
         if !f.is_null() {
             return f;
@@ -254,7 +249,7 @@ pub unsafe extern "C" fn open_log_file() -> *mut FILE {
         stderr,
         LOGLVL_ERR,
         ::core::ptr::null::<::core::ffi::c_char>(),
-        b"open_log_file\0".as_ptr() as *const ::core::ffi::c_char,
+        c"open_log_file".as_ptr(),
         234 as ::core::ffi::c_int,
     ) {
         fputs(msg.as_ptr() as *const ::core::ffi::c_char, stderr);
@@ -299,10 +294,10 @@ unsafe extern "C" fn log_write_prefix(
     static name: GlobalCell<[::core::ffi::c_char; 32]> = GlobalCell::new([0; 32]);
     static log_levels: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
         ::core::ptr::null::<::core::ffi::c_char>(),
-        b"DBG\0".as_ptr() as *const ::core::ffi::c_char,
-        b"INF\0".as_ptr() as *const ::core::ffi::c_char,
-        b"WRN\0".as_ptr() as *const ::core::ffi::c_char,
-        b"ERR\0".as_ptr() as *const ::core::ffi::c_char,
+        c"DBG".as_ptr(),
+        c"INF".as_ptr(),
+        c"WRN".as_ptr(),
+        c"ERR".as_ptr(),
     ]);
     debug_assert!(
         log_level >= 1 as ::core::ffi::c_int && log_level <= 4 as ::core::ffi::c_int,
@@ -316,7 +311,7 @@ unsafe extern "C" fn log_write_prefix(
     if strftime(
         &raw mut date_time as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 20]>(),
-        b"%Y-%m-%dT%H:%M:%S\0".as_ptr() as *const ::core::ffi::c_char,
+        c"%Y-%m-%dT%H:%M:%S".as_ptr(),
         &raw mut local_time,
     ) == 0 as size_t
     {
@@ -348,9 +343,9 @@ unsafe extern "C" fn log_write_prefix(
                 name.ptr() as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 32]>(),
                 if ui as ::core::ffi::c_int != 0 {
-                    b"ui/c/%s\0".as_ptr() as *const ::core::ffi::c_char
+                    c"ui/c/%s".as_ptr()
                 } else {
-                    b"c/%s\0".as_ptr() as *const ::core::ffi::c_char
+                    c"c/%s".as_ptr()
                 },
                 parent,
             );
@@ -359,9 +354,9 @@ unsafe extern "C" fn log_write_prefix(
                 name.ptr() as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 32]>(),
                 if ui as ::core::ffi::c_int != 0 {
-                    b"ui/%s\0".as_ptr() as *const ::core::ffi::c_char
+                    c"ui/%s".as_ptr()
                 } else {
-                    b"%s\0".as_ptr() as *const ::core::ffi::c_char
+                    c"%s".as_ptr()
                 },
                 serv,
             );
@@ -370,11 +365,11 @@ unsafe extern "C" fn log_write_prefix(
             snprintf(
                 name.ptr() as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 32]>(),
-                b"%s.%-5ld\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%s.%-5ld".as_ptr(),
                 if ui as ::core::ffi::c_int != 0 {
-                    b"ui\0".as_ptr() as *const ::core::ffi::c_char
+                    c"ui".as_ptr()
                 } else {
-                    b"?\0".as_ptr() as *const ::core::ffi::c_char
+                    c"?".as_ptr()
                 },
                 pid,
             );
@@ -384,13 +379,13 @@ unsafe extern "C" fn log_write_prefix(
     {
         fprintf(
             log_file,
-            b"%s %s.%03d %-10s %s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%s %s.%03d %-10s %s".as_ptr(),
             (*log_levels.ptr())[log_level as usize],
             &raw mut date_time as *mut ::core::ffi::c_char,
             millis,
             name.ptr() as *mut ::core::ffi::c_char,
             if context.is_null() {
-                b"?:\0".as_ptr() as *const ::core::ffi::c_char
+                c"?:".as_ptr()
             } else {
                 context
             },
@@ -398,13 +393,13 @@ unsafe extern "C" fn log_write_prefix(
     } else {
         fprintf(
             log_file,
-            b"%s %s.%03d %-10s %s%s:%d: \0".as_ptr() as *const ::core::ffi::c_char,
+            c"%s %s.%03d %-10s %s%s:%d: ".as_ptr(),
             (*log_levels.ptr())[log_level as usize],
             &raw mut date_time as *mut ::core::ffi::c_char,
             millis,
             name.ptr() as *mut ::core::ffi::c_char,
             if context.is_null() {
-                b"\0".as_ptr() as *const ::core::ffi::c_char
+                c"".as_ptr()
             } else {
                 context
             },

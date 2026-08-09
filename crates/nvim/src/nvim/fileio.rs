@@ -193,9 +193,8 @@ pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static e_auchangedbuf: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
-    b"E812: Autocommands changed buffer or buffer name\0".as_ptr() as *const ::core::ffi::c_char,
-);
+static e_auchangedbuf: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(c"E812: Autocommands changed buffer or buffer name".as_ptr());
 pub const NONASCII_MASK: uint64_t = (-1 as ::core::ffi::c_int as uint64_t)
     .wrapping_div(0xff as uint64_t)
     .wrapping_mul(0x80 as uint64_t);

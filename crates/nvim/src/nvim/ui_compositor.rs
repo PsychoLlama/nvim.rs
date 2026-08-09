@@ -73,19 +73,19 @@ pub unsafe extern "C" fn ui_comp_init() {
 }
 pub unsafe extern "C" fn ui_comp_syn_init() {
     dbghl_normal.set(syn_check_group(
-        b"RedrawDebugNormal\0".as_ptr() as *const ::core::ffi::c_char,
+        c"RedrawDebugNormal".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 18]>().wrapping_sub(1 as size_t),
     ));
     dbghl_clear.set(syn_check_group(
-        b"RedrawDebugClear\0".as_ptr() as *const ::core::ffi::c_char,
+        c"RedrawDebugClear".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 17]>().wrapping_sub(1 as size_t),
     ));
     dbghl_composed.set(syn_check_group(
-        b"RedrawDebugComposed\0".as_ptr() as *const ::core::ffi::c_char,
+        c"RedrawDebugComposed".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 20]>().wrapping_sub(1 as size_t),
     ));
     dbghl_recompose.set(syn_check_group(
-        b"RedrawDebugRecompose\0".as_ptr() as *const ::core::ffi::c_char,
+        c"RedrawDebugRecompose".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 21]>().wrapping_sub(1 as size_t),
     ));
 }
@@ -824,10 +824,10 @@ pub unsafe extern "C" fn ui_comp_raw_line(
         logmsg(
             LOGLVL_DBG,
             ::core::ptr::null::<::core::ffi::c_char>(),
-            b"ui_comp_raw_line\0".as_ptr() as *const ::core::ffi::c_char,
+            c"ui_comp_raw_line".as_ptr(),
             580 as ::core::ffi::c_int,
             true_0 != 0,
-            b"compositor: invalid row %ld on grid %ld\0".as_ptr() as *const ::core::ffi::c_char,
+            c"compositor: invalid row %ld on grid %ld".as_ptr(),
             row,
             grid,
         );
@@ -837,11 +837,10 @@ pub unsafe extern "C" fn ui_comp_raw_line(
         logmsg(
             LOGLVL_DBG,
             ::core::ptr::null::<::core::ffi::c_char>(),
-            b"ui_comp_raw_line\0".as_ptr() as *const ::core::ffi::c_char,
+            c"ui_comp_raw_line".as_ptr(),
             585 as ::core::ffi::c_int,
             true_0 != 0,
-            b"compositor: invalid last column %ld on grid %ld\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"compositor: invalid last column %ld on grid %ld".as_ptr(),
             clearcol,
             grid,
         );

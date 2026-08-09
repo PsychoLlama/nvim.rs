@@ -294,10 +294,7 @@ unsafe extern "C" fn trigger_undo_ftplugin(mut buf: *mut buf_T, mut win: *mut wi
     window_layout_lock();
     (*buf).b_locked += 1;
     (*win).w_locked = true_0 != 0;
-    do_cmdline_cmd(
-        b"if exists('b:undo_ftplugin') | exe b:undo_ftplugin | endif\0".as_ptr()
-            as *const ::core::ffi::c_char,
-    );
+    do_cmdline_cmd(c"if exists('b:undo_ftplugin') | exe b:undo_ftplugin | endif".as_ptr());
     (*buf).b_locked -= 1;
     (*win).w_locked = win_was_locked;
     window_layout_unlock();
@@ -424,15 +421,13 @@ pub unsafe extern "C" fn open_buffer(
         }
         if (*curbuf.ptr()).is_null() {
             emsg(gettext(
-                b"E82: Cannot allocate any buffer, exiting...\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"E82: Cannot allocate any buffer, exiting...".as_ptr(),
             ));
             v_dying.set(2 as ::core::ffi::c_int);
             getout(2 as ::core::ffi::c_int);
         }
         emsg(gettext(
-            b"E83: Cannot allocate buffer, using other one...\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"E83: Cannot allocate buffer, using other one...".as_ptr(),
         ));
         enter_buffer(curbuf.get());
         if old_tw != (*curbuf.get()).b_p_tw {
@@ -634,7 +629,7 @@ unsafe extern "C" fn can_unload_buffer(mut buf: *mut buf_T) -> bool {
             if !fname.is_null() {
                 fname as *const ::core::ffi::c_char
             } else {
-                b"[No Name]\0".as_ptr() as *const ::core::ffi::c_char
+                c"[No Name]".as_ptr()
             },
         );
     }
@@ -1103,7 +1098,7 @@ unsafe extern "C" fn free_buffer_stuff(mut buf: *mut buf_T, mut free_flags: ::co
     }
     let changedtick_hi: *mut hashitem_T = hash_find(
         &raw mut (*(*buf).b_vars).dv_hashtab,
-        b"changedtick\0".as_ptr() as *const ::core::ffi::c_char,
+        c"changedtick".as_ptr(),
     );
     debug_assert!(!changedtick_hi.is_null(), "changedtick_hi != NULL");
     hash_remove(&raw mut (*(*buf).b_vars).dv_hashtab, changedtick_hi);
@@ -1221,7 +1216,7 @@ pub unsafe extern "C" fn handle_swap_exists(mut old_curbuf: *mut bufref_T) {
         enter_cleanup(&raw mut cs);
         msg_scroll.set(true_0);
         ml_recover(false_0 != 0);
-        msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
+        msg_puts(c"\n".as_ptr());
         cmdline_row.set(msg_row.get());
         do_modelines(0 as ::core::ffi::c_int);
         leave_cleanup(&raw mut cs);
@@ -1315,25 +1310,19 @@ pub unsafe extern "C" fn do_bufdel(
             if command == DOBUF_UNLOAD as ::core::ffi::c_int {
                 xstrlcpy(
                     IObuff.ptr() as *mut ::core::ffi::c_char,
-                    gettext(
-                        b"E515: No buffers were unloaded\0".as_ptr() as *const ::core::ffi::c_char
-                    ),
+                    gettext(c"E515: No buffers were unloaded".as_ptr()),
                     IOSIZE as size_t,
                 );
             } else if command == DOBUF_DEL as ::core::ffi::c_int {
                 xstrlcpy(
                     IObuff.ptr() as *mut ::core::ffi::c_char,
-                    gettext(
-                        b"E516: No buffers were deleted\0".as_ptr() as *const ::core::ffi::c_char
-                    ),
+                    gettext(c"E516: No buffers were deleted".as_ptr()),
                     IOSIZE as size_t,
                 );
             } else {
                 xstrlcpy(
                     IObuff.ptr() as *mut ::core::ffi::c_char,
-                    gettext(
-                        b"E517: No buffers were wiped out\0".as_ptr() as *const ::core::ffi::c_char
-                    ),
+                    gettext(c"E517: No buffers were wiped out".as_ptr()),
                     IOSIZE as size_t,
                 );
             }
@@ -1343,8 +1332,8 @@ pub unsafe extern "C" fn do_bufdel(
                 smsg_c!(
                     0 as ::core::ffi::c_int,
                     ngettext(
-                        b"%d buffer unloaded\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"%d buffers unloaded\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"%d buffer unloaded".as_ptr(),
+                        c"%d buffers unloaded".as_ptr(),
                         deleted as ::core::ffi::c_ulong,
                     ),
                     deleted,
@@ -1353,8 +1342,8 @@ pub unsafe extern "C" fn do_bufdel(
                 smsg_c!(
                     0 as ::core::ffi::c_int,
                     ngettext(
-                        b"%d buffer deleted\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"%d buffers deleted\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"%d buffer deleted".as_ptr(),
+                        c"%d buffers deleted".as_ptr(),
                         deleted as ::core::ffi::c_ulong,
                     ),
                     deleted,
@@ -1363,8 +1352,8 @@ pub unsafe extern "C" fn do_bufdel(
                 smsg_c!(
                     0 as ::core::ffi::c_int,
                     ngettext(
-                        b"%d buffer wiped out\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"%d buffers wiped out\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"%d buffer wiped out".as_ptr(),
+                        c"%d buffers wiped out".as_ptr(),
                         deleted as ::core::ffi::c_ulong,
                     ),
                     deleted,
@@ -1381,9 +1370,7 @@ unsafe extern "C" fn empty_curbuf(
 ) -> ::core::ffi::c_int {
     let mut buf: *mut buf_T = curbuf.get();
     if action == DOBUF_UNLOAD as ::core::ffi::c_int {
-        emsg(gettext(
-            b"E90: Cannot unload last buffer\0".as_ptr() as *const ::core::ffi::c_char
-        ));
+        emsg(gettext(c"E90: Cannot unload last buffer".as_ptr()));
         return FAIL;
     }
     let mut bufref: bufref_T = bufref_T::default();
@@ -1477,9 +1464,7 @@ unsafe extern "C" fn do_buffer_ext(
             }
         }
         if !bufIsChanged(buf) {
-            emsg(gettext(
-                b"E84: No modified buffer found\0".as_ptr() as *const ::core::ffi::c_char
-            ));
+            emsg(gettext(c"E84: No modified buffer found".as_ptr()));
             return FAIL;
         }
     } else if start == DOBUF_FIRST as ::core::ffi::c_int && count != 0 {
@@ -1528,9 +1513,7 @@ unsafe extern "C" fn do_buffer_ext(
                 bp = ::core::ptr::null_mut::<buf_T>();
             }
             if bp == buf {
-                emsg(gettext(
-                    b"E85: There is no listed buffer\0".as_ptr() as *const ::core::ffi::c_char
-                ));
+                emsg(gettext(c"E85: There is no listed buffer".as_ptr()));
                 return FAIL;
             }
         }
@@ -1544,13 +1527,9 @@ unsafe extern "C" fn do_buffer_ext(
                 );
             }
         } else if dir == FORWARD as ::core::ffi::c_int {
-            emsg(gettext(
-                b"E87: Cannot go beyond last buffer\0".as_ptr() as *const ::core::ffi::c_char
-            ));
+            emsg(gettext(c"E87: Cannot go beyond last buffer".as_ptr()));
         } else {
-            emsg(gettext(
-                b"E88: Cannot go before first buffer\0".as_ptr() as *const ::core::ffi::c_char
-            ));
+            emsg(gettext(c"E88: Cannot go before first buffer".as_ptr()));
         }
         return FAIL;
     }
@@ -1622,8 +1601,7 @@ unsafe extern "C" fn do_buffer_ext(
                 }
             } else {
                 semsg_c!(
-                    gettext(b"E89: %s will be killed (add ! to override)\0".as_ptr()
-                        as *const ::core::ffi::c_char),
+                    gettext(c"E89: %s will be killed (add ! to override)".as_ptr()),
                     (*buf).b_fname,
                 );
                 return FAIL;
@@ -2085,9 +2063,7 @@ pub unsafe extern "C" fn do_autochdir() {
             && !(*curbuf.get()).b_ffname.is_null()
             && vim_chdirfile((*curbuf.get()).b_ffname, kCdCauseAuto) == OK
         {
-            last_chdir_reason
-                .set(b"autochdir\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char);
+            last_chdir_reason.set(c"autochdir".as_ptr() as *mut ::core::ffi::c_char);
             shorten_fnames(true_0);
         }
     }
@@ -2292,8 +2268,7 @@ pub unsafe extern "C" fn buflist_new(
         );
         if top_file_num.get() < 0 as ::core::ffi::c_int {
             emsg(gettext(
-                b"W14: Warning: List of file names overflow\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"W14: Warning: List of file names overflow".as_ptr(),
             ));
             if emsg_silent.get() == 0 as ::core::ffi::c_int && !in_assert_fails.get() {
                 msg_delay(3001 as uint64_t, true_0 != 0);
@@ -2779,14 +2754,11 @@ pub unsafe extern "C" fn buflist_findpat(
     }
     if match_0 == -2 as ::core::ffi::c_int {
         semsg_c!(
-            gettext(b"E93: More than one match for %s\0".as_ptr() as *const ::core::ffi::c_char),
+            gettext(c"E93: More than one match for %s".as_ptr()),
             pattern,
         );
     } else if match_0 < 0 as ::core::ffi::c_int {
-        semsg_c!(
-            gettext(b"E94: No matching buffer for %s\0".as_ptr() as *const ::core::ffi::c_char),
-            pattern,
-        );
+        semsg_c!(gettext(c"E94: No matching buffer for %s".as_ptr()), pattern,);
     }
     return match_0;
 }
@@ -2837,7 +2809,7 @@ pub unsafe extern "C" fn ExpandBufnames(
             patc = xstrdup(pat.offset(1 as ::core::ffi::c_int as isize));
             to_free = true_0 != 0;
         } else if *pat as ::core::ffi::c_int == '^' as ::core::ffi::c_int {
-            patc = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            patc = c"".as_ptr() as *mut ::core::ffi::c_char;
         } else {
             patc = pat;
         }
@@ -3281,7 +3253,7 @@ pub unsafe fn buflist_list(mut eap: *mut exarg_T) {
         ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     };
     let mut buflist_data: *mut *mut buf_T = ::core::ptr::null_mut::<*mut buf_T>();
-    msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
+    msg_ext_set_kind(c"list_cmd".as_ptr());
     if !vim_strchr((*eap).arg, 't' as ::core::ffi::c_int).is_null() {
         ga_init(
             &raw mut buflist,
@@ -3384,7 +3356,7 @@ pub unsafe fn buflist_list(mut eap: *mut exarg_T) {
                 let mut len: ::core::ffi::c_int = vim_snprintf_safelen(
                     IObuff.ptr() as *mut ::core::ffi::c_char,
                     (IOSIZE - 20 as ::core::ffi::c_int) as size_t,
-                    b"%3d%c%c%c%c%c \"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"%3d%c%c%c%c%c \"%s\"".as_ptr(),
                     (*buf).handle,
                     if (*buf).b_p_bl != 0 {
                         ' ' as ::core::ffi::c_int
@@ -3440,7 +3412,7 @@ pub unsafe fn buflist_list(mut eap: *mut exarg_T) {
                     vim_snprintf(
                         (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
                         (IOSIZE - len) as size_t,
-                        gettext(b"line %ld\0".as_ptr() as *const ::core::ffi::c_char),
+                        gettext(c"line %ld".as_ptr()),
                         if buf == curbuf.get() {
                             (*curwin.get()).w_cursor.lnum as int64_t
                         } else {
@@ -3543,8 +3515,7 @@ pub unsafe extern "C" fn setfname(
             if !(*obuf).b_ml.ml_mfp.is_null() || in_use as ::core::ffi::c_int != 0 {
                 if message {
                     emsg(gettext(
-                        b"E95: Buffer with this name already exists\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        c"E95: Buffer with this name already exists".as_ptr(),
                     ));
                 }
                 xfree(ffname as *mut ::core::ffi::c_void);
@@ -3723,7 +3694,7 @@ pub unsafe extern "C" fn fileinfo(
         bufferlen = vim_snprintf_safelen(
             buffer,
             IOSIZE as size_t,
-            b"buf %d: \0".as_ptr() as *const ::core::ffi::c_char,
+            c"buf %d: ".as_ptr(),
             (*curbuf.get()).handle,
         );
     }
@@ -3735,7 +3706,7 @@ pub unsafe extern "C" fn fileinfo(
         bufferlen = bufferlen.wrapping_add(vim_snprintf_safelen(
             buffer.add(bufferlen),
             (IOSIZE as size_t).wrapping_sub(bufferlen),
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%s".as_ptr(),
             name,
         ));
     } else {
@@ -3761,57 +3732,54 @@ pub unsafe extern "C" fn fileinfo(
     bufferlen = bufferlen.wrapping_add(vim_snprintf_safelen(
         buffer.add(bufferlen),
         (IOSIZE as size_t).wrapping_sub(bufferlen),
-        b"\"%s%s%s%s%s%s\0".as_ptr() as *const ::core::ffi::c_char,
+        c"\"%s%s%s%s%s%s".as_ptr(),
         if curbufIsChanged() as ::core::ffi::c_int != 0 {
             if shortmess(SHM_MOD as ::core::ffi::c_int) as ::core::ffi::c_int != 0 {
-                b" [+]\0".as_ptr() as *const ::core::ffi::c_char
+                c" [+]".as_ptr()
             } else {
-                gettext(b" [Modified]\0".as_ptr() as *const ::core::ffi::c_char)
-                    as *const ::core::ffi::c_char
+                gettext(c" [Modified]".as_ptr()) as *const ::core::ffi::c_char
             }
         } else {
-            b" \0".as_ptr() as *const ::core::ffi::c_char
+            c" ".as_ptr()
         },
         if (*curbuf.get()).b_flags & BF_NOTEDITED != 0 && !dontwrite {
-            gettext(b"[Not edited]\0".as_ptr() as *const ::core::ffi::c_char)
-                as *const ::core::ffi::c_char
+            gettext(c"[Not edited]".as_ptr()) as *const ::core::ffi::c_char
         } else {
-            b"\0".as_ptr() as *const ::core::ffi::c_char
+            c"".as_ptr()
         },
         if (*curbuf.get()).b_flags & BF_NEW != 0 && !dontwrite {
-            gettext(b"[New]\0".as_ptr() as *const ::core::ffi::c_char) as *const ::core::ffi::c_char
+            gettext(c"[New]".as_ptr()) as *const ::core::ffi::c_char
         } else {
-            b"\0".as_ptr() as *const ::core::ffi::c_char
+            c"".as_ptr()
         },
         if (*curbuf.get()).b_flags & BF_READERR != 0 {
-            gettext(b"[Read errors]\0".as_ptr() as *const ::core::ffi::c_char)
-                as *const ::core::ffi::c_char
+            gettext(c"[Read errors]".as_ptr()) as *const ::core::ffi::c_char
         } else {
-            b"\0".as_ptr() as *const ::core::ffi::c_char
+            c"".as_ptr()
         },
         if (*curbuf.get()).b_p_ro != 0 {
             (if shortmess(SHM_RO as ::core::ffi::c_int) as ::core::ffi::c_int != 0 {
-                gettext(b"[RO]\0".as_ptr() as *const ::core::ffi::c_char)
+                gettext(c"[RO]".as_ptr())
             } else {
-                gettext(b"[readonly]\0".as_ptr() as *const ::core::ffi::c_char)
+                gettext(c"[readonly]".as_ptr())
             }) as *const ::core::ffi::c_char
         } else {
-            b"\0".as_ptr() as *const ::core::ffi::c_char
+            c"".as_ptr()
         },
         if curbufIsChanged() as ::core::ffi::c_int != 0
             || (*curbuf.get()).b_flags & BF_WRITE_MASK != 0
             || (*curbuf.get()).b_p_ro != 0
         {
-            b" \0".as_ptr() as *const ::core::ffi::c_char
+            c" ".as_ptr()
         } else {
-            b"\0".as_ptr() as *const ::core::ffi::c_char
+            c"".as_ptr()
         },
     ));
     if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
         bufferlen = bufferlen.wrapping_add(vim_snprintf_safelen(
             buffer.add(bufferlen),
             (IOSIZE as size_t).wrapping_sub(bufferlen),
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%s".as_ptr(),
             gettext(no_lines_msg.ptr() as *mut ::core::ffi::c_char),
         ));
     } else if p_ru.get() != 0 {
@@ -3819,8 +3787,8 @@ pub unsafe extern "C" fn fileinfo(
             buffer.add(bufferlen),
             (IOSIZE as size_t).wrapping_sub(bufferlen),
             ngettext(
-                b"%ld line --%d%%--\0".as_ptr() as *const ::core::ffi::c_char,
-                b"%ld lines --%d%%--\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%ld line --%d%%--".as_ptr(),
+                c"%ld lines --%d%%--".as_ptr(),
                 (*curbuf.get()).b_ml.ml_line_count as ::core::ffi::c_ulong,
             ),
             (*curbuf.get()).b_ml.ml_line_count as int64_t,
@@ -3833,7 +3801,7 @@ pub unsafe extern "C" fn fileinfo(
         bufferlen = bufferlen.wrapping_add(vim_snprintf_safelen(
             buffer.add(bufferlen),
             (IOSIZE as size_t).wrapping_sub(bufferlen),
-            gettext(b"line %ld of %ld --%d%%-- col \0".as_ptr() as *const ::core::ffi::c_char),
+            gettext(c"line %ld of %ld --%d%%-- col ".as_ptr()),
             (*curwin.get()).w_cursor.lnum as int64_t,
             (*curbuf.get()).b_ml.ml_line_count as int64_t,
             calc_percentage(
@@ -3878,20 +3846,9 @@ pub unsafe extern "C" fn col_print(
     mut vcol: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     if col == vcol {
-        return vim_snprintf_safelen(
-            buf,
-            buflen,
-            b"%d\0".as_ptr() as *const ::core::ffi::c_char,
-            col,
-        ) as ::core::ffi::c_int;
+        return vim_snprintf_safelen(buf, buflen, c"%d".as_ptr(), col) as ::core::ffi::c_int;
     }
-    return vim_snprintf_safelen(
-        buf,
-        buflen,
-        b"%d-%d\0".as_ptr() as *const ::core::ffi::c_char,
-        col,
-        vcol,
-    ) as ::core::ffi::c_int;
+    return vim_snprintf_safelen(buf, buflen, c"%d-%d".as_ptr(), col, vcol) as ::core::ffi::c_int;
 }
 static lasttitle: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
@@ -3947,8 +3904,8 @@ pub unsafe extern "C" fn maketitle() {
             }
         } else {
             let mut default_titlestring: *mut ::core::ffi::c_char =
-                b"%t%( %M%)%( (%{expand('%:p:~:h')})%)%a - Nvim\0".as_ptr()
-                    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                c"%t%( %M%)%( (%{expand('%:p:~:h')})%)%a - Nvim".as_ptr()
+                    as *mut ::core::ffi::c_char;
             build_stl_str_hl(
                 curwin.get(),
                 &raw mut buf as *mut ::core::ffi::c_char,
@@ -4057,11 +4014,11 @@ pub unsafe extern "C" fn get_rel_pos(
         return vim_snprintf_safelen(
             buf,
             buflen as size_t,
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%s".as_ptr(),
             if above == 0 as linenr_T {
-                gettext(b"All\0".as_ptr() as *const ::core::ffi::c_char)
+                gettext(c"All".as_ptr())
             } else {
-                gettext(b"Bot\0".as_ptr() as *const ::core::ffi::c_char)
+                gettext(c"Bot".as_ptr())
             },
         ) as ::core::ffi::c_int;
     }
@@ -4069,8 +4026,8 @@ pub unsafe extern "C" fn get_rel_pos(
         return vim_snprintf_safelen(
             buf,
             buflen as size_t,
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-            gettext(b"Top\0".as_ptr() as *const ::core::ffi::c_char),
+            c"%s".as_ptr(),
+            gettext(c"Top".as_ptr()),
         ) as ::core::ffi::c_int;
     }
     let mut perc: ::core::ffi::c_int =
@@ -4079,13 +4036,13 @@ pub unsafe extern "C" fn get_rel_pos(
     vim_snprintf(
         &raw mut tmp as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 8]>(),
-        gettext(b"%d%%\0".as_ptr() as *const ::core::ffi::c_char),
+        gettext(c"%d%%".as_ptr()),
         perc,
     );
     return vim_snprintf_safelen(
         buf,
         buflen as size_t,
-        gettext(b"%3s\0".as_ptr() as *const ::core::ffi::c_char),
+        gettext(c"%3s".as_ptr()),
         &raw mut tmp as *mut ::core::ffi::c_char,
     ) as ::core::ffi::c_int;
 }
@@ -4098,9 +4055,9 @@ pub unsafe extern "C" fn append_arg_number(
         return 0 as ::core::ffi::c_int;
     }
     let mut msg_0: *const ::core::ffi::c_char = if (*wp).w_arg_idx_invalid != 0 {
-        gettext(b" ((%d) of %d)\0".as_ptr() as *const ::core::ffi::c_char)
+        gettext(c" ((%d) of %d)".as_ptr())
     } else {
-        gettext(b" (%d of %d)\0".as_ptr() as *const ::core::ffi::c_char)
+        gettext(c" (%d of %d)".as_ptr())
     };
     return vim_snprintf_safelen(
         buf,
@@ -4367,16 +4324,8 @@ unsafe extern "C" fn chk_modeline(
         's_24: {
             if prev == -1 as ::core::ffi::c_int || ascii_isspace(prev) as ::core::ffi::c_int != 0 {
                 if prev != -1 as ::core::ffi::c_int
-                    && strncmp(
-                        s,
-                        b"ex:\0".as_ptr() as *const ::core::ffi::c_char,
-                        3 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    || strncmp(
-                        s,
-                        b"vi:\0".as_ptr() as *const ::core::ffi::c_char,
-                        3 as size_t,
-                    ) == 0 as ::core::ffi::c_int
+                    && strncmp(s, c"ex:".as_ptr(), 3 as size_t) == 0 as ::core::ffi::c_int
+                    || strncmp(s, c"vi:".as_ptr(), 3 as size_t) == 0 as ::core::ffi::c_int
                 {
                     break 's_91;
                 }
@@ -4410,7 +4359,7 @@ unsafe extern "C" fn chk_modeline(
                                 != 'V' as ::core::ffi::c_int
                                 || strncmp(
                                     skipwhite(e.offset(1 as ::core::ffi::c_int as isize)),
-                                    b"set\0".as_ptr() as *const ::core::ffi::c_char,
+                                    c"set".as_ptr(),
                                     3 as size_t,
                                 ) == 0 as ::core::ffi::c_int)
                             && (*s.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -4464,7 +4413,7 @@ unsafe extern "C" fn chk_modeline(
     line_end = s.add(len);
     estack_push(
         ETYPE_MODELINE,
-        b"modelines\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        c"modelines".as_ptr() as *mut ::core::ffi::c_char,
         lnum,
     );
     let mut end: bool = false_0 != 0;
@@ -4495,16 +4444,8 @@ unsafe extern "C" fn chk_modeline(
         if *e as ::core::ffi::c_int == NUL {
             end = true_0 != 0;
         }
-        if strncmp(
-            s,
-            b"set \0".as_ptr() as *const ::core::ffi::c_char,
-            4 as size_t,
-        ) == 0 as ::core::ffi::c_int
-            || strncmp(
-                s,
-                b"se \0".as_ptr() as *const ::core::ffi::c_char,
-                3 as size_t,
-            ) == 0 as ::core::ffi::c_int
+        if strncmp(s, c"set ".as_ptr(), 4 as size_t) == 0 as ::core::ffi::c_int
+            || strncmp(s, c"se ".as_ptr(), 3 as size_t) == 0 as ::core::ffi::c_int
         {
             if *e as ::core::ffi::c_int != ':' as ::core::ffi::c_int {
                 break;
@@ -4612,7 +4553,7 @@ pub unsafe extern "C" fn bt_dontwrite(buf: *const buf_T) -> bool {
 pub unsafe extern "C" fn bt_dontwrite_msg(buf: *const buf_T) -> bool {
     if bt_dontwrite(buf) {
         emsg(gettext(
-            b"E382: Cannot write, 'buftype' option is set\0".as_ptr() as *const ::core::ffi::c_char,
+            c"E382: Cannot write, 'buftype' option is set".as_ptr(),
         ));
         return true_0 != 0;
     }
@@ -4638,12 +4579,12 @@ pub unsafe extern "C" fn buf_spname(mut buf: *mut buf_T) -> *mut ::core::ffi::c_
             return (*buf).b_fname;
         }
         if buf == cmdwin_buf.get() {
-            return gettext(b"[Command Line]\0".as_ptr() as *const ::core::ffi::c_char);
+            return gettext(c"[Command Line]".as_ptr());
         }
         if bt_prompt(buf) {
-            return gettext(b"[Prompt]\0".as_ptr() as *const ::core::ffi::c_char);
+            return gettext(c"[Prompt]".as_ptr());
         }
-        return gettext(b"[Scratch]\0".as_ptr() as *const ::core::ffi::c_char);
+        return gettext(c"[Scratch]".as_ptr());
     }
     if (*buf).b_fname.is_null() {
         return buf_get_fname(buf);
@@ -4652,7 +4593,7 @@ pub unsafe extern "C" fn buf_spname(mut buf: *mut buf_T) -> *mut ::core::ffi::c_
 }
 pub unsafe extern "C" fn buf_get_fname(mut buf: *const buf_T) -> *mut ::core::ffi::c_char {
     if (*buf).b_fname.is_null() {
-        return gettext(b"[No Name]\0".as_ptr() as *const ::core::ffi::c_char);
+        return gettext(c"[No Name]".as_ptr());
     }
     return (*buf).b_fname;
 }
@@ -4823,8 +4764,7 @@ pub unsafe extern "C" fn buf_open_scratch(
             type_0: kOptValTypeString,
             data: OptValData {
                 string: String_0 {
-                    data: b"hide\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    data: c"hide".as_ptr() as *mut ::core::ffi::c_char,
                     size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
                         .wrapping_sub(1 as size_t),
                 },
@@ -4838,8 +4778,7 @@ pub unsafe extern "C" fn buf_open_scratch(
             type_0: kOptValTypeString,
             data: OptValData {
                 string: String_0 {
-                    data: b"nofile\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    data: c"nofile".as_ptr() as *mut ::core::ffi::c_char,
                     size: ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
                         .wrapping_sub(1 as size_t),
                 },
@@ -4870,7 +4809,7 @@ pub unsafe extern "C" fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnu
     let mut old_val: typval_T = (*buf).changedtick_di.di_tv;
     let changedtick_di: *mut dictitem_T = tv_dict_find(
         (*buf).b_vars,
-        b"changedtick\0".as_ptr() as *const ::core::ffi::c_char,
+        c"changedtick".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     debug_assert!(!changedtick_di.is_null(), "changedtick_di != NULL");

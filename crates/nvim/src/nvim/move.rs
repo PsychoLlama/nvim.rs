@@ -1122,25 +1122,25 @@ pub unsafe extern "C" fn f_screenpos(
     );
     tv_dict_add_nr(
         dict,
-        b"row\0".as_ptr() as *const ::core::ffi::c_char,
+        c"row".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
         row as varnumber_T,
     );
     tv_dict_add_nr(
         dict,
-        b"col\0".as_ptr() as *const ::core::ffi::c_char,
+        c"col".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
         scol as varnumber_T,
     );
     tv_dict_add_nr(
         dict,
-        b"curscol\0".as_ptr() as *const ::core::ffi::c_char,
+        c"curscol".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
         ccol as varnumber_T,
     );
     tv_dict_add_nr(
         dict,
-        b"endcol\0".as_ptr() as *const ::core::ffi::c_char,
+        c"endcol".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
         ecol as varnumber_T,
     );

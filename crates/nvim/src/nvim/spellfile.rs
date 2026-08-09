@@ -251,7 +251,7 @@ pub const VIMSPELLVERSION: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 pub const SNF_REQUIRED: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const COMPOUND_MAX_LEN: ::core::ffi::c_int = 100000 as ::core::ffi::c_int;
 static e_spell_trunc: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(b"E758: Truncated spell file\0".as_ptr() as *const ::core::ffi::c_char);
+    GlobalCell::new(c"E758: Truncated spell file".as_ptr());
 static e_error_while_reading_sug_file_str: GlobalCell<[::core::ffi::c_char; 40]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
@@ -265,12 +265,11 @@ static e_duplicate_char_in_map_entry: GlobalCell<[::core::ffi::c_char; 34]> =
         )
     });
 static e_illegal_character_in_word: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(b"E1280: Illegal character in word\0".as_ptr() as *const ::core::ffi::c_char);
+    GlobalCell::new(c"E1280: Illegal character in word".as_ptr());
 static e_afftrailing: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(b"Trailing text in %s line %d: %s\0".as_ptr() as *const ::core::ffi::c_char);
-static e_affname: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
-    b"Affix name too long in %s line %d: %s\0".as_ptr() as *const ::core::ffi::c_char,
-);
+    GlobalCell::new(c"Trailing text in %s line %d: %s".as_ptr());
+static e_affname: GlobalCell<*const ::core::ffi::c_char> =
+    GlobalCell::new(c"Affix name too long in %s line %d: %s".as_ptr());
 pub const MAXLINELEN: ::core::ffi::c_int = 500 as ::core::ffi::c_int;
 pub const AFT_CHAR: ::core::ffi::c_int = 0;
 pub const AFT_LONG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -330,12 +329,7 @@ pub unsafe fn ex_mkspell(mut eap: *mut exarg_T) {
         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut ascii: bool = false_0 != 0;
-    if strncmp(
-        arg,
-        b"-ascii\0".as_ptr() as *const ::core::ffi::c_char,
-        6 as size_t,
-    ) == 0 as ::core::ffi::c_int
-    {
+    if strncmp(arg, c"-ascii".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int {
         ascii = true_0 != 0;
         arg = skipwhite(arg.offset(6 as ::core::ffi::c_int as isize));
     }
@@ -518,14 +512,14 @@ unsafe fn mkspell(
                 (*fnames.offset(0 as ::core::ffi::c_int as isize))
                     .offset(len as isize)
                     .offset(-(4 as ::core::ffi::c_int as isize)),
-                b".add\0".as_ptr() as *const ::core::ffi::c_char,
+                c".add".as_ptr(),
             ) == 0 as ::core::ffi::c_int
         {
             incount = 1 as ::core::ffi::c_int;
             vim_snprintf(
                 wfname,
                 MAXPATHL as size_t,
-                b"%s.spl\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%s.spl".as_ptr(),
                 *fnames.offset(0 as ::core::ffi::c_int as isize),
             );
         } else if fcount == 1 as ::core::ffi::c_int {
@@ -536,7 +530,7 @@ unsafe fn mkspell(
                 SPL_FNAME_TMPL.as_ptr(),
                 *fnames.offset(0 as ::core::ffi::c_int as isize),
                 if spin.si_ascii != 0 {
-                    b"ascii\0".as_ptr() as *const ::core::ffi::c_char
+                    c"ascii".as_ptr()
                 } else {
                     spell_enc() as *const ::core::ffi::c_char
                 },
@@ -546,7 +540,7 @@ unsafe fn mkspell(
                 (*fnames.offset(0 as ::core::ffi::c_int as isize))
                     .offset(len as isize)
                     .offset(-(4 as ::core::ffi::c_int as isize)),
-                b".spl\0".as_ptr() as *const ::core::ffi::c_char,
+                c".spl".as_ptr(),
             ) == 0 as ::core::ffi::c_int
         {
             xstrlcpy(
@@ -561,7 +555,7 @@ unsafe fn mkspell(
                 SPL_FNAME_TMPL.as_ptr(),
                 *fnames.offset(0 as ::core::ffi::c_int as isize),
                 if spin.si_ascii != 0 {
-                    b"ascii\0".as_ptr() as *const ::core::ffi::c_char
+                    c"ascii".as_ptr()
                 } else {
                     spell_enc() as *const ::core::ffi::c_char
                 },
@@ -579,13 +573,11 @@ unsafe fn mkspell(
             emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
         } else if !vim_strchr(path_tail(wfname), '_' as ::core::ffi::c_int).is_null() {
             emsg(gettext(
-                b"E751: Output file name must not have region name\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"E751: Output file name must not have region name".as_ptr(),
             ));
         } else if incount > MAXREGIONS as ::core::ffi::c_int {
             semsg_c!(
-                gettext(b"E754: Only up to %d regions supported\0".as_ptr()
-                    as *const ::core::ffi::c_char),
+                gettext(c"E754: Only up to %d regions supported".as_ptr()),
                 MAXREGIONS as ::core::ffi::c_int,
             );
         } else if !over_write && os_path_exists(wfname) as ::core::ffi::c_int != 0 {
@@ -610,8 +602,7 @@ unsafe fn mkspell(
                             != '_' as ::core::ffi::c_int
                     {
                         semsg_c!(
-                            gettext(b"E755: Invalid region in %s\0".as_ptr()
-                                as *const ::core::ffi::c_char),
+                            gettext(c"E755: Invalid region in %s".as_ptr()),
                             *innames.offset(i as isize),
                         );
                         break '_theend;
@@ -673,7 +664,7 @@ unsafe fn mkspell(
                 vim_snprintf(
                     fname,
                     MAXPATHL as size_t,
-                    b"%s.aff\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"%s.aff".as_ptr(),
                     *innames.offset(i_0 as isize),
                 );
                 if os_path_exists(fname) {
@@ -684,7 +675,7 @@ unsafe fn mkspell(
                         vim_snprintf(
                             fname,
                             MAXPATHL as size_t,
-                            b"%s.dic\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"%s.dic".as_ptr(),
                             *innames.offset(i_0 as isize),
                         );
                         if spell_read_dic(
@@ -709,10 +700,7 @@ unsafe fn mkspell(
             }
             if !spin.si_compflags.is_null() && spin.si_nobreak as ::core::ffi::c_int != 0 {
                 msg(
-                    gettext(
-                        b"Warning: both compounding and NOBREAK specified\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(c"Warning: both compounding and NOBREAK specified".as_ptr()),
                     0 as ::core::ffi::c_int,
                 );
             }
@@ -729,20 +717,16 @@ unsafe fn mkspell(
                 vim_snprintf(
                     IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
-                    gettext(b"Writing spell file %s...\0".as_ptr() as *const ::core::ffi::c_char),
+                    gettext(c"Writing spell file %s...".as_ptr()),
                     wfname,
                 );
                 spell_message(&raw mut spin, IObuff.ptr() as *mut ::core::ffi::c_char);
                 error = write_vim_spell(&mut spin, wfname) == FAIL;
-                spell_message(
-                    &raw mut spin,
-                    gettext(b"Done!\0".as_ptr() as *const ::core::ffi::c_char),
-                );
+                spell_message(&raw mut spin, gettext(c"Done!".as_ptr()));
                 vim_snprintf(
                     IObuff.ptr() as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
-                    gettext(b"Estimated runtime memory use: %d bytes\0".as_ptr()
-                        as *const ::core::ffi::c_char),
+                    gettext(c"Estimated runtime memory use: %d bytes".as_ptr()),
                     spin.si_memtot,
                 );
                 spell_message(&raw mut spin, IObuff.ptr() as *mut ::core::ffi::c_char);
@@ -818,8 +802,7 @@ unsafe fn set_spell_finish(mut new_st: *mut spelltab_T) -> ::core::ffi::c_int {
                     != (*new_st).st_upper[i as usize] as ::core::ffi::c_int
             {
                 emsg(gettext(
-                    b"E763: Word characters differ between spell files\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    c"E763: Word characters differ between spell files".as_ptr(),
                 ));
                 return FAIL;
             }

@@ -152,11 +152,7 @@ pub unsafe extern "C" fn buf_updates_register(
             type_0: kObjectTypeBoolean,
             data: C2Rust_Unnamed { boolean: false },
         };
-        rpc_send_event(
-            channel_id,
-            b"nvim_buf_lines_event\0".as_ptr() as *const ::core::ffi::c_char,
-            args,
-        );
+        rpc_send_event(channel_id, c"nvim_buf_lines_event".as_ptr(), args);
         arena_mem_free(arena_finish(&raw mut arena));
     } else {
         buf_updates_changedtick_single(buf, channel_id);
@@ -182,11 +178,7 @@ pub unsafe extern "C" fn buf_updates_send_end(mut buf: *mut buf_T, mut channelid
             integer: (*buf).handle as Integer,
         },
     };
-    rpc_send_event(
-        channelid,
-        b"nvim_buf_detach_event\0".as_ptr() as *const ::core::ffi::c_char,
-        args,
-    );
+    rpc_send_event(channelid, c"nvim_buf_detach_event".as_ptr(), args);
 }
 pub unsafe extern "C" fn buf_updates_unregister(mut buf: *mut buf_T, mut channelid: uint64_t) {
     let mut size: size_t = (*buf).update_channels.size;
@@ -285,9 +277,9 @@ pub unsafe extern "C" fn buf_updates_unload(mut buf: *mut buf_T, mut can_reload:
             nlua_call_ref(
                 thecb,
                 if keep as ::core::ffi::c_int != 0 {
-                    b"reload\0".as_ptr() as *const ::core::ffi::c_char
+                    c"reload".as_ptr()
                 } else {
-                    b"detach\0".as_ptr() as *const ::core::ffi::c_char
+                    c"detach".as_ptr()
                 },
                 args,
                 kRetObject,
@@ -409,11 +401,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
             type_0: kObjectTypeBoolean,
             data: C2Rust_Unnamed { boolean: false },
         };
-        if !rpc_send_event(
-            channelid,
-            b"nvim_buf_lines_event\0".as_ptr() as *const ::core::ffi::c_char,
-            args,
-        ) {
+        if !rpc_send_event(channelid, c"nvim_buf_lines_event".as_ptr(), args) {
             badchannelid = channelid;
         }
         i = i.wrapping_add(1);
@@ -422,11 +410,10 @@ pub unsafe extern "C" fn buf_updates_send_changes(
         logmsg(
             LOGLVL_ERR,
             ::core::ptr::null::<::core::ffi::c_char>(),
-            b"buf_updates_send_changes\0".as_ptr() as *const ::core::ffi::c_char,
+            c"buf_updates_send_changes".as_ptr(),
             258 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Disabling buffer updates for dead channel %lu\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"Disabling buffer updates for dead channel %lu".as_ptr(),
             badchannelid,
         );
         buf_updates_unregister(buf, badchannelid);
@@ -527,7 +514,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
             (*textlock.ptr()) += 1;
             res = nlua_call_ref(
                 cb.on_lines,
-                b"lines\0".as_ptr() as *const ::core::ffi::c_char,
+                c"lines".as_ptr(),
                 args_0,
                 kRetNilBool,
                 ::core::ptr::null_mut::<Arena>(),
@@ -678,7 +665,7 @@ pub unsafe extern "C" fn buf_updates_send_splice(
             (*textlock.ptr()) += 1;
             res = nlua_call_ref(
                 cb.on_bytes,
-                b"bytes\0".as_ptr() as *const ::core::ffi::c_char,
+                c"bytes".as_ptr(),
                 args,
                 kRetNilBool,
                 ::core::ptr::null_mut::<Arena>(),
@@ -748,7 +735,7 @@ pub unsafe extern "C" fn buf_updates_changedtick(mut buf: *mut buf_T) {
             (*textlock.ptr()) += 1;
             res = nlua_call_ref(
                 cb.on_changedtick,
-                b"changedtick\0".as_ptr() as *const ::core::ffi::c_char,
+                c"changedtick".as_ptr(),
                 args,
                 kRetNilBool,
                 ::core::ptr::null_mut::<Arena>(),
@@ -801,11 +788,7 @@ pub unsafe extern "C" fn buf_updates_changedtick_single(
             integer: buf_get_changedtick(buf),
         },
     };
-    rpc_send_event(
-        channel_id,
-        b"nvim_buf_changedtick_event\0".as_ptr() as *const ::core::ffi::c_char,
-        args,
-    );
+    rpc_send_event(channel_id, c"nvim_buf_changedtick_event".as_ptr(), args);
 }
 pub unsafe extern "C" fn buffer_update_callbacks_free(mut cb: BufUpdateCallbacks) {
     api_free_luaref(cb.on_lines);

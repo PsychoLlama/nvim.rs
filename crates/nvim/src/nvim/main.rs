@@ -237,16 +237,16 @@ pub static tabpage_handles: GlobalCell<Map_int_ptr_t> = GlobalCell::new(Map_int_
     values: ::core::ptr::null_mut::<ptr_t>(),
 });
 pub static ui_ext_names: GlobalCell<[*const c_char; 10]> = GlobalCell::new([
-    b"ext_cmdline\0".as_ptr() as *const c_char,
-    b"ext_popupmenu\0".as_ptr() as *const c_char,
-    b"ext_tabline\0".as_ptr() as *const c_char,
-    b"ext_wildmenu\0".as_ptr() as *const c_char,
-    b"ext_messages\0".as_ptr() as *const c_char,
-    b"ext_linegrid\0".as_ptr() as *const c_char,
-    b"ext_multigrid\0".as_ptr() as *const c_char,
-    b"ext_hlstate\0".as_ptr() as *const c_char,
-    b"ext_termcolors\0".as_ptr() as *const c_char,
-    b"_debug_float\0".as_ptr() as *const c_char,
+    c"ext_cmdline".as_ptr(),
+    c"ext_popupmenu".as_ptr(),
+    c"ext_tabline".as_ptr(),
+    c"ext_wildmenu".as_ptr(),
+    c"ext_messages".as_ptr(),
+    c"ext_linegrid".as_ptr(),
+    c"ext_multigrid".as_ptr(),
+    c"ext_hlstate".as_ptr(),
+    c"ext_termcolors".as_ptr(),
+    c"_debug_float".as_ptr(),
 ]);
 pub(crate) const NUL: c_int = '\0' as c_int;
 pub(crate) const PATHSEP: c_int = '/' as c_int;
@@ -281,9 +281,9 @@ pub static aucmd_win_vec: GlobalCell<AucmdWinVec> = GlobalCell::new(AucmdWinVec 
 pub static deferred_events: GlobalCell<*mut MultiQueue> =
     GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
 pub static msg_loclist: GlobalCell<*mut c_char> =
-    GlobalCell::new(b"[Location List]\0".as_ptr() as *const c_char as *mut c_char);
+    GlobalCell::new(c"[Location List]".as_ptr() as *mut c_char);
 pub static msg_qflist: GlobalCell<*mut c_char> =
-    GlobalCell::new(b"[Quickfix List]\0".as_ptr() as *const c_char as *mut c_char);
+    GlobalCell::new(c"[Quickfix List]".as_ptr() as *mut c_char);
 pub static channels: GlobalCell<Map_uint64_t_ptr_t> = GlobalCell::new(Map_uint64_t_ptr_t {
     set: Set_uint64_t {
         h: MapHash {
@@ -1175,7 +1175,7 @@ pub static g_do_tagpreview: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static g_tag_at_cursor: GlobalCell<bool> = GlobalCell::new(false);
 pub static replace_offset: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static escape_chars: GlobalCell<*mut c_char> =
-    GlobalCell::new(b" \t\\\"|\0".as_ptr() as *const c_char as *mut c_char);
+    GlobalCell::new(c" \t\\\"|".as_ptr() as *mut c_char);
 pub static keep_help_flag: GlobalCell<bool> = GlobalCell::new(false);
 pub static redir_off: GlobalCell<bool> = GlobalCell::new(false);
 pub static redir_fd: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
@@ -1930,16 +1930,15 @@ pub static main_loop: SharedCell<Loop> = SharedCell::new(Loop {
 });
 static argv0: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 static err_arg_missing: GlobalCell<*const c_char> =
-    GlobalCell::new(b"Argument missing after\0".as_ptr() as *const c_char);
+    GlobalCell::new(c"Argument missing after".as_ptr());
 static err_opt_garbage: GlobalCell<*const c_char> =
-    GlobalCell::new(b"Garbage after option argument\0".as_ptr() as *const c_char);
+    GlobalCell::new(c"Garbage after option argument".as_ptr());
 static err_opt_unknown: GlobalCell<*const c_char> =
-    GlobalCell::new(b"Unknown option argument\0".as_ptr() as *const c_char);
+    GlobalCell::new(c"Unknown option argument".as_ptr());
 static err_too_many_args: GlobalCell<*const c_char> =
-    GlobalCell::new(b"Too many edit arguments\0".as_ptr() as *const c_char);
+    GlobalCell::new(c"Too many edit arguments".as_ptr());
 static err_extra_cmd: GlobalCell<*const c_char> = GlobalCell::new(
-    b"Too many \"+command\", \"-c command\" or \"--cmd command\" arguments\0".as_ptr()
-        as *const c_char,
+    c"Too many \"+command\", \"-c command\" or \"--cmd command\" arguments".as_ptr(),
 );
 pub static tslua_query_parse_count: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
 pub(crate) const MAX_ARG_CMDS: c_int = 10 as c_int;
@@ -2016,10 +2015,10 @@ pub static ui_client_attached: GlobalCell<bool> = GlobalCell::new(false);
 pub static ui_client_forward_stdin: GlobalCell<bool> = GlobalCell::new(false);
 pub static tabpage_move_disallowed: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static float_anchor_str: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    b"NW\0".as_ptr() as *const c_char,
-    b"NE\0".as_ptr() as *const c_char,
-    b"SW\0".as_ptr() as *const c_char,
-    b"SE\0".as_ptr() as *const c_char,
+    c"NW".as_ptr(),
+    c"NE".as_ptr(),
+    c"SW".as_ptr(),
+    c"SE".as_ptr(),
 ]);
 pub(crate) const WRITEBIN: [c_char; 3] = c_bytes(b"wb\0");
 pub(crate) const APPENDBIN: [c_char; 3] = c_bytes(b"ab\0");

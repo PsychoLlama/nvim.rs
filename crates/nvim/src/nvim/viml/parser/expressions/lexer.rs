@@ -108,10 +108,8 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     ret.len = ret.len.wrapping_add(1);
                 }
                 ret.data.err.type_0 = kExprLexSpacing;
-                ret.data.err.msg = gettext(
-                    b"E15: Invalid control character present in input: %.*s\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
+                ret.data.err.msg =
+                    gettext(c"E15: Invalid control character present in input: %.*s".as_ptr());
             }
             48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 => {
                 ret.data.num.is_float = false;
@@ -409,15 +407,13 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     && (ret.len == 2
                         && memcmp(
                             pline.data as *const ::core::ffi::c_void,
-                            b"is\0".as_ptr() as *const ::core::ffi::c_char
-                                as *const ::core::ffi::c_void,
+                            c"is".as_ptr() as *const ::core::ffi::c_void,
                             2,
                         ) == 0 as ::core::ffi::c_int
                         || ret.len == 5
                             && memcmp(
                                 pline.data as *const ::core::ffi::c_void,
-                                b"isnot\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *const ::core::ffi::c_void,
+                                c"isnot".as_ptr() as *const ::core::ffi::c_void,
                                 5,
                             ) == 0 as ::core::ffi::c_int)
                 {
@@ -426,7 +422,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     ret.data.cmp.inv = ret.len == 5;
                     if ret.len < pline.size
                         && !strchr(
-                            b"?#\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"?#".as_ptr(),
                             *pline.data.add(ret.len) as ::core::ffi::c_int,
                         )
                         .is_null()
@@ -513,9 +509,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                 {
                     ret.type_0 = kExprLexInvalid;
                     ret.data.err.type_0 = kExprLexOption;
-                    ret.data.err.msg =
-                        gettext(b"E112: Option name missing: %.*s\0".as_ptr()
-                            as *const ::core::ffi::c_char);
+                    ret.data.err.msg = gettext(c"E112: Option name missing: %.*s".as_ptr());
                 } else {
                     ret.type_0 = kExprLexOption;
                     if pline.size > 2
@@ -568,9 +562,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                         if ret.data.opt.len == 0 {
                             ret.type_0 = kExprLexInvalid;
                             ret.data.err.type_0 = kExprLexOption;
-                            ret.data.err.msg =
-                                gettext(b"E112: Option name missing: %.*s\0".as_ptr()
-                                    as *const ::core::ffi::c_char);
+                            ret.data.err.msg = gettext(c"E112: Option name missing: %.*s".as_ptr());
                         } else {
                             ret.len = ret.len.wrapping_add(ret.data.opt.len);
                         }
@@ -652,7 +644,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     }
                     if ret.len < pline.size
                         && !strchr(
-                            b"?#\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"?#".as_ptr(),
                             *pline.data.add(ret.len) as ::core::ffi::c_int,
                         )
                         .is_null()
@@ -674,7 +666,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                 }
                 if ret.len < pline.size
                     && !strchr(
-                        b"?#\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"?#".as_ptr(),
                         *pline.data.add(ret.len) as ::core::ffi::c_int,
                     )
                     .is_null()
@@ -736,8 +728,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
             NUL | NL => {
                 if flags & kELFlagForbidEOC as ::core::ffi::c_int != 0 {
                     ret.type_0 = kExprLexInvalid;
-                    ret.data.err.msg = gettext(b"E15: Unexpected EOC character: %.*s\0".as_ptr()
-                        as *const ::core::ffi::c_char);
+                    ret.data.err.msg = gettext(c"E15: Unexpected EOC character: %.*s".as_ptr());
                     ret.data.err.type_0 = kExprLexSpacing;
                 } else {
                     ret.type_0 = kExprLexEOC;
@@ -751,8 +742,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     ret.type_0 = kExprLexOr;
                 } else if flags & kELFlagForbidEOC as ::core::ffi::c_int != 0 {
                     ret.type_0 = kExprLexInvalid;
-                    ret.data.err.msg = gettext(b"E15: Unexpected EOC character: %.*s\0".as_ptr()
-                        as *const ::core::ffi::c_char);
+                    ret.data.err.msg = gettext(c"E15: Unexpected EOC character: %.*s".as_ptr());
                     ret.data.err.type_0 = kExprLexOr;
                 } else {
                     ret.type_0 = kExprLexEOC;
@@ -762,9 +752,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                 ret.len = utfc_ptr2len_len(pline.data, pline.size as ::core::ffi::c_int) as size_t;
                 ret.type_0 = kExprLexInvalid;
                 ret.data.err.type_0 = kExprLexPlainIdentifier;
-                ret.data.err.msg =
-                    gettext(b"E15: Unidentified character: %.*s\0".as_ptr()
-                        as *const ::core::ffi::c_char);
+                ret.data.err.msg = gettext(c"E15: Unidentified character: %.*s".as_ptr());
             }
         }
     }

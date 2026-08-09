@@ -524,32 +524,32 @@ unsafe extern "C" fn filter_map(
     let func_name: *const ::core::ffi::c_char = if filtermap as ::core::ffi::c_uint
         == FILTERMAP_MAP as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        b"map()\0".as_ptr() as *const ::core::ffi::c_char
+        c"map()".as_ptr()
     } else if filtermap as ::core::ffi::c_uint
         == FILTERMAP_MAPNEW as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        b"mapnew()\0".as_ptr() as *const ::core::ffi::c_char
+        c"mapnew()".as_ptr()
     } else if filtermap as ::core::ffi::c_uint
         == FILTERMAP_FILTER as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        b"filter()\0".as_ptr() as *const ::core::ffi::c_char
+        c"filter()".as_ptr()
     } else {
-        b"foreach()\0".as_ptr() as *const ::core::ffi::c_char
+        c"foreach()".as_ptr()
     };
     let arg_errmsg: *const ::core::ffi::c_char = if filtermap as ::core::ffi::c_uint
         == FILTERMAP_MAP as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        b"map() argument\0".as_ptr() as *const ::core::ffi::c_char
+        c"map() argument".as_ptr()
     } else if filtermap as ::core::ffi::c_uint
         == FILTERMAP_MAPNEW as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        b"mapnew() argument\0".as_ptr() as *const ::core::ffi::c_char
+        c"mapnew() argument".as_ptr()
     } else if filtermap as ::core::ffi::c_uint
         == FILTERMAP_FILTER as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        b"filter() argument\0".as_ptr() as *const ::core::ffi::c_char
+        c"filter() argument".as_ptr()
     } else {
-        b"foreach() argument\0".as_ptr() as *const ::core::ffi::c_char
+        c"foreach() argument".as_ptr()
     };
     if filtermap as ::core::ffi::c_uint
         != FILTERMAP_MAPNEW as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -691,7 +691,7 @@ pub unsafe extern "C" fn f_add(
             .v_list;
         if !value_check_lock(
             tv_list_locked(l),
-            b"add() argument\0".as_ptr() as *const ::core::ffi::c_char,
+            c"add() argument".as_ptr(),
             TV_TRANSLATE as size_t,
         ) {
             tv_list_append_tv(l, argvars.offset(1 as ::core::ffi::c_int as isize));
@@ -706,7 +706,7 @@ pub unsafe extern "C" fn f_add(
         if !b.is_null()
             && !value_check_lock(
                 (*b).bv_lock,
-                b"add() argument\0".as_ptr() as *const ::core::ffi::c_char,
+                c"add() argument".as_ptr(),
                 TV_TRANSLATE as size_t,
             )
         {
@@ -893,7 +893,7 @@ pub unsafe extern "C" fn f_count(
         semsg_c!(
             (e_argument_of_str_must_be_list_string_or_dictionary.ptr() as *const _)
                 as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            b"count()\0".as_ptr() as *const ::core::ffi::c_char,
+            c"count()".as_ptr(),
         );
     }
     (*rettv).vval.v_number = n;
@@ -939,15 +939,12 @@ unsafe extern "C" fn extend_dict(
             return;
         }
     }
-    let mut action: *const ::core::ffi::c_char = b"force\0".as_ptr() as *const ::core::ffi::c_char;
+    let mut action: *const ::core::ffi::c_char = c"force".as_ptr();
     if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        let av: [*const ::core::ffi::c_char; 3] = [
-            b"keep\0".as_ptr() as *const ::core::ffi::c_char,
-            b"force\0".as_ptr() as *const ::core::ffi::c_char,
-            b"error\0".as_ptr() as *const ::core::ffi::c_char,
-        ];
+        let av: [*const ::core::ffi::c_char; 3] =
+            [c"keep".as_ptr(), c"force".as_ptr(), c"error".as_ptr()];
         action = tv_get_string_chk(argvars.offset(2 as ::core::ffi::c_int as isize));
         if action.is_null() {
             if is_new {
@@ -1090,9 +1087,9 @@ unsafe extern "C" fn extend(
         semsg_c!(
             &raw const e_listdictarg as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             if is_new as ::core::ffi::c_int != 0 {
-                b"extendnew()\0".as_ptr() as *const ::core::ffi::c_char
+                c"extendnew()".as_ptr()
             } else {
-                b"extend()\0".as_ptr() as *const ::core::ffi::c_char
+                c"extend()".as_ptr()
             },
         );
     };
@@ -1103,7 +1100,7 @@ pub unsafe extern "C" fn f_extend(
     mut _fptr: EvalFuncData,
 ) {
     let mut errmsg: *mut ::core::ffi::c_char =
-        b"extend() argument\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        c"extend() argument".as_ptr() as *mut ::core::ffi::c_char;
     extend(argvars, rettv, errmsg, false_0 != 0);
 }
 pub unsafe extern "C" fn f_extendnew(
@@ -1111,9 +1108,8 @@ pub unsafe extern "C" fn f_extendnew(
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    let mut errmsg: *mut ::core::ffi::c_char = b"extendnew() argument\0".as_ptr()
-        as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char;
+    let mut errmsg: *mut ::core::ffi::c_char =
+        c"extendnew() argument".as_ptr() as *mut ::core::ffi::c_char;
     extend(argvars, rettv, errmsg, true_0 != 0);
 }
 pub unsafe extern "C" fn f_insert(
@@ -1131,7 +1127,7 @@ pub unsafe extern "C" fn f_insert(
         if b.is_null()
             || value_check_lock(
                 (*b).bv_lock,
-                b"insert() argument\0".as_ptr() as *const ::core::ffi::c_char,
+                c"insert() argument".as_ptr(),
                 TV_TRANSLATE as size_t,
             ) as ::core::ffi::c_int
                 != 0
@@ -1188,7 +1184,7 @@ pub unsafe extern "C" fn f_insert(
     {
         semsg_c!(
             &raw const e_listblobarg as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            b"insert()\0".as_ptr() as *const ::core::ffi::c_char,
+            c"insert()".as_ptr(),
         );
     } else {
         let mut l: *mut list_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
@@ -1196,7 +1192,7 @@ pub unsafe extern "C" fn f_insert(
             .v_list;
         if value_check_lock(
             tv_list_locked(l),
-            b"insert() argument\0".as_ptr() as *const ::core::ffi::c_char,
+            c"insert() argument".as_ptr(),
             TV_TRANSLATE as size_t,
         ) {
             return;
@@ -1236,8 +1232,7 @@ pub unsafe extern "C" fn f_remove(
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    let arg_errmsg: *const ::core::ffi::c_char =
-        b"remove() argument\0".as_ptr() as *const ::core::ffi::c_char;
+    let arg_errmsg: *const ::core::ffi::c_char = c"remove() argument".as_ptr();
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -1253,7 +1248,7 @@ pub unsafe extern "C" fn f_remove(
     } else {
         semsg_c!(
             &raw const e_listdictblobarg as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            b"remove()\0".as_ptr() as *const ::core::ffi::c_char,
+            c"remove()".as_ptr(),
         );
     };
 }
@@ -1305,7 +1300,7 @@ pub unsafe extern "C" fn f_reverse(
             .v_list;
         if !value_check_lock(
             tv_list_locked(l),
-            b"reverse() argument\0".as_ptr() as *const ::core::ffi::c_char,
+            c"reverse() argument".as_ptr(),
             TV_TRANSLATE as size_t,
         ) {
             tv_list_reverse(l);

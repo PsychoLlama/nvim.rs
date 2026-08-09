@@ -53,12 +53,10 @@ pub const SURROGATE_HI_END: ::core::ffi::c_int = 0xdbff as ::core::ffi::c_int;
 pub const SURROGATE_LO_START: ::core::ffi::c_int = 0xdc00 as ::core::ffi::c_int;
 pub const SURROGATE_LO_END: ::core::ffi::c_int = 0xdfff as ::core::ffi::c_int;
 pub const SURROGATE_FIRST_CHAR: ::core::ffi::c_int = 0x10000 as ::core::ffi::c_int;
-pub static encode_bool_var_names: GlobalCell<[*const ::core::ffi::c_char; 2]> = GlobalCell::new([
-    b"v:false\0".as_ptr() as *const ::core::ffi::c_char,
-    b"v:true\0".as_ptr() as *const ::core::ffi::c_char,
-]);
+pub static encode_bool_var_names: GlobalCell<[*const ::core::ffi::c_char; 2]> =
+    GlobalCell::new([c"v:false".as_ptr(), c"v:true".as_ptr()]);
 pub static encode_special_var_names: GlobalCell<[*const ::core::ffi::c_char; 1]> =
-    GlobalCell::new([b"v:null\0".as_ptr() as *const ::core::ffi::c_char]);
+    GlobalCell::new([c"v:null".as_ptr()]);
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn encode_list_write(
     data: *mut ::core::ffi::c_void,
@@ -458,7 +456,7 @@ pub(crate) unsafe extern "C" fn convert_to_json_string(
     if utf_buf.is_null() {
         ga_concat_len(
             gap,
-            b"\"\"\0".as_ptr() as *const ::core::ffi::c_char,
+            c"\"\"".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
         );
     } else {
@@ -483,8 +481,8 @@ pub(crate) unsafe extern "C" fn convert_to_json_string(
                     if ch > 0x7f as ::core::ffi::c_int && shift == 1 as size_t {
                         semsg_c!(
                             gettext(
-                                b"E474: String \"%.*s\" contains byte that does not start any UTF-8 character\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                c"E474: String \"%.*s\" contains byte that does not start any UTF-8 character"
+                                    .as_ptr(),
                             ),
                             utf_len.wrapping_sub(i.wrapping_sub(shift))
                                 as ::core::ffi::c_int,
@@ -497,8 +495,8 @@ pub(crate) unsafe extern "C" fn convert_to_json_string(
                     {
                         semsg_c!(
                             gettext(
-                                b"E474: UTF-8 string contains code point which belongs to a surrogate pair: %.*s\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                c"E474: UTF-8 string contains code point which belongs to a surrogate pair: %.*s"
+                                    .as_ptr(),
                             ),
                             utf_len.wrapping_sub(i.wrapping_sub(shift))
                                 as ::core::ffi::c_int,
@@ -665,7 +663,7 @@ pub unsafe extern "C" fn encode_check_json_key(tv: *const typval_T) -> bool {
     let mut val_di: *const dictitem_T = ::core::ptr::null::<dictitem_T>();
     type_di = tv_dict_find(
         spdict,
-        b"_TYPE\0".as_ptr() as *const ::core::ffi::c_char,
+        c"_TYPE".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if type_di.is_null()
@@ -677,7 +675,7 @@ pub unsafe extern "C" fn encode_check_json_key(tv: *const typval_T) -> bool {
         || {
             val_di = tv_dict_find(
                 spdict,
-                b"_VAL\0".as_ptr() as *const ::core::ffi::c_char,
+                c"_VAL".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as usize)
                     as ptrdiff_t,
             );
@@ -780,11 +778,7 @@ pub unsafe extern "C" fn encode_tv2json(
         ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int,
         80 as ::core::ffi::c_int,
     );
-    let evj_ret = encode_vim_to_json(
-        &raw mut ga,
-        tv,
-        b"encode_tv2json() argument\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let evj_ret = encode_vim_to_json(&raw mut ga, tv, c"encode_tv2json() argument".as_ptr());
     if !evj_ret {
         ga_clear(&raw mut ga);
     }

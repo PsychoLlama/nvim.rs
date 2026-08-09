@@ -537,7 +537,7 @@ unsafe extern "C" fn win_redr_custom(
                 }) as ::core::ffi::c_int;
                 let mut tsize: size_t = transstr_buf(
                     if p >= (&raw mut buf as *mut ::core::ffi::c_char).offset(len as isize) {
-                        b"\0".as_ptr() as *const ::core::ffi::c_char
+                        c"".as_ptr()
                     } else {
                         p as *const ::core::ffi::c_char
                     },
@@ -811,7 +811,7 @@ pub unsafe extern "C" fn redraw_ruler() {
     let mut bufferlen: ::core::ffi::c_int = vim_snprintf(
         &raw mut buffer as *mut ::core::ffi::c_char,
         RULER_BUF_LEN as size_t,
-        gettext(b"%ld,\0".as_ptr() as *const ::core::ffi::c_char),
+        gettext(c"%ld,".as_ptr()),
         if (*(*wp).w_buffer).b_ml.ml_flags & ML_EMPTY != 0 {
             0 as int64_t
         } else {
@@ -855,7 +855,7 @@ pub unsafe extern "C" fn redraw_ruler() {
         bufferlen += vim_snprintf(
             (&raw mut buffer as *mut ::core::ffi::c_char).offset(bufferlen as isize),
             (RULER_BUF_LEN as size_t).wrapping_sub(bufferlen as size_t),
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%s".as_ptr(),
             &raw mut rel_pos as *mut ::core::ffi::c_char,
         );
     }
@@ -975,7 +975,7 @@ unsafe extern "C" fn ui_ext_tabline_update() {
         let c2rust_fresh45 = tab_info.size;
         tab_info.size = tab_info.size.wrapping_add(1);
         *tab_info.items.add(c2rust_fresh45) = key_value_pair {
-            key: cstr_as_string(b"tab\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"tab".as_ptr()),
             value: object {
                 type_0: kObjectTypeTabpage,
                 data: C2Rust_Unnamed {
@@ -992,7 +992,7 @@ unsafe extern "C" fn ui_ext_tabline_update() {
         let c2rust_fresh46 = tab_info.size;
         tab_info.size = tab_info.size.wrapping_add(1);
         *tab_info.items.add(c2rust_fresh46) = key_value_pair {
-            key: cstr_as_string(b"name\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"name".as_ptr()),
             value: object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed {
@@ -1031,7 +1031,7 @@ unsafe extern "C" fn ui_ext_tabline_update() {
             let c2rust_fresh48 = buffer_info.size;
             buffer_info.size = buffer_info.size.wrapping_add(1);
             *buffer_info.items.add(c2rust_fresh48) = key_value_pair {
-                key: cstr_as_string(b"buffer\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"buffer".as_ptr()),
                 value: object {
                     type_0: kObjectTypeBuffer,
                     data: C2Rust_Unnamed {
@@ -1043,7 +1043,7 @@ unsafe extern "C" fn ui_ext_tabline_update() {
             let c2rust_fresh49 = buffer_info.size;
             buffer_info.size = buffer_info.size.wrapping_add(1);
             *buffer_info.items.add(c2rust_fresh49) = key_value_pair {
-                key: cstr_as_string(b"name\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"name".as_ptr()),
                 value: object {
                     type_0: kObjectTypeString,
                     data: C2Rust_Unnamed {
@@ -1171,7 +1171,7 @@ pub unsafe extern "C" fn draw_tabline() {
                     let mut len: ::core::ffi::c_int = vim_snprintf(
                         NameBuff.ptr() as *mut ::core::ffi::c_char,
                         MAXPATHL as size_t,
-                        b"%d\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"%d".as_ptr(),
                         wincount,
                     );
                     if col + len >= Columns.get() - 3 as ::core::ffi::c_int {
@@ -1404,7 +1404,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
             },
         };
         set_var(
-            b"g:statusline_winid\0".as_ptr() as *const ::core::ffi::c_char,
+            c"g:statusline_winid".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 19]>().wrapping_sub(1 as size_t),
             &raw mut tv,
             false_0 != 0,
@@ -1418,7 +1418,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
             usefmt = fmt;
         }
         do_unlet(
-            b"g:statusline_winid\0".as_ptr() as *const ::core::ffi::c_char,
+            c"g:statusline_winid".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 19]>().wrapping_sub(1 as size_t),
             true_0 != 0,
         );
@@ -1972,24 +1972,22 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                     &raw mut buf_tmp as *mut ::core::ffi::c_char,
                                                     ::core::mem::size_of::<[::core::ffi::c_char; 70]>(
                                                     ),
-                                                    b"%d\0".as_ptr() as *const ::core::ffi::c_char,
+                                                    c"%d".as_ptr(),
                                                     (*curbuf.get()).handle,
                                                 );
                                                 set_internal_string_var(
-                                                    b"g:actual_curbuf\0".as_ptr()
-                                                        as *const ::core::ffi::c_char,
+                                                    c"g:actual_curbuf".as_ptr(),
                                                     &raw mut buf_tmp as *mut ::core::ffi::c_char,
                                                 );
                                                 vim_snprintf(
                                                     &raw mut buf_tmp as *mut ::core::ffi::c_char,
                                                     ::core::mem::size_of::<[::core::ffi::c_char; 70]>(
                                                     ),
-                                                    b"%d\0".as_ptr() as *const ::core::ffi::c_char,
+                                                    c"%d".as_ptr(),
                                                     (*curwin.get()).handle,
                                                 );
                                                 set_internal_string_var(
-                                                    b"g:actual_curwin\0".as_ptr()
-                                                        as *const ::core::ffi::c_char,
+                                                    c"g:actual_curwin".as_ptr(),
                                                     &raw mut buf_tmp as *mut ::core::ffi::c_char,
                                                 );
                                                 let save_curbuf: *mut buf_T = curbuf.get();
@@ -2010,13 +2008,13 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                 curbuf.set(save_curbuf);
                                                 VIsual_active.set(save_VIsual_active != 0);
                                                 do_unlet(
-                                                    b"g:actual_curbuf\0".as_ptr() as *const ::core::ffi::c_char,
+                                                    c"g:actual_curbuf".as_ptr(),
                                                     ::core::mem::size_of::<[::core::ffi::c_char; 16]>()
                                                         .wrapping_sub(1 as size_t),
                                                     true_0 != 0,
                                                 );
                                                 do_unlet(
-                                                    b"g:actual_curwin\0".as_ptr() as *const ::core::ffi::c_char,
+                                                    c"g:actual_curwin".as_ptr(),
                                                     ::core::mem::size_of::<[::core::ffi::c_char; 16]>()
                                                         .wrapping_sub(1 as size_t),
                                                     true_0 != 0,
@@ -2076,8 +2074,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                         .add(str_length);
                                                     new_fmt_p = (memcpy(
                                                         new_fmt_p as *mut ::core::ffi::c_void,
-                                                        b"%}\0".as_ptr()
-                                                            as *const ::core::ffi::c_char
+                                                        c"%}".as_ptr()
                                                             as *const ::core::ffi::c_void,
                                                         2 as size_t,
                                                     )
@@ -2257,7 +2254,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                 let plen = vim_snprintf(
                                                     buf_tmp.as_mut_ptr(),
                                                     TMPLEN as size_t,
-                                                    b"<%s>\0".as_ptr() as *const _,
+                                                    c"<%s>".as_ptr() as *const _,
                                                     keymap_name.as_ptr(),
                                                 );
                                                 if plen > 0 && plen <= TMPLEN - 1 {
@@ -2291,10 +2288,9 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                 str = (if opt as ::core::ffi::c_int
                                                     == STL_ROFLAG_ALT as ::core::ffi::c_int
                                                 {
-                                                    b",RO\0".as_ptr() as *const ::core::ffi::c_char
+                                                    c",RO".as_ptr()
                                                 } else {
-                                                    gettext(b"[RO]\0".as_ptr()
-                                                        as *const ::core::ffi::c_char)
+                                                    gettext(c"[RO]".as_ptr())
                                                         as *const ::core::ffi::c_char
                                                 })
                                                     as *mut ::core::ffi::c_char;
@@ -2307,10 +2303,9 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                 str = (if opt as ::core::ffi::c_int
                                                     == STL_HELPFLAG_ALT as ::core::ffi::c_int
                                                 {
-                                                    b",HLP\0".as_ptr() as *const ::core::ffi::c_char
+                                                    c",HLP".as_ptr()
                                                 } else {
-                                                    gettext(b"[Help]\0".as_ptr()
-                                                        as *const ::core::ffi::c_char)
+                                                    gettext(c"[Help]".as_ptr())
                                                         as *const ::core::ffi::c_char
                                                 })
                                                     as *mut ::core::ffi::c_char;
@@ -2333,8 +2328,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                     &raw mut buf_tmp as *mut ::core::ffi::c_char,
                                                     ::core::mem::size_of::<[::core::ffi::c_char; 70]>(
                                                     ),
-                                                    b"[%s]\0".as_ptr()
-                                                        as *const ::core::ffi::c_char,
+                                                    c"[%s]".as_ptr(),
                                                     (*(*wp).w_buffer).b_p_ft,
                                                 );
                                                 str = &raw mut buf_tmp as *mut ::core::ffi::c_char;
@@ -2352,7 +2346,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                     &raw mut buf_tmp as *mut ::core::ffi::c_char,
                                                     ::core::mem::size_of::<[::core::ffi::c_char; 70]>(
                                                     ),
-                                                    b",%s\0".as_ptr() as *const ::core::ffi::c_char,
+                                                    c",%s".as_ptr(),
                                                     (*(*wp).w_buffer).b_p_ft,
                                                 );
                                                 let mut t_3: *mut ::core::ffi::c_char =
@@ -2376,10 +2370,9 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                 str = (if opt as ::core::ffi::c_int
                                                     == STL_PREVIEWFLAG_ALT as ::core::ffi::c_int
                                                 {
-                                                    b",PRV\0".as_ptr() as *const ::core::ffi::c_char
+                                                    c",PRV".as_ptr()
                                                 } else {
-                                                    gettext(b"[Preview]\0".as_ptr()
-                                                        as *const ::core::ffi::c_char)
+                                                    gettext(c"[Preview]".as_ptr())
                                                         as *const ::core::ffi::c_char
                                                 })
                                                     as *mut ::core::ffi::c_char;
@@ -2408,34 +2401,28 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                     * 4 as ::core::ffi::c_int
                                             {
                                                 2 => {
-                                                    str = b"[+]\0".as_ptr()
-                                                        as *const ::core::ffi::c_char
-                                                        as *mut ::core::ffi::c_char;
+                                                    str =
+                                                        c"[+]".as_ptr() as *mut ::core::ffi::c_char;
                                                 }
                                                 3 => {
-                                                    str = b",+\0".as_ptr()
-                                                        as *const ::core::ffi::c_char
-                                                        as *mut ::core::ffi::c_char;
+                                                    str =
+                                                        c",+".as_ptr() as *mut ::core::ffi::c_char;
                                                 }
                                                 4 => {
-                                                    str = b"[-]\0".as_ptr()
-                                                        as *const ::core::ffi::c_char
-                                                        as *mut ::core::ffi::c_char;
+                                                    str =
+                                                        c"[-]".as_ptr() as *mut ::core::ffi::c_char;
                                                 }
                                                 5 => {
-                                                    str = b",-\0".as_ptr()
-                                                        as *const ::core::ffi::c_char
-                                                        as *mut ::core::ffi::c_char;
+                                                    str =
+                                                        c",-".as_ptr() as *mut ::core::ffi::c_char;
                                                 }
                                                 6 => {
-                                                    str = b"[+-]\0".as_ptr()
-                                                        as *const ::core::ffi::c_char
+                                                    str = c"[+-]".as_ptr()
                                                         as *mut ::core::ffi::c_char;
                                                 }
                                                 7 => {
-                                                    str = b",+-\0".as_ptr()
-                                                        as *const ::core::ffi::c_char
-                                                        as *mut ::core::ffi::c_char;
+                                                    str =
+                                                        c",+-".as_ptr() as *mut ::core::ffi::c_char;
                                                 }
                                                 _ => {}
                                             }

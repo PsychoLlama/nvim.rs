@@ -657,9 +657,9 @@ mod tests {
 
         let list = tmp.join("db");
         let list = list.as_os_str().as_bytes();
-        let foo = CStr::from_bytes_with_nul(b"foo\0").unwrap();
-        let bar = CStr::from_bytes_with_nul(b"bar\0").unwrap();
-        let baz = CStr::from_bytes_with_nul(b"baz\0").unwrap();
+        let foo = c"foo";
+        let bar = c"bar";
+        let baz = c"baz";
         assert!(from_dirs(list, foo).is_some());
         assert!(from_dirs(list, bar).is_some(), "hex fallback directory");
         assert!(from_dirs(list, baz).is_none());

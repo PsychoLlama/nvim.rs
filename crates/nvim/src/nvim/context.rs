@@ -175,8 +175,7 @@ pub unsafe extern "C" fn ctx_restore(mut ctx: *mut Context, flags: ::core::ffi::
             type_0: kOptValTypeString,
             data: OptValData {
                 string: String_0 {
-                    data: b"!,'100,%\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    data: c"!,'100,%".as_ptr() as *mut ::core::ffi::c_char,
                     size: ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
                         .wrapping_sub(1 as size_t),
                 },
@@ -250,11 +249,8 @@ unsafe extern "C" fn ctx_save_funcs(mut ctx: *mut Context, mut scriptonly: bool)
         {
             hitodo_ = hitodo_.wrapping_sub(1);
             let name: *const ::core::ffi::c_char = (*hi).hi_key;
-            let mut islambda: bool = strncmp(
-                name,
-                b"<lambda>\0".as_ptr() as *const ::core::ffi::c_char,
-                8 as size_t,
-            ) == 0 as ::core::ffi::c_int;
+            let mut islambda: bool =
+                strncmp(name, c"<lambda>".as_ptr(), 8 as size_t) == 0 as ::core::ffi::c_int;
             let mut isscript: bool = *name.offset(0 as ::core::ffi::c_int as isize) as uint8_t
                 as ::core::ffi::c_int
                 == 0x80 as ::core::ffi::c_int;
@@ -263,12 +259,7 @@ unsafe extern "C" fn ctx_save_funcs(mut ctx: *mut Context, mut scriptonly: bool)
                     ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_add(strlen(name));
                 let mut cmd: *mut ::core::ffi::c_char =
                     xmalloc(cmd_len) as *mut ::core::ffi::c_char;
-                snprintf(
-                    cmd,
-                    cmd_len,
-                    b"func! %s\0".as_ptr() as *const ::core::ffi::c_char,
-                    name,
-                );
+                snprintf(cmd, cmd_len, c"func! %s".as_ptr(), name);
                 let mut opts: KeyDict_exec_opts = KeyDict_exec_opts { output: true };
                 let mut func_body: String_0 = exec_impl(
                     (1 as ::core::ffi::c_int as uint64_t)
@@ -342,9 +333,8 @@ unsafe extern "C" fn array_to_string(mut array: Array, mut err: *mut Error) -> S
         api_set_error(
             err,
             kErrorTypeException,
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-            b"E474: Failed to convert list to msgpack string buffer\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"%s".as_ptr(),
+            c"E474: Failed to convert list to msgpack string buffer".as_ptr(),
         );
     }
     tv_clear(&raw mut list_tv);
@@ -356,7 +346,7 @@ pub unsafe extern "C" fn ctx_to_dict(mut ctx: *mut Context, mut arena: *mut Aren
     let c2rust_fresh2 = rv.size;
     rv.size = rv.size.wrapping_add(1);
     *rv.items.add(c2rust_fresh2) = key_value_pair {
-        key: cstr_as_string(b"regs\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(c"regs".as_ptr()),
         value: object {
             type_0: kObjectTypeArray,
             data: C2Rust_Unnamed_0 {
@@ -367,7 +357,7 @@ pub unsafe extern "C" fn ctx_to_dict(mut ctx: *mut Context, mut arena: *mut Aren
     let c2rust_fresh3 = rv.size;
     rv.size = rv.size.wrapping_add(1);
     *rv.items.add(c2rust_fresh3) = key_value_pair {
-        key: cstr_as_string(b"jumps\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(c"jumps".as_ptr()),
         value: object {
             type_0: kObjectTypeArray,
             data: C2Rust_Unnamed_0 {
@@ -378,7 +368,7 @@ pub unsafe extern "C" fn ctx_to_dict(mut ctx: *mut Context, mut arena: *mut Aren
     let c2rust_fresh4 = rv.size;
     rv.size = rv.size.wrapping_add(1);
     *rv.items.add(c2rust_fresh4) = key_value_pair {
-        key: cstr_as_string(b"bufs\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(c"bufs".as_ptr()),
         value: object {
             type_0: kObjectTypeArray,
             data: C2Rust_Unnamed_0 {
@@ -389,7 +379,7 @@ pub unsafe extern "C" fn ctx_to_dict(mut ctx: *mut Context, mut arena: *mut Aren
     let c2rust_fresh5 = rv.size;
     rv.size = rv.size.wrapping_add(1);
     *rv.items.add(c2rust_fresh5) = key_value_pair {
-        key: cstr_as_string(b"gvars\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(c"gvars".as_ptr()),
         value: object {
             type_0: kObjectTypeArray,
             data: C2Rust_Unnamed_0 {
@@ -400,7 +390,7 @@ pub unsafe extern "C" fn ctx_to_dict(mut ctx: *mut Context, mut arena: *mut Aren
     let c2rust_fresh6 = rv.size;
     rv.size = rv.size.wrapping_add(1);
     *rv.items.add(c2rust_fresh6) = key_value_pair {
-        key: cstr_as_string(b"funcs\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(c"funcs".as_ptr()),
         value: object {
             type_0: kObjectTypeArray,
             data: C2Rust_Unnamed_0 {
@@ -425,34 +415,19 @@ pub unsafe extern "C" fn ctx_from_dict(
         if item.value.type_0 as ::core::ffi::c_uint
             == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            if strequal(
-                item.key.data,
-                b"regs\0".as_ptr() as *const ::core::ffi::c_char,
-            ) {
+            if strequal(item.key.data, c"regs".as_ptr()) {
                 types |= kCtxRegs as ::core::ffi::c_int;
                 (*ctx).regs = array_to_string(item.value.data.array, err);
-            } else if strequal(
-                item.key.data,
-                b"jumps\0".as_ptr() as *const ::core::ffi::c_char,
-            ) {
+            } else if strequal(item.key.data, c"jumps".as_ptr()) {
                 types |= kCtxJumps as ::core::ffi::c_int;
                 (*ctx).jumps = array_to_string(item.value.data.array, err);
-            } else if strequal(
-                item.key.data,
-                b"bufs\0".as_ptr() as *const ::core::ffi::c_char,
-            ) {
+            } else if strequal(item.key.data, c"bufs".as_ptr()) {
                 types |= kCtxBufs as ::core::ffi::c_int;
                 (*ctx).bufs = array_to_string(item.value.data.array, err);
-            } else if strequal(
-                item.key.data,
-                b"gvars\0".as_ptr() as *const ::core::ffi::c_char,
-            ) {
+            } else if strequal(item.key.data, c"gvars".as_ptr()) {
                 types |= kCtxGVars as ::core::ffi::c_int;
                 (*ctx).gvars = array_to_string(item.value.data.array, err);
-            } else if strequal(
-                item.key.data,
-                b"funcs\0".as_ptr() as *const ::core::ffi::c_char,
-            ) {
+            } else if strequal(item.key.data, c"funcs".as_ptr()) {
                 types |= kCtxFuncs as ::core::ffi::c_int;
                 (*ctx).funcs = copy_object(item.value, ::core::ptr::null_mut::<Arena>())
                     .data

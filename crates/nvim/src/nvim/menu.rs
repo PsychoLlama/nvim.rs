@@ -105,14 +105,14 @@ pub const MNU_HIDDEN_CHAR: ::core::ffi::c_int = ']' as ::core::ffi::c_int;
 pub const MENUDEPTH: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
 static menus_locked: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static menu_mode_chars: GlobalCell<[*mut ::core::ffi::c_char; 8]> = GlobalCell::new([
-    b"n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"v\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"s\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"o\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"i\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"c\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"tl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"t\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+    c"n".as_ptr() as *mut ::core::ffi::c_char,
+    c"v".as_ptr() as *mut ::core::ffi::c_char,
+    c"s".as_ptr() as *mut ::core::ffi::c_char,
+    c"o".as_ptr() as *mut ::core::ffi::c_char,
+    c"i".as_ptr() as *mut ::core::ffi::c_char,
+    c"c".as_ptr() as *mut ::core::ffi::c_char,
+    c"tl".as_ptr() as *mut ::core::ffi::c_char,
+    c"t".as_ptr() as *mut ::core::ffi::c_char,
 ]);
 static e_notsubmenu: GlobalCell<[::core::ffi::c_char; 45]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
@@ -123,11 +123,7 @@ static e_nomenu: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe 
     ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E329: No menu \"%s\"\0")
 });
 unsafe extern "C" fn menu_is_winbar(name: *const ::core::ffi::c_char) -> bool {
-    return strncmp(
-        name,
-        b"WinBar\0".as_ptr() as *const ::core::ffi::c_char,
-        6 as size_t,
-    ) == 0 as ::core::ffi::c_int;
+    return strncmp(name, c"WinBar".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn get_root_menu(_name: *const ::core::ffi::c_char) -> *mut *mut vimmenu_T {
     return root_menu.ptr();
@@ -176,40 +172,20 @@ pub unsafe fn ex_menu(mut eap: *mut exarg_T) {
     );
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     loop {
-        if strncmp(
-            arg,
-            b"<script>\0".as_ptr() as *const ::core::ffi::c_char,
-            8 as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
+        if strncmp(arg, c"<script>".as_ptr(), 8 as size_t) == 0 as ::core::ffi::c_int {
             noremap = REMAP_SCRIPT as ::core::ffi::c_int;
             arg = skipwhite(arg.offset(8 as ::core::ffi::c_int as isize));
-        } else if strncmp(
-            arg,
-            b"<silent>\0".as_ptr() as *const ::core::ffi::c_char,
-            8 as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
+        } else if strncmp(arg, c"<silent>".as_ptr(), 8 as size_t) == 0 as ::core::ffi::c_int {
             silent = true_0 != 0;
             arg = skipwhite(arg.offset(8 as ::core::ffi::c_int as isize));
         } else {
-            if strncmp(
-                arg,
-                b"<special>\0".as_ptr() as *const ::core::ffi::c_char,
-                9 as size_t,
-            ) != 0 as ::core::ffi::c_int
-            {
+            if strncmp(arg, c"<special>".as_ptr(), 9 as size_t) != 0 as ::core::ffi::c_int {
                 break;
             }
             arg = skipwhite(arg.offset(9 as ::core::ffi::c_int as isize));
         }
     }
-    if strncmp(
-        arg,
-        b"icon=\0".as_ptr() as *const ::core::ffi::c_char,
-        5 as size_t,
-    ) == 0 as ::core::ffi::c_int
-    {
+    if strncmp(arg, c"icon=".as_ptr(), 5 as size_t) == 0 as ::core::ffi::c_int {
         arg = arg.offset(5 as ::core::ffi::c_int as isize);
         while *arg as ::core::ffi::c_int != NUL
             && *arg as ::core::ffi::c_int != ' ' as ::core::ffi::c_int
@@ -265,22 +241,14 @@ pub unsafe fn ex_menu(mut eap: *mut exarg_T) {
         pri_tab[c2rust_fresh1 as usize] = 500 as ::core::ffi::c_int;
     }
     pri_tab[MENUDEPTH as usize] = -1 as ::core::ffi::c_int;
-    if strncmp(
-        arg,
-        b"enable\0".as_ptr() as *const ::core::ffi::c_char,
-        6 as size_t,
-    ) == 0 as ::core::ffi::c_int
+    if strncmp(arg, c"enable".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int
         && ascii_iswhite(*arg.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
             as ::core::ffi::c_int
             != 0
     {
         enable = kTrue;
         arg = skipwhite(arg.offset(6 as ::core::ffi::c_int as isize));
-    } else if strncmp(
-        arg,
-        b"disable\0".as_ptr() as *const ::core::ffi::c_char,
-        7 as size_t,
-    ) == 0 as ::core::ffi::c_int
+    } else if strncmp(arg, c"disable".as_ptr(), 7 as size_t) == 0 as ::core::ffi::c_int
         && ascii_iswhite(*arg.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
             as ::core::ffi::c_int
             != 0
@@ -317,11 +285,8 @@ pub unsafe fn ex_menu(mut eap: *mut exarg_T) {
             } else {
                 let mut root_menu_ptr: *mut *mut vimmenu_T = get_root_menu(menu_path);
                 if enable as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
-                    if strcmp(menu_path, b"*\0".as_ptr() as *const ::core::ffi::c_char)
-                        == 0 as ::core::ffi::c_int
-                    {
-                        menu_path = b"\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char;
+                    if strcmp(menu_path, c"*".as_ptr()) == 0 as ::core::ffi::c_int {
+                        menu_path = c"".as_ptr() as *mut ::core::ffi::c_char;
                     }
                     if menu_is_popup(menu_path) {
                         i = 0 as ::core::ffi::c_int;
@@ -349,11 +314,8 @@ pub unsafe fn ex_menu(mut eap: *mut exarg_T) {
                     if is_menus_locked() != 0 {
                         break 's_573;
                     } else {
-                        if strcmp(menu_path, b"*\0".as_ptr() as *const ::core::ffi::c_char)
-                            == 0 as ::core::ffi::c_int
-                        {
-                            menu_path = b"\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char;
+                        if strcmp(menu_path, c"*".as_ptr()) == 0 as ::core::ffi::c_int {
+                            menu_path = c"".as_ptr() as *mut ::core::ffi::c_char;
                         }
                         if menu_is_popup(menu_path) {
                             i = 0 as ::core::ffi::c_int;
@@ -376,14 +338,10 @@ pub unsafe fn ex_menu(mut eap: *mut exarg_T) {
                 } else if is_menus_locked() != 0 {
                     break 's_573;
                 } else {
-                    if strcasecmp(
-                        map_to,
-                        b"<nop>\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
-                    ) == 0 as ::core::ffi::c_int
+                    if strcasecmp(map_to, c"<nop>".as_ptr() as *mut ::core::ffi::c_char)
+                        == 0 as ::core::ffi::c_int
                     {
-                        map_to = b"\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char;
+                        map_to = c"".as_ptr() as *mut ::core::ffi::c_char;
                         map_buf = ::core::ptr::null_mut::<::core::ffi::c_char>();
                     } else if modes & MENU_TIP_MODE as ::core::ffi::c_int != 0 {
                         map_buf = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -468,9 +426,7 @@ unsafe extern "C" fn add_menu_path(
                 ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
             );
             if *dname as ::core::ffi::c_int == NUL {
-                emsg(gettext(
-                    b"E792: Empty menu name\0".as_ptr() as *const ::core::ffi::c_char
-                ));
+                emsg(gettext(c"E792: Empty menu name".as_ptr()));
                 break '_erret;
             } else {
                 lower_pri = menup;
@@ -482,8 +438,7 @@ unsafe extern "C" fn add_menu_path(
                         if *next_name as ::core::ffi::c_int == NUL && !(*menu).children.is_null() {
                             if !sys_menu.get() {
                                 emsg(gettext(
-                                    b"E330: Menu path must not lead to a sub-menu\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    c"E330: Menu path must not lead to a sub-menu".as_ptr(),
                                 ));
                             }
                             break '_erret;
@@ -515,16 +470,14 @@ unsafe extern "C" fn add_menu_path(
                 if menu.is_null() {
                     if *next_name as ::core::ffi::c_int == NUL && parent.is_null() {
                         emsg(gettext(
-                            b"E331: Must not add menu items directly to menu bar\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            c"E331: Must not add menu items directly to menu bar".as_ptr(),
                         ));
                         break '_erret;
                     } else if menu_is_separator(dname) as ::core::ffi::c_int != 0
                         && *next_name as ::core::ffi::c_int != NUL
                     {
                         emsg(gettext(
-                            b"E332: Separator cannot be part of a menu path\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            c"E332: Separator cannot be part of a menu path".as_ptr(),
                         ));
                         break '_erret;
                     } else {
@@ -839,19 +792,19 @@ unsafe extern "C" fn menu_get_recursive(
     let mut dict: *mut dict_T = tv_dict_alloc();
     tv_dict_add_str(
         dict,
-        b"name\0".as_ptr() as *const ::core::ffi::c_char,
+        c"name".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
         (*menu).dname,
     );
     tv_dict_add_nr(
         dict,
-        b"priority\0".as_ptr() as *const ::core::ffi::c_char,
+        c"priority".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
         (*menu).priority as varnumber_T,
     );
     tv_dict_add_nr(
         dict,
-        b"hidden\0".as_ptr() as *const ::core::ffi::c_char,
+        c"hidden".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
         menu_is_hidden((*menu).dname) as varnumber_T,
     );
@@ -860,7 +813,7 @@ unsafe extern "C" fn menu_get_recursive(
         utf_char2bytes((*menu).mnemonic, &raw mut buf as *mut ::core::ffi::c_char);
         tv_dict_add_str(
             dict,
-            b"shortcut\0".as_ptr() as *const ::core::ffi::c_char,
+            c"shortcut".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
             &raw mut buf as *mut ::core::ffi::c_char,
         );
@@ -868,7 +821,7 @@ unsafe extern "C" fn menu_get_recursive(
     if !(*menu).actext.is_null() {
         tv_dict_add_str(
             dict,
-            b"actext\0".as_ptr() as *const ::core::ffi::c_char,
+            c"actext".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
             (*menu).actext,
         );
@@ -878,7 +831,7 @@ unsafe extern "C" fn menu_get_recursive(
     {
         tv_dict_add_str(
             dict,
-            b"tooltip\0".as_ptr() as *const ::core::ffi::c_char,
+            c"tooltip".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
             (*menu).strings[MENU_INDEX_TIP as ::core::ffi::c_int as usize],
         );
@@ -887,7 +840,7 @@ unsafe extern "C" fn menu_get_recursive(
         let mut commands: *mut dict_T = tv_dict_alloc();
         tv_dict_add_dict(
             dict,
-            b"mappings\0".as_ptr() as *const ::core::ffi::c_char,
+            c"mappings".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
             commands,
         );
@@ -897,19 +850,19 @@ unsafe extern "C" fn menu_get_recursive(
                 let mut impl_0: *mut dict_T = tv_dict_alloc();
                 tv_dict_add_allocated_str(
                     impl_0,
-                    b"rhs\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"rhs".as_ptr(),
                     ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
                     str2special_save((*menu).strings[bit as usize], false_0 != 0, false_0 != 0),
                 );
                 tv_dict_add_nr(
                     impl_0,
-                    b"silent\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"silent".as_ptr(),
                     ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
                     (*menu).silent[bit as usize] as varnumber_T,
                 );
                 tv_dict_add_nr(
                     impl_0,
-                    b"enabled\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"enabled".as_ptr(),
                     ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
                     (if (*menu).enabled & (1 as ::core::ffi::c_int) << bit != 0 {
                         1 as ::core::ffi::c_int
@@ -919,7 +872,7 @@ unsafe extern "C" fn menu_get_recursive(
                 );
                 tv_dict_add_nr(
                     impl_0,
-                    b"noremap\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"noremap".as_ptr(),
                     ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
                     (if (*menu).noremap[bit as usize] & REMAP_NONE as ::core::ffi::c_int != 0 {
                         1 as ::core::ffi::c_int
@@ -929,7 +882,7 @@ unsafe extern "C" fn menu_get_recursive(
                 );
                 tv_dict_add_nr(
                     impl_0,
-                    b"sid\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"sid".as_ptr(),
                     ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
                     (if (*menu).noremap[bit as usize] & REMAP_SCRIPT as ::core::ffi::c_int != 0 {
                         1 as ::core::ffi::c_int
@@ -959,7 +912,7 @@ unsafe extern "C" fn menu_get_recursive(
         }
         tv_dict_add_list(
             dict,
-            b"submenus\0".as_ptr() as *const ::core::ffi::c_char,
+            c"submenus".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
             children_list,
         );
@@ -1050,9 +1003,7 @@ unsafe extern "C" fn show_menus(
         }
     }
     (*menus_locked.ptr()) += 1;
-    msg_puts_title(gettext(
-        b"\n--- Menus ---\0".as_ptr() as *const ::core::ffi::c_char
-    ));
+    msg_puts_title(gettext(c"\n--- Menus ---".as_ptr()));
     show_menus_recursive(menu, modes, 0 as ::core::ffi::c_int);
     (*menus_locked.ptr()) -= 1;
     return OK;
@@ -1072,12 +1023,12 @@ unsafe extern "C" fn show_menus_recursive(
         }
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < depth {
-            msg_puts(b"  \0".as_ptr() as *const ::core::ffi::c_char);
+            msg_puts(c"  ".as_ptr());
             i += 1;
         }
         if (*menu).priority != 0 {
             msg_outnum((*menu).priority);
-            msg_puts(b" \0".as_ptr() as *const ::core::ffi::c_char);
+            msg_puts(c" ".as_ptr());
         }
         msg_outtrans((*menu).name, HLF_D, false_0 != 0);
     }
@@ -1091,7 +1042,7 @@ unsafe extern "C" fn show_menus_recursive(
                 }
                 let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 while i_0 < depth + 2 as ::core::ffi::c_int {
-                    msg_puts(b"  \0".as_ptr() as *const ::core::ffi::c_char);
+                    msg_puts(c"  ".as_ptr());
                     i_0 += 1;
                 }
                 msg_puts((*menu_mode_chars.ptr())[bit as usize]);
@@ -1114,13 +1065,9 @@ unsafe extern "C" fn show_menus_recursive(
                 } else {
                     msg_putchar(' ' as ::core::ffi::c_int);
                 }
-                msg_puts(b" \0".as_ptr() as *const ::core::ffi::c_char);
+                msg_puts(c" ".as_ptr());
                 if *(*menu).strings[bit as usize] as ::core::ffi::c_int == NUL {
-                    msg_puts_hl(
-                        b"<Nop>\0".as_ptr() as *const ::core::ffi::c_char,
-                        HLF_8,
-                        false_0 != 0,
-                    );
+                    msg_puts_hl(c"<Nop>".as_ptr(), HLF_8, false_0 != 0);
                 } else {
                     msg_outtrans_special(
                         (*menu).strings[bit as usize],
@@ -1172,22 +1119,14 @@ pub unsafe extern "C" fn set_context_in_menu_cmd(
         p = p.offset(1);
     }
     if !ascii_iswhite(*p as ::core::ffi::c_int) {
-        if strncmp(
-            arg,
-            b"enable\0".as_ptr() as *const ::core::ffi::c_char,
-            6 as size_t,
-        ) == 0 as ::core::ffi::c_int
+        if strncmp(arg, c"enable".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int
             && (*arg.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
                 || ascii_iswhite(*arg.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
                     as ::core::ffi::c_int
                     != 0)
         {
             p = arg.offset(6 as ::core::ffi::c_int as isize);
-        } else if strncmp(
-            arg,
-            b"disable\0".as_ptr() as *const ::core::ffi::c_char,
-            7 as size_t,
-        ) == 0 as ::core::ffi::c_int
+        } else if strncmp(arg, c"disable".as_ptr(), 7 as size_t) == 0 as ::core::ffi::c_int
             && (*arg.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
                 || ascii_iswhite(*arg.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
                     as ::core::ffi::c_int
@@ -1310,7 +1249,7 @@ pub unsafe extern "C" fn get_menu_name(
             }
         }
     } else {
-        str = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        str = c"".as_ptr() as *mut ::core::ffi::c_char;
     }
     if should_advance.get() {
         menu.set((*menu.get()).next);
@@ -1363,10 +1302,7 @@ pub unsafe extern "C" fn get_menu_names(
                     should_advance.set(true_0 != 0);
                 }
             }
-            strcat(
-                tbuffer.ptr() as *mut ::core::ffi::c_char,
-                b"\x01\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            strcat(tbuffer.ptr() as *mut ::core::ffi::c_char, c"\x01".as_ptr());
             str = tbuffer.ptr() as *mut ::core::ffi::c_char;
         } else if should_advance.get() {
             str = (*menu.get()).en_dname;
@@ -1377,7 +1313,7 @@ pub unsafe extern "C" fn get_menu_names(
             }
         }
     } else {
-        str = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        str = c"".as_ptr() as *mut ::core::ffi::c_char;
     }
     if should_advance.get() {
         menu.set((*menu.get()).next);
@@ -1546,7 +1482,7 @@ unsafe extern "C" fn get_menu_mode_str(mut modes: ::core::ffi::c_int) -> *mut ::
             | MENU_SELECT_MODE as ::core::ffi::c_int
             | MENU_OP_PENDING_MODE as ::core::ffi::c_int
     {
-        return b"a\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        return c"a".as_ptr() as *mut ::core::ffi::c_char;
     }
     if modes
         & (MENU_NORMAL_MODE as ::core::ffi::c_int
@@ -1558,43 +1494,43 @@ unsafe extern "C" fn get_menu_mode_str(mut modes: ::core::ffi::c_int) -> *mut ::
             | MENU_SELECT_MODE as ::core::ffi::c_int
             | MENU_OP_PENDING_MODE as ::core::ffi::c_int
     {
-        return b" \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        return c" ".as_ptr() as *mut ::core::ffi::c_char;
     }
     if modes & (MENU_INSERT_MODE as ::core::ffi::c_int | MENU_CMDLINE_MODE as ::core::ffi::c_int)
         == MENU_INSERT_MODE as ::core::ffi::c_int | MENU_CMDLINE_MODE as ::core::ffi::c_int
     {
-        return b"!\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        return c"!".as_ptr() as *mut ::core::ffi::c_char;
     }
     if modes & (MENU_VISUAL_MODE as ::core::ffi::c_int | MENU_SELECT_MODE as ::core::ffi::c_int)
         == MENU_VISUAL_MODE as ::core::ffi::c_int | MENU_SELECT_MODE as ::core::ffi::c_int
     {
-        return b"v\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        return c"v".as_ptr() as *mut ::core::ffi::c_char;
     }
     if modes & MENU_VISUAL_MODE as ::core::ffi::c_int != 0 {
-        return b"x\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        return c"x".as_ptr() as *mut ::core::ffi::c_char;
     }
     if modes & MENU_SELECT_MODE as ::core::ffi::c_int != 0 {
-        return b"s\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        return c"s".as_ptr() as *mut ::core::ffi::c_char;
     }
     if modes & MENU_OP_PENDING_MODE as ::core::ffi::c_int != 0 {
-        return b"o\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        return c"o".as_ptr() as *mut ::core::ffi::c_char;
     }
     if modes & MENU_INSERT_MODE as ::core::ffi::c_int != 0 {
-        return b"i\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        return c"i".as_ptr() as *mut ::core::ffi::c_char;
     }
     if modes & MENU_TERMINAL_MODE as ::core::ffi::c_int != 0 {
-        return b"tl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        return c"tl".as_ptr() as *mut ::core::ffi::c_char;
     }
     if modes & MENU_CMDLINE_MODE as ::core::ffi::c_int != 0 {
-        return b"c\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        return c"c".as_ptr() as *mut ::core::ffi::c_char;
     }
     if modes & MENU_NORMAL_MODE as ::core::ffi::c_int != 0 {
-        return b"n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        return c"n".as_ptr() as *mut ::core::ffi::c_char;
     }
     if modes & MENU_TIP_MODE as ::core::ffi::c_int != 0 {
-        return b"t\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        return c"t".as_ptr() as *mut ::core::ffi::c_char;
     }
-    return b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+    return c"".as_ptr() as *mut ::core::ffi::c_char;
 }
 unsafe extern "C" fn popup_mode_name(
     mut name: *mut ::core::ffi::c_char,
@@ -1669,18 +1605,10 @@ pub unsafe extern "C" fn menu_is_menubar(name: *const ::core::ffi::c_char) -> bo
         && *name as ::core::ffi::c_int != MNU_HIDDEN_CHAR;
 }
 pub unsafe extern "C" fn menu_is_popup(name: *const ::core::ffi::c_char) -> bool {
-    return strncmp(
-        name,
-        b"PopUp\0".as_ptr() as *const ::core::ffi::c_char,
-        5 as size_t,
-    ) == 0 as ::core::ffi::c_int;
+    return strncmp(name, c"PopUp".as_ptr(), 5 as size_t) == 0 as ::core::ffi::c_int;
 }
 pub unsafe extern "C" fn menu_is_toolbar(name: *const ::core::ffi::c_char) -> bool {
-    return strncmp(
-        name,
-        b"ToolBar\0".as_ptr() as *const ::core::ffi::c_char,
-        7 as size_t,
-    ) == 0 as ::core::ffi::c_int;
+    return strncmp(name, c"ToolBar".as_ptr(), 7 as size_t) == 0 as ::core::ffi::c_int;
 }
 pub unsafe extern "C" fn menu_is_separator(mut name: *mut ::core::ffi::c_char) -> bool {
     return *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -1747,11 +1675,7 @@ pub unsafe extern "C" fn show_popupmenu() {
     let mut menu: *mut vimmenu_T = ::core::ptr::null_mut::<vimmenu_T>();
     menu = root_menu.get();
     while !menu.is_null() {
-        if strncmp(
-            b"PopUp\0".as_ptr() as *const ::core::ffi::c_char,
-            (*menu).name,
-            5 as size_t,
-        ) == 0 as ::core::ffi::c_int
+        if strncmp(c"PopUp".as_ptr(), (*menu).name, 5 as size_t) == 0 as ::core::ffi::c_int
             && strncmp(
                 (*menu).name.offset(5 as ::core::ffi::c_int as isize),
                 mode,
@@ -1901,36 +1825,29 @@ pub unsafe extern "C" fn execute_menu(
         let mut mode: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         match idx {
             1 => {
-                mode =
-                    b"Visual\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                mode = c"Visual".as_ptr() as *mut ::core::ffi::c_char;
             }
             2 => {
-                mode =
-                    b"Select\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                mode = c"Select".as_ptr() as *mut ::core::ffi::c_char;
             }
             3 => {
-                mode = b"Op-pending\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                mode = c"Op-pending".as_ptr() as *mut ::core::ffi::c_char;
             }
             6 => {
-                mode = b"Terminal\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                mode = c"Terminal".as_ptr() as *mut ::core::ffi::c_char;
             }
             4 => {
-                mode =
-                    b"Insert\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                mode = c"Insert".as_ptr() as *mut ::core::ffi::c_char;
             }
             5 => {
-                mode =
-                    b"Cmdline\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                mode = c"Cmdline".as_ptr() as *mut ::core::ffi::c_char;
             }
             _ => {
-                mode =
-                    b"Normal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                mode = c"Normal".as_ptr() as *mut ::core::ffi::c_char;
             }
         }
         semsg_c!(
-            gettext(b"E335: Menu not defined for %s mode\0".as_ptr() as *const ::core::ffi::c_char),
+            gettext(c"E335: Menu not defined for %s mode".as_ptr()),
             mode,
         );
     }
@@ -1946,8 +1863,7 @@ unsafe extern "C" fn menu_getbyname(mut name_arg: *mut ::core::ffi::c_char) -> *
             if menu_name_equal(name, menu) {
                 if *p as ::core::ffi::c_int == NUL && !(*menu).children.is_null() {
                     emsg(gettext(
-                        b"E333: Menu path must lead to a menu item\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        c"E333: Menu path must lead to a menu item".as_ptr(),
                     ));
                     gave_emsg = true_0 != 0;
                     menu = ::core::ptr::null_mut::<vimmenu_T>();
@@ -1971,10 +1887,7 @@ unsafe extern "C" fn menu_getbyname(mut name_arg: *mut ::core::ffi::c_char) -> *
     xfree(saved_name as *mut ::core::ffi::c_void);
     if menu.is_null() {
         if !gave_emsg {
-            semsg_c!(
-                gettext(b"E334: Menu not found: %s\0".as_ptr() as *const ::core::ffi::c_char),
-                name_arg,
-            );
+            semsg_c!(gettext(c"E334: Menu not found: %s".as_ptr()), name_arg,);
         }
         return ::core::ptr::null_mut::<vimmenu_T>();
     }
@@ -2037,10 +1950,7 @@ pub unsafe extern "C" fn menu_find(mut path_name: *const ::core::ffi::c_char) ->
                 if menu_name_equal(name, menu) {
                     if (*menu).children.is_null() {
                         if *p as ::core::ffi::c_int == NUL {
-                            emsg(gettext(
-                                b"E336: Menu path must lead to a sub-menu\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ));
+                            emsg(gettext(c"E336: Menu path must lead to a sub-menu".as_ptr()));
                         } else {
                             emsg(gettext(
                                 (e_notsubmenu.ptr() as *const _) as *const ::core::ffi::c_char,
@@ -2064,9 +1974,7 @@ pub unsafe extern "C" fn menu_find(mut path_name: *const ::core::ffi::c_char) ->
             name = p;
         }
         if menu.is_null() {
-            emsg(gettext(
-                b"E337: Menu not found - check menu names\0".as_ptr() as *const ::core::ffi::c_char,
-            ));
+            emsg(gettext(c"E337: Menu not found - check menu names".as_ptr()));
         }
     }
     xfree(saved_name as *mut ::core::ffi::c_void);
@@ -2082,11 +1990,7 @@ pub unsafe fn ex_menutranslate(mut eap: *mut exarg_T) {
             5 as ::core::ffi::c_int,
         );
     }
-    if strncmp(
-        arg,
-        b"clear\0".as_ptr() as *const ::core::ffi::c_char,
-        5 as size_t,
-    ) == 0 as ::core::ffi::c_int
+    if strncmp(arg, c"clear".as_ptr(), 5 as size_t) == 0 as ::core::ffi::c_int
         && ends_excmd(*skipwhite(arg.offset(5 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int)
             != 0
     {
@@ -2212,7 +2116,7 @@ unsafe extern "C" fn menu_translate_tab_and_shift(
             arg = arg.offset(1);
         } else if strncasecmp(
             arg,
-            b"<TAB>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"<TAB>".as_ptr() as *mut ::core::ffi::c_char,
             5 as ::core::ffi::c_int as size_t,
         ) == 0 as ::core::ffi::c_int
         {
@@ -2243,7 +2147,7 @@ unsafe extern "C" fn menuitem_getinfo(
         let l: *mut list_T = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
         tv_dict_add_list(
             dict,
-            b"submenus\0".as_ptr() as *const ::core::ffi::c_char,
+            c"submenus".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
             l,
         );
@@ -2258,33 +2162,33 @@ unsafe extern "C" fn menuitem_getinfo(
     }
     tv_dict_add_str(
         dict,
-        b"name\0".as_ptr() as *const ::core::ffi::c_char,
+        c"name".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
         (*menu).name,
     );
     tv_dict_add_str(
         dict,
-        b"display\0".as_ptr() as *const ::core::ffi::c_char,
+        c"display".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
         (*menu).dname,
     );
     if !(*menu).actext.is_null() {
         tv_dict_add_str(
             dict,
-            b"accel\0".as_ptr() as *const ::core::ffi::c_char,
+            c"accel".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
             (*menu).actext,
         );
     }
     tv_dict_add_nr(
         dict,
-        b"priority\0".as_ptr() as *const ::core::ffi::c_char,
+        c"priority".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
         (*menu).priority as varnumber_T,
     );
     tv_dict_add_str(
         dict,
-        b"modes\0".as_ptr() as *const ::core::ffi::c_char,
+        c"modes".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
         get_menu_mode_str((*menu).modes),
     );
@@ -2293,7 +2197,7 @@ unsafe extern "C" fn menuitem_getinfo(
         NUL as ::core::ffi::c_char;
     tv_dict_add_str(
         dict,
-        b"shortcut\0".as_ptr() as *const ::core::ffi::c_char,
+        c"shortcut".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
         &raw mut buf as *mut ::core::ffi::c_char,
     );
@@ -2309,10 +2213,10 @@ unsafe extern "C" fn menuitem_getinfo(
             if !(*menu).strings[bit as usize].is_null() {
                 tv_dict_add_allocated_str(
                     dict,
-                    b"rhs\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"rhs".as_ptr(),
                     ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
                     if *(*menu).strings[bit as usize] as ::core::ffi::c_int == NUL {
-                        xstrdup(b"<Nop>\0".as_ptr() as *const ::core::ffi::c_char)
+                        xstrdup(c"<Nop>".as_ptr())
                     } else {
                         str2special_save((*menu).strings[bit as usize], false_0 != 0, false_0 != 0)
                     },
@@ -2320,27 +2224,27 @@ unsafe extern "C" fn menuitem_getinfo(
             }
             tv_dict_add_bool(
                 dict,
-                b"noremenu\0".as_ptr() as *const ::core::ffi::c_char,
+                c"noremenu".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
                 ((*menu).noremap[bit as usize] == REMAP_NONE as ::core::ffi::c_int)
                     as ::core::ffi::c_int as BoolVarValue,
             );
             tv_dict_add_bool(
                 dict,
-                b"script\0".as_ptr() as *const ::core::ffi::c_char,
+                c"script".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
                 ((*menu).noremap[bit as usize] == REMAP_SCRIPT as ::core::ffi::c_int)
                     as ::core::ffi::c_int as BoolVarValue,
             );
             tv_dict_add_bool(
                 dict,
-                b"silent\0".as_ptr() as *const ::core::ffi::c_char,
+                c"silent".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
                 (*menu).silent[bit as usize] as BoolVarValue,
             );
             tv_dict_add_bool(
                 dict,
-                b"enabled\0".as_ptr() as *const ::core::ffi::c_char,
+                c"enabled".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
                 ((*menu).enabled & (1 as ::core::ffi::c_int) << bit != 0 as ::core::ffi::c_int)
                     as ::core::ffi::c_int as BoolVarValue,
@@ -2350,7 +2254,7 @@ unsafe extern "C" fn menuitem_getinfo(
         let l_0: *mut list_T = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
         tv_dict_add_list(
             dict,
-            b"submenus\0".as_ptr() as *const ::core::ffi::c_char,
+            c"submenus".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
             l_0,
         );
@@ -2379,7 +2283,7 @@ pub unsafe extern "C" fn f_menu_info(
     {
         which = tv_get_string_chk(argvars.offset(1 as ::core::ffi::c_int as isize));
     } else {
-        which = b"\0".as_ptr() as *const ::core::ffi::c_char;
+        which = c"".as_ptr();
     }
     if which.is_null() {
         return;

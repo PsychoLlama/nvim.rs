@@ -70,7 +70,7 @@ pub unsafe fn adjust_clipboard_name(
         return ::core::ptr::null_mut();
     }
 
-    if !eval_has_provider(b"clipboard\0".as_ptr() as *const ::core::ffi::c_char, false) {
+    if !eval_has_provider(c"clipboard".as_ptr(), false) {
         let warn = CLIPBOARD.with_mut(|st| {
             if st.batch_change_count <= 1
                 && !quiet
@@ -158,8 +158,8 @@ pub unsafe fn get_clipboard(
     let regname = name as ::core::ffi::c_char;
     tv_list_append_string(args, &raw const regname, 1);
     let result = eval_call_provider(
-        b"clipboard\0".as_ptr() as *mut ::core::ffi::c_char,
-        b"get\0".as_ptr() as *mut ::core::ffi::c_char,
+        c"clipboard".as_ptr() as *mut ::core::ffi::c_char,
+        c"get".as_ptr() as *mut ::core::ffi::c_char,
         args,
         false,
     );
@@ -215,11 +215,8 @@ pub unsafe fn get_clipboard(
                     break 'err;
                 }
                 let s = (*li).li_tv.vval.v_string;
-                *(*reg).y_array.add(tv_idx) = cstr_to_string(if !s.is_null() {
-                    s
-                } else {
-                    b"\0".as_ptr() as *const ::core::ffi::c_char
-                });
+                *(*reg).y_array.add(tv_idx) =
+                    cstr_to_string(if !s.is_null() { s } else { c"".as_ptr() });
                 tv_idx += 1;
                 li = (*li).li_next;
             }
@@ -256,7 +253,7 @@ pub unsafe fn get_clipboard(
     (*reg).additional_data = ::core::ptr::null_mut();
     (*reg).timestamp = 0;
     if errmsg {
-        emsg(b"clipboard: provider returned invalid data\0".as_ptr() as *const ::core::ffi::c_char);
+        emsg(c"clipboard: provider returned invalid data".as_ptr());
     }
     *target = reg;
     false
@@ -302,8 +299,8 @@ pub unsafe fn set_clipboard(mut name: ::core::ffi::c_int, reg: *mut yankreg_T) {
     let regname = [name as ::core::ffi::c_char];
     tv_list_append_string(args, regname.as_ptr(), 1);
     eval_call_provider(
-        b"clipboard\0".as_ptr() as *mut ::core::ffi::c_char,
-        b"set\0".as_ptr() as *mut ::core::ffi::c_char,
+        c"clipboard".as_ptr() as *mut ::core::ffi::c_char,
+        c"set".as_ptr() as *mut ::core::ffi::c_char,
         args,
         true,
     );

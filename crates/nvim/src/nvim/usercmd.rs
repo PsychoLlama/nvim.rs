@@ -144,111 +144,110 @@ static e_no_such_user_defined_command_in_current_buffer_str: GlobalCell<[::core:
     });
 static command_complete: GlobalCell<[*const ::core::ffi::c_char; 64]> = GlobalCell::new([
     ::core::ptr::null::<::core::ffi::c_char>(),
-    b"command\0".as_ptr() as *const ::core::ffi::c_char,
-    b"file\0".as_ptr() as *const ::core::ffi::c_char,
-    b"dir\0".as_ptr() as *const ::core::ffi::c_char,
-    b"option\0".as_ptr() as *const ::core::ffi::c_char,
+    c"command".as_ptr(),
+    c"file".as_ptr(),
+    c"dir".as_ptr(),
+    c"option".as_ptr(),
     ::core::ptr::null::<::core::ffi::c_char>(),
-    b"tag\0".as_ptr() as *const ::core::ffi::c_char,
+    c"tag".as_ptr(),
     ::core::ptr::null::<::core::ffi::c_char>(),
-    b"help\0".as_ptr() as *const ::core::ffi::c_char,
-    b"buffer\0".as_ptr() as *const ::core::ffi::c_char,
-    b"event\0".as_ptr() as *const ::core::ffi::c_char,
-    b"menu\0".as_ptr() as *const ::core::ffi::c_char,
+    c"help".as_ptr(),
+    c"buffer".as_ptr(),
+    c"event".as_ptr(),
+    c"menu".as_ptr(),
     ::core::ptr::null::<::core::ffi::c_char>(),
-    b"highlight\0".as_ptr() as *const ::core::ffi::c_char,
-    b"augroup\0".as_ptr() as *const ::core::ffi::c_char,
-    b"var\0".as_ptr() as *const ::core::ffi::c_char,
-    b"mapping\0".as_ptr() as *const ::core::ffi::c_char,
-    b"tag_listfiles\0".as_ptr() as *const ::core::ffi::c_char,
-    b"function\0".as_ptr() as *const ::core::ffi::c_char,
+    c"highlight".as_ptr(),
+    c"augroup".as_ptr(),
+    c"var".as_ptr(),
+    c"mapping".as_ptr(),
+    c"tag_listfiles".as_ptr(),
+    c"function".as_ptr(),
     ::core::ptr::null::<::core::ffi::c_char>(),
-    b"expression\0".as_ptr() as *const ::core::ffi::c_char,
-    ::core::ptr::null::<::core::ffi::c_char>(),
-    ::core::ptr::null::<::core::ffi::c_char>(),
+    c"expression".as_ptr(),
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
-    b"environment\0".as_ptr() as *const ::core::ffi::c_char,
-    ::core::ptr::null::<::core::ffi::c_char>(),
-    b"color\0".as_ptr() as *const ::core::ffi::c_char,
-    b"compiler\0".as_ptr() as *const ::core::ffi::c_char,
-    b"custom\0".as_ptr() as *const ::core::ffi::c_char,
-    b"customlist\0".as_ptr() as *const ::core::ffi::c_char,
-    b"<Lua function>\0".as_ptr() as *const ::core::ffi::c_char,
-    b"shellcmd\0".as_ptr() as *const ::core::ffi::c_char,
-    b"sign\0".as_ptr() as *const ::core::ffi::c_char,
-    ::core::ptr::null::<::core::ffi::c_char>(),
-    b"filetype\0".as_ptr() as *const ::core::ffi::c_char,
-    b"file_in_path\0".as_ptr() as *const ::core::ffi::c_char,
-    b"syntax\0".as_ptr() as *const ::core::ffi::c_char,
-    b"locale\0".as_ptr() as *const ::core::ffi::c_char,
-    b"history\0".as_ptr() as *const ::core::ffi::c_char,
-    b"user\0".as_ptr() as *const ::core::ffi::c_char,
-    b"syntime\0".as_ptr() as *const ::core::ffi::c_char,
-    ::core::ptr::null::<::core::ffi::c_char>(),
-    b"packadd\0".as_ptr() as *const ::core::ffi::c_char,
-    b"messages\0".as_ptr() as *const ::core::ffi::c_char,
-    b"mapclear\0".as_ptr() as *const ::core::ffi::c_char,
-    b"arglist\0".as_ptr() as *const ::core::ffi::c_char,
-    b"diff_buffer\0".as_ptr() as *const ::core::ffi::c_char,
-    b"breakpoint\0".as_ptr() as *const ::core::ffi::c_char,
-    b"scriptnames\0".as_ptr() as *const ::core::ffi::c_char,
-    b"runtime\0".as_ptr() as *const ::core::ffi::c_char,
     ::core::ptr::null::<::core::ffi::c_char>(),
     ::core::ptr::null::<::core::ffi::c_char>(),
+    c"environment".as_ptr(),
     ::core::ptr::null::<::core::ffi::c_char>(),
-    b"keymap\0".as_ptr() as *const ::core::ffi::c_char,
-    b"dir_in_path\0".as_ptr() as *const ::core::ffi::c_char,
-    b"shellcmdline\0".as_ptr() as *const ::core::ffi::c_char,
+    c"color".as_ptr(),
+    c"compiler".as_ptr(),
+    c"custom".as_ptr(),
+    c"customlist".as_ptr(),
+    c"<Lua function>".as_ptr(),
+    c"shellcmd".as_ptr(),
+    c"sign".as_ptr(),
     ::core::ptr::null::<::core::ffi::c_char>(),
-    b"filetypecmd\0".as_ptr() as *const ::core::ffi::c_char,
+    c"filetype".as_ptr(),
+    c"file_in_path".as_ptr(),
+    c"syntax".as_ptr(),
+    c"locale".as_ptr(),
+    c"history".as_ptr(),
+    c"user".as_ptr(),
+    c"syntime".as_ptr(),
     ::core::ptr::null::<::core::ffi::c_char>(),
-    b"retab\0".as_ptr() as *const ::core::ffi::c_char,
-    b"checkhealth\0".as_ptr() as *const ::core::ffi::c_char,
-    b"lua\0".as_ptr() as *const ::core::ffi::c_char,
+    c"packadd".as_ptr(),
+    c"messages".as_ptr(),
+    c"mapclear".as_ptr(),
+    c"arglist".as_ptr(),
+    c"diff_buffer".as_ptr(),
+    c"breakpoint".as_ptr(),
+    c"scriptnames".as_ptr(),
+    c"runtime".as_ptr(),
+    ::core::ptr::null::<::core::ffi::c_char>(),
+    ::core::ptr::null::<::core::ffi::c_char>(),
+    ::core::ptr::null::<::core::ffi::c_char>(),
+    c"keymap".as_ptr(),
+    c"dir_in_path".as_ptr(),
+    c"shellcmdline".as_ptr(),
+    ::core::ptr::null::<::core::ffi::c_char>(),
+    c"filetypecmd".as_ptr(),
+    ::core::ptr::null::<::core::ffi::c_char>(),
+    c"retab".as_ptr(),
+    c"checkhealth".as_ptr(),
+    c"lua".as_ptr(),
 ]);
 static addr_type_complete: GlobalCell<[C2Rust_Unnamed_20; 9]> = GlobalCell::new([
     C2Rust_Unnamed_20 {
         expand: ADDR_ARGUMENTS,
-        name: b"arguments\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        shortname: b"arg\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"arguments".as_ptr() as *mut ::core::ffi::c_char,
+        shortname: c"arg".as_ptr() as *mut ::core::ffi::c_char,
     },
     C2Rust_Unnamed_20 {
         expand: ADDR_LINES,
-        name: b"lines\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        shortname: b"line\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"lines".as_ptr() as *mut ::core::ffi::c_char,
+        shortname: c"line".as_ptr() as *mut ::core::ffi::c_char,
     },
     C2Rust_Unnamed_20 {
         expand: ADDR_LOADED_BUFFERS,
-        name: b"loaded_buffers\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        shortname: b"load\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"loaded_buffers".as_ptr() as *mut ::core::ffi::c_char,
+        shortname: c"load".as_ptr() as *mut ::core::ffi::c_char,
     },
     C2Rust_Unnamed_20 {
         expand: ADDR_TABS,
-        name: b"tabs\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        shortname: b"tab\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"tabs".as_ptr() as *mut ::core::ffi::c_char,
+        shortname: c"tab".as_ptr() as *mut ::core::ffi::c_char,
     },
     C2Rust_Unnamed_20 {
         expand: ADDR_BUFFERS,
-        name: b"buffers\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        shortname: b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"buffers".as_ptr() as *mut ::core::ffi::c_char,
+        shortname: c"buf".as_ptr() as *mut ::core::ffi::c_char,
     },
     C2Rust_Unnamed_20 {
         expand: ADDR_WINDOWS,
-        name: b"windows\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        shortname: b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"windows".as_ptr() as *mut ::core::ffi::c_char,
+        shortname: c"win".as_ptr() as *mut ::core::ffi::c_char,
     },
     C2Rust_Unnamed_20 {
         expand: ADDR_QUICKFIX,
-        name: b"quickfix\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        shortname: b"qf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"quickfix".as_ptr() as *mut ::core::ffi::c_char,
+        shortname: c"qf".as_ptr() as *mut ::core::ffi::c_char,
     },
     C2Rust_Unnamed_20 {
         expand: ADDR_OTHER,
-        name: b"other\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        shortname: b"?\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        name: c"other".as_ptr() as *mut ::core::ffi::c_char,
+        shortname: c"?".as_ptr() as *mut ::core::ffi::c_char,
     },
     C2Rust_Unnamed_20 {
         expand: ADDR_NONE,
@@ -372,7 +371,7 @@ pub unsafe extern "C" fn set_context_in_user_cmd(
             }
             if strncasecmp(
                 arg as *mut ::core::ffi::c_char,
-                b"complete\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                c"complete".as_ptr() as *mut ::core::ffi::c_char,
                 p.offset_from(arg) as size_t,
             ) == 0 as ::core::ffi::c_int
             {
@@ -382,7 +381,7 @@ pub unsafe extern "C" fn set_context_in_user_cmd(
                 return ::core::ptr::null::<::core::ffi::c_char>();
             } else if strncasecmp(
                 arg as *mut ::core::ffi::c_char,
-                b"nargs\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                c"nargs".as_ptr() as *mut ::core::ffi::c_char,
                 p.offset_from(arg) as size_t,
             ) == 0 as ::core::ffi::c_int
             {
@@ -392,7 +391,7 @@ pub unsafe extern "C" fn set_context_in_user_cmd(
                 return ::core::ptr::null::<::core::ffi::c_char>();
             } else if strncasecmp(
                 arg as *mut ::core::ffi::c_char,
-                b"addr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                c"addr".as_ptr() as *mut ::core::ffi::c_char,
                 p.offset_from(arg) as size_t,
             ) == 0 as ::core::ffi::c_int
             {
@@ -436,7 +435,7 @@ pub unsafe extern "C" fn set_context_in_user_cmdarg(
     if context == EXPAND_MAPPINGS as ::core::ffi::c_int {
         return set_context_in_map_cmd(
             xp,
-            b"map\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"map".as_ptr() as *mut ::core::ffi::c_char,
             arg as *mut ::core::ffi::c_char,
             forceit,
             false_0 != 0,
@@ -486,7 +485,7 @@ pub unsafe extern "C" fn get_user_commands(
                 (*((*buf).b_ucmds.ga_data as *mut ucmd_T).offset(i as isize)).uc_name,
             ) == 0 as ::core::ffi::c_int
             {
-                return b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                return c"".as_ptr() as *mut ::core::ffi::c_char;
             }
             i += 1;
         }
@@ -520,16 +519,16 @@ pub unsafe extern "C" fn get_user_cmd_flags(
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     static user_cmd_flags: GlobalCell<[*mut ::core::ffi::c_char; 10]> = GlobalCell::new([
-        b"addr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"bang\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"bar\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"buffer\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"complete\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"count\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"nargs\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"range\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"register\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"keepscript\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        c"addr".as_ptr() as *mut ::core::ffi::c_char,
+        c"bang".as_ptr() as *mut ::core::ffi::c_char,
+        c"bar".as_ptr() as *mut ::core::ffi::c_char,
+        c"buffer".as_ptr() as *mut ::core::ffi::c_char,
+        c"complete".as_ptr() as *mut ::core::ffi::c_char,
+        c"count".as_ptr() as *mut ::core::ffi::c_char,
+        c"nargs".as_ptr() as *mut ::core::ffi::c_char,
+        c"range".as_ptr() as *mut ::core::ffi::c_char,
+        c"register".as_ptr() as *mut ::core::ffi::c_char,
+        c"keepscript".as_ptr() as *mut ::core::ffi::c_char,
     ]);
     if idx
         >= ::core::mem::size_of::<[*mut ::core::ffi::c_char; 10]>()
@@ -549,11 +548,11 @@ pub unsafe extern "C" fn get_user_cmd_nargs(
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     static user_cmd_nargs: GlobalCell<[*mut ::core::ffi::c_char; 5]> = GlobalCell::new([
-        b"0\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"*\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"?\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        c"0".as_ptr() as *mut ::core::ffi::c_char,
+        c"1".as_ptr() as *mut ::core::ffi::c_char,
+        c"*".as_ptr() as *mut ::core::ffi::c_char,
+        c"?".as_ptr() as *mut ::core::ffi::c_char,
+        c"+".as_ptr() as *mut ::core::ffi::c_char,
     ]);
     if idx
         >= ::core::mem::size_of::<[*mut ::core::ffi::c_char; 5]>()
@@ -600,7 +599,7 @@ pub unsafe extern "C" fn get_user_cmd_complete(
     }
     let mut cmd_compl: *mut ::core::ffi::c_char = get_command_complete(idx);
     if cmd_compl.is_null() || idx == EXPAND_USER_LUA as ::core::ffi::c_int {
-        return b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        return c"".as_ptr() as *mut ::core::ffi::c_char;
     }
     return cmd_compl;
 }
@@ -619,13 +618,7 @@ pub unsafe extern "C" fn cmdcomplete_type_to_str(
             .wrapping_add(strlen(compl_arg))
             .wrapping_add(2 as size_t);
         let mut buffer: *mut ::core::ffi::c_char = xmalloc(buflen) as *mut ::core::ffi::c_char;
-        snprintf(
-            buffer,
-            buflen,
-            b"%s,%s\0".as_ptr() as *const ::core::ffi::c_char,
-            cmd_compl,
-            compl_arg,
-        );
+        snprintf(buffer, buflen, c"%s,%s".as_ptr(), cmd_compl, compl_arg);
         return buffer;
     }
     return xstrdup(cmd_compl);
@@ -633,20 +626,10 @@ pub unsafe extern "C" fn cmdcomplete_type_to_str(
 pub unsafe extern "C" fn cmdcomplete_str_to_type(
     mut complete_str: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    if strncmp(
-        complete_str,
-        b"custom,\0".as_ptr() as *const ::core::ffi::c_char,
-        7 as size_t,
-    ) == 0 as ::core::ffi::c_int
-    {
+    if strncmp(complete_str, c"custom,".as_ptr(), 7 as size_t) == 0 as ::core::ffi::c_int {
         return EXPAND_USER_DEFINED as ::core::ffi::c_int;
     }
-    if strncmp(
-        complete_str,
-        b"customlist,\0".as_ptr() as *const ::core::ffi::c_char,
-        11 as size_t,
-    ) == 0 as ::core::ffi::c_int
-    {
+    if strncmp(complete_str, c"customlist,".as_ptr(), 11 as size_t) == 0 as ::core::ffi::c_int {
         return EXPAND_USER_LIST as ::core::ffi::c_int;
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -672,7 +655,7 @@ pub unsafe extern "C" fn cmdcomplete_str_to_type(
 }
 unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: size_t) {
     let mut found: bool = false_0 != 0;
-    msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
+    msg_ext_set_kind(c"list_cmd".as_ptr());
     let mut gap: *const garray_T =
         &raw mut (*(*(prevwin_curwin as unsafe extern "C" fn() -> *mut win_T)()).w_buffer).b_ucmds;
     loop {
@@ -686,8 +669,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
             {
                 if !found {
                     msg_puts_title(gettext(
-                        b"\n    Name              Args Address Complete    Definition\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        c"\n    Name              Args Address Complete    Definition".as_ptr(),
                     ));
                 }
                 found = true_0 != 0;
@@ -713,10 +695,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                     len = len.wrapping_sub(1);
                 }
                 if len != 0 as size_t {
-                    msg_puts(
-                        (b"    \0".as_ptr() as *const ::core::ffi::c_char)
-                            .add((4 as size_t).wrapping_sub(len)),
-                    );
+                    msg_puts((c"    ".as_ptr()).add((4 as size_t).wrapping_sub(len)));
                 }
                 msg_outtrans((*cmd).uc_name, HLF_D, false_0 != 0);
                 len = strlen((*cmd).uc_name).wrapping_add(4 as size_t);
@@ -778,7 +757,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                         let mut rc: ::core::ffi::c_int = snprintf(
                             (IObuff.ptr() as *mut ::core::ffi::c_char).add(len),
                             (IOSIZE as size_t).wrapping_sub(len),
-                            b"%ldc\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"%ldc".as_ptr(),
                             (*cmd).uc_def,
                         );
                         debug_assert!(rc > 0 as ::core::ffi::c_int, "rc > 0");
@@ -791,7 +770,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                         let mut rc_0: ::core::ffi::c_int = snprintf(
                             (IObuff.ptr() as *mut ::core::ffi::c_char).add(len),
                             (IOSIZE as size_t).wrapping_sub(len),
-                            b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"%ld".as_ptr(),
                             (*cmd).uc_def,
                         );
                         debug_assert!(rc_0 > 0 as ::core::ffi::c_int, "rc > 0");
@@ -822,7 +801,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                         let mut rc_1: ::core::ffi::c_int = snprintf(
                             (IObuff.ptr() as *mut ::core::ffi::c_char).add(len),
                             (IOSIZE as size_t).wrapping_sub(len),
-                            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"%s".as_ptr(),
                             (*addr_type_complete.ptr())[j as usize].shortname,
                         );
                         debug_assert!(rc_1 > 0 as ::core::ffi::c_int, "rc > 0");
@@ -845,7 +824,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                     let mut rc_2: ::core::ffi::c_int = snprintf(
                         (IObuff.ptr() as *mut ::core::ffi::c_char).add(len),
                         (IOSIZE as size_t).wrapping_sub(len),
-                        b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"%s".as_ptr(),
                         get_command_complete((*cmd).uc_compl),
                     );
                     debug_assert!(rc_2 > 0 as ::core::ffi::c_int, "rc > 0");
@@ -871,10 +850,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                     msg_puts_hl(fn_0, HLF_8, false_0 != 0);
                     xfree(fn_0 as *mut ::core::ffi::c_void);
                     if *(*cmd).uc_rep as ::core::ffi::c_int != NUL {
-                        msg_puts(
-                            b"\n                                               \0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        );
+                        msg_puts(c"\n                                               ".as_ptr());
                     }
                 }
                 msg_outtrans_special(
@@ -903,7 +879,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
     }
     if !found {
         msg(
-            gettext(b"No user-defined commands found\0".as_ptr() as *const ::core::ffi::c_char),
+            gettext(c"No user-defined commands found".as_ptr()),
             0 as ::core::ffi::c_int,
         );
     }
@@ -945,9 +921,7 @@ pub unsafe extern "C" fn parse_addr_type_arg(
         }
         *err.offset(i as isize) = NUL as ::core::ffi::c_char;
         semsg_c!(
-            gettext(
-                b"E180: Invalid address type value: %s\0".as_ptr() as *const ::core::ffi::c_char
-            ),
+            gettext(c"E180: Invalid address type value: %s".as_ptr()),
             err,
         );
         return FAIL;
@@ -1017,10 +991,7 @@ pub unsafe extern "C" fn parse_compl_arg(
                     == 0) as ::core::ffi::c_int as usize,
             ) as ::core::ffi::c_int
     {
-        semsg_c!(
-            gettext(b"E180: Invalid complete value: %s\0".as_ptr() as *const ::core::ffi::c_char),
-            value,
-        );
+        semsg_c!(gettext(c"E180: Invalid complete value: %s".as_ptr()), value,);
         return FAIL;
     }
     if *complp != EXPAND_USER_DEFINED as ::core::ffi::c_int
@@ -1028,8 +999,7 @@ pub unsafe extern "C" fn parse_compl_arg(
         && !arg.is_null()
     {
         emsg(gettext(
-            b"E468: Completion argument only allowed for custom completion\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"E468: Completion argument only allowed for custom completion".as_ptr(),
         ));
         return FAIL;
     }
@@ -1038,8 +1008,7 @@ pub unsafe extern "C" fn parse_compl_arg(
         && arg.is_null()
     {
         emsg(gettext(
-            b"E467: Custom completion requires a function argument\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"E467: Custom completion requires a function argument".as_ptr(),
         ));
         return FAIL;
     }
@@ -1059,44 +1028,30 @@ unsafe extern "C" fn uc_scan_attr(
     mut addr_type_arg: *mut cmd_addr_T,
 ) -> ::core::ffi::c_int {
     if len == 0 as size_t {
-        emsg(gettext(
-            b"E175: No attribute specified\0".as_ptr() as *const ::core::ffi::c_char
-        ));
+        emsg(gettext(c"E175: No attribute specified".as_ptr()));
         return FAIL;
     }
-    if strncasecmp(
-        attr,
-        b"bang\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        len,
-    ) == 0 as ::core::ffi::c_int
+    if strncasecmp(attr, c"bang".as_ptr() as *mut ::core::ffi::c_char, len)
+        == 0 as ::core::ffi::c_int
     {
         *argt = (*argt as ::core::ffi::c_uint | EX_BANG) as uint32_t;
-    } else if strncasecmp(
-        attr,
-        b"buffer\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        len,
-    ) == 0 as ::core::ffi::c_int
+    } else if strncasecmp(attr, c"buffer".as_ptr() as *mut ::core::ffi::c_char, len)
+        == 0 as ::core::ffi::c_int
     {
         *flags |= UC_BUFFER as ::core::ffi::c_int;
-    } else if strncasecmp(
-        attr,
-        b"register\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        len,
-    ) == 0 as ::core::ffi::c_int
+    } else if strncasecmp(attr, c"register".as_ptr() as *mut ::core::ffi::c_char, len)
+        == 0 as ::core::ffi::c_int
     {
         *argt = (*argt as ::core::ffi::c_uint | EX_REGSTR) as uint32_t;
     } else if strncasecmp(
         attr,
-        b"keepscript\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        c"keepscript".as_ptr() as *mut ::core::ffi::c_char,
         len,
     ) == 0 as ::core::ffi::c_int
     {
         *argt = (*argt as ::core::ffi::c_uint | EX_KEEPSCRIPT) as uint32_t;
-    } else if strncasecmp(
-        attr,
-        b"bar\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        len,
-    ) == 0 as ::core::ffi::c_int
+    } else if strncasecmp(attr, c"bar".as_ptr() as *mut ::core::ffi::c_char, len)
+        == 0 as ::core::ffi::c_int
     {
         *argt = (*argt as ::core::ffi::c_uint | EX_TRLBAR) as uint32_t;
     } else {
@@ -1114,11 +1069,8 @@ unsafe extern "C" fn uc_scan_attr(
                 i += 1;
             }
         }
-        if strncasecmp(
-            attr,
-            b"nargs\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            attrlen,
-        ) == 0 as ::core::ffi::c_int
+        if strncasecmp(attr, c"nargs".as_ptr() as *mut ::core::ffi::c_char, attrlen)
+            == 0 as ::core::ffi::c_int
         {
             's_180: {
                 '_wrong_nargs: {
@@ -1143,9 +1095,7 @@ unsafe extern "C" fn uc_scan_attr(
                         break 's_180;
                     }
                 }
-                emsg(gettext(
-                    b"E176: Invalid number of arguments\0".as_ptr() as *const ::core::ffi::c_char
-                ));
+                emsg(gettext(c"E176: Invalid number of arguments".as_ptr()));
                 return FAIL;
             }
         } else {
@@ -1154,12 +1104,8 @@ unsafe extern "C" fn uc_scan_attr(
                     ::core::ptr::null_mut::<::core::ffi::c_char>();
                 '_two_count: {
                     '_invalid_count: {
-                        if strncasecmp(
-                            attr,
-                            b"range\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
-                            attrlen,
-                        ) == 0 as ::core::ffi::c_int
+                        if strncasecmp(attr, c"range".as_ptr() as *mut ::core::ffi::c_char, attrlen)
+                            == 0 as ::core::ffi::c_int
                         {
                             *argt = (*argt as ::core::ffi::c_uint | EX_RANGE) as uint32_t;
                             if vallen == 1 as size_t
@@ -1189,8 +1135,7 @@ unsafe extern "C" fn uc_scan_attr(
                             }
                         } else if strncasecmp(
                             attr,
-                            b"count\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
+                            c"count".as_ptr() as *mut ::core::ffi::c_char,
                             attrlen,
                         ) == 0 as ::core::ffi::c_int
                         {
@@ -1224,8 +1169,7 @@ unsafe extern "C" fn uc_scan_attr(
                             };
                         } else if strncasecmp(
                             attr,
-                            b"complete\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
+                            c"complete".as_ptr() as *mut ::core::ffi::c_char,
                             attrlen,
                         ) == 0 as ::core::ffi::c_int
                         {
@@ -1235,7 +1179,7 @@ unsafe extern "C" fn uc_scan_attr(
                                         (e_argument_required_for_str.ptr() as *const _)
                                             as *const ::core::ffi::c_char,
                                     ),
-                                    b"-complete\0".as_ptr() as *const ::core::ffi::c_char,
+                                    c"-complete".as_ptr(),
                                 );
                                 return FAIL;
                             }
@@ -1251,8 +1195,7 @@ unsafe extern "C" fn uc_scan_attr(
                             }
                         } else if strncasecmp(
                             attr,
-                            b"addr\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
+                            c"addr".as_ptr() as *mut ::core::ffi::c_char,
                             attrlen,
                         ) == 0 as ::core::ffi::c_int
                         {
@@ -1263,7 +1206,7 @@ unsafe extern "C" fn uc_scan_attr(
                                         (e_argument_required_for_str.ptr() as *const _)
                                             as *const ::core::ffi::c_char,
                                     ),
-                                    b"-addr\0".as_ptr() as *const ::core::ffi::c_char,
+                                    c"-addr".as_ptr(),
                                 );
                                 return FAIL;
                             }
@@ -1280,22 +1223,16 @@ unsafe extern "C" fn uc_scan_attr(
                         } else {
                             let mut ch: ::core::ffi::c_char = *attr.add(len);
                             *attr.add(len) = NUL as ::core::ffi::c_char;
-                            semsg_c!(
-                                gettext(b"E181: Invalid attribute: %s\0".as_ptr()
-                                    as *const ::core::ffi::c_char),
-                                attr,
-                            );
+                            semsg_c!(gettext(c"E181: Invalid attribute: %s".as_ptr()), attr,);
                             *attr.add(len) = ch;
                             return FAIL;
                         }
                         break 's_409;
                     }
-                    emsg(gettext(b"E178: Invalid default value for count\0".as_ptr()
-                        as *const ::core::ffi::c_char));
+                    emsg(gettext(c"E178: Invalid default value for count".as_ptr()));
                     return FAIL;
                 }
-                emsg(gettext(b"E177: Count cannot be specified twice\0".as_ptr()
-                    as *const ::core::ffi::c_char));
+                emsg(gettext(c"E177: Count cannot be specified twice".as_ptr()));
                 return FAIL;
             }
         }
@@ -1387,10 +1324,7 @@ pub unsafe extern "C" fn uc_add_command(
                         || (*cmd).uc_script_ctx.sc_seq == (*current_sctx.ptr()).sc_seq)
                 {
                     semsg_c!(
-                        gettext(
-                            b"E174: Command already exists: add ! to replace it: %s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(c"E174: Command already exists: add ! to replace it: %s".as_ptr(),),
                         name,
                     );
                     break '_fail;
@@ -1506,9 +1440,7 @@ pub unsafe fn ex_command(mut eap: *mut exarg_T) {
         name = p;
         end = uc_validate_name(name);
         if end.is_null() {
-            emsg(gettext(
-                b"E182: Invalid command name\0".as_ptr() as *const ::core::ffi::c_char
-            ));
+            emsg(gettext(c"E182: Invalid command name".as_ptr()));
         } else {
             name_len = end.offset_from(name) as size_t;
             p = skipwhite(end);
@@ -1518,19 +1450,13 @@ pub unsafe fn ex_command(mut eap: *mut exarg_T) {
                 && *name as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint)
             {
                 emsg(gettext(
-                    b"E183: User defined commands must start with an uppercase letter\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    c"E183: User defined commands must start with an uppercase letter".as_ptr(),
                 ));
             } else if name_len <= 4 as size_t
-                && strncmp(
-                    name,
-                    b"Next\0".as_ptr() as *const ::core::ffi::c_char,
-                    name_len,
-                ) == 0 as ::core::ffi::c_int
+                && strncmp(name, c"Next".as_ptr(), name_len) == 0 as ::core::ffi::c_int
             {
                 emsg(gettext(
-                    b"E841: Reserved name, cannot be used for user defined command\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    c"E841: Reserved name, cannot be used for user defined command".as_ptr(),
                 ));
             } else if context > 0 as ::core::ffi::c_int
                 && argt & EX_EXTRA as uint32_t == 0 as uint32_t
@@ -1602,11 +1528,7 @@ pub unsafe fn ex_delcommand(mut eap: *mut exarg_T) {
     let mut res: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     let mut arg: *const ::core::ffi::c_char = (*eap).arg;
     let mut buffer_only: bool = false_0 != 0;
-    if strncmp(
-        arg,
-        b"-buffer\0".as_ptr() as *const ::core::ffi::c_char,
-        7 as size_t,
-    ) == 0 as ::core::ffi::c_int
+    if strncmp(arg, c"-buffer".as_ptr(), 7 as size_t) == 0 as ::core::ffi::c_int
         && ascii_iswhite(*arg.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
             as ::core::ffi::c_int
             != 0
@@ -1906,7 +1828,7 @@ unsafe extern "C" fn add_cmd_modifier(
     }
     if !buf.is_null() {
         if *multi_mods {
-            strcat(buf, b" \0".as_ptr() as *const ::core::ffi::c_char);
+            strcat(buf, c" ".as_ptr());
         }
         strcat(buf, mod_str);
     }
@@ -1922,21 +1844,21 @@ pub unsafe extern "C" fn add_win_cmd_modifiers(
     if (*cmod).cmod_split & WSP_ABOVE as ::core::ffi::c_int != 0 {
         result = result.wrapping_add(add_cmd_modifier(
             buf,
-            b"aboveleft\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"aboveleft".as_ptr() as *mut ::core::ffi::c_char,
             multi_mods,
         ));
     }
     if (*cmod).cmod_split & WSP_BELOW as ::core::ffi::c_int != 0 {
         result = result.wrapping_add(add_cmd_modifier(
             buf,
-            b"belowright\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"belowright".as_ptr() as *mut ::core::ffi::c_char,
             multi_mods,
         ));
     }
     if (*cmod).cmod_split & WSP_BOT as ::core::ffi::c_int != 0 {
         result = result.wrapping_add(add_cmd_modifier(
             buf,
-            b"botright\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"botright".as_ptr() as *mut ::core::ffi::c_char,
             multi_mods,
         ));
     }
@@ -1945,7 +1867,7 @@ pub unsafe extern "C" fn add_win_cmd_modifiers(
         if tabnr == tabpage_index(curtab.get()) {
             result = result.wrapping_add(add_cmd_modifier(
                 buf,
-                b"tab\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                c"tab".as_ptr() as *mut ::core::ffi::c_char,
                 multi_mods,
             ));
         } else {
@@ -1953,7 +1875,7 @@ pub unsafe extern "C" fn add_win_cmd_modifiers(
             snprintf(
                 &raw mut tab_buf as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 68]>(),
-                b"%dtab\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%dtab".as_ptr(),
                 tabnr,
             );
             result = result.wrapping_add(add_cmd_modifier(
@@ -1966,21 +1888,21 @@ pub unsafe extern "C" fn add_win_cmd_modifiers(
     if (*cmod).cmod_split & WSP_TOP as ::core::ffi::c_int != 0 {
         result = result.wrapping_add(add_cmd_modifier(
             buf,
-            b"topleft\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"topleft".as_ptr() as *mut ::core::ffi::c_char,
             multi_mods,
         ));
     }
     if (*cmod).cmod_split & WSP_VERT as ::core::ffi::c_int != 0 {
         result = result.wrapping_add(add_cmd_modifier(
             buf,
-            b"vertical\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"vertical".as_ptr() as *mut ::core::ffi::c_char,
             multi_mods,
         ));
     }
     if (*cmod).cmod_split & WSP_HOR as ::core::ffi::c_int != 0 {
         result = result.wrapping_add(add_cmd_modifier(
             buf,
-            b"horizontal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"horizontal".as_ptr() as *mut ::core::ffi::c_char,
             multi_mods,
         ));
     }
@@ -1996,53 +1918,51 @@ pub unsafe extern "C" fn uc_mods(
     static mod_entries: GlobalCell<[mod_entry_T; 12]> = GlobalCell::new([
         mod_entry_T {
             flag: CMOD_BROWSE as ::core::ffi::c_int,
-            name: b"browse\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            name: c"browse".as_ptr() as *mut ::core::ffi::c_char,
         },
         mod_entry_T {
             flag: CMOD_CONFIRM as ::core::ffi::c_int,
-            name: b"confirm\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            name: c"confirm".as_ptr() as *mut ::core::ffi::c_char,
         },
         mod_entry_T {
             flag: CMOD_HIDE as ::core::ffi::c_int,
-            name: b"hide\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            name: c"hide".as_ptr() as *mut ::core::ffi::c_char,
         },
         mod_entry_T {
             flag: CMOD_KEEPALT as ::core::ffi::c_int,
-            name: b"keepalt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            name: c"keepalt".as_ptr() as *mut ::core::ffi::c_char,
         },
         mod_entry_T {
             flag: CMOD_KEEPJUMPS as ::core::ffi::c_int,
-            name: b"keepjumps\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            name: c"keepjumps".as_ptr() as *mut ::core::ffi::c_char,
         },
         mod_entry_T {
             flag: CMOD_KEEPMARKS as ::core::ffi::c_int,
-            name: b"keepmarks\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            name: c"keepmarks".as_ptr() as *mut ::core::ffi::c_char,
         },
         mod_entry_T {
             flag: CMOD_KEEPPATTERNS as ::core::ffi::c_int,
-            name: b"keeppatterns\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            name: c"keeppatterns".as_ptr() as *mut ::core::ffi::c_char,
         },
         mod_entry_T {
             flag: CMOD_LOCKMARKS as ::core::ffi::c_int,
-            name: b"lockmarks\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            name: c"lockmarks".as_ptr() as *mut ::core::ffi::c_char,
         },
         mod_entry_T {
             flag: CMOD_NOSWAPFILE as ::core::ffi::c_int,
-            name: b"noswapfile\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            name: c"noswapfile".as_ptr() as *mut ::core::ffi::c_char,
         },
         mod_entry_T {
             flag: CMOD_UNSILENT as ::core::ffi::c_int,
-            name: b"unsilent\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            name: c"unsilent".as_ptr() as *mut ::core::ffi::c_char,
         },
         mod_entry_T {
             flag: CMOD_NOAUTOCMD as ::core::ffi::c_int,
-            name: b"noautocmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            name: c"noautocmd".as_ptr() as *mut ::core::ffi::c_char,
         },
         mod_entry_T {
             flag: CMOD_SANDBOX as ::core::ffi::c_int,
-            name: b"sandbox\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            name: c"sandbox".as_ptr() as *mut ::core::ffi::c_char,
         },
     ]);
     result = (if quote as ::core::ffi::c_int != 0 {
@@ -2080,9 +2000,9 @@ pub unsafe extern "C" fn uc_mods(
         result = result.wrapping_add(add_cmd_modifier(
             buf,
             (if (*cmod).cmod_flags & CMOD_ERRSILENT as ::core::ffi::c_int != 0 {
-                b"silent!\0".as_ptr() as *const ::core::ffi::c_char
+                c"silent!".as_ptr()
             } else {
-                b"silent\0".as_ptr() as *const ::core::ffi::c_char
+                c"silent".as_ptr()
             }) as *mut ::core::ffi::c_char,
             &raw mut multi_mods,
         ));
@@ -2092,7 +2012,7 @@ pub unsafe extern "C" fn uc_mods(
         if verbose_value == 1 as ::core::ffi::c_int {
             result = result.wrapping_add(add_cmd_modifier(
                 buf,
-                b"verbose\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                c"verbose".as_ptr() as *mut ::core::ffi::c_char,
                 &raw mut multi_mods,
             ));
         } else {
@@ -2100,7 +2020,7 @@ pub unsafe extern "C" fn uc_mods(
             snprintf(
                 &raw mut verbose_buf as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 65]>(),
-                b"%dverbose\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%dverbose".as_ptr(),
                 verbose_value,
             );
             result = result.wrapping_add(add_cmd_modifier(
@@ -2131,11 +2051,7 @@ unsafe extern "C" fn uc_check_code(
     let mut l: size_t = len.wrapping_sub(2 as size_t);
     let mut quote: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut type_0: C2Rust_Unnamed_21 = ct_NONE;
-    if !vim_strchr(
-        b"qQfF\0".as_ptr() as *const ::core::ffi::c_char,
-        *p as uint8_t as ::core::ffi::c_int,
-    )
-    .is_null()
+    if !vim_strchr(c"qQfF".as_ptr(), *p as uint8_t as ::core::ffi::c_int).is_null()
         && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == '-' as ::core::ffi::c_int
     {
@@ -2151,72 +2067,42 @@ unsafe extern "C" fn uc_check_code(
     }
     l = l.wrapping_add(1);
     if l > 1 as size_t {
-        if strncasecmp(
-            p,
-            b"args>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            l,
-        ) == 0 as ::core::ffi::c_int
+        if strncasecmp(p, c"args>".as_ptr() as *mut ::core::ffi::c_char, l)
+            == 0 as ::core::ffi::c_int
         {
             type_0 = ct_ARGS;
-        } else if strncasecmp(
-            p,
-            b"bang>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            l,
-        ) == 0 as ::core::ffi::c_int
+        } else if strncasecmp(p, c"bang>".as_ptr() as *mut ::core::ffi::c_char, l)
+            == 0 as ::core::ffi::c_int
         {
             type_0 = ct_BANG;
-        } else if strncasecmp(
-            p,
-            b"count>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            l,
-        ) == 0 as ::core::ffi::c_int
+        } else if strncasecmp(p, c"count>".as_ptr() as *mut ::core::ffi::c_char, l)
+            == 0 as ::core::ffi::c_int
         {
             type_0 = ct_COUNT;
-        } else if strncasecmp(
-            p,
-            b"line1>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            l,
-        ) == 0 as ::core::ffi::c_int
+        } else if strncasecmp(p, c"line1>".as_ptr() as *mut ::core::ffi::c_char, l)
+            == 0 as ::core::ffi::c_int
         {
             type_0 = ct_LINE1;
-        } else if strncasecmp(
-            p,
-            b"line2>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            l,
-        ) == 0 as ::core::ffi::c_int
+        } else if strncasecmp(p, c"line2>".as_ptr() as *mut ::core::ffi::c_char, l)
+            == 0 as ::core::ffi::c_int
         {
             type_0 = ct_LINE2;
-        } else if strncasecmp(
-            p,
-            b"range>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            l,
-        ) == 0 as ::core::ffi::c_int
+        } else if strncasecmp(p, c"range>".as_ptr() as *mut ::core::ffi::c_char, l)
+            == 0 as ::core::ffi::c_int
         {
             type_0 = ct_RANGE;
-        } else if strncasecmp(
-            p,
-            b"lt>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            l,
-        ) == 0 as ::core::ffi::c_int
+        } else if strncasecmp(p, c"lt>".as_ptr() as *mut ::core::ffi::c_char, l)
+            == 0 as ::core::ffi::c_int
         {
             type_0 = ct_LT;
-        } else if strncasecmp(
-            p,
-            b"reg>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            l,
-        ) == 0 as ::core::ffi::c_int
-            || strncasecmp(
-                p,
-                b"register>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                l,
-            ) == 0 as ::core::ffi::c_int
+        } else if strncasecmp(p, c"reg>".as_ptr() as *mut ::core::ffi::c_char, l)
+            == 0 as ::core::ffi::c_int
+            || strncasecmp(p, c"register>".as_ptr() as *mut ::core::ffi::c_char, l)
+                == 0 as ::core::ffi::c_int
         {
             type_0 = ct_REGISTER;
-        } else if strncasecmp(
-            p,
-            b"mods>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            l,
-        ) == 0 as ::core::ffi::c_int
+        } else if strncasecmp(p, c"mods>".as_ptr() as *mut ::core::ffi::c_char, l)
+            == 0 as ::core::ffi::c_int
         {
             type_0 = ct_MODS;
         }
@@ -2227,11 +2113,7 @@ unsafe extern "C" fn uc_check_code(
                 if quote == 1 as ::core::ffi::c_int {
                     result = 2 as size_t;
                     if !buf.is_null() {
-                        strcpy(
-                            buf,
-                            b"''\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
-                        );
+                        strcpy(buf, c"''".as_ptr() as *mut ::core::ffi::c_char);
                     }
                 } else {
                     result = 0 as size_t;
@@ -2346,7 +2228,7 @@ unsafe extern "C" fn uc_check_code(
             snprintf(
                 &raw mut num_buf as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 20]>(),
-                b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%ld".as_ptr(),
                 num,
             );
             num_len = strlen(&raw mut num_buf as *mut ::core::ffi::c_char);
@@ -2567,7 +2449,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         let c2rust_fresh45 = d.size;
         d.size = d.size.wrapping_add(1);
         *d.items.add(c2rust_fresh45) = key_value_pair {
-            key: cstr_as_string(b"name\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"name".as_ptr()),
             value: object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed {
@@ -2578,7 +2460,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         let c2rust_fresh46 = d.size;
         d.size = d.size.wrapping_add(1);
         *d.items.add(c2rust_fresh46) = key_value_pair {
-            key: cstr_as_string(b"definition\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"definition".as_ptr()),
             value: object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed {
@@ -2589,7 +2471,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         let c2rust_fresh47 = d.size;
         d.size = d.size.wrapping_add(1);
         *d.items.add(c2rust_fresh47) = key_value_pair {
-            key: cstr_as_string(b"script_id\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"script_id".as_ptr()),
             value: object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
@@ -2600,7 +2482,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         let c2rust_fresh48 = d.size;
         d.size = d.size.wrapping_add(1);
         *d.items.add(c2rust_fresh48) = key_value_pair {
-            key: cstr_as_string(b"bang\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"bang".as_ptr()),
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
@@ -2611,7 +2493,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         let c2rust_fresh49 = d.size;
         d.size = d.size.wrapping_add(1);
         *d.items.add(c2rust_fresh49) = key_value_pair {
-            key: cstr_as_string(b"bar\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"bar".as_ptr()),
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
@@ -2622,7 +2504,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         let c2rust_fresh50 = d.size;
         d.size = d.size.wrapping_add(1);
         *d.items.add(c2rust_fresh50) = key_value_pair {
-            key: cstr_as_string(b"register\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"register".as_ptr()),
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
@@ -2633,7 +2515,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         let c2rust_fresh51 = d.size;
         d.size = d.size.wrapping_add(1);
         *d.items.add(c2rust_fresh51) = key_value_pair {
-            key: cstr_as_string(b"keepscript\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"keepscript".as_ptr()),
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
@@ -2645,7 +2527,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
             let c2rust_fresh52 = d.size;
             d.size = d.size.wrapping_add(1);
             *d.items.add(c2rust_fresh52) = key_value_pair {
-                key: cstr_as_string(b"preview\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"preview".as_ptr()),
                 value: object {
                     type_0: kObjectTypeLuaRef,
                     data: C2Rust_Unnamed {
@@ -2658,7 +2540,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
             let c2rust_fresh53 = d.size;
             d.size = d.size.wrapping_add(1);
             *d.items.add(c2rust_fresh53) = key_value_pair {
-                key: cstr_as_string(b"callback\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"callback".as_ptr()),
                 value: object {
                     type_0: kObjectTypeLuaRef,
                     data: C2Rust_Unnamed {
@@ -2690,7 +2572,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         let c2rust_fresh54 = d.size;
         d.size = d.size.wrapping_add(1);
         *d.items.add(c2rust_fresh54) = key_value_pair {
-            key: cstr_as_string(b"nargs\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"nargs".as_ptr()),
             value: object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed {
@@ -2705,7 +2587,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
             let c2rust_fresh55 = d.size;
             d.size = d.size.wrapping_add(1);
             *d.items.add(c2rust_fresh55) = key_value_pair {
-                key: cstr_as_string(b"complete\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"complete".as_ptr()),
                 value: object {
                     type_0: kObjectTypeLuaRef,
                     data: C2Rust_Unnamed {
@@ -2718,7 +2600,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
             let c2rust_fresh56 = d.size;
             d.size = d.size.wrapping_add(1);
             *d.items.add(c2rust_fresh56) = key_value_pair {
-                key: cstr_as_string(b"complete\0".as_ptr() as *const ::core::ffi::c_char),
+                key: cstr_as_string(c"complete".as_ptr()),
                 value: if cmd_compl.is_null() {
                     object {
                         type_0: kObjectTypeNil,
@@ -2737,7 +2619,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         let c2rust_fresh57 = d.size;
         d.size = d.size.wrapping_add(1);
         *d.items.add(c2rust_fresh57) = key_value_pair {
-            key: cstr_as_string(b"complete_arg\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"complete_arg".as_ptr()),
             value: if (*cmd).uc_compl_arg.is_null() {
                 object {
                     type_0: kObjectTypeNil,
@@ -2761,18 +2643,14 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
                 obj = object {
                     type_0: kObjectTypeString,
                     data: C2Rust_Unnamed {
-                        string: arena_printf(
-                            arena,
-                            b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
-                            (*cmd).uc_def,
-                        ),
+                        string: arena_printf(arena, c"%ld".as_ptr(), (*cmd).uc_def),
                     },
                 };
             } else {
                 obj = object {
                     type_0: kObjectTypeString,
                     data: C2Rust_Unnamed {
-                        string: cstr_as_string(b"0\0".as_ptr() as *const ::core::ffi::c_char),
+                        string: cstr_as_string(c"0".as_ptr()),
                     },
                 };
             }
@@ -2780,7 +2658,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         let c2rust_fresh58 = d.size;
         d.size = d.size.wrapping_add(1);
         *d.items.add(c2rust_fresh58) = key_value_pair {
-            key: cstr_as_string(b"count\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"count".as_ptr()),
             value: obj,
         };
         obj = object {
@@ -2793,8 +2671,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
                     type_0: kObjectTypeString,
                     data: C2Rust_Unnamed {
                         string: String_0 {
-                            data: b"%\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
+                            data: c"%".as_ptr() as *mut ::core::ffi::c_char,
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
                                 .wrapping_sub(1 as size_t),
                         },
@@ -2804,11 +2681,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
                 obj = object {
                     type_0: kObjectTypeString,
                     data: C2Rust_Unnamed {
-                        string: arena_printf(
-                            arena,
-                            b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
-                            (*cmd).uc_def,
-                        ),
+                        string: arena_printf(arena, c"%ld".as_ptr(), (*cmd).uc_def),
                     },
                 };
             } else {
@@ -2816,8 +2689,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
                     type_0: kObjectTypeString,
                     data: C2Rust_Unnamed {
                         string: String_0 {
-                            data: b".\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
+                            data: c".".as_ptr() as *mut ::core::ffi::c_char,
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
                                 .wrapping_sub(1 as size_t),
                         },
@@ -2828,7 +2700,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         let c2rust_fresh59 = d.size;
         d.size = d.size.wrapping_add(1);
         *d.items.add(c2rust_fresh59) = key_value_pair {
-            key: cstr_as_string(b"range\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"range".as_ptr()),
             value: obj,
         };
         obj = object {
@@ -2858,7 +2730,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         let c2rust_fresh60 = d.size;
         d.size = d.size.wrapping_add(1);
         *d.items.add(c2rust_fresh60) = key_value_pair {
-            key: cstr_as_string(b"addr\0".as_ptr() as *const ::core::ffi::c_char),
+            key: cstr_as_string(c"addr".as_ptr()),
             value: obj,
         };
         let c2rust_fresh61 = rv.size;

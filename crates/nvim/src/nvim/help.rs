@@ -124,7 +124,7 @@ pub unsafe fn ex_help(mut eap: *mut exarg_T) {
             return;
         }
     } else {
-        arg = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        arg = c"".as_ptr() as *mut ::core::ffi::c_char;
     }
     let mut p: *mut ::core::ffi::c_char = arg
         .add(strlen(arg))
@@ -142,7 +142,7 @@ pub unsafe fn ex_help(mut eap: *mut exarg_T) {
     let mut helpbang: bool =
         !eap.is_null() && (*eap).forceit != 0 && *arg as ::core::ffi::c_int == NUL;
     if *arg as ::core::ffi::c_int == NUL && !helpbang {
-        arg = b"help.txt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        arg = c"help.txt".as_ptr() as *mut ::core::ffi::c_char;
     }
     let mut allocated_arg: *mut ::core::ffi::c_char =
         ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -153,8 +153,8 @@ pub unsafe fn ex_help(mut eap: *mut exarg_T) {
         };
         let mut res: Object = nlua_exec(
             String_0 {
-                data: b"return require'vim._core.help'.resolve_tag()\0".as_ptr()
-                    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                data: c"return require'vim._core.help'.resolve_tag()".as_ptr()
+                    as *mut ::core::ffi::c_char,
                 size: ::core::mem::size_of::<[::core::ffi::c_char; 45]>().wrapping_sub(1 as size_t),
             },
             ::core::ptr::null::<::core::ffi::c_char>(),
@@ -212,16 +212,9 @@ pub unsafe fn ex_help(mut eap: *mut exarg_T) {
     }
     if i >= num_matches || n == FAIL {
         if !lang.is_null() {
-            semsg_c!(
-                gettext(b"E661: No '%s' help for %s\0".as_ptr() as *const ::core::ffi::c_char),
-                lang,
-                arg,
-            );
+            semsg_c!(gettext(c"E661: No '%s' help for %s".as_ptr()), lang, arg,);
         } else {
-            semsg_c!(
-                gettext(b"E149: No help for %s\0".as_ptr() as *const ::core::ffi::c_char),
-                arg,
-            );
+            semsg_c!(gettext(c"E149: No help for %s".as_ptr()), arg,);
         }
         if n != FAIL {
             FreeWild(num_matches, matches);
@@ -262,9 +255,7 @@ pub unsafe fn ex_help(mut eap: *mut exarg_T) {
                 if helpfd.is_null() {
                     smsg_c!(
                         0 as ::core::ffi::c_int,
-                        gettext(
-                            b"Help file \"%s\" not found\0".as_ptr() as *const ::core::ffi::c_char
-                        ),
+                        gettext(c"Help file \"%s\" not found".as_ptr()),
                         p_hf.get(),
                     );
                     break '_erret;
@@ -489,8 +480,8 @@ pub unsafe extern "C" fn find_help_tags(
     };
     let mut res: Object = nlua_exec(
         String_0 {
-            data: b"return require'vim._core.help'.escape_subject(...)\0".as_ptr()
-                as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            data: c"return require'vim._core.help'.escape_subject(...)".as_ptr()
+                as *mut ::core::ffi::c_char,
             size: ::core::mem::size_of::<[::core::ffi::c_char; 51]>().wrapping_sub(1 as size_t),
         },
         ::core::ptr::null::<::core::ffi::c_char>(),
@@ -500,12 +491,7 @@ pub unsafe extern "C" fn find_help_tags(
         &raw mut err,
     );
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-        emsg_multiline(
-            err.msg,
-            b"lua_error\0".as_ptr() as *const ::core::ffi::c_char,
-            HLF_E,
-            true_0 != 0,
-        );
+        emsg_multiline(err.msg, c"lua_error".as_ptr(), HLF_E, true_0 != 0);
         api_clear_error(&raw mut err);
         return FAIL;
     }
@@ -590,7 +576,7 @@ pub unsafe extern "C" fn cleanup_help_tags(
         if len > 0 as ::core::ffi::c_int {
             if strcmp(
                 (*file.offset(i as isize)).offset(len as isize),
-                b"@en\0".as_ptr() as *const ::core::ffi::c_char,
+                c"@en".as_ptr(),
             ) == 0 as ::core::ffi::c_int
             {
                 let mut j: ::core::ffi::c_int = 0;
@@ -643,8 +629,7 @@ pub unsafe extern "C" fn prepare_help_buffer() {
             type_0: kOptValTypeString,
             data: OptValData {
                 string: String_0 {
-                    data: b"help\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    data: c"help".as_ptr() as *mut ::core::ffi::c_char,
                     size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
                         .wrapping_sub(1 as size_t),
                 },
@@ -653,9 +638,8 @@ pub unsafe extern "C" fn prepare_help_buffer() {
         OPT_LOCAL as ::core::ffi::c_int,
         0 as scid_T,
     );
-    let mut p: *mut ::core::ffi::c_char = b"!-~,^*,^|,^\",192-255\0".as_ptr()
-        as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char;
+    let mut p: *mut ::core::ffi::c_char =
+        c"!-~,^*,^|,^\",192-255".as_ptr() as *mut ::core::ffi::c_char;
     if strcmp((*curbuf.get()).b_p_isk, p) != 0 as ::core::ffi::c_int {
         set_option_direct(
             kOptIskeyword,
@@ -677,8 +661,7 @@ pub unsafe extern "C" fn prepare_help_buffer() {
             type_0: kOptValTypeString,
             data: OptValData {
                 string: String_0 {
-                    data: b"manual\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    data: c"manual".as_ptr() as *mut ::core::ffi::c_char,
                     size: ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
                         .wrapping_sub(1 as size_t),
                 },
@@ -709,8 +692,8 @@ pub unsafe extern "C" fn get_local_additions() {
     };
     let mut res: Object = nlua_exec(
         String_0 {
-            data: b"return require'vim._core.help'.local_additions()\0".as_ptr()
-                as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            data: c"return require'vim._core.help'.local_additions()".as_ptr()
+                as *mut ::core::ffi::c_char,
             size: ::core::mem::size_of::<[::core::ffi::c_char; 49]>().wrapping_sub(1 as size_t),
         },
         ::core::ptr::null::<::core::ffi::c_char>(),
@@ -724,21 +707,16 @@ pub unsafe extern "C" fn get_local_additions() {
         &raw mut err,
     );
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-        emsg_multiline(
-            err.msg,
-            b"lua_error\0".as_ptr() as *const ::core::ffi::c_char,
-            HLF_E,
-            true_0 != 0,
-        );
+        emsg_multiline(err.msg, c"lua_error".as_ptr(), HLF_E, true_0 != 0);
     }
     api_free_object(res);
     api_clear_error(&raw mut err);
 }
 pub unsafe fn ex_exusage(mut _eap: *mut exarg_T) {
-    do_cmdline_cmd(b"help ex-cmd-index\0".as_ptr() as *const ::core::ffi::c_char);
+    do_cmdline_cmd(c"help ex-cmd-index".as_ptr());
 }
 pub unsafe fn ex_viusage(mut _eap: *mut exarg_T) {
-    do_cmdline_cmd(b"help normal-index\0".as_ptr() as *const ::core::ffi::c_char);
+    do_cmdline_cmd(c"help normal-index".as_ptr());
 }
 unsafe extern "C" fn helptags_one(
     mut dir: *mut ::core::ffi::c_char,
@@ -766,7 +744,7 @@ unsafe extern "C" fn helptags_one(
     if dirlen >= MAXPATHL as size_t
         || xstrlcat(
             NameBuff.ptr() as *mut ::core::ffi::c_char,
-            b"/**/*\0".as_ptr() as *const ::core::ffi::c_char,
+            c"/**/*".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
         ) >= MAXPATHL as size_t
         || xstrlcat(
@@ -791,7 +769,7 @@ unsafe extern "C" fn helptags_one(
     if res == FAIL || filecount == 0 as ::core::ffi::c_int {
         if !got_int.get() {
             semsg_c!(
-                gettext(b"E151: No match: %s\0".as_ptr() as *const ::core::ffi::c_char),
+                gettext(c"E151: No match: %s".as_ptr()),
                 NameBuff.ptr() as *mut ::core::ffi::c_char,
             );
         }
@@ -817,16 +795,11 @@ unsafe extern "C" fn helptags_one(
         ));
         return;
     }
-    let fd_tags: *mut FILE = os_fopen(
-        NameBuff.ptr() as *mut ::core::ffi::c_char,
-        b"w\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let fd_tags: *mut FILE = os_fopen(NameBuff.ptr() as *mut ::core::ffi::c_char, c"w".as_ptr());
     if fd_tags.is_null() {
         if !ignore_writeerr {
             semsg_c!(
-                gettext(
-                    b"E152: Cannot open %s for writing\0".as_ptr() as *const ::core::ffi::c_char
-                ),
+                gettext(c"E152: Cannot open %s for writing".as_ptr()),
                 NameBuff.ptr() as *mut ::core::ffi::c_char,
             );
         }
@@ -840,7 +813,7 @@ unsafe extern "C" fn helptags_one(
     );
     if add_help_tags as ::core::ffi::c_int != 0
         || path_full_compare(
-            b"$VIMRUNTIME/doc\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"$VIMRUNTIME/doc".as_ptr() as *mut ::core::ffi::c_char,
             dir,
             false_0 != 0,
             true_0 != 0,
@@ -849,27 +822,17 @@ unsafe extern "C" fn helptags_one(
     {
         let mut s_len: size_t = (18 as size_t).wrapping_add(strlen(tagfname));
         s = xmalloc(s_len) as *mut ::core::ffi::c_char;
-        snprintf(
-            s,
-            s_len,
-            b"help-tags\t%s\t1\n\0".as_ptr() as *const ::core::ffi::c_char,
-            tagfname,
-        );
+        snprintf(s, s_len, c"help-tags\t%s\t1\n".as_ptr(), tagfname);
         ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
         *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) = s;
         ga.ga_len += 1;
     }
     let mut fi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while fi < filecount && !got_int.get() {
-        let fd: *mut FILE = os_fopen(
-            *files.offset(fi as isize),
-            b"r\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        let fd: *mut FILE = os_fopen(*files.offset(fi as isize), c"r".as_ptr());
         if fd.is_null() {
             semsg_c!(
-                gettext(
-                    b"E153: Unable to open %s for reading\0".as_ptr() as *const ::core::ffi::c_char
-                ),
+                gettext(c"E153: Unable to open %s for reading".as_ptr()),
                 *files.offset(fi as isize),
             );
         } else {
@@ -881,7 +844,7 @@ unsafe extern "C" fn helptags_one(
             {
                 if in_example {
                     if !vim_strchr(
-                        b" \t\n\r\0".as_ptr() as *const ::core::ffi::c_char,
+                        c" \t\n\r".as_ptr(),
                         (*IObuff.ptr())[0 as ::core::ffi::c_int as usize] as uint8_t
                             as ::core::ffi::c_int,
                     )
@@ -920,7 +883,7 @@ unsafe extern "C" fn helptags_one(
                                     as ::core::ffi::c_int
                                     == '\t' as ::core::ffi::c_int)
                             && (!vim_strchr(
-                                b" \t\n\r\0".as_ptr() as *const ::core::ffi::c_char,
+                                c" \t\n\r".as_ptr(),
                                 *s.offset(1 as ::core::ffi::c_int as isize) as uint8_t
                                     as ::core::ffi::c_int,
                             )
@@ -939,13 +902,7 @@ unsafe extern "C" fn helptags_one(
                             *(ga.ga_data as *mut *mut ::core::ffi::c_char)
                                 .offset(ga.ga_len as isize) = s;
                             ga.ga_len += 1;
-                            snprintf(
-                                s,
-                                s_len_0,
-                                b"%s\t%s\0".as_ptr() as *const ::core::ffi::c_char,
-                                p1,
-                                fname,
-                            );
+                            snprintf(s, s_len_0, c"%s\t%s".as_ptr(), p1, fname);
                             p2 = vim_strchr(
                                 p2.offset(1 as ::core::ffi::c_int as isize),
                                 '*' as ::core::ffi::c_int,
@@ -1002,8 +959,7 @@ unsafe extern "C" fn helptags_one(
                     vim_snprintf(
                         NameBuff.ptr() as *mut ::core::ffi::c_char,
                         MAXPATHL as size_t,
-                        gettext(b"E154: Duplicate tag \"%s\" in file %s/%s\0".as_ptr()
-                            as *const ::core::ffi::c_char),
+                        gettext(c"E154: Duplicate tag \"%s\" in file %s/%s".as_ptr()),
                         *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(i as isize),
                         dir,
                         p2_0.offset(1 as ::core::ffi::c_int as isize),
@@ -1021,19 +977,10 @@ unsafe extern "C" fn helptags_one(
         let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i_0 < ga.ga_len {
             s = *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(i_0 as isize);
-            if strncmp(
-                s,
-                b"help-tags\t\0".as_ptr() as *const ::core::ffi::c_char,
-                10 as size_t,
-            ) == 0 as ::core::ffi::c_int
-            {
+            if strncmp(s, c"help-tags\t".as_ptr(), 10 as size_t) == 0 as ::core::ffi::c_int {
                 fputs(s, fd_tags);
             } else {
-                fprintf(
-                    fd_tags,
-                    b"%s\t/*\0".as_ptr() as *const ::core::ffi::c_char,
-                    s,
-                );
+                fprintf(fd_tags, c"%s\t/*".as_ptr(), s);
                 let mut p1_1: *mut ::core::ffi::c_char = s;
                 while *p1_1 as ::core::ffi::c_int != '\t' as ::core::ffi::c_int {
                     if *p1_1 as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
@@ -1044,7 +991,7 @@ unsafe extern "C" fn helptags_one(
                     putc(*p1_1 as ::core::ffi::c_int, fd_tags);
                     p1_1 = p1_1.offset(1);
                 }
-                fprintf(fd_tags, b"*\n\0".as_ptr() as *const ::core::ffi::c_char);
+                fprintf(fd_tags, c"*\n".as_ptr());
             }
             i_0 += 1;
         }
@@ -1088,7 +1035,7 @@ unsafe extern "C" fn do_helptags(
     if !add_pathsep(NameBuff.ptr() as *mut ::core::ffi::c_char)
         || xstrlcat(
             NameBuff.ptr() as *mut ::core::ffi::c_char,
-            b"**\0".as_ptr() as *const ::core::ffi::c_char,
+            c"**".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
         ) >= MAXPATHL as size_t
     {
@@ -1108,7 +1055,7 @@ unsafe extern "C" fn do_helptags(
         || filecount == 0 as ::core::ffi::c_int
     {
         semsg_c!(
-            gettext(b"E151: No match: %s\0".as_ptr() as *const ::core::ffi::c_char),
+            gettext(c"E151: No match: %s".as_ptr()),
             NameBuff.ptr() as *mut ::core::ffi::c_char,
         );
         return;
@@ -1128,7 +1075,7 @@ unsafe extern "C" fn do_helptags(
                     (*files.offset(i as isize))
                         .offset(len as isize)
                         .offset(-(4 as ::core::ffi::c_int as isize)),
-                    b".txt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                    c".txt".as_ptr() as *mut ::core::ffi::c_char,
                 ) == 0 as ::core::ffi::c_int
                 {
                     lang[0 as ::core::ffi::c_int as usize] = 'e' as ::core::ffi::c_char;
@@ -1260,7 +1207,7 @@ unsafe extern "C" fn do_helptags(
     while j < ga.ga_len {
         strcpy(
             &raw mut fname as *mut ::core::ffi::c_char,
-            b"tags-xx\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"tags-xx".as_ptr() as *mut ::core::ffi::c_char,
         );
         fname[5 as ::core::ffi::c_int as usize] =
             *(ga.ga_data as *mut ::core::ffi::c_char).offset(j as isize);
@@ -1274,12 +1221,12 @@ unsafe extern "C" fn do_helptags(
             fname[4 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
             strcpy(
                 &raw mut ext as *mut ::core::ffi::c_char,
-                b".txt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                c".txt".as_ptr() as *mut ::core::ffi::c_char,
             );
         } else {
             strcpy(
                 &raw mut ext as *mut ::core::ffi::c_char,
-                b".xxx\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                c".xxx".as_ptr() as *mut ::core::ffi::c_char,
             );
             ext[1 as ::core::ffi::c_int as usize] = fname[5 as ::core::ffi::c_int as usize];
             ext[2 as ::core::ffi::c_int as usize] = fname[6 as ::core::ffi::c_int as usize];
@@ -1347,11 +1294,7 @@ pub unsafe fn ex_helptags(mut eap: *mut exarg_T) {
         },
     };
     let mut add_help_tags: bool = false_0 != 0;
-    if strncmp(
-        (*eap).arg,
-        b"++t\0".as_ptr() as *const ::core::ffi::c_char,
-        3 as size_t,
-    ) == 0 as ::core::ffi::c_int
+    if strncmp((*eap).arg, c"++t".as_ptr(), 3 as size_t) == 0 as ::core::ffi::c_int
         && ascii_iswhite(*(*eap).arg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
             as ::core::ffi::c_int
             != 0
@@ -1359,13 +1302,11 @@ pub unsafe fn ex_helptags(mut eap: *mut exarg_T) {
         add_help_tags = true_0 != 0;
         (*eap).arg = skipwhite((*eap).arg.offset(3 as ::core::ffi::c_int as isize));
     }
-    if strcmp((*eap).arg, b"ALL\0".as_ptr() as *const ::core::ffi::c_char)
-        == 0 as ::core::ffi::c_int
-    {
+    if strcmp((*eap).arg, c"ALL".as_ptr()) == 0 as ::core::ffi::c_int {
         do_in_path(
             p_rtp.get(),
-            b"\0".as_ptr() as *const ::core::ffi::c_char,
-            b"doc\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"".as_ptr(),
+            c"doc".as_ptr() as *mut ::core::ffi::c_char,
             DIP_ALL as ::core::ffi::c_int + DIP_DIR as ::core::ffi::c_int,
             Some(
                 helptags_cb
@@ -1389,10 +1330,7 @@ pub unsafe fn ex_helptags(mut eap: *mut exarg_T) {
             WILD_EXPAND_FREE as ::core::ffi::c_int,
         );
         if dirname.is_null() || !os_isdir(dirname) {
-            semsg_c!(
-                gettext(b"E150: Not a directory: %s\0".as_ptr() as *const ::core::ffi::c_char),
-                (*eap).arg,
-            );
+            semsg_c!(gettext(c"E150: Not a directory: %s".as_ptr()), (*eap).arg,);
         } else {
             do_helptags(dirname, add_help_tags, false_0 != 0);
         }

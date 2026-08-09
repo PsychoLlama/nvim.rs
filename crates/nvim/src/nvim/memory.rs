@@ -61,7 +61,7 @@ unsafe fn do_outofmem_msg(size: usize) {
     emsg_silent.set(0);
     did_outofmem_msg.set(true);
     semsg_c!(
-        gettext(b"E342: Out of memory!  (allocating %lu bytes)\0".as_ptr() as *const c_char),
+        gettext(c"E342: Out of memory!  (allocating %lu bytes)".as_ptr()),
         size as u64,
     );
 }
@@ -137,7 +137,7 @@ pub unsafe extern "C" fn xmallocz(size: usize) -> *mut c_void {
     let total_size = size.wrapping_add(1);
     if total_size < size {
         preserve_exit(gettext(
-            b"Nvim: Data too large to fit into virtual memory space\n\0".as_ptr() as *const c_char,
+            c"Nvim: Data too large to fit into virtual memory space\n".as_ptr(),
         ));
     }
     let ret = xmalloc(total_size);

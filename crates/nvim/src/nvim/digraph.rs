@@ -229,9 +229,7 @@ fn check_digraph_chars_valid(char1: c_int, char2: c_int) -> bool {
     if char1 == ESC || char2 == ESC {
         // SAFETY: plain message call with a static string.
         unsafe {
-            emsg(gettext(
-                b"E104: Escape not allowed in digraph\0".as_ptr() as *const c_char
-            ));
+            emsg(gettext(c"E104: Escape not allowed in digraph".as_ptr()));
         }
         return false;
     }
@@ -364,7 +362,7 @@ fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
 pub fn listdigraphs(use_headers: bool) {
     // SAFETY: plain message output.
     unsafe {
-        msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const c_char);
+        msg_ext_set_kind(c"list_cmd".as_ptr());
         msg_putchar('\n' as c_int);
     }
     let mut previous: c_int = 0;
@@ -640,7 +638,7 @@ pub fn keymap_init() -> *const c_char {
         if *(*buf).b_p_keymap as c_int == NUL {
             // Stop any active keymap and clear the b:keymap_name variable.
             keymap_unload();
-            do_cmdline_cmd(b"unlet! b:keymap_name\0".as_ptr() as *const c_char);
+            do_cmdline_cmd(c"unlet! b:keymap_name".as_ptr());
         } else {
             // Source the keymap file; snapshot the names first because the
             // script can set 'keymap' itself.
@@ -659,7 +657,7 @@ pub fn keymap_init() -> *const c_char {
                 name.extend_from_slice(&keymap);
                 name.extend_from_slice(b".vim\0");
                 if source_runtime(name.as_mut_ptr() as *mut c_char, 0) == FAIL {
-                    return b"E544: Keymap file not found\0".as_ptr() as *const c_char;
+                    return c"E544: Keymap file not found".as_ptr();
                 }
             }
         }
@@ -679,7 +677,7 @@ pub unsafe fn ex_loadkeymap(eap: *mut exarg_T) {
         Some(getsourceline as unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char),
     ) {
         emsg(gettext(
-            b"E105: Using :loadkeymap not in a sourced file\0".as_ptr() as *const c_char,
+            c"E105: Using :loadkeymap not in a sourced file".as_ptr(),
         ));
         return;
     }
@@ -694,7 +692,7 @@ pub unsafe fn ex_loadkeymap(eap: *mut exarg_T) {
     );
     // Set 'cpoptions' to "C" to avoid line continuation.
     let save_cpo = p_cpo.get();
-    p_cpo.set(b"C\0".as_ptr() as *const c_char as *mut c_char);
+    p_cpo.set(c"C".as_ptr() as *mut c_char);
     // Get each line of the sourced file, break at the end.
     loop {
         let line = (*eap).ea_getline.expect("non-null line getter")(0, (*eap).cookie, 0, true);
@@ -708,9 +706,7 @@ pub unsafe fn ex_loadkeymap(eap: *mut exarg_T) {
             let (to, _) = split_at_white(skip_white(rest));
             if from.len() + to.len() >= KMAP_LLEN || from.is_empty() || to.is_empty() {
                 if to.is_empty() {
-                    emsg(gettext(
-                        b"E791: Empty keymap entry\0".as_ptr() as *const c_char
-                    ));
+                    emsg(gettext(c"E791: Empty keymap entry".as_ptr()));
                 }
             } else {
                 let kp =
@@ -767,7 +763,7 @@ fn keymap_unload() {
         }
         // Set 'cpoptions' to "C" to avoid line continuation.
         let save_cpo = p_cpo.get();
-        p_cpo.set(b"C\0".as_ptr() as *const c_char as *mut c_char);
+        p_cpo.set(c"C".as_ptr() as *mut c_char);
         for i in 0..(*buf).b_kmap_ga.ga_len {
             let kp = ((*buf).b_kmap_ga.ga_data as *mut kmap_T).offset(i as isize);
             let mut cmd = Vec::with_capacity(KMAP_LLEN + 10);

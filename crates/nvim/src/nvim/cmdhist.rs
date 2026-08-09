@@ -712,7 +712,7 @@ pub unsafe extern "C" fn f_histget(
         };
         let idx = calc_hist_idx(histype, num);
         (*rettv).vval.v_string = match hist_entry_ref(histype, idx) {
-            None => xstrnsave(b"\0".as_ptr() as *const c_char, 0),
+            None => xstrnsave(c"".as_ptr(), 0),
             Some(e) => xstrnsave(e.text, e.len),
         };
     }
@@ -747,12 +747,9 @@ pub unsafe fn ex_history(eap: *mut exarg_T) {
     let mut hisidx2: c_int = -1;
     let arg: *mut c_char = (*eap).arg;
     let mut end: *mut c_char;
-    msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const c_char);
+    msg_ext_set_kind(c"list_cmd".as_ptr());
     if get_hislen() == 0 {
-        msg(
-            gettext(b"'history' option is zero\0".as_ptr() as *const c_char),
-            0,
-        );
+        msg(gettext(c"'history' option is zero".as_ptr()), 0);
         return;
     }
     let first = *arg as u8;
@@ -826,7 +823,7 @@ pub unsafe fn ex_history(eap: *mut exarg_T) {
                         let len = snprintf(
                             IObuff.ptr() as *mut c_char,
                             IOSIZE as size_t,
-                            b"%c%6d  \0".as_ptr() as *const c_char,
+                            c"%c%6d  ".as_ptr(),
                             if i == idx { '>' as c_int } else { ' ' as c_int },
                             num,
                         );
@@ -871,7 +868,7 @@ pub unsafe extern "C" fn get_history_arg(xp: *mut expand_T, idx: c_int) -> *mut 
         return HISTORY_NAMES[i].as_ptr() as *mut c_char;
     }
     if i == HIST_COUNT {
-        return b"all\0".as_ptr() as *const c_char as *mut c_char;
+        return c"all".as_ptr() as *mut c_char;
     }
     core::ptr::null_mut()
 }

@@ -87,58 +87,31 @@ static e_compiler_not_supported_str: GlobalCell<[::core::ffi::c_char; 33]> =
         )
     });
 pub unsafe fn ex_ruby(mut eap: *mut exarg_T) {
-    script_host_execute(
-        b"ruby\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        eap,
-    );
+    script_host_execute(c"ruby".as_ptr() as *mut ::core::ffi::c_char, eap);
 }
 pub unsafe fn ex_rubyfile(mut eap: *mut exarg_T) {
-    script_host_execute_file(
-        b"ruby\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        eap,
-    );
+    script_host_execute_file(c"ruby".as_ptr() as *mut ::core::ffi::c_char, eap);
 }
 pub unsafe fn ex_rubydo(mut eap: *mut exarg_T) {
-    script_host_do_range(
-        b"ruby\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        eap,
-    );
+    script_host_do_range(c"ruby".as_ptr() as *mut ::core::ffi::c_char, eap);
 }
 pub unsafe fn ex_python3(mut eap: *mut exarg_T) {
-    script_host_execute(
-        b"python3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        eap,
-    );
+    script_host_execute(c"python3".as_ptr() as *mut ::core::ffi::c_char, eap);
 }
 pub unsafe fn ex_py3file(mut eap: *mut exarg_T) {
-    script_host_execute_file(
-        b"python3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        eap,
-    );
+    script_host_execute_file(c"python3".as_ptr() as *mut ::core::ffi::c_char, eap);
 }
 pub unsafe fn ex_pydo3(mut eap: *mut exarg_T) {
-    script_host_do_range(
-        b"python3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        eap,
-    );
+    script_host_do_range(c"python3".as_ptr() as *mut ::core::ffi::c_char, eap);
 }
 pub unsafe fn ex_perl(mut eap: *mut exarg_T) {
-    script_host_execute(
-        b"perl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        eap,
-    );
+    script_host_execute(c"perl".as_ptr() as *mut ::core::ffi::c_char, eap);
 }
 pub unsafe fn ex_perlfile(mut eap: *mut exarg_T) {
-    script_host_execute_file(
-        b"perl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        eap,
-    );
+    script_host_execute_file(c"perl".as_ptr() as *mut ::core::ffi::c_char, eap);
 }
 pub unsafe fn ex_perldo(mut eap: *mut exarg_T) {
-    script_host_do_range(
-        b"perl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        eap,
-    );
+    script_host_do_range(c"perl".as_ptr() as *mut ::core::ffi::c_char, eap);
 }
 pub unsafe extern "C" fn autowrite(mut buf: *mut buf_T, mut forceit: bool) -> ::core::ffi::c_int {
     let mut bufref: bufref_T = bufref_T::default();
@@ -261,7 +234,7 @@ pub unsafe extern "C" fn dialog_changed(mut buf: *mut buf_T, mut checkall: bool)
     };
     dialog_msg(
         &raw mut buff as *mut ::core::ffi::c_char,
-        gettext(b"Save changes to \"%s\"?\0".as_ptr() as *const ::core::ffi::c_char),
+        gettext(c"Save changes to \"%s\"?".as_ptr()),
         (*buf).b_fname,
     );
     if checkall {
@@ -284,7 +257,7 @@ pub unsafe extern "C" fn dialog_changed(mut buf: *mut buf_T, mut checkall: bool)
         if empty_bufname {
             buf_set_name(
                 (*buf).handle as ::core::ffi::c_int,
-                b"Untitled\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                c"Untitled".as_ptr() as *mut ::core::ffi::c_char,
             );
         }
         if check_overwrite(
@@ -352,11 +325,11 @@ pub unsafe extern "C" fn dialog_close_terminal(mut buf: *mut buf_T) -> bool {
     let mut buff: [::core::ffi::c_char; 1000] = [0; 1000];
     dialog_msg(
         &raw mut buff as *mut ::core::ffi::c_char,
-        gettext(b"Close \"%s\"?\0".as_ptr() as *const ::core::ffi::c_char),
+        gettext(c"Close \"%s\"?".as_ptr()),
         (if !(*buf).b_fname.is_null() {
             (*buf).b_fname as *const ::core::ffi::c_char
         } else {
-            b"?\0".as_ptr() as *const ::core::ffi::c_char
+            c"?".as_ptr()
         }) as *mut ::core::ffi::c_char,
     );
     let mut ret: ::core::ffi::c_int = vim_dialog_yesnocancel(
@@ -497,16 +470,12 @@ pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -
                         != 0
                 {
                     semsg_c!(
-                        gettext(b"E947: Job still running in buffer \"%s\"\0".as_ptr()
-                            as *const ::core::ffi::c_char),
+                        gettext(c"E947: Job still running in buffer \"%s\"".as_ptr()),
                         (*buf_1).b_fname,
                     ) as ::core::ffi::c_int
                 } else {
                     semsg_c!(
-                        gettext(
-                            b"E162: No write since last change for buffer \"%s\"\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(c"E162: No write since last change for buffer \"%s\"".as_ptr(),),
                         if !buf_spname(buf_1).is_null() {
                             buf_spname(buf_1)
                         } else {
@@ -597,10 +566,7 @@ pub unsafe extern "C" fn buf_write_all(
     if curbuf.get() != old_curbuf {
         msg_source(HLF_W);
         msg(
-            gettext(
-                b"Warning: Entered other buffer unexpectedly (check autocommands)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
+            gettext(c"Warning: Entered other buffer unexpectedly (check autocommands)".as_ptr()),
             0 as ::core::ffi::c_int,
         );
     }
@@ -637,9 +603,7 @@ pub unsafe fn ex_listdo(mut eap: *mut exarg_T) {
     if (*eap).cmdidx as ::core::ffi::c_int != CMD_windo as ::core::ffi::c_int
         && (*eap).cmdidx as ::core::ffi::c_int != CMD_tabdo as ::core::ffi::c_int
     {
-        save_ei = au_event_disable(
-            b",Syntax\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char
-        );
+        save_ei = au_event_disable(c",Syntax".as_ptr() as *mut ::core::ffi::c_char);
         let mut buf: *mut buf_T = firstbuf.get();
         while !buf.is_null() {
             (*buf).b_flags &= !BF_SYN_SET;
@@ -886,48 +850,32 @@ pub unsafe fn ex_listdo(mut eap: *mut exarg_T) {
 pub unsafe fn ex_compiler(mut eap: *mut exarg_T) {
     let mut old_cur_comp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if *(*eap).arg as ::core::ffi::c_int == NUL {
-        do_cmdline_cmd(
-            b"echo globpath(&rtp, 'compiler/*.vim')\0".as_ptr() as *const ::core::ffi::c_char
-        );
-        do_cmdline_cmd(
-            b"echo globpath(&rtp, 'compiler/*.lua')\0".as_ptr() as *const ::core::ffi::c_char
-        );
+        do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.vim')".as_ptr());
+        do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.lua')".as_ptr());
         return;
     }
     let mut bufsize: size_t = strlen((*eap).arg).wrapping_add(14 as size_t);
     let mut buf: *mut ::core::ffi::c_char = xmalloc(bufsize) as *mut ::core::ffi::c_char;
     if (*eap).forceit != 0 {
-        do_cmdline_cmd(
-            b"command -nargs=* -keepscript CompilerSet set <args>\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        );
+        do_cmdline_cmd(c"command -nargs=* -keepscript CompilerSet set <args>".as_ptr());
     } else {
-        old_cur_comp =
-            get_var_value(b"g:current_compiler\0".as_ptr() as *const ::core::ffi::c_char);
+        old_cur_comp = get_var_value(c"g:current_compiler".as_ptr());
         if !old_cur_comp.is_null() {
             old_cur_comp = xstrdup(old_cur_comp);
         }
-        do_cmdline_cmd(
-            b"command -nargs=* -keepscript CompilerSet setlocal <args>\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        );
+        do_cmdline_cmd(c"command -nargs=* -keepscript CompilerSet setlocal <args>".as_ptr());
     }
     do_unlet(
-        b"g:current_compiler\0".as_ptr() as *const ::core::ffi::c_char,
+        c"g:current_compiler".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 19]>().wrapping_sub(1 as size_t),
         true_0 != 0,
     );
     do_unlet(
-        b"b:current_compiler\0".as_ptr() as *const ::core::ffi::c_char,
+        c"b:current_compiler".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 19]>().wrapping_sub(1 as size_t),
         true_0 != 0,
     );
-    snprintf(
-        buf,
-        bufsize,
-        b"compiler/%s.*\0".as_ptr() as *const ::core::ffi::c_char,
-        (*eap).arg,
-    );
+    snprintf(buf, bufsize, c"compiler/%s.*".as_ptr(), (*eap).arg);
     if source_runtime_vim_lua(buf, DIP_ALL as ::core::ffi::c_int) == FAIL {
         semsg_c!(
             gettext((e_compiler_not_supported_str.ptr() as *const _) as *const ::core::ffi::c_char),
@@ -935,25 +883,18 @@ pub unsafe fn ex_compiler(mut eap: *mut exarg_T) {
         );
     }
     xfree(buf as *mut ::core::ffi::c_void);
-    do_cmdline_cmd(b":delcommand CompilerSet\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut p: *mut ::core::ffi::c_char =
-        get_var_value(b"g:current_compiler\0".as_ptr() as *const ::core::ffi::c_char);
+    do_cmdline_cmd(c":delcommand CompilerSet".as_ptr());
+    let mut p: *mut ::core::ffi::c_char = get_var_value(c"g:current_compiler".as_ptr());
     if !p.is_null() {
-        set_internal_string_var(
-            b"b:current_compiler\0".as_ptr() as *const ::core::ffi::c_char,
-            p,
-        );
+        set_internal_string_var(c"b:current_compiler".as_ptr(), p);
     }
     if (*eap).forceit == 0 {
         if !old_cur_comp.is_null() {
-            set_internal_string_var(
-                b"g:current_compiler\0".as_ptr() as *const ::core::ffi::c_char,
-                old_cur_comp,
-            );
+            set_internal_string_var(c"g:current_compiler".as_ptr(), old_cur_comp);
             xfree(old_cur_comp as *mut ::core::ffi::c_void);
         } else {
             do_unlet(
-                b"g:current_compiler\0".as_ptr() as *const ::core::ffi::c_char,
+                c"g:current_compiler".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 19]>().wrapping_sub(1 as size_t),
                 true_0 != 0,
             );
@@ -986,7 +927,7 @@ unsafe extern "C" fn script_host_execute(
         tv_list_append_number(args, (*eap).line2 as ::core::ffi::c_int as varnumber_T);
         eval_call_provider(
             name,
-            b"execute\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"execute".as_ptr() as *mut ::core::ffi::c_char,
             args,
             true_0 != 0,
         );
@@ -1014,7 +955,7 @@ unsafe extern "C" fn script_host_execute_file(
         tv_list_append_number(args, (*eap).line2 as ::core::ffi::c_int as varnumber_T);
         eval_call_provider(
             name,
-            b"execute_file\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"execute_file".as_ptr() as *mut ::core::ffi::c_char,
             args,
             true_0 != 0,
         );
@@ -1031,7 +972,7 @@ unsafe extern "C" fn script_host_do_range(
         tv_list_append_string(args, (*eap).arg, -1 as ssize_t);
         eval_call_provider(
             name,
-            b"do_range\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            c"do_range".as_ptr() as *mut ::core::ffi::c_char,
             args,
             true_0 != 0,
         );

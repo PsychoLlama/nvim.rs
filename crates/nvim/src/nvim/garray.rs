@@ -97,10 +97,10 @@ pub unsafe extern "C" fn ga_set_growsize(gap: *mut garray_T, growsize: c_int) {
         logmsg(
             LOGLVL_WRN,
             ptr::null(),
-            b"ga_set_growsize\0".as_ptr() as *const c_char,
+            c"ga_set_growsize".as_ptr(),
             57,
             true,
-            b"trying to set an invalid ga_growsize: %d\0".as_ptr() as *const c_char,
+            c"trying to set an invalid ga_growsize: %d".as_ptr(),
             growsize,
         );
         (*gap).ga_growsize = 1;
@@ -117,10 +117,10 @@ pub unsafe extern "C" fn ga_grow(gap: *mut garray_T, n: c_int) {
         logmsg(
             LOGLVL_WRN,
             ptr::null(),
-            b"ga_grow\0".as_ptr() as *const c_char,
+            c"ga_grow".as_ptr(),
             76,
             true,
-            b"ga_growsize(%d) is less than 1\0".as_ptr() as *const c_char,
+            c"ga_growsize(%d) is less than 1".as_ptr(),
             (*gap).ga_growsize,
         );
     }
@@ -155,7 +155,7 @@ pub unsafe extern "C" fn ga_concat_strings(
     sep: *const c_char,
 ) -> *mut c_char {
     if (*gap).ga_len == 0 {
-        return xstrdup(b"\0".as_ptr() as *const c_char);
+        return xstrdup(c"".as_ptr());
     }
     let strings = slice::from_raw_parts(
         (*gap).ga_data as *const *const c_char,
@@ -202,10 +202,10 @@ pub unsafe extern "C" fn ga_append_via_ptr(gap: *mut garray_T, item_size: usize)
         logmsg(
             LOGLVL_WRN,
             ptr::null(),
-            b"ga_append_via_ptr\0".as_ptr() as *const c_char,
+            c"ga_append_via_ptr".as_ptr(),
             209,
             true,
-            b"wrong item size (%zu), should be %d\0".as_ptr() as *const c_char,
+            c"wrong item size (%zu), should be %d".as_ptr(),
             item_size,
             (*gap).ga_itemsize,
         );

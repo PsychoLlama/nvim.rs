@@ -138,9 +138,7 @@ unsafe extern "C" fn get_mouse_class(mut p: *mut ::core::ffi::c_char) -> ::core:
     if vim_iswordc(c) {
         return 2 as ::core::ffi::c_int;
     }
-    if c != NUL
-        && !vim_strchr(b"-+*/%<>&|^!=\0".as_ptr() as *const ::core::ffi::c_char, c).is_null()
-    {
+    if c != NUL && !vim_strchr(c"-+*/%<>&|^!=".as_ptr(), c).is_null() {
         return 1 as ::core::ffi::c_int;
     }
     return c;
@@ -263,17 +261,17 @@ unsafe extern "C" fn call_click_def_func(
             v_lock: VAR_FIXED,
             vval: typval_vval_union {
                 v_string: (if which_button == MOUSE_LEFT as ::core::ffi::c_int {
-                    b"l\0".as_ptr() as *const ::core::ffi::c_char
+                    c"l".as_ptr()
                 } else if which_button == MOUSE_RIGHT as ::core::ffi::c_int {
-                    b"r\0".as_ptr() as *const ::core::ffi::c_char
+                    c"r".as_ptr()
                 } else if which_button == MOUSE_MIDDLE as ::core::ffi::c_int {
-                    b"m\0".as_ptr() as *const ::core::ffi::c_char
+                    c"m".as_ptr()
                 } else if which_button == MOUSE_X1 as ::core::ffi::c_int {
-                    b"x1\0".as_ptr() as *const ::core::ffi::c_char
+                    c"x1".as_ptr()
                 } else if which_button == MOUSE_X2 as ::core::ffi::c_int {
-                    b"x2\0".as_ptr() as *const ::core::ffi::c_char
+                    c"x2".as_ptr()
                 } else {
-                    b"?\0".as_ptr() as *const ::core::ffi::c_char
+                    c"?".as_ptr()
                 }) as *mut ::core::ffi::c_char,
             },
         },
@@ -361,11 +359,7 @@ unsafe extern "C" fn do_popup(
     mut m_pos: pos_T,
 ) -> ::core::ffi::c_int {
     let mut jump_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if strcmp(
-        p_mousem.get(),
-        b"popup_setpos\0".as_ptr() as *const ::core::ffi::c_char,
-    ) == 0 as ::core::ffi::c_int
-    {
+    if strcmp(p_mousem.get(), c"popup_setpos".as_ptr()) == 0 as ::core::ffi::c_int {
         if VIsual_active.get() {
             if m_pos_flag != IN_BUFFER as ::core::ffi::c_int {
                 jump_flags = MOUSE_MAY_STOP_VIS as ::core::ffi::c_int;
@@ -536,7 +530,7 @@ pub unsafe extern "C" fn do_mouse(
             if VIsual_active.get() {
                 if VIsual_select.get() {
                     stuffcharReadbuff(Ctrl_G);
-                    stuffReadbuff(b"\"+p\0".as_ptr() as *const ::core::ffi::c_char);
+                    stuffReadbuff(c"\"+p".as_ptr());
                 } else {
                     stuffcharReadbuff('y' as ::core::ffi::c_int);
                     stuffcharReadbuff(
@@ -554,10 +548,7 @@ pub unsafe extern "C" fn do_mouse(
                 insert_reg(regname, ::core::ptr::null_mut::<yankreg_T>(), true_0 != 0);
             } else {
                 if regname == 0 as ::core::ffi::c_int
-                    && eval_has_provider(
-                        b"clipboard\0".as_ptr() as *const ::core::ffi::c_char,
-                        false_0 != 0,
-                    ) as ::core::ffi::c_int
+                    && eval_has_provider(c"clipboard".as_ptr(), false_0 != 0) as ::core::ffi::c_int
                         != 0
                 {
                     regname = '*' as ::core::ffi::c_int;
@@ -943,11 +934,7 @@ pub unsafe extern "C" fn do_mouse(
     }
     if which_button == MOUSE_MIDDLE as ::core::ffi::c_int {
         if regname == 0 as ::core::ffi::c_int
-            && eval_has_provider(
-                b"clipboard\0".as_ptr() as *const ::core::ffi::c_char,
-                false_0 != 0,
-            ) as ::core::ffi::c_int
-                != 0
+            && eval_has_provider(c"clipboard".as_ptr(), false_0 != 0) as ::core::ffi::c_int != 0
         {
             regname = '*' as ::core::ffi::c_int;
         }
@@ -996,9 +983,9 @@ pub unsafe extern "C" fn do_mouse(
         && bt_quickfix(curbuf.get()) as ::core::ffi::c_int != 0
     {
         if (*curwin.get()).w_llist_ref.is_null() {
-            do_cmdline_cmd(b".cc\0".as_ptr() as *const ::core::ffi::c_char);
+            do_cmdline_cmd(c".cc".as_ptr());
         } else {
-            do_cmdline_cmd(b".ll\0".as_ptr() as *const ::core::ffi::c_char);
+            do_cmdline_cmd(c".ll".as_ptr());
         }
         got_click.set(false_0 != 0);
     } else if mod_mask.get() & MOD_MASK_CTRL != 0
@@ -1281,10 +1268,7 @@ pub unsafe extern "C" fn ins_mousescroll(mut dir: ::core::ffi::c_int) {
                 + ((KE_MOUSERIGHT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
         }
         _ => {
-            siemsg_c!(
-                b"Invalid ins_mousescroll() argument: %d\0".as_ptr() as *const ::core::ffi::c_char,
-                dir,
-            );
+            siemsg_c!(c"Invalid ins_mousescroll() argument: %d".as_ptr(), dir,);
         }
     }
     let mut old_curwin: *mut win_T = curwin.get();
@@ -2138,13 +2122,13 @@ pub unsafe extern "C" fn f_getmousepos(
     let mut d: *mut dict_T = (*rettv).vval.v_dict;
     tv_dict_add_nr(
         d,
-        b"screenrow\0".as_ptr() as *const ::core::ffi::c_char,
+        c"screenrow".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
         mouse_row.get() as varnumber_T + 1 as varnumber_T,
     );
     tv_dict_add_nr(
         d,
-        b"screencol\0".as_ptr() as *const ::core::ffi::c_char,
+        c"screencol".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
         mouse_col.get() as varnumber_T + 1 as varnumber_T,
     );
@@ -2169,37 +2153,37 @@ pub unsafe extern "C" fn f_getmousepos(
     }
     tv_dict_add_nr(
         d,
-        b"winid\0".as_ptr() as *const ::core::ffi::c_char,
+        c"winid".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
         winid,
     );
     tv_dict_add_nr(
         d,
-        b"winrow\0".as_ptr() as *const ::core::ffi::c_char,
+        c"winrow".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
         winrow,
     );
     tv_dict_add_nr(
         d,
-        b"wincol\0".as_ptr() as *const ::core::ffi::c_char,
+        c"wincol".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
         wincol,
     );
     tv_dict_add_nr(
         d,
-        b"line\0".as_ptr() as *const ::core::ffi::c_char,
+        c"line".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
         lnum as varnumber_T,
     );
     tv_dict_add_nr(
         d,
-        b"column\0".as_ptr() as *const ::core::ffi::c_char,
+        c"column".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
         column,
     );
     tv_dict_add_nr(
         d,
-        b"coladd\0".as_ptr() as *const ::core::ffi::c_char,
+        c"coladd".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
         coladd as varnumber_T,
     );

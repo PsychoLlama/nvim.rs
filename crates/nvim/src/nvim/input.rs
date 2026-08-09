@@ -32,7 +32,7 @@ pub unsafe extern "C" fn ask_yesno(str: *const ::core::ffi::c_char) -> ::core::f
     snprintf(
         IObuff.ptr() as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
-        gettext(b"%s (y/n)?\0".as_ptr() as *const ::core::ffi::c_char),
+        gettext(c"%s (y/n)?".as_ptr()),
         str,
     );
     let mut prompt: *mut ::core::ffi::c_char = xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char);
@@ -164,12 +164,10 @@ pub unsafe extern "C" fn prompt_for_input(
     if prompt.is_null() {
         if !mouse_used.is_null() {
             prompt = gettext(
-                b"Type number and <Enter> or click with the mouse (q or empty cancels): \0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"Type number and <Enter> or click with the mouse (q or empty cancels): ".as_ptr(),
             );
         } else {
-            prompt = gettext(b"Type number and <Enter> (q or empty cancels): \0".as_ptr()
-                as *const ::core::ffi::c_char);
+            prompt = gettext(c"Type number and <Enter> (q or empty cancels): ".as_ptr());
         }
     }
     cmdline_row.set(msg_row.get());

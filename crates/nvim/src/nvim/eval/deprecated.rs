@@ -66,8 +66,7 @@ pub unsafe extern "C" fn f_rpcstart(
                 {
                     semsg_c!(
                         gettext(
-                            b"E5010: List item %d of the second argument is not a string\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            c"E5010: List item %d of the second argument is not a string".as_ptr(),
                         ),
                         i,
                     );
@@ -242,7 +241,7 @@ pub unsafe extern "C" fn f_termopen(
     {
         semsg_c!(
             gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-            b"expected dictionary\0".as_ptr() as *const ::core::ffi::c_char,
+            c"expected dictionary".as_ptr(),
         );
         return;
     }
@@ -250,7 +249,7 @@ pub unsafe extern "C" fn f_termopen(
         (*argvars.offset(1 as ::core::ffi::c_int as isize))
             .vval
             .v_dict,
-        b"term\0".as_ptr() as *const ::core::ffi::c_char,
+        c"term".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
         kBoolVarTrue,
     );

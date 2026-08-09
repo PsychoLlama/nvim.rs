@@ -315,9 +315,8 @@ static e_cannot_split_window_when_closing_buffer: GlobalCell<[::core::ffi::c_cha
             *b"E1159: Cannot split a window when closing the buffer\0",
         )
     });
-static m_onlyone: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
-    b"Already only one window\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-);
+static m_onlyone: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(c"Already only one window".as_ptr() as *mut ::core::ffi::c_char);
 static split_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static close_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static frame_locked: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
@@ -354,7 +353,7 @@ pub unsafe extern "C" fn window_layout_locked_err(mut cmd: cmdidx_T, mut err: *m
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%s".as_ptr(),
                 (e_cannot_split_window_when_closing_buffer.ptr() as *const _)
                     as *const ::core::ffi::c_char,
             );
@@ -362,7 +361,7 @@ pub unsafe extern "C" fn window_layout_locked_err(mut cmd: cmdidx_T, mut err: *m
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%s".as_ptr(),
                 &raw const e_not_allowed_to_change_window_layout_in_this_autocmd
                     as *const ::core::ffi::c_char,
             );
@@ -555,8 +554,7 @@ pub unsafe extern "C" fn do_window(
                         Ctrl_Q | 113 => {
                             reset_VIsual_and_resel();
                             cmd_with_count(
-                                b"quit\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
+                                c"quit".as_ptr() as *mut ::core::ffi::c_char,
                                 &raw mut cbuf as *mut ::core::ffi::c_char,
                                 ::core::mem::size_of::<[::core::ffi::c_char; 40]>(),
                                 Prenum as int64_t,
@@ -567,8 +565,7 @@ pub unsafe extern "C" fn do_window(
                         Ctrl_C | 99 => {
                             reset_VIsual_and_resel();
                             cmd_with_count(
-                                b"close\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
+                                c"close".as_ptr() as *mut ::core::ffi::c_char,
                                 &raw mut cbuf as *mut ::core::ffi::c_char,
                                 ::core::mem::size_of::<[::core::ffi::c_char; 40]>(),
                                 Prenum as int64_t,
@@ -582,7 +579,7 @@ pub unsafe extern "C" fn do_window(
                                 return;
                             }
                             reset_VIsual_and_resel();
-                            do_cmdline_cmd(b"pclose\0".as_ptr() as *const ::core::ffi::c_char);
+                            do_cmdline_cmd(c"pclose".as_ptr());
                             break 's_1675;
                         }
                         80 => {
@@ -601,8 +598,7 @@ pub unsafe extern "C" fn do_window(
                                 }
                             }
                             if wp.is_null() {
-                                emsg(gettext(b"E441: There is no preview window\0".as_ptr()
-                                    as *const ::core::ffi::c_char));
+                                emsg(gettext(c"E441: There is no preview window".as_ptr()));
                             } else {
                                 win_goto(wp);
                             }
@@ -615,8 +611,7 @@ pub unsafe extern "C" fn do_window(
                             }
                             reset_VIsual_and_resel();
                             cmd_with_count(
-                                b"only\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
+                                c"only".as_ptr() as *mut ::core::ffi::c_char,
                                 &raw mut cbuf as *mut ::core::ffi::c_char,
                                 ::core::mem::size_of::<[::core::ffi::c_char; 40]>(),
                                 Prenum as int64_t,
@@ -1177,7 +1172,7 @@ pub unsafe extern "C" fn do_window(
             vim_snprintf(
                 &raw mut cbuf as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 40]>().wrapping_sub(5 as size_t),
-                b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%ld".as_ptr(),
                 Prenum as int64_t,
             );
         } else {
@@ -1186,13 +1181,13 @@ pub unsafe extern "C" fn do_window(
         if nchar == 'v' as ::core::ffi::c_int || nchar == Ctrl_V {
             xstrlcat(
                 &raw mut cbuf as *mut ::core::ffi::c_char,
-                b"v\0".as_ptr() as *const ::core::ffi::c_char,
+                c"v".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 40]>(),
             );
         }
         xstrlcat(
             &raw mut cbuf as *mut ::core::ffi::c_char,
-            b"new\0".as_ptr() as *const ::core::ffi::c_char,
+            c"new".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 40]>(),
         );
         do_cmdline_cmd(&raw mut cbuf as *mut ::core::ffi::c_char);
@@ -1209,7 +1204,7 @@ unsafe extern "C" fn cmd_with_count(
         vim_snprintf(
             bufp.add(len),
             bufsize.wrapping_sub(len),
-            b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%ld".as_ptr(),
             Prenum,
         );
     }
@@ -1263,7 +1258,7 @@ pub unsafe extern "C" fn win_set_buf(
         api_set_error(
             err,
             kErrorTypeException,
-            b"Failed to switch to window %d\0".as_ptr() as *const ::core::ffi::c_char,
+            c"Failed to switch to window %d".as_ptr(),
             win_handle,
         );
     }
@@ -1273,12 +1268,7 @@ pub unsafe extern "C" fn win_set_buf(
 }
 pub unsafe extern "C" fn win_fdccol_count(mut wp: *mut win_T) -> ::core::ffi::c_int {
     let mut fdc: *const ::core::ffi::c_char = (*wp).w_onebuf_opt.wo_fdc;
-    if strncmp(
-        fdc,
-        b"auto\0".as_ptr() as *const ::core::ffi::c_char,
-        4 as size_t,
-    ) == 0 as ::core::ffi::c_int
-    {
+    if strncmp(fdc, c"auto".as_ptr(), 4 as size_t) == 0 as ::core::ffi::c_int {
         let fdccol: ::core::ffi::c_int = if *fdc.offset(4 as ::core::ffi::c_int as isize)
             as ::core::ffi::c_int
             == ':' as ::core::ffi::c_int
@@ -1726,8 +1716,7 @@ pub unsafe extern "C" fn check_split_disallowed_err(
         api_set_error(
             err,
             kErrorTypeException,
-            b"E242: Can't split a window while closing another\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"E242: Can't split a window while closing another".as_ptr(),
         );
         return false_0 != 0;
     }
@@ -1735,7 +1724,7 @@ pub unsafe extern "C" fn check_split_disallowed_err(
         api_set_error(
             err,
             kErrorTypeException,
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%s".as_ptr(),
             (e_cannot_split_window_when_closing_buffer.ptr() as *const _)
                 as *const ::core::ffi::c_char,
         );
@@ -1756,8 +1745,7 @@ pub unsafe extern "C" fn win_split(
     flags |= (*cmdmod.ptr()).cmod_split;
     if flags & WSP_TOP as ::core::ffi::c_int != 0 && flags & WSP_BOT as ::core::ffi::c_int != 0 {
         emsg(gettext(
-            b"E442: Can't split topleft and botright at the same time\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"E442: Can't split topleft and botright at the same time".as_ptr(),
         ));
         return FAIL;
     }
@@ -2654,8 +2642,7 @@ unsafe extern "C" fn win_rotate(mut upwards: bool, mut count: ::core::ffi::c_int
     while !frp.is_null() {
         if (*frp).fr_win.is_null() {
             emsg(gettext(
-                b"E443: Cannot rotate when another window is split\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"E443: Cannot rotate when another window is split".as_ptr(),
             ));
             return;
         }
@@ -2778,10 +2765,7 @@ pub unsafe extern "C" fn win_move_after(mut win1: *mut win_T, mut win2: *mut win
     }
     if (*win2).w_next != win1 {
         if (*(*win1).w_frame).fr_parent != (*(*win2).w_frame).fr_parent {
-            iemsg(
-                b"INTERNAL: trying to move a window into another frame\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
+            iemsg(c"INTERNAL: trying to move a window into another frame".as_ptr());
             return;
         }
         if win1 == lastwin.get() {
@@ -3351,7 +3335,7 @@ pub unsafe extern "C" fn can_close_in_cmdwin(mut win: *mut win_T, mut err: *mut 
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%s".as_ptr(),
                 &raw const e_cmdwin as *const ::core::ffi::c_char,
             );
             return false_0 != 0;
@@ -3500,8 +3484,7 @@ pub unsafe extern "C" fn win_close(
     {
         if is_aucmd_win(lastwin.get()) {
             emsg(gettext(
-                b"E814: Cannot close window, only autocmd window would remain\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"E814: Cannot close window, only autocmd window would remain".as_ptr(),
             ));
             return FAIL;
         }
@@ -3797,7 +3780,7 @@ pub unsafe extern "C" fn win_close(
             dwin = (*dwin).w_next;
         }
         if diffcount == 1 as ::core::ffi::c_int {
-            do_cmdline_cmd(b"diffoff!\0".as_ptr() as *const ::core::ffi::c_char);
+            do_cmdline_cmd(c"diffoff!".as_ptr());
         }
     }
     (*curwin.get()).w_pos_changed = true_0 != 0;
@@ -3827,7 +3810,7 @@ unsafe extern "C" fn do_autocmd_winclosed(mut win: *mut win_T) {
     vim_snprintf(
         &raw mut winid as *mut ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 65]>(),
-        b"%d\0".as_ptr() as *const ::core::ffi::c_char,
+        c"%d".as_ptr(),
         (*win).handle,
     );
     apply_autocmds(
@@ -3964,8 +3947,7 @@ pub unsafe extern "C" fn win_close_othertab(
                                 ptp = (*ptp).tp_next;
                             }
                             if ptp.is_null() {
-                                internal_error(b"win_close_othertab()\0".as_ptr()
-                                    as *const ::core::ffi::c_char);
+                                internal_error(c"win_close_othertab()".as_ptr());
                                 return false_0 != 0;
                             }
                             (*ptp).tp_next = (*tp).tp_next;
@@ -3991,7 +3973,7 @@ pub unsafe extern "C" fn win_close_othertab(
                             vim_snprintf(
                                 &raw mut prev_idx as *mut ::core::ffi::c_char,
                                 NUMBUFLEN as ::core::ffi::c_int as size_t,
-                                b"%i\0".as_ptr() as *const ::core::ffi::c_char,
+                                c"%i".as_ptr(),
                                 free_tp_idx,
                             );
                             apply_autocmds(
@@ -4885,9 +4867,7 @@ pub unsafe extern "C" fn close_others(
         wp = nextwp;
     }
     if message != 0 && !(firstwin.get() == lastwin.get()) {
-        emsg(gettext(
-            b"E445: Other window contains changes\0".as_ptr() as *const ::core::ffi::c_char
-        ));
+        emsg(gettext(c"E445: Other window contains changes".as_ptr()));
     }
 }
 pub unsafe extern "C" fn unuse_tabpage(mut tp: *mut tabpage_T) {
@@ -6524,7 +6504,7 @@ unsafe extern "C" fn make_win_info_dict(
     tv.vval.v_number = width as varnumber_T;
     if tv_dict_add_tv(
         d,
-        b"width\0".as_ptr() as *const ::core::ffi::c_char,
+        c"width".as_ptr(),
         ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
         &raw mut tv,
     ) != FAIL
@@ -6532,7 +6512,7 @@ unsafe extern "C" fn make_win_info_dict(
         tv.vval.v_number = height as varnumber_T;
         if tv_dict_add_tv(
             d,
-            b"height\0".as_ptr() as *const ::core::ffi::c_char,
+            c"height".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
             &raw mut tv,
         ) != FAIL
@@ -6540,7 +6520,7 @@ unsafe extern "C" fn make_win_info_dict(
             tv.vval.v_number = topline as varnumber_T;
             if tv_dict_add_tv(
                 d,
-                b"topline\0".as_ptr() as *const ::core::ffi::c_char,
+                c"topline".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
                 &raw mut tv,
             ) != FAIL
@@ -6548,7 +6528,7 @@ unsafe extern "C" fn make_win_info_dict(
                 tv.vval.v_number = topfill as varnumber_T;
                 if tv_dict_add_tv(
                     d,
-                    b"topfill\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"topfill".as_ptr(),
                     ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
                     &raw mut tv,
                 ) != FAIL
@@ -6556,7 +6536,7 @@ unsafe extern "C" fn make_win_info_dict(
                     tv.vval.v_number = leftcol as varnumber_T;
                     if tv_dict_add_tv(
                         d,
-                        b"leftcol\0".as_ptr() as *const ::core::ffi::c_char,
+                        c"leftcol".as_ptr(),
                         ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
                             .wrapping_sub(1 as size_t),
                         &raw mut tv,
@@ -6565,7 +6545,7 @@ unsafe extern "C" fn make_win_info_dict(
                         tv.vval.v_number = skipcol as varnumber_T;
                         if tv_dict_add_tv(
                             d,
-                            b"skipcol\0".as_ptr() as *const ::core::ffi::c_char,
+                            c"skipcol".as_ptr(),
                             ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
                                 .wrapping_sub(1 as size_t),
                             &raw mut tv,
@@ -6668,7 +6648,7 @@ unsafe extern "C" fn check_window_scroll_resize(
                 let mut key_len: ::core::ffi::c_int = vim_snprintf(
                     &raw mut winid as *mut ::core::ffi::c_char,
                     ::core::mem::size_of::<[::core::ffi::c_char; 65]>(),
-                    b"%d\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"%d".as_ptr(),
                     (*wp).handle,
                 );
                 if tv_dict_add_dict(
@@ -6705,7 +6685,7 @@ unsafe extern "C" fn check_window_scroll_resize(
         if !alldict.is_null() {
             if tv_dict_add_dict(
                 v_event,
-                b"all\0".as_ptr() as *const ::core::ffi::c_char,
+                c"all".as_ptr(),
                 ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
                 alldict,
             ) == FAIL
@@ -6775,7 +6755,7 @@ pub unsafe extern "C" fn may_trigger_win_scrolled_resized() {
         vim_snprintf(
             &raw mut resize_winid as *mut ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 65]>(),
-            b"%d\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%d".as_ptr(),
             (*first_size_win).handle,
         );
         set_bufref(&raw mut resize_bufref, (*first_size_win).w_buffer);
@@ -6786,7 +6766,7 @@ pub unsafe extern "C" fn may_trigger_win_scrolled_resized() {
         vim_snprintf(
             &raw mut scroll_winid as *mut ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 65]>(),
-            b"%d\0".as_ptr() as *const ::core::ffi::c_char,
+            c"%d".as_ptr(),
             (*first_scroll_win).handle,
         );
         set_bufref(&raw mut scroll_bufref, (*first_scroll_win).w_buffer);
@@ -6810,7 +6790,7 @@ pub unsafe extern "C" fn may_trigger_win_scrolled_resized() {
         let mut v_event: *mut dict_T = get_v_event(&raw mut save_v_event);
         if tv_dict_add_list(
             v_event,
-            b"windows\0".as_ptr() as *const ::core::ffi::c_char,
+            c"windows".as_ptr(),
             ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
             windows_list,
         ) == OK
@@ -6849,11 +6829,7 @@ pub unsafe extern "C" fn may_trigger_win_scrolled_resized() {
             },
         };
         let mut v_event_0: *mut dict_T = get_v_event(&raw mut save_v_event_0);
-        tv_dict_extend(
-            v_event_0,
-            scroll_dict,
-            b"move\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        tv_dict_extend(v_event_0, scroll_dict, c"move".as_ptr());
         tv_dict_set_keys_readonly(v_event_0);
         tv_dict_unref(scroll_dict);
         let mut buf_0: *mut buf_T =

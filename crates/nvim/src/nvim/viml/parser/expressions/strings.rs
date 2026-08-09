@@ -39,9 +39,9 @@ pub(super) unsafe extern "C" fn parse_quoted_string(
             token.start,
             1,
             if is_invalid {
-                b"NvimInvalidSingleQuote\0".as_ptr() as *const ::core::ffi::c_char
+                c"NvimInvalidSingleQuote".as_ptr()
             } else {
-                b"NvimSingleQuote\0".as_ptr() as *const ::core::ffi::c_char
+                c"NvimSingleQuote".as_ptr()
             },
         );
         while p < e {
@@ -107,9 +107,9 @@ pub(super) unsafe extern "C" fn parse_quoted_string(
             token.start,
             1,
             if is_invalid {
-                b"NvimInvalidDoubleQuote\0".as_ptr() as *const ::core::ffi::c_char
+                c"NvimInvalidDoubleQuote".as_ptr()
             } else {
-                b"NvimDoubleQuote\0".as_ptr() as *const ::core::ffi::c_char
+                c"NvimDoubleQuote".as_ptr()
             },
         );
         p = s.offset(1 as ::core::ffi::c_int as isize);
@@ -420,36 +420,36 @@ pub(super) unsafe extern "C" fn parse_quoted_string(
         let mut next_col: size_t = token.start.col.wrapping_add(1);
         let body_str: *const ::core::ffi::c_char = if is_double {
             if is_invalid {
-                b"NvimInvalidDoubleQuotedBody\0".as_ptr() as *const ::core::ffi::c_char
+                c"NvimInvalidDoubleQuotedBody".as_ptr()
             } else {
-                b"NvimDoubleQuotedBody\0".as_ptr() as *const ::core::ffi::c_char
+                c"NvimDoubleQuotedBody".as_ptr()
             }
         } else if is_invalid {
-            b"NvimInvalidSingleQuotedBody\0".as_ptr() as *const ::core::ffi::c_char
+            c"NvimInvalidSingleQuotedBody".as_ptr()
         } else {
-            b"NvimSingleQuotedBody\0".as_ptr() as *const ::core::ffi::c_char
+            c"NvimSingleQuotedBody".as_ptr()
         };
         let esc_str: *const ::core::ffi::c_char = if is_double {
             if is_invalid {
-                b"NvimInvalidDoubleQuotedEscape\0".as_ptr() as *const ::core::ffi::c_char
+                c"NvimInvalidDoubleQuotedEscape".as_ptr()
             } else {
-                b"NvimDoubleQuotedEscape\0".as_ptr() as *const ::core::ffi::c_char
+                c"NvimDoubleQuotedEscape".as_ptr()
             }
         } else if is_invalid {
-            b"NvimInvalidSingleQuotedQuote\0".as_ptr() as *const ::core::ffi::c_char
+            c"NvimInvalidSingleQuotedQuote".as_ptr()
         } else {
-            b"NvimSingleQuotedQuote\0".as_ptr() as *const ::core::ffi::c_char
+            c"NvimSingleQuotedQuote".as_ptr()
         };
         let ukn_esc_str: *const ::core::ffi::c_char = if is_double {
             if is_invalid {
-                b"NvimInvalidDoubleQuotedUnknownEscape\0".as_ptr() as *const ::core::ffi::c_char
+                c"NvimInvalidDoubleQuotedUnknownEscape".as_ptr()
             } else {
-                b"NvimDoubleQuotedUnknownEscape\0".as_ptr() as *const ::core::ffi::c_char
+                c"NvimDoubleQuotedUnknownEscape".as_ptr()
             }
         } else if is_invalid {
-            b"NvimInvalidSingleQuotedUnknownEscape\0".as_ptr() as *const ::core::ffi::c_char
+            c"NvimInvalidSingleQuotedUnknownEscape".as_ptr()
         } else {
-            b"NvimSingleQuotedUnknownEscape\0".as_ptr() as *const ::core::ffi::c_char
+            c"NvimSingleQuotedUnknownEscape".as_ptr()
         };
         let mut i: size_t = 0;
         while i < shifts.len() {
@@ -498,9 +498,9 @@ pub(super) unsafe extern "C" fn parse_quoted_string(
                 shifted_pos(token.start, token.len.wrapping_sub(1)),
                 1,
                 if is_invalid {
-                    b"NvimInvalidDoubleQuote\0".as_ptr() as *const ::core::ffi::c_char
+                    c"NvimInvalidDoubleQuote".as_ptr()
                 } else {
-                    b"NvimDoubleQuote\0".as_ptr() as *const ::core::ffi::c_char
+                    c"NvimDoubleQuote".as_ptr()
                 },
             );
         } else {
@@ -509,9 +509,9 @@ pub(super) unsafe extern "C" fn parse_quoted_string(
                 shifted_pos(token.start, token.len.wrapping_sub(1)),
                 1,
                 if is_invalid {
-                    b"NvimInvalidSingleQuote\0".as_ptr() as *const ::core::ffi::c_char
+                    c"NvimInvalidSingleQuote".as_ptr()
                 } else {
-                    b"NvimSingleQuote\0".as_ptr() as *const ::core::ffi::c_char
+                    c"NvimSingleQuote".as_ptr()
                 },
             );
         }
