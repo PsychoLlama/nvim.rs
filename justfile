@@ -130,10 +130,11 @@ apigen *args:
 abi-ledger *args:
   @scripts/abi-ledger.py {{ args }}
 
-# Regenerate the ratchet baseline (metrics/ratchet.json): per-file unsafe /
-# static mut / #[no_mangle] counts, file sizes (1k-line cap, current
-# offenders grandfathered), and the ledger's internal-export count may only
-# shrink. `--check` compares against the committed baseline instead.
+# Regenerate the ratchet baseline (metrics/ratchet.json): per-file
+# unchecked-line / static mut / #[no_mangle] / variadic / GlobalCell-ptr
+# counts, file sizes (1k-line cap, current offenders grandfathered), and the
+# ledger's internal-export count may only shrink. `--check` compares against
+# the committed baseline instead.
 ratchet *args:
   @scripts/ratchet.py {{ args }}
 

@@ -7,17 +7,31 @@ Rust source file (crates/*/src/**/*.rs plus the crate-root .rs files;
 integration tests under crates/*/tests are not migration surface and stay
 unmeasured, as they were when they lived at the repo root):
 
-  unsafe      occurrences of "unsafe ", less the unsafe-fn *declarations*
-              ("unsafe fn name", "unsafe extern \"C\" fn name") in files that
-              carry #![deny(unsafe_op_in_unsafe_fn)]. Under that lint a
-              function's real unsafe surface is spelled by the explicit
-              unsafe blocks in its body, which stay counted; charging the
-              declaration too would make adopting the lint *raise* this
-              metric while lowering the surface, pitting it against
-              files_without_deny_unsafe_op below. Declarations in files
-              without the lint keep costing their token: there the body is
-              implicitly unsafe, so the declaration is the only thing
-              standing in for it.
+  unsafe_lines  lines of *code* the compiler is not checking: the lines
+              spanned by an `unsafe {}` block, by an `unsafe extern` block,
+              or by the body of an `unsafe fn` in a file that has not
+              adopted #![deny(unsafe_op_in_unsafe_fn)] (there the body is
+              implicitly unsafe throughout, which is exactly what the metric
+              is about). Spans are unioned, so a nested block never counts
+              twice, and blank/comment-only lines are excluded, so a SAFETY
+              comment is free and a rewrite is never penalised for
+              explaining itself. `unsafe impl`/`unsafe trait` cost their
+              header line — an unchecked promise with nowhere else to book
+              it. An `unsafe fn` *type* (a function pointer) costs nothing:
+              the obligation is paid where it is called.
+
+              This metric used to count `unsafe {}` *blocks*, and blocks and
+              the goal diverge on exactly the change the migration wants
+              most. Splitting a 700-line transpiled body into fifteen
+              functions with narrow blocks books fifteen units where there
+              was one: edit.rs went 89 -> 104 blocks across phase 15 while
+              its clippy count went 33 -> 0. Lines-of-unchecked-code moves
+              the right way for every shape: narrowing a block lowers it,
+              deleting unsafe code lowers it, adopting the deny and wrapping
+              a body is neutral, and adding unchecked code raises it. It is
+              also the number that states the goal — phase by phase, how
+              much of the editor the compiler still cannot vouch for.
+
   static_mut  occurrences of "static mut "
   no_mangle   occurrences of "#[unsafe(no_mangle)]"
   variadic    occurrences of ": ..." — C-variadic parameters, whose calls
@@ -60,10 +74,16 @@ A `warnings` metric used to sit alongside it; phase 5 drove the count to
 zero and the dev shell (flake.nix) now sets `RUSTFLAGS="-D warnings"` for
 every local and CI build instead, so the counter is retired.
 
-Counting is plain substring matching. That over-counts (a comment saying
-"unsafe " counts), but it is deterministic, matches how the migration plan's
-baseline numbers were measured, and rustfmt (enforced by fmt-check) keeps the
-spelling canonical. The point is monotonic pressure, not precision.
+Everything is measured over a *masked* copy of the source, in which comments,
+string literals and character literals are blanked out (offsets and newlines
+preserved) so that only code is scanned. That is what makes the counts mean
+what they say: prose about `unsafe` costs nothing, a doc comment quoting
+`#![deny(unsafe_op_in_unsafe_fn)]` does not switch on the deny, and a string
+containing a brace cannot desynchronise the block scanner. Everything else is
+plain substring matching, which still over-counts a little (a macro naming
+`static mut ` in its expansion counts), but is deterministic, cheap enough for
+a pre-commit hook, and kept canonical by rustfmt (enforced by fmt-check). The
+point is monotonic pressure, not precision.
 
 The baseline is committed at metrics/ratchet.json (one file per line, so diffs
 review like the ledger's). A metric above its baseline is a violation; a
@@ -86,7 +106,9 @@ Usage: ratchet.py [--check] [--allow-growth]
 """
 
 import json
+import re
 import sys
+from bisect import bisect_right
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -94,23 +116,165 @@ BASELINE = ROOT / "metrics" / "ratchet.json"
 LEDGER = ROOT / "metrics" / "abi-ledger.jsonl"
 
 LINE_CAP = 1000
+# name -> needles counted in the masked source, summed.
 COUNTED = {
-    "unsafe": "unsafe ",
-    "static_mut": "static mut ",
-    "no_mangle": "#[unsafe(no_mangle)]",
-    "variadic": ": ...",
+    "static_mut": ("static mut ",),
+    "no_mangle": ("#[unsafe(no_mangle)]",),
+    "variadic": (": ...",),
 }
 FORBID = "#![forbid(unsafe_code)]"
 DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
-# Unsafe-fn declaration forms, discounted from the "unsafe" metric in files
-# denying unsafe_op_in_unsafe_fn. The trailing space is what separates a
-# declaration (a name follows) from a function-pointer type ("fn(" follows),
-# which is not a declaration and keeps costing its token.
-UNSAFE_FN_DECLS = (
-    'unsafe extern "C" fn ',
-    'unsafe extern "C-unwind" fn ',
-    "unsafe fn ",
-)
+
+IDENT = re.compile(r"[A-Za-z0-9_]")
+IDENT_AT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+WHITESPACE = re.compile(r"\s*")
+UNSAFE_WORD = re.compile(r"\bunsafe\b")
+# Literal prefixes that make a following `#`/`"` open a raw string.
+RAW_PREFIXES = {"r", "br", "cr", "rb", "rc"}
+
+
+def mask(text):
+    """The source with comments, strings and char literals blanked to spaces.
+
+    Offsets and newlines are preserved, so the result can be scanned
+    structurally (brace matching, keyword search) and mapped back to line
+    numbers, while nothing inside a literal or a comment can be mistaken for
+    code.
+    """
+    out = list(text)
+    n = len(text)
+    i = 0
+
+    def blank(start, stop):
+        for k in range(start, stop):
+            if out[k] != "\n":
+                out[k] = " "
+
+    while i < n:
+        c = text[i]
+        if IDENT.match(c):
+            # Consume whole identifiers so `r` inside one can't open a raw
+            # string, and so `b'x'` reaches the char-literal branch below.
+            j = i
+            while j < n and IDENT.match(text[j]):
+                j += 1
+            if text[i:j] in RAW_PREFIXES and j < n and text[j] in '#"':
+                k = j
+                while k < n and text[k] == "#":
+                    k += 1
+                if k < n and text[k] == '"':
+                    close = text.find('"' + "#" * (k - j), k + 1)
+                    j = n if close < 0 else close + 1 + (k - j)
+                    blank(i, j)
+            i = j
+        elif c == "/" and text.startswith("//", i):
+            j = text.find("\n", i)
+            j = n if j < 0 else j
+            blank(i, j)
+            i = j
+        elif c == "/" and text.startswith("/*", i):
+            depth, j = 1, i + 2
+            while j < n and depth:
+                if text.startswith("/*", j):
+                    depth, j = depth + 1, j + 2
+                elif text.startswith("*/", j):
+                    depth, j = depth - 1, j + 2
+                else:
+                    j += 1
+            blank(i, j)
+            i = j
+        elif c == '"':
+            j = i + 1
+            while j < n and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            j = min(j + 1, n)
+            blank(i, j)
+            i = j
+        elif c == "'":
+            # A char literal, or a lifetime — `'a` looks like the start of
+            # one until the closing quote fails to show up.
+            if i + 1 < n and text[i + 1] == "\\":
+                j = i + 2
+                while j < n and text[j] != "'":
+                    j += 2 if text[j] == "\\" else 1
+                j = min(j + 1, n)
+            elif i + 2 < n and text[i + 2] == "'":
+                j = i + 3
+            else:
+                i += 1
+                continue
+            blank(i, j)
+            i = j
+        else:
+            i += 1
+    return "".join(out)
+
+
+def matching_brace(masked, open_at):
+    """Offset of the `}` closing the `{` at open_at (end of text if unpaired)."""
+    depth = 0
+    for i in range(open_at, len(masked)):
+        if masked[i] == "{":
+            depth += 1
+        elif masked[i] == "}":
+            depth -= 1
+            if not depth:
+                return i
+    return len(masked) - 1
+
+
+def unsafe_lines(masked, deny):
+    """Lines of code the compiler is not checking. See the module docs."""
+    starts = [0, *(m.end() for m in re.finditer("\n", masked))]
+
+    def lineno(offset):
+        """0-based line holding `offset`."""
+        return bisect_right(starts, offset) - 1
+
+    # Lines whose masked content is blank hold no code: comments (SAFETY
+    # notes included) and empty lines inside a block are free.
+    code_lines = {i for i, line in enumerate(masked.splitlines()) if line.strip()}
+
+    covered = set()
+    for match in UNSAFE_WORD.finditer(masked):
+        at = WHITESPACE.match(masked, match.end()).end()
+        word = IDENT_AT.match(masked, at)
+        keyword = word.group(0) if word else ""
+        body_at = None
+        if at < len(masked) and masked[at] == "{":
+            body_at = at  # `unsafe { ... }`
+        elif keyword == "extern":
+            after = WHITESPACE.match(masked, word.end()).end()
+            follows = IDENT_AT.match(masked, after)
+            if after < len(masked) and masked[after] == "{":
+                body_at = after  # `unsafe extern "C" { ... }`
+            elif follows and follows.group(0) == "fn":
+                word = follows  # `unsafe extern "C" fn ...`
+                keyword = "fn"
+            else:
+                continue
+        elif keyword in ("impl", "trait"):
+            covered.add(lineno(match.start()))
+            continue
+        elif keyword != "fn":
+            continue  # `unsafe(no_mangle)` and friends: not a region
+
+        if body_at is None:
+            named = WHITESPACE.match(masked, word.end()).end()
+            if named < len(masked) and masked[named] == "(":
+                continue  # an `unsafe fn(..)` *type*; paid at the call site
+            if deny:
+                continue  # the body's own blocks state its unsafe surface
+            brace = masked.find("{", named)
+            semi = masked.find(";", named)
+            if brace < 0 or 0 <= semi < brace:
+                covered.add(lineno(match.start()))  # a bodyless declaration
+                continue
+            body_at = brace
+
+        span = range(lineno(match.start()), lineno(matching_brace(masked, body_at)) + 1)
+        covered.update(span)
+    return len(covered & code_lines)
 
 
 def measure():
@@ -124,13 +288,16 @@ def measure():
         [*ROOT.glob("crates/*/src/**/*.rs"), *ROOT.glob("crates/*/*.rs")]
     ):
         text = path.read_text()
-        counts = {name: text.count(needle) for name, needle in COUNTED.items()}
-        if DENY_UNSAFE_OP in text:
-            counts["unsafe"] -= sum(text.count(decl) for decl in UNSAFE_FN_DECLS)
+        masked = mask(text)
+        counts = {
+            name: sum(masked.count(needle) for needle in needles)
+            for name, needles in COUNTED.items()
+        }
+        counts["unsafe_lines"] = unsafe_lines(masked, DENY_UNSAFE_OP in masked)
         counts["lines"] = len(text.splitlines())
         stats[str(path.relative_to(ROOT))] = counts
-        without_forbid += FORBID not in text
-        without_deny += FORBID not in text and DENY_UNSAFE_OP not in text
+        without_forbid += FORBID not in masked
+        without_deny += FORBID not in masked and DENY_UNSAFE_OP not in masked
     return stats, without_forbid, without_deny
 
 
@@ -185,10 +352,11 @@ def violations(stats, internal, without_forbid, without_deny, baseline):
             f"files without {FORBID} or {DENY_UNSAFE_OP}: {base_deny} -> {without_deny}"
         )
     base_files = baseline["files"]
+    counted = (*COUNTED, "unsafe_lines")
     for file in sorted(stats.keys() | base_files.keys()):
-        cur = stats.get(file, {**dict.fromkeys(COUNTED, 0), "lines": 0})
+        cur = stats.get(file, {**dict.fromkeys(counted, 0), "lines": 0})
         base = base_files.get(file, {})
-        for name in COUNTED:
+        for name in counted:
             if cur[name] > base.get(name, 0):
                 found.append(f"{file}: {name} {base.get(name, 0)} -> {cur[name]}")
         limit = max(LINE_CAP, base.get("lines", 0))
@@ -199,7 +367,8 @@ def violations(stats, internal, without_forbid, without_deny, baseline):
 
 
 def summary(stats, internal, without_forbid, without_deny):
-    totals = {name: sum(c[name] for c in stats.values()) for name in COUNTED}
+    counted = (*COUNTED, "unsafe_lines")
+    totals = {name: sum(c[name] for c in stats.values()) for name in counted}
     over = sum(c["lines"] > LINE_CAP for c in stats.values())
     parts = [f"{n} {name}" for name, n in totals.items()]
     parts += [
@@ -211,11 +380,59 @@ def summary(stats, internal, without_forbid, without_deny):
     return ", ".join(parts)
 
 
+# Scanner cases, checked on every run (a few hundred microseconds against a
+# ~20 MB tree read). A silent regression in mask()/unsafe_lines() would
+# corrupt every number the ratchet enforces, so this is not opt-in.
+SELF_TEST = [
+    # (source, expected unsafe_lines in a file without the deny)
+    ("fn f() {\n    unsafe {\n        g();\n    }\n}\n", 3),
+    ("fn f() {\n    let x = unsafe { *p };\n}\n", 1),
+    # Comments and blank lines inside a block are free.
+    ("fn f() {\n    unsafe {\n        // SAFETY: fine.\n\n        g();\n    }\n}\n", 3),
+    # Prose and strings never count.
+    ("/// An unsafe fn would need one.\n/// unsafe { }\nfn f() {}\n", 0),
+    ('fn f() {\n    let s = "unsafe { g(); }";\n}\n', 0),
+    ('fn f() {\n    let s = r#"unsafe {"#;\n}\n', 0),
+    ("/* unsafe { /* nested */ } */\nfn f() {}\n", 0),
+    # A brace in a char literal must not desynchronise the scanner.
+    ("fn f() {\n    unsafe {\n        g('{');\n    }\n    h();\n}\n", 3),
+    ("fn f<'a>(x: &'a u8) {}\n", 0),
+    # An unsafe fn body is implicitly unsafe throughout without the deny.
+    ("unsafe fn f() {\n    g();\n}\n", 3),
+    ('unsafe extern "C" fn f() {\n    g();\n}\n', 3),
+    ("trait T {\n    unsafe fn f();\n}\n", 1),
+    # Nested blocks are unioned, not summed.
+    ("unsafe fn f() {\n    unsafe {\n        g();\n    }\n}\n", 5),
+    # Declarations, promises, types.
+    ("unsafe impl Sync for X {}\n", 1),
+    ("unsafe trait T {}\n", 1),
+    ('type F = unsafe extern "C" fn(u8);\n', 0),
+    ("struct S(Option<unsafe fn(u8)>);\n", 0),
+    ('#[unsafe(no_mangle)]\npub extern "C" fn f() {}\n', 0),
+    ('unsafe extern "C" {\n    static x: u8;\n}\n', 3),
+]
+SELF_TEST_DENY = [
+    # With the deny, a body's own blocks state its unsafe surface.
+    ("unsafe fn f() {\n    g();\n}\n", 0),
+    ("unsafe fn f() {\n    unsafe {\n        g();\n    }\n}\n", 3),
+]
+
+
+def self_test():
+    for source, expected in SELF_TEST:
+        got = unsafe_lines(mask(source), False)
+        assert got == expected, f"unsafe_lines={got}, want {expected}, for {source!r}"
+    for source, expected in SELF_TEST_DENY:
+        got = unsafe_lines(mask(source), True)
+        assert got == expected, f"unsafe_lines={got}, want {expected}, for {source!r}"
+
+
 def main():
     args = set(sys.argv[1:])
     if unknown := args - {"--check", "--allow-growth"}:
         sys.exit(f"ratchet: unknown argument(s): {' '.join(sorted(unknown))}")
 
+    self_test()
     stats, without_forbid, without_deny = measure()
     internal = internal_exports()
     content = render(stats, internal, without_forbid, without_deny)

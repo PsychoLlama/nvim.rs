@@ -14,7 +14,8 @@
 
 # Ratchet
 
-- The ratchet (`just ratchet --check`) constrains `unsafe `/`static mut`/`#[no_mangle]` counts, file line counts, and internal exports to only shrink.
+- The ratchet (`just ratchet --check`) constrains per-file unchecked lines (code inside `unsafe` regions), `static mut`/`#[no_mangle]`/variadic counts, file line counts, and internal exports to only shrink.
+- Narrowing an `unsafe` region is progress even when it adds regions; splitting a transpiled body into functions with tight regions lowers the count. Blank and comment-only lines inside a region are free, so SAFETY notes cost nothing.
 - After reducing any of them, run `just refresh` and commit the refreshed `metrics/*.{json,jsonl}`.
 - Justified growth requires `just refresh --allow-growth`.
 
