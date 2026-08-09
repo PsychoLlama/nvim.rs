@@ -109,6 +109,16 @@ fn setlimit_is_in_the_future() {
 }
 
 #[test]
+fn setlimit_saturates_on_an_absurd_timeout() {
+    // A Vimscript `{timeout}` past `INT64_MAX / 1e6` used to abort here.
+    for msec in [i64::MAX / 1_000_000, i64::MAX / 1_000, i64::MAX] {
+        let future = profile_setlimit(msec);
+        assert!(!profile_passed_limit(future));
+        assert!(profile_cmp(future, profile_start()) < 0);
+    }
+}
+
+#[test]
 fn passed_limit_start_is_in_the_past() {
     let start = profile_start();
     later_than(start);

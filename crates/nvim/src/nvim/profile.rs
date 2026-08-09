@@ -99,8 +99,17 @@ pub fn profile_setlimit(msec: int64_t) -> proftime_T {
     if msec <= 0 {
         return profile_zero();
     }
-    debug_assert!(msec <= (int64_t::MAX / 1_000_000) - 1);
-    let nsec = (msec as proftime_T).wrapping_mul(1_000_000);
+    // `msec` is user input -- `search()`, `searchpair()` and `matchfuzzy()`
+    // all take a `{timeout}` and nothing on the way here bounds it. Upstream
+    // asserts the range, which aborts a debug build and, compiled out,
+    // multiplies into an overflow instead. Saturate: an absurd timeout means
+    // "as far into the future as a limit can mean". The ceiling is
+    // `INT64_MAX` nanoseconds -- ~292 years -- because that is how far apart
+    // [`profile_cmp`] can still tell two times, and the wrapping add past it
+    // is the arithmetic this module is built on.
+    let nsec = (msec as proftime_T)
+        .saturating_mul(1_000_000)
+        .min(int64_t::MAX as proftime_T);
     profile_start().wrapping_add(nsec)
 }
 
