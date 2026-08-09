@@ -105,4 +105,23 @@ describe(':set validation', function()
     setto(6)
     setto(7)
   end)
+
+  -- The numeric fields inside these string options are read by getdigits(),
+  -- whose strict arm used to abort the process on anything outside the
+  -- target width -- reachable from a modeline, so a one-line denial of
+  -- service. They saturate now.
+  it('numbers inside string options saturate instead of aborting', function()
+    local huge = '2147483648' -- INT_MAX + 1
+    local vast = '99999999999999999999999' -- past intmax_t
+    for _, value in ipairs({ huge, vast }) do
+      command('set cinoptions=>' .. value)
+      command('set breakindentopt=shift:' .. value .. ',min:' .. value)
+      command('set spellsuggest=best,' .. value)
+      command('set comments=s' .. value .. ':xx')
+    end
+    command('sign define regress text=xx')
+    command('sign place ' .. huge .. ' line=1 name=regress buffer=1')
+    command('breakadd file ' .. huge .. ' regress.vim')
+    eq(2, eval('1 + 1'))
+  end)
 end)

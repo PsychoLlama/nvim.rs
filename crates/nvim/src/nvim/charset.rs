@@ -562,32 +562,38 @@ pub unsafe fn try_getdigits(pp: *mut *mut c_char, nr: *mut intmax_t) -> bool {
     !(*__errno_location() == ERANGE && (*nr == intmax_t::MIN || *nr == intmax_t::MAX))
 }
 
-/// [`try_getdigits`], answering `def` when the value did not fit. With
-/// `strict` an unrepresentable value aborts instead.
+/// [`try_getdigits`], answering `def` when the value did not fit.
+///
+/// `strict` says the caller has already established that there *are* digits
+/// here, so a value it cannot represent is a bad number rather than a parse
+/// failure, and `def` would be misleading. Every one of those callers is
+/// reading text a user typed -- an option value, a `:sign` id, a `:breakadd`
+/// line number -- so an unrepresentable value **saturates** rather than
+/// failing: `strtoimax` has already clamped it to `INTMAX_MIN`/`INTMAX_MAX`
+/// and that is what comes back. Upstream `abort()`s here instead, which
+/// `:set breakindentopt=min:99999999999999999999999` reaches from a modeline.
 ///
 /// # Safety
 /// `*pp` must be a NUL-terminated string.
 pub unsafe fn getdigits(pp: *mut *mut c_char, strict: bool, def: intmax_t) -> intmax_t {
     let mut number: intmax_t = 0;
     let ok = try_getdigits(pp, &raw mut number);
-    if strict && !ok {
-        abort();
-    }
-    if ok { number } else { def }
+    if ok || strict { number } else { def }
 }
 
 /// [`getdigits`] narrowed to an `int`.
+///
+/// A `strict` value outside the range saturates -- see [`getdigits`] for why
+/// it is not an abort, and `getdigits_int32` below for the same shape.
 ///
 /// # Safety
 /// `*pp` must be a NUL-terminated string.
 pub unsafe fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int {
     let number = getdigits(pp, strict, def as intmax_t);
     if strict {
-        assert!(
-            number >= c_int::MIN as intmax_t && number <= c_int::MAX as intmax_t,
-            "number >= INT_MIN && number <= INT_MAX"
-        );
-    } else if !(number >= c_int::MIN as intmax_t && number <= c_int::MAX as intmax_t) {
+        return number.clamp(c_int::MIN as intmax_t, c_int::MAX as intmax_t) as c_int;
+    }
+    if !(number >= c_int::MIN as intmax_t && number <= c_int::MAX as intmax_t) {
         return def;
     }
     number as c_int
@@ -609,11 +615,9 @@ pub unsafe fn getdigits_long(pp: *mut *mut c_char, strict: bool, def: c_long) ->
 pub unsafe fn getdigits_int32(pp: *mut *mut c_char, strict: bool, def: int32_t) -> int32_t {
     let number = getdigits(pp, strict, def as intmax_t);
     if strict {
-        assert!(
-            number >= int32_t::MIN as intmax_t && number <= int32_t::MAX as intmax_t,
-            "number >= INT32_MIN && number <= INT32_MAX"
-        );
-    } else if !(number >= int32_t::MIN as intmax_t && number <= int32_t::MAX as intmax_t) {
+        return number.clamp(int32_t::MIN as intmax_t, int32_t::MAX as intmax_t) as int32_t;
+    }
+    if !(number >= int32_t::MIN as intmax_t && number <= int32_t::MAX as intmax_t) {
         return def;
     }
     number as int32_t

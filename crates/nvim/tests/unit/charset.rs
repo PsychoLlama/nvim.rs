@@ -531,3 +531,77 @@ fn works_with_weirdly_quoted_numbers() {
     t("0x'abcd", flags, all(1, 0, 0, 0), 0, false);
     t("0xab''cd", flags, all(4, 171, 171, hex), 0, true);
 }
+
+/// `getdigits*` with `strict` used to abort on a number outside the target
+/// width, which every caller reaches from text a user typed. It saturates
+/// now; these pin that, and the non-strict arm's unchanged `def` answer.
+mod getdigits {
+    use std::ffi::c_char;
+
+    use c2rust_neovim::src::nvim::charset::{getdigits, getdigits_int, getdigits_int32};
+
+    use crate::support::cstr;
+
+    /// Read `s` through `f`, and answer what it returned alongside how many
+    /// bytes it consumed.
+    fn read<T>(s: &str, f: impl FnOnce(*mut *mut c_char) -> T) -> (T, usize) {
+        let owned = cstr(s);
+        let start = owned.as_ptr() as *mut c_char;
+        let mut p = start;
+        let got = f(&raw mut p);
+        (got, (p as usize) - (start as usize))
+    }
+
+    #[test]
+    fn strict_saturates_at_the_target_width() {
+        // SAFETY: every string below is NUL-terminated by `CString`.
+        unsafe {
+            assert_eq!(
+                read("2147483648", |p| getdigits_int(p, true, 0)).0,
+                i32::MAX
+            );
+            assert_eq!(
+                read("-2147483649", |p| getdigits_int(p, true, 0)).0,
+                i32::MIN
+            );
+            assert_eq!(
+                read("2147483648", |p| getdigits_int32(p, true, 0)).0,
+                i32::MAX
+            );
+            // Past `intmax_t` as well: `strtoimax` reports ERANGE, and the
+            // clamped value it left behind is what comes back.
+            assert_eq!(
+                read("99999999999999999999999", |p| getdigits_int(p, true, 7)).0,
+                i32::MAX
+            );
+            assert_eq!(
+                read("99999999999999999999999", |p| getdigits(p, true, 7)).0,
+                i64::MAX as _
+            );
+        }
+    }
+
+    #[test]
+    fn non_strict_still_answers_the_default() {
+        // SAFETY: as above.
+        unsafe {
+            assert_eq!(read("2147483648", |p| getdigits_int(p, false, 7)).0, 7);
+            assert_eq!(read("2147483648", |p| getdigits_int32(p, false, 7)).0, 7);
+            assert_eq!(
+                read("99999999999999999999999", |p| getdigits(p, false, 7)).0,
+                7
+            );
+        }
+    }
+
+    #[test]
+    fn an_in_range_number_is_unmoved_and_the_pointer_advances() {
+        // SAFETY: as above.
+        unsafe {
+            let (got, used) = read("2147483647rest", |p| getdigits_int(p, true, 0));
+            assert_eq!((got, used), (i32::MAX, 10));
+            let (got, used) = read("42:", |p| getdigits_int(p, false, 7));
+            assert_eq!((got, used), (42, 2));
+        }
+    }
+}
