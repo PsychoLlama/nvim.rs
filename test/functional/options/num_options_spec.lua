@@ -124,4 +124,12 @@ describe(':set validation', function()
     command('breakadd file ' .. huge .. ' regress.vim')
     eq(2, eval('1 + 1'))
   end)
+
+  -- 'rulerformat's leading %<n>( is that same number, kept as ru_wid, and
+  -- comp_col() adds one to it before subtracting it from &columns.
+  it("'rulerformat' with an INT_MAX width still redraws", function()
+    command('set ruler rulerformat=%2147483647(x%)')
+    command('redraw')
+    eq(2, eval('1 + 1'))
+  end)
 end)

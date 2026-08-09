@@ -323,12 +323,18 @@ pub unsafe fn comp_col() {
         let mut sc_width = 0;
         let mut ru_width = 0;
 
+        // Saturating throughout: `ru_wid` is whatever number the user put in
+        // `'rulerformat'`'s leading `%<n>(`, unbounded and as large as
+        // `INT_MAX`, and `+ 1` on that overflows. Any width past the screen
+        // lands on the same column-one answer below, so saturating is the
+        // clamp the arithmetic wanted anyway.
         if p_ru.get() != 0 {
             ru_width = if ru_wid.get() != 0 {
                 ru_wid.get()
             } else {
                 COL_RULER
-            } + 1;
+            }
+            .saturating_add(1);
             // With no status line on the last window the ruler shares the last
             // line, so 'showcmd' has to start left of it.
             if !last_has_status {
@@ -336,10 +342,10 @@ pub unsafe fn comp_col() {
             }
         }
         if p_sc.get() != 0 && *p_sloc.get() == b'l' as c_char {
-            sc_width += SHOWCMD_COLS as c_int;
+            sc_width = sc_width.saturating_add(SHOWCMD_COLS as c_int);
             // A separating space, unless the ruler is not beside it anyway.
             if p_ru.get() == 0 || last_has_status {
-                sc_width += 1;
+                sc_width = sc_width.saturating_add(1);
             }
         }
 
