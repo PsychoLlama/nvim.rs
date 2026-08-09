@@ -21,6 +21,7 @@
 //!   [`CB_MAX_ERROR`] times and then disabled, so a broken plugin cannot
 //!   flood the message area on every redraw.
 
+use crate::msg_schedule_semsg_multiline_c;
 use crate::src::nvim::api::extmark::describe_ns;
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_array, api_free_object, api_object_to_bool,
@@ -31,7 +32,6 @@ use crate::src::nvim::highlight::hl_check_ns;
 use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref};
 use crate::src::nvim::main::{decor_state, display_tick, ns_hl_active, textlock};
-use crate::src::nvim::message::msg_schedule_semsg_multiline;
 use crate::src::nvim::r#move::validate_botline_win;
 use crate::src::nvim::types::builders::ArrayBuf;
 use crate::src::nvim::types::{
@@ -116,7 +116,7 @@ unsafe fn decor_provider_error(ns_id: NS, name: *const c_char, msg: *const c_cha
             ns,
             msg,
         );
-        msg_schedule_semsg_multiline(
+        msg_schedule_semsg_multiline_c!(
             c"Decoration provider \"%s\" (ns=%s):\n%s".as_ptr(),
             name,
             ns,

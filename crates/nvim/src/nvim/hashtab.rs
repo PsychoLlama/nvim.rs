@@ -7,12 +7,12 @@
 //! the table compares them and frees them only on the caller's behalf
 //! (`hash_clear_all`). Allocation stays on the `xmalloc` family.
 
+use crate::siemsg_c;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use core::slice;
 
 use crate::src::nvim::memory::{xcalloc, xfree};
-use crate::src::nvim::message::siemsg;
 use crate::src::nvim::os::libc::gettext;
 
 use crate::src::nvim::types::{hash_T, hashitem_T, hashtab_T};
@@ -278,7 +278,7 @@ pub unsafe fn hash_add(ht: *mut hashtab_T, key: *mut c_char) -> c_int {
     let hash = hash_hash(key);
     let hi = hash_lookup(ht, key, CStr::from_ptr(key).to_bytes().len(), hash);
     if (*hi).is_kept() {
-        siemsg(
+        siemsg_c!(
             gettext(c"E685: Internal error: hash_add(): duplicate key \"%s\"".as_ptr()),
             key,
         );

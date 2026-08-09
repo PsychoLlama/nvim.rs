@@ -46,6 +46,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::hash::{BuildHasherDefault, Hasher};
 use std::collections::HashMap;
@@ -55,7 +56,7 @@ use crate::src::nvim::fileio::{read_eintr, write_eintr};
 use crate::src::nvim::main::{did_swapwrite_msg, e_swapclose, firstbuf, got_int, main_loop};
 use crate::src::nvim::memline::{ml_get_buf, ml_open_file};
 use crate::src::nvim::memory::{xfree, xmalloc};
-use crate::src::nvim::message::{emsg, iemsg, semsg};
+use crate::src::nvim::message::{emsg, iemsg};
 use crate::src::nvim::os::fs::{
     os_fileinfo_blocksize, os_fileinfo_fd, os_fileinfo_link, os_fsync, os_open, os_remove,
     os_set_cloexec,
@@ -917,7 +918,7 @@ unsafe fn mf_do_open(mfp: *mut memfile_T, fname: *mut c_char, mut flags: c_int) 
 /// `PERROR`: an error message with the failing call's `strerror` after it.
 unsafe fn perror_msg(message: &core::ffi::CStr) {
     unsafe {
-        semsg(
+        semsg_c!(
             c"%s: %s".as_ptr(),
             gettext(message.as_ptr()),
             strerror(*__errno_location()),

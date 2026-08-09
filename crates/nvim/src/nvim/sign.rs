@@ -17,6 +17,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
 
@@ -64,7 +65,7 @@ use crate::src::nvim::marktree::{
 use crate::src::nvim::mbyte::{MAX_SCHAR_SIZE, utf_ptr2cells, utfc_ptr2len, utfc_ptr2schar};
 use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::message::{
-    emsg, msg_outtrans, msg_putchar, msg_puts, msg_puts_hl, msg_puts_title, semsg,
+    emsg, msg_outtrans, msg_putchar, msg_puts, msg_puts_hl, msg_puts_title,
 };
 use crate::src::nvim::os::libc::{atoi, gettext, snprintf, strcmp, strlen, strncmp};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
@@ -364,7 +365,7 @@ pub unsafe fn init_sign_text(
         // on an unprintable character.
         if s != endp || cells > SIGN_WIDTH {
             if from_define {
-                semsg(gettext(c"E239: Invalid sign text: %s".as_ptr()), text);
+                semsg_c!(gettext(c"E239: Invalid sign text: %s".as_ptr()), text);
             }
             return FAIL;
         }
@@ -510,7 +511,7 @@ pub(crate) unsafe fn sign_undefine_by_name(name: *const c_char) -> c_int {
                 .map(|i| signs.swap_remove(i))
         });
         let Some(entry) = entry else {
-            semsg(gettext(c"E155: Unknown sign: %s".as_ptr()), name);
+            semsg_c!(gettext(c"E155: Unknown sign: %s".as_ptr()), name);
             return FAIL;
         };
         xfree(entry.def.sn_icon.cast());
@@ -793,7 +794,7 @@ pub(crate) unsafe fn sign_place(
 
         let sp = sign_find(name);
         if sp.is_null() {
-            semsg(gettext(c"E155: Unknown sign: %s".as_ptr()), name);
+            semsg_c!(gettext(c"E155: Unknown sign: %s".as_ptr()), name);
             return FAIL;
         }
 
@@ -812,7 +813,7 @@ pub(crate) unsafe fn sign_place(
             buf_mod_sign(buf, id, group, prio, sp)
         };
         if lnum <= 0 {
-            semsg(
+            semsg_c!(
                 gettext(c"E885: Not possible to change sign %s".as_ptr()),
                 name,
             );
@@ -890,7 +891,7 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *mut c_char, buf: *mut buf_T) -
     unsafe {
         let lnum = buf_findsign(buf, id, group);
         if lnum <= 0 {
-            semsg(gettext(c"E157: Invalid sign ID: %d".as_ptr()), id);
+            semsg_c!(gettext(c"E157: Invalid sign ID: %d".as_ptr()), id);
             return -1;
         }
 

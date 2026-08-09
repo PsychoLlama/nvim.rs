@@ -1,3 +1,4 @@
+use crate::semsg_c;
 use crate::src::nvim::arglist::alist_name;
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::{EVENT_SESSIONWRITEPOST, apply_autocmds};
@@ -20,7 +21,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::mapping::makemap;
 use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::option::{makefoldset, makeset};
 use crate::src::nvim::options::{
     kOptSsopFlagBlank, kOptSsopFlagBuffers, kOptSsopFlagCurdir, kOptSsopFlagCursor,
@@ -1238,7 +1239,7 @@ pub unsafe fn ex_loadview(mut eap: *mut exarg_T) {
         ::core::ptr::null_mut::<::core::ffi::c_int>(),
     ) == FAIL
     {
-        semsg(
+        semsg_c!(
             gettext(&raw const e_notopen as *const ::core::ffi::c_char),
             fname,
         );

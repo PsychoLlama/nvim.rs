@@ -1,3 +1,4 @@
+use crate::semsg_c;
 use crate::src::nvim::buffer::buf_is_empty;
 use crate::src::nvim::cursor::{check_cursor, check_cursor_lnum, coladvance};
 use crate::src::nvim::decoration::{SIGN_WIDTH, decor_conceal_line, win_lines_concealed};
@@ -24,7 +25,6 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::mbyte::{mb_adjust_cursor, utf_head_off};
 use crate::src::nvim::memline::ml_get_buf;
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::mouse::vcol2col;
 use crate::src::nvim::normal::{nv_g_home_m_cmd, nv_screengo};
 use crate::src::nvim::option::{get_scrolloff_value, get_showbreak_value, get_sidescrolloff_value};
@@ -1157,7 +1157,7 @@ pub unsafe extern "C" fn f_screenpos(
         coladd: 0 as colnr_T,
     };
     if pos.lnum > (*(*wp).w_buffer).b_ml.ml_line_count {
-        semsg(
+        semsg_c!(
             gettext(&raw const e_invalid_line_number_nr as *const ::core::ffi::c_char),
             pos.lnum,
         );

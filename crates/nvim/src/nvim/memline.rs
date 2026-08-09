@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::autocmd::{
     EVENT_BUFREADPOST, EVENT_BUFWINENTER, EVENT_SWAPEXISTS, apply_autocmds, has_autocmd,
@@ -48,7 +49,7 @@ use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xrealloc, xstpcpy, xstr
 use crate::src::nvim::message::{
     do_dialog, emsg, iemsg, msg, msg_end, msg_ext_set_kind, msg_home_replace, msg_multiline,
     msg_outnum, msg_outtrans, msg_putchar, msg_puts, msg_puts_hl, msg_reset_scroll, msg_start,
-    semsg, set_keep_msg, verb_msg,
+    set_keep_msg, verb_msg,
 };
 use crate::src::nvim::option::{
     copy_option_part, get_fileformat, set_fileformat, set_option_value_give_err,
@@ -488,7 +489,7 @@ pub unsafe fn ml_open_file(buf: *mut buf_T) {
         if *p_dir.get() != NUL as ::core::ffi::c_char && mf_fname(mfp).is_null() {
             need_wait_return.set(true); // call wait_return() later
             (*no_wait_return.ptr()) += 1;
-            semsg(
+            semsg_c!(
                 gettext(c"E303: Unable to open swap file for \"%s\", recovery impossible".as_ptr()),
                 if !buf_spname(buf).is_null() {
                     buf_spname(buf)

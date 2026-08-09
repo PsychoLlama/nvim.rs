@@ -1,3 +1,4 @@
+use crate::semsg_c;
 use crate::src::nvim::arglist::{do_argfile, editing_arg_idx, ex_all, ex_rewind, set_arglist};
 use crate::src::nvim::autocmd::{
     EVENT_SYNTAX, apply_autocmds, au_event_disable, au_event_restore, aucmd_prepbuf, aucmd_restbuf,
@@ -31,7 +32,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
 use crate::src::nvim::message::{
-    emsg, msg, msg_source, semsg, vim_dialog_yesnoallcancel, vim_dialog_yesnocancel, wait_return,
+    emsg, msg, msg_source, vim_dialog_yesnoallcancel, vim_dialog_yesnocancel, wait_return,
 };
 use crate::src::nvim::r#move::validate_cursor;
 use crate::src::nvim::normal::do_check_scrollbind;
@@ -495,13 +496,13 @@ pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -
                     && channel_job_running((*buf_1).b_p_channel as uint64_t) as ::core::ffi::c_int
                         != 0
                 {
-                    semsg(
+                    semsg_c!(
                         gettext(b"E947: Job still running in buffer \"%s\"\0".as_ptr()
                             as *const ::core::ffi::c_char),
                         (*buf_1).b_fname,
                     ) as ::core::ffi::c_int
                 } else {
-                    semsg(
+                    semsg_c!(
                         gettext(
                             b"E162: No write since last change for buffer \"%s\"\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -976,7 +977,7 @@ pub unsafe fn ex_compiler(mut eap: *mut exarg_T) {
         (*eap).arg,
     );
     if source_runtime_vim_lua(buf, DIP_ALL as ::core::ffi::c_int) == FAIL {
-        semsg(
+        semsg_c!(
             gettext((e_compiler_not_supported_str.ptr() as *const _) as *const ::core::ffi::c_char),
             (*eap).arg,
         );

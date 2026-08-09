@@ -30,6 +30,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::src::nvim::change::inserted_bytes;
@@ -39,7 +40,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{curwin, got_int, p_ws, sub_nlines, sub_nsubs};
 use crate::src::nvim::memline::ml_replace;
 use crate::src::nvim::memory::{xfree, xmalloc};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{gettext, memmove, snprintf, strcat, strcpy, strlen, strncmp};
 use crate::src::nvim::search::{SEARCH_KEEP, do_search};
 use crate::src::nvim::types::{
@@ -347,7 +348,7 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
         xfree(frompat as *mut c_void);
 
         if sub_nsubs.get() == 0 {
-            semsg(gettext(c"E753: Not found: %s".as_ptr()), repl_from.get());
+            semsg_c!(gettext(c"E753: Not found: %s".as_ptr()), repl_from.get());
         } else {
             do_sub_msg(false);
         }

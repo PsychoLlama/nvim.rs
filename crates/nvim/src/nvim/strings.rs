@@ -1,11 +1,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use crate::src::nvim::eval::typval::tv_get_bool_chk;
 use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::main::e_using_number_as_bool_nr;
 use crate::src::nvim::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::src::nvim::memory::{xmalloc, xmallocz};
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::{
     gettext, qsort, strcasecmp, strchr, strcmp, strlen, strncmp, strstr,
 };
@@ -53,7 +53,7 @@ pub(crate) unsafe fn strict_bool_arg(tv: *mut typval_T) -> Option<bool> {
             return None;
         }
         if !(0..=1).contains(&value) {
-            semsg(
+            semsg_c!(
                 gettext(e_using_number_as_bool_nr.ptr().cast::<c_char>()),
                 value,
             );

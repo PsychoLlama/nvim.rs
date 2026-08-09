@@ -42,6 +42,7 @@ mod score;
 mod soundalike;
 mod walk;
 
+use crate::semsg_c;
 pub use prompt::spell_suggest;
 
 use crate::src::nvim::charset::{getdigits_int, skiptowhite, skipwhite};
@@ -55,7 +56,6 @@ use crate::src::nvim::hashtab::{hash_clear_all, hash_init};
 use crate::src::nvim::main::{curbuf, curwin, e_notopen, got_int, p_sps};
 use crate::src::nvim::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz, xstrdup};
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::option::copy_option_part;
 use crate::src::nvim::os::fs::os_fopen;
 use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
@@ -679,7 +679,7 @@ unsafe fn spell_suggest_file(su: *mut suginfo_T, fname: *mut c_char) {
     unsafe {
         let fd: *mut FILE = os_fopen(fname, c"r".as_ptr());
         if fd.is_null() {
-            semsg(gettext(&raw const e_notopen as *const c_char), fname);
+            semsg_c!(gettext(&raw const e_notopen as *const c_char), fname);
             return;
         }
 

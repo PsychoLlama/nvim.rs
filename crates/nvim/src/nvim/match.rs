@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 
 use crate::src::nvim::ascii::ascii_iswhite;
@@ -42,7 +43,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::mbyte::{utf_char2bytes, utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::memline::ml_get_buf;
 use crate::src::nvim::memory::{xcalloc, xfree, xmemdupz, xstrdup};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{gettext, strlen, strncasecmp};
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit};
 use crate::src::nvim::regexp::vim_regexec_multi;
@@ -105,7 +106,7 @@ unsafe fn match_add(
             return -1;
         }
         if id < -1 || id == 0 {
-            semsg(
+            semsg_c!(
                 gettext(c"E799: Invalid ID: %ld (must be greater than or equal to 1)".as_ptr()),
                 id as int64_t,
             );
@@ -118,7 +119,7 @@ unsafe fn match_add(
             let mut cur = (*wp).w_match_head;
             while !cur.is_null() {
                 if (*cur).mit_id == id {
-                    semsg(
+                    semsg_c!(
                         gettext(c"E801: ID already taken: %ld".as_ptr()),
                         id as int64_t,
                     );
@@ -141,7 +142,7 @@ unsafe fn match_add(
         if !pat.is_null() {
             regprog = vim_regcomp(pat, RE_MAGIC);
             if regprog.is_null() {
-                semsg(gettext(&raw const e_invarg2 as *const c_char), pat);
+                semsg_c!(gettext(&raw const e_invarg2 as *const c_char), pat);
                 return -1;
             }
         }
@@ -245,7 +246,7 @@ unsafe fn fill_pos_array(
                 let subl = (*tv).vval.v_list;
                 let mut subli = tv_list_first(subl);
                 if subli.is_null() {
-                    semsg(
+                    semsg_c!(
                         gettext(c"E5030: Empty list at position %d".as_ptr()),
                         tv_list_idx_of_item(pos_list, li),
                     );
@@ -298,7 +299,7 @@ unsafe fn fill_pos_array(
                     (*(*m).mit_pos_array.offset(i as isize)).len = 0;
                 }
             } else {
-                semsg(
+                semsg_c!(
                     gettext(c"E5031: List or number required at position %d".as_ptr()),
                     tv_list_idx_of_item(pos_list, li),
                 );
@@ -331,7 +332,7 @@ unsafe fn match_delete(wp: *mut win_T, id: c_int, perr: bool) -> c_int {
 
         if id < 1 {
             if perr {
-                semsg(
+                semsg_c!(
                     gettext(c"E802: Invalid ID: %ld (must be greater than or equal to 1)".as_ptr()),
                     id as int64_t,
                 );
@@ -347,7 +348,7 @@ unsafe fn match_delete(wp: *mut win_T, id: c_int, perr: bool) -> c_int {
         }
         if cur.is_null() {
             if perr {
-                semsg(gettext(c"E803: ID not found: %ld".as_ptr()), id as int64_t);
+                semsg_c!(gettext(c"E803: ID not found: %ld".as_ptr()), id as int64_t);
             }
             return -1;
         }
@@ -449,7 +450,7 @@ pub unsafe fn ex_match(eap: *mut exarg_T) {
             if *p == 0 {
                 // There must be two arguments.
                 xfree(g.cast());
-                semsg(gettext(&raw const e_invarg2 as *const c_char), arg);
+                semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg);
                 return;
             }
             // `*p` is the pattern's delimiter, whatever character it is.
@@ -463,7 +464,7 @@ pub unsafe fn ex_match(eap: *mut exarg_T) {
                 if *end != *p {
                     // The closing delimiter is missing.
                     xfree(g.cast());
-                    semsg(gettext(&raw const e_invarg2 as *const c_char), p);
+                    semsg_c!(gettext(&raw const e_invarg2 as *const c_char), p);
                     return;
                 }
                 // Terminate the pattern in place for the compile, then put

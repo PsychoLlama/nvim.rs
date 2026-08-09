@@ -1,5 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::CStr;
 use std::borrow::Cow;
 use std::ffi::CString;
@@ -35,7 +36,7 @@ use crate::src::nvim::memline::{
     get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp,
 };
 use crate::src::nvim::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};
-use crate::src::nvim::message::{emsg, msg, msg_progress, msg_puts_hl, semsg, set_keep_msg};
+use crate::src::nvim::message::{emsg, msg, msg_progress, msg_puts_hl, set_keep_msg};
 use crate::src::nvim::option::{copy_option_part, get_bkc_flags, get_fileformat_force, shortmess};
 use crate::src::nvim::options::{
     kOptBkcFlagAuto, kOptBkcFlagBreakhardlink, kOptBkcFlagBreaksymlink, kOptBkcFlagYes,
@@ -152,10 +153,10 @@ impl WriteError {
             let iobuff = IObuff.ptr() as *mut ::core::ffi::c_char;
             match (self.num, self.arg) {
                 (Some(num), 0) => {
-                    semsg(c"%s: %s%s".as_ptr(), num.as_ptr(), iobuff, msg);
+                    semsg_c!(c"%s: %s%s".as_ptr(), num.as_ptr(), iobuff, msg);
                 }
                 (Some(num), arg) => {
-                    semsg(
+                    semsg_c!(
                         c"%s: %s%s: %s".as_ptr(),
                         num.as_ptr(),
                         iobuff,
@@ -165,7 +166,7 @@ impl WriteError {
                 }
                 // The message is deliberately its own format string here.
                 (None, arg) if arg != 0 => {
-                    semsg(msg, uv_strerror(arg));
+                    semsg_c!(msg, uv_strerror(arg));
                 }
                 (None, _) => {
                     emsg(msg);

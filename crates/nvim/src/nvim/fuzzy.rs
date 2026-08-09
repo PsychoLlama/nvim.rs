@@ -26,6 +26,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -49,7 +50,6 @@ use crate::src::nvim::mbyte::{
 };
 use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{xfree, xmalloc};
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::pos::equalpos;
 use crate::src::nvim::search::FORWARD;
@@ -870,7 +870,7 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
     unsafe {
         let list = &*argvars;
         if list.v_type != VAR_LIST || list.vval.v_list.is_null() {
-            semsg(
+            semsg_c!(
                 message(&e_listarg),
                 if retmatchpos {
                     c"matchfuzzypos()".as_ptr()
@@ -882,7 +882,7 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
         }
         let pat = &*argvars.add(1);
         if pat.v_type != VAR_STRING || pat.vval.v_string.is_null() {
-            semsg(message(&e_invarg2), tv_get_string(pat));
+            semsg_c!(message(&e_invarg2), tv_get_string(pat));
             return;
         }
 
@@ -908,7 +908,7 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
                     || (*di).di_tv.vval.v_string.is_null()
                     || *(*di).di_tv.vval.v_string == 0
                 {
-                    semsg(
+                    semsg_c!(
                         message(&e_invargNval),
                         c"key".as_ptr(),
                         tv_get_string(&raw const (*di).di_tv),
@@ -917,13 +917,13 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
                 }
                 key = tv_get_string(&raw const (*di).di_tv);
             } else if !tv_dict_get_callback(d, c"text_cb".as_ptr(), -1, &raw mut cb) {
-                semsg(message(&e_invargval), c"text_cb".as_ptr());
+                semsg_c!(message(&e_invargval), c"text_cb".as_ptr());
                 return;
             }
             let di = tv_dict_find(d, c"limit".as_ptr(), -1);
             if !di.is_null() {
                 if (*di).di_tv.v_type != VAR_NUMBER {
-                    semsg(message(&e_invargval), c"limit".as_ptr());
+                    semsg_c!(message(&e_invargval), c"limit".as_ptr());
                     return;
                 }
                 limit = tv_get_number_chk(&raw const (*di).di_tv, core::ptr::null_mut()) as c_int;

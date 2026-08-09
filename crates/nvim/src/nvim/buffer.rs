@@ -77,7 +77,7 @@ use crate::src::nvim::memline::{
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xrealloc, xstrdup, xstrlcpy};
 use crate::src::nvim::message::{
     emsg, message_filtered, msg, msg_delay, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts,
-    msg_start, msg_trunc, semsg, set_keep_msg, smsg,
+    msg_start, msg_trunc, set_keep_msg,
 };
 use crate::src::nvim::r#move::{scroll_cursor_halfway, validate_virtcol};
 use crate::src::nvim::normal::{end_visual_mode, reset_VIsual_and_resel};
@@ -137,6 +137,7 @@ use crate::src::nvim::window::{
     win_valid_any_tab, window_layout_lock, window_layout_unlock,
 };
 use crate::src::nvim::winfloat::win_set_minimal_style;
+use crate::{semsg_c, smsg_c};
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISdigit: C2Rust_Unnamed = 2048;
 pub const kExtmarkMove: UndoObjectType = 1;
@@ -625,7 +626,7 @@ unsafe extern "C" fn can_unload_buffer(mut buf: *mut buf_T) -> bool {
         } else {
             (*buf).b_ffname
         };
-        semsg(
+        semsg_c!(
             gettext(
                 (e_attempt_to_delete_buffer_that_is_in_use_str.ptr() as *const _)
                     as *const ::core::ffi::c_char,
@@ -1339,7 +1340,7 @@ pub unsafe extern "C" fn do_bufdel(
             errormsg = IObuff.ptr() as *mut ::core::ffi::c_char;
         } else if deleted as OptInt >= p_report.get() {
             if command == DOBUF_UNLOAD as ::core::ffi::c_int {
-                smsg(
+                smsg_c!(
                     0 as ::core::ffi::c_int,
                     ngettext(
                         b"%d buffer unloaded\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1349,7 +1350,7 @@ pub unsafe extern "C" fn do_bufdel(
                     deleted,
                 );
             } else if command == DOBUF_DEL as ::core::ffi::c_int {
-                smsg(
+                smsg_c!(
                     0 as ::core::ffi::c_int,
                     ngettext(
                         b"%d buffer deleted\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1359,7 +1360,7 @@ pub unsafe extern "C" fn do_bufdel(
                     deleted,
                 );
             } else {
-                smsg(
+                smsg_c!(
                     0 as ::core::ffi::c_int,
                     ngettext(
                         b"%d buffer wiped out\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1537,7 +1538,7 @@ unsafe extern "C" fn do_buffer_ext(
     if buf.is_null() {
         if start == DOBUF_FIRST as ::core::ffi::c_int {
             if !unload {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_nobufnr as *const ::core::ffi::c_char),
                     count as int64_t,
                 );
@@ -1565,7 +1566,7 @@ unsafe extern "C" fn do_buffer_ext(
     if (action == DOBUF_GOTO as ::core::ffi::c_int || action == DOBUF_SPLIT as ::core::ffi::c_int)
         && (*buf).b_flags & BF_DUMMY != 0
     {
-        semsg(
+        semsg_c!(
             gettext(&raw const e_nobufnr as *const ::core::ffi::c_char),
             count,
         );
@@ -1599,7 +1600,7 @@ unsafe extern "C" fn do_buffer_ext(
                     return FAIL;
                 }
             } else {
-                semsg(
+                semsg_c!(
                     gettext(
                         &raw const e_no_write_since_last_change_for_buffer_nr_add_bang_to_override
                             as *const ::core::ffi::c_char,
@@ -1620,7 +1621,7 @@ unsafe extern "C" fn do_buffer_ext(
                     return FAIL;
                 }
             } else {
-                semsg(
+                semsg_c!(
                     gettext(b"E89: %s will be killed (add ! to override)\0".as_ptr()
                         as *const ::core::ffi::c_char),
                     (*buf).b_fname,
@@ -2099,7 +2100,7 @@ pub unsafe extern "C" fn no_write_message_buf(mut buf: *mut buf_T) {
             &raw const e_job_still_running_add_bang_to_end_the_job as *const ::core::ffi::c_char,
         ));
     } else {
-        semsg(
+        semsg_c!(
             gettext(
                 &raw const e_no_write_since_last_change_for_buffer_nr_add_bang_to_override
                     as *const ::core::ffi::c_char,
@@ -2520,7 +2521,7 @@ pub unsafe extern "C" fn buflist_getfile(
         if options & GETF_ALT as ::core::ffi::c_int != 0 && n == 0 as ::core::ffi::c_int {
             emsg(gettext(&raw const e_noalt as *const ::core::ffi::c_char));
         } else {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_buffer_nr_not_found as *const ::core::ffi::c_char),
                 n,
             );
@@ -2777,12 +2778,12 @@ pub unsafe extern "C" fn buflist_findpat(
         xfree(pat as *mut ::core::ffi::c_void);
     }
     if match_0 == -2 as ::core::ffi::c_int {
-        semsg(
+        semsg_c!(
             gettext(b"E93: More than one match for %s\0".as_ptr() as *const ::core::ffi::c_char),
             pattern,
         );
     } else if match_0 < 0 as ::core::ffi::c_int {
-        semsg(
+        semsg_c!(
             gettext(b"E94: No matching buffer for %s\0".as_ptr() as *const ::core::ffi::c_char),
             pattern,
         );

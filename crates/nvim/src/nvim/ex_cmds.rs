@@ -93,8 +93,8 @@ use crate::src::nvim::memory::{
 use crate::src::nvim::message::{
     emsg, message_filtered, messaging, msg, msg_check_for_delay, msg_clr_eos, msg_end,
     msg_ext_set_kind, msg_multiline, msg_outnum, msg_outtrans, msg_prt_line, msg_putchar, msg_puts,
-    msg_puts_hl, msg_sb_eol, msg_start, msg_starthere, msgmore, semsg, set_keep_msg, smsg,
-    vim_dialog_yesno, wait_return,
+    msg_puts_hl, msg_sb_eol, msg_start, msg_starthere, msgmore, set_keep_msg, vim_dialog_yesno,
+    wait_return,
 };
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::r#move::{
@@ -162,6 +162,7 @@ use crate::src::nvim::window::{
     check_can_set_curbuf_forceit, check_lnums, curwin_init, win_enter, win_split, win_valid,
     win_valid_any_tab,
 };
+use crate::{semsg_c, smsg_c};
 unsafe extern "C" {
     fn re_multiline(prog: *const regprog_T) -> ::core::ffi::c_int;
 }
@@ -829,7 +830,7 @@ pub unsafe fn ex_sort(mut eap: *mut exarg_T) {
                     p = s;
                     regmatch.rm_ic = p_ic.get() != 0;
                 } else {
-                    semsg(
+                    semsg_c!(
                         gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
                         p,
                     );
@@ -1153,7 +1154,7 @@ pub unsafe fn ex_uniq(mut eap: *mut exarg_T) {
                     p = s;
                     regmatch.rm_ic = p_ic.get() != 0;
                 } else {
-                    semsg(
+                    semsg_c!(
                         gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
                         p,
                     );
@@ -1479,7 +1480,7 @@ pub unsafe extern "C" fn do_move(
         l += 1;
     }
     if global_busy.get() == 0 && num_lines as OptInt > p_report.get() {
-        smsg(
+        smsg_c!(
             0 as ::core::ffi::c_int,
             ngettext(
                 b"%ld line moved\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1792,7 +1793,7 @@ unsafe extern "C" fn do_filter(
             }
             (*no_wait_return.ptr()) -= 1;
             if !aborting() {
-                semsg(
+                semsg_c!(
                     gettext(b"E482: Can't create file %s\0".as_ptr() as *const ::core::ffi::c_char),
                     itmp,
                 );
@@ -1841,7 +1842,7 @@ unsafe extern "C" fn do_filter(
                         {
                             if !aborting() {
                                 msg_putchar('\n' as ::core::ffi::c_int);
-                                semsg(
+                                semsg_c!(
                                     gettext(
                                         &raw const e_cant_read_file_str
                                             as *const ::core::ffi::c_char,
@@ -2310,7 +2311,7 @@ pub unsafe fn ex_write(mut eap: *mut exarg_T) {
 }
 unsafe extern "C" fn check_writable(mut fname: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if os_nodetype(fname) == NODE_OTHER {
-        semsg(
+        semsg_c!(
             gettext(b"E503: \"%s\" is not a file or writable device\0".as_ptr()
                 as *const ::core::ffi::c_char),
             fname,
@@ -2538,7 +2539,7 @@ pub unsafe extern "C" fn check_overwrite(
     {
         if (*eap).forceit == 0 && (*eap).append == 0 {
             if os_isdir(ffname) {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_isadir2 as *const ::core::ffi::c_char),
                     ffname,
                 );
@@ -2614,7 +2615,7 @@ pub unsafe extern "C" fn check_overwrite(
                     }
                     (*eap).forceit = true_0;
                 } else {
-                    semsg(
+                    semsg_c!(
                         gettext(
                             b"E768: Swap file exists: %s (:silent! overrides)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -2675,7 +2676,7 @@ pub unsafe fn do_wqall(mut eap: *mut exarg_T) {
                 break 's_136;
             } else {
                 if (*buf).b_ffname.is_null() {
-                    semsg(
+                    semsg_c!(
                         gettext(b"E141: No file name for buffer %ld\0".as_ptr()
                             as *const ::core::ffi::c_char),
                         (*buf).handle as int64_t,
@@ -2767,7 +2768,7 @@ unsafe extern "C" fn check_readonly(
         } else if (*buf).b_p_ro != 0 {
             emsg(gettext(&raw const e_readonly as *const ::core::ffi::c_char));
         } else {
-            semsg(
+            semsg_c!(
                 gettext(b"E505: \"%s\" is read-only (add ! to override)\0".as_ptr()
                     as *const ::core::ffi::c_char),
                 (*buf).b_fname,
@@ -3511,7 +3512,7 @@ pub unsafe extern "C" fn do_ecmd(
     return retval;
 }
 unsafe extern "C" fn delbuf_msg(mut name: *mut ::core::ffi::c_char) {
-    semsg(
+    semsg_c!(
         gettext(
             b"E143: Autocommands unexpectedly deleted new buffer %s\0".as_ptr()
                 as *const ::core::ffi::c_char,
@@ -4250,7 +4251,7 @@ unsafe extern "C" fn do_sub(
             xfree(sub as *mut ::core::ffi::c_void);
             return 0 as ::core::ffi::c_int;
         } else if i == INT_MAX {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_val_too_large_len as *const ::core::ffi::c_char),
                 cmd.offset_from(count_arg) as ::core::ffi::c_int,
                 count_arg,
@@ -4272,7 +4273,7 @@ unsafe extern "C" fn do_sub(
     if *cmd as ::core::ffi::c_int != 0 && *cmd as ::core::ffi::c_int != '"' as ::core::ffi::c_int {
         (*eap).nextcmd = check_nextcmd(cmd);
         if (*eap).nextcmd.is_null() {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
                 cmd,
             );
@@ -5273,7 +5274,7 @@ unsafe extern "C" fn do_sub(
                 );
             }
         } else if (*subflags.ptr()).do_error {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_patnotf2 as *const ::core::ffi::c_char),
                 get_search_pat(),
             );
@@ -5558,7 +5559,7 @@ pub unsafe fn ex_global(mut eap: *mut exarg_T) {
             );
         } else if ndone == 0 as ::core::ffi::c_int {
             if type_0 == 'v' as ::core::ffi::c_int {
-                smsg(
+                smsg_c!(
                     0 as ::core::ffi::c_int,
                     gettext(
                         b"Pattern found in every line: %s\0".as_ptr() as *const ::core::ffi::c_char
@@ -5566,7 +5567,7 @@ pub unsafe fn ex_global(mut eap: *mut exarg_T) {
                     used_pat,
                 );
             } else {
-                smsg(
+                smsg_c!(
                     0 as ::core::ffi::c_int,
                     gettext(b"Pattern not found: %s\0".as_ptr() as *const ::core::ffi::c_char),
                     used_pat,

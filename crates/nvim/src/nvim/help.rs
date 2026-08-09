@@ -7,6 +7,7 @@ use crate::src::nvim::ex_cmds::do_ecmd;
 use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::fileio::vim_fgets;
 use crate::src::nvim::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
+use crate::{semsg_c, smsg_c};
 
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::highlight_group::HLF_E;
@@ -16,7 +17,7 @@ use crate::src::nvim::main::{
     firstwin, got_int, p_hf, p_hh, p_hlg, p_rtp, p_sb, restart_edit,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xstrdup, xstrlcat, xstrlcpy};
-use crate::src::nvim::message::{emsg, emsg_multiline, semsg, smsg};
+use crate::src::nvim::message::{emsg, emsg_multiline};
 use crate::src::nvim::option::set_option_direct;
 use crate::src::nvim::optionstr::check_buf_options;
 use crate::src::nvim::os::fs::{os_fopen, os_isdir};
@@ -216,13 +217,13 @@ pub unsafe fn ex_help(mut eap: *mut exarg_T) {
     }
     if i >= num_matches || n == FAIL {
         if !lang.is_null() {
-            semsg(
+            semsg_c!(
                 gettext(b"E661: No '%s' help for %s\0".as_ptr() as *const ::core::ffi::c_char),
                 lang,
                 arg,
             );
         } else {
-            semsg(
+            semsg_c!(
                 gettext(b"E149: No help for %s\0".as_ptr() as *const ::core::ffi::c_char),
                 arg,
             );
@@ -264,7 +265,7 @@ pub unsafe fn ex_help(mut eap: *mut exarg_T) {
             } else {
                 helpfd = os_fopen(p_hf.get(), READBIN.as_ptr());
                 if helpfd.is_null() {
-                    smsg(
+                    smsg_c!(
                         0 as ::core::ffi::c_int,
                         gettext(
                             b"Help file \"%s\" not found\0".as_ptr() as *const ::core::ffi::c_char
@@ -802,7 +803,7 @@ unsafe extern "C" fn helptags_one(
     );
     if res == FAIL || filecount == 0 as ::core::ffi::c_int {
         if !got_int.get() {
-            semsg(
+            semsg_c!(
                 gettext(b"E151: No match: %s\0".as_ptr() as *const ::core::ffi::c_char),
                 NameBuff.ptr() as *mut ::core::ffi::c_char,
             );
@@ -835,7 +836,7 @@ unsafe extern "C" fn helptags_one(
     );
     if fd_tags.is_null() {
         if !ignore_writeerr {
-            semsg(
+            semsg_c!(
                 gettext(
                     b"E152: Cannot open %s for writing\0".as_ptr() as *const ::core::ffi::c_char
                 ),
@@ -878,7 +879,7 @@ unsafe extern "C" fn helptags_one(
             b"r\0".as_ptr() as *const ::core::ffi::c_char,
         );
         if fd.is_null() {
-            semsg(
+            semsg_c!(
                 gettext(
                     b"E153: Unable to open %s for reading\0".as_ptr() as *const ::core::ffi::c_char
                 ),
@@ -1119,7 +1120,7 @@ unsafe extern "C" fn do_helptags(
     ) == FAIL
         || filecount == 0 as ::core::ffi::c_int
     {
-        semsg(
+        semsg_c!(
             gettext(b"E151: No match: %s\0".as_ptr() as *const ::core::ffi::c_char),
             NameBuff.ptr() as *mut ::core::ffi::c_char,
         );
@@ -1401,7 +1402,7 @@ pub unsafe fn ex_helptags(mut eap: *mut exarg_T) {
             WILD_EXPAND_FREE as ::core::ffi::c_int,
         );
         if dirname.is_null() || !os_isdir(dirname) {
-            semsg(
+            semsg_c!(
                 gettext(b"E150: Not a directory: %s\0".as_ptr() as *const ::core::ffi::c_char),
                 (*eap).arg,
             );

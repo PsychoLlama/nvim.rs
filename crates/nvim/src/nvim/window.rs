@@ -1,3 +1,4 @@
+use crate::semsg_c;
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_set_error, cstr_as_string, find_window_by_handle, try_enter, try_leave,
 };
@@ -78,7 +79,7 @@ use crate::src::nvim::mark::{copy_jumplist, free_jumplist, setmark, setpcmark};
 use crate::src::nvim::r#match::clear_matches;
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemdupz, xstrdup, xstrlcat, xstrlcpy};
 use crate::src::nvim::message::{
-    emsg, iemsg, internal_error, msg, msg_clr_eos_force, msg_grid_validate, msg_ui_flush, semsg,
+    emsg, iemsg, internal_error, msg, msg_clr_eos_force, msg_grid_validate, msg_ui_flush,
     set_keep_msg,
 };
 use crate::src::nvim::mouse::{reset_dragwin, setmouse};
@@ -517,7 +518,7 @@ pub unsafe extern "C" fn do_window(
                                 if Prenum == 0 as ::core::ffi::c_int {
                                     emsg(gettext(&raw const e_noalt as *const ::core::ffi::c_char));
                                 } else {
-                                    semsg(
+                                    semsg_c!(
                                         gettext(
                                             &raw const e_buffer_nr_not_found
                                                 as *const ::core::ffi::c_char,

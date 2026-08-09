@@ -1,3 +1,4 @@
+use crate::semsg_c;
 use crate::src::nvim::arglist::get_arglist_exp;
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::charset::{getdigits_int, skipwhite};
@@ -7,7 +8,7 @@ use crate::src::nvim::hashtab::{hash_clear_all, hash_init};
 use crate::src::nvim::main::{IObuff, e_exists, e_invarg, e_isadir2, got_int, p_msm, p_verbose};
 use crate::src::nvim::mbyte::convert_setup;
 use crate::src::nvim::memory::{xfree, xmalloc, xstrlcpy};
-use crate::src::nvim::message::{emsg, msg, semsg, verbose_enter, verbose_leave};
+use crate::src::nvim::message::{emsg, msg, verbose_enter, verbose_leave};
 use crate::src::nvim::os::fs::{os_isdir, os_path_exists};
 use crate::src::nvim::os::libc::{gettext, memset, strcmp, strlen, strncmp, strstr};
 use crate::src::nvim::path::{FreeWild, path_tail};
@@ -582,7 +583,7 @@ unsafe fn mkspell(
                     as *const ::core::ffi::c_char,
             ));
         } else if incount > MAXREGIONS as ::core::ffi::c_int {
-            semsg(
+            semsg_c!(
                 gettext(b"E754: Only up to %d regions supported\0".as_ptr()
                     as *const ::core::ffi::c_char),
                 MAXREGIONS as ::core::ffi::c_int,
@@ -590,7 +591,7 @@ unsafe fn mkspell(
         } else if !over_write && os_path_exists(wfname) as ::core::ffi::c_int != 0 {
             emsg(gettext(&raw const e_exists as *const ::core::ffi::c_char));
         } else if os_isdir(wfname) {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_isadir2 as *const ::core::ffi::c_char),
                 wfname,
             );
@@ -608,7 +609,7 @@ unsafe fn mkspell(
                             as ::core::ffi::c_int
                             != '_' as ::core::ffi::c_int
                     {
-                        semsg(
+                        semsg_c!(
                             gettext(b"E755: Invalid region in %s\0".as_ptr()
                                 as *const ::core::ffi::c_char),
                             *innames.offset(i as isize),

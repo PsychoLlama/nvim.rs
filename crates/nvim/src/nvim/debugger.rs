@@ -18,7 +18,7 @@ use crate::src::nvim::main::{
     redir_off,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
-use crate::src::nvim::message::{emsg, msg, msg_starthere, semsg, smsg};
+use crate::src::nvim::message::{emsg, msg, msg_starthere};
 use crate::src::nvim::os::env::{expand_env_save, home_replace};
 use crate::src::nvim::os::libc::{atoi, gettext, memmove, strcmp, strcpy, strlen, strncmp, strstr};
 use crate::src::nvim::path::fix_fname;
@@ -31,6 +31,7 @@ use crate::src::nvim::types::{
     exprtype_T, garray_T, int32_t, int64_t, linenr_T, regprog_T, size_t, tasave_T, typebuf_T,
     typval_T, uint8_t, varnumber_T,
 };
+use crate::{semsg_c, smsg_c};
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_13 = 0;
 pub const DOCMD_EXCRESET: C2Rust_Unnamed_17 = 16;
@@ -136,7 +137,7 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
         );
     }
     if !(*debug_oldval.ptr()).is_null() {
-        smsg(
+        smsg_c!(
             0 as ::core::ffi::c_int,
             gettext(b"Oldval = \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
             debug_oldval.get(),
@@ -148,7 +149,7 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
         let _ = *ptr_;
     }
     if !(*debug_newval.ptr()).is_null() {
-        smsg(
+        smsg_c!(
             0 as ::core::ffi::c_int,
             gettext(b"Newval = \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
             debug_newval.get(),
@@ -169,7 +170,7 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
     .es_lnum
         != 0 as linenr_T
     {
-        smsg(
+        smsg_c!(
             0 as ::core::ffi::c_int,
             gettext(b"line %ld: %s\0".as_ptr() as *const ::core::ffi::c_char),
             (*((*exestack.ptr()).ga_data as *mut estack_T)
@@ -178,7 +179,7 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
             cmd,
         );
     } else {
-        smsg(
+        smsg_c!(
             0 as ::core::ffi::c_int,
             gettext(b"cmd: %s\0".as_ptr() as *const ::core::ffi::c_char),
             cmd,
@@ -452,7 +453,7 @@ unsafe extern "C" fn do_checkbacktracelevel() {
         let mut max: ::core::ffi::c_int = get_maxbacktrace_level(sname);
         if debug_backtrace_level.get() > max {
             debug_backtrace_level.set(max);
-            smsg(
+            smsg_c!(
                 0 as ::core::ffi::c_int,
                 gettext(b"frame at highest level: %d\0".as_ptr() as *const ::core::ffi::c_char),
                 max,
@@ -474,14 +475,14 @@ unsafe extern "C" fn do_showbacktrace(mut cmd: *mut ::core::ffi::c_char) {
                 *next = NUL as ::core::ffi::c_char;
             }
             if i == max - debug_backtrace_level.get() {
-                smsg(
+                smsg_c!(
                     0 as ::core::ffi::c_int,
                     b"->%d %s\0".as_ptr() as *const ::core::ffi::c_char,
                     max - i,
                     cur,
                 );
             } else {
-                smsg(
+                smsg_c!(
                     0 as ::core::ffi::c_int,
                     b"  %d %s\0".as_ptr() as *const ::core::ffi::c_char,
                     max - i,
@@ -502,7 +503,7 @@ unsafe extern "C" fn do_showbacktrace(mut cmd: *mut ::core::ffi::c_char) {
     .es_lnum
         != 0 as linenr_T
     {
-        smsg(
+        smsg_c!(
             0 as ::core::ffi::c_int,
             gettext(b"line %ld: %s\0".as_ptr() as *const ::core::ffi::c_char),
             (*((*exestack.ptr()).ga_data as *mut estack_T)
@@ -511,7 +512,7 @@ unsafe extern "C" fn do_showbacktrace(mut cmd: *mut ::core::ffi::c_char) {
             cmd,
         );
     } else {
-        smsg(
+        smsg_c!(
             0 as ::core::ffi::c_int,
             gettext(b"cmd: %s\0".as_ptr() as *const ::core::ffi::c_char),
             cmd,
@@ -549,7 +550,7 @@ pub unsafe extern "C" fn dbg_check_breakpoint(mut eap: *mut exarg_T) {
             } else {
                 p = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             }
-            smsg(
+            smsg_c!(
                 0 as ::core::ffi::c_int,
                 gettext(b"Breakpoint in \"%s%s\" line %ld\0".as_ptr() as *const ::core::ffi::c_char),
                 p,
@@ -660,7 +661,7 @@ unsafe extern "C" fn dbg_parsearg(
     {
         (*bp).dbg_type = DBG_EXPR;
     } else {
-        semsg(
+        semsg_c!(
             gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
             p,
         );
@@ -682,7 +683,7 @@ unsafe extern "C" fn dbg_parsearg(
         || (*bp).dbg_type == DBG_FUNC
             && !strstr(p, b"()\0".as_ptr() as *const ::core::ffi::c_char).is_null()
     {
-        semsg(
+        semsg_c!(
             gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
             arg,
         );
@@ -839,7 +840,7 @@ pub unsafe fn ex_breakdel(mut eap: *mut exarg_T) {
         xfree((*bp).dbg_name as *mut ::core::ffi::c_void);
     }
     if todel < 0 as ::core::ffi::c_int {
-        semsg(
+        semsg_c!(
             gettext(b"E161: Breakpoint not found: %s\0".as_ptr() as *const ::core::ffi::c_char),
             (*eap).arg,
         );
@@ -902,7 +903,7 @@ pub unsafe fn ex_breaklist(mut _eap: *mut exarg_T) {
             );
         }
         if (*bp).dbg_type != DBG_EXPR {
-            smsg(
+            smsg_c!(
                 0 as ::core::ffi::c_int,
                 gettext(b"%3d  %s %s  line %ld\0".as_ptr() as *const ::core::ffi::c_char),
                 (*bp).dbg_nr,
@@ -919,7 +920,7 @@ pub unsafe fn ex_breaklist(mut _eap: *mut exarg_T) {
                 (*bp).dbg_lnum as int64_t,
             );
         } else {
-            smsg(
+            smsg_c!(
                 0 as ::core::ffi::c_int,
                 gettext(b"%3d  expr %s\0".as_ptr() as *const ::core::ffi::c_char),
                 (*bp).dbg_nr,

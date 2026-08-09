@@ -13,6 +13,7 @@
 //! the terminator, because the C originals never read past it and the
 //! allocation may end there.
 
+use crate::semsg_c;
 use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 use crate::src::nvim::types::{Arena, ArenaMem, consumed_blk};
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
@@ -23,7 +24,7 @@ use crate::src::nvim::main::{
     arena_alloc_count, did_outofmem_msg, e_outofmem, emsg_silent, preserve_exit,
 };
 use crate::src::nvim::memfile::mf_release_all;
-use crate::src::nvim::message::{clear_sb_text, semsg};
+use crate::src::nvim::message::clear_sb_text;
 use crate::src::nvim::os::libc::{calloc, free, gettext, malloc, realloc};
 
 pub type MemMalloc = Option<unsafe extern "C" fn(usize) -> *mut c_void>;
@@ -59,7 +60,7 @@ unsafe fn do_outofmem_msg(size: usize) {
     // Message queueing would fail the allocation again; report loudly, once.
     emsg_silent.set(0);
     did_outofmem_msg.set(true);
-    semsg(
+    semsg_c!(
         gettext(b"E342: Out of memory!  (allocating %lu bytes)\0".as_ptr() as *const c_char),
         size as u64,
     );

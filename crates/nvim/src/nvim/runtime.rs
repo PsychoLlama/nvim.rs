@@ -54,8 +54,8 @@ use crate::src::nvim::memory::{
     xstrdup, xstrlcat, xstrlcpy,
 };
 use crate::src::nvim::message::{
-    emsg, message_filtered, msg_ext_set_kind, msg_ext_ui_flush, msg_outtrans, msg_putchar, semsg,
-    smsg, verbose_enter, verbose_leave,
+    emsg, message_filtered, msg_ext_set_kind, msg_ext_ui_flush, msg_outtrans, msg_putchar,
+    verbose_enter, verbose_leave,
 };
 use crate::src::nvim::option::{copy_option_part, set_option_value_give_err, vimrc_found};
 use crate::src::nvim::options::kOptRuntimepath;
@@ -96,6 +96,7 @@ use crate::src::nvim::types::{
     varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::usercmd::add_win_cmd_modifiers;
+use crate::{semsg_c, smsg_c};
 pub const kMHExisting: MHPutStatus = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
 pub const EXPAND_RUNTIME: C2Rust_Unnamed_13 = 51;
@@ -835,7 +836,7 @@ pub unsafe extern "C" fn do_in_path(
     if p_verbose.get() > 10 as OptInt && !name.is_null() {
         verbose_enter();
         if *prefix as ::core::ffi::c_int != NUL {
-            smsg(
+            smsg_c!(
                 0 as ::core::ffi::c_int,
                 gettext(b"Searching for \"%s\" under \"%s\" in \"%s\"\0".as_ptr()
                     as *const ::core::ffi::c_char),
@@ -844,7 +845,7 @@ pub unsafe extern "C" fn do_in_path(
                 path,
             );
         } else {
-            smsg(
+            smsg_c!(
                 0 as ::core::ffi::c_int,
                 gettext(b"Searching for \"%s\" in \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
                 name,
@@ -913,7 +914,7 @@ pub unsafe extern "C" fn do_in_path(
                 );
                 if p_verbose.get() > 10 as OptInt {
                     verbose_enter();
-                    smsg(
+                    smsg_c!(
                         0 as ::core::ffi::c_int,
                         gettext(b"Searching for \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
                         buf,
@@ -953,14 +954,14 @@ pub unsafe extern "C" fn do_in_path(
                 b"packpath\0".as_ptr() as *const ::core::ffi::c_char
             }) as *mut ::core::ffi::c_char;
         if flags & DIP_ERR as ::core::ffi::c_int != 0 {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_dirnotf as *const ::core::ffi::c_char),
                 basepath,
                 name,
             );
         } else if p_verbose.get() > 1 as OptInt {
             verbose_enter();
-            smsg(
+            smsg_c!(
                 0 as ::core::ffi::c_int,
                 gettext(b"not found in '%s': \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
                 basepath,
@@ -1042,7 +1043,7 @@ unsafe extern "C" fn do_in_cached_path(
     let mut buf: [::core::ffi::c_char; 4096] = [0; 4096];
     if p_verbose.get() > 10 as OptInt && !name.is_null() {
         verbose_enter();
-        smsg(
+        smsg_c!(
             0 as ::core::ffi::c_int,
             gettext(
                 b"Searching for \"%s\" in runtime path\0".as_ptr() as *const ::core::ffi::c_char
@@ -1112,7 +1113,7 @@ unsafe extern "C" fn do_in_cached_path(
                     );
                     if p_verbose.get() > 10 as OptInt {
                         verbose_enter();
-                        smsg(
+                        smsg_c!(
                             0 as ::core::ffi::c_int,
                             gettext(
                                 b"Searching for \"%s\"\0".as_ptr() as *const ::core::ffi::c_char
@@ -1150,14 +1151,14 @@ unsafe extern "C" fn do_in_cached_path(
     }
     if !did_one && !name.is_null() {
         if flags & DIP_ERR as ::core::ffi::c_int != 0 {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_dirnotf as *const ::core::ffi::c_char),
                 b"runtime path\0".as_ptr() as *const ::core::ffi::c_char,
                 name,
             );
         } else if p_verbose.get() > 1 as OptInt {
             verbose_enter();
-            smsg(
+            smsg_c!(
                 0 as ::core::ffi::c_int,
                 gettext(
                     b"not found in runtime path: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char
@@ -3503,7 +3504,7 @@ unsafe extern "C" fn cmd_source(mut fname: *mut ::core::ffi::c_char, mut eap: *m
         ::core::ptr::null_mut::<::core::ffi::c_int>(),
     ) == FAIL
     {
-        semsg(
+        semsg_c!(
             gettext(&raw const e_notopen as *const ::core::ffi::c_char),
             fname,
         );
@@ -3827,7 +3828,7 @@ unsafe extern "C" fn do_source_ext(
                 return retval;
             }
             if os_isdir(fname_exp) {
-                smsg(
+                smsg_c!(
                     0 as ::core::ffi::c_int,
                     gettext(b"Cannot source a directory: \"%s\"\0".as_ptr()
                         as *const ::core::ffi::c_char),
@@ -3917,7 +3918,7 @@ unsafe extern "C" fn do_source_ext(
                     .es_name
                     .is_null()
                     {
-                        smsg(
+                        smsg_c!(
                             0 as ::core::ffi::c_int,
                             gettext(
                                 b"could not source \"%s\"\0".as_ptr() as *const ::core::ffi::c_char
@@ -3925,7 +3926,7 @@ unsafe extern "C" fn do_source_ext(
                             fname,
                         );
                     } else {
-                        smsg(
+                        smsg_c!(
                             0 as ::core::ffi::c_int,
                             gettext(b"line %ld: could not source \"%s\"\0".as_ptr()
                                 as *const ::core::ffi::c_char),
@@ -3946,13 +3947,13 @@ unsafe extern "C" fn do_source_ext(
                     .es_name
                     .is_null()
                     {
-                        smsg(
+                        smsg_c!(
                             0 as ::core::ffi::c_int,
                             gettext(b"sourcing \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
                             fname,
                         );
                     } else {
-                        smsg(
+                        smsg_c!(
                             0 as ::core::ffi::c_int,
                             gettext(b"line %ld: sourcing \"%s\"\0".as_ptr()
                                 as *const ::core::ffi::c_char),
@@ -4218,7 +4219,7 @@ unsafe extern "C" fn do_source_ext(
                 estack_pop();
                 if p_verbose.get() > 1 as OptInt {
                     verbose_enter();
-                    smsg(
+                    smsg_c!(
                         0 as ::core::ffi::c_int,
                         gettext(b"finished sourcing %s\0".as_ptr() as *const ::core::ffi::c_char),
                         fname,
@@ -4228,7 +4229,7 @@ unsafe extern "C" fn do_source_ext(
                     .es_name
                     .is_null()
                     {
-                        smsg(
+                        smsg_c!(
                             0 as ::core::ffi::c_int,
                             gettext(b"continuing in %s\0".as_ptr() as *const ::core::ffi::c_char),
                             (*((*exestack.ptr()).ga_data as *mut estack_T).offset(
@@ -4560,7 +4561,7 @@ pub unsafe extern "C" fn f_getscriptinfo(
                 return;
             }
             if sid <= 0 as varnumber_T {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_invargNval as *const ::core::ffi::c_char),
                     b"sid\0".as_ptr() as *const ::core::ffi::c_char,
                     tv_get_string(&raw mut (*sid_di).di_tv),

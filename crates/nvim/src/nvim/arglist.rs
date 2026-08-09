@@ -1,3 +1,4 @@
+use crate::semsg_c;
 use crate::src::nvim::ascii::ascii_isspace;
 use crate::src::nvim::autocmd::is_aucmd_win;
 use crate::src::nvim::buffer::{
@@ -22,7 +23,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::mark::{setmark, setpcmark};
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xstrdup};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::reset_VIsual_and_resel;
 use crate::src::nvim::option::magic_isset;
 use crate::src::nvim::os::input::os_breakcheck;
@@ -445,7 +446,7 @@ unsafe extern "C" fn arglist_del_files(mut alist_ga: *mut garray_T) {
             vim_regfree(regmatch.regprog);
             xfree(p as *mut c_void);
             if !didone {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_nomatch2 as *const c_char),
                     *((*alist_ga).ga_data as *mut *mut c_char).offset(i as isize),
                 );

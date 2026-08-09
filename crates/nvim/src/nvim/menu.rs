@@ -1,3 +1,4 @@
+use crate::semsg_c;
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::{EVENT_MENUPOPUP, apply_autocmds};
 use crate::src::nvim::charset::{getdigits_int, skipwhite};
@@ -27,7 +28,7 @@ use crate::src::nvim::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy};
 use crate::src::nvim::message::{
     emsg, msg_outnum, msg_outtrans, msg_outtrans_special, msg_putchar, msg_puts, msg_puts_hl,
-    msg_puts_title, semsg, str2special_save,
+    msg_puts_title, str2special_save,
 };
 use crate::src::nvim::os::libc::{
     __assert_fail, gettext, memmove, strcasecmp, strcat, strcmp, strcpy, strlen, strncasecmp,
@@ -295,7 +296,7 @@ pub unsafe fn ex_menu(mut eap: *mut exarg_T) {
     let mut menu_path: *mut ::core::ffi::c_char = arg;
     's_573: {
         if *menu_path as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
                 menu_path,
             );
@@ -310,7 +311,7 @@ pub unsafe fn ex_menu(mut eap: *mut exarg_T) {
                 && (unmenu as ::core::ffi::c_int != 0
                     || enable as ::core::ffi::c_int != kNone as ::core::ffi::c_int)
             {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
                     map_to,
                 );
@@ -711,7 +712,7 @@ unsafe extern "C" fn menu_enable_recurse(
         && *name as ::core::ffi::c_int != '*' as ::core::ffi::c_int
         && menu.is_null()
     {
-        semsg(
+        semsg_c!(
             gettext((e_nomenu.ptr() as *const _) as *const ::core::ffi::c_char),
             name,
         );
@@ -777,7 +778,7 @@ unsafe extern "C" fn remove_menu(
     if *name as ::core::ffi::c_int != NUL {
         if menu.is_null() {
             if !silent {
-                semsg(
+                semsg_c!(
                     gettext((e_nomenu.ptr() as *const _) as *const ::core::ffi::c_char),
                     name,
                 );
@@ -1035,7 +1036,7 @@ unsafe extern "C" fn find_menu(
             }
         }
         if menu.is_null() {
-            semsg(
+            semsg_c!(
                 gettext((e_nomenu.ptr() as *const _) as *const ::core::ffi::c_char),
                 name,
             );
@@ -1973,7 +1974,7 @@ pub unsafe extern "C" fn execute_menu(
                     b"Normal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             }
         }
-        semsg(
+        semsg_c!(
             gettext(b"E335: Menu not defined for %s mode\0".as_ptr() as *const ::core::ffi::c_char),
             mode,
         );
@@ -2015,7 +2016,7 @@ unsafe extern "C" fn menu_getbyname(mut name_arg: *mut ::core::ffi::c_char) -> *
     xfree(saved_name as *mut ::core::ffi::c_void);
     if menu.is_null() {
         if !gave_emsg {
-            semsg(
+            semsg_c!(
                 gettext(b"E334: Menu not found: %s\0".as_ptr() as *const ::core::ffi::c_char),
                 name_arg,
             );
@@ -2055,7 +2056,7 @@ pub unsafe fn ex_emenu(mut eap: *mut exarg_T) {
                 mode_idx = MENU_INDEX_CMDLINE as ::core::ffi::c_int;
             }
             _ => {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
                     arg,
                 );

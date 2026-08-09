@@ -20,9 +20,7 @@ use crate::src::nvim::main::{
     trylevel,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc, xstrdup, xstrlcpy};
-use crate::src::nvim::message::{
-    emsg, internal_error, msg_puts, semsg, smsg, verbose_enter, verbose_leave,
-};
+use crate::src::nvim::message::{emsg, internal_error, msg_puts, verbose_enter, verbose_leave};
 use crate::src::nvim::option::p_vfile;
 use crate::src::nvim::os::libc::{
     __assert_fail, gettext, snprintf, strcat, strcpy, strlen, strncmp,
@@ -38,6 +36,7 @@ use crate::src::nvim::types::{
     evalarg_T, exarg_T, except_T, except_type_T, exception_state_T, int64_t, linenr_T, list_T,
     msglist_T, ptrdiff_t, regmatch_T, regprog_T, size_t, typval_T, typval_vval_union,
 };
+use crate::{semsg_c, smsg_c};
 pub type C2Rust_Unnamed_1 = ::core::ffi::c_uint;
 pub const CSTACK_LEN: C2Rust_Unnamed_1 = 50;
 pub type C2Rust_Unnamed_3 = ::core::ffi::c_uint;
@@ -422,7 +421,7 @@ unsafe extern "C" fn throw_exception(
                 {
                     msg_scroll.set(true_0);
                 }
-                smsg(
+                smsg_c!(
                     0 as ::core::ffi::c_int,
                     gettext(b"Exception thrown: %s\0".as_ptr() as *const ::core::ffi::c_char),
                     (*excp).value,
@@ -470,7 +469,7 @@ unsafe extern "C" fn discard_exception(mut excp: *mut except_T, mut was_finished
         {
             msg_scroll.set(true_0);
         }
-        smsg(
+        smsg_c!(
             0 as ::core::ffi::c_int,
             if was_finished as ::core::ffi::c_int != 0 {
                 gettext(b"Exception finished: %s\0".as_ptr() as *const ::core::ffi::c_char)
@@ -567,7 +566,7 @@ unsafe extern "C" fn catch_exception(mut excp: *mut except_T) {
         {
             msg_scroll.set(true_0);
         }
-        smsg(
+        smsg_c!(
             0 as ::core::ffi::c_int,
             gettext(b"Exception caught: %s\0".as_ptr() as *const ::core::ffi::c_char),
             (*excp).value,
@@ -739,7 +738,7 @@ unsafe extern "C" fn report_pending(
     }
     (*no_wait_return.ptr()) += 1;
     msg_scroll.set(true_0);
-    smsg(0 as ::core::ffi::c_int, mesg, s);
+    smsg_c!(0 as ::core::ffi::c_int, mesg, s);
     msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
     cmdline_row.set(msg_row.get());
     (*no_wait_return.ptr()) -= 1;
@@ -919,7 +918,7 @@ pub unsafe fn ex_else(mut eap: *mut exarg_T) {
             && *(*eap).arg as ::core::ffi::c_int != '"' as ::core::ffi::c_int
             && ends_excmd(*(*eap).arg as ::core::ffi::c_int) != 0
         {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_invexpr2 as *const ::core::ffi::c_char),
                 (*eap).arg,
             );
@@ -1298,7 +1297,7 @@ pub unsafe fn ex_catch(mut eap: *mut exarg_T) {
                     *skipwhite(end.offset(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
                 ) == 0
             {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
                     end,
                 );
@@ -1321,7 +1320,7 @@ pub unsafe fn ex_catch(mut eap: *mut exarg_T) {
                 }
                 p_cpo.set(save_cpo);
                 if regmatch.regprog.is_null() {
-                    semsg(
+                    semsg_c!(
                         gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
                         pat,
                     );
@@ -1804,7 +1803,7 @@ pub unsafe extern "C" fn rewind_conditionals(
     }
 }
 pub unsafe fn ex_endfunction(mut _eap: *mut exarg_T) {
-    semsg(
+    semsg_c!(
         gettext(&raw const e_str_not_inside_function as *const ::core::ffi::c_char),
         b":endfunction\0".as_ptr() as *const ::core::ffi::c_char,
     );

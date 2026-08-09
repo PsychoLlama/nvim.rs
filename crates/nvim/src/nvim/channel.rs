@@ -13,6 +13,7 @@
 //!
 //! [`msgpack_rpc::channel`]: crate::src::nvim::msgpack_rpc::channel
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
 
@@ -43,7 +44,6 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
 use crate::src::nvim::memory::{xfree, xmemdup, xstrdup};
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::msgpack_rpc::channel::call_stack::CallStack;
 use crate::src::nvim::msgpack_rpc::channel::{rpc_close, rpc_free, rpc_init, rpc_start};
 use crate::src::nvim::msgpack_rpc::server::server_owns_pipe_address;
@@ -472,7 +472,7 @@ pub unsafe fn channel_job_start(
     if pty {
         // A detached child has no controlling terminal to hand a pty to.
         if detach {
-            semsg(
+            semsg_c!(
                 gettext(e_invarg2.ptr() as *const c_char),
                 c"terminal/pty job cannot be detached".as_ptr(),
             );
@@ -524,7 +524,7 @@ pub unsafe fn channel_job_start(
     let cmd = xstrdup(proc_get_exepath(proc));
     let status = proc_spawn(proc, has_in, has_out, has_err);
     if status != 0 {
-        semsg(
+        semsg_c!(
             gettext(e_jobspawn.ptr() as *const c_char),
             crate::src::nvim::event::libuv::uv_strerror(status),
             cmd,

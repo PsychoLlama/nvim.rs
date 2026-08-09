@@ -1,3 +1,4 @@
+use crate::siemsg_c;
 use crate::src::nvim::ascii::ascii_iswhite;
 use crate::src::nvim::buffer::{bt_prompt, bt_quickfix};
 use crate::src::nvim::charset::vim_iswordc;
@@ -38,7 +39,6 @@ use crate::src::nvim::mbyte::{
 };
 use crate::src::nvim::memline::{gchar_pos, inc, ml_get, ml_get_buf};
 use crate::src::nvim::menu::show_popupmenu;
-use crate::src::nvim::message::siemsg;
 use crate::src::nvim::r#move::{
     check_topfill, pagescroll, scroll_redraw, win_col_off, win_col_off2,
 };
@@ -1291,7 +1291,7 @@ pub unsafe extern "C" fn ins_mousescroll(mut dir: ::core::ffi::c_int) {
                 + ((KE_MOUSERIGHT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
         }
         _ => {
-            siemsg(
+            siemsg_c!(
                 b"Invalid ins_mousescroll() argument: %d\0".as_ptr() as *const ::core::ffi::c_char,
                 dir,
             );

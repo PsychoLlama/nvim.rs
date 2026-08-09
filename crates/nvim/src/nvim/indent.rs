@@ -16,6 +16,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use ::core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use crate::src::nvim::ascii::ascii_iswhite;
@@ -28,7 +29,7 @@ use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::main::{State, curbuf, curwin, e_invarg2, e_positive, saved_cursor};
 use crate::src::nvim::memline::{ml_get, ml_get_buf, ml_get_pos, ml_replace};
 use crate::src::nvim::memory::{xfree, xmalloc};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::options::kOptDyFlagUhex;
 use crate::src::nvim::os::libc::{abort, gettext};
 use crate::src::nvim::plines::getvcol;
@@ -147,7 +148,7 @@ pub unsafe fn tabstop_set(var: *mut c_char, array: *mut *mut colnr_T) -> bool {
                 return false;
             }
             Err(tabstop::ParseError::Malformed(at) | tabstop::ParseError::OutOfRange(at)) => {
-                semsg(gettext(&raw const e_invarg2 as *const c_char), var.add(at));
+                semsg_c!(gettext(&raw const e_invarg2 as *const c_char), var.add(at));
                 return false;
             }
         };

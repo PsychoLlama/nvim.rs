@@ -1,3 +1,4 @@
+use crate::semsg_c;
 use crate::src::nvim::api::private::helpers::{arena_dict, arena_string, cstr_as_string};
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::charset::{getdigits_int, skiptowhite, skipwhite};
@@ -19,7 +20,7 @@ use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
 use crate::src::nvim::menu::set_context_in_menu_cmd;
 use crate::src::nvim::message::{
     emsg, message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_outtrans_special, msg_putchar,
-    msg_puts, msg_puts_hl, msg_puts_title, semsg,
+    msg_puts, msg_puts_hl, msg_puts_title,
 };
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
@@ -988,7 +989,7 @@ pub unsafe extern "C" fn parse_addr_type_arg(
             i += 1;
         }
         *err.offset(i as isize) = NUL as ::core::ffi::c_char;
-        semsg(
+        semsg_c!(
             gettext(
                 b"E180: Invalid address type value: %s\0".as_ptr() as *const ::core::ffi::c_char
             ),
@@ -1061,7 +1062,7 @@ pub unsafe extern "C" fn parse_compl_arg(
                     == 0) as ::core::ffi::c_int as usize,
             ) as ::core::ffi::c_int
     {
-        semsg(
+        semsg_c!(
             gettext(b"E180: Invalid complete value: %s\0".as_ptr() as *const ::core::ffi::c_char),
             value,
         );
@@ -1274,7 +1275,7 @@ unsafe extern "C" fn uc_scan_attr(
                         ) == 0 as ::core::ffi::c_int
                         {
                             if val.is_null() {
-                                semsg(
+                                semsg_c!(
                                     gettext(
                                         (e_argument_required_for_str.ptr() as *const _)
                                             as *const ::core::ffi::c_char,
@@ -1302,7 +1303,7 @@ unsafe extern "C" fn uc_scan_attr(
                         {
                             *argt = (*argt as ::core::ffi::c_uint | EX_RANGE) as uint32_t;
                             if val.is_null() {
-                                semsg(
+                                semsg_c!(
                                     gettext(
                                         (e_argument_required_for_str.ptr() as *const _)
                                             as *const ::core::ffi::c_char,
@@ -1324,7 +1325,7 @@ unsafe extern "C" fn uc_scan_attr(
                         } else {
                             let mut ch: ::core::ffi::c_char = *attr.offset(len as isize);
                             *attr.offset(len as isize) = NUL as ::core::ffi::c_char;
-                            semsg(
+                            semsg_c!(
                                 gettext(b"E181: Invalid attribute: %s\0".as_ptr()
                                     as *const ::core::ffi::c_char),
                                 attr,
@@ -1430,7 +1431,7 @@ pub unsafe extern "C" fn uc_add_command(
                     && ((*cmd).uc_script_ctx.sc_sid != (*current_sctx.ptr()).sc_sid
                         || (*cmd).uc_script_ctx.sc_seq == (*current_sctx.ptr()).sc_seq)
                 {
-                    semsg(
+                    semsg_c!(
                         gettext(
                             b"E174: Command already exists: add ! to replace it: %s\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -1678,7 +1679,7 @@ pub unsafe fn ex_delcommand(mut eap: *mut exarg_T) {
         gap = ucmds.ptr();
     }
     if res != 0 as ::core::ffi::c_int {
-        semsg(
+        semsg_c!(
             gettext(if buffer_only as ::core::ffi::c_int != 0 {
                 (e_no_such_user_defined_command_in_current_buffer_str.ptr() as *const _)
                     as *const ::core::ffi::c_char

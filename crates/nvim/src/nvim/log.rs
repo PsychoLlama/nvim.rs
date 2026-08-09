@@ -1,3 +1,4 @@
+use crate::msg_schedule_semsg_c;
 use crate::src::nvim::eval::vars::get_vim_var_str;
 use crate::src::nvim::event::libuv::{
     uv_mutex_init_recursive, uv_mutex_lock, uv_mutex_unlock, uv_print_all_handles, uv_strerror,
@@ -5,7 +6,6 @@ use crate::src::nvim::event::libuv::{
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{g_min_log_level, g_stats, ui_client_channel_id};
 use crate::src::nvim::memory::{strequal, xfree, xstrlcpy};
-use crate::src::nvim::message::msg_schedule_semsg;
 use crate::src::nvim::os::env::{expand_env, os_get_pid, os_getenv_buf, os_setenv};
 use crate::src::nvim::os::fs::{os_isdir, os_mkdir_recurse};
 use crate::src::nvim::os::libc::{
@@ -192,7 +192,7 @@ pub unsafe extern "C" fn logmsg(
     if recursive.get() {
         if !did_msg.get() {
             did_msg.set(true_0 != 0);
-            msg_schedule_semsg(
+            msg_schedule_semsg_c!(
                 b"E5430: %s:%d: recursive log!\0".as_ptr() as *const ::core::ffi::c_char,
                 if !func_name.is_null() {
                     func_name
