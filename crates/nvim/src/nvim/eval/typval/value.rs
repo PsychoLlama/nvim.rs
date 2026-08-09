@@ -9,8 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 
 /// Release whatever `tv` holds and leave `VAR_UNKNOWN` behind.
 ///
@@ -102,7 +103,7 @@ pub unsafe extern "C" fn tv_copy(from: *const typval_T, to: *mut typval_T) {
                 }
             }
             VAR_UNKNOWN => {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_intern2 as *const ::core::ffi::c_char),
                     c"tv_copy(UNKNOWN)".as_ptr(),
                 );
@@ -273,7 +274,7 @@ pub unsafe extern "C" fn value_check_lock(
             } else if name_len == TV_CSTRING as size_t {
                 name_len = strlen(name);
             }
-            semsg(gettext(error_message), name_len as ::core::ffi::c_int, name);
+            semsg_c!(gettext(error_message), name_len as ::core::ffi::c_int, name);
         }
 
         true

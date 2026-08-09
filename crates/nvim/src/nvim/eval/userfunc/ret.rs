@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -166,7 +167,7 @@ unsafe fn ex_defer_inner(
         let mut argcount = 0;
 
         if current_funccal.get().is_null() {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_str_not_inside_function as *const c_char),
                 c"defer".as_ptr(),
             );
@@ -240,7 +241,7 @@ unsafe fn ex_defer_inner(
 pub unsafe fn can_add_defer() -> bool {
     unsafe {
         if get_current_funccal().is_null() {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_str_not_inside_function as *const c_char),
                 c"defer".as_ptr(),
             );
@@ -378,7 +379,7 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
         );
         if !fudi.fd_newkey.is_null() {
             // Still need to give an error message for missing key.
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_dictkey as *const c_char),
                 fudi.fd_newkey,
             );
@@ -412,7 +413,7 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
 
         let startarg = skipwhite(arg);
         if *startarg != b'(' as c_char {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_missingparen as *const c_char),
                 (*eap).arg,
             );
@@ -444,7 +445,7 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
                 if ends_excmd(*arg as c_int) == 0 {
                     if !failed && !aborting() {
                         emsg_severe.set(true);
-                        semsg(gettext(&raw const e_trailing_arg as *const c_char), arg);
+                        semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), arg);
                     }
                 } else {
                     (*eap).nextcmd = check_nextcmd(arg);

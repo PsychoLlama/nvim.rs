@@ -9,6 +9,7 @@
 
 use super::args::{Args, frame};
 use super::{FAIL, NUL, false_0, true_0};
+use crate::semsg_c;
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::cursor::check_cursor;
 use crate::src::nvim::eval::typval::{
@@ -19,7 +20,6 @@ use crate::src::nvim::eval::{eval_expr_to_bool, eval_expr_valid_arg};
 use crate::src::nvim::main::{curbuf, curwin, e_invarg2, empty_string_option, p_cpo, p_ws};
 use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::memline::{decl, incl};
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::normal::find_decl;
 use crate::src::nvim::option::{kOptValTypeString, set_option_value_give_err};
 use crate::src::nvim::options::kOptCpoptions;
@@ -123,7 +123,7 @@ unsafe fn search_direction(varp: *mut typval_T, flags: &mut c_int) -> c_int {
                         // The message quotes the rest of the flag string
                         // from the offending letter on, not just the
                         // letter, and those are arbitrary user bytes.
-                        semsg(gettext(e_invarg2.ptr() as *const c_char), p);
+                        semsg_c!(gettext(e_invarg2.ptr() as *const c_char), p);
                         dir = 0;
                     }
                 },
@@ -195,7 +195,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
         if flags & (SP_REPEAT | SP_RETCOUNT) != 0
             || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
         {
-            semsg(
+            semsg_c!(
                 gettext(e_invarg2.ptr() as *const c_char),
                 tv_get_string(args.ptr(1)),
             );
@@ -404,7 +404,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
         if flags & (SP_END | SP_SUBPAT) != 0
             || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
         {
-            semsg(
+            semsg_c!(
                 gettext(e_invarg2.ptr() as *const c_char),
                 tv_get_string(args.ptr(3)),
             );
@@ -425,7 +425,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
             if args.has(5) {
                 lnum_stop = tv_get_number_chk(args.ptr(5), ptr::null_mut()) as linenr_T;
                 if lnum_stop < 0 {
-                    semsg(
+                    semsg_c!(
                         gettext(e_invarg2.ptr() as *const c_char),
                         tv_get_string(args.ptr(5)),
                     );
@@ -434,7 +434,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
                 if args.has(6) {
                     time_limit = tv_get_number_chk(args.ptr(6), ptr::null_mut()) as int64_t;
                     if time_limit < 0 {
-                        semsg(
+                        semsg_c!(
                             gettext(e_invarg2.ptr() as *const c_char),
                             tv_get_string(args.ptr(6)),
                         );

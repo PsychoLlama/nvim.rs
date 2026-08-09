@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr::{null, null_mut};
@@ -27,9 +28,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::memline::ml_get_buf;
 use crate::src::nvim::memory::{memchrsub, xcalloc, xfree, xmalloc, xmemdupz, xstrdup};
-use crate::src::nvim::message::{
-    emsg, msg_puts, semsg, smsg, verbose_enter_scroll, verbose_leave_scroll,
-};
+use crate::src::nvim::message::{emsg, msg_puts, verbose_enter_scroll, verbose_leave_scroll};
 use crate::src::nvim::os::fs::os_can_exe;
 use crate::src::nvim::os::libc::{gettext, snprintf, strlen};
 use crate::src::nvim::os::shell::{
@@ -65,7 +64,7 @@ pub unsafe fn tv_to_argv(
             return shell_build_argv(cmd_str, null::<c_char>());
         }
         if (*cmd_tv).v_type != VAR_LIST {
-            semsg(
+            semsg_c!(
                 gettext(e_invarg2.ptr().cast()),
                 c"expected String or List".as_ptr(),
             );
@@ -92,7 +91,7 @@ pub unsafe fn tv_to_argv(
                     c"'%s' is not executable".as_ptr(),
                     arg0,
                 );
-                semsg(
+                semsg_c!(
                     gettext(e_invargNval.ptr().cast()),
                     c"cmd".as_ptr(),
                     buf.as_mut_ptr(),
@@ -189,7 +188,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
         if p_verbose.get() > 3 as OptInt {
             let cmdstr = shell_argv_to_str(argv);
             verbose_enter_scroll();
-            smsg(0, gettext(c"Executing command: \"%s\"".as_ptr()), cmdstr);
+            smsg_c!(0, gettext(c"Executing command: \"%s\"".as_ptr()), cmdstr);
             msg_puts(c"\n\n".as_ptr());
             verbose_leave_scroll();
             xfree(cmdstr as *mut c_void);
@@ -310,7 +309,7 @@ unsafe fn buffer_as_string(tv: *mut typval_T, len: *mut ptrdiff_t) -> *mut c_cha
     unsafe {
         let buf: *mut buf_T = buflist_findnr((*tv).vval.v_number as c_int);
         if buf.is_null() {
-            semsg(gettext(e_nobufnr.ptr().cast()), (*tv).vval.v_number);
+            semsg_c!(gettext(e_nobufnr.ptr().cast()), (*tv).vval.v_number);
             *len = -1;
             return null_mut();
         }

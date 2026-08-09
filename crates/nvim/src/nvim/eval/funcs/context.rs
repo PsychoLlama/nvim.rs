@@ -4,6 +4,7 @@
 use super::args::frame;
 use super::{CONTEXT_INIT, kCtxBufs, kCtxFuncs, kCtxGVars, kCtxJumps, kCtxRegs, kCtxSFuncs};
 use crate::semsg;
+use crate::semsg_c;
 use crate::src::nvim::api::private::converter::{object_to_vim, vim_to_object};
 use crate::src::nvim::api::private::helpers::api_clear_error;
 use crate::src::nvim::context::{
@@ -12,7 +13,6 @@ use crate::src::nvim::context::{
 use crate::src::nvim::eval::typval::tv_list_first;
 use crate::src::nvim::main::did_emsg;
 use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::types::{
     Context, Error, EvalFuncData, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
     kErrorTypeNone, kObjectTypeDict, object, object_data, typval_T, varnumber_T,
@@ -184,7 +184,7 @@ pub unsafe extern "C" fn f_ctxset(
         if err.type_0 != kErrorTypeNone {
             // The message is whatever the API layer produced, so it keeps
             // the variadic call rather than assuming UTF-8.
-            semsg(c"%s".as_ptr(), err.msg);
+            semsg_c!(c"%s".as_ptr(), err.msg);
             ctx_free(&raw mut tmp);
         } else {
             ctx_free(ctx);

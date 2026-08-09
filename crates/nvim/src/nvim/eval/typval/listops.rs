@@ -9,8 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 
 /// Link `ni` into `l` in front of `item`, or at the tail when `item` is NULL.
 #[unsafe(no_mangle)]
@@ -327,7 +328,7 @@ pub unsafe extern "C" fn tv_list_remove(
         }
         let item = tv_list_find(l, idx as ::core::ffi::c_int);
         if item.is_null() {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char),
                 idx,
             );
@@ -349,7 +350,7 @@ pub unsafe extern "C" fn tv_list_remove(
         }
         let item2 = tv_list_find(l, end as ::core::ffi::c_int);
         if item2.is_null() {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char),
                 end,
             );
@@ -514,7 +515,7 @@ pub unsafe extern "C" fn tv_list_find_str(
     unsafe {
         let li = tv_list_find(l, n);
         if li.is_null() {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char),
                 n as int64_t,
             );

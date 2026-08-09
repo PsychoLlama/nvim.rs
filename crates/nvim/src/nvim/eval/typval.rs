@@ -31,7 +31,7 @@ use crate::src::nvim::mbyte::{mb_strcmp_ic, string_convert, utf_char2bytes, utfc
 use crate::src::nvim::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemdup, xmemdupz, xstrdup, xstrndup,
 };
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::input::{fast_breakcheck, line_breakcheck};
 use crate::src::nvim::os::libc::{
     abort, gettext, memcmp, memcpy, memmove, qsort, snprintf, strcasecmp, strcmp, strcoll, strcpy,

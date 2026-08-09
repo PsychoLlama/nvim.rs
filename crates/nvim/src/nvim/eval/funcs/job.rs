@@ -6,6 +6,7 @@ use super::{
     C2Rust_Unnamed_16, C2Rust_Unnamed_22, FAIL, GA_EMPTY_INIT_VALUE, NUL, NUMBUFLEN, f_environ,
     false_0, kChannelPartRpc, kChannelStreamProc, kProcTypePty,
 };
+use crate::semsg_c;
 use crate::src::nvim::api::private::helpers::{api_clear_error, cstr_as_string, dict_set_var};
 use crate::src::nvim::autocmd::{EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, apply_autocmds};
 use crate::src::nvim::buffer::{buf_close_terminal, setfname};
@@ -33,7 +34,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::memline::ml_open;
 use crate::src::nvim::memory::{xcalloc, xfree};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::r#move::win_col_off;
 use crate::src::nvim::os::env::{home_replace, os_getenv};
 use crate::src::nvim::os::fs::os_isdir;
@@ -452,7 +453,7 @@ pub unsafe extern "C" fn f_jobstart(
         }
 
         if args.ty(1) != VAR_DICT && args.has(1) {
-            semsg(
+            semsg_c!(
                 gettext(e_invarg2.ptr() as *const c_char),
                 c"expected dictionary".as_ptr(),
             );
@@ -488,7 +489,7 @@ pub unsafe extern "C" fn f_jobstart(
                 if strncmp(s, c"null".as_ptr(), NUMBUFLEN as usize) == 0 {
                     stdin_mode = kChannelStdinNull;
                 } else if strncmp(s, c"pipe".as_ptr(), NUMBUFLEN as usize) != 0 {
-                    semsg(
+                    semsg_c!(
                         gettext(e_invargNval.ptr() as *const c_char),
                         c"stdin".as_ptr(),
                         s,
@@ -500,14 +501,14 @@ pub unsafe extern "C" fn f_jobstart(
             // truthy string used to mean something else.
             let job_term = tv_dict_find(job_opts, c"term".as_ptr(), 4);
             if !job_term.is_null() && (*job_term).di_tv.v_type != VAR_BOOL {
-                semsg(
+                semsg_c!(
                     gettext(e_invarg2.ptr() as *const c_char),
                     c"'term' must be Boolean".as_ptr(),
                 );
                 bail!();
             }
             if pty && rpc {
-                semsg(
+                semsg_c!(
                     gettext(e_invarg2.ptr() as *const c_char),
                     c"job cannot have both 'pty' and 'rpc' options set".as_ptr(),
                 );
@@ -518,7 +519,7 @@ pub unsafe extern "C" fn f_jobstart(
             if !new_cwd.is_null() && *new_cwd as c_int != NUL {
                 cwd = new_cwd;
                 if !os_isdir(cwd) {
-                    semsg(
+                    semsg_c!(
                         gettext(e_invarg2.ptr() as *const c_char),
                         c"expected valid directory".as_ptr(),
                     );
@@ -528,7 +529,7 @@ pub unsafe extern "C" fn f_jobstart(
 
             job_env = tv_dict_find(job_opts, c"env".as_ptr(), 3);
             if !job_env.is_null() && (*job_env).di_tv.v_type != VAR_DICT {
-                semsg(gettext(e_invarg2.ptr() as *const c_char), c"env".as_ptr());
+                semsg_c!(gettext(e_invarg2.ptr() as *const c_char), c"env".as_ptr());
                 bail!();
             }
 
@@ -561,7 +562,7 @@ pub unsafe extern "C" fn f_jobstart(
             }
             if !(*curbuf.get()).terminal.is_null() {
                 if terminal_running((*curbuf.get()).terminal) {
-                    semsg(
+                    semsg_c!(
                         gettext(c"Terminal already connected to buffer %d".as_ptr()),
                         (*curbuf.get()).handle,
                     );

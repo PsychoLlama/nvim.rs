@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -51,7 +52,7 @@ pub unsafe fn set_var_const(
         let watched = tv_dict_is_watched(dict);
 
         if ht.is_null() || *varname == NUL {
-            semsg(gettext(&raw const e_illvar as *const c_char), name);
+            semsg_c!(gettext(&raw const e_illvar as *const c_char), name);
             return;
         }
         // `varname` is `name` itself or `name + 2`, so this cannot go
@@ -94,7 +95,7 @@ pub unsafe fn set_var_const(
                 && !before_set_vvar(varname, di, tv, copy, watched, &raw mut type_error)
             {
                 if type_error {
-                    semsg(
+                    semsg_c!(
                         gettext(e_setting_v_str_to_value_with_wrong_type.as_ptr()),
                         varname,
                     );
@@ -109,7 +110,7 @@ pub unsafe fn set_var_const(
         } else {
             // A new variable. `v:` and `a:` do not take one.
             if ht == &raw mut (*vimvardict.ptr()).dv_hashtab || ht == get_funccal_args_ht() {
-                semsg(gettext(&raw const e_illvar as *const c_char), name);
+                semsg_c!(gettext(&raw const e_illvar as *const c_char), name);
                 return;
             }
             if !valid_varname(varname) {
@@ -183,7 +184,7 @@ pub unsafe fn var_check_ro(flags: c_int, mut name: *const c_char, mut name_len: 
         } else if name_len == TV_CSTRING as size_t {
             name_len = strlen(name);
         }
-        semsg(gettext(error_message), name_len as c_int, name);
+        semsg_c!(gettext(error_message), name_len as c_int, name);
         true
     }
 }
@@ -203,7 +204,7 @@ pub unsafe fn var_check_lock(flags: c_int, mut name: *const c_char, mut name_len
         } else if name_len == TV_CSTRING as size_t {
             name_len = strlen(name);
         }
-        semsg(
+        semsg_c!(
             gettext(c"E1122: Variable is locked: %.*s".as_ptr()),
             name_len as c_int,
             name,
@@ -228,7 +229,7 @@ pub unsafe fn var_check_fixed(flags: c_int, mut name: *const c_char, mut name_le
         } else if name_len == TV_CSTRING as size_t {
             name_len = strlen(name);
         }
-        semsg(
+        semsg_c!(
             gettext(&raw const e_cannot_delete_variable_str as *const c_char),
             name_len as c_int,
             name,
@@ -258,7 +259,7 @@ pub unsafe fn var_wrong_func_name(name: *const c_char, new_var: bool) -> bool {
             && !(first as u8).is_ascii_uppercase()
             && vim_strchr(name, b'#' as c_int).is_null()
         {
-            semsg(
+            semsg_c!(
                 gettext(c"E704: Funcref variable name must start with a capital: %s".as_ptr()),
                 name,
             );
@@ -268,7 +269,7 @@ pub unsafe fn var_wrong_func_name(name: *const c_char, new_var: bool) -> bool {
         // be assigning another function to the same one, whose type the
         // caller checks.
         if new_var && function_exists(name, false) {
-            semsg(
+            semsg_c!(
                 gettext(c"E705: Variable name conflicts with existing function: %s".as_ptr()),
                 name,
             );
@@ -290,7 +291,7 @@ pub unsafe fn valid_varname(varname: *const c_char) -> bool {
                 && (p == varname || !ascii_isdigit(*p as c_int))
                 && *p != AUTOLOAD_CHAR as c_char
             {
-                semsg(gettext(&raw const e_illvar as *const c_char), varname);
+                semsg_c!(gettext(&raw const e_illvar as *const c_char), varname);
                 return false;
             }
             p = p.add(1);

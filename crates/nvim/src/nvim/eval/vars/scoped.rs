@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -190,7 +191,7 @@ pub(crate) unsafe fn tv_to_optval(
                 }
                 if idx == 0 || *s.add(idx) != NUL {
                     err = true;
-                    semsg(
+                    semsg_c!(
                         gettext(c"E521: Number required: &%s = '%s'".as_ptr()),
                         option,
                         if s.is_null() { c"".as_ptr() } else { s },
@@ -290,7 +291,7 @@ unsafe fn set_option_from_tv(varname: *const c_char, varp: *mut typval_T) {
     unsafe {
         let opt_idx = find_option(varname);
         if opt_idx == kOptInvalid {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_unknown_option2 as *const c_char),
                 varname,
             );

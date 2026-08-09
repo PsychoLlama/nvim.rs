@@ -7,6 +7,7 @@ use super::{
     AUTOLOAD_CHAR, DOCMD_KEYTYPED, DOCMD_NOWAIT, DOCMD_REPEAT, DOCMD_VERBOSE, FAIL, MAX_FUNC_ARGS,
     NUL, OK, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET, true_0,
 };
+use crate::semsg_c;
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::{au_exists, autocmd_supported};
@@ -35,7 +36,7 @@ use crate::src::nvim::main::{
     msg_silent, need_clr_eos, redir_off, want_garbage_collect,
 };
 use crate::src::nvim::memory::{strnequal, xcalloc, xfree, xmalloc, xstrdup};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
 use crate::src::nvim::os::env::{expand_env_save, os_env_exists};
 use crate::src::nvim::os::libc::{gettext, strcmp, strncmp};
@@ -156,13 +157,13 @@ pub unsafe extern "C" fn f_eval(argvars: *mut typval_T, rettv: *mut typval_T, _f
             ) == FAIL
         {
             if !expr_start.is_null() && !aborting() {
-                semsg(gettext(e_invexpr2.ptr() as *const c_char), expr_start);
+                semsg_c!(gettext(e_invexpr2.ptr() as *const c_char), expr_start);
             }
             need_clr_eos.set(false);
             rettv.v_type = VAR_NUMBER;
             rettv.vval.v_number = 0;
         } else if *s as c_int != NUL {
-            semsg(gettext(e_trailing_arg.ptr() as *const c_char), s);
+            semsg_c!(gettext(e_trailing_arg.ptr() as *const c_char), s);
         }
     }
 }
@@ -426,7 +427,7 @@ unsafe fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
             || (use_string && ascii_isdigit(*s as c_int))
             || (is_funcref && trans_name.0.is_null())
         {
-            semsg(
+            semsg_c!(
                 gettext(e_invarg2.ptr() as *const c_char),
                 if use_string {
                     tv_get_string(args.ptr(0))
@@ -443,7 +444,7 @@ unsafe fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
                 !translated_function_exists(trans_name.0)
             }
         {
-            semsg(gettext(c"E700: Unknown function: %s".as_ptr()), s);
+            semsg_c!(gettext(c"E700: Unknown function: %s".as_ptr()), s);
             return;
         }
 
@@ -656,7 +657,7 @@ unsafe fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
         };
         match result {
             None => {
-                semsg(gettext(e_libcall.ptr() as *const c_char), funcname);
+                semsg_c!(gettext(e_libcall.ptr() as *const c_char), funcname);
             }
             Some(LibcallResult::Str(s)) => {
                 rettv.vval.v_string = s.map_or(ptr::null_mut(), CString::into_raw);

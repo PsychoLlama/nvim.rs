@@ -7,6 +7,7 @@ use super::args::{Args, frame};
 use super::uv_random;
 use super::wrappers::tv_get_float_chk;
 use crate::semsg;
+use crate::semsg_c;
 use crate::src::nvim::charset::skipwhite;
 use crate::src::nvim::eval::string2float;
 use crate::src::nvim::eval::typval::{
@@ -15,7 +16,6 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::e_invarg2;
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::env::os_get_pid;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::os::time::os_hrtime;
@@ -258,7 +258,7 @@ pub unsafe extern "C" fn f_rand(argvars: *mut typval_T, rettv: *mut typval_T, _f
             // SAFETY: `args.ptr(0)` is a live typval, and `tv_get_string`
             // hands back a NUL-terminated buffer that outlives the call.
             unsafe {
-                semsg(
+                semsg_c!(
                     gettext(e_invarg2.ptr() as *const c_char),
                     tv_get_string(args.ptr(0)),
                 )

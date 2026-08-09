@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 
 /// The tail every `tv_check_for_*_arg` shares: answer `OK`, or raise `errmsg`
 /// naming the argument's one-based position and answer `FAIL`.
@@ -22,7 +23,7 @@ unsafe fn arg_check(
         return OK;
     }
     unsafe {
-        semsg(gettext(errmsg), idx + 1);
+        semsg_c!(gettext(errmsg), idx + 1);
     }
     FAIL
 }
@@ -42,7 +43,7 @@ pub unsafe extern "C" fn tv_check_str_or_nr(tv: *const typval_T) -> bool {
             VAR_BOOL => c"E5299: Expected a Number or a String, Boolean found",
             VAR_SPECIAL => c"E5300: Expected a Number or a String",
             VAR_UNKNOWN => {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_intern2 as *const ::core::ffi::c_char),
                     c"tv_check_str_or_nr(UNKNOWN)".as_ptr(),
                 );

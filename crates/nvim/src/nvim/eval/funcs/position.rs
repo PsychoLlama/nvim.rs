@@ -4,6 +4,7 @@
 
 use super::args::{Args, frame};
 use super::{FAIL, NUL, OK, VALID_VIRTCOL};
+use crate::semsg_c;
 use crate::src::nvim::cursor::check_cursor;
 use crate::src::nvim::eval::typval::{
     tv_check_for_dict_arg, tv_check_for_opt_number_arg, tv_check_for_string_or_list_arg,
@@ -18,7 +19,7 @@ use crate::src::nvim::main::{curbuf, curwin, e_invarg, e_invarg2, p_spk, skip_up
 use crate::src::nvim::mark::setmark_pos;
 use crate::src::nvim::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::memline::{ml_find_line_or_offset, ml_get_buf, ml_get_buf_len};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::r#move::update_curswant;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::plines::{getvvcol, win_chartabsize};
@@ -493,7 +494,7 @@ unsafe fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
                 // Kept on the variadic message call: the argument is
                 // arbitrary user bytes. Note that this reports and then
                 // carries on to the range check below.
-                semsg(
+                semsg_c!(
                     gettext(e_invarg2.ptr() as *const c_char),
                     tv_get_string(args.ptr(0)),
                 );

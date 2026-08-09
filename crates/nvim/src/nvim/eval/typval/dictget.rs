@@ -9,8 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 
 /// `items()` over a blob: a list of `[index, byte]` pairs.
 pub(crate) unsafe extern "C" fn tv_blob2items(argvars: *mut typval_T, rettv: *mut typval_T) {
@@ -358,7 +359,7 @@ pub unsafe extern "C" fn f_items(
             VAR_BLOB => tv_blob2items(argvars, rettv),
             VAR_DICT => tv_dict2items(argvars, rettv),
             _ => {
-                semsg(
+                semsg_c!(
                     gettext(
                         (e_list_dict_blob_or_string_required_for_argument_nr.ptr() as *const _)
                             as *const ::core::ffi::c_char,

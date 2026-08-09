@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::super::decode_string;
@@ -17,7 +18,6 @@ use crate::src::nvim::charset::vim_str2nr;
 use crate::src::nvim::eval::string2float;
 use crate::src::nvim::mbyte::{utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len};
 use crate::src::nvim::memory::xmalloc;
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::{abort, gettext};
 use crate::src::nvim::types::{
     VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNLOCKED, typval_T, typval_vval_union, uvarnumber_T,
@@ -332,7 +332,7 @@ pub(crate) unsafe fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> boo
         if fracs.is_some() || exps.is_some() {
             let got = string2float(text, &raw mut tv.vval.v_float);
             if want != got {
-                semsg(gettext(E685_FLOAT.as_ptr()), want as c_int, text, got, want);
+                semsg_c!(gettext(E685_FLOAT.as_ptr()), want as c_int, text, got, want);
             }
             tv.v_type = VAR_FLOAT;
         } else {
@@ -350,7 +350,7 @@ pub(crate) unsafe fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> boo
                 ::core::ptr::null_mut(),
             );
             if want as c_int != got {
-                semsg(
+                semsg_c!(
                     gettext(E685_INTEGER.as_ptr()),
                     want as c_int,
                     text,

@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr::{null, null_mut};
 
@@ -25,7 +26,7 @@ use crate::src::nvim::main::{
     curwin, e_invexpr2, e_missingparen, e_not_callable_type_str, e_trailing_arg,
 };
 use crate::src::nvim::memory::{strnequal, xfree, xstrdup};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
@@ -147,7 +148,7 @@ pub(crate) unsafe fn eval_lambda(
                 if *skipwhite(*arg) == b'(' as c_char {
                     emsg(gettext(e_nowhitespace.as_ptr()));
                 } else {
-                    semsg(gettext(e_missingparen.ptr().cast()), c"lambda".as_ptr());
+                    semsg_c!(gettext(e_missingparen.ptr().cast()), c"lambda".as_ptr());
                 }
             }
             tv_clear(rettv);
@@ -211,7 +212,7 @@ pub(crate) unsafe fn eval_method(
                 if lua_funcname.is_null() {
                     emsg(gettext(c"E260: Missing name after ->".as_ptr()));
                 } else {
-                    semsg(gettext(e_invexpr2.ptr().cast()), name);
+                    semsg_c!(gettext(e_invexpr2.ptr().cast()), name);
                 }
             }
             ret = FAIL;
@@ -236,7 +237,7 @@ pub(crate) unsafe fn eval_method(
                     ret = FAIL;
                 } else if *skipwhite(*arg) as c_int != NUL {
                     if verbose {
-                        semsg(gettext(e_trailing_arg.ptr().cast()), *arg);
+                        semsg_c!(gettext(e_trailing_arg.ptr().cast()), *arg);
                     }
                     ret = FAIL;
                 } else if callee.v_type == VAR_FUNC && !callee.vval.v_string.is_null() {
@@ -268,7 +269,7 @@ pub(crate) unsafe fn eval_method(
                     }
                 } else {
                     if verbose {
-                        semsg(gettext(e_not_callable_type_str.ptr().cast()), name);
+                        semsg_c!(gettext(e_not_callable_type_str.ptr().cast()), name);
                     }
                     ret = FAIL;
                 }
@@ -279,7 +280,7 @@ pub(crate) unsafe fn eval_method(
             if ret == OK {
                 if **arg != b'(' as c_char {
                     if verbose {
-                        semsg(gettext(e_missingparen.ptr().cast()), name);
+                        semsg_c!(gettext(e_missingparen.ptr().cast()), name);
                     }
                     ret = FAIL;
                 } else if ascii_iswhite(*(*arg).offset(-1) as c_int) {

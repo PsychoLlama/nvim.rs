@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -146,7 +147,7 @@ pub unsafe fn eval_variable(
         let v = find_var(name, len as size_t, ptr::null_mut(), no_autoload);
         if v.is_null() {
             if !rettv.is_null() && verbose {
-                semsg(
+                semsg_c!(
                     gettext(c"E121: Undefined variable: %.*s".as_ptr()),
                     len,
                     name,

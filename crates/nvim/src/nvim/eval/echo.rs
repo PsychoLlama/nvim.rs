@@ -2,6 +2,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr::null_mut;
 
@@ -26,7 +27,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::memory::xfree;
 use crate::src::nvim::message::{
     emsg_multiline, msg, msg_clr_eos, msg_end, msg_ext_set_append, msg_ext_set_kind, msg_multiline,
-    msg_outnum, msg_puts, msg_puts_hl, msg_puts_len, msg_sb_eol, msg_start, semsg, verbose_enter,
+    msg_outnum, msg_puts, msg_puts_hl, msg_puts_len, msg_sb_eol, msg_start, verbose_enter,
     verbose_leave,
 };
 use crate::src::nvim::os::libc::{gettext, memcpy, strlen};
@@ -99,7 +100,7 @@ pub unsafe fn ex_echo(eap: *mut exarg_T) {
                     && did_emsg.get() == did_emsg_before
                     && called_emsg.get() == called_emsg_before
                 {
-                    semsg(gettext(e_invexpr2.ptr().cast()), start);
+                    semsg_c!(gettext(e_invexpr2.ptr().cast()), start);
                 }
                 need_clr_eos.set(false);
                 break;

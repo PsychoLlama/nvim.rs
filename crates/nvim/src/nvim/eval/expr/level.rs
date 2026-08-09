@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_ushort};
 use core::ptr::{null_mut, write_bytes};
 
@@ -39,7 +40,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{called_emsg, curwin, did_emsg, e_invexpr2, e_trailing_arg, p_ic};
 use crate::src::nvim::memory::strnequal;
 use crate::src::nvim::memory::{xfree, xmemdupz};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{__ctype_b_loc, gettext, strncmp, strstr};
 use crate::src::nvim::register::get_reg_contents;
 use crate::src::nvim::types::{
@@ -201,9 +202,9 @@ pub unsafe extern "C" fn eval0(
                 && called_emsg.get() == called_emsg_before
             {
                 if end_error {
-                    semsg(gettext((&raw const e_trailing_arg).cast()), p);
+                    semsg_c!(gettext((&raw const e_trailing_arg).cast()), p);
                 } else {
-                    semsg(gettext((&raw const e_invexpr2).cast()), arg);
+                    semsg_c!(gettext((&raw const e_invexpr2).cast()), arg);
                 }
             }
             if !eap.is_null() && !p.is_null() {
@@ -691,7 +692,7 @@ pub(crate) unsafe fn eval7(
         let mut end_leader: *const c_char = *arg;
 
         if RECURSE.get() == MAX_RECURSE {
-            semsg(gettext(e_expression_too_recursive_str.as_ptr()), *arg);
+            semsg_c!(gettext(e_expression_too_recursive_str.as_ptr()), *arg);
             return FAIL;
         }
         *RECURSE.ptr() += 1;

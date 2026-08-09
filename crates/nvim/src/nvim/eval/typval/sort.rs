@@ -16,8 +16,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 
 /// Compare two list items by the ordering `sortinfo` selected: numeric, float,
 /// or a string comparison of their `string()` forms.
@@ -413,7 +414,7 @@ pub(crate) unsafe extern "C" fn do_sort_uniq(
 ) {
     unsafe {
         if (*argvars).v_type != VAR_LIST {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_listarg as *const ::core::ffi::c_char),
                 if sort {
                     c"sort()".as_ptr()

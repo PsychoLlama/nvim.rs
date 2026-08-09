@@ -4,6 +4,7 @@
 
 use super::args::{Args, frame};
 use super::{FAIL, NUL, TV_TRANSLATE};
+use crate::semsg_c;
 use crate::src::nvim::eval::typval::{
     tv_blob_get, tv_blob_len, tv_check_for_list_or_blob_arg, tv_check_for_opt_bool_arg,
     tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg, tv_clear, tv_copy,
@@ -21,7 +22,7 @@ use crate::src::nvim::main::{
     called_emsg, did_emsg, e_invarg2, e_listarg, e_listblobreq, e_listdictblobarg,
 };
 use crate::src::nvim::memory::xstrdup;
-use crate::src::nvim::message::{emsg, internal_error, semsg};
+use crate::src::nvim::message::{emsg, internal_error};
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::types::{
     BoolVarValue, EvalFuncData, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
@@ -136,7 +137,7 @@ unsafe fn flatten_common(args: Args<'_>, rettv: &mut typval_T, make_copy: bool) 
     // SAFETY: the caller's obligation.
     unsafe {
         if args.ty(0) != VAR_LIST {
-            semsg(
+            semsg_c!(
                 gettext(e_listarg.ptr() as *const c_char),
                 c"flatten()".as_ptr(),
             );
@@ -210,7 +211,7 @@ pub unsafe extern "C" fn f_get(argvars: *mut typval_T, rettv: *mut typval_T, _fp
                 ptr::null_mut()
             }
             _ => {
-                semsg(
+                semsg_c!(
                     gettext(e_listdictblobarg.ptr() as *const c_char),
                     c"get()".as_ptr(),
                 );
@@ -357,7 +358,7 @@ unsafe fn get_from_func(args: Args<'_>, rettv: &mut typval_T) -> bool {
             _ => {
                 // Kept on the variadic message call: `what` is arbitrary
                 // user bytes and a Rust format string can only carry UTF-8.
-                semsg(gettext(e_invarg2.ptr() as *const c_char), what);
+                semsg_c!(gettext(e_invarg2.ptr() as *const c_char), what);
             }
         }
         false

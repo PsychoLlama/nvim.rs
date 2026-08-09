@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -75,7 +76,7 @@ unsafe fn ex_unletlock(
                 lv.ll_tv = ptr::null_mut();
                 arg = arg.add(1);
                 if get_env_len(&raw mut arg as *mut *const c_char) == 0 {
-                    semsg(gettext(&raw const e_invarg2 as *const c_char), arg.sub(1));
+                    semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg.sub(1));
                     return;
                 }
                 if !error && (*eap).skip == 0 && callback(&raw mut lv, arg, eap, deep) == FAIL {
@@ -101,7 +102,7 @@ unsafe fn ex_unletlock(
                 {
                     if !name_end.is_null() {
                         emsg_severe.set(true);
-                        semsg(
+                        semsg_c!(
                             gettext(&raw const e_trailing_arg as *const c_char),
                             name_end,
                         );
@@ -307,7 +308,7 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
         if forceit {
             return OK;
         }
-        semsg(gettext(c"E108: No such variable: \"%s\"".as_ptr()), name);
+        semsg_c!(gettext(c"E108: No such variable: \"%s\"".as_ptr()), name);
         FAIL
     }
 }
@@ -330,7 +331,7 @@ unsafe fn do_lock_var(
             // A whole variable.
             if *(*lp).ll_name == b'$' as c_char {
                 // An environment variable has no lock to set.
-                semsg(gettext(e_lock_unlock.as_ptr()), (*lp).ll_name);
+                semsg_c!(gettext(e_lock_unlock.as_ptr()), (*lp).ll_name);
                 return FAIL;
             }
             let di = find_var((*lp).ll_name, (*lp).ll_name_len, ptr::null_mut(), true);
@@ -343,7 +344,7 @@ unsafe fn do_lock_var(
                 && (*di).di_tv.v_type != VAR_DICT
                 && (*di).di_tv.v_type != VAR_LIST
             {
-                semsg(gettext(e_lock_unlock.as_ptr()), (*lp).ll_name);
+                semsg_c!(gettext(e_lock_unlock.as_ptr()), (*lp).ll_name);
                 return FAIL;
             }
             if lock {

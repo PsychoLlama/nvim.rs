@@ -9,8 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 
 /// Resolve the first index of `l[n1:n2]`, clamping a negative one that fell
 /// off the front and raising `E684` when there is no such item.
@@ -24,7 +25,7 @@ pub unsafe extern "C" fn tv_list_check_range_index_one(
     unsafe {
         let li = tv_list_find_index(l, n1);
         if li.is_null() && !quiet {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char),
                 int64_t::from(*n1),
             );
@@ -47,7 +48,7 @@ pub unsafe extern "C" fn tv_list_check_range_index_two(
             let ni = tv_list_find(l, *n2);
             if ni.is_null() {
                 if !quiet {
-                    semsg(
+                    semsg_c!(
                         gettext(
                             &raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char,
                         ),
@@ -63,7 +64,7 @@ pub unsafe extern "C" fn tv_list_check_range_index_two(
         }
         if *n2 < *n1 {
             if !quiet {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char),
                     int64_t::from(*n2),
                 );
@@ -253,7 +254,7 @@ pub unsafe extern "C" fn tv_list_slice_or_index(
             // A list index out of range is an error.
             if !range {
                 if verbose {
-                    semsg(
+                    semsg_c!(
                         gettext(
                             &raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char,
                         ),

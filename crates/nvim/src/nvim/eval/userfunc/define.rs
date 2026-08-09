@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of_val;
 use core::ptr;
@@ -159,7 +160,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
             // an exception.
             if !aborting() {
                 if !fudi.fd_newkey.is_null() {
-                    semsg(
+                    semsg_c!(
                         gettext(&raw const e_dictkey as *const c_char),
                         fudi.fd_newkey,
                     );
@@ -185,7 +186,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
             p = skipwhite(p);
             if *p != b'(' as c_char {
                 if (*eap).skip == 0 {
-                    semsg(gettext(c"E124: Missing '(': %s".as_ptr()), (*eap).arg);
+                    semsg_c!(gettext(c"E124: Missing '(': %s".as_ptr()), (*eap).arg);
                     break 'ret_free;
                 }
                 // Attempt to carry on by skipping some text.
@@ -300,7 +301,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                             && (*eap).skip == 0
                             && did_emsg.get() == 0
                         {
-                            semsg(gettext(&raw const e_trailing_arg as *const c_char), p);
+                            semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), p);
                         }
 
                         if KeyTyped.get() {
@@ -443,7 +444,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                                     xfree(scriptname as *mut c_void);
                                 }
                                 if j == FAIL {
-                                    semsg(
+                                    semsg_c!(
                                         gettext(
                                             c"E746: Function name does not match script file name: %s"
                                                 .as_ptr(),

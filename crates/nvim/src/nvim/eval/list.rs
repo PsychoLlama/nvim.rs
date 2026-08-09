@@ -1,3 +1,4 @@
+use crate::semsg_c;
 use crate::src::nvim::eval::typval::{
     tv_blob_copy, tv_blob_remove, tv_check_for_string_or_list_or_blob_arg, tv_clear, tv_copy,
     tv_dict_add_tv, tv_dict_alloc_ret, tv_dict_copy, tv_dict_extend, tv_dict_item_remove,
@@ -26,7 +27,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::mbyte::{mb_strnicmp, utfc_ptr2len};
 use crate::src::nvim::memory::xmemdupz;
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{__assert_fail, memmove, strcmp, strlen, strstr};
 use crate::src::nvim::strings::reverse_text;
 use crate::src::nvim::types::{
@@ -566,7 +567,7 @@ unsafe extern "C" fn filter_map(
         && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        semsg(
+        semsg_c!(
             (e_argument_of_str_must_be_list_string_dictionary_or_blob.ptr() as *const _)
                 as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             func_name,
@@ -776,7 +777,7 @@ unsafe extern "C" fn count_list(
     }
     let mut li: *mut listitem_T = tv_list_find(l, idx as ::core::ffi::c_int);
     if li.is_null() {
-        semsg(
+        semsg_c!(
             &raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             idx,
@@ -898,7 +899,7 @@ pub unsafe extern "C" fn f_count(
             }
         }
     } else if !error {
-        semsg(
+        semsg_c!(
             (e_argument_of_str_must_be_list_string_or_dictionary.ptr() as *const _)
                 as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             b"count()\0".as_ptr() as *const ::core::ffi::c_char,
@@ -990,7 +991,7 @@ unsafe extern "C" fn extend_dict(
             if is_new {
                 tv_dict_unref(d1);
             }
-            semsg(
+            semsg_c!(
                 &raw const e_invarg2 as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 action,
             );
@@ -1055,7 +1056,7 @@ unsafe extern "C" fn extend_list(
                 } else {
                     item = tv_list_find(l1, before);
                     if item.is_null() {
-                        semsg(
+                        semsg_c!(
                             &raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char,
                             before as int64_t,
@@ -1103,7 +1104,7 @@ unsafe extern "C" fn extend(
     {
         extend_dict(argvars, arg_errmsg, is_new, rettv);
     } else {
-        semsg(
+        semsg_c!(
             &raw const e_listdictarg as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             if is_new as ::core::ffi::c_int != 0 {
                 b"extendnew()\0".as_ptr() as *const ::core::ffi::c_char
@@ -1167,7 +1168,7 @@ pub unsafe extern "C" fn f_insert(
                 return;
             }
             if before < 0 as ::core::ffi::c_int || before > len {
-                semsg(
+                semsg_c!(
                     &raw const e_invarg2 as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                     tv_get_string(argvars.offset(2 as ::core::ffi::c_int as isize)),
                 );
@@ -1182,7 +1183,7 @@ pub unsafe extern "C" fn f_insert(
             return;
         }
         if val < 0 as ::core::ffi::c_int || val > 255 as ::core::ffi::c_int {
-            semsg(
+            semsg_c!(
                 &raw const e_invarg2 as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 tv_get_string(argvars.offset(1 as ::core::ffi::c_int as isize)),
             );
@@ -1202,7 +1203,7 @@ pub unsafe extern "C" fn f_insert(
     } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        semsg(
+        semsg_c!(
             &raw const e_listblobarg as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             b"insert()\0".as_ptr() as *const ::core::ffi::c_char,
         );
@@ -1233,7 +1234,7 @@ pub unsafe extern "C" fn f_insert(
         if before_0 != tv_list_len(l) as int64_t {
             item = tv_list_find(l, before_0 as ::core::ffi::c_int);
             if item.is_null() {
-                semsg(
+                semsg_c!(
                     &raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char,
                     before_0,
@@ -1267,7 +1268,7 @@ pub unsafe extern "C" fn f_remove(
     {
         tv_list_remove(argvars, rettv, arg_errmsg);
     } else {
-        semsg(
+        semsg_c!(
             &raw const e_listdictblobarg as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             b"remove()\0".as_ptr() as *const ::core::ffi::c_char,
         );

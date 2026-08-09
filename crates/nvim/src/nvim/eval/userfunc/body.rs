@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::{semsg_c, swmsg_c};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -110,7 +111,7 @@ pub(crate) unsafe fn get_function_body(
                 }
                 if theline.is_null() {
                     if !skip_until.is_null() {
-                        semsg(
+                        semsg_c!(
                             gettext(E_MISSING_HEREDOC_END_MARKER_STR.as_ptr()),
                             skip_until,
                         );
@@ -183,7 +184,7 @@ pub(crate) unsafe fn get_function_body(
                             nextcmd = line_arg;
                         } else if *p != NUL as c_char && *p != b'"' as c_char && p_verbose.get() > 0
                         {
-                            swmsg(
+                            swmsg_c!(
                                 true,
                                 gettext(c"W22: Text found after :endfunction: %s".as_ptr()),
                                 p,

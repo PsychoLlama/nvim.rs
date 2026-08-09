@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -270,7 +271,7 @@ pub unsafe fn skip_var_list(
             let s = skip_var_one(p);
             if s == p {
                 if !silent {
-                    semsg(gettext(&raw const e_invarg2 as *const c_char), p);
+                    semsg_c!(gettext(&raw const e_invarg2 as *const c_char), p);
                 }
                 return ptr::null();
             }
@@ -290,7 +291,7 @@ pub unsafe fn skip_var_list(
                 *semicolon = 1;
             } else if *p != b',' as c_char {
                 if !silent {
-                    semsg(gettext(&raw const e_invarg2 as *const c_char), p);
+                    semsg_c!(gettext(&raw const e_invarg2 as *const c_char), p);
                 }
                 return ptr::null();
             }
@@ -347,11 +348,11 @@ unsafe fn ex_let_env(
         let name = arg;
         let len = get_env_len(&raw mut arg as *mut *const c_char);
         if len == 0 {
-            semsg(gettext(&raw const e_invarg2 as *const c_char), name.sub(1));
+            semsg_c!(gettext(&raw const e_invarg2 as *const c_char), name.sub(1));
         } else if !op.is_null()
             && !vim_strchr(ARITHMETIC.as_ptr(), *op as uint8_t as c_int).is_null()
         {
-            semsg(gettext(&raw const e_letwrong as *const c_char), op);
+            semsg_c!(gettext(&raw const e_letwrong as *const c_char), op);
         } else if !endchars.is_null()
             && vim_strchr(endchars, *skipwhite(arg) as uint8_t as c_int).is_null()
         {
@@ -435,7 +436,7 @@ unsafe fn ex_let_option(
 
         'theend: {
             if curval.type_0 == kOptValTypeNil {
-                semsg(gettext(&raw const e_unknown_option2 as *const c_char), arg);
+                semsg_c!(gettext(&raw const e_unknown_option2 as *const c_char), arg);
                 break 'theend;
             }
             if !op.is_null()
@@ -443,7 +444,7 @@ unsafe fn ex_let_option(
                 && ((curval.type_0 != kOptValTypeString && *op == b'.' as c_char)
                     || (curval.type_0 == kOptValTypeString && *op != b'.' as c_char))
             {
-                semsg(gettext(&raw const e_letwrong as *const c_char), op);
+                semsg_c!(gettext(&raw const e_letwrong as *const c_char), op);
                 break 'theend;
             }
 
@@ -554,7 +555,7 @@ unsafe fn ex_let_register(
         let mut arg_end: *mut c_char = ptr::null_mut();
         arg = arg.add(1);
         if !op.is_null() && !vim_strchr(ARITHMETIC.as_ptr(), *op as uint8_t as c_int).is_null() {
-            semsg(gettext(&raw const e_letwrong as *const c_char), op);
+            semsg_c!(gettext(&raw const e_letwrong as *const c_char), op);
             return arg_end;
         }
         if !endchars.is_null()
@@ -613,7 +614,7 @@ unsafe fn ex_let_one(
             return ex_let_register(arg, tv, is_const, endchars, op);
         }
         if !eval_isnamec1(*arg as c_int) && *arg != b'{' as c_char {
-            semsg(gettext(&raw const e_invarg2 as *const c_char), arg);
+            semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg);
             return ptr::null_mut();
         }
 

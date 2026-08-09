@@ -4,6 +4,7 @@
 use super::args::frame;
 use super::{ARENA_BLOCK_SIZE, FAIL, MPACK_EOF, MPACK_ERROR, MPACK_OK, OK};
 use crate::semsg;
+use crate::semsg_c;
 use crate::src::mpack::object::mpack_parser_init;
 use crate::src::nvim::api::private::helpers::api_free_string;
 use crate::src::nvim::eval::decode::{
@@ -19,7 +20,6 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::main::{e_listarg, e_listblobarg};
 use crate::src::nvim::memory::{alloc_block, free_block, strequal, xfree};
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
 use crate::src::nvim::os::libc::{gettext, memmove, strlen};
 use crate::src::nvim::types::{
@@ -74,7 +74,7 @@ pub unsafe extern "C" fn f_json_decode(
         if json_decode_string(s, len, rettv) == FAIL {
             // The text that failed to parse is arbitrary user bytes, so the
             // message keeps the variadic call and its `%.*s`.
-            semsg(
+            semsg_c!(
                 gettext(c"E474: Failed to parse %.*s".as_ptr()),
                 len as c_int,
                 s,
@@ -113,7 +113,7 @@ pub unsafe extern "C" fn f_msgpackdump(
     // result List and freed.
     unsafe {
         if args.ty(0) != VAR_LIST {
-            semsg(
+            semsg_c!(
                 gettext(e_listarg.ptr() as *const c_char),
                 c"msgpackdump()".as_ptr(),
             );
@@ -272,7 +272,7 @@ pub unsafe extern "C" fn f_msgpackparse(
     // live for the call.
     unsafe {
         if args.ty(0) != VAR_LIST && args.ty(0) != VAR_BLOB {
-            semsg(
+            semsg_c!(
                 gettext(e_listblobarg.ptr() as *const c_char),
                 c"msgpackparse()".as_ptr(),
             );

@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::offset_of;
 use core::ptr;
@@ -182,7 +183,7 @@ pub unsafe fn get_lambda_tv(
 
             *arg = skipwhite(*arg);
             if **arg != b'}' as c_char {
-                semsg(gettext(c"E451: Expected }: %s".as_ptr()), *arg);
+                semsg_c!(gettext(c"E451: Expected }: %s".as_ptr()), *arg);
                 break 'errret false;
             }
             *arg = (*arg).add(1);

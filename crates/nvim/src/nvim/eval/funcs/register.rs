@@ -7,6 +7,7 @@ use super::{
     FAIL, NUL, OK, YREG_YANK, kGRegExprSrc, kGRegList, kMTBlockWise, kMTCharWise, kMTLineWise,
     kMTUnknown,
 };
+use crate::semsg_c;
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::charset::getdigits_int;
 use crate::src::nvim::eval::typval::{
@@ -20,7 +21,6 @@ use crate::src::nvim::main::{
     e_invargval, e_toomanyarg, reg_executing, reg_recorded, reg_recording,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::register::{
     format_reg_type, get_reg_contents, get_reg_type, get_register_name, get_unname_register,
@@ -315,7 +315,7 @@ pub unsafe extern "C" fn f_setreg(
                 if get_yank_type(&mut p, &mut yank_type, &mut block_len) == FAIL
                     || *p.add(1) != NUL as c_char
                 {
-                    semsg(
+                    semsg_c!(
                         gettext(e_invargval.ptr() as *const c_char),
                         c"value".as_ptr(),
                     );
@@ -341,7 +341,7 @@ pub unsafe extern "C" fn f_setreg(
             // A dict value already carried the type; a third argument on
             // top of it is one argument too many.
             if yank_type != kMTUnknown {
-                semsg(
+                semsg_c!(
                     gettext(e_toomanyarg.ptr() as *const c_char),
                     c"setreg".as_ptr(),
                 );

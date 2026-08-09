@@ -6,6 +6,7 @@ use super::{
     FAIL, NSUBEXP, SomeMatchType, kSomeMatch, kSomeMatchEnd, kSomeMatchList, kSomeMatchStr,
     kSomeMatchStrPos, tv_get_buf,
 };
+use crate::semsg_c;
 use crate::src::nvim::eval::encode::encode_tv2echo;
 use crate::src::nvim::eval::typval::{
     tv_check_for_buffer_arg, tv_check_for_list_arg, tv_check_for_lnum_arg,
@@ -22,7 +23,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memline::ml_get_buf;
 use crate::src::nvim::memory::{xfree, xmemdupz};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree};
 use crate::src::nvim::types::{
@@ -420,7 +421,7 @@ pub unsafe extern "C" fn f_matchbufline(
         if buf.is_null() {
             // Only report the name when `tv_get_buf` was silent about it.
             if did_emsg.get() == prev_did_emsg {
-                semsg(
+                semsg_c!(
                     gettext(e_invalid_buffer_name_str.ptr() as *const c_char),
                     tv_get_string(args.ptr(0)),
                 );
@@ -440,7 +441,7 @@ pub unsafe extern "C" fn f_matchbufline(
             return;
         }
         if slnum < 1 {
-            semsg(
+            semsg_c!(
                 gettext(e_invargval.ptr() as *const c_char),
                 c"lnum".as_ptr(),
             );
@@ -451,7 +452,7 @@ pub unsafe extern "C" fn f_matchbufline(
             return;
         }
         if elnum < 1 || elnum < slnum {
-            semsg(
+            semsg_c!(
                 gettext(e_invargval.ptr() as *const c_char),
                 c"end_lnum".as_ptr(),
             );
@@ -497,7 +498,7 @@ unsafe fn want_submatches(args: Args<'_>, i: usize) -> Option<bool> {
             return Some(false);
         }
         if (*di).di_tv.v_type != VAR_BOOL {
-            semsg(
+            semsg_c!(
                 gettext(e_invargval.ptr() as *const c_char),
                 c"submatches".as_ptr(),
             );

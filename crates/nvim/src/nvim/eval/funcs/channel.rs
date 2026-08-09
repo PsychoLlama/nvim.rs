@@ -29,7 +29,7 @@ use crate::src::nvim::main::{
     e_invarg2, e_stdiochan2, on_print, provider_call_nesting, provider_caller_scope,
 };
 use crate::src::nvim::memory::{arena_finish, arena_mem_free, xfree, xmemdup, xstrdup};
-use crate::src::nvim::message::{emsg, semsg, semsg_multiline};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::msgpack_rpc::channel::{get_client_info, rpc_send_call, rpc_send_event};
 use crate::src::nvim::msgpack_rpc::server::{
     server_address_list, server_address_new, server_start, server_stop,
@@ -42,6 +42,7 @@ use crate::src::nvim::types::{
     funccal_entry_T, funccall_T, kErrorTypeNone, kObjectTypeArray, kObjectTypeNil,
     kObjectTypeString, object, sctx_T, typval_T, uint64_t, varnumber_T,
 };
+use crate::{semsg_c, semsg_multiline_c};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -132,7 +133,7 @@ pub unsafe extern "C" fn f_chanclose(
             match found {
                 Some(&(_, p)) => part = p,
                 None => {
-                    semsg(gettext(c"Invalid channel stream \"%s\"".as_ptr()), stream);
+                    semsg_c!(gettext(c"Invalid channel stream \"%s\"".as_ptr()), stream);
                     return;
                 }
             }
@@ -220,14 +221,14 @@ pub unsafe extern "C" fn f_rpcnotify(
         // Channel 0 is the broadcast channel, so zero is allowed here where
         // `rpcrequest()` insists on a real one.
         if args.ty(0) != VAR_NUMBER || args.get(0).vval.v_number < 0 {
-            semsg(
+            semsg_c!(
                 gettext(e_invarg2.ptr() as *const c_char),
                 c"Channel id must be a positive integer".as_ptr(),
             );
             return;
         }
         if args.ty(1) != VAR_STRING {
-            semsg(
+            semsg_c!(
                 gettext(e_invarg2.ptr() as *const c_char),
                 c"Event type must be a string".as_ptr(),
             );
@@ -244,7 +245,7 @@ pub unsafe extern "C" fn f_rpcnotify(
         );
         arena_mem_free(arena_finish(&raw mut arena));
         if !ok {
-            semsg(
+            semsg_c!(
                 gettext(e_invarg2.ptr() as *const c_char),
                 c"Channel doesn't exist".as_ptr(),
             );
@@ -343,14 +344,14 @@ pub unsafe extern "C" fn f_rpcrequest(
             return;
         }
         if args.ty(0) != VAR_NUMBER || args.get(0).vval.v_number <= 0 {
-            semsg(
+            semsg_c!(
                 gettext(e_invarg2.ptr() as *const c_char),
                 c"Channel id must be a positive integer".as_ptr(),
             );
             return;
         }
         if args.ty(1) != VAR_STRING {
-            semsg(
+            semsg_c!(
                 gettext(e_invarg2.ptr() as *const c_char),
                 c"Method name must be a string".as_ptr(),
             );
@@ -386,7 +387,7 @@ pub unsafe extern "C" fn f_rpcrequest(
                 get_client_info(chan, c"name".as_ptr())
             };
             if name.is_null() {
-                semsg_multiline(
+                semsg_multiline_c!(
                     c"rpc_error".as_ptr(),
                     c"Invoking '%s' on channel %lu:\n%s".as_ptr(),
                     method,
@@ -394,7 +395,7 @@ pub unsafe extern "C" fn f_rpcrequest(
                     err.msg,
                 );
             } else {
-                semsg_multiline(
+                semsg_multiline_c!(
                     c"rpc_error".as_ptr(),
                     c"Invoking '%s' on channel %lu (%s):\n%s".as_ptr(),
                     method,
@@ -520,7 +521,7 @@ pub unsafe extern "C" fn f_serverstart(
         let result = server_start(address);
         xfree(address as *mut c_void);
         if result != 0 {
-            semsg(
+            semsg_c!(
                 c"Failed to start server: %s".as_ptr(),
                 if result > 0 {
                     c"Unknown system error".as_ptr()
@@ -586,7 +587,7 @@ pub unsafe extern "C" fn f_sockconnect(
             return;
         }
         if args.ty(2) != VAR_DICT && args.has(2) {
-            semsg(
+            semsg_c!(
                 gettext(e_invarg2.ptr() as *const c_char),
                 c"expected dictionary".as_ptr(),
             );
@@ -600,7 +601,7 @@ pub unsafe extern "C" fn f_sockconnect(
         } else if strcmp(mode, c"pipe".as_ptr()) == 0 {
             false
         } else {
-            semsg(
+            semsg_c!(
                 gettext(e_invarg2.ptr() as *const c_char),
                 c"invalid mode".as_ptr(),
             );
@@ -626,7 +627,7 @@ pub unsafe extern "C" fn f_sockconnect(
         let mut error = ptr::null::<c_char>();
         let id = channel_connect(tcp, address, rpc, on_data, 50, &raw mut error);
         if !error.is_null() {
-            semsg(gettext(c"connection failed: %s".as_ptr()), error);
+            semsg_c!(gettext(c"connection failed: %s".as_ptr()), error);
         }
         rettv.vval.v_number = id as varnumber_T;
         rettv.v_type = VAR_NUMBER;
@@ -666,7 +667,7 @@ pub unsafe extern "C" fn f_stdioopen(
         let mut error = ptr::null::<c_char>();
         let id = channel_from_stdio(rpc, on_stdin, &raw mut error);
         if id == 0 {
-            semsg(e_stdiochan2.ptr() as *const c_char, error);
+            semsg_c!(e_stdiochan2.ptr() as *const c_char, error);
         }
         rettv.vval.v_number = id as varnumber_T;
         rettv.v_type = VAR_NUMBER;

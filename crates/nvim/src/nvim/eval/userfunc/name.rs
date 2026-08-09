@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of_val};
 use core::ptr;
@@ -92,7 +93,7 @@ pub unsafe fn emsg_funcname(errmsg: *const c_char, name: *const c_char) {
         if *name as u8 as c_int == K_SPECIAL && *name.add(1) != 0 && *name.add(2) != 0 {
             p = concat_str(c"<SNR>".as_ptr(), name.add(3));
         }
-        semsg(gettext(errmsg), p);
+        semsg_c!(gettext(errmsg), p);
         if p != name as *mut c_char {
             xfree(p as *mut c_void);
         }
@@ -342,7 +343,7 @@ unsafe fn mangle_function_name(
                 lead += sid_buflen as c_int;
             }
         } else if flags & TFN_INT == 0 && builtin_function(lv.ll_name, lv.ll_name_len as c_int) {
-            semsg(
+            semsg_c!(
                 gettext(c"E128: Function name must start with a capital or \"s:\": %s".as_ptr()),
                 start,
             );
@@ -359,7 +360,7 @@ unsafe fn mangle_function_name(
             // the coin flip (O-B14-12).
             let cp = xmemrchr(lv.ll_name as *const c_void, b':', lv.ll_name_len);
             if !cp.is_null() {
-                semsg(
+                semsg_c!(
                     gettext(c"E884: Function name cannot contain a colon: %s".as_ptr()),
                     start,
                 );
@@ -457,7 +458,7 @@ pub unsafe fn trans_function_name(
                 // or an exception.
                 if !aborting() {
                     if !end.is_null() {
-                        semsg(gettext(&raw const e_invarg2 as *const c_char), start);
+                        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), start);
                     }
                 } else {
                     *pp = find_name_end(start, ptr::null_mut(), ptr::null_mut(), FNE_INCL_BR)
@@ -481,7 +482,7 @@ pub unsafe fn trans_function_name(
                     if is_luafunc((*lv.ll_tv).vval.v_partial) && *end == b'.' as c_char {
                         len = check_luafunc_name(end.add(1), true);
                         if len == 0 {
-                            semsg(&raw const e_invexpr2 as *const c_char, c"v:lua".as_ptr());
+                            semsg_c!(&raw const e_invexpr2 as *const c_char, c"v:lua".as_ptr());
                             break 'theend;
                         }
                         name = xmallocz(len as size_t) as *mut c_char;

@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 
 /// Allocate an empty blob.  The caller owns the reference count.
 pub unsafe extern "C" fn tv_blob_alloc() -> *mut blob_T {
@@ -136,7 +137,7 @@ pub(crate) unsafe extern "C" fn tv_blob_index(
             idx = varnumber_T::from(len) + idx;
         }
         if idx >= varnumber_T::from(len) || idx < 0 {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_blobidx as *const ::core::ffi::c_char),
                 idx,
             );
@@ -180,7 +181,7 @@ pub unsafe extern "C" fn tv_blob_check_index(
     unsafe {
         if n1 < 0 || n1 > varnumber_T::from(bloblen) {
             if !quiet {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_blobidx as *const ::core::ffi::c_char),
                     n1,
                 );
@@ -201,7 +202,7 @@ pub unsafe extern "C" fn tv_blob_check_range(
     unsafe {
         if n2 < 0 || n2 >= varnumber_T::from(bloblen) || n2 < n1 {
             if !quiet {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_blobidx as *const ::core::ffi::c_char),
                     n2,
                 );
@@ -284,7 +285,7 @@ pub unsafe extern "C" fn tv_blob_remove(
             idx += len;
         }
         if idx < 0 || idx >= len {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_blobidx as *const ::core::ffi::c_char),
                 idx,
             );
@@ -314,7 +315,7 @@ pub unsafe extern "C" fn tv_blob_remove(
             end += len;
         }
         if end >= len || idx > end {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_blobidx as *const ::core::ffi::c_char),
                 end,
             );
@@ -387,7 +388,7 @@ pub unsafe extern "C" fn f_list2blob(
             let n = tv_get_number_chk(&raw const (*li).li_tv, &raw mut error);
             if error || !(0..=255).contains(&n) {
                 if !error {
-                    semsg(
+                    semsg_c!(
                         gettext(
                             &raw const e_invalid_value_for_blob_nr as *const ::core::ffi::c_char,
                         ),

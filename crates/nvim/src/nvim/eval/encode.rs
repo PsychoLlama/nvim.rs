@@ -1,3 +1,4 @@
+use crate::semsg_c;
 use crate::src::nvim::eval::typval::{GARRAY_EMPTY, tv_list_first, tv_list_last, tv_list_len};
 use crate::src::nvim::eval::typval::{
     tv_dict_find, tv_list_append_allocated_string, tv_list_idx_of_item,
@@ -9,7 +10,6 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::IObuff;
 use crate::src::nvim::mbyte::{utf_char2len, utf_printable, utf_ptr2char, utf_ptr2len};
 use crate::src::nvim::memory::{memchrsub, xfree, xmalloc, xmemdupz, xmemscan, xrealloc};
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memcpy, strlen};
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
@@ -231,7 +231,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                 }
             }
         }
-        semsg(
+        semsg_c!(
             msg,
             gettext(path.objname),
             if path.stack.is_empty() {
@@ -528,7 +528,7 @@ pub(crate) unsafe extern "C" fn convert_to_json_string(
                 }
                 _ => {
                     if ch > 0x7f as ::core::ffi::c_int && shift == 1 as size_t {
-                        semsg(
+                        semsg_c!(
                             gettext(
                                 b"E474: String \"%.*s\" contains byte that does not start any UTF-8 character\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
@@ -542,7 +542,7 @@ pub(crate) unsafe extern "C" fn convert_to_json_string(
                     } else if SURROGATE_HI_START <= ch && ch <= SURROGATE_HI_END
                         || SURROGATE_LO_START <= ch && ch <= SURROGATE_LO_END
                     {
-                        semsg(
+                        semsg_c!(
                             gettext(
                                 b"E474: UTF-8 string contains code point which belongs to a surrogate pair: %.*s\0"
                                     .as_ptr() as *const ::core::ffi::c_char,

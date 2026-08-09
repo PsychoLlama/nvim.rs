@@ -6,6 +6,7 @@ use super::{
     FAIL, NUL, VARNUMBER_MAX, VARNUMBER_MIN, e_missing_function_argument,
     e_string_list_or_blob_required,
 };
+use crate::semsg_c;
 use crate::src::nvim::eval::typval::{
     tv_blob_get, tv_blob_len, tv_check_for_number_arg, tv_check_for_string_arg, tv_clear, tv_copy,
     tv_dict_len, tv_get_number_chk, tv_get_string, tv_list_first, tv_list_len, tv_list_locked,
@@ -18,7 +19,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memory::xmemdupz;
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::types::{
     EvalFuncData, VAR_BLOB, VAR_DICT, VAR_FIXED, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
@@ -118,7 +119,7 @@ unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
                 }
             }
             _ => {
-                semsg(
+                semsg_c!(
                     gettext(e_listdictarg.ptr() as *const c_char),
                     if domax {
                         c"max()".as_ptr()
@@ -229,7 +230,7 @@ unsafe fn reduce_list(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
             (*args.get(2), tv_list_first(l))
         } else {
             if tv_list_len(l) == 0 {
-                semsg(
+                semsg_c!(
                     gettext(e_reduce_of_an_empty_str_with_no_initial_value.ptr() as *const c_char),
                     c"List".as_ptr(),
                 );
@@ -268,7 +269,7 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_
         let called_emsg_start = called_emsg.get();
         if !args.has(2) {
             if *p as c_int == NUL {
-                semsg(
+                semsg_c!(
                     gettext(e_reduce_of_an_empty_str_with_no_initial_value.ptr() as *const c_char),
                     c"String".as_ptr(),
                 );
@@ -316,7 +317,7 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
             (*args.get(2), 0)
         } else {
             if tv_blob_len(b) == 0 {
-                semsg(
+                semsg_c!(
                     gettext(e_reduce_of_an_empty_str_with_no_initial_value.ptr() as *const c_char),
                     c"Blob".as_ptr(),
                 );

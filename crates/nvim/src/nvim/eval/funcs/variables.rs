@@ -4,6 +4,7 @@
 use super::args::frame;
 use super::{DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY, NUL, dummy_ap};
 use crate::semsg;
+use crate::semsg_c;
 use crate::src::nvim::eval::typval::{
     callback_free, kCallbackNone, tv_dict_watcher_add, tv_dict_watcher_remove, tv_get_string,
     tv_get_string_chk, tv_islocked,
@@ -13,7 +14,6 @@ use crate::src::nvim::eval::{callback_from_typval, clear_lval, get_lval};
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::main::{e_dictkey, e_invarg2, e_trailing_arg};
 use crate::src::nvim::memory::xmalloc;
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::strings::vim_vsnprintf_typval;
 use crate::src::nvim::types::{
@@ -149,7 +149,7 @@ pub unsafe extern "C" fn f_islocked(
                 } else {
                     e_trailing_arg.ptr() as *const c_char
                 };
-                semsg(gettext(fmt), end);
+                semsg_c!(gettext(fmt), end);
             } else if lv.ll_tv.is_null() {
                 let di = find_var(lv.ll_name, lv.ll_name_len, ptr::null_mut(), true);
                 if !di.is_null() {
@@ -160,7 +160,7 @@ pub unsafe extern "C" fn f_islocked(
             } else if lv.ll_range {
                 semsg!("E786: Range not allowed");
             } else if !lv.ll_newkey.is_null() {
-                semsg(gettext(e_dictkey.ptr() as *const c_char), lv.ll_newkey);
+                semsg_c!(gettext(e_dictkey.ptr() as *const c_char), lv.ll_newkey);
             } else if !lv.ll_list.is_null() {
                 rettv.vval.v_number = tv_islocked(&raw mut (*lv.ll_li).li_tv) as varnumber_T;
             } else {

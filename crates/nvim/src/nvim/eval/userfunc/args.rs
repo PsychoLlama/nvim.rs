@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -38,7 +39,7 @@ unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut garray_T, skip: bool)
             || (len == 8 && strncmp(arg, c"lastline".as_ptr(), 8) == 0)
         {
             if !skip {
-                semsg(gettext(c"E125: Illegal argument: %s".as_ptr()), arg);
+                semsg_c!(gettext(c"E125: Illegal argument: %s".as_ptr()), arg);
             }
             return arg;
         }
@@ -49,7 +50,7 @@ unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut garray_T, skip: bool)
             let arg_copy = xstrdup(arg);
             for &earlier in ga_strings(&*newargs) {
                 if strcmp(earlier, arg_copy) == 0 {
-                    semsg(
+                    semsg_c!(
                         gettext(c"E853: Duplicate argument name: %s".as_ptr()),
                         arg_copy,
                     );
@@ -144,7 +145,7 @@ pub(crate) unsafe fn get_function_args(
                     }
                     if ascii_iswhite(*p as c_int) && *skipwhite(p) == b',' as c_char {
                         if !skip {
-                            semsg(
+                            semsg_c!(
                                 gettext(E_NO_WHITE_SPACE_ALLOWED_BEFORE_STR_STR.as_ptr()),
                                 c",".as_ptr(),
                                 p,
@@ -162,7 +163,7 @@ pub(crate) unsafe fn get_function_args(
                 p = skipwhite(p);
                 if mustend && *p != endchar {
                     if !skip {
-                        semsg(gettext(&raw const e_invarg2 as *const c_char), *argp);
+                        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), *argp);
                     }
                     break;
                 }

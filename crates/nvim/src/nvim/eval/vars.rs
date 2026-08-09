@@ -61,7 +61,7 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::message::{
     emsg, internal_error, message_filtered, msg_advance, msg_clr_eos, msg_ext_set_kind,
-    msg_outtrans, msg_putchar, msg_puts, msg_puts_len, msg_start, semsg,
+    msg_outtrans, msg_putchar, msg_puts, msg_puts_len, msg_start,
 };
 use crate::src::nvim::option::{
     find_option, get_option, get_option_sctx, get_option_value, get_tty_option, get_winbuf_options,

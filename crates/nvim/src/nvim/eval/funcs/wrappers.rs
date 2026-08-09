@@ -28,13 +28,14 @@ use crate::src::nvim::main::{
     empty_string_option, emsg_off, lastbuf, p_cpo, p_magic,
 };
 use crate::src::nvim::memory::{arena_finish, arena_mem_free};
-use crate::src::nvim::message::{emsg, semsg, semsg_multiline};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{gettext, strlen, strncmp};
 use crate::src::nvim::types::{
     Arena, Array, Error, EvalFuncData, EvalFuncDef, MsgpackRpcRequestHandler, Object, VAR_BOOL,
     VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, buf_T, expand_T, float_T,
     kBoolVarTrue, kErrorTypeNone, kObjectTypeNil, typval_T, typval_vval_union, win_T,
 };
+use crate::{semsg_c, semsg_multiline_c};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 use core::slice;
@@ -91,7 +92,7 @@ pub unsafe extern "C" fn check_internal_func(fdef: *const EvalFuncDef, argcount:
         } else {
             e_toofewarg.ptr() as *const c_char
         };
-        semsg(gettext(message), (*fdef).name);
+        semsg_c!(gettext(message), (*fdef).name);
         -1
     }
 }
@@ -300,7 +301,7 @@ pub(crate) unsafe fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut float_T) 
             VAR_FLOAT => *ret_f = (*tv).vval.v_float,
             VAR_NUMBER => *ret_f = (*tv).vval.v_number as float_T,
             _ => {
-                semsg(
+                semsg_c!(
                     c"%s".as_ptr(),
                     gettext(c"E808: Number or Float required".as_ptr()),
                 );
@@ -375,7 +376,7 @@ pub unsafe extern "C" fn api_wrapper(
             &raw mut err,
         );
         if err.type_0 != kErrorTypeNone {
-            semsg_multiline(
+            semsg_multiline_c!(
                 c"emsg".as_ptr(),
                 e_api_error.ptr() as *const c_char,
                 err.msg,
@@ -471,7 +472,7 @@ pub unsafe extern "C" fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T {
         let buf = tv_get_buf(arg, false_0);
         *emsg_off.ptr() -= 1;
         if buf.is_null() {
-            semsg(
+            semsg_c!(
                 gettext(c"E158: Invalid buffer name: %s".as_ptr()),
                 tv_get_string(arg),
             );

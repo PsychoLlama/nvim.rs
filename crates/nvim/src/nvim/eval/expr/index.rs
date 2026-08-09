@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr::{null, null_mut};
 
@@ -27,7 +28,7 @@ use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::main::{e_dictkey, e_dictkey_len, e_using_float_as_string};
 use crate::src::nvim::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::src::nvim::memory::xmemdupz;
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::types::{
     EvalFuncData, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
@@ -326,9 +327,9 @@ pub(crate) unsafe fn eval_index_inner(
                 let item: *mut dictitem_T = tv_dict_find((*rettv).vval.v_dict, key, keylen);
                 if item.is_null() && verbose {
                     if keylen > 0 {
-                        semsg(gettext(e_dictkey_len.ptr().cast()), keylen, key);
+                        semsg_c!(gettext(e_dictkey_len.ptr().cast()), keylen, key);
                     } else {
-                        semsg(gettext(e_dictkey.ptr().cast()), key);
+                        semsg_c!(gettext(e_dictkey.ptr().cast()), key);
                     }
                 }
                 if item.is_null() || tv_is_luafunc(&raw mut (*item).di_tv) {

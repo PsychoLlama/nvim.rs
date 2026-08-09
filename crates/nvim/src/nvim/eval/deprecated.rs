@@ -1,3 +1,4 @@
+use crate::semsg_c;
 use crate::src::nvim::channel::{channel_close, channel_create_event, channel_job_start};
 use crate::src::nvim::eval::find_job;
 use crate::src::nvim::eval::funcs::{f_jobstart, f_jobstop};
@@ -9,7 +10,7 @@ use crate::src::nvim::ex_cmds::check_secure;
 
 use crate::src::nvim::main::{e_api_spawn_failed, e_invarg, e_invarg2, firstbuf};
 use crate::src::nvim::memory::{xmalloc, xstrdup};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::types::channel::kChannelStdinPipe;
 use crate::src::nvim::types::{
@@ -63,7 +64,7 @@ pub unsafe extern "C" fn f_rpcstart(
                 if (*arg).li_tv.v_type as ::core::ffi::c_uint
                     != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    semsg(
+                    semsg_c!(
                         gettext(
                             b"E5010: List item %d of the second argument is not a string\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -239,7 +240,7 @@ pub unsafe extern "C" fn f_termopen(
     if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        semsg(
+        semsg_c!(
             gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
             b"expected dictionary\0".as_ptr() as *const ::core::ffi::c_char,
         );

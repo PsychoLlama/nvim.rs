@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::src::nvim::ascii::ascii_isdigit;
@@ -21,7 +22,6 @@ use crate::src::nvim::keycodes::{K_SPECIAL, KE_SNR};
 use crate::src::nvim::main::e_invexpr2;
 use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memory::{xfree, xmalloc};
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::option::find_option_end;
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
@@ -145,7 +145,7 @@ pub unsafe fn get_name_len(
 
         len += get_id_len(arg);
         if len == 0 && verbose && **arg as c_int != NUL {
-            semsg(gettext(e_invexpr2.ptr().cast()), *arg);
+            semsg_c!(gettext(e_invexpr2.ptr().cast()), *arg);
         }
         len
     }

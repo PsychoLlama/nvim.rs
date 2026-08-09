@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr::null_mut;
@@ -41,7 +42,6 @@ use crate::src::nvim::main::{
     sandbox, textlock,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::option::was_set_insecurely;
 use crate::src::nvim::options::{kOptFoldexpr, kOptFoldtext};
 use crate::src::nvim::os::libc::{atol, gettext, memcmp, memset, strlen};
@@ -212,7 +212,7 @@ pub(crate) unsafe fn eval1_emsg(
             && did_emsg.get() == did_emsg_before
             && called_emsg.get() == called_emsg_before
         {
-            semsg(gettext(e_invexpr2.ptr().cast()), start);
+            semsg_c!(gettext(e_invexpr2.ptr().cast()), start);
         }
         clear_evalarg(&raw mut evalarg, eap);
         ret
@@ -307,7 +307,7 @@ pub(crate) unsafe fn eval_expr_string(expr: *const typval_T, rettv: *mut typval_
         }
         if *skipwhite(s) as c_int != NUL {
             tv_clear(rettv);
-            semsg(gettext(e_invexpr2.ptr().cast()), s);
+            semsg_c!(gettext(e_invexpr2.ptr().cast()), s);
             return FAIL;
         }
         OK

@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 
 /// `tv` as a number, raising an error and answering 0 for a value that has no
 /// numeric form.
@@ -57,7 +58,7 @@ pub unsafe extern "C" fn tv_get_number_chk(
                 emsg(gettext((*num_errors.ptr())[(*tv).v_type as usize]));
             }
             VAR_UNKNOWN => {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_intern2 as *const ::core::ffi::c_char),
                     c"tv_get_number(UNKNOWN)".as_ptr(),
                 );
@@ -134,7 +135,7 @@ pub unsafe extern "C" fn tv_get_float(tv: *const typval_T) -> float_T {
             VAR_SPECIAL => c"E907: Using a special value as a Float",
             VAR_BLOB => c"E975: Using a Blob as a Float",
             VAR_UNKNOWN => {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_intern2 as *const ::core::ffi::c_char),
                     c"tv_get_float(UNKNOWN)".as_ptr(),
                 );

@@ -2,6 +2,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr::null_mut;
 
@@ -14,7 +15,6 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::{EVAL_EVALUATE, FAIL, NOTDONE, NUL, OK, e_list_end, eval1};
 use crate::src::nvim::memory::xmemdupz;
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::types::{
     VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, dict_T, dictitem_T, evalarg_T, kListLenShouldKnow,
@@ -78,11 +78,11 @@ pub(crate) unsafe fn eval_list(
                 if had_comma {
                     continue;
                 }
-                semsg(gettext(c"E696: Missing comma in List: %s".as_ptr()), *arg);
+                semsg_c!(gettext(c"E696: Missing comma in List: %s".as_ptr()), *arg);
                 break 'items false;
             }
             if **arg != b']' as c_char {
-                semsg(gettext(e_list_end.as_ptr()), *arg);
+                semsg_c!(gettext(e_list_end.as_ptr()), *arg);
                 break 'items false;
             }
             *arg = skipwhite((*arg).add(1));
@@ -179,7 +179,7 @@ pub(crate) unsafe fn eval_dict(
                     break 'items false;
                 }
                 if **arg != b':' as c_char {
-                    semsg(
+                    semsg_c!(
                         gettext(c"E720: Missing colon in Dictionary: %s".as_ptr()),
                         *arg,
                     );
@@ -203,7 +203,7 @@ pub(crate) unsafe fn eval_dict(
                 }
                 if evaluate {
                     if !tv_dict_find(dict, key, -1 as ptrdiff_t).is_null() {
-                        semsg(
+                        semsg_c!(
                             gettext(c"E721: Duplicate key in Dictionary: \"%s\"".as_ptr()),
                             key,
                         );
@@ -230,14 +230,14 @@ pub(crate) unsafe fn eval_dict(
                 if had_comma {
                     continue;
                 }
-                semsg(
+                semsg_c!(
                     gettext(c"E722: Missing comma in Dictionary: %s".as_ptr()),
                     *arg,
                 );
                 break 'items false;
             }
             if **arg != b'}' as c_char {
-                semsg(
+                semsg_c!(
                     gettext(c"E723: Missing end of Dictionary '}': %s".as_ptr()),
                     *arg,
                 );

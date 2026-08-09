@@ -7,6 +7,7 @@ use super::{
     FAIL, NUL, SIGINT, VIM_ERROR, VIM_GENERIC, VIM_INFO, VIM_QUESTION, VIM_WARNING, false_0,
     true_0, tv_get_buf_from_arg,
 };
+use crate::semsg_c;
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::api::vim::nvim_feedkeys;
 use crate::src::nvim::buffer::bt_prompt;
@@ -29,8 +30,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::memory::xstrdup;
 use crate::src::nvim::message::{
-    do_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start, semsg,
-    verb_msg,
+    do_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start, verb_msg,
 };
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::types::ui::kUIMessages;
@@ -217,7 +217,7 @@ pub unsafe extern "C" fn f_inputlist(
     // whole call.
     unsafe {
         if args.ty(0) != VAR_LIST {
-            semsg(
+            semsg_c!(
                 gettext(e_listarg.ptr() as *const c_char),
                 c"inputlist()".as_ptr(),
             );

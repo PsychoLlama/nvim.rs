@@ -3,6 +3,7 @@
 
 use super::args::frame;
 use super::{FAIL, NUL, OK, tv_get_buf};
+use crate::semsg_c;
 use crate::src::nvim::eval::typval::{
     tv_check_for_dict_arg, tv_check_for_string_arg, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc,
     tv_dict_alloc_ret, tv_get_number, tv_get_string, tv_get_string_chk, tv_list_alloc,
@@ -12,7 +13,6 @@ use crate::src::nvim::eval::typval::{
 use crate::src::nvim::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::src::nvim::main::{curbuf, curwin, emsg_off, vim_ignored};
 use crate::src::nvim::mark::{cleanup_jumplist, get_buf_local_marks, get_global_marks};
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::src::nvim::types::{
@@ -214,7 +214,7 @@ pub unsafe extern "C" fn f_settagstack(
             match CStr::from_ptr(actstr).to_bytes() {
                 b"r" | b"a" | b"t" => action = *actstr,
                 _ => {
-                    semsg(gettext(c"E962: Invalid action: '%s'".as_ptr()), actstr);
+                    semsg_c!(gettext(c"E962: Invalid action: '%s'".as_ptr()), actstr);
                     return;
                 }
             }

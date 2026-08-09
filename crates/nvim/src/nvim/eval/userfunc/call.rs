@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of_val;
 use core::ptr;
@@ -282,7 +283,7 @@ pub unsafe fn call_user_func(
         estack_push_ufunc(fp, 1);
         if p_verbose.get() >= 12 {
             verbose_report(|| {
-                smsg(
+                smsg_c!(
                     0,
                     gettext(c"calling %s".as_ptr()),
                     (*sourcing_entry()).es_name,
@@ -407,9 +408,9 @@ pub unsafe fn call_user_func(
             verbose_report(|| {
                 let name = (*sourcing_entry()).es_name;
                 if aborting() {
-                    smsg(0, gettext(c"%s aborted".as_ptr()), name);
+                    smsg_c!(0, gettext(c"%s aborted".as_ptr()), name);
                 } else if (*(*fc).fc_rettv).v_type == VAR_NUMBER {
-                    smsg(
+                    smsg_c!(
                         0,
                         gettext(c"%s returning #%ld".as_ptr()),
                         name,
@@ -427,7 +428,7 @@ pub unsafe fn call_user_func(
                             trunc_string(s, buf.as_mut_ptr(), MSG_BUF_CLEN, MSG_BUF_LEN);
                             s = buf.as_mut_ptr();
                         }
-                        smsg(0, gettext(c"%s returning %s".as_ptr()), name, s);
+                        smsg_c!(0, gettext(c"%s returning %s".as_ptr()), name, s);
                         xfree(tofree as *mut c_void);
                     }
                 }
@@ -445,7 +446,7 @@ pub unsafe fn call_user_func(
 
         if p_verbose.get() >= 12 && !(*sourcing_entry()).es_name.is_null() {
             verbose_report(|| {
-                smsg(
+                smsg_c!(
                     0,
                     gettext(c"continuing in %s".as_ptr()),
                     (*sourcing_entry()).es_name,
@@ -529,7 +530,7 @@ pub(crate) unsafe fn user_func_error(error: c_int, name: *const c_char, found_va
         match error {
             FCERR_UNKNOWN => {
                 if found_var {
-                    semsg(
+                    semsg_c!(
                         gettext(&raw const e_not_callable_type_str as *const c_char),
                         name,
                     );

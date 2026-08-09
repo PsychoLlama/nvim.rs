@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -88,9 +89,9 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
         if endp.is_null() || (*redir_lval.get()).ll_name.is_null() || *endp != NUL {
             clear_lval(redir_lval.get());
             if !endp.is_null() && *endp != NUL {
-                semsg(gettext(&raw const e_trailing_arg as *const c_char), endp);
+                semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), endp);
             } else {
-                semsg(gettext(&raw const e_invarg2 as *const c_char), name);
+                semsg_c!(gettext(&raw const e_invarg2 as *const c_char), name);
             }
             // Store no value; only clean up.
             redir_endp.set(ptr::null_mut());

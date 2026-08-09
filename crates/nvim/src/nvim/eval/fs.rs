@@ -1,3 +1,4 @@
+use crate::semsg_c;
 use crate::src::nvim::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne, globpath};
 use crate::src::nvim::eval::typval::{
     tv_blob_alloc_ret, tv_blob_free, tv_check_for_nonempty_string_arg, tv_check_for_string_arg,
@@ -27,7 +28,7 @@ use crate::src::nvim::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::src::nvim::memory::{
     xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup, xstrlcat, xstrlcpy,
 };
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::env::{expand_env_save, home_replace};
 use crate::src::nvim::os::fileio::{file_close, file_flush, file_open, file_write};
 use crate::src::nvim::os::fs::{
@@ -482,7 +483,7 @@ pub unsafe extern "C" fn f_chdir(
         {
             scope = kCdScopeWindow;
         } else {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_invargNval as *const ::core::ffi::c_char),
                 b"scope\0".as_ptr() as *const ::core::ffi::c_char,
                 s,
@@ -553,7 +554,7 @@ pub unsafe extern "C" fn f_delete(
     {
         (*rettv).vval.v_number = delete_recursive(name) as varnumber_T;
     } else {
-        semsg(
+        semsg_c!(
             gettext(&raw const e_invexpr2 as *const ::core::ffi::c_char),
             flags,
         );
@@ -1565,7 +1566,7 @@ pub unsafe extern "C" fn f_mkdir(
                 },
             );
             if ret != 0 as ::core::ffi::c_int {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_mkdir as *const ::core::ffi::c_char),
                     failed_dir,
                     uv_strerror(ret),
@@ -1870,7 +1871,7 @@ unsafe extern "C" fn read_file_or_blob(
     let fname: *const ::core::ffi::c_char =
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
     if os_isdir(fname) {
-        semsg(
+        semsg_c!(
             gettext(&raw const e_isadir2 as *const ::core::ffi::c_char),
             fname,
         );
@@ -1880,7 +1881,7 @@ unsafe extern "C" fn read_file_or_blob(
         fd = os_fopen(fname, READBIN.as_ptr());
         fd.is_null()
     } {
-        semsg(
+        semsg_c!(
             gettext(&raw const e_notopen as *const ::core::ffi::c_char),
             if *fname as ::core::ffi::c_int == NUL {
                 gettext(b"<empty>\0".as_ptr() as *const ::core::ffi::c_char)
@@ -1893,7 +1894,7 @@ unsafe extern "C" fn read_file_or_blob(
     }
     if blob {
         if read_blob(fd, rettv, offset, size) == FAIL {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_cant_read_file_str as *const ::core::ffi::c_char),
                 fname,
             );
@@ -2429,7 +2430,7 @@ unsafe extern "C" fn write_list(
             return true_0 != 0;
         }
     }
-    semsg(
+    semsg_c!(
         gettext((e_error_while_writing_str.ptr() as *const _) as *const ::core::ffi::c_char),
         uv_strerror(error),
     );
@@ -2454,7 +2455,7 @@ unsafe extern "C" fn write_data(
             return true_0 != 0;
         }
     }
-    semsg(
+    semsg_c!(
         gettext((e_error_while_writing_str.ptr() as *const _) as *const ::core::ffi::c_char),
         uv_strerror(error),
     );
@@ -2503,7 +2504,7 @@ pub unsafe extern "C" fn f_writefile(
             == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
             && script_is_lua((*current_sctx.ptr()).sc_sid) as ::core::ffi::c_int != 0)
     {
-        semsg(
+        semsg_c!(
             gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
             gettext(
                 b"writefile() first argument must be a List or a Blob\0".as_ptr()
@@ -2547,7 +2548,7 @@ pub unsafe extern "C" fn f_writefile(
                     mkdir_p = true_0 != 0;
                 }
                 _ => {
-                    semsg(
+                    semsg_c!(
                         gettext(b"E5060: Unknown flag: %s\0".as_ptr() as *const ::core::ffi::c_char),
                         p,
                     );
@@ -2599,7 +2600,7 @@ pub unsafe extern "C" fn f_writefile(
             0o666 as ::core::ffi::c_int,
         );
         if error != 0 as ::core::ffi::c_int {
-            semsg(
+            semsg_c!(
                 gettext(b"E482: Can't open file %s for writing: %s\0".as_ptr()
                     as *const ::core::ffi::c_char),
                 fname,
@@ -2659,7 +2660,7 @@ pub unsafe extern "C" fn f_writefile(
             }
             error = file_close(&raw mut fp, do_fsync);
             if error != 0 as ::core::ffi::c_int {
-                semsg(
+                semsg_c!(
                     gettext(b"E80: Error when closing file %s: %s\0".as_ptr()
                         as *const ::core::ffi::c_char),
                     fname,

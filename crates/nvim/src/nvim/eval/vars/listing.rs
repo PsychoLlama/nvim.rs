@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -160,7 +161,7 @@ pub(crate) unsafe fn list_arg_vars(
                 );
                 if !ascii_iswhite(*arg as c_int) && ends_excmd(*arg as c_int) == 0 {
                     emsg_severe.set(true);
-                    semsg(gettext(&raw const e_trailing_arg as *const c_char), arg);
+                    semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), arg);
                     break;
                 }
                 arg = skipwhite(arg);
@@ -176,7 +177,7 @@ pub(crate) unsafe fn list_arg_vars(
                 if len <= 0 {
                     if len < 0 && !aborting() {
                         emsg_severe.set(true);
-                        semsg(gettext(&raw const e_invarg2 as *const c_char), arg);
+                        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg);
                         xfree(tofree.cast());
                         return arg;
                     }
@@ -210,7 +211,7 @@ pub(crate) unsafe fn list_arg_vars(
                         b's' => list_script_vars(first),
                         b'l' => list_func_vars(first),
                         _ => {
-                            semsg(gettext(c"E738: Can't list variables for %s".as_ptr()), name);
+                            semsg_c!(gettext(c"E738: Can't list variables for %s".as_ptr()), name);
                         }
                     }
                 } else {

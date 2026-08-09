@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr::null_mut;
 
@@ -26,7 +27,7 @@ use crate::src::nvim::keycodes::{find_special_key, trans_special};
 use crate::src::nvim::main::{e_invexpr2, e_stray_closing_curly_str};
 use crate::src::nvim::mbyte::{mb_copy_char, utf_char2bytes, utfc_ptr2len};
 use crate::src::nvim::memory::{xfree, xmalloc};
-use crate::src::nvim::message::{emsg, iemsg, semsg};
+use crate::src::nvim::message::{emsg, iemsg};
 use crate::src::nvim::option::{get_option_value, get_tty_option, is_option_hidden, is_tty_option};
 use crate::src::nvim::options::{kOptAleph, kOptInvalid};
 use crate::src::nvim::os::env::{expand_env_save, vim_getenv};
@@ -72,7 +73,7 @@ pub unsafe fn eval_option(arg: *mut *const c_char, rettv: *mut typval_T, evaluat
             find_option_var_end(arg, &raw mut opt_idx, &raw mut opt_flags) as *mut c_char;
         if option_end.is_null() {
             if !rettv.is_null() {
-                semsg(gettext(c"E112: Option name missing: %s".as_ptr()), *arg);
+                semsg_c!(gettext(c"E112: Option name missing: %s".as_ptr()), *arg);
             }
             return FAIL;
         }
@@ -90,7 +91,7 @@ pub unsafe fn eval_option(arg: *mut *const c_char, rettv: *mut typval_T, evaluat
         let ret = if opt_idx == kOptInvalid && !is_tty_opt {
             // Only report it when the result is going to be used.
             if !rettv.is_null() {
-                semsg(gettext(c"E113: Unknown option: %s".as_ptr()), *arg);
+                semsg_c!(gettext(c"E113: Unknown option: %s".as_ptr()), *arg);
             }
             FAIL
         } else if !rettv.is_null() {
@@ -214,7 +215,7 @@ pub(crate) unsafe fn eval_number(
             );
             if len == 0 {
                 if evaluate {
-                    semsg(gettext(e_invexpr2.ptr().cast()), *arg);
+                    semsg_c!(gettext(e_invexpr2.ptr().cast()), *arg);
                 }
                 return FAIL;
             }
@@ -285,7 +286,7 @@ pub(crate) unsafe fn eval_string(
                 }
                 p = p.add(1);
                 if *p.sub(1) == b'}' as c_char && *p != b'}' as c_char {
-                    semsg(gettext(e_stray_closing_curly_str.ptr().cast()), *arg);
+                    semsg_c!(gettext(e_stray_closing_curly_str.ptr().cast()), *arg);
                     return FAIL;
                 }
                 extra -= 1; // `{{` becomes `{`, `}}` becomes `}`
@@ -294,7 +295,7 @@ pub(crate) unsafe fn eval_string(
         }
 
         if *p != b'"' as c_char && !(interpolate && *p == b'{' as c_char) {
-            semsg(gettext(c"E114: Missing quote: %s".as_ptr()), *arg);
+            semsg_c!(gettext(c"E114: Missing quote: %s".as_ptr()), *arg);
             return FAIL;
         }
         if !evaluate {
@@ -481,7 +482,7 @@ pub(crate) unsafe fn eval_lit_string(
                 } else if *p == b'}' as c_char {
                     p = p.add(1);
                     if *p != b'}' as c_char {
-                        semsg(gettext(e_stray_closing_curly_str.ptr().cast()), *arg);
+                        semsg_c!(gettext(e_stray_closing_curly_str.ptr().cast()), *arg);
                         return FAIL;
                     }
                     reduce += 1;
@@ -491,7 +492,7 @@ pub(crate) unsafe fn eval_lit_string(
         }
 
         if *p != b'\'' as c_char && !(interpolate && *p == b'{' as c_char) {
-            semsg(gettext(c"E115: Missing quote: %s".as_ptr()), *arg);
+            semsg_c!(gettext(c"E115: Missing quote: %s".as_ptr()), *arg);
             return FAIL;
         }
         if !evaluate {

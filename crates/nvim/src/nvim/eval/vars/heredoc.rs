@@ -6,6 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -33,7 +34,7 @@ pub unsafe fn eval_one_expr_in_str(
         let block_start = skipwhite(p.add(1));
         let mut block_end = block_start;
         if *block_start == NUL {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_missing_close_curly_str as *const c_char),
                 p,
             );
@@ -44,7 +45,7 @@ pub unsafe fn eval_one_expr_in_str(
         }
         block_end = skipwhite(block_end);
         if *block_end != b'}' as c_char {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_missing_close_curly_str as *const c_char),
                 p,
             );
@@ -97,7 +98,7 @@ unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
                 p = p.add(1);
                 escaped_brace = true;
             } else if *p == b'}' as c_char {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_stray_closing_curly_str as *const c_char),
                     str,
                 );
@@ -208,7 +209,7 @@ pub unsafe fn heredoc_get(
             marker = skipwhite(cmd);
             let p = skiptowhite(marker);
             if *skipwhite(p) != NUL && *skipwhite(p) != COMMENT_CHAR {
-                semsg(gettext(&raw const e_trailing_arg as *const c_char), p);
+                semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), p);
                 return ptr::null_mut();
             }
             *p = NUL;
@@ -239,7 +240,7 @@ pub unsafe fn heredoc_get(
             if heredoc_in_string {
                 if *line_arg == NUL {
                     if !script_get {
-                        semsg(gettext(e_missing_end_marker_str.as_ptr()), marker);
+                        semsg_c!(gettext(e_missing_end_marker_str.as_ptr()), marker);
                     }
                     break;
                 }
@@ -261,7 +262,7 @@ pub unsafe fn heredoc_get(
                 );
                 if theline.is_null() {
                     if !script_get {
-                        semsg(gettext(e_missing_end_marker_str.as_ptr()), marker);
+                        semsg_c!(gettext(e_missing_end_marker_str.as_ptr()), marker);
                     }
                     break;
                 }

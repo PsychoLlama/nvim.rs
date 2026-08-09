@@ -4,6 +4,7 @@
 
 use super::args::{Args, frame};
 use super::{FAIL, NUL, OK, kMTBlockWise, kMTCharWise, kMTLineWise};
+use crate::semsg_c;
 use crate::src::nvim::api::private::helpers::cbuf_to_string;
 use crate::src::nvim::buffer::buflist_findnr;
 use crate::src::nvim::charset::getdigits_int;
@@ -21,7 +22,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::mbyte::{mb_prevptr, utfc_ptr2len};
 use crate::src::nvim::memline::{ml_get, ml_get_buf_len, ml_get_len, ml_get_pos};
 use crate::src::nvim::memory::xmalloc;
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::unadjust_for_sel_inner;
 use crate::src::nvim::ops::{block_prep, charwise_block_prep, reset_lbr, restore_lbr};
 use crate::src::nvim::os::libc::{gettext, memmove, memset};
@@ -246,7 +247,7 @@ unsafe fn parse_type(spec: *const c_char) -> Option<(MotionType, c_int)> {
     // whole width.
     unsafe {
         let bad = || {
-            semsg(
+            semsg_c!(
                 gettext(e_invargNval.ptr() as *const c_char),
                 c"type".as_ptr(),
                 spec,
@@ -284,7 +285,7 @@ unsafe fn check_corner(buf: *mut buf_T, p: &mut pos_T) -> Option<()> {
     // the line number has been checked.
     unsafe {
         if p.lnum < 1 || p.lnum > (*buf).b_ml.ml_line_count {
-            semsg(
+            semsg_c!(
                 gettext(e_invalid_line_number_nr.ptr() as *const c_char),
                 p.lnum,
             );
@@ -294,7 +295,7 @@ unsafe fn check_corner(buf: *mut buf_T, p: &mut pos_T) -> Option<()> {
         if p.col == MAXCOL as colnr_T {
             p.col = len + 1;
         } else if p.col < 1 || p.col > len + 1 {
-            semsg(
+            semsg_c!(
                 gettext(e_invalid_column_number_nr.ptr() as *const c_char),
                 p.col,
             );

@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::super::FAIL;
@@ -21,7 +22,6 @@ use crate::src::nvim::eval::typval::{
     tv_clear, tv_dict_add, tv_dict_find, tv_dict_item_alloc, tv_list_alloc, tv_list_append_list,
     tv_list_append_owned_tv, tv_list_len,
 };
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::{abort, gettext};
 use crate::src::nvim::types::{VAR_LIST, VAR_STRING, list_T, typval_T};
 
@@ -97,7 +97,7 @@ impl<'a> Decoder<'a> {
         // SAFETY: `rest` outlives the call and `semsg` copies what it keeps;
         // `%.*s` reads at most the length given.
         unsafe {
-            semsg(
+            semsg_c!(
                 gettext(fmt.as_ptr()),
                 rest.len() as c_int,
                 rest.as_ptr() as *const c_char,
@@ -163,7 +163,7 @@ impl<'a> Decoder<'a> {
 
             if last.container.v_type == VAR_LIST {
                 if tv_list_len(last.container.vval.v_list) != 0 && !obj.didcomma {
-                    semsg(
+                    semsg_c!(
                         gettext(E474_COMMA_BEFORE_LIST_ITEM.as_ptr()),
                         self.buf[val_location..].as_ptr() as *const c_char,
                     );
@@ -179,7 +179,7 @@ impl<'a> Decoder<'a> {
             // value that goes with it.
             if last.stack_index == self.stack.len().wrapping_sub(2) {
                 if !obj.didcolon {
-                    semsg(
+                    semsg_c!(
                         gettext(E474_COLON_BEFORE_DICT_VALUE.as_ptr()),
                         self.buf[val_location..].as_ptr() as *const c_char,
                     );
@@ -208,7 +208,7 @@ impl<'a> Decoder<'a> {
 
             // A dictionary with nothing pending: this value is a key.
             if !obj.is_special_string && obj.val.v_type != VAR_STRING {
-                semsg(
+                semsg_c!(
                     gettext(E474_STRING_KEY.as_ptr()),
                     self.buf[*at..].as_ptr() as *const c_char,
                 );
@@ -219,7 +219,7 @@ impl<'a> Decoder<'a> {
                 && last.special_val.is_null()
                 && (*last.container.vval.v_dict).dv_hashtab.ht_used != 0
             {
-                semsg(
+                semsg_c!(
                     gettext(E474_COMMA_BEFORE_DICT_KEY.as_ptr()),
                     self.buf[val_location..].as_ptr() as *const c_char,
                 );

@@ -3,6 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr::null_mut;
@@ -29,7 +30,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::memline::{ml_append, ml_get_buf};
 use crate::src::nvim::memory::{strchrsub, strequal, xfree, xstrdup};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{gettext, snprintf, strlen};
 use crate::src::nvim::runtime::{exestack, script_autoload};
 use crate::src::nvim::strings::concat_str;
@@ -174,7 +175,7 @@ pub unsafe fn eval_call_provider(
 ) -> typval_T {
     unsafe {
         if !eval_has_provider(provider, false) {
-            semsg(
+            semsg_c!(
                 c"E319: No \"%s\" provider found. Run \":checkhealth vim.provider\"".as_ptr(),
                 provider,
             );
@@ -274,7 +275,7 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
             return false;
         }
         if throw_if_fast && !nlua_is_deferred_safe() {
-            semsg(
+            semsg_c!(
                 e_fast_api_disabled.ptr().cast(),
                 c"Vimscript function".as_ptr(),
             );
@@ -331,7 +332,7 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
                     name.as_mut_ptr(),
                 );
                 if !find_func(buf.as_mut_ptr()).is_null() && p_lpl.get() != 0 {
-                    semsg(
+                    semsg_c!(
                         c"provider: %s: missing required variable g:loaded_%s_provider".as_ptr(),
                         name.as_mut_ptr(),
                         name.as_mut_ptr(),
@@ -351,7 +352,7 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
                 name.as_mut_ptr(),
             );
             if find_func(buf.as_mut_ptr()).is_null() {
-                semsg(
+                semsg_c!(
                     c"provider: %s: g:loaded_%s_provider=2 but %s is not defined".as_ptr(),
                     name.as_mut_ptr(),
                     name.as_mut_ptr(),

@@ -9,8 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::types::CONV_NONE;
 
 /// Allocate a `dictitem_T` sized for a `key_len`-byte key, and copy the key in.
@@ -72,7 +73,7 @@ pub unsafe extern "C" fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dicti
         if (*hi).is_kept() {
             hash_remove(&raw mut (*dict).dv_hashtab, hi);
         } else {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_intern2 as *const ::core::ffi::c_char),
                 c"tv_dict_item_remove()".as_ptr(),
             );
@@ -447,7 +448,7 @@ pub unsafe extern "C" fn tv_dict_extend(
                     }
                 }
             } else if action == b'e' {
-                semsg(gettext(c"E737: Key already exists: %s".as_ptr()), di2_key);
+                semsg_c!(gettext(c"E737: Key already exists: %s".as_ptr()), di2_key);
                 break;
             } else if action == b'f' && di2 != di1 {
                 if value_check_lock((*di1).di_tv.v_lock, arg_errmsg, arg_errmsg_len)
@@ -627,7 +628,7 @@ pub unsafe extern "C" fn tv_dict_remove(
 ) {
     unsafe {
         if (*argvars.add(2)).v_type != VAR_UNKNOWN {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_toomanyarg as *const ::core::ffi::c_char),
                 c"remove()".as_ptr(),
             );
@@ -644,7 +645,7 @@ pub unsafe extern "C" fn tv_dict_remove(
         }
         let di = tv_dict_find(d, key, -1);
         if di.is_null() {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_dictkey as *const ::core::ffi::c_char),
                 key,
             );

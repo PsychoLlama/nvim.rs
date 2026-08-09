@@ -9,6 +9,7 @@ use super::{
     kXDGConfigDirs, kXDGConfigHome, kXDGDataDirs, kXDGDataHome, kXDGRuntimeDir, kXDGStateHome,
     tv_get_buf,
 };
+use crate::semsg_c;
 use crate::src::nvim::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne};
 use crate::src::nvim::eval::typval::{
     tv_dict_add_str, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_get_number_chk,
@@ -22,7 +23,7 @@ use crate::src::nvim::main::{e_invarg2, emsg_off, p_verbose, p_wic};
 use crate::src::nvim::memfile::mf_fname;
 use crate::src::nvim::memline::{recover_names, swapfile_dict};
 use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xstrdup};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::env::{
     os_copy_fullenv, os_free_fullenv, os_get_fullenv_size, vim_env_iter, vim_getenv,
     vim_setenv_ext, vim_unsetenv_ext,
@@ -289,7 +290,7 @@ pub unsafe extern "C" fn f_setfperm(
             return;
         }
         if strlen(mode_str) != 9 {
-            semsg(gettext(e_invarg2.ptr() as *const c_char), mode_str);
+            semsg_c!(gettext(e_invarg2.ptr() as *const c_char), mode_str);
             return;
         }
         let mut mode: c_int = 0;
@@ -372,7 +373,7 @@ pub unsafe extern "C" fn f_stdpath(
             _ => {
                 // The name is arbitrary user bytes, so this keeps the
                 // variadic call.
-                semsg(gettext(c"E6100: \"%s\" is not a valid stdpath".as_ptr()), p);
+                semsg_c!(gettext(c"E6100: \"%s\" is not a valid stdpath".as_ptr()), p);
                 return;
             }
         };

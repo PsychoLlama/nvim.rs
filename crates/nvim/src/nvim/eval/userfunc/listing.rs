@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
 use core::ptr;
@@ -94,7 +95,7 @@ pub(crate) unsafe fn list_one_function(
 ) -> *mut ufunc_T {
     unsafe {
         if ends_excmd(*skipwhite(p) as c_int) == 0 {
-            semsg(gettext(&raw const e_trailing_arg as *const c_char), p);
+            semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), p);
             return ptr::null_mut();
         }
         (*eap).nextcmd = check_nextcmd(p);
@@ -292,7 +293,7 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
         }
         if ends_excmd(*skipwhite(p) as c_int) == 0 {
             xfree(name as *mut c_void);
-            semsg(gettext(&raw const e_trailing_arg as *const c_char), p);
+            semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), p);
             return;
         }
         (*eap).nextcmd = check_nextcmd(p);
@@ -303,7 +304,7 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
         if (*name as u8).is_ascii_digit() && fudi.fd_dict.is_null() {
             // Numbered function.
             if (*eap).skip == 0 {
-                semsg(gettext(&raw const e_invarg2 as *const c_char), (*eap).arg);
+                semsg_c!(gettext(&raw const e_invarg2 as *const c_char), (*eap).arg);
             }
             xfree(name as *mut c_void);
             return;
@@ -320,12 +321,12 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
 
         if fp.is_null() {
             if (*eap).forceit == 0 {
-                semsg(gettext(E_NOFUNC.as_ptr()), (*eap).arg);
+                semsg_c!(gettext(E_NOFUNC.as_ptr()), (*eap).arg);
             }
             return;
         }
         if (*fp).uf_calls > 0 {
-            semsg(
+            semsg_c!(
                 gettext(c"E131: Cannot delete function %s: It is in use".as_ptr()),
                 (*eap).arg,
             );
@@ -337,7 +338,7 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
         // of its own until the garbage collector frees it, which is why this
         // arm is reachable at all (see the docket's O-B14-13).
         if (*fp).uf_refcount > 2 {
-            semsg(
+            semsg_c!(
                 gettext(c"Cannot delete function %s: It is being used internally".as_ptr()),
                 (*eap).arg,
             );

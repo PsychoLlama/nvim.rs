@@ -23,6 +23,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr::null_mut;
@@ -57,7 +58,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memory::{xfree, xmemdupz, xstrdup};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{gettext, memset, strlen};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
@@ -172,7 +173,7 @@ pub(crate) unsafe fn get_lval_dict_item(
             && len == -1
             && rettv.is_null()
         {
-            semsg(e_illvar.ptr().cast(), c"v:['lua']".as_ptr());
+            semsg_c!(e_illvar.ptr().cast(), c"v:['lua']".as_ptr());
             return GLV_FAIL;
         }
 
@@ -181,14 +182,14 @@ pub(crate) unsafe fn get_lval_dict_item(
             if (*lp).ll_dict == get_vimvar_dict()
                 || &raw mut (*(*lp).ll_dict).dv_hashtab == get_funccal_args_ht()
             {
-                semsg(gettext(e_illvar.ptr().cast()), name);
+                semsg_c!(gettext(e_illvar.ptr().cast()), name);
                 return GLV_FAIL;
             }
             // The key does not exist. It may be added — unless something
             // follows it to subscript, or this is an `:unlet`.
             if *p == b'[' as c_char || *p == b'.' as c_char || unlet {
                 if !quiet {
-                    semsg(gettext(e_dictkey.ptr().cast()), key);
+                    semsg_c!(gettext(e_dictkey.ptr().cast()), key);
                 }
                 return GLV_FAIL;
             }
@@ -339,7 +340,7 @@ pub(crate) unsafe fn get_lval_subscript(
             {
                 if *p == b'.' as c_char && (*(*lp).ll_tv).v_type != VAR_DICT {
                     if !quiet {
-                        semsg(
+                        semsg_c!(
                             gettext(e_dot_can_only_be_used_on_dictionary_str.as_ptr()),
                             name,
                         );
@@ -541,7 +542,7 @@ pub unsafe fn get_lval(
                 && *p != b'[' as c_char
                 && *p != b'.' as c_char
             {
-                semsg(gettext(e_trailing_arg.ptr().cast()), p);
+                semsg_c!(gettext(e_trailing_arg.ptr().cast()), p);
                 return null_mut();
             }
             (*lp).ll_exp_name = make_expanded_name(name, expr_start, expr_end, p);
@@ -549,7 +550,7 @@ pub unsafe fn get_lval(
             if (*lp).ll_exp_name.is_null() {
                 if !aborting() && !quiet {
                     emsg_severe.set(true);
-                    semsg(gettext(e_invarg2.ptr().cast()), name);
+                    semsg_c!(gettext(e_invarg2.ptr().cast()), name);
                     return null_mut();
                 }
                 (*lp).ll_name_len = 0 as size_t;
@@ -579,7 +580,7 @@ pub unsafe fn get_lval(
         );
         if v.is_null() {
             if !quiet {
-                semsg(
+                semsg_c!(
                     gettext(c"E121: Undefined variable: %.*s".as_ptr()),
                     (*lp).ll_name_len as c_int,
                     (*lp).ll_name,
@@ -702,7 +703,7 @@ pub unsafe fn set_var_lval(
             if !(*lp).ll_newkey.is_null() {
                 // The key has to be added to the Dictionary first.
                 if !op.is_null() && *op != b'=' as c_char {
-                    semsg(gettext(e_dictkey.ptr().cast()), (*lp).ll_newkey);
+                    semsg_c!(gettext(e_dictkey.ptr().cast()), (*lp).ll_newkey);
                     return;
                 }
                 if tv_dict_wrong_func_name((*(*lp).ll_tv).vval.v_dict, rettv, (*lp).ll_newkey) != 0
@@ -836,7 +837,7 @@ unsafe fn set_whole_var(
 unsafe fn set_blob_var(lp: *mut lval_T, rettv: *mut typval_T, op: *const c_char) -> bool {
     unsafe {
         if !op.is_null() && *op != b'=' as c_char {
-            semsg(gettext(e_letwrong.ptr().cast()), op);
+            semsg_c!(gettext(e_letwrong.ptr().cast()), op);
             return false;
         }
         if value_check_lock(
@@ -867,7 +868,7 @@ unsafe fn set_blob_var(lp: *mut lval_T, rettv: *mut typval_T, op: *const c_char)
         let val = tv_get_number_chk(rettv, &raw mut error);
         if !error {
             if !(0..=255).contains(&val) {
-                semsg(gettext(e_invalid_value_for_blob_nr.ptr().cast()), val);
+                semsg_c!(gettext(e_invalid_value_for_blob_nr.ptr().cast()), val);
             } else {
                 tv_blob_set_append((*lp).ll_blob, (*lp).ll_n1, val as uint8_t);
             }

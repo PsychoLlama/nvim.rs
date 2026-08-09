@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -585,7 +586,7 @@ pub(crate) unsafe fn set_vvar_item(
             &raw mut type_error,
         ) {
             if type_error {
-                semsg(
+                semsg_c!(
                     gettext(e_setting_v_str_to_value_with_wrong_type.as_ptr()),
                     varname,
                 );
