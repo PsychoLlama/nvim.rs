@@ -5,6 +5,7 @@ use super::file::*;
 use super::format::*;
 use super::tree::*;
 use super::*;
+use crate::{semsg_c, smsg_c};
 
 pub unsafe extern "C" fn u_read_undo(
     mut name: *mut c_char,
@@ -114,7 +115,7 @@ pub unsafe extern "C" fn u_read_undo(
         {
             if p_verbose.get() > 0 {
                 verbose_enter();
-                smsg(
+                smsg_c!(
                     0,
                     gettext(c"Not reading undo file, owner differs: %s".as_ptr()),
                     file_name,
@@ -128,7 +129,7 @@ pub unsafe extern "C" fn u_read_undo(
     }
     if p_verbose.get() > 0 {
         verbose_enter();
-        smsg(0, gettext(c"Reading undo file: %s".as_ptr()), file_name);
+        smsg_c!(0, gettext(c"Reading undo file: %s".as_ptr()), file_name);
         verbose_leave();
     }
     let mut fp: *mut FILE = os_fopen(file_name, c"r".as_ptr());
@@ -136,7 +137,7 @@ pub unsafe extern "C" fn u_read_undo(
         '_error: {
             if fp.is_null() {
                 if !name.is_null() || p_verbose.get() > 0 {
-                    semsg(
+                    semsg_c!(
                         gettext(c"E822: Cannot open undo file for reading: %s".as_ptr()),
                         file_name,
                     );
@@ -159,11 +160,11 @@ pub unsafe extern "C" fn u_read_undo(
                         UF_START_MAGIC_LEN as size_t,
                     ) != 0
                 {
-                    semsg(gettext(c"E823: Not an undo file: %s".as_ptr()), file_name);
+                    semsg_c!(gettext(c"E823: Not an undo file: %s".as_ptr()), file_name);
                 } else {
                     version = get2c(fp);
                     if version != UF_VERSION {
-                        semsg(
+                        semsg_c!(
                             gettext(c"E824: Incompatible undo file: %s".as_ptr()),
                             file_name,
                         );
@@ -434,7 +435,7 @@ pub unsafe extern "C" fn u_read_undo(
                                             (*curbuf.get()).b_u_synced = true;
                                             xfree(uhp_table as *mut c_void);
                                             if !name.is_null() {
-                                                smsg(
+                                                smsg_c!(
                                                     0,
                                                     gettext(
                                                         c"Finished reading undo file %s".as_ptr(),

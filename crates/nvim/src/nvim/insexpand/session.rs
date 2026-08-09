@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
 use crate::src::nvim::types::{VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 
@@ -271,7 +272,7 @@ pub(crate) unsafe fn get_userdefined_compl_info(
         let is_cpt_function = !cb.is_null();
         if !is_cpt_function {
             if *get_complete_funcname(ctrl_x_mode.get()) as c_int == NUL {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_notset as *const c_char),
                     if ctrl_x_mode_function() {
                         c"completefunc".as_ptr()

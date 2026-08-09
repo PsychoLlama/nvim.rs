@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_int, c_void};
 use core::ptr;
 
@@ -24,7 +25,6 @@ use crate::src::nvim::lua::ffi::{
 };
 use crate::src::nvim::main::nlua_global_refs;
 use crate::src::nvim::memory::arena_memdupz;
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::{gettext, memchr};
 use crate::src::nvim::types::{
     Arena, Array, Boolean, Dict, Error, Float, Integer, LuaRef, ObjectType, String_0, handle_T,
@@ -61,7 +61,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_traverse_table(
         let mut other_keys_num: size_t = 0;
         let mut ret = LuaTableProps::NIL;
         if lua_checkstack(lstate, lua_gettop(lstate) + 3) == 0 {
-            semsg(gettext(E1502_GROW_STACK.as_ptr()), lua_gettop(lstate) + 2);
+            semsg_c!(gettext(E1502_GROW_STACK.as_ptr()), lua_gettop(lstate) + 2);
             ret.type_0 = kObjectTypeNil;
             return ret;
         }

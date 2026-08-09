@@ -25,6 +25,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::smsg_c;
 use ::core::ffi::{c_char, c_int, c_ulong, c_void};
 
 use super::*;
@@ -159,7 +160,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
             (*curbuf.get()).b_op_start = startpos;
         }
         if change_cnt > p_report.get() as ssize_t {
-            smsg(
+            smsg_c!(
                 0,
                 ngettext(
                     c"%ld lines changed".as_ptr(),

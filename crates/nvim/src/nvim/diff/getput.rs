@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use ::core::ffi::{c_char, c_int};
 
 /// `do` and `dp`: get or put the diff block under the cursor.
@@ -159,7 +160,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
             }
             let mut buf: *mut buf_T = buflist_findnr(i_0);
             if buf.is_null() {
-                semsg(
+                semsg_c!(
                     gettext(c"E102: Can't find buffer \"%s\"".as_ptr()),
                     (*eap).arg,
                 );
@@ -170,7 +171,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
             }
             idx_other = diff_buf_idx(buf, curtab.get());
             if idx_other == DB_COUNT {
-                semsg(
+                semsg_c!(
                     gettext(c"E103: Buffer \"%s\" is not in diff mode".as_ptr()),
                     (*eap).arg,
                 );

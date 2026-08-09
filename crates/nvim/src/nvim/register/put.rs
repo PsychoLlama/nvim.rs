@@ -19,6 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use ::core::ffi::{c_char, c_int, c_uint, c_void};
 
 use super::*;
@@ -443,7 +444,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
             }
 
             if put.y_size == 0 || put.y_array.is_null() {
-                semsg(
+                semsg_c!(
                     gettext(c"E353: Nothing in register %s".as_ptr()),
                     if regname == 0 {
                         c"\"".as_ptr()

@@ -17,6 +17,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::{FC_LUAREF, nlua_create_typed_table};
@@ -28,7 +29,6 @@ use crate::src::nvim::lua::ffi::{
     lua_pushnumber, lua_pushvalue, lua_rawset, lua_setmetatable, lua_tonumber,
 };
 use crate::src::nvim::main::nlua_global_refs;
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::types::{
     LuaRef, blob_T, dict_T, float_T, int64_t, kObjectTypeDict, lua_Number, lua_State, size_t,
@@ -103,7 +103,7 @@ impl LuaSink {
         unsafe {
             let wanted = lua_gettop(self.lstate) + CONTAINER_SLOTS;
             if lua_checkstack(self.lstate, wanted) == 0 {
-                semsg(gettext(E5102_GROW_STACK.as_ptr()), wanted);
+                semsg_c!(gettext(E5102_GROW_STACK.as_ptr()), wanted);
                 return Flow::Fail;
             }
         }
@@ -312,7 +312,7 @@ pub unsafe extern "C-unwind" fn nlua_push_typval(
         if lua_checkstack(lstate, initial_size + 2) == 0 {
             // Upstream reports the size it would have needed for a container,
             // not the two slots it just asked for.
-            semsg(gettext(E1502_GROW_STACK.as_ptr()), initial_size + 4);
+            semsg_c!(gettext(E1502_GROW_STACK.as_ptr()), initial_size + 4);
             return false;
         }
         let mut sink = LuaSink {

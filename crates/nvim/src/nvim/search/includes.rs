@@ -10,8 +10,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::smsg_c;
 use crate::src::nvim::highlight_group::{HLF_D, HLF_R};
 use crate::src::nvim::regexp::RE_MAGIC;
 use core::ffi::{c_char, c_int, c_uint, c_void};
@@ -466,7 +467,7 @@ unsafe fn handle_include(
             msg_trunc(IObuff.ptr() as *mut c_char, true, HLF_R);
         } else if p_verbose.get() >= 5 {
             verbose_enter();
-            smsg(0, gettext(c"Searching included file %s".as_ptr()), name);
+            smsg_c!(0, gettext(c"Searching included file %s".as_ptr()), name);
             verbose_leave();
         }
     }

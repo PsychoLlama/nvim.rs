@@ -16,8 +16,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::smsg_c;
 
 /// Advance `apc` to the next autocommand whose pattern matches, updating
 /// the execution-stack entry when the pattern changes.
@@ -77,7 +78,7 @@ pub(crate) unsafe extern "C" fn aucmd_next(apc: *mut AutoPatCmd) {
                 snprintf(namep, sourcing_name_len, s, name, (*ap).pat);
                 if p_verbose.get() >= 8 {
                     verbose_enter();
-                    smsg(0, gettext(c"Executing %s".as_ptr()), namep);
+                    smsg_c!(0, gettext(c"Executing %s".as_ptr()), namep);
                     verbose_leave();
                 }
 
@@ -187,7 +188,7 @@ pub unsafe extern "C" fn getnextac(
         if p_verbose.get() >= 9 {
             verbose_enter_scroll();
             let handler_str = aucmd_handler_to_string(ac);
-            smsg(0, gettext(c"autocommand %s".as_ptr()), handler_str);
+            smsg_c!(0, gettext(c"autocommand %s".as_ptr()), handler_str);
             // Don't overwrite this either.
             msg_puts(c"\n".as_ptr());
             xfree(handler_str.cast::<::core::ffi::c_void>());

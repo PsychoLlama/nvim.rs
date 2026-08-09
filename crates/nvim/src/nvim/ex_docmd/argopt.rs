@@ -2,6 +2,7 @@
 //! argument, and opening the file a command will write to.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_ulong};
 use core::ptr;
 
@@ -23,7 +24,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::mbyte::{get_encoding_name, utf8len_tab};
 use crate::src::nvim::memory::{xmalloc, xstrdup};
-use crate::src::nvim::message::{semsg, vim_dialog_yesno};
+use crate::src::nvim::message::vim_dialog_yesno;
 use crate::src::nvim::optionstr::{check_ff_value, get_fileformat_name};
 use crate::src::nvim::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
 use crate::src::nvim::os::libc::{gettext, ngettext, strcasecmp, strcmp, strncmp};
@@ -426,7 +427,7 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
             );
             return if answer == VIM_YES as c_int { OK } else { FAIL };
         }
-        semsg(
+        semsg_c!(
             ngettext(
                 c"E173: %d more file to edit".as_ptr(),
                 c"E173: %d more files to edit".as_ptr(),
@@ -444,7 +445,7 @@ pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> c_int {
     unsafe {
         let ret = os_mkdir(name, prot as int32_t);
         if ret != 0 {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_mkdir as *const c_char),
                 name,
                 uv_strerror(ret),
@@ -462,11 +463,11 @@ pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> c_int {
 pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char) -> *mut FILE {
     unsafe {
         if os_isdir(fname) {
-            semsg(gettext(&raw const e_isadir2 as *const c_char), fname);
+            semsg_c!(gettext(&raw const e_isadir2 as *const c_char), fname);
             return ptr::null_mut();
         }
         if forceit == 0 && *mode as c_int != 'a' as c_int && os_path_exists(fname) {
-            semsg(
+            semsg_c!(
                 gettext(c"E189: \"%s\" exists (add ! to override)".as_ptr()),
                 fname,
             );
@@ -474,7 +475,7 @@ pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char)
         }
         let fd = os_fopen(fname, mode);
         if fd.is_null() {
-            semsg(
+            semsg_c!(
                 gettext(c"E190: Cannot open \"%s\" for writing".as_ptr()),
                 fname,
             );

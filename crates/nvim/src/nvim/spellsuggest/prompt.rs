@@ -29,6 +29,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::smsg_c;
 use crate::src::nvim::change::inserted_bytes;
 use crate::src::nvim::charset::rl_mirror_ascii;
 use crate::src::nvim::cursor::{get_cursor_line_len, get_cursor_line_ptr};
@@ -44,7 +45,7 @@ use crate::src::nvim::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::src::nvim::memline::ml_replace;
 use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz, xstrdup, xstrlcpy};
 use crate::src::nvim::message::{
-    emsg, msg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start, smsg,
+    emsg, msg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start,
 };
 use crate::src::nvim::normal::end_visual_mode;
 use crate::src::nvim::options::kOptBoFlagSpell;
@@ -158,7 +159,7 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: pos_T, msg_scroll_save:
             msg(gettext(c"No suggestions".as_ptr()), 0);
         } else if count > 0 {
             if count > sug.su_ga.ga_len {
-                smsg(
+                smsg_c!(
                     0,
                     gettext(c"Only %ld suggestions".as_ptr()),
                     sug.su_ga.ga_len as int64_t,

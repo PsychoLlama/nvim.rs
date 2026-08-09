@@ -10,8 +10,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::{semsg_c, smsg_c};
 
 /// A `vim_snprintf` into a fresh [`MSG_BUF_LEN`] buffer, kept as bytes so the
 /// caller can hand the result straight back to `msg_puts`.
@@ -144,7 +145,7 @@ pub(crate) unsafe fn sign_cmd_idx(begin_cmd: *mut c_char, end_cmd: *mut c_char) 
 pub(crate) unsafe fn sign_list_defined(sp: *mut sign_T) {
     // SAFETY: the caller's definition.
     unsafe {
-        smsg(0, c"sign %s".as_ptr(), (*sp).sn_name);
+        smsg_c!(0, c"sign %s".as_ptr(), (*sp).sn_name);
         if !(*sp).sn_icon.is_null() {
             msg_puts(c" icon=".as_ptr());
             msg_outtrans((*sp).sn_icon, 0, false);
@@ -186,7 +187,7 @@ unsafe fn sign_list_by_name(name: *mut c_char) {
     unsafe {
         let sp = sign_find(name);
         if sp.is_null() {
-            semsg(gettext(c"E155: Unknown sign: %s".as_ptr()), name);
+            semsg_c!(gettext(c"E155: Unknown sign: %s".as_ptr()), name);
         } else {
             sign_list_defined(sp);
         }
@@ -240,7 +241,7 @@ unsafe fn sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
             } else if let Some(v) = after(c"priority=") {
                 prio = atoi(v);
             } else {
-                semsg(gettext(&raw const e_invarg2 as *const c_char), arg);
+                semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg);
                 return;
             }
 
@@ -467,7 +468,7 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
                 // Diagnosed but not fatal, which is why this still breaks
                 // out with whatever buffer it found.
                 if *skipwhite(p) != 0 {
-                    semsg(gettext(&raw const e_trailing_arg as *const c_char), p);
+                    semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), p);
                 }
                 break;
             } else {
@@ -478,7 +479,7 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
         }
 
         if !filename.is_null() && out.buf.is_null() {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_invalid_buffer_name_str as *const c_char),
                 filename,
             );
@@ -506,7 +507,7 @@ pub unsafe fn ex_sign(eap: *mut exarg_T) {
         let p = skiptowhite(arg);
         let idx = sign_cmd_idx(arg, p);
         if idx == SIGNCMD_LAST {
-            semsg(gettext(c"E160: Unknown sign command: %s".as_ptr()), arg);
+            semsg_c!(gettext(c"E160: Unknown sign command: %s".as_ptr()), arg);
             return;
         }
         arg = skipwhite(p);

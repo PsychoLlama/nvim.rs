@@ -2,6 +2,7 @@
 //! redrawing, `:redir`, highlighting and the digraph table.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -23,7 +24,7 @@ use crate::src::nvim::main::{
     redir_reg, redir_vname, redraw_cmdline,
 };
 use crate::src::nvim::memory::{xfree, xstrdup};
-use crate::src::nvim::message::{msg, msg_ext_set_kind, semsg};
+use crate::src::nvim::message::{msg, msg_ext_set_kind};
 use crate::src::nvim::r#move::{update_topline, validate_cursor};
 use crate::src::nvim::os::env::expand_env_save;
 use crate::src::nvim::os::libc::{fclose, gettext, strcasecmp};
@@ -38,7 +39,7 @@ pub(crate) unsafe fn ex_colorscheme(eap: *mut exarg_T) {
     unsafe {
         if *(*eap).arg as c_int != NUL {
             if load_colors((*eap).arg) == FAIL {
-                semsg(
+                semsg_c!(
                     gettext(c"E185: Cannot find color scheme '%s'".as_ptr()),
                     (*eap).arg,
                 );
@@ -122,7 +123,7 @@ pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
             }
             if *arg as c_int != NUL {
                 redir_reg.set(0);
-                semsg(gettext(&raw const e_invarg2 as *const c_char), (*eap).arg);
+                semsg_c!(gettext(&raw const e_invarg2 as *const c_char), (*eap).arg);
             }
         } else if *arg as c_int == '=' as c_int && *arg.add(1) as c_int == '>' as c_int {
             close_redir();
@@ -135,7 +136,7 @@ pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
                 redir_vname.set(true);
             }
         } else {
-            semsg(gettext(&raw const e_invarg2 as *const c_char), (*eap).arg);
+            semsg_c!(gettext(&raw const e_invarg2 as *const c_char), (*eap).arg);
         }
         // Whichever form succeeded, output is being captured again.
         if !(*redir_fd.ptr()).is_null() || redir_reg.get() != 0 || redir_vname.get() {

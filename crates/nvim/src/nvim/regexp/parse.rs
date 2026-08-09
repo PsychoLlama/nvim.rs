@@ -20,15 +20,14 @@ use super::{
     prev_at_start, prevchr, prevchr_len, prevprevchr, refresh_cpo_flags, reg_cpo_lit, reg_magic,
     regnpar, regparse, take_bracketed, take_char_class, toggle_magic, unmagic,
 };
-use crate::semsg;
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::src::nvim::charset::{getdigits_int, hex2nr};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::rc_did_emsg;
 use crate::src::nvim::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
-use crate::src::nvim::message::semsg as semsg_c;
 use crate::src::nvim::os::libc::{gettext, memmove, strlen};
 use crate::src::nvim::strings::xstrnsave;
+use crate::{semsg, semsg_c};
 
 /// Whether `c` is a repeat operator, and whether it can match more than one
 /// of the preceding atom.
@@ -132,7 +131,7 @@ pub unsafe fn skip_regexp_err(startp: *mut c_char, delim: c_int, magic: c_int) -
     unsafe {
         let p = skip_regexp(startp, delim, magic);
         if *p as c_int != delim {
-            semsg_c(
+            semsg_c!(
                 gettext(E_MISSING_DELIMITER_AFTER_SEARCH_PATTERN_STR.as_ptr()),
                 startp,
             );

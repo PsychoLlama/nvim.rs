@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
 #[allow(unused_imports)]
@@ -500,7 +501,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int)
 
         xfree(key as *mut ::core::ffi::c_void);
         if illegal {
-            semsg(gettext(c"E404: Illegal arguments: %s".as_ptr()), arg_start);
+            semsg_c!(gettext(c"E404: Illegal arguments: %s".as_ptr()), arg_start);
         } else if !finished {
             (*eap).nextcmd = check_nextcmd(arg_start);
             redraw_curbuf_later(UPD_SOME_VALID);

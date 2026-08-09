@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
 #[allow(unused_imports)]
@@ -57,14 +58,14 @@ pub(crate) unsafe extern "C" fn syn_cmd_list(eap: *mut exarg_T, syncing: c_int) 
                 if *arg as c_int == '@' as c_int {
                     let id = syn_scl_namen2id(arg.add(1), arg_end.offset_from(arg) as c_int - 1);
                     if id == 0 {
-                        semsg(gettext(c"E392: No such syntax cluster: %s".as_ptr()), arg);
+                        semsg_c!(gettext(c"E392: No such syntax cluster: %s".as_ptr()), arg);
                     } else {
                         syn_list_cluster(id - SYNID_CLUSTER);
                     }
                 } else {
                     let id = syn_name2id_len(arg, arg_end.offset_from(arg) as size_t);
                     if id == 0 {
-                        semsg(gettext(&raw const e_nogroup as *const c_char), arg);
+                        semsg_c!(gettext(&raw const e_nogroup as *const c_char), arg);
                     } else {
                         syn_list_one(id, false, true);
                     }

@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 
 #[allow(unused_imports)]
@@ -200,12 +201,12 @@ unsafe fn add_keyword_variants(mut kw: *mut c_char, def: &KeywordDef) -> Option<
             }
             let next = *p.add(1) as c_int;
             if next == NUL {
-                semsg(gettext(c"E789: Missing ']': %s".as_ptr()), kw);
+                semsg_c!(gettext(c"E789: Missing ']': %s".as_ptr()), kw);
                 return None;
             }
             if next == ']' as c_int {
                 if *p.add(2) as c_int != NUL {
-                    semsg(gettext(E_TRAILING_CHAR_AFTER_RSB.as_ptr()), kw, p.add(2));
+                    semsg_c!(gettext(E_TRAILING_CHAR_AFTER_RSB.as_ptr()), kw, p.add(2));
                     return None;
                 }
                 // Step over the `]`: it and the NUL after it are exactly the
@@ -303,7 +304,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_i
         }
 
         if rest.is_null() {
-            semsg(gettext(&raw const e_invarg2 as *const c_char), arg);
+            semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg);
         } else {
             (*eap).nextcmd = check_nextcmd(rest);
         }

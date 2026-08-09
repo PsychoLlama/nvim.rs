@@ -64,7 +64,7 @@ use crate::src::nvim::memline::{
     ml_get_pos, ml_get_pos_len, ml_replace, ml_replace_len,
 };
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz};
-use crate::src::nvim::message::{emsg, msg, msg_keep, msg_start, msgmore, smsg};
+use crate::src::nvim::message::{emsg, msg, msg_keep, msg_start, msgmore};
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::r#move::validate_virtcol;
 use crate::src::nvim::normal::{

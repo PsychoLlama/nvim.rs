@@ -4,6 +4,7 @@
 use super::format::*;
 use super::tree::*;
 use super::*;
+use crate::semsg_c;
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn u_compute_hash(mut buf: *mut buf_T, mut hash: *mut uint8_t) {
@@ -82,7 +83,7 @@ pub unsafe extern "C" fn u_get_undo_file_name(
                     ptr::null_mut(),
                 );
                 if ret != 0 {
-                    semsg(
+                    semsg_c!(
                         gettext(
                             c"E5003: Unable to create directory \"%s\" for undo file: %s".as_ptr(),
                         ),
@@ -118,7 +119,7 @@ pub unsafe extern "C" fn u_get_undo_file_name(
     return undo_file_name;
 }
 pub(crate) unsafe extern "C" fn corruption_error(mesg: *const c_char, file_name: *const c_char) {
-    semsg(
+    semsg_c!(
         gettext(c"E825: Corrupted undo file (%s): %s".as_ptr()),
         mesg,
         file_name,

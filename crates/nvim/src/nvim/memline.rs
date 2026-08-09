@@ -48,7 +48,7 @@ use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xrealloc, xstpcpy, xstr
 use crate::src::nvim::message::{
     do_dialog, emsg, iemsg, msg, msg_end, msg_ext_set_kind, msg_home_replace, msg_multiline,
     msg_outnum, msg_outtrans, msg_putchar, msg_puts, msg_puts_hl, msg_reset_scroll, msg_start,
-    semsg, set_keep_msg, siemsg, smsg, verb_msg,
+    semsg, set_keep_msg, verb_msg,
 };
 use crate::src::nvim::option::{
     copy_option_part, get_fileformat, set_fileformat, set_option_value_give_err,

@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 
 /// The `scriptin` entry `curscript` names.
@@ -50,7 +51,7 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
             0,
         );
         if error != 0 {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_notopen_2 as *const c_char),
                 name,
                 uv_strerror(error),

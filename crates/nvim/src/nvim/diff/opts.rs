@@ -9,8 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use ::core::ffi::{c_char, c_int};
 use ::std::ffi::CStr;
 
@@ -158,7 +159,7 @@ pub(crate) unsafe fn parse_diffanchors(
             i += 1;
         }
         if i == MAX_DIFF_ANCHORS && *dia != 0 {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_cannot_have_more_than_nr_diff_anchors as *const c_char),
                 MAX_DIFF_ANCHORS,
             );

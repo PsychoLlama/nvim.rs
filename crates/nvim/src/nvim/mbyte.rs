@@ -50,7 +50,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::mark::mark_mb_adjustpos;
 use crate::src::nvim::memline::ml_get_buf;
 use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xstrdup};
-use crate::src::nvim::message::{emsg, msg, semsg};
+use crate::src::nvim::message::{emsg, msg};
 use crate::src::nvim::r#move::changed_window_setting_all;
 use crate::src::nvim::options::{kOptCmpFlagInternal, kOptCmpFlagKeepascii};
 use crate::src::nvim::optionstr::check_chars_options;

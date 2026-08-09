@@ -6,8 +6,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_multiline_c;
 use crate::src::nvim::keycodes::{K_COMMAND, K_SNR, key_escape, key_unescape};
 use crate::src::nvim::types::kErrorTypeNone;
 use core::ffi::{c_char, c_int, c_void};
@@ -163,7 +164,7 @@ pub unsafe fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
             &raw mut err,
         );
         if err.type_0 != kErrorTypeNone {
-            semsg_multiline(c"emsg".as_ptr(), c"E5108: %s".as_ptr(), err.msg);
+            semsg_multiline_c!(c"emsg".as_ptr(), c"E5108: %s".as_ptr(), err.msg);
             api_clear_error(&raw mut err);
         }
 

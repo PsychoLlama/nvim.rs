@@ -67,7 +67,7 @@ use crate::src::nvim::memline::{
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xmallocz, xmemcpyz, xstrdup};
 use crate::src::nvim::message::{
-    msg_clr_eos, msg_delay, msg_end, msg_ext_set_kind, msg_puts_hl, msg_source, msg_start, siemsg,
+    msg_clr_eos, msg_delay, msg_end, msg_ext_set_kind, msg_puts_hl, msg_source, msg_start,
     wait_return,
 };
 use crate::src::nvim::r#move::{

@@ -7,6 +7,7 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::semsg_c;
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn os_path_exists(mut path: *const ::core::ffi::c_char) -> bool {
     let mut statbuf: uv_stat_t = uv_stat_t {
@@ -146,7 +147,7 @@ pub unsafe extern "C" fn os_file_mkdir(
             ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
         );
         if r < 0 as ::core::ffi::c_int {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_mkdir as *const ::core::ffi::c_char),
                 failed_dir,
                 uv_strerror(r),

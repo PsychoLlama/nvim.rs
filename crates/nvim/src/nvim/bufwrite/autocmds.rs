@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 
 use crate::src::nvim::types::{CMOD_LOCKMARKS, event_T};
@@ -188,7 +189,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
             no_wait_return.set(no_wait_return.get() - 1);
             msg_scroll.set(msg_save);
             if nofile_err {
-                semsg(
+                semsg_c!(
                     gettext(c"E676: No matching autocommands for buftype=%s buffer".as_ptr()),
                     (*curbuf.get()).b_p_bt,
                 );

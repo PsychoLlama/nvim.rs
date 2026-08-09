@@ -12,12 +12,12 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::smsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::src::nvim::garray::{ga_append, ga_append_via_ptr, ga_concat, ga_grow};
 use crate::src::nvim::main::curwin;
 use crate::src::nvim::mbyte::{mb_ptr2char_adv, utfc_ptr2len};
-use crate::src::nvim::message::smsg;
 use crate::src::nvim::os::libc::{gettext, strcat, strcmp, strcpy, strlen};
 use crate::src::nvim::spell::spell_casefold;
 use crate::src::nvim::strings::vim_strchr;
@@ -100,7 +100,7 @@ pub unsafe fn add_rep_entry(
     // and replaces one byte with one byte.
     unsafe {
         if items.len() > 3 && *items[3] as c_int != b'#' as c_int {
-            smsg(0, gettext(e_afftrailing.get()), fname, lnum, items[3]);
+            smsg_c!(0, gettext(e_afftrailing.get()), fname, lnum, items[3]);
         }
         // "REPSAL" has an S where "REP" has its terminator.
         let is_sal = *items[0].add(3) as c_int == b'S' as c_int;
@@ -143,7 +143,7 @@ pub unsafe fn handle_map(
             // The first MAP line is the number of groups.
             st.found_map = true;
             if !is_digit_byte(*items[1]) {
-                smsg(
+                smsg_c!(
                     0,
                     gettext(c"Expected MAP count in %s line %d".as_ptr()),
                     fname,
@@ -164,7 +164,7 @@ pub unsafe fn handle_map(
                 && !vim_strchr((*spin).si_map.ga_data.cast::<c_char>(), c).is_null())
                 || !vim_strchr(p, c).is_null()
             {
-                smsg(
+                smsg_c!(
                     0,
                     gettext(c"Duplicate character in MAP in %s line %d".as_ptr()),
                     fname,

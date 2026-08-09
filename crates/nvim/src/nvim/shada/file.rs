@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::{semsg_c, smsg_c};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use std::ffi::CString;
 
@@ -44,7 +45,7 @@ pub(crate) unsafe fn close_file(cookie: *mut FileDescriptor) {
     unsafe {
         let error = file_close(cookie, p_fs.get() != 0);
         if error != 0 {
-            semsg(
+            semsg_c!(
                 gettext(c"E886: System error while closing ShaDa file: %s".as_ptr()),
                 uv_strerror(error),
             );
@@ -125,7 +126,7 @@ unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> c_int {
                     c"".as_ptr()
                 }
             };
-            smsg(
+            smsg_c!(
                 0,
                 gettext(c"Reading ShaDa file \"%s\"%s%s%s%s".as_ptr()),
                 fname.as_ptr(),
@@ -145,7 +146,7 @@ unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> c_int {
             // A missing file is only worth complaining about when the caller
             // asked for one by name.
             if of_ret != UV_ENOENT || flags & kShaDaMissingError as c_int != 0 {
-                semsg(
+                semsg_c!(
                     gettext(
                         c"E886: System error while opening ShaDa file %s for reading: %s".as_ptr(),
                     ),
@@ -226,7 +227,7 @@ unsafe fn open_temp_writer(
                 return Some(CString::from_vec_with_nul(tempname).expect("shada: a NUL crept in"));
             }
             if error != UV_EEXIST && error != UV_ELOOP {
-                semsg(
+                semsg_c!(
                     gettext(
                         c"E886: System error while opening temporary ShaDa file %s for writing: %s"
                             .as_ptr(),
@@ -237,7 +238,7 @@ unsafe fn open_temp_writer(
                 return None;
             }
             if tempname[last] == b'z' {
-                semsg(
+                semsg_c!(
                     gettext(c"E138: All %s.tmp.X files exist, cannot write ShaDa file!".as_ptr()),
                     fname.as_ptr(),
                 );
@@ -268,7 +269,7 @@ unsafe fn open_direct_writer(sd_writer: *mut FileDescriptor, fname: &CStr) -> Re
             };
             *tail = tail_save;
             if ret != 0 {
-                semsg(
+                semsg_c!(
                     gettext(
                         c"E886: Failed to create directory %s for writing ShaDa file: %s".as_ptr(),
                     ),
@@ -287,7 +288,7 @@ unsafe fn open_direct_writer(sd_writer: *mut FileDescriptor, fname: &CStr) -> Re
             0o600,
         );
         if error != 0 {
-            semsg(
+            semsg_c!(
                 gettext(c"E886: System error while opening ShaDa file %s for writing: %s".as_ptr()),
                 fname,
                 uv_strerror(error),
@@ -324,7 +325,7 @@ pub unsafe fn shada_write_file(file: *const c_char, nomerge: bool) -> c_int {
                 if error != UV_ENOENT {
                     // Something other than "no file yet" — say so, but still
                     // try to write: that may work regardless.
-                    semsg(
+                    semsg_c!(
                         gettext(
                             c"E886: System error while opening ShaDa file %s for reading to merge before writing it: %s"
                                 .as_ptr(),
@@ -368,7 +369,7 @@ pub unsafe fn shada_write_file(file: *const c_char, nomerge: bool) -> c_int {
 
         if p_verbose.get() > 1 {
             verbose_enter();
-            smsg(
+            smsg_c!(
                 0,
                 gettext(c"Writing ShaDa file \"%s\"".as_ptr()),
                 fname.as_ptr(),
@@ -385,7 +386,7 @@ pub unsafe fn shada_write_file(file: *const c_char, nomerge: bool) -> c_int {
         if let Some(tempname) = merge {
             close_file(&raw mut sd_reader);
             if !replace_original(&raw mut sd_writer, &fname, &tempname, sw_ret) {
-                semsg(
+                semsg_c!(
                     gettext(
                         c"E136: Do not forget to remove %s or rename it manually to %s.".as_ptr(),
                     ),
@@ -409,7 +410,7 @@ unsafe fn replace_original(
 ) -> bool {
     unsafe {
         if sw_ret != kSDWriteSuccessful {
-            semsg(
+            semsg_c!(
                 gettext(if sw_ret == kSDWriteReadNotShada {
                     c"E136: Did not rename %s because %s does not look like a ShaDa file".as_ptr()
                 } else {
@@ -424,7 +425,7 @@ unsafe fn replace_original(
 
         let mut old_info = FileInfo::default();
         if !os_fileinfo(fname.as_ptr(), &raw mut old_info) || !writable_by_us(&old_info) {
-            semsg(
+            semsg_c!(
                 gettext(c"E137: ShaDa file is not writable: %s".as_ptr()),
                 fname.as_ptr(),
             );
@@ -444,7 +445,7 @@ unsafe fn replace_original(
                 old_info.stat.st_gid as uv_gid_t,
             );
             if fchown_ret != 0 {
-                semsg(
+                semsg_c!(
                     gettext(c"E136: Failed setting uid and gid for file %s: %s".as_ptr()),
                     tempname.as_ptr(),
                     uv_strerror(fchown_ret),
@@ -454,7 +455,7 @@ unsafe fn replace_original(
         }
 
         if vim_rename(tempname.as_ptr(), fname.as_ptr()) == -1 {
-            semsg(
+            semsg_c!(
                 gettext(c"E136: Can't rename ShaDa file from %s to %s!".as_ptr()),
                 tempname.as_ptr(),
                 fname.as_ptr(),

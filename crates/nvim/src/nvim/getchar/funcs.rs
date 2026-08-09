@@ -6,8 +6,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::keycodes::{K_IGNORE, K_MOUSEMOVE, key_escape};
 use crate::src::nvim::types::{VAR_DICT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 use core::ffi::{c_char, c_int};
@@ -62,7 +63,7 @@ unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<Get
                 opts.allow_number = tv_dict_get_bool(d, c"number".as_ptr(), true_0) != 0;
             } else if tv_dict_has_key(d, c"number".as_ptr()) {
                 // getcharstr() never answers a number, so asking is an error.
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_invarg2 as *const c_char),
                     c"number".as_ptr(),
                 );
@@ -79,7 +80,7 @@ unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<Get
                 } else if strcmp(cursor, c"msg".as_ptr()) == 0 {
                     CursorFlag::Msg
                 } else {
-                    semsg(
+                    semsg_c!(
                         gettext(&raw const e_invargNval as *const c_char),
                         c"cursor".as_ptr(),
                         cursor,

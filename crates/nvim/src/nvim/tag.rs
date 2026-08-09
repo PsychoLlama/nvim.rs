@@ -40,7 +40,7 @@ use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xstrdup, xstrlcat};
 use crate::src::nvim::message::{
     emsg, give_warning, msg, msg_advance, msg_clr_eos, msg_delay, msg_ext_set_kind, msg_outtrans,
     msg_outtrans_len, msg_outtrans_one, msg_putchar, msg_puts, msg_puts_hl, msg_puts_title,
-    msg_start, semsg, smsg, verbose_enter, verbose_leave, wait_return,
+    msg_start, verbose_enter, verbose_leave, wait_return,
 };
 use crate::src::nvim::r#move::{set_topline, validate_cursor};
 use crate::src::nvim::option::{copy_option_part, magic_isset, option_set_callback_func};

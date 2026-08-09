@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 #[allow(unused_imports)]
@@ -256,7 +257,7 @@ unsafe fn sync_group_arg(mut arg: *mut c_char, opt: &syn_opt_arg_T) -> *mut c_ch
                 }
             };
             if !found {
-                semsg(
+                semsg_c!(
                     gettext(c"E394: Didn't find region item for %s".as_ptr()),
                     gname,
                 );
@@ -341,7 +342,7 @@ unsafe fn parse_id_list(arg: *mut c_char, keylen: c_int, skip: bool) -> IdListPa
 
         let mut p = skipwhite(arg.offset(keylen as isize));
         if *p as c_int != '=' as c_int {
-            semsg(gettext(c"E405: Missing equal sign: %s".as_ptr()), arg);
+            semsg_c!(gettext(c"E405: Missing equal sign: %s".as_ptr()), arg);
             return IdListPass {
                 ids,
                 end: p,
@@ -350,7 +351,7 @@ unsafe fn parse_id_list(arg: *mut c_char, keylen: c_int, skip: bool) -> IdListPa
         }
         p = skipwhite(p.add(1));
         if ends_excmd(*p as c_int) != 0 {
-            semsg(gettext(c"E406: Empty argument: %s".as_ptr()), arg);
+            semsg_c!(gettext(c"E406: Empty argument: %s".as_ptr()), arg);
             return IdListPass {
                 ids,
                 end: p,
@@ -425,11 +426,11 @@ unsafe fn parse_id_name(
             // Only `contains=` and `containedin=` accept these, which is what
             // upstream tests by the keyword's first letter.
             if !(*arg as u8).eq_ignore_ascii_case(&b'C') {
-                semsg(gettext(c"E407: %s not allowed here".as_ptr()), plain);
+                semsg_c!(gettext(c"E407: %s not allowed here".as_ptr()), plain);
                 return Err(());
             }
             if !ids.is_empty() {
-                semsg(
+                semsg_c!(
                     gettext(c"E408: %s must be first in contains list".as_ptr()),
                     plain,
                 );
@@ -449,7 +450,7 @@ unsafe fn parse_id_name(
             }
             let id = syn_check_cluster(plain.add(1), text_len as c_int - 1);
             return if id == 0 {
-                semsg(gettext(c"E409: Unknown group name: %s".as_ptr()), p);
+                semsg_c!(gettext(c"E409: Unknown group name: %s".as_ptr()), p);
                 Err(())
             } else {
                 Ok(Some(id))
@@ -459,7 +460,7 @@ unsafe fn parse_id_name(
         if strpbrk(plain, c"\\.*^$~[".as_ptr()).is_null() {
             let id = syn_check_group(plain, text_len as size_t);
             return if id == 0 {
-                semsg(gettext(c"E409: Unknown group name: %s".as_ptr()), p);
+                semsg_c!(gettext(c"E409: Unknown group name: %s".as_ptr()), p);
                 Err(())
             } else {
                 Ok(Some(id))
@@ -491,7 +492,7 @@ unsafe fn parse_id_name(
         }
         vim_regfree(regmatch.regprog);
         if !matched {
-            semsg(gettext(c"E409: Unknown group name: %s".as_ptr()), p);
+            semsg_c!(gettext(c"E409: Unknown group name: %s".as_ptr()), p);
             return Err(());
         }
         Ok(None)

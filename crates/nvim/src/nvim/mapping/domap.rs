@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::ex_docmd::sourcing_lnum;
 use crate::src::nvim::keycodes::Ctrl_C;
 use core::ffi::{c_char, c_int};
@@ -616,7 +617,7 @@ unsafe fn do_exmap(eap: *mut exarg_T, isabbrev: bool) {
                     }));
                 }
                 5 => {
-                    semsg(
+                    semsg_c!(
                         gettext(if isabbrev {
                             E_ABBREVIATION_ALREADY_EXISTS_FOR_STR.as_ptr()
                         } else {
@@ -626,7 +627,7 @@ unsafe fn do_exmap(eap: *mut exarg_T, isabbrev: bool) {
                     );
                 }
                 6 => {
-                    semsg(
+                    semsg_c!(
                         gettext(if isabbrev {
                             E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR.as_ptr()
                         } else {

@@ -25,6 +25,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::src::nvim::drawscreen::{UPD_SOME_VALID, redraw_all_later};
@@ -33,7 +34,7 @@ use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::main::{curwin, e_notopen, got_int, p_verbose};
 use crate::src::nvim::memline::ml_append_buf;
 use crate::src::nvim::memory::{xcalloc, xfree, xstrdup};
-use crate::src::nvim::message::{emsg, semsg, smsg, verbose_enter, verbose_leave};
+use crate::src::nvim::message::{emsg, verbose_enter, verbose_leave};
 use crate::src::nvim::os::fs::os_fopen;
 use crate::src::nvim::os::input::fast_breakcheck;
 use crate::src::nvim::os::libc::{
@@ -211,17 +212,17 @@ unsafe fn load_spl(
     unsafe {
         if fd.is_null() {
             if !silent {
-                semsg(gettext((&raw const e_notopen).cast()), fname);
+                semsg_c!(gettext((&raw const e_notopen).cast()), fname);
             } else if p_verbose.get() > 2 as OptInt {
                 verbose_enter();
-                smsg(0, (&raw const e_notopen).cast::<c_char>(), fname);
+                smsg_c!(0, (&raw const e_notopen).cast::<c_char>(), fname);
                 verbose_leave();
             }
             return false;
         }
         if p_verbose.get() > 2 as OptInt {
             verbose_enter();
-            smsg(0, gettext(c"Reading spell file \"%s\"".as_ptr()), fname);
+            smsg_c!(0, gettext(c"Reading spell file \"%s\"".as_ptr()), fname);
             verbose_leave();
         }
 
@@ -242,14 +243,14 @@ unsafe fn load_spl(
 
         match spell_check_magic_string(fd) {
             SP_FORMERROR | SP_TRUNCERROR => {
-                semsg(
+                semsg_c!(
                     c"%s".as_ptr(),
                     gettext(c"E757: This does not look like a spell file".as_ptr()),
                 );
                 return false;
             }
             SP_OTHERERROR => {
-                semsg(
+                semsg_c!(
                     gettext(c"E5042: Failed to read spell file %s: %s".as_ptr()),
                     fname,
                     strerror(ferror(fd)),
@@ -511,7 +512,7 @@ unsafe fn load_sug(fd: *mut FILE, slang: *mut slang_T) {
             *b = getc(fd) as c_char;
         }
         if strncmp(buf.as_ptr(), VIMSUGMAGIC.as_ptr(), VIMSUGMAGICL as size_t) != 0 {
-            semsg(
+            semsg_c!(
                 gettext(c"E778: This does not look like a .sug file: %s".as_ptr()),
                 (*slang).sl_fname,
             );
@@ -519,14 +520,14 @@ unsafe fn load_sug(fd: *mut FILE, slang: *mut slang_T) {
         }
         let version = getc(fd);
         if version < VIMSUGVERSION {
-            semsg(
+            semsg_c!(
                 gettext(c"E779: Old .sug file, needs to be updated: %s".as_ptr()),
                 (*slang).sl_fname,
             );
             return;
         }
         if version > VIMSUGVERSION {
-            semsg(
+            semsg_c!(
                 gettext(c"E780: .sug file is for newer version of Vim: %s".as_ptr()),
                 (*slang).sl_fname,
             );
@@ -535,7 +536,7 @@ unsafe fn load_sug(fd: *mut FILE, slang: *mut slang_T) {
         // The `.spl` stamped both files; a mismatch means the pair is
         // stale and the word numbers would point at the wrong words.
         if get8ctime(fd) != (*slang).sl_sugtime {
-            semsg(
+            semsg_c!(
                 gettext(c"E781: .sug file doesn't match .spl file: %s".as_ptr()),
                 (*slang).sl_fname,
             );
@@ -545,7 +546,7 @@ unsafe fn load_sug(fd: *mut FILE, slang: *mut slang_T) {
         if read_sug_body(fd, slang) {
             return;
         }
-        semsg(
+        semsg_c!(
             gettext(
                 super::e_error_while_reading_sug_file_str
                     .ptr()

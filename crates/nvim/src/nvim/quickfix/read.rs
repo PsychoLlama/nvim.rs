@@ -14,8 +14,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::types::{CONV_NONE, VAR_LIST, VAR_STRING};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -133,7 +134,7 @@ impl Reader {
                     os_fopen(efile, c"r".as_ptr())
                 };
                 if fd.is_null() {
-                    semsg(gettext(&raw const e_openerrf as *const c_char), efile);
+                    semsg_c!(gettext(&raw const e_openerrf as *const c_char), efile);
                     // Dropping tears the conversion down again.
                     return None;
                 }

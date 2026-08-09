@@ -66,7 +66,7 @@ use crate::src::nvim::menu::{
 };
 use crate::src::nvim::message::{
     emsg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_outtrans, msg_outtrans_long, msg_putchar,
-    msg_puts, msg_puts_hl, msg_scroll_up, msg_start, semsg,
+    msg_puts, msg_puts_hl, msg_scroll_up, msg_start,
 };
 use crate::src::nvim::option::{
     ExpandOldSetting, ExpandSettingSubtract, ExpandSettings, ExpandStringSetting, copy_option_part,

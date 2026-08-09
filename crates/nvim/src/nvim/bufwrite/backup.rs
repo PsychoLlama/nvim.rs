@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_uint};
 
 #[allow(unused_imports)]
@@ -169,7 +170,7 @@ pub(crate) unsafe fn buf_get_backup_name(
             let mut failed_dir: *mut c_char = core::ptr::null_mut();
             let ret = os_mkdir_recurse(iobuff, 0o755, &raw mut failed_dir, core::ptr::null_mut());
             if ret != 0 {
-                semsg(
+                semsg_c!(
                     translate(c"E303: Unable to create directory \"%s\" for backup file: %s")
                         .as_ptr(),
                     failed_dir,

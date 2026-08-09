@@ -11,8 +11,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::highlight_group::{HLF_D, HLF_N, HLF_QFL};
 use crate::src::nvim::types::{CMD_colder, CMD_lolder};
 use core::ffi::{CStr, c_char, c_int};
@@ -210,7 +211,7 @@ pub unsafe fn qf_list(eap: *mut exarg_T) {
         let mut idx1: c_int = 1;
         let mut idx2: c_int = -1;
         if get_list_range(&raw mut arg, &raw mut idx1, &raw mut idx2) == 0 || *arg != 0 {
-            semsg(gettext(&raw const e_trailing_arg as *const c_char), arg);
+            semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), arg);
             return;
         }
         let qfl = qf_get_curlist(qi);

@@ -84,7 +84,7 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::message::{
     emsg, emsg_invreg, message_filtered, msg, msg_ext_set_kind, msg_outtrans_len, msg_putchar,
-    msg_puts, msg_puts_hl, msg_puts_title, msgmore, semsg, smsg,
+    msg_puts, msg_puts_hl, msg_puts_title, msgmore,
 };
 use crate::src::nvim::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
 use crate::src::nvim::normal::find_ident_under_cursor;

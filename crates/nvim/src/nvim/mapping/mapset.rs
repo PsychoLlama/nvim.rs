@@ -6,8 +6,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::types::{VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -61,7 +62,7 @@ pub unsafe extern "C" fn f_mapset(
 
         let mode = get_map_mode_string(which, is_abbr);
         if mode == 0 {
-            semsg(gettext(E_ILLEGAL_MAP_MODE_STRING_STR.as_ptr()), which);
+            semsg_c!(gettext(E_ILLEGAL_MAP_MODE_STRING_STR.as_ptr()), which);
             return;
         }
 

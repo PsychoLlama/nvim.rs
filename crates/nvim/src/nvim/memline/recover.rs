@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_long, c_uint};
 
 #[allow(unused_imports)]
@@ -78,7 +79,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             mfp = mf_open(fname_used, O_RDONLY);
             fname_used = kept;
             if mfp.is_null() || (*mfp).mf_fd < 0 {
-                semsg(gettext(c"E306: Cannot open %s".as_ptr()), fname_used);
+                semsg_c!(gettext(c"E306: Cannot open %s".as_ptr()), fname_used);
                 break 'theend;
             }
             (*buf).b_ml.ml_mfp = mfp;
@@ -125,7 +126,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                 break 'theend;
             }
             if !ml_check_b0_id(&*b0p) {
-                semsg(
+                semsg_c!(
                     gettext(c"E307: %s does not look like a Nvim swap file".as_ptr()),
                     mf_fname(mfp),
                 );
@@ -218,7 +219,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                 MAXPATHL as size_t,
                 true,
             );
-            smsg(
+            smsg_c!(
                 0,
                 gettext(c"Using swap file \"%s\"".as_ptr()),
                 NameBuff.ptr(),
@@ -239,7 +240,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                 );
             }
             msg_putchar('\n' as c_int);
-            smsg(
+            smsg_c!(
                 0,
                 gettext(c"Original file \"%s\"".as_ptr()),
                 NameBuff.ptr().cast::<c_char>(),
@@ -439,7 +440,7 @@ unsafe fn choose_swapfile(fname: *mut c_char) -> Option<*mut c_char> {
             core::ptr::null_mut(),
         );
         if count == 0 {
-            semsg(gettext(c"E305: No swap file found for %s".as_ptr()), fname);
+            semsg_c!(gettext(c"E305: No swap file found for %s".as_ptr()), fname);
             return None;
         }
         let nr = if count == 1 {
@@ -507,7 +508,7 @@ unsafe fn recover_lines(
                 *hp = mf_get(mfp, bnum, page_count);
                 if hp.is_null() {
                     if bnum == 1 {
-                        semsg(
+                        semsg_c!(
                             gettext(c"E309: Unable to read block 1 from %s".as_ptr()),
                             mf_fname(mfp),
                         );
@@ -626,7 +627,7 @@ unsafe fn recover_lines(
                     let dp = (**hp).bh_data as *mut DataBlock;
                     if (*dp).db_id != DATA_ID as uint16_t {
                         if bnum == 1 {
-                            semsg(
+                            semsg_c!(
                                 gettext(c"E310: Block 1 ID wrong (%s not a .swp file?)".as_ptr()),
                                 mf_fname(mfp),
                             );

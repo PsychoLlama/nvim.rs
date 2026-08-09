@@ -6,6 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 #[allow(unused_imports)]
@@ -21,7 +22,7 @@ pub unsafe fn ex_syntime(eap: *mut exarg_T) {
             b"clear" => syntime_clear(),
             b"report" => syntime_report(),
             _ => {
-                semsg(gettext(&raw const e_invarg2 as *const c_char), (*eap).arg);
+                semsg_c!(gettext(&raw const e_invarg2 as *const c_char), (*eap).arg);
             }
         }
     }

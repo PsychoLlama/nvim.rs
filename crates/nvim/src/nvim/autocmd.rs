@@ -52,7 +52,7 @@ use crate::src::nvim::map::{
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
 use crate::src::nvim::message::{
     emsg, give_warning, msg_advance, msg_clr_eos, msg_end, msg_ext_set_kind, msg_outtrans,
-    msg_putchar, msg_puts, msg_puts_hl, msg_puts_title, msg_start, semsg, smsg, verbose_enter,
+    msg_putchar, msg_puts, msg_puts_hl, msg_puts_title, msg_start, verbose_enter,
     verbose_enter_scroll, verbose_leave, verbose_leave_scroll,
 };
 use crate::src::nvim::option::set_option_direct;

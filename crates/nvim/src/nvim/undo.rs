@@ -38,8 +38,7 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::message::{
     emsg, give_warning, iemsg, internal_error, messaging, msg, msg_end, msg_ext_set_kind,
-    msg_putchar, msg_puts, msg_puts_hl, msg_start, semsg, smsg, smsg_keep, verb_msg, verbose_enter,
-    verbose_leave,
+    msg_putchar, msg_puts, msg_puts_hl, msg_start, verb_msg, verbose_enter, verbose_leave,
 };
 use crate::src::nvim::option::copy_option_part;
 use crate::src::nvim::options::kOptFdoFlagUndo;

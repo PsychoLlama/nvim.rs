@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use ::core::ffi::{c_char, c_int, c_void};
 
 use super::*;
@@ -485,7 +486,7 @@ pub unsafe fn write_reg_contents_ex(
                 let num = atoi(str);
                 let buf = buflist_findnr(num);
                 if buf.is_null() {
-                    semsg(
+                    semsg_c!(
                         gettext(&raw const e_nobufnr as *const c_char),
                         int64_t::from(num),
                     );

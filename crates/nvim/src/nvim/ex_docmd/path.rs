@@ -6,6 +6,7 @@
 //! is what keeps the three in step after any of them changes.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 
@@ -27,7 +28,7 @@ use crate::src::nvim::main::{
     globaldir, last_chdir_reason, p_cdh, p_cpo, p_ffu, p_verbose, textlock,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
-use crate::src::nvim::message::{emsg, msg, semsg, smsg};
+use crate::src::nvim::message::{emsg, msg};
 use crate::src::nvim::option::{get_option_sctx, option_set_callback_func};
 use crate::src::nvim::options::kOptFindfunc;
 use crate::src::nvim::optionstr::free_string_option;
@@ -154,12 +155,12 @@ pub(crate) unsafe fn findfunc_find_file(
         let fname_list = call_findfunc(findarg, kBoolVarFalse);
         let fname_count = tv_list_len(fname_list);
         if fname_count == 0 {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_cant_find_file_str_in_path as *const c_char),
                 findarg,
             );
         } else if count > fname_count {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_no_more_file_str_found_in_path as *const c_char),
                 findarg,
             );
@@ -375,7 +376,7 @@ pub(crate) unsafe fn ex_pwd(_eap: *mut exarg_T) {
             } else {
                 c"global".as_ptr() as *mut c_char
             };
-            smsg(
+            smsg_c!(
                 0,
                 c"[%s] %s".as_ptr(),
                 context,

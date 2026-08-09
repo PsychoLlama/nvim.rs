@@ -60,7 +60,7 @@ use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xstrlcpy};
 use crate::src::nvim::message::{
     emsg, give_warning, iemsg, messaging, msg, msg_check, msg_clr_eos, msg_end, msg_ext_set_kind,
     msg_home_replace, msg_outtrans, msg_prt_line, msg_putchar, msg_puts, msg_puts_hl,
-    msg_puts_title, msg_start, msg_strtrunc, msg_trunc, semsg, smsg, verbose_enter, verbose_leave,
+    msg_puts_title, msg_start, msg_strtrunc, msg_trunc, verbose_enter, verbose_leave,
 };
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::r#move::validate_cursor;

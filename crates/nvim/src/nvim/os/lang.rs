@@ -22,7 +22,6 @@ use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::time_fd;
 use crate::src::nvim::memory::{xfree, xstrlcpy};
-use crate::src::nvim::message::{semsg, smsg};
 use crate::src::nvim::option::{PROJECT_NAME, set_helplang_default};
 use crate::src::nvim::os::env::os_setenv;
 use crate::src::nvim::os::libc::{bindtextdomain, gettext, setlocale, textdomain};
@@ -32,6 +31,7 @@ use crate::src::nvim::profile::time_msg;
 use crate::src::nvim::types::{
     VV_COLLATE, VV_CTYPE, VV_LANG, VV_LC_TIME, VV_PROGPATH, exarg_T, expand_T,
 };
+use crate::{semsg_c, smsg_c};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
@@ -223,7 +223,7 @@ pub unsafe fn ex_language(eap: *mut exarg_T) {
     if loc.is_null() {
         // SAFETY: `semsg` is printf-shaped and `name` outlives the call.
         unsafe {
-            semsg(
+            semsg_c!(
                 gettext(c"E197: Cannot set language to \"%s\"".as_ptr()),
                 name,
             )
@@ -276,7 +276,7 @@ fn report(what: c_int, whatstr: &CStr) {
         if p.is_null() || *p == 0 {
             p = c"Unknown".as_ptr().cast_mut();
         }
-        smsg(
+        smsg_c!(
             0,
             gettext(c"Current %slanguage: \"%s\"".as_ptr()),
             whatstr.as_ptr(),

@@ -10,12 +10,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::file_search::Name;
 use crate::src::nvim::highlight_group::HLF_W;
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::types::VV_SWAPCOMMAND;
+#[allow(unused_imports)]
+use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -556,7 +557,7 @@ impl DoTag {
 
                 if num_matches.get() <= 0 {
                     if self.verbose {
-                        semsg(gettext(c"E426: Tag not found: %s".as_ptr()), name);
+                        semsg_c!(gettext(c"E426: Tag not found: %s".as_ptr()), name);
                     }
                     g_do_tagpreview.set(0);
                     return;
@@ -782,7 +783,7 @@ impl DoTag {
             // Only when about to try the next match: otherwise E429 below
             // reports it.
             if !nofile_fname.get().is_null() && self.error_cur_match != self.cur_match {
-                smsg(
+                smsg_c!(
                     0,
                     gettext(c"File \"%s\" does not exist".as_ptr()),
                     nofile_fname.get(),
@@ -824,7 +825,7 @@ impl DoTag {
                     && (max_num_matches.get() != MAXCOL as c_int
                         || self.cur_match < num_matches.get() - 1));
             if !more {
-                semsg(
+                semsg_c!(
                     gettext(c"E429: File \"%s\" does not exist".as_ptr()),
                     nofile_fname.get(),
                 );

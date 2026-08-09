@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::types::{VAR_STRING, VAR_UNKNOWN};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -74,13 +75,13 @@ pub unsafe extern "C" fn f_getcompletion(
             xpc.xp_context = cmdcomplete_str_to_type(type_0);
             match xpc.xp_context {
                 EXPAND_NOTHING => {
-                    semsg(gettext(&raw const e_invarg2 as *const c_char), type_0);
+                    semsg_c!(gettext(&raw const e_invarg2 as *const c_char), type_0);
                     return;
                 }
                 EXPAND_USER_DEFINED => {
                     // Must be "custom,funcname" pattern.
                     if strncmp(type_0, c"custom,".as_ptr(), 7) != 0 {
-                        semsg(gettext(&raw const e_invarg2 as *const c_char), type_0);
+                        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), type_0);
                         return;
                     }
                     xpc.xp_arg = type_0.add(7) as *mut c_char;
@@ -88,7 +89,7 @@ pub unsafe extern "C" fn f_getcompletion(
                 EXPAND_USER_LIST => {
                     // Must be "customlist,funcname" pattern.
                     if strncmp(type_0, c"customlist,".as_ptr(), 11) != 0 {
-                        semsg(gettext(&raw const e_invarg2 as *const c_char), type_0);
+                        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), type_0);
                         return;
                     }
                     xpc.xp_arg = type_0.add(11) as *mut c_char;

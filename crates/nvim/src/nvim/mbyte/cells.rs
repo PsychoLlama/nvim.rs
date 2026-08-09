@@ -17,8 +17,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
@@ -313,7 +314,7 @@ unsafe fn parse_cell_widths(l: *const list_T) -> Option<Vec<CellWidthRange>> {
         while !li.is_null() {
             let li_tv = &raw const (*li).li_tv;
             if (*li_tv).v_type as c_uint != VAR_LIST as c_uint || (*li_tv).vval.v_list.is_null() {
-                semsg(gettext(c"E1109: List item %d is not a List".as_ptr()), item);
+                semsg_c!(gettext(c"E1109: List item %d is not a List".as_ptr()), item);
                 return None;
             }
             rows.push(parse_cell_width_row((*li_tv).vval.v_list, item)?);
@@ -327,7 +328,7 @@ unsafe fn parse_cell_widths(l: *const list_T) -> Option<Vec<CellWidthRange>> {
         rows.sort_by_key(|r| r.first);
         for i in 1..rows.len() {
             if rows[i].first <= rows[i - 1].last {
-                semsg(
+                semsg_c!(
                     gettext(c"E1113: Overlapping ranges for 0x%lx".as_ptr()),
                     rows[i].first as size_t,
                 );
@@ -365,11 +366,11 @@ unsafe fn parse_cell_width_row(li_l: *const list_T, item: c_int) -> Option<CellW
                     return None;
                 }
                 1 if n < numbers[0] => {
-                    semsg(gettext(c"E1111: List item %d range invalid".as_ptr()), item);
+                    semsg_c!(gettext(c"E1111: List item %d range invalid".as_ptr()), item);
                     return None;
                 }
                 2 if !(1..=2).contains(&n) => {
-                    semsg(
+                    semsg_c!(
                         gettext(c"E1112: List item %d cell width invalid".as_ptr()),
                         item,
                     );
@@ -386,7 +387,7 @@ unsafe fn parse_cell_width_row(li_l: *const list_T, item: c_int) -> Option<CellW
 
         // A fourth number, a non-number, or too few: all "not three numbers".
         if seen != 3 {
-            semsg(
+            semsg_c!(
                 gettext(c"E1110: List item %d does not contain 3 numbers".as_ptr()),
                 item,
             );

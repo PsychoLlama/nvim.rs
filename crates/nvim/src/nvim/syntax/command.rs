@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 #[allow(unused_imports)]
@@ -54,7 +55,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_conceal(eap: *mut exarg_T, _syncing: c_i
         } else if let Some(i) = word_index(arg, next, &[c"on", c"off"]) {
             (*cur_syn_block()).b_syn_conceal = if i == 0 { true_0 } else { false_0 };
         } else {
-            semsg(gettext(E_ILLEGAL_ARG.as_ptr()), arg);
+            semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg);
         }
     }
 }
@@ -77,7 +78,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_case(eap: *mut exarg_T, _syncing: c_int)
         } else if let Some(i) = word_index(arg, next, &[c"match", c"ignore"]) {
             (*cur_syn_block()).b_syn_ic = if i == 0 { false_0 } else { true_0 };
         } else {
-            semsg(gettext(E_ILLEGAL_ARG.as_ptr()), arg);
+            semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg);
         }
     }
 }
@@ -104,7 +105,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_foldlevel(eap: *mut exarg_T, _syncing: c
             Some(0) => (*cur_syn_block()).b_syn_foldlevel = SYNFLD_START,
             Some(_) => (*cur_syn_block()).b_syn_foldlevel = SYNFLD_MINIMUM,
             None => {
-                semsg(gettext(E_ILLEGAL_ARG.as_ptr()), arg);
+                semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg);
                 return;
             }
         }
@@ -112,7 +113,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_foldlevel(eap: *mut exarg_T, _syncing: c
         // Unlike the other mode commands, this one diagnoses trailing text.
         let arg = skipwhite(arg_end);
         if *arg as c_int != NUL {
-            semsg(gettext(E_ILLEGAL_ARG.as_ptr()), arg);
+            semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg);
         }
     }
 }
@@ -139,7 +140,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_spell(eap: *mut exarg_T, _syncing: c_int
                 _ => SYNSPL_DEFAULT,
             };
         } else {
-            semsg(gettext(E_ILLEGAL_ARG.as_ptr()), arg);
+            semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg);
             return;
         }
 
@@ -328,7 +329,7 @@ pub unsafe fn ex_syntax(eap: *mut exarg_T) {
                 (sub.func)(eap, false_0);
             }
             None => {
-                semsg(
+                semsg_c!(
                     gettext(c"E410: Invalid :syntax subcommand: %s".as_ptr()),
                     subcmd_name,
                 );

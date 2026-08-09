@@ -27,6 +27,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::smsg_c;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::src::nvim::autocmd::{EVENT_SPELLFILEMISSING, apply_autocmds};
@@ -39,7 +40,6 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{curbuf, curwin, e_invarg, firstbuf, firstwin, p_enc, starting};
 use crate::src::nvim::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::memory::{xfree, xmemcpyz, xmemdupz, xstrdup, xstrlcpy};
-use crate::src::nvim::message::smsg;
 use crate::src::nvim::option::{copy_option_part, valid_name};
 use crate::src::nvim::os::fs::os_remove;
 use crate::src::nvim::os::libc::{
@@ -169,7 +169,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
                 );
                 do_cmdline_cmd(autocmd_buf.as_ptr());
             } else {
-                smsg(
+                smsg_c!(
                     0,
                     gettext(
                         c"Warning: Cannot find word list \"%s.%s.spl\" or \"%s.ascii.spl\""
@@ -405,7 +405,7 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
                             } else {
                                 // Probably a mistake; warn but accept the
                                 // words anyway.
-                                smsg(
+                                smsg_c!(
                                     0,
                                     gettext(c"Warning: region %s not supported".as_ptr()),
                                     region,

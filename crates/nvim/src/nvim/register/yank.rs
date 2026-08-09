@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::smsg_c;
 use ::core::ffi::{c_char, c_int, c_ulong, c_void};
 
 use super::*;
@@ -169,7 +170,7 @@ unsafe fn report_yank(oap: *mut oparg_T, yank_type: MotionType, yanklines: size_
                 c"%ld lines yanked%s".as_ptr(),
             )
         };
-        smsg(
+        smsg_c!(
             0,
             ngettext(one, many, yanklines as c_ulong),
             yanklines as int64_t,

@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
@@ -37,7 +38,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::memline::ml_recover;
 use crate::src::nvim::memory::{xfree, xstrdup};
-use crate::src::nvim::message::{msg_putchar, semsg};
+use crate::src::nvim::message::msg_putchar;
 use crate::src::nvim::option::{set_option_direct, set_option_value_give_err};
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::snprintf;
@@ -190,7 +191,7 @@ pub(crate) unsafe fn read_stdin() {
         if !(*curbuf.get()).b_ffname.is_null() {
             let stdin_buf = buflist_new(ptr::null_mut(), ptr::null_mut(), 0, BLN_LISTED as c_int);
             if stdin_buf.is_null() {
-                semsg(c"Failed to create buffer for stdin".as_ptr());
+                semsg_c!(c"Failed to create buffer for stdin".as_ptr());
                 return;
             }
             let initial_buf_handle: handle_T = (*curbuf.get()).handle;

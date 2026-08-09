@@ -13,8 +13,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -264,7 +265,7 @@ impl Format {
             } else {
                 // SAFETY: a literal format string, one `int` argument.
                 unsafe {
-                    semsg(
+                    semsg_c!(
                         gettext(c"E377: Invalid %%%c in format string".as_ptr()),
                         c_int::from(conv),
                     )
@@ -291,7 +292,7 @@ impl Format {
         if self.addr[idx] != 0 {
             // SAFETY: a literal format string, one `int` argument.
             unsafe {
-                semsg(
+                semsg_c!(
                     gettext(c"E372: Too many %%%c in format string".as_ptr()),
                     c_int::from(part[at]),
                 )
@@ -307,7 +308,7 @@ impl Format {
         {
             // SAFETY: a literal format string, one `int` argument.
             unsafe {
-                semsg(
+                semsg_c!(
                     gettext(c"E373: Unexpected %%%c in format string".as_ptr()),
                     c_int::from(part[at]),
                 )
@@ -349,7 +350,7 @@ impl Format {
         } else {
             // SAFETY: a literal format string, one `int` argument.
             unsafe {
-                semsg(
+                semsg_c!(
                     gettext(c"E376: Invalid %%%c in format string prefix".as_ptr()),
                     c_int::from(part[at]),
                 )
@@ -370,7 +371,7 @@ fn push_scanf(pat: &mut Vec<u8>, part: &[u8], at: usize, len: usize) -> Option<u
     if part[at] != b'[' && part[at] != b'\\' {
         // SAFETY: a literal format string, one `int` argument.
         unsafe {
-            semsg(
+            semsg_c!(
                 gettext(c"E375: Unsupported %%%c in format string".as_ptr()),
                 c_int::from(part[at]),
             )

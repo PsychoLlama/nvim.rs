@@ -14,7 +14,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::file_search::Name;
 use crate::src::nvim::regexp::RE_MAGIC;
@@ -22,6 +21,8 @@ use crate::src::nvim::types::{
     CMD_grep, CMD_grepadd, CMD_lcd, CMD_lgrep, CMD_lgrepadd, CMD_lvimgrep, CMD_lvimgrepadd,
     CMD_vimgrep, CMD_vimgrepadd, CMOD_HIDE,
 };
+#[allow(unused_imports)]
+use crate::{semsg_c, smsg_c};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
@@ -489,7 +490,7 @@ unsafe fn process_files(
 
             if buf.is_null() {
                 if !got_int.get() {
-                    smsg(0, gettext(c"Cannot open file \"%s\"".as_ptr()), fname);
+                    smsg_c!(0, gettext(c"Cannot open file \"%s\"".as_ptr()), fname);
                 }
             } else {
                 let found_match =
@@ -693,7 +694,7 @@ pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
         }
 
         if qf_list_empty(qf_get_curlist(qi)) {
-            semsg(gettext(&raw const e_nomatch2 as *const c_char), search.spat);
+            semsg_c!(gettext(&raw const e_nomatch2 as *const c_char), search.spat);
         } else if search.flags & VGR_NOJUMP as c_int == 0 {
             jump_to_match(qi, (*eap).forceit, &mut out);
         }

@@ -375,7 +375,7 @@
     "crates/nvim/src/nvim/fileio/open.rs": {"cell_ptr": 3, "unsafe_lines": 338},
     "crates/nvim/src/nvim/fileio/read.rs": {"cell_ptr": 3, "unsafe_lines": 713},
     "crates/nvim/src/nvim/fileio/report.rs": {"cell_ptr": 1, "unsafe_lines": 90},
-    "crates/nvim/src/nvim/fileio/tempfile.rs": {"no_mangle": 3, "unsafe_lines": 240},
+    "crates/nvim/src/nvim/fileio/tempfile.rs": {"no_mangle": 3, "unsafe_lines": 243},
     "crates/nvim/src/nvim/fileio/timestamp.rs": {"cell_ptr": 4, "unsafe_lines": 432},
     "crates/nvim/src/nvim/fold.rs": {"unsafe_lines": 393},
     "crates/nvim/src/nvim/fold/adjust.rs": {"cell_ptr": 2, "unsafe_lines": 489},

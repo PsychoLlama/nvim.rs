@@ -3,6 +3,7 @@
 //! line store `:while` and `:for` replay from, and Ex mode.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::smsg_c;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 
@@ -29,7 +30,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::message::{
-    emsg, emsg_multiline, msg, msg_clr_eos, msg_puts, msg_scroll_flush, smsg, verbose_enter_scroll,
+    emsg, emsg_multiline, msg, msg_clr_eos, msg_puts, msg_scroll_flush, verbose_enter_scroll,
     verbose_leave_scroll,
 };
 use crate::src::nvim::os::libc::gettext;
@@ -177,9 +178,9 @@ pub(crate) unsafe fn msg_verbose_cmd(lnum: linenr_T, cmd: *mut c_char) {
         *no_wait_return.ptr() += 1;
         verbose_enter_scroll();
         if lnum == 0 {
-            smsg(0, gettext(c"Executing: %s".as_ptr()), cmd);
+            smsg_c!(0, gettext(c"Executing: %s".as_ptr()), cmd);
         } else {
-            smsg(0, gettext(c"line %d: %s".as_ptr()), lnum, cmd);
+            smsg_c!(0, gettext(c"line %d: %s".as_ptr()), lnum, cmd);
         }
         if msg_silent.get() == 0 {
             msg_puts(c"\n".as_ptr());

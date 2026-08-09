@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::{size_of, size_of_val};
 use core::ptr;
@@ -38,7 +39,6 @@ use crate::src::nvim::main::{
     stdin_isatty, stdout_isatty, time_msg_at,
 };
 use crate::src::nvim::memory::{strequal, xfree, xmalloc, xstrdup};
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::option::{reset_modifiable, set_option_value_give_err, set_options_bin};
 use crate::src::nvim::os::env::os_getenv;
 use crate::src::nvim::os::fs::{os_exepath, os_isdir, os_write};
@@ -266,7 +266,7 @@ impl Scan {
                 let data = api_metadata_raw();
                 let written = os_write(STDOUT_FILENO, data.data, data.size, false);
                 if written < 0 as ptrdiff_t {
-                    semsg(
+                    semsg_c!(
                         gettext(c"E5420: Failed to write to file: %s".as_ptr()),
                         uv_strerror(written as c_int),
                     );

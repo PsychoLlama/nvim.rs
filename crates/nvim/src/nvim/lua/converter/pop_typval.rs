@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_int};
 
 use super::{VARNUMBER_MAX, VARNUMBER_MIN, nlua_traverse_table};
@@ -28,7 +29,7 @@ use crate::src::nvim::lua::ffi::{
 };
 use crate::src::nvim::main::nlua_global_refs;
 use crate::src::nvim::memory::xstrdup;
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{abort, gettext};
 use crate::src::nvim::types::{
     LuaRef, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
@@ -110,7 +111,7 @@ pub unsafe extern "C-unwind" fn nlua_pop_typval(
         stack.push(TVPopStackItem::leaf(ret_tv));
         while ret && !stack.is_empty() {
             if lua_checkstack(lstate, lua_gettop(lstate) + 3) == 0 {
-                semsg(gettext(E1502_GROW_STACK.as_ptr()), lua_gettop(lstate) + 3);
+                semsg_c!(gettext(E1502_GROW_STACK.as_ptr()), lua_gettop(lstate) + 3);
                 ret = false;
                 break;
             }

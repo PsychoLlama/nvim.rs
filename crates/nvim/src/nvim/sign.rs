@@ -64,7 +64,7 @@ use crate::src::nvim::marktree::{
 use crate::src::nvim::mbyte::{MAX_SCHAR_SIZE, utf_ptr2cells, utfc_ptr2len, utfc_ptr2schar};
 use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::message::{
-    emsg, msg_outtrans, msg_putchar, msg_puts, msg_puts_hl, msg_puts_title, semsg, smsg,
+    emsg, msg_outtrans, msg_putchar, msg_puts, msg_puts_hl, msg_puts_title, semsg,
 };
 use crate::src::nvim::os::libc::{atoi, gettext, snprintf, strcmp, strlen, strncmp};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};

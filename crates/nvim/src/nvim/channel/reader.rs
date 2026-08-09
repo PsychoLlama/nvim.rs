@@ -5,6 +5,7 @@
 //! own queue, so that a callback which writes back to its channel cannot
 //! recurse into the read path.
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
 
@@ -19,7 +20,6 @@ use crate::src::nvim::event::r#loop::one_arg_event;
 use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 use crate::src::nvim::garray::{ga_clear, ga_concat_len, ga_init};
 use crate::src::nvim::main::e_streamkey;
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::terminal::terminal_receive;
 use crate::src::nvim::types::{
@@ -164,7 +164,7 @@ pub unsafe fn channel_reader_callbacks(chan: *mut Channel, reader: *mut Callback
                 data,
             );
         } else {
-            semsg(
+            semsg_c!(
                 gettext(e_streamkey.ptr() as *const c_char),
                 (*reader).type_0,
                 (*chan).id,

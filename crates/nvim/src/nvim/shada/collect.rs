@@ -15,6 +15,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::siemsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
 
@@ -346,7 +347,7 @@ unsafe fn jump_target(
 ) -> Option<*const c_char> {
     unsafe {
         if fm.fmark.mark.lnum == 0 {
-            siemsg(
+            siemsg_c!(
                 c"ShaDa: mark lnum zero (ji:%p, js:%p, len:%i)".as_ptr(),
                 jump_iter,
                 (&raw const (*curwin.get()).w_jumplist).cast::<c_void>(),

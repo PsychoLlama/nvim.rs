@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::siemsg_c;
 use core::ffi::{c_char, c_int, c_uint};
 
 #[allow(unused_imports)]
@@ -112,7 +113,7 @@ pub(crate) unsafe fn ml_get_buf_impl(
                 // Avoid giving this message for a recursive call, which
                 // happens when the redraw it triggers reads the same line.
                 ml_get_recursive.set(1);
-                siemsg(
+                siemsg_c!(
                     gettext(c"E315: ml_get: Invalid lnum: %ld".as_ptr()),
                     lnum as int64_t,
                 );
@@ -140,7 +141,7 @@ pub(crate) unsafe fn ml_get_buf_impl(
                     get_trans_bufname(buf);
                     shorten_dir(NameBuff.ptr().cast::<c_char>());
                     // The missing space before "in buffer" is upstream's.
-                    siemsg(
+                    siemsg_c!(
                         gettext(c"E316: ml_get: Cannot find line %ldin buffer %d %s".as_ptr()),
                         lnum as int64_t,
                         (*buf).handle,
@@ -206,7 +207,7 @@ pub(crate) unsafe fn ml_flush_line(buf: *mut buf_T, noalloc: bool) {
 
             let hp = ml_find_line(buf, lnum, ML_FIND);
             if hp.is_null() {
-                siemsg(
+                siemsg_c!(
                     gettext(c"E320: Cannot find line %ld".as_ptr()),
                     lnum as int64_t,
                 );
@@ -502,12 +503,12 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
             if idx >= count {
                 // Past the end: the tree disagrees with the line count.
                 if lnum > (*buf).b_ml.ml_line_count {
-                    siemsg(
+                    siemsg_c!(
                         gettext(c"E322: Line number out of range: %ld past the end".as_ptr()),
                         lnum as int64_t - (*buf).b_ml.ml_line_count as int64_t,
                     );
                 } else {
-                    siemsg(
+                    siemsg_c!(
                         gettext(c"E323: Line count wrong in block %ld".as_ptr()),
                         bnum,
                     );

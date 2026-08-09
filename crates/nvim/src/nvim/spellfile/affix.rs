@@ -20,13 +20,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::smsg_c;
 use core::ffi::{c_char, c_int};
 
 use crate::src::nvim::garray::ga_append_via_ptr;
 use crate::src::nvim::hashtab::{hash_add, hash_find, hash_removed};
 use crate::src::nvim::mbyte::{mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::memory::xstrlcpy;
-use crate::src::nvim::message::smsg;
 use crate::src::nvim::os::libc::{atoi, gettext, snprintf, strcmp, strcpy, strlen};
 use crate::src::nvim::spell::{onecap_copy, spelltab};
 use crate::src::nvim::strings::{has_non_ascii, vim_strchr};
@@ -73,7 +73,7 @@ pub unsafe fn handle_affix_header(
             // A continued block for an affix already defined.
             st.cur_aff = (*hi).hi_key.cast::<affheader_T>();
             if ((*st.cur_aff).ah_combine != 0) != combines {
-                smsg(
+                smsg_c!(
                     0,
                     gettext(
                         c"Different combining flag in continued affix block in %s line %d: %s"
@@ -85,7 +85,7 @@ pub unsafe fn handle_affix_header(
                 );
             }
             if (*st.cur_aff).ah_follows == 0 {
-                smsg(
+                smsg_c!(
                     0,
                     gettext(c"Duplicate affix in %s line %d: %s".as_ptr()),
                     fname,
@@ -112,7 +112,7 @@ pub unsafe fn handle_affix_header(
                 (*aff).af_comproot,
             ];
             if clashes.contains(&(*st.cur_aff).ah_flag) {
-                smsg(
+                smsg_c!(
                     0,
                     gettext(
                         c"Affix also used for BAD/RARE/KEEPCASE/NEEDAFFIX/NEEDCOMPOUND/NOSUGGEST in %s line %d: %s"
@@ -138,10 +138,10 @@ pub unsafe fn handle_affix_header(
         }
         if items.len() > lasti && !(*aff).af_ignoreextra && *items[lasti] as c_int != b'#' as c_int
         {
-            smsg(0, gettext(e_afftrailing.get()), fname, lnum, items[lasti]);
+            smsg_c!(0, gettext(e_afftrailing.get()), fname, lnum, items[lasti]);
         }
         if strcmp(items[2], c"Y".as_ptr()) != 0 && strcmp(items[2], c"N".as_ptr()) != 0 {
-            smsg(
+            smsg_c!(
                 0,
                 gettext(c"Expected Y or N in %s line %d: %s".as_ptr()),
                 fname,
@@ -189,7 +189,7 @@ pub unsafe fn handle_affix_entry(
             && *items[lasti] as c_int != b'#' as c_int
             && (strcmp(items[lasti], c"-".as_ptr()) != 0 || items.len() != lasti + 1)
         {
-            smsg(0, gettext(e_afftrailing.get()), fname, lnum, items[lasti]);
+            smsg_c!(0, gettext(e_afftrailing.get()), fname, lnum, items[lasti]);
         }
         st.aff_todo -= 1;
 
@@ -232,7 +232,7 @@ pub unsafe fn handle_affix_entry(
             );
             (*entry).ae_prog = vim_regcomp(buf.as_mut_ptr(), RE_MAGIC + RE_STRING + RE_STRICT);
             if (*entry).ae_prog.is_null() {
-                smsg(
+                smsg_c!(
                     0,
                     gettext(c"Broken condition in %s line %d: %s".as_ptr()),
                     fname,

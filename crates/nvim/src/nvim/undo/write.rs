@@ -3,6 +3,7 @@
 use super::file::*;
 use super::format::*;
 use super::*;
+use crate::{semsg_c, smsg_c};
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn u_write_undo(
@@ -90,7 +91,7 @@ pub unsafe extern "C" fn u_write_undo(
         if file_name.is_null() {
             if p_verbose.get() > 0 {
                 verbose_enter();
-                smsg(
+                smsg_c!(
                     0,
                     c"%s".as_ptr(),
                     gettext(c"Cannot write undo file in any directory in 'undodir'".as_ptr()),
@@ -119,7 +120,7 @@ pub unsafe extern "C" fn u_write_undo(
                         if name.is_null() {
                             verbose_enter();
                         }
-                        smsg(
+                        smsg_c!(
                             0,
                             gettext(c"Will not overwrite with undo file, cannot read: %s".as_ptr()),
                             file_name,
@@ -148,7 +149,7 @@ pub unsafe extern "C" fn u_write_undo(
                             if name.is_null() {
                                 verbose_enter();
                             }
-                            smsg(
+                            smsg_c!(
                                 0,
                                 gettext(
                                     c"Will not overwrite, this is not an undo file: %s".as_ptr(),
@@ -174,7 +175,7 @@ pub unsafe extern "C" fn u_write_undo(
         } else {
             fd_0 = os_open(file_name, O_CREAT | O_WRONLY | O_EXCL | O_NOFOLLOW, perm);
             if fd_0 < 0 {
-                semsg(
+                semsg_c!(
                     gettext(c"E828: Cannot open undo file for writing: %s".as_ptr()),
                     file_name,
                 );
@@ -182,7 +183,7 @@ pub unsafe extern "C" fn u_write_undo(
                 os_setperm(file_name, perm);
                 if p_verbose.get() > 0 {
                     verbose_enter();
-                    smsg(0, gettext(c"Writing undo file: %s".as_ptr()), file_name);
+                    smsg_c!(0, gettext(c"Writing undo file: %s".as_ptr()), file_name);
                     verbose_leave();
                 }
                 file_info_old = FileInfo {
@@ -263,7 +264,7 @@ pub unsafe extern "C" fn u_write_undo(
                 }
                 fp = fdopen(fd_0, c"w".as_ptr());
                 if fp.is_null() {
-                    semsg(
+                    semsg_c!(
                         gettext(c"E828: Cannot open undo file for writing: %s".as_ptr()),
                         file_name,
                     );
@@ -323,7 +324,7 @@ pub unsafe extern "C" fn u_write_undo(
                     }
                     fclose(fp);
                     if !write_ok {
-                        semsg(
+                        semsg_c!(
                             gettext(c"E829: Write error in undo file: %s".as_ptr()),
                             file_name,
                         );

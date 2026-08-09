@@ -32,6 +32,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int};
 
 use crate::src::nvim::ascii::ascii_isdigit;
@@ -43,7 +44,7 @@ use crate::src::nvim::hashtab::{
 use crate::src::nvim::main::{IObuff, e_notopen, got_int, msg_col, msg_didout, p_verbose};
 use crate::src::nvim::mbyte::{mb_charlen, string_convert, utf_head_off, utfc_ptr2len};
 use crate::src::nvim::memory::{xfree, xmemcpyz, xstrlcat, xstrlcpy};
-use crate::src::nvim::message::{msg_clr_eos, msg_outtrans_long, msg_start, semsg, smsg};
+use crate::src::nvim::message::{msg_clr_eos, msg_outtrans_long, msg_start};
 use crate::src::nvim::os::fs::os_fopen;
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{fclose, gettext, memmove, strlen};
@@ -80,7 +81,7 @@ pub unsafe fn spell_read_dic(
     unsafe {
         let fd = os_fopen(fname, c"r".as_ptr());
         if fd.is_null() {
-            semsg(gettext((&raw const e_notopen).cast()), fname);
+            semsg_c!(gettext((&raw const e_notopen).cast()), fname);
             return FAIL;
         }
 
@@ -102,7 +103,7 @@ pub unsafe fn spell_read_dic(
         if vim_fgets(line.as_mut_ptr(), MAXLINELEN, fd)
             || !ascii_isdigit(*skipwhite(line.as_mut_ptr()) as c_int)
         {
-            semsg(gettext(c"E760: No word count in %s".as_ptr()), fname);
+            semsg_c!(gettext(c"E760: No word count in %s".as_ptr()), fname);
         }
 
         let mut store_afflist: [c_char; MAXWLEN] = [0; MAXWLEN];
@@ -138,7 +139,7 @@ pub unsafe fn spell_read_dic(
                     core::ptr::null_mut(),
                 );
                 if pc.is_null() {
-                    smsg(
+                    smsg_c!(
                         0,
                         gettext(c"Conversion failure for word in %s line %d: %s".as_ptr()),
                         fname,
@@ -215,7 +216,7 @@ pub unsafe fn spell_read_dic(
                 // Report every duplicate when 'verbose' is on, otherwise
                 // just the first, plus a count at the end.
                 if p_verbose.get() > 0 {
-                    smsg(
+                    smsg_c!(
                         0,
                         gettext(c"Duplicate word in %s line %d: %s".as_ptr()),
                         fname,
@@ -223,7 +224,7 @@ pub unsafe fn spell_read_dic(
                         dw,
                     );
                 } else if duplicate == 0 {
-                    smsg(
+                    smsg_c!(
                         0,
                         gettext(c"First duplicate word in %s line %d: %s".as_ptr()),
                         fname,
@@ -308,7 +309,7 @@ pub unsafe fn spell_read_dic(
         }
 
         if duplicate > 0 {
-            smsg(
+            smsg_c!(
                 0,
                 gettext(c"%d duplicate word(s) in %s".as_ptr()),
                 duplicate,
@@ -316,7 +317,7 @@ pub unsafe fn spell_read_dic(
             );
         }
         if (*spin).si_ascii != 0 && non_ascii > 0 {
-            smsg(
+            smsg_c!(
                 0,
                 gettext(c"Ignored %d word(s) with non-ASCII characters in %s".as_ptr()),
                 non_ascii,

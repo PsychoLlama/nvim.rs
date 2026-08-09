@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use crate::src::nvim::undo::UNDO_HASH_SIZE;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
@@ -585,7 +586,7 @@ pub unsafe extern "C" fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_op
                 || buf != curbuf.get()
                 || move_lines(buf, savebuf) == FAIL
             {
-                semsg(
+                semsg_c!(
                     gettext(c"E462: Could not prepare for reloading \"%s\"".as_ptr()),
                     (*buf).b_fname,
                 );
@@ -608,7 +609,7 @@ pub unsafe extern "C" fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_op
             ) != OK
             {
                 if !aborting() {
-                    semsg(
+                    semsg_c!(
                         gettext(c"E321: Could not reload \"%s\"".as_ptr()),
                         (*buf).b_fname,
                     );

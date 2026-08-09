@@ -5,6 +5,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::siemsg_c;
 use core::ffi::{c_char, c_int};
 
 use super::cursor;
@@ -12,7 +13,7 @@ use super::postfix;
 use crate::semsg;
 use crate::src::nvim::main::{e_nopresub, rc_did_emsg};
 use crate::src::nvim::mbyte::{utf_char2len, utf_ptr2char, utf_ptr2len};
-use crate::src::nvim::message::{emsg, siemsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::regexp::{
     FAIL, NFA_ADD_NL, NFA_ALPHA, NFA_ANY, NFA_BACKREF1, NFA_COMPOSING, NFA_CONCAT, NFA_DIGIT,
@@ -83,7 +84,7 @@ pub(crate) fn class_shorthand(c: c_int, extra: c_int) -> c_int {
             // dropped while messages are being held back. Unreachable in
             // practice — the dispatch only sends class characters here.
             // SAFETY: a NUL-terminated literal and the int its `%d` takes.
-            unsafe { siemsg(c"INTERNAL: Unknown character class char: %d".as_ptr(), c) };
+            unsafe { siemsg_c!(c"INTERNAL: Unknown character class char: %d".as_ptr(), c) };
         }
         return FAIL;
     };

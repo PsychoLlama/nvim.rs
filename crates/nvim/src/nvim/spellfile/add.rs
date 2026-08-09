@@ -27,6 +27,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_long, c_void};
 
 use crate::src::nvim::api::private::helpers::cstr_as_string;
@@ -35,7 +36,7 @@ use crate::src::nvim::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::src::nvim::fileio::{buf_reload, vim_fgets, vim_tempname};
 use crate::src::nvim::main::{NameBuff, curbuf, curwin, e_bufloaded, e_notopen, e_notset};
 use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz, xstrlcat, xstrlcpy};
-use crate::src::nvim::message::{emsg, semsg, smsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::option::{copy_option_part, set_option_value_give_err};
 use crate::src::nvim::options::kOptSpellfile;
 use crate::src::nvim::os::env::home_replace;
@@ -100,7 +101,7 @@ pub unsafe fn spell_add_word(
                 new_spf = true;
             }
             if *(*(*curwin.get()).w_s).b_p_spf == 0 {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_notset as *const c_char),
                     c"spellfile".as_ptr(),
                 );
@@ -121,7 +122,7 @@ pub unsafe fn spell_add_word(
                     break;
                 }
                 if *spf == 0 {
-                    semsg(
+                    semsg_c!(
                         gettext(c"E765: 'spellfile' does not have %d entries".as_ptr()),
                         idx,
                     );
@@ -175,7 +176,7 @@ pub unsafe fn spell_add_word(
             opened = !fd.is_null();
 
             if fd.is_null() {
-                semsg(gettext(&raw const e_notopen as *const c_char), fname);
+                semsg_c!(gettext(&raw const e_notopen as *const c_char), fname);
             } else {
                 let format = if what == SPELL_ADD_BAD as SpellAddType {
                     c"%.*s/!\n".as_ptr()
@@ -194,7 +195,7 @@ pub unsafe fn spell_add_word(
                     MAXPATHL as size_t,
                     true,
                 );
-                smsg(
+                smsg_c!(
                     0,
                     gettext(c"Word '%.*s' added to %s".as_ptr()),
                     len,
@@ -270,7 +271,7 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
                         MAXPATHL as size_t,
                         true,
                     );
-                    smsg(
+                    smsg_c!(
                         0,
                         gettext(c"Word '%.*s' removed from %s".as_ptr()),
                         len,
@@ -280,7 +281,7 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
                 }
             }
             if fseek(fd, fpos_next as c_long, SEEK_SET) != 0 {
-                semsg(
+                semsg_c!(
                     c"%s: %s".as_ptr(),
                     gettext(c"Seek error in spellfile".as_ptr()),
                     strerror(*__errno_location()),

@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -329,7 +330,7 @@ unsafe fn expand_one_start(
         }
         if (*xp).xp_numfiles == 0 {
             if options & WILD_SILENT == 0 {
-                semsg(gettext(&raw const e_nomatch2 as *const c_char), str);
+                semsg_c!(gettext(&raw const e_nomatch2 as *const c_char), str);
             }
             return ptr::null_mut();
         }

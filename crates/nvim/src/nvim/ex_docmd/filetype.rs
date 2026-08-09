@@ -2,6 +2,7 @@
 //! what a buffer is. Plus `:checkhealth`, which is a Lua entry point.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::{semsg_c, semsg_multiline_c, smsg_c};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -15,7 +16,7 @@ use crate::src::nvim::ex_docmd::{
 };
 use crate::src::nvim::lua::executor::nlua_exec;
 use crate::src::nvim::main::{cmdmod, curbuf, e_curdir, e_invarg2, p_rtp, secure};
-use crate::src::nvim::message::{emsg, semsg, semsg_multiline, smsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::option::set_option_value_give_err;
 use crate::src::nvim::options::kOptFiletype;
 use crate::src::nvim::os::env::os_getenv_noalloc;
@@ -123,7 +124,7 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
                 filetype_detect.set(kFalse);
             }
         } else {
-            semsg(gettext(&raw const e_invarg2 as *const c_char), arg);
+            semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg);
         }
     }
 }
@@ -144,7 +145,7 @@ unsafe fn report_filetype_state() {
                 c"(on)".as_ptr()
             }
         };
-        smsg(
+        smsg_c!(
             0,
             c"filetype detection:%s  plugin:%s  indent:%s".as_ptr(),
             if detecting {
@@ -281,14 +282,14 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
             // Upstream's, and it reads backwards: finding $VIMRUNTIME
             // *inside* 'runtimepath' is what makes it report $VIMRUNTIME as
             // the invalid one. Left alone — it is a message, not behaviour.
-            semsg(
+            semsg_c!(
                 gettext(c"E5009: Invalid $VIMRUNTIME: %s".as_ptr()),
                 vimruntime,
             );
         } else {
             emsg(gettext(c"E5009: Invalid 'runtimepath'".as_ptr()));
         }
-        semsg_multiline(c"emsg".as_ptr(), err.msg);
+        semsg_multiline_c!(c"emsg".as_ptr(), err.msg);
         api_clear_error(&raw mut err);
     }
 }

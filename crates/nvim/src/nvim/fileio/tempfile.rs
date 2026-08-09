@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::{msg_schedule_semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::{CStr, CString};
 
@@ -242,7 +243,7 @@ pub unsafe extern "C" fn readdir_core(
 
         let mut dir = Directory::default();
         if !os_scandir(&raw mut dir, path) {
-            smsg(0, gettext(&raw const e_notopen as *const c_char), path);
+            smsg_c!(0, gettext(&raw const e_notopen as *const c_char), path);
             return FAIL;
         }
 
@@ -394,7 +395,10 @@ pub unsafe extern "C" fn vim_gettempdir() -> *mut c_char {
                     );
                 }
                 if notfound > 1 {
-                    msg_schedule_semsg(c"E5431: tempdir disappeared (%d times)".as_ptr(), notfound);
+                    msg_schedule_semsg_c!(
+                        c"E5431: tempdir disappeared (%d times)".as_ptr(),
+                        notfound
+                    );
                 }
             }
             vim_mktempdir();

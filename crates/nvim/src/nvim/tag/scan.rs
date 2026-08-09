@@ -8,7 +8,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::file_search::Name;
 use crate::src::nvim::options::{
@@ -17,6 +16,8 @@ use crate::src::nvim::options::{
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::regexp::RE_MAGIC;
 use crate::src::nvim::types::CONV_NONE;
+#[allow(unused_imports)]
+use crate::{semsg_c, smsg_c};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::collections::HashSet;
@@ -497,7 +498,7 @@ impl FindTags {
             }
             if p_verbose.get() >= 5 {
                 verbose_enter();
-                smsg(
+                smsg_c!(
                     0,
                     gettext(c"Searching tags file %s".as_ptr()),
                     self.tag_fname.as_ptr(),
@@ -515,7 +516,7 @@ impl FindTags {
                 convert_setup(&raw mut self.vimconv, ptr::null_mut(), ptr::null_mut());
             }
             if margs.sort_error {
-                semsg(
+                semsg_c!(
                     gettext(c"E432: Tags file not sorted: %s".as_ptr()),
                     self.tag_fname.as_ptr(),
                 );
@@ -594,11 +595,11 @@ impl FindTags {
                     TagMatch::Next => continue,
                     TagMatch::Stop => break,
                     TagMatch::Fail => {
-                        semsg(
+                        semsg_c!(
                             gettext(c"E431: Format error in tags file \"%s\"".as_ptr()),
                             self.tag_fname.as_ptr(),
                         );
-                        semsg(
+                        semsg_c!(
                             gettext(c"Before byte %ld".as_ptr()),
                             ftello(self.fp) as int64_t,
                         );

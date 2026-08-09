@@ -22,6 +22,7 @@
 
 #![allow(unsafe_op_in_unsafe_fn)]
 
+use crate::smsg_c;
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::event::libuv::{
     uv_chdir, uv_cwd, uv_exepath, uv_fs_access, uv_fs_chmod, uv_fs_chown, uv_fs_close,
@@ -36,7 +37,7 @@ use crate::src::nvim::main::{e_mkdir, e_noname, g_stats, p_verbose, stdin_fd};
 use crate::src::nvim::memory::{
     memcnt, xfree, xmalloc, xmemcpyz, xmemdupz, xstrchrnul, xstrdup, xstrlcpy,
 };
-use crate::src::nvim::message::{emsg, semsg, smsg, verbose_enter, verbose_leave};
+use crate::src::nvim::message::{emsg, verbose_enter, verbose_leave};
 use crate::src::nvim::os::env::os_getenv;
 use crate::src::nvim::os::libc::{
     __errno_location, abort, dup, fcntl, fdopen, gettext, getuid, getxattr, listxattr, memset,
@@ -216,7 +217,7 @@ fn fs_ok(start: impl FnOnce(*mut uv_fs_t) -> ::core::ffi::c_int) -> ::core::ffi:
 pub unsafe extern "C" fn os_chdir(mut path: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if p_verbose.get() >= 5 as OptInt {
         verbose_enter();
-        smsg(0 as ::core::ffi::c_int, c"chdir(%s)".as_ptr(), path);
+        smsg_c!(0 as ::core::ffi::c_int, c"chdir(%s)".as_ptr(), path);
         verbose_leave();
     }
     let mut err: ::core::ffi::c_int = uv_chdir(path);

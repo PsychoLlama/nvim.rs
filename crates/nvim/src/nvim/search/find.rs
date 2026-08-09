@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::regexp::RE_SEARCH;
 use crate::src::nvim::search::{
@@ -394,7 +395,7 @@ pub unsafe extern "C" fn searchit(
         ) == FAIL
         {
             if options & SEARCH_MSG != 0 && !rc_did_emsg.get() {
-                semsg(
+                semsg_c!(
                     gettext(c"E383: Invalid search string: %s".as_ptr()),
                     get_search_pat(),
                 );
@@ -656,7 +657,7 @@ pub unsafe extern "C" fn searchit(
                 } else {
                     gettext(c"E385: Search hit BOTTOM without match for: %s".as_ptr())
                 };
-                semsg(msg, get_search_pat());
+                semsg_c!(msg, get_search_pat());
             }
             return FAIL;
         }

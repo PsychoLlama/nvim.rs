@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::smsg_c;
 use crate::src::nvim::pos::MAXCOL;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -288,7 +289,7 @@ unsafe fn add_tag_field(
         if !tv_dict_find(dict, field_name, -1).is_null() {
             if p_verbose.get() > 0 {
                 verbose_enter();
-                smsg(0, gettext(c"Duplicate field name: %s".as_ptr()), field_name);
+                smsg_c!(0, gettext(c"Duplicate field name: %s".as_ptr()), field_name);
                 verbose_leave();
             }
             return FAIL;

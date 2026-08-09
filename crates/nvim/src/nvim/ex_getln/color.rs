@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::smsg_c;
 use crate::src::nvim::types::{VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kErrorTypeNone};
 
 /// C's `kv_push` onto a `CmdlineColors`, doubling the heap array from 8.
@@ -150,7 +151,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
             ($($arg:tt)*) => {{
                 msg_scroll.set(1);
                 msg_putchar('\n' as ::core::ffi::c_int);
-                smsg(HLF_E, $($arg)*);
+                smsg_c!(HLF_E, $($arg)*);
                 printed_errmsg = true;
             }};
         }

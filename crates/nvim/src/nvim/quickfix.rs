@@ -86,8 +86,8 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::message::{
     emsg, internal_error, message_filtered, msg, msg_clr_eos, msg_ext_set_kind, msg_keep,
-    msg_outtrans, msg_prt_line, msg_putchar, msg_puts, msg_puts_hl, msg_start, msg_strtrunc, semsg,
-    smsg, trunc_string,
+    msg_outtrans, msg_prt_line, msg_putchar, msg_puts, msg_puts_hl, msg_start, msg_strtrunc,
+    trunc_string,
 };
 use crate::src::nvim::r#move::update_topline;
 use crate::src::nvim::normal::reset_VIsual_and_resel;

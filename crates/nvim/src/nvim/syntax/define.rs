@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 #[allow(unused_imports)]
@@ -110,7 +111,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_i
             source_runtime((*eap).arg, DIP_ALL as c_int) == FAIL
         };
         if failed {
-            semsg(gettext(&raw const e_notopen as *const c_char), (*eap).arg);
+            semsg_c!(gettext(&raw const e_notopen as *const c_char), (*eap).arg);
         }
 
         (*cur_syn_block()).b_syn_topgrp = prev_toplvl_grp;
@@ -240,7 +241,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_match(eap: *mut exarg_T, syncing: c_int)
             free_synpat(&item);
             free_opt_lists(&opt);
             if rest.is_null() {
-                semsg(gettext(&raw const e_invarg2 as *const c_char), arg);
+                semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg);
             }
         }
     }
@@ -326,7 +327,7 @@ unsafe fn parse_region_args(eap: *mut exarg_T, mut rest: *mut c_char) -> RegionA
             rest = skipwhite(key_end);
             if *rest as c_int != '=' as c_int {
                 rest = ::core::ptr::null_mut();
-                semsg(gettext(c"E398: Missing '=': %s".as_ptr()), (*eap).arg);
+                semsg_c!(gettext(c"E398: Missing '=': %s".as_ptr()), (*eap).arg);
                 break;
             }
             rest = skipwhite(rest.add(1));
@@ -427,12 +428,12 @@ pub(crate) unsafe extern "C" fn syn_cmd_region(eap: *mut exarg_T, syncing: c_int
             }
             free_opt_lists(&args.opt);
             if args.not_enough {
-                semsg(
+                semsg_c!(
                     gettext(c"E399: Not enough arguments: syntax region %s".as_ptr()),
                     arg,
                 );
             } else if rest.is_null() {
-                semsg(gettext(&raw const e_invarg2 as *const c_char), arg);
+                semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg);
             }
         }
     }
@@ -499,7 +500,7 @@ pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut synpat_T) -> *mu
 
         let mut end = skip_regexp(arg.add(1), *arg as c_int, true_0);
         if *end as c_int != *arg as c_int {
-            semsg(
+            semsg_c!(
                 gettext(c"E401: Pattern delimiter not found: %s".as_ptr()),
                 arg,
             );
@@ -521,7 +522,7 @@ pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut synpat_T) -> *mu
 
         let end = read_pattern_offsets(ci, end.add(1));
         if ends_excmd(*end as c_int) == 0 && !ascii_iswhite(*end as c_int) {
-            semsg(gettext(c"E402: Garbage after pattern: %s".as_ptr()), arg);
+            semsg_c!(gettext(c"E402: Garbage after pattern: %s".as_ptr()), arg);
             return ::core::ptr::null_mut();
         }
         skipwhite(end)

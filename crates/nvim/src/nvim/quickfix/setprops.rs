@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::types::{
     VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
 };
@@ -106,7 +107,7 @@ unsafe fn qf_add_entry_from_dict(
             // Ignore the buffer number, and report it once per call.
             if !DID_BUFNR_EMSG.get() {
                 DID_BUFNR_EMSG.set(true);
-                semsg(gettext(c"E92: Buffer %d not found".as_ptr()), bufnum);
+                semsg_c!(gettext(c"E92: Buffer %d not found".as_ptr()), bufnum);
             }
             valid = false;
             bufnum = 0;
@@ -643,7 +644,7 @@ pub unsafe fn set_errorlist(
         }
 
         if !list.is_null() && tv_list_len(list) != 0 && !what.is_null() {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_invarg2 as *const c_char),
                 gettext(c"cannot have both a list and a \"what\" argument".as_ptr()),
             );

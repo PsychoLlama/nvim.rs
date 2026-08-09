@@ -10,8 +10,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::smsg_c;
 
 /// A `multiqueue` event's argument vector with nothing in it.
 const NO_ARGV: [*mut ::core::ffi::c_void; 10] = [::core::ptr::null_mut(); 10];
@@ -71,7 +72,7 @@ pub unsafe extern "C" fn do_doautocmd(
         }
 
         if nothing_done && do_msg && !aborting() {
-            smsg(
+            smsg_c!(
                 0,
                 gettext(c"No matching autocommands: %s".as_ptr()),
                 arg_start,

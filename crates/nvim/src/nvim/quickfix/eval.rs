@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::types::{
     VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
 };
@@ -237,7 +238,7 @@ unsafe fn set_qf_ll_list(wp: *mut win_T, args: *mut typval_T, rettv: *mut typval
             let act = tv_get_string_chk(action_arg);
             let known = matches!(*act as u8, b'a' | b'r' | b'u' | b' ' | b'f');
             if !known || *act.add(1) as c_int != NUL {
-                semsg(gettext(c"E927: Invalid action: '%s'".as_ptr()), act);
+                semsg_c!(gettext(c"E927: Invalid action: '%s'".as_ptr()), act);
                 return;
             }
             action = *act;

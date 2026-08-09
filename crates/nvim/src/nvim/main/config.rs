@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -22,7 +23,6 @@ use crate::src::nvim::main::{
     silent_mode, time_msg_at,
 };
 use crate::src::nvim::memory::{strequal, xfree, xmalloc};
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::env::vim_env_iter;
 use crate::src::nvim::os::fs::os_path_exists;
 use crate::src::nvim::os::libc::{__assert_fail, fprintf, gettext, memcpy, stderr, strlen};
@@ -225,7 +225,7 @@ unsafe fn source_init_pair(
         {
             // Both present: the Lua one won, and the user should know.
             if os_path_exists(init_vim) {
-                semsg(
+                semsg_c!(
                     (e_conflicting_configs.ptr() as *const _) as *const c_char,
                     init_lua,
                     init_vim,
@@ -340,7 +340,7 @@ pub(crate) unsafe fn source_startup_scripts(parmp: *const mparm_T) {
                     ptr::null_mut(),
                 ) != OK
             {
-                semsg(
+                semsg_c!(
                     gettext((e_cannot_read_from_str_2.ptr() as *const _) as *const c_char),
                     (*parmp).use_vimrc,
                 );

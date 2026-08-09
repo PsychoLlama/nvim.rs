@@ -5,6 +5,7 @@ use super::tree::*;
 use super::*;
 use crate::src::nvim::drawscreen::UPD_NOT_VALID;
 use crate::src::nvim::pos::MAXLNUM;
+use crate::{semsg_c, smsg_keep_c};
 
 pub unsafe extern "C" fn u_undo(mut count: c_int) {
     if !(*curbuf.get()).b_u_synced {
@@ -290,7 +291,7 @@ pub unsafe extern "C" fn undo_time(
                 break;
             }
             if absolute {
-                semsg(
+                semsg_c!(
                     gettext(c"E830: Undo number %ld not found".as_ptr()),
                     step as int64_t,
                 );
@@ -746,7 +747,7 @@ pub(crate) unsafe extern "C" fn u_undo_end(
     if VIsual_active.get() {
         check_pos(curbuf.get(), VIsual.ptr());
     }
-    smsg_keep(
+    smsg_keep_c!(
         0,
         gettext(c"%ld %s; %s #%ld  %s".as_ptr()),
         if u_oldcount.get() < 0 {

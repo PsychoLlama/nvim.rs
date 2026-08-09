@@ -4,6 +4,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::siemsg_c;
 use core::ffi::{c_char, c_int, c_ushort};
 
 use super::matcher::nfa_regmatch;
@@ -14,7 +15,6 @@ use crate::src::nvim::mbyte::{
     mb_islower, mb_isupper, utf_char2len, utf_fold, utf_head_off, utf_iscomposing_legacy,
     utf_ptr2char, utf_ptr2len,
 };
-use crate::src::nvim::message::siemsg;
 use crate::src::nvim::os::libc::{__ctype_b_loc, strlen};
 use crate::src::nvim::profile::profile_passed_limit;
 use crate::src::nvim::regexp::{
@@ -74,7 +74,7 @@ pub(crate) fn check_char_class(cls: c_int, c: c_int) -> c_int {
             _ => {
                 // `siemsg`, not `semsg`: an internal-error report, dropped
                 // while messages are held back.
-                siemsg(
+                siemsg_c!(
                     c"E877: (NFA regexp) Invalid character class: %ld".as_ptr(),
                     cls as i64,
                 );

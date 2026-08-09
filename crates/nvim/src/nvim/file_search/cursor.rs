@@ -9,8 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::types::VV_FNAME;
 use core::ffi::{c_char, c_int, c_long};
 use core::ptr;
@@ -319,7 +320,7 @@ pub unsafe extern "C" fn find_file_name_in_path(
             if file_name.is_null() && options & FNAME_MESS as c_int != 0 {
                 let c = *ptr.add(len);
                 *ptr.add(len) = 0;
-                semsg(
+                semsg_c!(
                     gettext(c"E447: Can't find file \"%s\" in path".as_ptr()),
                     ptr,
                 );

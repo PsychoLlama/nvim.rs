@@ -55,8 +55,8 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::message::{
     emsg, iemsg, message_filtered, msg, msg_clr_eos, msg_ext_set_kind, msg_outtrans,
-    msg_outtrans_special, msg_putchar, msg_puts, msg_puts_hl, msg_start, semsg, semsg_multiline,
-    str2special_arena, str2special_save, swmsg,
+    msg_outtrans_special, msg_putchar, msg_puts, msg_puts_hl, msg_start, str2special_arena,
+    str2special_save,
 };
 use crate::src::nvim::os::libc::{
     abort, fprintf, fputc, fputs, gettext, putc, snprintf, strcasecmp, strchr, strcmp, strlen,

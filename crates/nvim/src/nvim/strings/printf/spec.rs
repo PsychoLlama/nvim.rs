@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::{semsg_c, siemsg_c};
 use core::ffi::{
     CStr, VaList, c_char, c_double, c_int, c_long, c_longlong, c_uint, c_ulong, c_ulonglong, c_void,
 };
@@ -20,7 +21,6 @@ use core::ptr;
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::main::e_val_too_large_len;
 use crate::src::nvim::memory::{xcalloc, xfree, xrealloc, xstrchrnul};
-use crate::src::nvim::message::{semsg, siemsg};
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::types::{VAR_UNKNOWN, size_t, typval_T};
 
@@ -157,7 +157,7 @@ unsafe fn adjust_types(
 ) -> Result<(), ()> {
     unsafe {
         if arg <= 0 {
-            semsg(gettext(E_INVALID_FORMAT_SPECIFIER.as_ptr()), spec);
+            semsg_c!(gettext(E_INVALID_FORMAT_SPECIFIER.as_ptr()), spec);
             return Err(());
         }
 
@@ -186,7 +186,7 @@ unsafe fn adjust_types(
                 // there is nothing left to check.
                 let other = if *spec as u8 == b'*' { seen } else { spec };
                 if *other as u8 != b'*' && !matches!(*other as u8, b'd' | b'i') {
-                    semsg(
+                    semsg_c!(
                         gettext(E_FIELD_WIDTH_REUSED.as_ptr()),
                         arg,
                         format_typename(seen),
@@ -195,7 +195,7 @@ unsafe fn adjust_types(
                     return Err(());
                 }
             } else if format_typeof(spec) != format_typeof(seen) {
-                semsg(
+                semsg_c!(
                     gettext(E_POS_TYPE_INCONSISTENT.as_ptr()),
                     arg,
                     format_typename(spec),
@@ -217,7 +217,7 @@ pub(crate) unsafe fn format_overflow_error(pstart: *const c_char) {
         while ascii_isdigit(*p as c_int) {
             p = p.add(1);
         }
-        semsg(
+        semsg_c!(
             gettext(e_val_too_large_len.ptr().cast::<c_char>()),
             p.offset_from(pstart) as c_int,
             pstart,
@@ -294,14 +294,14 @@ unsafe fn scan_fmt_types(
         macro_rules! check_pos_arg {
             () => {
                 if any_pos && any_arg {
-                    semsg(gettext(E_CANNOT_MIX.as_ptr()), fmt);
+                    semsg_c!(gettext(E_CANNOT_MIX.as_ptr()), fmt);
                     return Err(());
                 }
             };
         }
         macro_rules! invalid_specifier {
             () => {{
-                semsg(gettext(E_INVALID_FORMAT_SPECIFIER.as_ptr()), fmt);
+                semsg_c!(gettext(E_INVALID_FORMAT_SPECIFIER.as_ptr()), fmt);
                 return Err(());
             }};
         }
@@ -422,7 +422,7 @@ unsafe fn scan_fmt_types(
                 }
             } else if pos_arg != -1 {
                 // A position on something that is not a conversion.
-                semsg(gettext(E_CANNOT_MIX.as_ptr()), fmt);
+                semsg_c!(gettext(E_CANNOT_MIX.as_ptr()), fmt);
                 return Err(());
             }
 
@@ -435,11 +435,11 @@ unsafe fn scan_fmt_types(
         // typed, and must have an argument behind it.
         for arg_idx in 0..*num_posarg {
             if (*(*ap_types).offset(arg_idx as isize)).is_null() {
-                semsg(gettext(E_FMT_ARG_UNUSED.as_ptr()), arg_idx + 1, fmt);
+                semsg_c!(gettext(E_FMT_ARG_UNUSED.as_ptr()), arg_idx + 1, fmt);
                 return Err(());
             }
             if !tvs.is_null() && (*tvs.offset(arg_idx as isize)).v_type == VAR_UNKNOWN {
-                semsg(gettext(E_POS_OUT_OF_BOUNDS.as_ptr()), arg_idx + 1, fmt);
+                semsg_c!(gettext(E_POS_OUT_OF_BOUNDS.as_ptr()), arg_idx + 1, fmt);
                 return Err(());
             }
         }
@@ -485,7 +485,7 @@ pub(crate) unsafe fn skip_to_arg<'f>(
         *arg_cur = arg_min;
         while *arg_cur < *arg_idx - 1 {
             if ap_types.is_null() || (*ap_types.offset(*arg_cur as isize)).is_null() {
-                siemsg(E_APTYPES_IS_NULL.as_ptr(), fmt, *arg_cur);
+                siemsg_c!(E_APTYPES_IS_NULL.as_ptr(), fmt, *arg_cur);
                 return;
             }
             // Consume one argument at its recorded width.

@@ -6,8 +6,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -260,7 +261,7 @@ pub unsafe fn verbose_open() -> c_int {
             verbose_did_open.set(true);
             verbose_fd.set(os_fopen(p_vfile.get(), c"a".as_ptr()));
             if verbose_fd.get().is_null() {
-                semsg(
+                semsg_c!(
                     gettext(&raw const e_notopen as *const c_char),
                     p_vfile.get(),
                 );

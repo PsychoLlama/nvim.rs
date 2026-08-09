@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::types::{VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 
 /// Step over the `,` and ` ` that separate two `'complete'` entries.
@@ -492,7 +493,7 @@ pub(crate) unsafe fn advance_cpt_sources_index_safe() -> c_int {
             (*cpt_sources_index.ptr()) += 1;
             return OK;
         }
-        semsg(
+        semsg_c!(
             gettext(&raw const e_list_index_out_of_range_nr as *const c_char),
             cpt_sources_index.get(),
         );

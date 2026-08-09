@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::semsg_c;
 use crate::src::nvim::ascii::ascii_iswhite;
 use crate::src::nvim::charset::backslash_halve;
 use crate::src::nvim::fileio::vim_tempname;
@@ -15,7 +16,7 @@ use crate::src::nvim::main::{
     Rows, cmdline_row, e_cant_read_file_str, e_notmp, e_wildexpand, sandbox, secure,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
-use crate::src::nvim::message::{emsg, msg, msg_putchar, msg_start, semsg};
+use crate::src::nvim::message::{emsg, msg, msg_putchar, msg_start};
 use crate::src::nvim::os::fs::{os_can_exe, os_isdir, os_path_exists, os_remove};
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::os::time::os_delay;
@@ -572,7 +573,7 @@ unsafe fn read_temp_file(tempname: *mut c_char, flags: c_int) -> Read {
         fclose(fd);
         os_remove(tempname);
         if readlen as usize != len {
-            semsg(gettext((&raw const e_cant_read_file_str).cast()), tempname);
+            semsg_c!(gettext((&raw const e_cant_read_file_str).cast()), tempname);
             xfree(tempname.cast());
             return Read::Failed;
         }

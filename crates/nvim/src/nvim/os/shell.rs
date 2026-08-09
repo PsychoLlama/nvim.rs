@@ -22,6 +22,7 @@ pub mod expand;
 pub mod system;
 mod throttle;
 
+use crate::{semsg_c, smsg_c};
 pub use expand::os_expand_wildcards;
 pub use system::os_system;
 
@@ -40,9 +41,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::memline::ml_append;
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xstrdup, xstrlcat};
-use crate::src::nvim::message::{
-    emsg, msg_outnum, msg_puts, semsg, smsg, verbose_enter, verbose_leave,
-};
+use crate::src::nvim::message::{emsg, msg_outnum, msg_puts, verbose_enter, verbose_leave};
 use crate::src::nvim::message::{msg_ext_set_kind, msg_putchar};
 use crate::src::nvim::os::fs::{os_fopen, os_remove};
 use crate::src::nvim::os::libc::strlen;
@@ -274,7 +273,7 @@ pub unsafe fn call_shell(cmd: *mut c_char, opts: c_int, extra_shell_arg: *mut c_
     unsafe {
         if p_verbose.get() > 3 {
             verbose_enter();
-            smsg(
+            smsg_c!(
                 0,
                 gettext(c"Executing command: \"%s\"".as_ptr()),
                 if cmd.is_null() { p_sh.get() } else { cmd },
@@ -359,7 +358,7 @@ unsafe fn read_output(tempname: *mut c_char, ret_len: *mut size_t) -> *mut c_cha
         // Not being able to seek means the file cannot be read.
         let fd = os_fopen(tempname, READBIN.as_ptr());
         if fd.is_null() || fseek(fd, 0, SEEK_END) == -1 {
-            semsg(
+            semsg_c!(
                 gettext((&raw const e_cannot_read_from_str_2).cast()),
                 tempname,
             );
@@ -370,7 +369,7 @@ unsafe fn read_output(tempname: *mut c_char, ret_len: *mut size_t) -> *mut c_cha
         }
         let len_l = ftell(fd);
         if len_l == -1 || fseek(fd, 0, SEEK_SET) == -1 {
-            semsg(
+            semsg_c!(
                 gettext((&raw const e_cannot_read_from_str_2).cast()),
                 tempname,
             );
@@ -384,7 +383,7 @@ unsafe fn read_output(tempname: *mut c_char, ret_len: *mut size_t) -> *mut c_cha
         fclose(fd);
         os_remove(tempname);
         if read as usize != len {
-            semsg(gettext((&raw const e_cant_read_file_str).cast()), tempname);
+            semsg_c!(gettext((&raw const e_cant_read_file_str).cast()), tempname);
             xfree(buffer.cast());
             return ptr::null_mut();
         }

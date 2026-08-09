@@ -74,7 +74,7 @@ use crate::src::nvim::mbyte::{
 };
 use crate::src::nvim::memline::{ml_append, ml_delete, ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{memchrsub, xcalloc, xfree, xmalloc, xstrdup};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::r#move::{
     changed_line_abv_curs, changed_line_abv_curs_win, changed_window_setting, check_topfill,
     invalidate_botline_win, validate_cursor,

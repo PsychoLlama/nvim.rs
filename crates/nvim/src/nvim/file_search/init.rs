@@ -10,8 +10,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::os::libc::strtol;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -183,7 +184,7 @@ unsafe fn wildcard_tail(wc_part: *mut c_char) -> Result<Name, ()> {
 
             at = errpt;
             if *at != 0 && !vim_ispathsep(*at as c_int) {
-                semsg(
+                semsg_c!(
                     gettext(
                         c"E343: Invalid path: '**[number]' must be at the end of the path or be followed by '%s'."
                             .as_ptr(),

@@ -12,8 +12,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::swmsg_c;
 use core::ffi::{c_char, c_int};
 
 /// One `'langmap'` pair for a character that does not fit `langmap_mapchar`.
@@ -148,7 +149,7 @@ pub unsafe extern "C" fn did_set_langmap(args: *mut optset_T) -> *const c_char {
                     langmap_set_entry(from, to);
                 } else {
                     if to > UCHAR_MAX {
-                        swmsg(
+                        swmsg_c!(
                             true,
                             c"'langmap': Mapping from %.*s to %.*s will not work properly".as_ptr(),
                             utf_ptr2len(from_ptr),

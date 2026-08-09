@@ -104,7 +104,7 @@ use crate::src::nvim::memory::{
 use crate::src::nvim::message::{
     emsg, msg, msg_check, msg_clr_eos, msg_cursor_goto, msg_grid_validate, msg_outtrans_len,
     msg_putchar, msg_puts_hl, msg_puts_len, msg_start, msg_starthere, sb_text_end_cmdline,
-    sb_text_restart_cmdline, sb_text_start_cmdline, smsg,
+    sb_text_restart_cmdline, sb_text_start_cmdline,
 };
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::r#move::{

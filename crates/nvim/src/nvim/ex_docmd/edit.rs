@@ -2,6 +2,7 @@
 //! `:normal`, which re-enters the normal-mode state machine.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -43,7 +44,7 @@ use crate::src::nvim::mark::{checkpcmark, setmark, setpcmark};
 use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memline::{goto_byte, ml_clearmarked, ml_setmarked};
 use crate::src::nvim::memory::{xfree, xmalloc};
-use crate::src::nvim::message::{emsg, semsg, smsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::r#move::{
     check_cursor_moved, cursor_correct, cursor_valid, scrolldown, scrollup, update_curswant,
@@ -175,7 +176,7 @@ pub(crate) unsafe fn ex_equal(eap: *mut exarg_T) {
             ex_lua(eap);
         } else {
             (*eap).nextcmd = find_nextcmd((*eap).arg);
-            smsg(0, c"%ld".as_ptr(), (*eap).line2 as int64_t);
+            smsg_c!(0, c"%ld".as_ptr(), (*eap).line2 as int64_t);
         }
     }
 }
@@ -191,7 +192,7 @@ pub(crate) unsafe fn ex_sleep(eap: *mut exarg_T) {
             c if c == 'm' as c_int => {}
             c if c == NUL => len *= 1000,
             _ => {
-                semsg(gettext(&raw const e_invarg2 as *const c_char), (*eap).arg);
+                semsg_c!(gettext(&raw const e_invarg2 as *const c_char), (*eap).arg);
                 return;
             }
         }
@@ -578,7 +579,7 @@ pub(crate) unsafe fn ex_later(eap: *mut exarg_T) {
             }
         }
         if *p as c_int != NUL {
-            semsg(gettext(&raw const e_invarg2 as *const c_char), (*eap).arg);
+            semsg_c!(gettext(&raw const e_invarg2 as *const c_char), (*eap).arg);
             return;
         }
         undo_time(
@@ -602,7 +603,7 @@ pub(crate) unsafe fn ex_mark(eap: *mut exarg_T) {
             return;
         }
         if *(*eap).arg.add(1) as c_int != NUL {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_trailing_arg as *const c_char),
                 (*eap).arg,
             );

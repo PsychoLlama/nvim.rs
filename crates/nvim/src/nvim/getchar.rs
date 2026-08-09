@@ -57,7 +57,7 @@ use crate::src::nvim::memline::ml_sync_all;
 use crate::src::nvim::memory::{
     ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc, xmemcpyz, xmemdupz,
 };
-use crate::src::nvim::message::{emsg, iemsg, internal_error, semsg, semsg_multiline};
+use crate::src::nvim::message::{emsg, iemsg, internal_error};
 use crate::src::nvim::mouse::{is_mouse_key, mouse_comp_pos, mouse_find_win_inner};
 use crate::src::nvim::r#move::{validate_cursor, win_col_off};
 use crate::src::nvim::normal::{add_to_showcmd, normal_cmd, pop_showcmd, push_showcmd};

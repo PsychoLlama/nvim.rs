@@ -1,3 +1,4 @@
+use crate::semsg_c;
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::buffer::{bt_prompt, buflist_findnr, buflist_nr2name};
 use crate::src::nvim::charset::{ptr2cells, skipwhite};
@@ -9,7 +10,7 @@ use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memline::ml_get;
 use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::message::{
-    emsg, message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts_title, semsg,
+    emsg, message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts_title,
 };
 use crate::src::nvim::os::libc::{gettext, snprintf};
 use crate::src::nvim::os::time::os_time;
@@ -157,7 +158,7 @@ pub(super) unsafe extern "C" fn show_one_mark(
         } else if arg.is_null() {
             msg(gettext(c"No marks set".as_ptr()), 0);
         } else {
-            semsg(gettext(c"E283: No marks matching \"%s\"".as_ptr()), arg);
+            semsg_c!(gettext(c"E283: No marks matching \"%s\"".as_ptr()), arg);
         }
     } else if !got_int.get() && (arg.is_null() || !vim_strchr(arg, c).is_null()) && (*p).lnum != 0 {
         if name.is_null() && current != 0 {
@@ -258,7 +259,7 @@ pub unsafe fn ex_delmarks(mut eap: *mut exarg_T) {
                     }) == 0
                         || to < from
                     {
-                        semsg(gettext(&raw const e_invarg2 as *const c_char), p);
+                        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), p);
                         return;
                     }
                     p = p.offset(2);
@@ -353,7 +354,7 @@ pub unsafe fn ex_delmarks(mut eap: *mut exarg_T) {
                     }
                     58 | 32 => {}
                     _ => {
-                        semsg(gettext(&raw const e_invarg2 as *const c_char), p);
+                        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), p);
                         return;
                     }
                 }

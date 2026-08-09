@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_multiline_c;
 use crate::src::nvim::keycodes::{Ctrl_H, Ctrl_RSB, Ctrl_V, key_escape};
 use crate::src::nvim::types::{MB_MAXBYTES, kErrorTypeNone};
 use core::ffi::{c_char, c_int};
@@ -234,7 +235,7 @@ pub unsafe fn eval_map_expr(mp: *mut mapblock_T, c: c_int) -> *mut c_char {
             }
             api_free_object(ret);
             if err.type_0 != kErrorTypeNone {
-                semsg_multiline(c"emsg".as_ptr(), c"E5108: %s".as_ptr(), err.msg);
+                semsg_multiline_c!(c"emsg".as_ptr(), c"E5108: %s".as_ptr(), err.msg);
                 api_clear_error(&raw mut err);
             }
         } else {

@@ -10,8 +10,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 
 /// A `Callback` that holds nothing: `CALLBACK_INIT`.
 const CALLBACK_INIT: Callback = Callback {
@@ -342,7 +343,7 @@ pub unsafe extern "C" fn autocmd_register(
         if ap.is_null() {
             // A buffer-local pattern needs a buffer that exists.
             if is_buflocal && (buflocal_nr == 0 || buflist_findnr(buflocal_nr).is_null()) {
-                semsg(
+                semsg_c!(
                     gettext(c"E680: <buffer=%d>: invalid buffer number ".as_ptr()),
                     buflocal_nr,
                 );
@@ -553,7 +554,7 @@ pub(crate) unsafe extern "C" fn arg_event_skip(
     unsafe {
         if *arg == b'*' as ::core::ffi::c_char {
             if *arg.add(1) != 0 && !ascii_iswhite(*arg.add(1) as ::core::ffi::c_int) {
-                semsg(
+                semsg_c!(
                     gettext(c"E215: Illegal character after *: %s".as_ptr()),
                     arg,
                 );
@@ -569,7 +570,7 @@ pub(crate) unsafe extern "C" fn arg_event_skip(
             && !ascii_iswhite(*pat as ::core::ffi::c_int)
         {
             if event_name2nr(pat, &raw mut p) >= NUM_EVENTS {
-                semsg(
+                semsg_c!(
                     gettext(if have_group {
                         c"E216: No such event: %s".as_ptr()
                     } else {
@@ -601,7 +602,7 @@ unsafe fn arg_autocmd_flag_get(
             && ascii_iswhite(*(*cmd_ptr).offset(len as isize) as ::core::ffi::c_int)
         {
             if *flag {
-                semsg(
+                semsg_c!(
                     gettext((&raw const e_duparg2).cast::<::core::ffi::c_char>()),
                     pattern.as_ptr(),
                 );

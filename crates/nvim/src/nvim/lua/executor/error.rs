@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_multiline_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::{in_script, kCallback, kThread, kThreadCallback, luv_err_t};
@@ -17,7 +18,6 @@ use crate::src::nvim::lua::ffi::{
     lua_pop, lua_remove, lua_replace, lua_tolstring, lua_type, luaL_callmeta, luaL_getmetafield,
 };
 use crate::src::nvim::memory::xfree;
-use crate::src::nvim::message::semsg_multiline;
 use crate::src::nvim::os::libc::{fprintf, stderr};
 use crate::src::nvim::types::{intptr_t, lua_State, size_t};
 
@@ -63,7 +63,7 @@ pub unsafe extern "C-unwind" fn nlua_error(lstate: *mut lua_State, msg: *const c
             fprintf(stderr, msg, len as c_int, str);
             fprintf(stderr, c"\n".as_ptr());
         } else {
-            semsg_multiline(LUA_ERROR_KIND.as_ptr(), msg, len as c_int, str);
+            semsg_multiline_c!(LUA_ERROR_KIND.as_ptr(), msg, len as c_int, str);
         }
         lua_pop(lstate, 1);
     }
@@ -124,7 +124,7 @@ pub(crate) unsafe extern "C" fn nlua_luv_error_event(argv: *mut *mut c_void) {
             _ => None,
         };
         if let Some(fmt) = fmt {
-            semsg_multiline(LUA_ERROR_KIND.as_ptr(), fmt.as_ptr(), error);
+            semsg_multiline_c!(LUA_ERROR_KIND.as_ptr(), fmt.as_ptr(), error);
         }
         xfree(error.cast::<c_void>());
     }

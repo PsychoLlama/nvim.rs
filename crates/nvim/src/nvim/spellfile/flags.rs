@@ -30,6 +30,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::smsg_c;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::src::nvim::ascii::ascii_isdigit;
@@ -37,7 +38,6 @@ use crate::src::nvim::charset::getdigits_int;
 use crate::src::nvim::hashtab::{hash_add, hash_clear, hash_find, hash_removed};
 use crate::src::nvim::mbyte::mb_ptr2char_adv;
 use crate::src::nvim::memory::{xfree, xmemcpyz};
-use crate::src::nvim::message::smsg;
 use crate::src::nvim::os::libc::{gettext, memmove, strcat, strcpy, strlen};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{hashitem_T, size_t, uint8_t};
@@ -108,11 +108,11 @@ pub unsafe fn affitem2flag(
             } else {
                 c"Illegal flag in %s line %d: %s"
             };
-            smsg(0, gettext(msg.as_ptr()), fname, lnum, item);
+            smsg_c!(0, gettext(msg.as_ptr()), fname, lnum, item);
         }
         // Anything left over means the item was more than one flag.
         if *p as c_int != NUL {
-            smsg(0, gettext(e_affname.get()), fname, lnum, item);
+            smsg_c!(0, gettext(e_affname.get()), fname, lnum, item);
             return 0;
         }
         res

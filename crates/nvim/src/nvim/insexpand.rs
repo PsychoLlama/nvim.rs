@@ -80,7 +80,7 @@ use crate::src::nvim::memory::{
     xstrlcpy,
 };
 use crate::src::nvim::message::{
-    emsg, internal_error, msg, msg_clr_cmdline, msg_delay, msg_ext_set_kind, msg_progress, semsg,
+    emsg, internal_error, msg, msg_clr_cmdline, msg_delay, msg_ext_set_kind, msg_progress,
 };
 use crate::src::nvim::r#move::{changed_cline_bef_curs, curs_columns, validate_cursor};
 use crate::src::nvim::option::{

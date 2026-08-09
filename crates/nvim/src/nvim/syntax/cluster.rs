@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 #[allow(unused_imports)]
@@ -257,7 +258,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_i
             while let Some((opt_len, list_op)) = cluster_op(rest) {
                 let mut clstr_list = ::core::ptr::null_mut::<int16_t>();
                 if get_id_list(&mut rest, opt_len, &mut clstr_list, (*eap).skip != 0) == FAIL {
-                    semsg(gettext(&raw const e_invarg2 as *const c_char), rest);
+                    semsg_c!(gettext(&raw const e_invarg2 as *const c_char), rest);
                     break;
                 }
                 syn_combine_list(
@@ -278,7 +279,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_i
             emsg(gettext(c"E400: No cluster specified".as_ptr()));
         }
         if rest.is_null() || ends_excmd(*rest as c_int) == 0 {
-            semsg(gettext(&raw const e_invarg2 as *const c_char), arg);
+            semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg);
         }
     }
 }

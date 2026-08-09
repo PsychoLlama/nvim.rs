@@ -31,6 +31,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::src::nvim::fileio::{put_bytes, put_time};
@@ -38,7 +39,7 @@ use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::main::{IObuff, e_notopen, e_write, got_int};
 use crate::src::nvim::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{xfree, xmalloc, xstrlcpy};
-use crate::src::nvim::message::{emsg, semsg, smsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::fs::os_fopen;
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{fclose, fwrite, gettext, putc, strlen};
@@ -102,7 +103,7 @@ pub unsafe fn spell_make_sugfile(spin: &mut spellinfo_T, wfname: *mut c_char) {
         spell_message(spin, gettext(c"Performing soundfolding...".as_ptr()));
         let mut fname: *mut c_char = core::ptr::null_mut();
         if sug_filltree(spin, slang) != FAIL && sug_maketable(spin) != FAIL {
-            smsg(
+            smsg_c!(
                 0,
                 gettext(c"Number of words after soundfolding: %ld".as_ptr()),
                 (*spin.si_spellbuf).b_ml.ml_line_count as i64,
@@ -232,7 +233,7 @@ unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> c_int {
             }
         }
 
-        smsg(
+        smsg_c!(
             0,
             gettext(c"Total number of words: %d".as_ptr()),
             words_done,
@@ -381,7 +382,7 @@ unsafe fn sug_write(spin: &mut spellinfo_T, fname: *mut c_char) {
     unsafe {
         let fd = os_fopen(fname, c"w".as_ptr());
         if fd.is_null() {
-            semsg(gettext((&raw const e_notopen).cast()), fname);
+            semsg_c!(gettext((&raw const e_notopen).cast()), fname);
             return;
         }
         vim_snprintf(

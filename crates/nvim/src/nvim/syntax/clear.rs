@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 
 #[allow(unused_imports)]
@@ -184,7 +185,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_clear(eap: *mut exarg_T, syncing: c_int)
                 if *arg as c_int == '@' as c_int {
                     let id = syn_scl_namen2id(arg.add(1), arg_end.offset_from(arg) as c_int - 1);
                     if id == 0 {
-                        semsg(gettext(c"E391: No such syntax cluster: %s".as_ptr()), arg);
+                        semsg_c!(gettext(c"E391: No such syntax cluster: %s".as_ptr()), arg);
                         break;
                     }
                     // A cluster cannot be deleted without changing the ids of
@@ -195,7 +196,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_clear(eap: *mut exarg_T, syncing: c_int)
                 } else {
                     let id = syn_name2id_len(arg, arg_end.offset_from(arg) as size_t);
                     if id == 0 {
-                        semsg(gettext(&raw const e_nogroup as *const c_char), arg);
+                        semsg_c!(gettext(&raw const e_nogroup as *const c_char), arg);
                         break;
                     }
                     syn_clear_one(id, syncing != 0);

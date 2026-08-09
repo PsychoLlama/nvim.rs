@@ -8,13 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int};
 
 use crate::src::nvim::fileio::vim_fgets;
 use crate::src::nvim::main::{IObuff, e_notopen, got_int, p_enc};
 use crate::src::nvim::mbyte::{convert_setup, enc_canonize, string_convert};
 use crate::src::nvim::memory::xfree;
-use crate::src::nvim::message::{semsg, smsg};
 use crate::src::nvim::os::fs::os_fopen;
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{fclose, gettext, strcpy, strlen, strncmp};
@@ -39,7 +39,7 @@ pub unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_char) ->
     unsafe {
         let fd = os_fopen(fname, c"r".as_ptr());
         if fd.is_null() {
-            semsg(gettext((&raw const e_notopen).cast()), fname);
+            semsg_c!(gettext((&raw const e_notopen).cast()), fname);
             return FAIL;
         }
         vim_snprintf(
@@ -81,7 +81,7 @@ pub unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_char) ->
                     core::ptr::null_mut(),
                 );
                 if pc.is_null() {
-                    smsg(
+                    smsg_c!(
                         0,
                         gettext(c"Conversion failure for word in %s line %d: %s".as_ptr()),
                         fname,
@@ -122,7 +122,7 @@ pub unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_char) ->
                             flags |= WF_REGION as c_int;
                             let n = (d - b'0') as c_int;
                             if n == 0 || n > (*spin).si_region_count {
-                                smsg(
+                                smsg_c!(
                                     0,
                                     gettext(c"Invalid region nr in %s line %d: %s".as_ptr()),
                                     fname,
@@ -134,7 +134,7 @@ pub unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_char) ->
                             regionmask |= 1 << (n - 1);
                         }
                         _ => {
-                            smsg(
+                            smsg_c!(
                                 0,
                                 gettext(c"Unrecognized flags in %s line %d: %s".as_ptr()),
                                 fname,
@@ -200,7 +200,7 @@ unsafe fn read_wordfile_header(
     unsafe {
         if strncmp(line, c"encoding=".as_ptr(), 9) == 0 {
             if (*spin).si_conv.vc_type != CONV_NONE {
-                smsg(
+                smsg_c!(
                     0,
                     gettext(c"Duplicate /encoding= line ignored in %s line %d: %s".as_ptr()),
                     fname,
@@ -208,7 +208,7 @@ unsafe fn read_wordfile_header(
                     line.sub(1),
                 );
             } else if did_word {
-                smsg(
+                smsg_c!(
                     0,
                     gettext(c"/encoding= line after word ignored in %s line %d: %s".as_ptr()),
                     fname,
@@ -221,7 +221,7 @@ unsafe fn read_wordfile_header(
                 if (*spin).si_ascii == 0
                     && convert_setup(&raw mut (*spin).si_conv, enc, p_enc.get()) == FAIL
                 {
-                    smsg(
+                    smsg_c!(
                         0,
                         gettext(c"Conversion in %s not supported: from %s to %s".as_ptr()),
                         fname,
@@ -234,7 +234,7 @@ unsafe fn read_wordfile_header(
             }
         } else if strncmp(line, c"regions=".as_ptr(), 8) == 0 {
             if (*spin).si_region_count > 1 {
-                smsg(
+                smsg_c!(
                     0,
                     gettext(c"Duplicate /regions= line ignored in %s line %d: %s".as_ptr()),
                     fname,
@@ -244,7 +244,7 @@ unsafe fn read_wordfile_header(
             } else {
                 line = line.add(8);
                 if strlen(line) > (MAXREGIONS as c_int * 2) as size_t {
-                    smsg(
+                    smsg_c!(
                         0,
                         gettext(c"Too many regions in %s line %d: %s".as_ptr()),
                         fname,
@@ -258,7 +258,7 @@ unsafe fn read_wordfile_header(
                 }
             }
         } else {
-            smsg(
+            smsg_c!(
                 0,
                 gettext(c"/ line ignored in %s line %d: %s".as_ptr()),
                 fname,

@@ -7,8 +7,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING};
 use crate::src::nvim::types::{CMD_helpgrep, CMD_lhelpgrep};
 use core::ffi::{c_char, c_int};
@@ -303,7 +304,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
         if !qf_list_empty(qf_get_curlist(qi)) {
             qf_jump(qi, 0, 0, false as c_int);
         } else {
-            semsg(gettext(&raw const e_nomatch2 as *const c_char), (*eap).arg);
+            semsg_c!(gettext(&raw const e_nomatch2 as *const c_char), (*eap).arg);
         }
 
         decr_quickfix_busy();

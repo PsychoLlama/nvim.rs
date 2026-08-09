@@ -2,6 +2,7 @@
 //! session to another process or take it back.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -17,7 +18,7 @@ use crate::src::nvim::ex_docmd::{GA_EMPTY_INIT_VALUE, NUL, kChannelPartAll};
 use crate::src::nvim::log::{LOGLVL_INF, logmsg};
 use crate::src::nvim::main::{cmdmod, current_ui, e_invchan, exiting, getout};
 use crate::src::nvim::memory::{arena_mem_free, strequal, xcalloc, xfree, xmemdupz, xstrdup};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::msgpack_rpc::channel::rpc_send_call;
 use crate::src::nvim::msgpack_rpc::server::{server_start, server_stop};
 use crate::src::nvim::os::libc::strstr;
@@ -323,7 +324,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
 
         // The address was released for a server that is not going to use it.
         if server_stopped && server_start(listen_arg) != 0 {
-            semsg(c"couldn't resume listening on %s".as_ptr(), listen_arg);
+            semsg_c!(c"couldn't resume listening on %s".as_ptr(), listen_arg);
         }
     }
 }

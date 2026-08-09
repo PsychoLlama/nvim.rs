@@ -13,6 +13,7 @@
 
 use super::throttle::{Ring, out_data_cb, out_data_decide_throttle, out_data_ring};
 use super::*;
+use crate::msg_schedule_semsg_c;
 use crate::src::nvim::event::libuv::{uv_err_name, uv_strerror};
 use crate::src::nvim::event::libuv_proc::libuv_proc_init;
 use crate::src::nvim::event::r#loop::loop_poll_events;
@@ -27,9 +28,7 @@ use crate::src::nvim::event::wstream::{
 };
 use crate::src::nvim::main::{got_int, lines_left, msg_no_more, no_wait_return};
 use crate::src::nvim::memory::{xfree, xrealloc, xstrlcpy};
-use crate::src::nvim::message::{
-    msg_end, msg_outtrans, msg_putchar, msg_sb_eol, msg_schedule_semsg, msg_start,
-};
+use crate::src::nvim::message::{msg_end, msg_outtrans, msg_putchar, msg_sb_eol, msg_start};
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::types::{LibuvProc, MultiQueue, Proc, RStream, Stream, WBuffer};
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop};
@@ -246,7 +245,7 @@ unsafe extern "C" fn shell_write_cb(stream: *mut Stream, _data: *mut c_void, sta
         if status != 0 {
             // Happens when input is sent to a backgrounded shell command:
             // `:call system("cat - &", "foo")`. #3529 #5241
-            msg_schedule_semsg(
+            msg_schedule_semsg_c!(
                 gettext(c"E5677: Error writing input to shell-command: %s".as_ptr()),
                 uv_err_name(status),
             );

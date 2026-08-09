@@ -2,6 +2,7 @@
 //! recovering, and the buffer list.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -38,7 +39,7 @@ use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::memfile::mf_fname;
 use crate::src::nvim::memline::{ml_delete, ml_get, ml_preserve, ml_recover};
 use crate::src::nvim::memory::xfree;
-use crate::src::nvim::message::{emsg, msg, semsg};
+use crate::src::nvim::message::{emsg, msg};
 use crate::src::nvim::normal::normal_enter;
 use crate::src::nvim::option::get_findfunc;
 use crate::src::nvim::os::libc::{gettext, strlen};
@@ -536,7 +537,7 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
 
         if read != OK {
             if !aborting() {
-                semsg(gettext(&raw const e_notopen as *const c_char), (*eap).arg);
+                semsg_c!(gettext(&raw const e_notopen as *const c_char), (*eap).arg);
             }
             return;
         }

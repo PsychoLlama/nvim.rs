@@ -46,7 +46,7 @@ use crate::src::nvim::mbyte::mb_strnicmp;
 use crate::src::nvim::memory::{
     strequal, xcalloc, xfree, xmalloc, xmemdup, xmemdupz, xrealloc, xstrdup,
 };
-use crate::src::nvim::message::{semsg, siemsg, smsg, verbose_enter, verbose_leave};
+use crate::src::nvim::message::{verbose_enter, verbose_leave};
 use crate::src::nvim::msgpack_rpc::packer::{
     mpack_array, mpack_bin, mpack_bool, mpack_check_buffer, mpack_integer, mpack_map, mpack_raw,
     mpack_remaining, mpack_str, mpack_uint, mpack_uint64, packer_string_buffer, packer_take_string,

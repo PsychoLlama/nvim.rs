@@ -9,8 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::path::buffer_path;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -339,7 +340,7 @@ unsafe fn report_missing(first: bool, find_what: c_int, file_to_find: *const c_c
                 .cast::<c_char>(),
             (false, false) => e_no_more_file_str_found_in_path.ptr().cast::<c_char>(),
         };
-        semsg(gettext(message), file_to_find);
+        semsg_c!(gettext(message), file_to_find);
     }
 }
 

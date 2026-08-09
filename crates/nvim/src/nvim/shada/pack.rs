@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::src::nvim::types::builders::static_cstring;
@@ -276,7 +277,7 @@ unsafe fn pack_variable(
             vardesc.as_ptr().cast::<c_char>(),
         ) == FAIL
         {
-            semsg(
+            semsg_c!(
                 gettext(c"E574: Failed to write variable %s".as_ptr()),
                 global_var.name,
             );

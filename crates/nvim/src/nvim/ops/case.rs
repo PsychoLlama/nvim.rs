@@ -15,6 +15,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::smsg_c;
 use ::core::ffi::c_int;
 
 use super::*;
@@ -104,7 +105,7 @@ pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
         }
 
         if (*oap).line_count as OptInt > p_report.get() {
-            smsg(
+            smsg_c!(
                 0,
                 ngettext(
                     c"%ld line changed".as_ptr(),

@@ -55,7 +55,7 @@ use crate::src::nvim::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::src::nvim::message::{
     emsg, msg, msg_advance, msg_ext_set_kind, msg_outnum, msg_outtrans, msg_outtrans_len,
-    msg_putchar, msg_puts, msg_puts_hl, msg_puts_title, semsg,
+    msg_putchar, msg_puts, msg_puts_hl, msg_puts_title,
 };
 use crate::src::nvim::optionstr::clear_string_option;
 use crate::src::nvim::os::input::line_breakcheck;

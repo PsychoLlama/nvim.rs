@@ -23,11 +23,11 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref_ctx};
 use crate::src::nvim::main::{expr_map_lock, textlock, ui_event_ns_id};
-use crate::src::nvim::message::{msg_schedule_semsg, msg_schedule_semsg_multiline};
 use crate::src::nvim::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
 use crate::src::nvim::types::{
     Arena, Array, Error, LuaRef, LuaRetMode, NS, kErrorTypeNone, kObjectTypeBoolean,
 };
+use crate::{msg_schedule_semsg_c, msg_schedule_semsg_multiline_c};
 use core::ffi::{CStr, c_char};
 
 const kRetNilBool: LuaRetMode = 1;
@@ -121,7 +121,7 @@ pub unsafe fn ui_remove_cb(ns_id: u32, checkerr: bool) {
     if checkerr {
         let ns = unsafe { describe_ns(ns_id as NS, c"(UNKNOWN PLUGIN)".as_ptr()) };
         unsafe {
-            msg_schedule_semsg(
+            msg_schedule_semsg_c!(
                 c"Excessive errors in vim.ui_attach() callback (ns=%s)".as_ptr(),
                 ns,
             )
@@ -283,6 +283,6 @@ unsafe fn report_error(ns_id: u32, name: *const c_char, msg: *const c_char) {
             ns,
             msg,
         );
-        msg_schedule_semsg_multiline(format, name, ns, msg);
+        msg_schedule_semsg_multiline_c!(format, name, ns, msg);
     }
 }

@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -28,7 +29,7 @@ use crate::src::nvim::mbyte::{
     mb_cptr2char_adv, mb_ptr2char_adv, mb_string2cells, utf_head_off, utf_ptr2char, utf_ptr2len,
     utfc_ptr2len,
 };
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{gettext, strlen, strncmp, strstr};
 use crate::src::nvim::plines::linetabsize_col;
 use crate::src::nvim::types::{
@@ -438,7 +439,7 @@ pub unsafe extern "C" fn f_tr(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
             (*rettv).vval.v_string = ga.ga_data as *mut c_char;
             return;
         }
-        semsg(gettext(e_invarg2.ptr().cast::<c_char>()), fromstr);
+        semsg_c!(gettext(e_invarg2.ptr().cast::<c_char>()), fromstr);
         ga_clear(&raw mut ga);
     }
 }
@@ -475,7 +476,7 @@ pub unsafe extern "C" fn f_trim(argvars: *mut typval_T, rettv: *mut typval_T, _f
                     return;
                 }
                 if !(0..=2).contains(&dir) {
-                    semsg(
+                    semsg_c!(
                         gettext(e_invarg2.ptr().cast::<c_char>()),
                         tv_get_string(argvars.add(2)),
                     );

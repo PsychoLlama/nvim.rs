@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use crate::src::nvim::types::{MB_MAXCHAR, VAR_DICT, VAR_LIST, VAR_UNKNOWN, kListLenMayKnow};
 
 /// How many `posN` keys a saved position match can carry.
@@ -197,7 +198,7 @@ pub unsafe extern "C" fn f_setmatches(
         while !li.is_null() {
             let tv = &raw mut (*li).li_tv;
             if (*tv).v_type != VAR_DICT || (*tv).vval.v_dict.is_null() {
-                semsg(
+                semsg_c!(
                     gettext(
                         c"E474: List item %d is either not a dictionary or an empty one".as_ptr(),
                     ),
@@ -211,7 +212,7 @@ pub unsafe extern "C" fn f_setmatches(
                 && !find(d, "priority").is_null()
                 && !find(d, "id").is_null();
             if !ok {
-                semsg(
+                semsg_c!(
                     gettext(c"E474: List item %d is missing one of the required keys".as_ptr()),
                     li_idx,
                 );
@@ -364,7 +365,7 @@ pub unsafe extern "C" fn f_matchadd(
             return;
         };
         if (1..=3).contains(&id) {
-            semsg(
+            semsg_c!(
                 gettext(c"E798: ID is reserved for \":match\": %d".as_ptr()),
                 id,
             );
@@ -402,7 +403,7 @@ pub unsafe extern "C" fn f_matchaddpos(
             return;
         }
         if (*argvars.offset(1)).v_type != VAR_LIST {
-            semsg(
+            semsg_c!(
                 gettext(&raw const e_listarg as *const c_char),
                 c"matchaddpos()".as_ptr(),
             );
@@ -418,7 +419,7 @@ pub unsafe extern "C" fn f_matchaddpos(
         };
         // 3 is allowed: matchaddpos() is meant to stand in for `:3match`.
         if id == 1 || id == 2 {
-            semsg(
+            semsg_c!(
                 gettext(c"E798: ID is reserved for \"match\": %d".as_ptr()),
                 id,
             );

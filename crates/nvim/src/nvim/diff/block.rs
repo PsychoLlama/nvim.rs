@@ -13,8 +13,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 use ::core::ffi::c_int;
 use ::std::ffi::CStr;
 
@@ -86,7 +87,7 @@ pub unsafe fn diff_buf_add(buf: *mut buf_T) {
                 return;
             }
         }
-        semsg(
+        semsg_c!(
             gettext(c"E96: Cannot diff more than %d buffers".as_ptr()),
             DB_COUNT,
         );

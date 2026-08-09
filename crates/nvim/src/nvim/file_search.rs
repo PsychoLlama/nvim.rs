@@ -30,7 +30,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::memory::{xfree, xmemdupz, xstrlcpy};
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::get_visual_text;
 use crate::src::nvim::option::{copy_option_part, was_set_insecurely};
 use crate::src::nvim::options::kOptIncludeexpr;

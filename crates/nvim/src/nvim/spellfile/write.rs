@@ -31,13 +31,14 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::src::nvim::fileio::{put_bytes, put_time};
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::main::{e_notopen, e_write};
 use crate::src::nvim::mbyte::utf_char2bytes;
-use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::fs::os_fopen;
 use crate::src::nvim::os::libc::{
     fclose, fputc, fwrite, gettext, putc, qsort, strcmp, strlen, time,
@@ -139,7 +140,7 @@ pub unsafe fn write_vim_spell(spin: &mut spellinfo_T, fname: *mut c_char) -> c_i
     unsafe {
         let fd = os_fopen(fname, c"w".as_ptr());
         if fd.is_null() {
-            semsg(gettext((&raw const e_notopen).cast()), fname);
+            semsg_c!(gettext((&raw const e_notopen).cast()), fname);
             return FAIL;
         }
         let mut w = SplWriter { fd, ok: true };

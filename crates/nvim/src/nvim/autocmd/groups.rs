@@ -9,8 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::semsg_c;
 
 /// Drop a group's entries from the two maps, freeing the keys they own.
 ///
@@ -86,7 +87,7 @@ pub unsafe extern "C" fn augroup_del(name: *mut ::core::ffi::c_char, stupid_lega
     unsafe {
         let group = augroup_find(name);
         if group == AUGROUP_ERROR {
-            semsg(gettext(c"E367: No such group: \"%s\"".as_ptr()), name);
+            semsg_c!(gettext(c"E367: No such group: \"%s\"".as_ptr()), name);
             return;
         } else if group == current_augroup.get() {
             emsg(gettext(c"E936: Cannot delete the current group".as_ptr()));

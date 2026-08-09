@@ -9,8 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
 use super::*;
+#[allow(unused_imports)]
+use crate::smsg_c;
 
 /// Mark one autocommand deleted: free everything it owns and null its
 /// pattern, which is the flag [`au_cleanup`] compacts on.
@@ -135,7 +136,7 @@ pub unsafe extern "C" fn aubuflocal_remove(buf: *mut buf_T) {
                     aucmd_del(ac);
                     if p_verbose.get() >= 6 {
                         verbose_enter();
-                        smsg(
+                        smsg_c!(
                             0,
                             gettext(c"auto-removing autocommand: %s <buffer=%d>".as_ptr()),
                             event_nr2name(event),

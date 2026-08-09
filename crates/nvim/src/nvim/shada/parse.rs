@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use crate::src::nvim::msgpack_rpc::unpacker::MPACK_OK;
@@ -66,7 +67,7 @@ pub(crate) unsafe fn parse_known(
                 );
             }
             if cursor.left != 0 {
-                semsg(
+                semsg_c!(
                     gettext(
                         c"E575: Error while reading ShaDa file: item entry at position %lu additional bytes"
                             .as_ptr(),
@@ -109,7 +110,7 @@ unsafe fn parse_search_pattern(
             extra,
             error,
         ) {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: search pattern entry at position %lu %s"
                         .as_ptr(),
@@ -125,7 +126,7 @@ unsafe fn parse_search_pattern(
             (*it).is_set___shada_search_pat_,
             KEYSET_OPTIDX__shada_search_pat__sp,
         ) {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: search pattern entry at position %lu has no pattern"
                         .as_ptr(),
@@ -164,7 +165,7 @@ unsafe fn parse_mark(
             extra,
             error,
         ) {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: mark entry at position %lu %s".as_ptr(),
                 ),
@@ -179,7 +180,7 @@ unsafe fn parse_mark(
             if header.type_u64 == kSDItemJump as uint64_t
                 || header.type_u64 == kSDItemChange as uint64_t
             {
-                semsg(
+                semsg_c!(
                     gettext(
                         c"E575: Error while reading ShaDa file: mark entry at position %lu has n key which is only valid for local and global mark entries"
                             .as_ptr(),
@@ -201,7 +202,7 @@ unsafe fn parse_mark(
         }
 
         if (*mark).fname.is_null() {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: mark entry at position %lu is missing file name"
                         .as_ptr(),
@@ -211,7 +212,7 @@ unsafe fn parse_mark(
             return Err(Malformed);
         }
         if (*mark).mark.lnum <= 0 {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: mark entry at position %lu has invalid line number"
                         .as_ptr(),
@@ -221,7 +222,7 @@ unsafe fn parse_mark(
             return Err(Malformed);
         }
         if (*mark).mark.col < 0 {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: mark entry at position %lu has invalid column number"
                         .as_ptr(),
@@ -277,7 +278,7 @@ unsafe fn parse_register(
         };
         let claim = (|| {
             if !ok {
-                semsg(
+                semsg_c!(
                     gettext(
                         c"E575: Error while reading ShaDa file: register entry at position %lu %s"
                             .as_ptr(),
@@ -288,7 +289,7 @@ unsafe fn parse_register(
                 return Err(Malformed);
             }
             if lines.is_empty() {
-                semsg(
+                semsg_c!(
                     gettext(
                         c"E575: Error while reading ShaDa file: register entry at position %lu has rc key with missing or empty array"
                             .as_ptr(),
@@ -350,7 +351,7 @@ unsafe fn parse_history(
     unsafe {
         let len = cursor.array();
         if len < 2 {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: history entry at position %lu is not an array with enough elements"
                         .as_ptr(),
@@ -360,7 +361,7 @@ unsafe fn parse_history(
             return Err(Malformed);
         }
         let Some(hist_type) = cursor.integer() else {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: history entry at position %lu has wrong history type type"
                         .as_ptr(),
@@ -371,7 +372,7 @@ unsafe fn parse_history(
         };
         let item = cursor.string();
         if item.data.is_null() {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: history entry at position %lu has wrong history string type"
                         .as_ptr(),
@@ -382,7 +383,7 @@ unsafe fn parse_history(
         }
         let text = core::slice::from_raw_parts(item.data.cast::<u8>(), item.size);
         if text.contains(&0) {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: history entry at position %lu contains string with zero byte inside"
                         .as_ptr(),
@@ -397,7 +398,7 @@ unsafe fn parse_history(
         let is_search = (*history).histtype as c_int == HIST_SEARCH;
         if is_search {
             if len < 3 {
-                semsg(
+                semsg_c!(
                     gettext(
                         c"E575: Error while reading ShaDa file: search history entry at position %lu does not have separator character"
                             .as_ptr(),
@@ -407,7 +408,7 @@ unsafe fn parse_history(
                 return Err(Malformed);
             }
             let Some(sep) = cursor.integer() else {
-                semsg(
+                semsg_c!(
                     gettext(
                         c"E575: Error while reading ShaDa file: search history entry at position %lu has wrong history separator type"
                             .as_ptr(),
@@ -442,7 +443,7 @@ unsafe fn parse_variable(
     unsafe {
         let len = cursor.array();
         if len < 2 {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: variable entry at position %lu is not an array with enough elements"
                         .as_ptr(),
@@ -453,7 +454,7 @@ unsafe fn parse_variable(
         }
         let name = cursor.string();
         if name.data.is_null() {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: variable entry at position %lu has wrong variable name type"
                         .as_ptr(),
@@ -470,7 +471,7 @@ unsafe fn parse_variable(
         if !binval.data.is_null() {
             if len > 2 {
                 if cursor.integer() != Some(VAR_TYPE_BLOB as Integer) {
-                    semsg(
+                    semsg_c!(
                         gettext(
                             c"E575: Error while reading ShaDa file: variable entry at position %lu has wrong variable type"
                                 .as_ptr(),
@@ -483,7 +484,7 @@ unsafe fn parse_variable(
             }
             (*global_var).value = decode_string(binval.data, binval.size, is_blob, false);
         } else if cursor.typval(&raw mut (*global_var).value) as c_uint != MPACK_OK {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: variable entry at position %lu has value that cannot be converted to the Vimscript value"
                         .as_ptr(),
@@ -505,7 +506,7 @@ unsafe fn parse_sub_string(
     unsafe {
         let len = cursor.array();
         if len < 1 {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: sub string entry at position %lu is not an array with enough elements"
                         .as_ptr(),
@@ -516,7 +517,7 @@ unsafe fn parse_sub_string(
         }
         let sub = cursor.string();
         if sub.data.is_null() {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: sub string entry at position %lu has wrong sub string type"
                         .as_ptr(),
@@ -542,7 +543,7 @@ unsafe fn parse_buffer_list(
     unsafe {
         let len = cursor.array();
         if len < 0 {
-            semsg(
+            semsg_c!(
                 gettext(
                     c"E575: Error while reading ShaDa file: buffer list entry at position %lu is not an array"
                         .as_ptr(),
@@ -575,7 +576,7 @@ unsafe fn parse_buffer_list(
                 &mut item_extra,
                 error,
             ) {
-                semsg(
+                semsg_c!(
                     gettext(
                         c"E575: Error while reading ShaDa file: buffer list at position %lu contains entry that %s"
                             .as_ptr(),
@@ -618,7 +619,7 @@ unsafe fn parse_buffer_list(
                 None
             };
             if let Some(complaint) = complaint {
-                semsg(gettext(complaint.as_ptr()), pos);
+                semsg_c!(gettext(complaint.as_ptr()), pos);
                 return Err(Malformed);
             }
         }

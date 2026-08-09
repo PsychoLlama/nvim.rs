@@ -1,6 +1,7 @@
 //! Splitting, resizing, moving between and listing windows and tab pages.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -28,9 +29,7 @@ use crate::src::nvim::main::{
     msg_col, msg_scroll, must_redraw, p_pvh, postponed_split_flags, postponed_split_tab,
 };
 use crate::src::nvim::memory::{xfree, xstrlcpy};
-use crate::src::nvim::message::{
-    emsg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_start, semsg,
-};
+use crate::src::nvim::message::{emsg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_start};
 use crate::src::nvim::r#move::validate_cursor;
 use crate::src::nvim::normal::do_check_scrollbind;
 use crate::src::nvim::option::get_findfunc;
@@ -438,7 +437,7 @@ pub(crate) unsafe fn ex_winsize(eap: *mut exarg_T) {
     unsafe {
         let mut arg = (*eap).arg;
         if !ascii_isdigit(*arg as c_int) {
-            semsg(gettext(&raw const e_invarg2 as *const c_char), arg);
+            semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg);
             return;
         }
         let w = getdigits_int(&raw mut arg, false, 10);

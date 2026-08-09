@@ -50,8 +50,8 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::message::{
     do_dialog, emsg, msg, msg_check_for_delay, msg_clr_eos, msg_delay, msg_end, msg_may_trunc,
-    msg_outtrans, msg_progress, msg_putchar, msg_puts, msg_puts_hl, msg_schedule_semsg, msg_start,
-    msg_trunc, semsg, set_keep_msg, smsg,
+    msg_outtrans, msg_progress, msg_putchar, msg_puts, msg_puts_hl, msg_start, msg_trunc,
+    set_keep_msg,
 };
 use crate::src::nvim::r#move::update_topline;
 use crate::src::nvim::option::{
