@@ -1,7 +1,7 @@
 {
   "internal_exports": 34,
-  "files_without_forbid_unsafe": 932,
-  "files_without_deny_unsafe_op": 142,
+  "files_without_forbid_unsafe": 934,
+  "files_without_deny_unsafe_op": 141,
   "files": {
     "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe_lines": 54},
     "crates/nvim/src/cjson/lua_cjson/decode.rs": {"unsafe_lines": 175},
@@ -680,7 +680,9 @@
     "crates/nvim/src/nvim/popupmenu/layout.rs": {"cell_ptr": 2, "unsafe_lines": 171},
     "crates/nvim/src/nvim/popupmenu/menu.rs": {"cell_ptr": 3, "unsafe_lines": 181},
     "crates/nvim/src/nvim/popupmenu/preview.rs": {"unsafe_lines": 280},
-    "crates/nvim/src/nvim/profile.rs": {"cell_ptr": 11, "unsafe_lines": 519},
+    "crates/nvim/src/nvim/profile.rs": {"cell_ptr": 1, "unsafe_lines": 131},
+    "crates/nvim/src/nvim/profile/report.rs": {"unsafe_lines": 45},
+    "crates/nvim/src/nvim/profile/startuptime.rs": {"unsafe_lines": 28},
     "crates/nvim/src/nvim/quickfix/cmds.rs": {"cell_ptr": 2, "unsafe_lines": 252},
     "crates/nvim/src/nvim/quickfix/display.rs": {"cell_ptr": 10, "unsafe_lines": 343},
     "crates/nvim/src/nvim/quickfix/dummy.rs": {"unsafe_lines": 111},
