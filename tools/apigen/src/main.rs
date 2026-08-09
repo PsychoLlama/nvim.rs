@@ -3004,15 +3004,20 @@ impl Packer {
 fn byte_strings(expr: &syn::Expr, out: &mut Vec<String>) {
     let mut nested = |e| byte_strings(e, out);
     match expr {
+        // Both spellings of a C string literal. `c"..."` is what the tree
+        // writes since the `manual_c_str_literals` sweep; `b"...\0"` is what
+        // c2rust emitted, and is still what the untouched files hold.
         syn::Expr::Lit(lit) => {
-            if let syn::Lit::ByteStr(bytes) = &lit.lit {
-                let bytes = bytes.value();
-                out.push(
-                    String::from_utf8_lossy(&bytes)
-                        .trim_end_matches('\0')
-                        .into(),
-                );
-            }
+            let bytes = match &lit.lit {
+                syn::Lit::ByteStr(bytes) => bytes.value(),
+                syn::Lit::CStr(bytes) => bytes.value().into_bytes(),
+                _ => return,
+            };
+            out.push(
+                String::from_utf8_lossy(&bytes)
+                    .trim_end_matches('\0')
+                    .into(),
+            );
         }
         syn::Expr::Array(array) => array.elems.iter().for_each(nested),
         syn::Expr::Call(call) => call.args.iter().for_each(nested),
