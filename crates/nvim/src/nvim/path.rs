@@ -481,7 +481,6 @@ pub unsafe extern "C" fn append_path(
     unsafe {
         let mut current_length = CStr::from_ptr(path).to_bytes().len();
         let to_append_length = CStr::from_ptr(to_append).to_bytes().len();
-        let max_len = max_len as usize;
         // The separator, without its NUL.
         let sep_len = PATHSEPSTR.len() - 1;
 
@@ -539,7 +538,7 @@ unsafe fn path_to_absolute(
         // last separator. One byte longer than upstream's, which writes its
         // NUL one past the end for a name of exactly `len - 1` bytes ending
         // in "/..".
-        let mut relative_directory = vec![0 as c_char; len as usize + 1];
+        let mut relative_directory = vec![0 as c_char; len + 1];
         let mut end_of_path = fname;
 
         // Expand it if forced, or if it is not an absolute path.

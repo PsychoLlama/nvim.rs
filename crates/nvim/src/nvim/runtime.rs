@@ -850,7 +850,7 @@ pub unsafe extern "C" fn do_in_path(
                 && (do_all as ::core::ffi::c_int != 0 || !did_one)
             {
                 debug_assert!(
-                    4096 as isize >= tail.offset_from(buf),
+                    4096_isize >= tail.offset_from(buf),
                     "MAXPATHL >= (tail - buf)"
                 );
                 copy_option_part(
@@ -1033,7 +1033,7 @@ unsafe extern "C" fn do_in_cached_path(
                     && (do_all as ::core::ffi::c_int != 0 || !did_one)
                 {
                     debug_assert!(
-                        4096 as isize >= tail.offset_from(&raw mut buf as *mut ::core::ffi::c_char),
+                        4096_isize >= tail.offset_from(&raw mut buf as *mut ::core::ffi::c_char),
                         "MAXPATHL >= (tail - buf)"
                     );
                     copy_option_part(
@@ -2653,7 +2653,7 @@ unsafe extern "C" fn ExpandRTDir_int(
             *((*gap).ga_data as *mut *mut ::core::ffi::c_char).offset(i_1 as isize);
         let mut s: *mut ::core::ffi::c_char = match_0;
         let mut e: *mut ::core::ffi::c_char = s.add(strlen(s));
-        if e.offset_from(s) > 4 as isize
+        if e.offset_from(s) > 4_isize
             && !keep_ext
             && (strncasecmp(
                 e.offset(-(4 as ::core::ffi::c_int as isize)),
@@ -2692,10 +2692,7 @@ unsafe extern "C" fn ExpandRTDir_int(
         }
         s = s.offset(1);
         if s != match_0 {
-            debug_assert!(
-                e.offset_from(s) + 1 as isize >= 0 as isize,
-                "(e - s) + 1 >= 0"
-            );
+            debug_assert!(e.offset_from(s) + 1_isize >= 0_isize, "(e - s) + 1 >= 0");
             memmove(
                 match_0 as *mut ::core::ffi::c_void,
                 s as *const ::core::ffi::c_void,
@@ -3329,9 +3326,9 @@ pub unsafe extern "C" fn runtimepath_default(mut clean_arg: bool) -> *mut ::core
     return rtp;
 }
 pub const SITE_SIZE: usize =
-    ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as usize);
+    ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1_usize);
 pub const AFTER_SIZE: usize =
-    ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize);
+    ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1_usize);
 unsafe extern "C" fn cmd_source(mut fname: *mut ::core::ffi::c_char, mut eap: *mut exarg_T) {
     if *fname as ::core::ffi::c_int != NUL
         && !eap.is_null()
@@ -4348,8 +4345,7 @@ pub unsafe extern "C" fn f_getscriptinfo(
                 .vval
                 .v_dict,
             c"sid".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
+            ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1_usize) as ptrdiff_t,
         );
         if !sid_di.is_null() {
             let mut error: bool = false_0 != 0;

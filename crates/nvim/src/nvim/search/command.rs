@@ -673,7 +673,7 @@ pub unsafe extern "C" fn do_search(
                 if show_search_stats {
                     let inexact = count != 1
                         || has_offset
-                        || (fdo_flags.get() & kOptFdoFlagSearch as u32 == 0
+                        || (fdo_flags.get() & kOptFdoFlagSearch == 0
                             && hasFolding(
                                 curwin.get(),
                                 (*curwin.get()).w_cursor.lnum,
@@ -780,7 +780,7 @@ pub unsafe extern "C" fn showmatch(c: c_int) {
 
         let lpos = findmatch(ptr::null_mut(), NUL);
         if lpos.is_null() {
-            vim_beep(kOptBoFlagShowmatch as u32); // no match, so beep
+            vim_beep(kOptBoFlagShowmatch); // no match, so beep
             return;
         }
         if (*lpos).lnum < (*curwin.get()).w_topline || (*lpos).lnum >= (*curwin.get()).w_botline {

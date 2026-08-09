@@ -282,8 +282,7 @@ pub(crate) unsafe fn repl_cmdline(
         // The tail after the replacement, the replacement itself, a
         // terminator, and — because `nextcmd` is stored past the end — the
         // next command and its own terminator.
-        let mut size =
-            src.offset_from(*cmdlinep) as size_t + strlen(src.add(srclen as usize)) + len + 3;
+        let mut size = src.offset_from(*cmdlinep) as size_t + strlen(src.add(srclen)) + len + 3;
         if !ea.nextcmd.is_null() {
             size += strlen(ea.nextcmd);
         }
@@ -301,7 +300,7 @@ pub(crate) unsafe fn repl_cmdline(
             len,
         );
         let tail = offset + len;
-        strcpy(new_cmdline.add(tail as usize), src.add(srclen as usize));
+        strcpy(new_cmdline.add(tail as usize), src.add(srclen));
         let resume = new_cmdline.add(tail as usize);
 
         if !ea.nextcmd.is_null() {
@@ -314,9 +313,9 @@ pub(crate) unsafe fn repl_cmdline(
         // An argument after the replacement moved by the length difference;
         // one before it did not move at all.
         for j in 0..ea.argc {
-            let old = *ea.args.add(j as usize);
+            let old = *ea.args.add(j);
             let old_off = old.offset_from(*cmdlinep);
-            *ea.args.add(j as usize) = if offset >= old_off as size_t {
+            *ea.args.add(j) = if offset >= old_off as size_t {
                 new_cmdline.offset(old_off)
             } else {
                 new_cmdline.offset(old_off + len.wrapping_sub(srclen) as isize)
@@ -648,7 +647,7 @@ pub unsafe fn eval_vars(
             }
 
             resultlen = strlen(result);
-            if *src.add(*usedlen as usize) as c_int == '<' as c_int {
+            if *src.add(*usedlen) as c_int == '<' as c_int {
                 // A trailing `<` drops the extension.
                 *usedlen += 1;
                 let dot = strrchr(result, '.' as c_int);

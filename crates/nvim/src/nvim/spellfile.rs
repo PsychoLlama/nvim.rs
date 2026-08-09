@@ -246,7 +246,7 @@ pub const ZERO_FLAG: ::core::ffi::c_int = 65009 as ::core::ffi::c_int;
 pub const VIMSPELLMAGIC: [::core::ffi::c_char; 9] =
     unsafe { ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"VIMspell\0") };
 pub const VIMSPELLMAGICL: usize =
-    ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as usize);
+    ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1_usize);
 pub const VIMSPELLVERSION: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 pub const SNF_REQUIRED: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const COMPOUND_MAX_LEN: ::core::ffi::c_int = 100000 as ::core::ffi::c_int;
@@ -668,7 +668,7 @@ unsafe fn mkspell(
                     *innames.offset(i_0 as isize),
                 );
                 if os_path_exists(fname) {
-                    afile[i_0 as usize] = spell_read_aff(&raw mut spin, fname) as *mut afffile_T;
+                    afile[i_0 as usize] = spell_read_aff(&raw mut spin, fname);
                     if afile[i_0 as usize].is_null() {
                         error = true_0 != 0;
                     } else {
@@ -678,12 +678,7 @@ unsafe fn mkspell(
                             c"%s.dic".as_ptr(),
                             *innames.offset(i_0 as isize),
                         );
-                        if spell_read_dic(
-                            &raw mut spin,
-                            fname,
-                            afile[i_0 as usize] as *mut afffile_T,
-                        ) == FAIL
-                        {
+                        if spell_read_dic(&raw mut spin, fname, afile[i_0 as usize]) == FAIL {
                             error = true_0 != 0;
                         }
                     }
@@ -744,7 +739,7 @@ unsafe fn mkspell(
             let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i_1 < incount {
                 if !afile[i_1 as usize].is_null() {
-                    spell_free_aff(afile[i_1 as usize] as *mut afffile_T);
+                    spell_free_aff(afile[i_1 as usize]);
                 }
                 i_1 += 1;
             }

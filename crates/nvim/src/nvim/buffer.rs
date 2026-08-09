@@ -4810,7 +4810,7 @@ pub unsafe extern "C" fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnu
     let changedtick_di: *mut dictitem_T = tv_dict_find(
         (*buf).b_vars,
         c"changedtick".as_ptr(),
-        ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as usize) as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1_usize) as ptrdiff_t,
     );
     debug_assert!(!changedtick_di.is_null(), "changedtick_di != NULL");
     assert!(

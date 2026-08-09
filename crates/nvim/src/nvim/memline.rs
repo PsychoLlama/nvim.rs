@@ -250,8 +250,8 @@ pub const SEA_RECOVER: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const SEA_READONLY: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const DB_MARKED: ::core::ffi::c_uint = (1 as ::core::ffi::c_int as ::core::ffi::c_uint)
     << ::core::mem::size_of::<::core::ffi::c_uint>()
-        .wrapping_mul(8 as usize)
-        .wrapping_sub(1 as usize);
+        .wrapping_mul(8_usize)
+        .wrapping_sub(1_usize);
 pub const DB_INDEX_MASK: ::core::ffi::c_uint = !DB_MARKED;
 pub const INDEX_SIZE: usize = ::core::mem::size_of::<::core::ffi::c_uint>();
 pub const HEADER_SIZE: ::core::ffi::c_ulong = 24 as ::core::ffi::c_ulong;

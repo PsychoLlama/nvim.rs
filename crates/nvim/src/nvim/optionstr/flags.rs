@@ -188,7 +188,7 @@ pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> c_i
     } else {
         varp
     };
-    let list = unsafe { (*opt).flags } & (kOptFlagComma | kOptFlagOneComma) as u32 != 0;
+    let list = unsafe { (*opt).flags } & (kOptFlagComma | kOptFlagOneComma) != 0;
     let (values, _) = opt_values(idx);
     // SAFETY: the option's variable holds a C string, and `flags_var` is the
     // table's own `unsigned` (or null for an option with no mask).

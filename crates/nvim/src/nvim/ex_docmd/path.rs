@@ -149,8 +149,8 @@ pub(crate) unsafe fn findfunc_find_file(
 ) -> *mut c_char {
     unsafe {
         let mut ret_fname: *mut c_char = ptr::null_mut();
-        let saved = *findarg.add(findarg_len as usize);
-        *findarg.add(findarg_len as usize) = NUL as c_char;
+        let saved = *findarg.add(findarg_len);
+        *findarg.add(findarg_len) = NUL as c_char;
 
         let fname_list = call_findfunc(findarg, kBoolVarFalse);
         let fname_count = tv_list_len(fname_list);
@@ -173,7 +173,7 @@ pub(crate) unsafe fn findfunc_find_file(
         if !fname_list.is_null() {
             tv_list_free(fname_list);
         }
-        *findarg.add(findarg_len as usize) = saved;
+        *findarg.add(findarg_len) = saved;
         ret_fname
     }
 }

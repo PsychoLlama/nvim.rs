@@ -105,7 +105,7 @@ unsafe fn field<'a>(dict: &'a Dict, index: size_t) -> (&'a CStr, &'a Object) {
     // SAFETY: `index` is below `dict.size`, so the pair is in the items array
     // and its key is a NUL-terminated string.
     unsafe {
-        let pair = &*dict.items.add(index as usize);
+        let pair = &*dict.items.add(index);
         (CStr::from_ptr(pair.key.data), &pair.value)
     }
 }
@@ -175,7 +175,7 @@ pub(crate) unsafe fn remote_request(
             size_of::<Object>().wrapping_mul(args.capacity),
         ) as *mut Object;
         for i in remote_args..argc {
-            *args.items.add(args.size as usize) = Object {
+            *args.items.add(args.size) = Object {
                 type_0: kObjectTypeString,
                 data: object_data {
                     string: cstr_as_string(*argv.offset(i as isize)),

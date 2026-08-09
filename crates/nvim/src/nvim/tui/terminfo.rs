@@ -238,7 +238,7 @@ pub unsafe extern "C" fn terminfo_fmt(
     let mut values = [param::Param::default(); 9];
     for (i, value) in values.iter_mut().enumerate() {
         let given = *params.add(i);
-        value.num = given.num as i64;
+        value.num = given.num;
         value.string = (!given.string.is_null()).then(|| CStr::from_ptr(given.string).to_bytes());
     }
 

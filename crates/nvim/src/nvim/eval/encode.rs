@@ -511,7 +511,7 @@ pub(crate) unsafe extern "C" fn convert_to_json_string(
                     } else {
                         str_len = (str_len as ::core::ffi::c_ulong).wrapping_add(
                             ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-                                .wrapping_sub(1 as usize)
+                                .wrapping_sub(1_usize)
                                 .wrapping_mul(
                                     (1 as ::core::ffi::c_int
                                         + (ch >= SURROGATE_FIRST_CHAR) as ::core::ffi::c_int)
@@ -664,7 +664,7 @@ pub unsafe extern "C" fn encode_check_json_key(tv: *const typval_T) -> bool {
     type_di = tv_dict_find(
         spdict,
         c"_TYPE".as_ptr(),
-        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize) as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1_usize) as ptrdiff_t,
     );
     if type_di.is_null()
         || (*type_di).di_tv.v_type as ::core::ffi::c_uint
@@ -676,7 +676,7 @@ pub unsafe extern "C" fn encode_check_json_key(tv: *const typval_T) -> bool {
             val_di = tv_dict_find(
                 spdict,
                 c"_VAL".as_ptr(),
-                ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as usize)
+                ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1_usize)
                     as ptrdiff_t,
             );
             val_di.is_null()

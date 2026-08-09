@@ -1167,7 +1167,7 @@ unsafe extern "C" fn virtcol2col(
                 + 1 as ::core::ffi::c_int) as isize),
         );
     }
-    return (p.offset_from(line) + 1 as isize) as ::core::ffi::c_int;
+    return (p.offset_from(line) + 1_isize) as ::core::ffi::c_int;
 }
 pub unsafe extern "C" fn f_virtcol2col(
     mut argvars: *mut typval_T,

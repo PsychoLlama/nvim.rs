@@ -397,12 +397,12 @@ mod tests {
     /// The transpiled C probe loop, kept as the reference the iterator must
     /// match step for step.
     fn c_probe_reference(hash: hash_T, mask: hash_T, steps: usize) -> Vec<usize> {
-        let mut out = vec![(hash & mask) as usize];
+        let mut out = vec![hash & mask];
         let mut idx = hash & mask;
         let mut perturb = hash;
         for _ in 1..steps {
             idx = idx.wrapping_mul(5).wrapping_add(perturb).wrapping_add(1);
-            out.push((idx & mask) as usize);
+            out.push(idx & mask);
             perturb >>= PERTURB_SHIFT;
         }
         out

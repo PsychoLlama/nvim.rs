@@ -208,13 +208,13 @@ pub(crate) unsafe fn do_concat_fnames(
     sep: bool,
 ) -> *mut c_char {
     unsafe {
-        let mut at = len1 as usize;
+        let mut at = len1;
         if sep && *fname1 != 0 && after_pathsep(fname1, fname1.add(at)) == 0 {
             *fname1.add(at) = PATHSEP as c_char;
             at += 1;
         }
         // The NUL comes across with the name.
-        core::ptr::copy(fname2, fname1.add(at), len2 as usize + 1);
+        core::ptr::copy(fname2, fname1.add(at), len2 + 1);
         fname1
     }
 }
@@ -289,7 +289,7 @@ pub unsafe fn add_pathsep(p: *mut c_char) -> bool {
 pub unsafe fn path_has_drive_letter(p: *const c_char, path_len: size_t) -> bool {
     // SAFETY: the caller's promise. `p` is never NULL, which the slice needs
     // even at length zero.
-    let p = unsafe { core::slice::from_raw_parts(p.cast::<u8>(), path_len as usize) };
+    let p = unsafe { core::slice::from_raw_parts(p.cast::<u8>(), path_len) };
     p.len() >= 2
         && p[0].is_ascii_alphabetic()
         && (p[1] == b':' || p[1] == b'|')

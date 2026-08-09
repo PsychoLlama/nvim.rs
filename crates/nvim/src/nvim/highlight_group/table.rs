@@ -362,7 +362,7 @@ pub unsafe fn syn_name2id(name: *const c_char) -> c_int {
 /// `name` points to at least `len` readable bytes; main thread only.
 pub unsafe fn syn_name2id_len(name: *const c_char, len: size_t) -> c_int {
     // SAFETY: the caller's buffer, `len` bytes of it.
-    lookup(unsafe { core::slice::from_raw_parts(name.cast::<u8>(), len as usize) })
+    lookup(unsafe { core::slice::from_raw_parts(name.cast::<u8>(), len) })
 }
 
 /// The shared body of the two lookups. An over-long name cannot have been
@@ -424,7 +424,7 @@ pub unsafe fn syn_check_group(name: *const c_char, len: size_t) -> c_int {
         return 0;
     }
     // SAFETY: the caller's buffer, `len` bytes of it.
-    let bytes = unsafe { core::slice::from_raw_parts(name.cast::<u8>(), len as usize) };
+    let bytes = unsafe { core::slice::from_raw_parts(name.cast::<u8>(), len) };
     match lookup(bytes) {
         0 => syn_add_group(bytes),
         id => id,

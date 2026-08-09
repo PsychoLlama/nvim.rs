@@ -147,9 +147,7 @@ unsafe fn scan(
             // Every position gets a fresh generation, which is how a state
             // knows whether it is already on a list.
             (*rex.ptr()).nfa_listid += 1;
-            if (*prog).re_engine == AUTOMATIC_ENGINE as u32
-                && (*rex.ptr()).nfa_listid >= NFA_MAX_STATES
-            {
+            if (*prog).re_engine == AUTOMATIC_ENGINE && (*rex.ptr()).nfa_listid >= NFA_MAX_STATES {
                 nfa_match.set(NFA_TOO_EXPENSIVE);
                 return;
             }

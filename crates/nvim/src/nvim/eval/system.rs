@@ -140,7 +140,7 @@ pub(crate) unsafe fn string_to_list(
     unsafe {
         // A trailing newline does not start an empty last line unless the
         // caller asked to keep one.
-        if !keepempty && *str.add(len as usize - 1) as c_int == NL {
+        if !keepempty && *str.add(len - 1) as c_int == NL {
             len -= 1;
         }
         let list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);

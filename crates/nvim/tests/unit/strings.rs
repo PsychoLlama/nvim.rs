@@ -302,13 +302,13 @@ fn vim_snprintf_zd_and_zu() {
     let mut storage = vec![0u8; bsize];
     let buf = storage.as_mut_ptr() as *mut c_char;
     #[rustfmt::skip]
-    snp!("-1234567 -7654321", buf, bsize, "%zd %zd", -1234567 as isize, -7654321 as isize);
+    snp!("-1234567 -7654321", buf, bsize, "%zd %zd", -1234567_isize, -7654321_isize);
     #[rustfmt::skip]
-    snp!("-7654321 -1234567", buf, bsize, "%2$zd %1$zd", -1234567 as isize, -7654321 as isize);
+    snp!("-7654321 -1234567", buf, bsize, "%2$zd %1$zd", -1234567_isize, -7654321_isize);
     #[rustfmt::skip]
-    snp!("1234567 7654321", buf, bsize, "%zu %zu", 1234567 as usize, 7654321 as usize);
+    snp!("1234567 7654321", buf, bsize, "%zu %zu", 1234567_usize, 7654321_usize);
     #[rustfmt::skip]
-    snp!("7654321 1234567", buf, bsize, "%2$zu %1$zu", 1234567 as usize, 7654321 as usize);
+    snp!("7654321 1234567", buf, bsize, "%2$zu %1$zu", 1234567_usize, 7654321_usize);
 }
 
 #[test]

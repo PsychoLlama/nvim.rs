@@ -190,7 +190,7 @@ pub unsafe extern "C" fn current_search(count: c_int, forward: bool) -> c_int {
             }
         }
 
-        if fdo_flags.get() & kOptFdoFlagSearch as u32 != 0 && KeyTyped.get() {
+        if fdo_flags.get() & kOptFdoFlagSearch != 0 && KeyTyped.get() {
             foldOpenCursor();
         }
 

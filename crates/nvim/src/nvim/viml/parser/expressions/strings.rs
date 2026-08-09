@@ -218,7 +218,7 @@ pub(super) unsafe extern "C" fn parse_quoted_string(
                         p as *const ::core::ffi::c_void,
                         e.offset_from(p) as size_t,
                     );
-                    v_p_0 = v_p_0.offset(e.offset_from(p) as isize);
+                    v_p_0 = v_p_0.offset(e.offset_from(p));
                     break;
                 } else {
                     memcpy(

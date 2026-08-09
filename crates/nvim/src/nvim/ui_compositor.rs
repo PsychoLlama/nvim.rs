@@ -1005,7 +1005,7 @@ pub unsafe extern "C" fn ui_comp_msg_set_pos(
         }
     }
     msg_current_row.set(row as ::core::ffi::c_int);
-    msg_was_scrolled.set(scrolled as bool);
+    msg_was_scrolled.set(scrolled);
 }
 unsafe extern "C" fn curgrid_covered_above(mut row: ::core::ffi::c_int) -> bool {
     let mut above_msg: bool = *(*layers.ptr())

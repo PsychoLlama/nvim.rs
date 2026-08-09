@@ -8265,8 +8265,7 @@ pub unsafe extern "C" fn make_snapshot(mut idx: ::core::ffi::c_int) {
     clear_snapshot(curtab.get(), idx);
     make_snapshot_rec(
         topframe.get(),
-        (&raw mut (*curtab.get()).tp_snapshot as *mut *mut frame_T).offset(idx as isize)
-            as *mut *mut frame_T,
+        (&raw mut (*curtab.get()).tp_snapshot as *mut *mut frame_T).offset(idx as isize),
     );
 }
 unsafe extern "C" fn make_snapshot_rec(mut fr: *mut frame_T, mut frp: *mut *mut frame_T) {

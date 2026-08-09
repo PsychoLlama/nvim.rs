@@ -155,7 +155,7 @@ pub(crate) unsafe fn get_visual_text(
             // Reachable: a blockwise selection whose last line is short ends
             // on the terminator. Kept wrapping, deliberately.
             if *lenp > 0 {
-                let tail = utfc_ptr2len((*pp).add(*lenp as usize - 1));
+                let tail = utfc_ptr2len((*pp).add(*lenp - 1));
                 *lenp = (*lenp).wrapping_add((tail - 1) as size_t);
             }
         }

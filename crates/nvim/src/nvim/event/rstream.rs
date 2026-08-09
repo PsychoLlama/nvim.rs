@@ -110,7 +110,7 @@ unsafe extern "C" fn read_cb(uvstream: *mut uv_stream_t, cnt: ssize_t, _buf: *co
     let stream = (*uvstream).data as *mut RStream;
     if cnt > 0 {
         (*stream).num_bytes += cnt as size_t;
-        (*stream).write_pos = (*stream).write_pos.offset(cnt as isize);
+        (*stream).write_pos = (*stream).write_pos.offset(cnt);
         invoke_read_cb(stream, false);
         return;
     }

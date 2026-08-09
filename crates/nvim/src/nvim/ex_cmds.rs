@@ -1996,11 +1996,11 @@ pub unsafe extern "C" fn make_filter_cmd(
     let mut len: size_t = strlen(cmd).wrapping_add(1 as size_t);
     len = (len as ::core::ffi::c_ulong).wrapping_add(
         (if is_fish_shell as ::core::ffi::c_int != 0 {
-            ::core::mem::size_of::<[::core::ffi::c_char; 13]>().wrapping_sub(1 as usize)
+            ::core::mem::size_of::<[::core::ffi::c_char; 13]>().wrapping_sub(1_usize)
         } else if !is_pwsh {
-            ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize)
+            ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1_usize)
         } else {
-            0 as usize
+            0_usize
         }) as ::core::ffi::c_ulong,
     ) as size_t;
     if !itmp.is_null() {
@@ -3717,7 +3717,7 @@ pub unsafe fn ex_z(mut eap: *mut exarg_T) {
             start = lnum;
             if *kind as ::core::ffi::c_int == '+' as ::core::ffi::c_int {
                 start = (start as ::core::ffi::c_int
-                    + (bigness as linenr_T * (x.offset_from(kind) - 1 as isize) as linenr_T
+                    + (bigness as linenr_T * (x.offset_from(kind) - 1_isize) as linenr_T
                         + 1 as linenr_T) as ::core::ffi::c_int) as linenr_T;
             } else if (*eap).addr_count == 0 as ::core::ffi::c_int {
                 start += 1;
@@ -3866,7 +3866,7 @@ unsafe extern "C" fn sub_joining_lines(
             }
             add_to_history(
                 HIST_SEARCH as ::core::ffi::c_int,
-                ::core::slice::from_raw_parts(pat as *const u8, patlen as usize),
+                ::core::slice::from_raw_parts(pat as *const u8, patlen),
                 true_0 != 0,
                 NUL as u8,
             );
@@ -4784,7 +4784,7 @@ unsafe extern "C" fn do_sub(
                                             ml_append(
                                                 lnum - 1 as linenr_T,
                                                 new_start,
-                                                (p1.offset_from(new_start) + 1 as isize) as colnr_T,
+                                                (p1.offset_from(new_start) + 1_isize) as colnr_T,
                                                 false_0 != 0,
                                             );
                                             mark_adjust(

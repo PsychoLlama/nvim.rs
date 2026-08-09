@@ -72,9 +72,8 @@ use crate::src::nvim::types::{
     AdditionalData, CONV_NONE, Channel, DictWatcher, OptInt, QUEUE, String_0, VAR_BLOB, VAR_BOOL,
     VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
     VAR_UNKNOWN, VAR_UNLOCKED, buf_T, dict_T, dictitem_T, fmark_T, fmarkv_T, hashitem_T, hashtab_T,
-    ht_stack_S, ht_stack_T, list_T, list_stack_S, list_stack_T, listitem_T, partial_T, pos_T,
-    size_t, tabpage_T, timer_T, typval_T, typval_vval_union, ufunc_T, vimconv_T, win_T, xfmark_T,
-    yankreg_T,
+    ht_stack_T, list_T, list_stack_T, listitem_T, partial_T, pos_T, size_t, tabpage_T, timer_T,
+    typval_T, typval_vval_union, ufunc_T, vimconv_T, win_T, xfmark_T, yankreg_T,
 };
 
 /// A freshly declared typval.
@@ -519,7 +518,7 @@ pub(crate) unsafe fn set_ref_in_item_dict(
 
         let newitem = xmalloc(size_of::<ht_stack_T>()) as *mut ht_stack_T;
         (*newitem).ht = &raw mut (*dd).dv_hashtab;
-        (*newitem).prev = *ht_stack as *mut ht_stack_S;
+        (*newitem).prev = *ht_stack;
         *ht_stack = newitem;
 
         // The watchers' callbacks are marked only on this branch, which is
@@ -556,7 +555,7 @@ pub(crate) unsafe fn set_ref_in_item_list(
         }
         let newitem = xmalloc(size_of::<list_stack_T>()) as *mut list_stack_T;
         (*newitem).list = ll;
-        (*newitem).prev = *list_stack as *mut list_stack_S;
+        (*newitem).prev = *list_stack;
         *list_stack = newitem;
         false
     }

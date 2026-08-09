@@ -26,8 +26,8 @@ pub const KV_INITIAL_VALUE: Array = Array {
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
     << ::core::mem::size_of::<uint64_t>()
-        .wrapping_mul(8 as usize)
-        .wrapping_sub(1 as usize);
+        .wrapping_mul(8_usize)
+        .wrapping_sub(1_usize);
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL.wrapping_add(1 as uint64_t);
 pub unsafe extern "C" fn buf_updates_register(

@@ -541,7 +541,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     }
                     let mut p: *const ::core::ffi::c_char = ret.data.opt.name;
                     let e: *const ::core::ffi::c_char = pline.data.add(pline.size);
-                    if e.offset_from(p) >= 4 as isize
+                    if e.offset_from(p) >= 4_isize
                         && *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                             == 't' as ::core::ffi::c_int
                         && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int

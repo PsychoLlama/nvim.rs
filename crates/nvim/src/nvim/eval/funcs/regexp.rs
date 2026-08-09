@@ -281,7 +281,7 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
                             tv_list_append_string(
                                 rettv.vval.v_list,
                                 regmatch.startp[i],
-                                regmatch.endp[i].offset_from(regmatch.startp[i]) as isize,
+                                regmatch.endp[i].offset_from(regmatch.startp[i]),
                             );
                         }
                     }
@@ -378,7 +378,7 @@ unsafe fn get_matches_in_str(
                         tv_list_append_string(
                             sml,
                             (*rmp).startp[i],
-                            (*rmp).endp[i].offset_from((*rmp).startp[i]) as isize,
+                            (*rmp).endp[i].offset_from((*rmp).startp[i]),
                         );
                     }
                 }

@@ -142,7 +142,7 @@ pub(crate) unsafe fn parse_count(
             }
         }
 
-        let n: linenr_T = getdigits_int32(&raw mut ea.arg, false, INT32_MAX as i32);
+        let n: linenr_T = getdigits_int32(&raw mut ea.arg, false, INT32_MAX);
         ea.arg = skipwhite(ea.arg);
         if !ea.args.is_null() {
             // `nvim_cmd` supplies the arguments already split, so the count

@@ -1952,7 +1952,7 @@ unsafe extern "C" fn read_file_or_blob(
                             dest = &raw mut buf as *mut ::core::ffi::c_char;
                         }
                         if readlen as isize
-                            > p.offset_from(&raw mut buf as *mut ::core::ffi::c_char) + 1 as isize
+                            > p.offset_from(&raw mut buf as *mut ::core::ffi::c_char) + 1_isize
                         {
                             memmove(
                                 dest as *mut ::core::ffi::c_void,
@@ -2116,7 +2116,7 @@ pub unsafe extern "C" fn f_resolve(
             }
             q = path_tail(p);
             if q > p && *q as ::core::ffi::c_int == NUL {
-                *p.offset((q.offset_from(p) - 1 as isize) as isize) = NUL as ::core::ffi::c_char;
+                *p.offset(q.offset_from(p) - 1) = NUL as ::core::ffi::c_char;
                 q = path_tail(p);
             }
             if q > p && !path_is_absolute(buf) {

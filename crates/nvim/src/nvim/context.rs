@@ -264,8 +264,8 @@ unsafe extern "C" fn ctx_save_funcs(mut ctx: *mut Context, mut scriptonly: bool)
                 let mut func_body: String_0 = exec_impl(
                     (1 as ::core::ffi::c_int as uint64_t)
                         << ::core::mem::size_of::<uint64_t>()
-                            .wrapping_mul(8 as usize)
-                            .wrapping_sub(1 as usize),
+                            .wrapping_mul(8_usize)
+                            .wrapping_sub(1_usize),
                     cstr_as_string(cmd),
                     &raw mut opts,
                     &raw mut err,

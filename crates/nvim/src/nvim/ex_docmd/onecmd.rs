@@ -133,13 +133,13 @@ pub(crate) unsafe fn shift_cmd_args(eap: *mut exarg_T) {
             ptr::null_mut()
         };
         for i in 0..ea.argc {
-            *ea.args.add(i as usize) = *oldargs.add(i as usize + 1);
-            *ea.arglens.add(i as usize) = *oldarglens.add(i as usize + 1);
+            *ea.args.add(i) = *oldargs.add(i + 1);
+            *ea.arglens.add(i) = *oldarglens.add(i + 1);
         }
         ea.arg = if ea.argc > 0 {
             *ea.args
         } else {
-            (*oldargs).add(*oldarglens as usize)
+            (*oldargs).add(*oldarglens)
         };
 
         xfree(oldargs as *mut c_void);
