@@ -568,7 +568,7 @@
     "crates/nvim/src/nvim/menu.rs": {"cell_ptr": 33, "lines": 2477, "unsafe_lines": 2218},
     "crates/nvim/src/nvim/message.rs": {"cell_ptr": 7, "no_mangle": 2, "unsafe_lines": 369},
     "crates/nvim/src/nvim/message/dialog.rs": {"unsafe_lines": 242},
-    "crates/nvim/src/nvim/message/errors.rs": {"cell_ptr": 6, "no_mangle": 1, "unsafe_lines": 279},
+    "crates/nvim/src/nvim/message/errors.rs": {"cell_ptr": 6, "no_mangle": 1, "unsafe_lines": 269},
     "crates/nvim/src/nvim/message/ext.rs": {"cell_ptr": 1, "unsafe_lines": 98},
     "crates/nvim/src/nvim/message/grid.rs": {"cell_ptr": 78, "unsafe_lines": 317},
     "crates/nvim/src/nvim/message/history.rs": {"no_mangle": 1, "unsafe_lines": 234},

@@ -106,24 +106,31 @@ macro_rules! smsg {
 // a rewrite replaces `semsg_c!(gettext(c"E1: %s".as_ptr()), p)` with
 // `semsg!("E1: {}", …)`, whose format string the compiler checks.
 //
-// One deliberate divergence: the wrappers tested `emsg_not_now()` *before*
-// formatting, and the macros test it in the tail instead, so a suppressed
-// error is now formatted into the (private) scratch buffer and dropped. That
-// keeps the arguments evaluated exactly once, in source order, exactly as the
-// call they replace — the alternative short-circuits argument expressions
-// that the C call always evaluated.
+// Where errors can be suppressed (`semsg`, `siemsg`, `semsg_multiline`) the
+// wrapper tested `emsg_not_now()` *before* formatting, and so does the macro:
+// a suppressed error must cost nothing, and the unit specs assert exactly
+// that by counting allocations across a `emsg_skip`-guarded call. But its
+// caller had already evaluated the arguments by then, so the suppressed arm
+// evaluates them too — each expression appears in both arms and runs in
+// exactly one of them.
 
 /// `semsg()`: report a `printf`-formatted error. Evaluates to `bool`.
 #[macro_export]
 macro_rules! semsg_c {
     ($fmt:expr $(, $arg:expr)* $(,)?) => {{
-        $crate::src::nvim::strings::vim_snprintf(
-            $crate::src::nvim::message::semsg_errbuf(),
-            $crate::src::nvim::message::SEMSG_ERRBUF_LEN,
-            $fmt,
-            $($arg,)*
-        );
-        $crate::src::nvim::message::semsg_finish()
+        let fmt = $fmt;
+        if $crate::src::nvim::message::emsg_not_now() {
+            $(let _ = $arg;)*
+            true
+        } else {
+            $crate::src::nvim::strings::vim_snprintf(
+                $crate::src::nvim::message::semsg_errbuf(),
+                $crate::src::nvim::message::SEMSG_ERRBUF_LEN,
+                fmt,
+                $($arg,)*
+            );
+            $crate::src::nvim::message::semsg_report()
+        }
     }};
 }
 
@@ -142,13 +149,19 @@ macro_rules! siemsg_c {
 macro_rules! semsg_multiline_c {
     ($kind:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {{
         let kind = $kind;
-        $crate::src::nvim::strings::vim_snprintf(
-            $crate::src::nvim::message::semsg_multiline_errbuf(),
-            $crate::src::nvim::message::SEMSG_MULTILINE_ERRBUF_LEN,
-            $fmt,
-            $($arg,)*
-        );
-        $crate::src::nvim::message::semsg_multiline_finish(kind)
+        let fmt = $fmt;
+        if $crate::src::nvim::message::emsg_not_now() {
+            $(let _ = $arg;)*
+            true
+        } else {
+            $crate::src::nvim::strings::vim_snprintf(
+                $crate::src::nvim::message::semsg_multiline_errbuf(),
+                $crate::src::nvim::message::SEMSG_MULTILINE_ERRBUF_LEN,
+                fmt,
+                $($arg,)*
+            );
+            $crate::src::nvim::message::semsg_multiline_report(kind)
+        }
     }};
 }
 

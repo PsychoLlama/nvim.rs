@@ -9,6 +9,10 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Replaced the eight `printf`-style message wrappers (`semsg` and its
+  siblings) with macros across all 724 of their call sites, leaving
+  vimscript's own `printf()` as the only format machinery that is still a C
+  variadic. No message text changes.
 - Rewrote version reporting, covering `:version`, `nvim -v`, the intro
   screen and the `has("nvim-…")`/`has("patch-…")` predicates. `:version`
   now names the port and the version it was built from, and reports the

@@ -388,18 +388,13 @@ pub fn semsg_multiline_errbuf() -> *mut c_char {
 
 /// Report whatever was formatted into [`semsg_errbuf`] as an error. The
 /// second half of [`semsg_c!`](crate::semsg_c); not meant to be called
-/// directly.
+/// directly. The macro has already established that errors are on.
 ///
 /// # Safety
 /// Only that the message state is the main thread's.
 #[doc(hidden)]
-pub unsafe fn semsg_finish() -> bool {
-    unsafe {
-        if emsg_not_now() {
-            return true;
-        }
-        emsg(semsg_errbuf())
-    }
+pub unsafe fn semsg_report() -> bool {
+    unsafe { emsg(semsg_errbuf()) }
 }
 
 /// Report whatever was formatted into [`semsg_multiline_errbuf`] as a
@@ -409,13 +404,8 @@ pub unsafe fn semsg_finish() -> bool {
 /// # Safety
 /// `kind` must be a valid C string.
 #[doc(hidden)]
-pub unsafe fn semsg_multiline_finish(kind: *const c_char) -> bool {
-    unsafe {
-        if emsg_not_now() {
-            return true;
-        }
-        emsg_multiline(semsg_multiline_errbuf(), kind, HLF_E, true)
-    }
+pub unsafe fn semsg_multiline_report(kind: *const c_char) -> bool {
+    unsafe { emsg_multiline(semsg_multiline_errbuf(), kind, HLF_E, true) }
 }
 
 /// An internal error: same as [`emsg`], but skipped when errors are off.
