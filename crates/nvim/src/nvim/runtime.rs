@@ -90,28 +90,22 @@ use crate::src::nvim::types::{
     dictitem_T, estack_T, estack_arg_T, etype_T, exarg_T, expand_T, funccal_entry_T, garray_T,
     handle_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kErrorTypeNone, kFalse, kNone,
     kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
-    kTrue, key_value_pair, linenr_T, list_T, object, object_data as C2Rust_Unnamed, optset_T,
-    proftime_T, pthread_mutex_t, ptrdiff_t, regmatch_T, regprog_T, scid_T, scriptitem_T, sctx_T,
-    size_t, ssize_t, typval_T, typval_vval_union, ufunc_T, uint8_t, uint32_t, uv_mutex_t,
-    varnumber_T, vimconv_T, win_T,
+    kTrue, key_value_pair, linenr_T, list_T, object, object_data, optset_T, proftime_T,
+    pthread_mutex_t, ptrdiff_t, regmatch_T, regprog_T, scid_T, scriptitem_T, sctx_T, size_t,
+    ssize_t, typval_T, typval_vval_union, ufunc_T, uint8_t, uint32_t, uv_mutex_t, varnumber_T,
+    vimconv_T, win_T,
 };
 use crate::src::nvim::usercmd::add_win_cmd_modifiers;
 use crate::{semsg_c, smsg_c};
 pub const kMHExisting: MHPutStatus = 0;
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
-pub const EXPAND_RUNTIME: C2Rust_Unnamed_13 = 51;
-pub const EXPAND_FILES: C2Rust_Unnamed_13 = 2;
+/// `xp_context`: the completion this command line wants.
+pub const EXPAND_RUNTIME: ::core::ffi::c_int = 51;
 pub const kOptValTypeString: OptValType = 2;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const CSTP_FINISH: C2Rust_Unnamed_15 = 32;
+/// `:finish` as a pending control-flow reason, for `report_make_pending`.
+pub const CSTP_FINISH: ::core::ffi::c_int = 32;
 pub const ADDR_LINES: cmd_addr_T = 0;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const WILD_ICASE: C2Rust_Unnamed_16 = 256;
-pub const WILD_SILENT: C2Rust_Unnamed_16 = 64;
-pub const WILD_KEEP_ALL: C2Rust_Unnamed_16 = 32;
-pub const WILD_ADD_SLASH: C2Rust_Unnamed_16 = 16;
-pub const WILD_USE_NL: C2Rust_Unnamed_16 = 4;
-pub const WILD_LIST_NOTFOUND: C2Rust_Unnamed_16 = 1;
+/// `globpath` flags.
+pub const WILD_ADD_SLASH: ::core::ffi::c_int = 16;
 pub const kXDGDataDirs: XDGVarType = 6;
 pub const kXDGConfigDirs: XDGVarType = 5;
 pub const kXDGRuntimeDir: XDGVarType = 4;
@@ -120,11 +114,10 @@ pub const kXDGCacheHome: XDGVarType = 2;
 pub const kXDGDataHome: XDGVarType = 1;
 pub const kXDGConfigHome: XDGVarType = 0;
 pub const kXDGNone: XDGVarType = -1;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const DOCMD_KEYTYPED: C2Rust_Unnamed_18 = 8;
-pub const DOCMD_REPEAT: C2Rust_Unnamed_18 = 4;
-pub const DOCMD_NOWAIT: C2Rust_Unnamed_18 = 2;
-pub const DOCMD_VERBOSE: C2Rust_Unnamed_18 = 1;
+/// `do_cmdline` flags.
+pub const DOCMD_REPEAT: ::core::ffi::c_int = 4;
+pub const DOCMD_NOWAIT: ::core::ffi::c_int = 2;
+pub const DOCMD_VERBOSE: ::core::ffi::c_int = 1;
 pub const ETYPE_AUCMD: etype_T = 3;
 pub const ETYPE_UFUNC: etype_T = 2;
 pub const ETYPE_SCRIPT: etype_T = 1;
@@ -134,16 +127,13 @@ pub const ESTACK_STACK: estack_arg_T = 2;
 pub const ESTACK_SFILE: estack_arg_T = 1;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const EW_NOBREAK: C2Rust_Unnamed_20 = 262144;
-pub const EW_NOTWILD: C2Rust_Unnamed_20 = 1024;
-pub const EW_ADDSLASH: C2Rust_Unnamed_20 = 8;
-pub const EW_NOTFOUND: C2Rust_Unnamed_20 = 4;
-pub const EW_FILE: C2Rust_Unnamed_20 = 2;
-pub const EW_DIR: C2Rust_Unnamed_20 = 1;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const DOSO_VIMRC: C2Rust_Unnamed_21 = 1;
-pub const DOSO_NONE: C2Rust_Unnamed_21 = 0;
+/// `gen_expand_wildcards` flags: what a wildcard expansion may return.
+pub const EW_NOBREAK: ::core::ffi::c_int = 262144;
+pub const EW_FILE: ::core::ffi::c_int = 2;
+pub const EW_DIR: ::core::ffi::c_int = 1;
+/// `do_source`'s `is_vimrc`: whether the file being sourced is the vimrc.
+pub const DOSO_VIMRC: ::core::ffi::c_int = 1;
+pub const DOSO_NONE: ::core::ffi::c_int = 0;
 pub const DIP_DIRFILE: ::core::ffi::c_uint = 512;
 /// `do_in_path` flags: which runtime directories to visit and what to match.
 pub const DIP_AFTER: ::core::ffi::c_uint = 128;
@@ -195,7 +185,7 @@ pub struct CharVec {
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct C2Rust_Unnamed_23 {
+pub struct StringVec {
     pub size: size_t,
     pub capacity: size_t,
     pub items: *mut String_0,
@@ -704,7 +694,7 @@ pub unsafe extern "C" fn set_context_in_runtime_cmd(
         }
         arg = skipwhite(p);
     }
-    (*xp).xp_context = EXPAND_RUNTIME as ::core::ffi::c_int;
+    (*xp).xp_context = EXPAND_RUNTIME;
     (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
 }
 unsafe extern "C" fn source_callback_vim_lua(
@@ -720,7 +710,7 @@ unsafe extern "C" fn source_callback_vim_lua(
             do_source(
                 *fnames.offset(i as isize),
                 false_0 != 0,
-                DOSO_NONE as ::core::ffi::c_int,
+                DOSO_NONE,
                 cookie as *mut ::core::ffi::c_int,
             );
             did_one = true_0 != 0;
@@ -736,7 +726,7 @@ unsafe extern "C" fn source_callback_vim_lua(
             do_source(
                 *fnames.offset(i_0 as isize),
                 false_0 != 0,
-                DOSO_NONE as ::core::ffi::c_int,
+                DOSO_NONE,
                 cookie as *mut ::core::ffi::c_int,
             );
             did_one = true_0 != 0;
@@ -766,7 +756,7 @@ unsafe extern "C" fn source_callback(
             do_source(
                 *fnames.offset(i as isize),
                 false_0 != 0,
-                DOSO_NONE as ::core::ffi::c_int,
+                DOSO_NONE,
                 cookie as *mut ::core::ffi::c_int,
             );
             did_one = true_0 != 0;
@@ -870,11 +860,11 @@ pub unsafe extern "C" fn do_in_path(
                 }
                 let mut ew_flags: ::core::ffi::c_int =
                     (if flags & DIP_DIR as ::core::ffi::c_int != 0 {
-                        EW_DIR as ::core::ffi::c_int
+                        EW_DIR
                     } else {
-                        EW_FILE as ::core::ffi::c_int
+                        EW_FILE
                     }) | (if flags & DIP_DIRFILE as ::core::ffi::c_int != 0 {
-                        EW_DIR as ::core::ffi::c_int | EW_FILE as ::core::ffi::c_int
+                        EW_DIR | EW_FILE
                     } else {
                         0 as ::core::ffi::c_int
                     });
@@ -1055,14 +1045,14 @@ unsafe extern "C" fn do_in_cached_path(
                     }
                     let mut ew_flags: ::core::ffi::c_int =
                         (if flags & DIP_DIR as ::core::ffi::c_int != 0 {
-                            EW_DIR as ::core::ffi::c_int
+                            EW_DIR
                         } else {
-                            EW_FILE as ::core::ffi::c_int
+                            EW_FILE
                         }) | (if flags & DIP_DIRFILE as ::core::ffi::c_int != 0 {
-                            EW_DIR as ::core::ffi::c_int | EW_FILE as ::core::ffi::c_int
+                            EW_DIR | EW_FILE
                         } else {
                             0 as ::core::ffi::c_int
-                        }) | EW_NOBREAK as ::core::ffi::c_int;
+                        }) | EW_NOBREAK;
                     let mut pat: [*mut ::core::ffi::c_char; 1] =
                         [&raw mut buf as *mut ::core::ffi::c_char];
                     did_one = did_one as ::core::ffi::c_int
@@ -1117,7 +1107,7 @@ pub unsafe extern "C" fn runtime_inspect(mut arena: *mut Arena) -> Array {
             key: cstr_as_string(c"path".as_ptr()),
             value: object {
                 type_0: kObjectTypeString,
-                data: C2Rust_Unnamed {
+                data: object_data {
                     string: cstr_as_string((*item).path),
                 },
             },
@@ -1129,7 +1119,7 @@ pub unsafe extern "C" fn runtime_inspect(mut arena: *mut Arena) -> Array {
                 key: cstr_as_string(c"after".as_ptr()),
                 value: object {
                     type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed { boolean: true },
+                    data: object_data { boolean: true },
                 },
             };
         }
@@ -1140,7 +1130,7 @@ pub unsafe extern "C" fn runtime_inspect(mut arena: *mut Arena) -> Array {
                 key: cstr_as_string(c"pack_inserted".as_ptr()),
                 value: object {
                     type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed { boolean: true },
+                    data: object_data { boolean: true },
                 },
             };
         }
@@ -1151,7 +1141,7 @@ pub unsafe extern "C" fn runtime_inspect(mut arena: *mut Arena) -> Array {
                 key: cstr_as_string(c"has_lua".as_ptr()),
                 value: object {
                     type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed {
+                    data: object_data {
                         boolean: (*item).has_lua as ::core::ffi::c_int
                             == kTrue as ::core::ffi::c_int,
                     },
@@ -1164,7 +1154,7 @@ pub unsafe extern "C" fn runtime_inspect(mut arena: *mut Arena) -> Array {
             key: cstr_as_string(c"pos_in_rtp".as_ptr()),
             value: object {
                 type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
+                data: object_data {
                     integer: (*item).pos_in_rtp as Integer,
                 },
             },
@@ -1173,7 +1163,7 @@ pub unsafe extern "C" fn runtime_inspect(mut arena: *mut Arena) -> Array {
         rv.size = rv.size.wrapping_add(1);
         *rv.items.add(c2rust_fresh13) = object {
             type_0: kObjectTypeDict,
-            data: C2Rust_Unnamed { dict: entry },
+            data: object_data { dict: entry },
         };
         i = i.wrapping_add(1);
     }
@@ -1266,7 +1256,7 @@ unsafe extern "C" fn runtime_get_named_common(
                             rv.size = rv.size.wrapping_add(1);
                             *rv.items.add(c2rust_fresh14) = object {
                                 type_0: kObjectTypeString,
-                                data: C2Rust_Unnamed {
+                                data: object_data {
                                     string: arena_string(arena, cstr_as_string(buf)),
                                 },
                             };
@@ -1419,7 +1409,7 @@ unsafe extern "C" fn expand_rtp_entry(
         &raw mut pat as *mut *mut ::core::ffi::c_char,
         &raw mut num_files,
         &raw mut files,
-        EW_DIR as ::core::ffi::c_int | EW_NOBREAK as ::core::ffi::c_int,
+        EW_DIR | EW_NOBREAK,
     ) == OK
     {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -1512,7 +1502,7 @@ unsafe extern "C" fn path_is_after(mut buf: *mut ::core::ffi::c_char, mut buflen
         ) == 0 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn runtime_search_path_build() -> RuntimeSearchPath {
-    let mut pack_entries: C2Rust_Unnamed_23 = C2Rust_Unnamed_23 {
+    let mut pack_entries: StringVec = StringVec {
         size: 0 as size_t,
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<String_0>(),
@@ -2144,7 +2134,7 @@ unsafe extern "C" fn load_pack_plugin(
     gen_expand_wildcards_and_cb(
         1 as ::core::ffi::c_int,
         &raw mut pat,
-        EW_FILE as ::core::ffi::c_int,
+        EW_FILE,
         true_0 != 0,
         Some(
             source_callback_vim_lua
@@ -2169,7 +2159,7 @@ unsafe extern "C" fn load_pack_plugin(
         gen_expand_wildcards_and_cb(
             1 as ::core::ffi::c_int,
             &raw mut pat,
-            EW_FILE as ::core::ffi::c_int,
+            EW_FILE,
             true_0 != 0,
             Some(
                 source_callback_vim_lua
@@ -2295,7 +2285,7 @@ unsafe extern "C" fn pack_has_entries(mut buf: *mut ::core::ffi::c_char) -> bool
         &raw mut pat as *mut *mut ::core::ffi::c_char,
         &raw mut num_files,
         &raw mut files,
-        EW_DIR as ::core::ffi::c_int,
+        EW_DIR,
     ) == OK
     {
         FreeWild(num_files, files);
@@ -2633,7 +2623,7 @@ unsafe extern "C" fn ExpandRTDir_int(
                 break;
             }
             snprintf(buf, buf_len, c"%s*".as_ptr(), pat);
-            glob_flags = WILD_ADD_SLASH as ::core::ffi::c_int;
+            glob_flags = WILD_ADD_SLASH;
             expand_dirs = true_0 != 0;
         }
         xfree(buf as *mut ::core::ffi::c_void);
@@ -3354,7 +3344,7 @@ unsafe extern "C" fn cmd_source(mut fname: *mut ::core::ffi::c_char, mut eap: *m
     } else if do_source(
         fname,
         false_0 != 0,
-        DOSO_NONE as ::core::ffi::c_int,
+        DOSO_NONE,
         ::core::ptr::null_mut::<::core::ffi::c_int>(),
     ) == FAIL
     {
@@ -3544,7 +3534,7 @@ pub unsafe extern "C" fn cmd_source_buffer(eap: *const exarg_T, mut ex_lua: bool
     do_source_ext(
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         false_0 != 0,
-        DOSO_NONE as ::core::ffi::c_int,
+        DOSO_NONE,
         ::core::ptr::null_mut::<::core::ffi::c_int>(),
         eap,
         ex_lua,
@@ -3576,7 +3566,7 @@ pub unsafe extern "C" fn do_source_str(
     return do_source_ext(
         traceback_name,
         false_0 != 0,
-        DOSO_NONE as ::core::ffi::c_int,
+        DOSO_NONE,
         ::core::ptr::null_mut::<::core::ffi::c_int>(),
         ::core::ptr::null::<exarg_T>(),
         false_0 != 0,
@@ -3797,7 +3787,7 @@ unsafe extern "C" fn do_source_ext(
                     }
                     verbose_leave();
                 }
-                if is_vimrc == DOSO_VIMRC as ::core::ffi::c_int {
+                if is_vimrc == DOSO_VIMRC {
                     vimrc_found(fname_exp, c"MYVIMRC".as_ptr() as *mut ::core::ffi::c_char);
                 }
                 cookie.breakpoint = dbg_find_breakpoint(true_0 != 0, fname_exp, 0 as linenr_T);
@@ -3880,7 +3870,7 @@ unsafe extern "C" fn do_source_ext(
                     let mut args: Array = ARRAY_DICT_INIT;
                     let mut args__items: [Object; 3] = [Object {
                         type_0: kObjectTypeNil,
-                        data: C2Rust_Unnamed { boolean: false },
+                        data: object_data { boolean: false },
                     }; 3];
                     args.capacity = 3 as size_t;
                     args.items = &raw mut args__items as *mut Object;
@@ -3888,7 +3878,7 @@ unsafe extern "C" fn do_source_ext(
                     args.size = args.size.wrapping_add(1);
                     *args.items.add(c2rust_fresh0) = object {
                         type_0: kObjectTypeInteger,
-                        data: C2Rust_Unnamed {
+                        data: object_data {
                             integer: (*curbuf.get()).handle as Integer,
                         },
                     };
@@ -3896,7 +3886,7 @@ unsafe extern "C" fn do_source_ext(
                     args.size = args.size.wrapping_add(1);
                     *args.items.add(c2rust_fresh1) = object {
                         type_0: kObjectTypeInteger,
-                        data: C2Rust_Unnamed {
+                        data: object_data {
                             integer: (*eap).line1 as Integer,
                         },
                     };
@@ -3904,7 +3894,7 @@ unsafe extern "C" fn do_source_ext(
                     args.size = args.size.wrapping_add(1);
                     *args.items.add(c2rust_fresh2) = object {
                         type_0: kObjectTypeInteger,
-                        data: C2Rust_Unnamed {
+                        data: object_data {
                             integer: (*eap).line2 as Integer,
                         },
                     };
@@ -3996,9 +3986,7 @@ unsafe extern "C" fn do_source_ext(
                                     -> *mut ::core::ffi::c_char,
                         ),
                         &raw mut cookie as *mut ::core::ffi::c_void,
-                        DOCMD_VERBOSE as ::core::ffi::c_int
-                            | DOCMD_NOWAIT as ::core::ffi::c_int
-                            | DOCMD_REPEAT as ::core::ffi::c_int,
+                        DOCMD_VERBOSE | DOCMD_NOWAIT | DOCMD_REPEAT,
                     );
                 }
                 retval = OK;
@@ -4702,9 +4690,8 @@ pub unsafe extern "C" fn do_finish(mut eap: *mut exarg_T, mut reanimate: bool) {
     let mut idx: ::core::ffi::c_int =
         cleanup_conditionals((*eap).cstack, 0 as ::core::ffi::c_int, true_0);
     if idx >= 0 as ::core::ffi::c_int {
-        (*(*eap).cstack).cs_pending[idx as usize] =
-            CSTP_FINISH as ::core::ffi::c_int as ::core::ffi::c_char;
-        report_make_pending(CSTP_FINISH as ::core::ffi::c_int, NULL_0);
+        (*(*eap).cstack).cs_pending[idx as usize] = CSTP_FINISH as ::core::ffi::c_char;
+        report_make_pending(CSTP_FINISH, NULL_0);
     } else {
         (*(getline_cookie((*eap).ea_getline, (*eap).cookie) as *mut source_cookie_T)).finished =
             true_0 != 0;
