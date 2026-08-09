@@ -116,8 +116,8 @@ pub unsafe extern "C" fn modify_fname(
     let mut has_fullname: bool = false_0 != 0;
     let mut has_homerelative: bool = false_0 != 0;
     loop {
-        if *src.offset(*usedlen as isize) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
-            && *src.offset((*usedlen).wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
+        if *src.add(*usedlen) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
+            && *src.add((*usedlen).wrapping_add(1 as size_t)) as ::core::ffi::c_int
                 == 'p' as ::core::ffi::c_int
         {
             has_fullname = true_0 != 0;
@@ -175,9 +175,8 @@ pub unsafe extern "C" fn modify_fname(
             }
         }
         c = 0;
-        while *src.offset(*usedlen as isize) as ::core::ffi::c_int == ':' as ::core::ffi::c_int && {
-            c = *src.offset((*usedlen).wrapping_add(1 as size_t) as isize) as uint8_t
-                as ::core::ffi::c_int;
+        while *src.add(*usedlen) as ::core::ffi::c_int == ':' as ::core::ffi::c_int && {
+            c = *src.add((*usedlen).wrapping_add(1 as size_t)) as uint8_t as ::core::ffi::c_int;
             c == '.' as ::core::ffi::c_int
                 || c == '~' as ::core::ffi::c_int
                 || c == '8' as ::core::ffi::c_int
@@ -220,7 +219,7 @@ pub unsafe extern "C" fn modify_fname(
                     if path_fnamencmp(p, &raw mut dirname as *mut ::core::ffi::c_char, namelen)
                         == 0 as ::core::ffi::c_int
                     {
-                        p = p.offset(namelen as isize);
+                        p = p.add(namelen);
                         if vim_ispathsep(*p as ::core::ffi::c_int) {
                             while *p as ::core::ffi::c_int != 0
                                 && vim_ispathsep(*p as ::core::ffi::c_int) as ::core::ffi::c_int
@@ -260,8 +259,8 @@ pub unsafe extern "C" fn modify_fname(
         }
         tail = path_tail(*fnamep);
         *fnamelen = strlen(*fnamep);
-        while *src.offset(*usedlen as isize) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
-            && *src.offset((*usedlen).wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
+        while *src.add(*usedlen) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
+            && *src.add((*usedlen).wrapping_add(1 as size_t)) as ::core::ffi::c_int
                 == 'h' as ::core::ffi::c_int
         {
             valid |= VALID_HEAD as ::core::ffi::c_int;
@@ -289,35 +288,35 @@ pub unsafe extern "C" fn modify_fname(
                 }
             }
         }
-        if *src.offset(*usedlen as isize) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
-            && *src.offset((*usedlen).wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
+        if *src.add(*usedlen) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
+            && *src.add((*usedlen).wrapping_add(1 as size_t)) as ::core::ffi::c_int
                 == '8' as ::core::ffi::c_int
         {
             *usedlen = (*usedlen).wrapping_add(2 as size_t);
         }
-        if *src.offset(*usedlen as isize) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
-            && *src.offset((*usedlen).wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
+        if *src.add(*usedlen) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
+            && *src.add((*usedlen).wrapping_add(1 as size_t)) as ::core::ffi::c_int
                 == 't' as ::core::ffi::c_int
         {
             *usedlen = (*usedlen).wrapping_add(2 as size_t);
             *fnamelen = (*fnamelen).wrapping_sub(tail.offset_from(*fnamep) as size_t);
             *fnamep = tail;
         }
-        while *src.offset(*usedlen as isize) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
-            && (*src.offset((*usedlen).wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
+        while *src.add(*usedlen) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
+            && (*src.add((*usedlen).wrapping_add(1 as size_t)) as ::core::ffi::c_int
                 == 'e' as ::core::ffi::c_int
-                || *src.offset((*usedlen).wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
+                || *src.add((*usedlen).wrapping_add(1 as size_t)) as ::core::ffi::c_int
                     == 'r' as ::core::ffi::c_int)
         {
             let is_second_e: bool = *fnamep > tail;
-            if *src.offset((*usedlen).wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
+            if *src.add((*usedlen).wrapping_add(1 as size_t)) as ::core::ffi::c_int
                 == 'e' as ::core::ffi::c_int
                 && is_second_e as ::core::ffi::c_int != 0
             {
                 s = (*fnamep).offset(-(2 as ::core::ffi::c_int as isize));
             } else {
                 s = (*fnamep)
-                    .offset(*fnamelen as isize)
+                    .add(*fnamelen)
                     .offset(-(1 as ::core::ffi::c_int as isize));
             }
             while s > tail {
@@ -328,7 +327,7 @@ pub unsafe extern "C" fn modify_fname(
                 }
                 s = s.offset(-1);
             }
-            if *src.offset((*usedlen).wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
+            if *src.add((*usedlen).wrapping_add(1 as size_t)) as ::core::ffi::c_int
                 == 'e' as ::core::ffi::c_int
             {
                 if s > tail || false && is_second_e as ::core::ffi::c_int != 0 && s == tail {
@@ -346,14 +345,12 @@ pub unsafe extern "C" fn modify_fname(
             }
             *usedlen = (*usedlen).wrapping_add(2 as size_t);
         }
-        if !(*src.offset(*usedlen as isize) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
-            && (*src.offset((*usedlen).wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
+        if !(*src.add(*usedlen) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
+            && (*src.add((*usedlen).wrapping_add(1 as size_t)) as ::core::ffi::c_int
                 == 's' as ::core::ffi::c_int
-                || *src.offset((*usedlen).wrapping_add(1 as size_t) as isize)
-                    as ::core::ffi::c_int
+                || *src.add((*usedlen).wrapping_add(1 as size_t)) as ::core::ffi::c_int
                     == 'g' as ::core::ffi::c_int
-                    && *src.offset((*usedlen).wrapping_add(2 as size_t) as isize)
-                        as ::core::ffi::c_int
+                    && *src.add((*usedlen).wrapping_add(2 as size_t)) as ::core::ffi::c_int
                         == 's' as ::core::ffi::c_int))
         {
             break;
@@ -361,10 +358,8 @@ pub unsafe extern "C" fn modify_fname(
         let mut didit: bool = false_0 != 0;
         let mut flags: *mut ::core::ffi::c_char =
             b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        s = src
-            .offset(*usedlen as isize)
-            .offset(2 as ::core::ffi::c_int as isize);
-        if *src.offset((*usedlen).wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
+        s = src.add(*usedlen).offset(2 as ::core::ffi::c_int as isize);
+        if *src.add((*usedlen).wrapping_add(1 as size_t)) as ::core::ffi::c_int
             == 'g' as ::core::ffi::c_int
         {
             flags = b"g\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
@@ -415,17 +410,17 @@ pub unsafe extern "C" fn modify_fname(
             break;
         }
     }
-    if *src.offset(*usedlen as isize) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
-        && *src.offset((*usedlen).wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
+    if *src.add(*usedlen) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
+        && *src.add((*usedlen).wrapping_add(1 as size_t)) as ::core::ffi::c_int
             == 'S' as ::core::ffi::c_int
     {
-        c = *(*fnamep).offset(*fnamelen as isize) as uint8_t as ::core::ffi::c_int;
+        c = *(*fnamep).add(*fnamelen) as uint8_t as ::core::ffi::c_int;
         if c != NUL {
-            *(*fnamep).offset(*fnamelen as isize) = NUL as ::core::ffi::c_char;
+            *(*fnamep).add(*fnamelen) = NUL as ::core::ffi::c_char;
         }
         p = vim_strsave_shellescape(*fnamep, false_0 != 0, false_0 != 0);
         if c != NUL {
-            *(*fnamep).offset(*fnamelen as isize) = c as ::core::ffi::c_char;
+            *(*fnamep).add(*fnamelen) = c as ::core::ffi::c_char;
         }
         xfree(*bufp as *mut ::core::ffi::c_void);
         *fnamep = p;
@@ -1868,8 +1863,7 @@ unsafe extern "C" fn read_file_or_blob(
                 let mut len: size_t = p.offset_from(start) as size_t;
                 if readlen > 0 as ::core::ffi::c_int && !binary {
                     while len > 0 as size_t
-                        && *start.offset(len.wrapping_sub(1 as size_t) as isize)
-                            as ::core::ffi::c_int
+                        && *start.add(len.wrapping_sub(1 as size_t)) as ::core::ffi::c_int
                             == '\r' as ::core::ffi::c_int
                     {
                         len = len.wrapping_sub(1);
@@ -1903,8 +1897,7 @@ unsafe extern "C" fn read_file_or_blob(
                         start as *const ::core::ffi::c_void,
                         len,
                     );
-                    *s.offset((prevlen as size_t).wrapping_add(len) as isize) =
-                        NUL as ::core::ffi::c_char;
+                    *s.add((prevlen as size_t).wrapping_add(len)) = NUL as ::core::ffi::c_char;
                     prev = ::core::ptr::null_mut::<::core::ffi::c_char>();
                     prevsize = 0 as ptrdiff_t;
                     prevlen = prevsize;
@@ -2184,7 +2177,7 @@ pub unsafe extern "C" fn f_resolve(
             p_len_0.wrapping_add(1 as size_t),
         );
         xstrlcat(
-            cpy.offset(p_len_0 as isize),
+            cpy.add(p_len_0),
             remain,
             (len as size_t).wrapping_add(1 as size_t),
         );
@@ -2246,7 +2239,7 @@ pub unsafe extern "C" fn f_resolve(
         }
     }
     if !has_trailing_pathsep {
-        q = p.offset(strlen(p) as isize);
+        q = p.add(strlen(p));
         if after_pathsep(p, q) != 0 {
             *path_tail_with_sep(p) = NUL as ::core::ffi::c_char;
         }

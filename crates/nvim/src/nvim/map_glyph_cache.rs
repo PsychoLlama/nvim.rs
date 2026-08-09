@@ -105,9 +105,7 @@ pub unsafe extern "C" fn mh_put_glyph(
             key.data as *const ::core::ffi::c_void,
             key.size,
         );
-        *(*set)
-            .keys
-            .offset((pos as size_t).wrapping_add(key.size) as isize) = NUL as ::core::ffi::c_char;
+        *(*set).keys.add((pos as size_t).wrapping_add(key.size)) = NUL as ::core::ffi::c_char;
         *(*h).hash.offset(idx as isize) = pos.wrapping_add(1 as uint32_t);
         return pos;
     } else {

@@ -127,7 +127,7 @@ pub unsafe fn ex_help(mut eap: *mut exarg_T) {
         arg = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     let mut p: *mut ::core::ffi::c_char = arg
-        .offset(strlen(arg) as isize)
+        .add(strlen(arg))
         .offset(-(1 as ::core::ffi::c_int as isize));
     while p > arg
         && ascii_iswhite(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
@@ -448,10 +448,10 @@ unsafe extern "C" fn help_compare(
     mut s2: *const ::core::ffi::c_void,
 ) -> ::core::ffi::c_int {
     let mut p1: *mut ::core::ffi::c_char = (*(s1 as *mut *mut ::core::ffi::c_char))
-        .offset(strlen(*(s1 as *mut *mut ::core::ffi::c_char)) as isize)
+        .add(strlen(*(s1 as *mut *mut ::core::ffi::c_char)))
         .offset(1 as ::core::ffi::c_int as isize);
     let mut p2: *mut ::core::ffi::c_char = (*(s2 as *mut *mut ::core::ffi::c_char))
-        .offset(strlen(*(s2 as *mut *mut ::core::ffi::c_char)) as isize)
+        .add(strlen(*(s2 as *mut *mut ::core::ffi::c_char)))
         .offset(1 as ::core::ffi::c_int as isize);
     let mut cmp: ::core::ffi::c_int = strcmp(p1, p2);
     if cmp != 0 as ::core::ffi::c_int {
@@ -481,7 +481,7 @@ pub unsafe extern "C" fn find_help_tags(
     args.items = &raw mut args__items as *mut Object;
     let c2rust_fresh2 = args.size;
     args.size = args.size.wrapping_add(1);
-    *args.items.offset(c2rust_fresh2 as isize) = object {
+    *args.items.add(c2rust_fresh2) = object {
         type_0: kObjectTypeString,
         data: C2Rust_Unnamed_13 {
             string: cstr_as_string(arg),
@@ -874,7 +874,7 @@ unsafe extern "C" fn helptags_one(
             );
         } else {
             let fname: *const ::core::ffi::c_char = (*files.offset(fi as isize))
-                .offset(dirlen as isize)
+                .add(dirlen)
                 .offset(1 as ::core::ffi::c_int as isize);
             let mut in_example: bool = false_0 != 0;
             while !vim_fgets(IObuff.ptr() as *mut ::core::ffi::c_char, IOSIZE, fd) && !got_int.get()

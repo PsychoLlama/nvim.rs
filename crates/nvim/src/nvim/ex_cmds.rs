@@ -443,7 +443,7 @@ pub unsafe fn do_ascii(mut _eap: *mut exarg_T) {
         off = off.wrapping_add(utf_ptr2len(data) as size_t);
     }
     while off < len {
-        c = utf_ptr2char(data.offset(off as isize));
+        c = utf_ptr2char(data.add(off));
         let mut iobuff_len: size_t = 0 as size_t;
         if off > 0 as size_t {
             let c2rust_fresh0 = iobuff_len;
@@ -460,12 +460,12 @@ pub unsafe fn do_ascii(mut _eap: *mut exarg_T) {
         }
         iobuff_len = iobuff_len.wrapping_add(utf_char2bytes(
             c,
-            (IObuff.ptr() as *mut ::core::ffi::c_char).offset(iobuff_len as isize),
+            (IObuff.ptr() as *mut ::core::ffi::c_char).add(iobuff_len),
         ) as size_t);
         let dig_0 = get_digraph_for_char(c);
         if let Some(dig_0) = &dig_0 {
             vim_snprintf(
-                (IObuff.ptr() as *mut ::core::ffi::c_char).offset(iobuff_len as isize),
+                (IObuff.ptr() as *mut ::core::ffi::c_char).add(iobuff_len),
                 ::core::mem::size_of::<[::core::ffi::c_char; 1025]>().wrapping_sub(iobuff_len),
                 if c < 0x10000 as ::core::ffi::c_int {
                     gettext(
@@ -483,7 +483,7 @@ pub unsafe fn do_ascii(mut _eap: *mut exarg_T) {
             );
         } else {
             vim_snprintf(
-                (IObuff.ptr() as *mut ::core::ffi::c_char).offset(iobuff_len as isize),
+                (IObuff.ptr() as *mut ::core::ffi::c_char).add(iobuff_len),
                 ::core::mem::size_of::<[::core::ffi::c_char; 1025]>().wrapping_sub(iobuff_len),
                 if c < 0x10000 as ::core::ffi::c_int {
                     gettext(b"> %d, Hex %04x, Octal %o\0".as_ptr() as *const ::core::ffi::c_char)
@@ -502,7 +502,7 @@ pub unsafe fn do_ascii(mut _eap: *mut exarg_T) {
             false_0 != 0,
             &raw mut need_clear,
         );
-        off = off.wrapping_add(utf_ptr2len(data.offset(off as isize)) as size_t);
+        off = off.wrapping_add(utf_ptr2len(data.add(off)) as size_t);
     }
     if need_clear {
         msg_clr_eos();
@@ -608,7 +608,7 @@ unsafe extern "C" fn linelen(mut has_tab: *mut ::core::ffi::c_int) -> ::core::ff
         return 0 as ::core::ffi::c_int;
     }
     let mut first: *mut ::core::ffi::c_char = skipwhite(line);
-    last = first.offset(strlen(first) as isize);
+    last = first.add(strlen(first));
     while last > first
         && ascii_iswhite(*last.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
             as ::core::ffi::c_int
@@ -970,13 +970,11 @@ pub unsafe fn ex_sort(mut eap: *mut exarg_T) {
                 lnum_0 = (*eap).line2;
                 i = 0 as size_t;
                 while i < count {
-                    let get_lnum: linenr_T = (*nrs.offset(
-                        (if (*eap).forceit != 0 {
-                            count.wrapping_sub(i).wrapping_sub(1 as size_t)
-                        } else {
-                            i
-                        }) as isize,
-                    ))
+                    let get_lnum: linenr_T = (*nrs.add(if (*eap).forceit != 0 {
+                        count.wrapping_sub(i).wrapping_sub(1 as size_t)
+                    } else {
+                        i
+                    }))
                     .lnum;
                     if get_lnum + (count as linenr_T - 1 as linenr_T) != lnum_0 {
                         change_occurred = true_0 != 0;
@@ -1629,7 +1627,7 @@ pub unsafe extern "C" fn do_bang(
         if ins_prevcmd {
             strcat(t, prevcmd.get());
         }
-        let mut p: *mut ::core::ffi::c_char = t.offset(strlen(t) as isize);
+        let mut p: *mut ::core::ffi::c_char = t.add(strlen(t));
         strcat(t, trailarg);
         xfree(newcmd as *mut ::core::ffi::c_void);
         newcmd = t;
@@ -2112,7 +2110,7 @@ pub unsafe extern "C" fn append_redir(
     opt: *const ::core::ffi::c_char,
     fname: *const ::core::ffi::c_char,
 ) {
-    let end: *mut ::core::ffi::c_char = buf.offset(strlen(buf) as isize);
+    let end: *mut ::core::ffi::c_char = buf.add(strlen(buf));
     let mut p: *const ::core::ffi::c_char = opt;
     loop {
         p = strchr(p, '%' as ::core::ffi::c_int);
@@ -3560,7 +3558,7 @@ pub unsafe fn ex_append(mut eap: *mut exarg_T) {
             }
             p = vim_strchr((*eap).nextcmd, NL);
             if p.is_null() {
-                p = (*eap).nextcmd.offset(strlen((*eap).nextcmd) as isize);
+                p = (*eap).nextcmd.add(strlen((*eap).nextcmd));
             }
             theline = xmemdupz(
                 (*eap).nextcmd as *const ::core::ffi::c_void,
@@ -3966,12 +3964,12 @@ unsafe extern "C" fn sub_grow_buf(
                 *new_start_len as size_t,
             ) as *mut ::core::ffi::c_char;
             memset(
-                (*new_start).offset(prev_new_start_len as isize) as *mut ::core::ffi::c_void,
+                (*new_start).add(prev_new_start_len) as *mut ::core::ffi::c_void,
                 0 as ::core::ffi::c_int,
                 added_len,
             );
         }
-        new_end = (*new_start).offset(len as isize);
+        new_end = (*new_start).add(len);
     }
     return new_end;
 }
@@ -4936,8 +4934,7 @@ unsafe extern "C" fn do_sub(
                                 };
                                 let c2rust_fresh9 = line_matches.size;
                                 line_matches.size = line_matches.size.wrapping_add(1);
-                                let mut data: *mut LineData =
-                                    line_matches.items.offset(c2rust_fresh9 as isize);
+                                let mut data: *mut LineData = line_matches.items.add(c2rust_fresh9);
                                 (*data).start_col = start_col;
                                 (*data).start = start;
                                 (*data).end = end;
@@ -4987,8 +4984,7 @@ unsafe extern "C" fn do_sub(
                         ml_replace(lnum, new_start, true_0 != 0);
                         let mut match_idx: size_t = 0 as size_t;
                         while match_idx < line_matches.size {
-                            let mut match_0: *mut LineData =
-                                line_matches.items.offset(match_idx as isize);
+                            let mut match_0: *mut LineData = line_matches.items.add(match_idx);
                             extmark_splice(
                                 curbuf.get(),
                                 (*match_0).lnum_before as ::core::ffi::c_int
@@ -5066,13 +5062,12 @@ unsafe extern "C" fn do_sub(
                             let mut match_lines: linenr_T =
                                 current_match.end.lnum - current_match.start.lnum + 1 as linenr_T;
                             if preview_lines.subresults.size > 0 as size_t {
-                                let mut last: linenr_T = (*preview_lines.subresults.items.offset(
+                                let mut last: linenr_T = (*preview_lines.subresults.items.add(
                                     preview_lines
                                         .subresults
                                         .size
                                         .wrapping_sub(0 as size_t)
-                                        .wrapping_sub(1 as size_t)
-                                        as isize,
+                                        .wrapping_sub(1 as size_t),
                                 ))
                                 .end
                                 .lnum;
@@ -5105,10 +5100,7 @@ unsafe extern "C" fn do_sub(
                             let c2rust_fresh10 = preview_lines.subresults.size;
                             preview_lines.subresults.size =
                                 preview_lines.subresults.size.wrapping_add(1);
-                            *preview_lines
-                                .subresults
-                                .items
-                                .offset(c2rust_fresh10 as isize) = current_match;
+                            *preview_lines.subresults.items.add(c2rust_fresh10) = current_match;
                         }
                         break;
                     }
@@ -5117,12 +5109,12 @@ unsafe extern "C" fn do_sub(
                     let mut match_lines_0: linenr_T =
                         current_match.end.lnum - current_match.start.lnum + 1 as linenr_T;
                     if preview_lines.subresults.size > 0 as size_t {
-                        let mut last_0: linenr_T = (*preview_lines.subresults.items.offset(
+                        let mut last_0: linenr_T = (*preview_lines.subresults.items.add(
                             preview_lines
                                 .subresults
                                 .size
                                 .wrapping_sub(0 as size_t)
-                                .wrapping_sub(1 as size_t) as isize,
+                                .wrapping_sub(1 as size_t),
                         ))
                         .end
                         .lnum;
@@ -5154,10 +5146,7 @@ unsafe extern "C" fn do_sub(
                     };
                     let c2rust_fresh11 = preview_lines.subresults.size;
                     preview_lines.subresults.size = preview_lines.subresults.size.wrapping_add(1);
-                    *preview_lines
-                        .subresults
-                        .items
-                        .offset(c2rust_fresh11 as isize) = current_match;
+                    *preview_lines.subresults.items.add(c2rust_fresh11) = current_match;
                 }
                 line_breakcheck();
             }
@@ -5672,7 +5661,7 @@ unsafe extern "C" fn show_sub(
     );
     let mut i: size_t = 0 as size_t;
     while i < lines.subresults.size {
-        let mut curres: SubResult = *lines.subresults.items.offset(i as isize);
+        let mut curres: SubResult = *lines.subresults.items.add(i);
         if curres.start.lnum >= old_cusr.lnum {
             (*curwin.get()).w_cursor.lnum = curres.start.lnum;
             (*curwin.get()).w_cursor.col = curres.start.col;
@@ -5689,12 +5678,12 @@ unsafe extern "C" fn show_sub(
         cmdpreview_buf = buflist_findnr(cmdpreview_bufnr as ::core::ffi::c_int);
         debug_assert!(!cmdpreview_buf.is_null(), "cmdpreview_buf != NULL");
         if lines.subresults.size > 0 as size_t {
-            let mut last_match: SubResult = *lines.subresults.items.offset(
+            let mut last_match: SubResult = *lines.subresults.items.add(
                 lines
                     .subresults
                     .size
                     .wrapping_sub(0 as size_t)
-                    .wrapping_sub(1 as size_t) as isize,
+                    .wrapping_sub(1 as size_t),
             );
             let mut highest_lnum: linenr_T = if last_match.start.lnum > last_match.end.lnum {
                 last_match.start.lnum
@@ -5715,7 +5704,7 @@ unsafe extern "C" fn show_sub(
     let mut next_linenr: linenr_T = 0 as linenr_T;
     let mut matchidx: size_t = 0 as size_t;
     while matchidx < lines.subresults.size {
-        let mut match_0: SubResult = *lines.subresults.items.offset(matchidx as isize);
+        let mut match_0: SubResult = *lines.subresults.items.add(matchidx);
         if !cmdpreview_buf.is_null() {
             let mut p_start: lpos_T = lpos_T {
                 lnum: 0 as linenr_T,

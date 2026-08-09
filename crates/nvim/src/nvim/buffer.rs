@@ -1090,7 +1090,7 @@ unsafe extern "C" fn free_buffer(mut buf: *mut buf_T) {
 unsafe extern "C" fn clear_wininfo(mut buf: *mut buf_T) {
     let mut i: size_t = 0 as size_t;
     while i < (*buf).b_wininfo.size {
-        free_wininfo(*(*buf).b_wininfo.items.offset(i as isize));
+        free_wininfo(*(*buf).b_wininfo.items.add(i));
         i = i.wrapping_add(1);
     }
     (*buf).b_wininfo.size = 0 as size_t;
@@ -2264,7 +2264,7 @@ pub unsafe extern "C" fn buflist_new(
     };
     let c2rust_fresh0 = (*buf).b_wininfo.size;
     (*buf).b_wininfo.size = (*buf).b_wininfo.size.wrapping_add(1);
-    let c2rust_lvalue_ptr = &raw mut *(*buf).b_wininfo.items.offset(c2rust_fresh0 as isize);
+    let c2rust_lvalue_ptr = &raw mut *(*buf).b_wininfo.items.add(c2rust_fresh0);
     *c2rust_lvalue_ptr = curwin_info;
     if buf == curbuf.get() {
         free_buffer_stuff(buf, kBffInitChangedtick as ::core::ffi::c_int);
@@ -2688,7 +2688,7 @@ pub unsafe extern "C" fn buflist_findpat(
             return -1 as ::core::ffi::c_int;
         }
         let mut patend: *mut ::core::ffi::c_char = pat
-            .offset(strlen(pat) as isize)
+            .add(strlen(pat))
             .offset(-(1 as ::core::ffi::c_int as isize));
         let mut toggledollar: bool =
             patend > pat && *patend as ::core::ffi::c_int == '$' as ::core::ffi::c_int;
@@ -3059,7 +3059,7 @@ pub unsafe extern "C" fn buflist_setfpos(
     let mut i: size_t = 0;
     i = 0 as size_t;
     while i < (*buf).b_wininfo.size {
-        wip = *(*buf).b_wininfo.items.offset(i as isize);
+        wip = *(*buf).b_wininfo.items.add(i);
         if (*wip).wi_win == win {
             break;
         }
@@ -3075,11 +3075,8 @@ pub unsafe extern "C" fn buflist_setfpos(
         (*buf).b_wininfo.size = (*buf).b_wininfo.size.wrapping_sub(1 as size_t);
         (i < (*buf).b_wininfo.size
             && !memmove(
-                (*buf).b_wininfo.items.offset(i as isize) as *mut ::core::ffi::c_void,
-                (*buf)
-                    .b_wininfo
-                    .items
-                    .offset(i.wrapping_add(1 as size_t) as isize)
+                (*buf).b_wininfo.items.add(i) as *mut ::core::ffi::c_void,
+                (*buf).b_wininfo.items.add(i.wrapping_add(1 as size_t))
                     as *const ::core::ffi::c_void,
                 (*buf)
                     .b_wininfo
@@ -3166,7 +3163,7 @@ unsafe extern "C" fn find_wininfo(
 ) -> *mut WinInfo {
     let mut i: size_t = 0 as size_t;
     while i < (*buf).b_wininfo.size {
-        let mut wip: *mut WinInfo = *(*buf).b_wininfo.items.offset(i as isize);
+        let mut wip: *mut WinInfo = *(*buf).b_wininfo.items.add(i);
         if (*wip).wi_win == curwin.get()
             && (!skip_diff_buffer || !wininfo_other_tab_diff(wip))
             && (!need_options || (*wip).wi_optset as ::core::ffi::c_int != 0)
@@ -3178,7 +3175,7 @@ unsafe extern "C" fn find_wininfo(
     if skip_diff_buffer {
         let mut i_0: size_t = 0 as size_t;
         while i_0 < (*buf).b_wininfo.size {
-            let mut wip_0: *mut WinInfo = *(*buf).b_wininfo.items.offset(i_0 as isize);
+            let mut wip_0: *mut WinInfo = *(*buf).b_wininfo.items.add(i_0);
             if !wininfo_other_tab_diff(wip_0)
                 && (!need_options
                     || (*wip_0).wi_optset as ::core::ffi::c_int != 0
@@ -3732,11 +3729,11 @@ pub unsafe extern "C" fn fileinfo(
     }
     let c2rust_fresh6 = bufferlen;
     bufferlen = bufferlen.wrapping_add(1);
-    *buffer.offset(c2rust_fresh6 as isize) = '"' as ::core::ffi::c_char;
+    *buffer.add(c2rust_fresh6) = '"' as ::core::ffi::c_char;
     let mut name: *mut ::core::ffi::c_char = buf_spname(curbuf.get());
     if !name.is_null() {
         bufferlen = bufferlen.wrapping_add(vim_snprintf_safelen(
-            buffer.offset(bufferlen as isize),
+            buffer.add(bufferlen),
             (IOSIZE as size_t).wrapping_sub(bufferlen),
             b"%s\0".as_ptr() as *const ::core::ffi::c_char,
             name,
@@ -3754,15 +3751,15 @@ pub unsafe extern "C" fn fileinfo(
                 ::core::ptr::null_mut::<buf_T>()
             },
             name,
-            buffer.offset(bufferlen as isize),
+            buffer.add(bufferlen),
             (IOSIZE as size_t).wrapping_sub(bufferlen),
             true_0 != 0,
         );
-        bufferlen = bufferlen.wrapping_add(strlen(buffer.offset(bufferlen as isize)));
+        bufferlen = bufferlen.wrapping_add(strlen(buffer.add(bufferlen)));
     }
     let mut dontwrite: bool = bt_dontwrite(curbuf.get());
     bufferlen = bufferlen.wrapping_add(vim_snprintf_safelen(
-        buffer.offset(bufferlen as isize),
+        buffer.add(bufferlen),
         (IOSIZE as size_t).wrapping_sub(bufferlen),
         b"\"%s%s%s%s%s%s\0".as_ptr() as *const ::core::ffi::c_char,
         if curbufIsChanged() as ::core::ffi::c_int != 0 {
@@ -3812,14 +3809,14 @@ pub unsafe extern "C" fn fileinfo(
     ));
     if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
         bufferlen = bufferlen.wrapping_add(vim_snprintf_safelen(
-            buffer.offset(bufferlen as isize),
+            buffer.add(bufferlen),
             (IOSIZE as size_t).wrapping_sub(bufferlen),
             b"%s\0".as_ptr() as *const ::core::ffi::c_char,
             gettext(no_lines_msg.ptr() as *mut ::core::ffi::c_char),
         ));
     } else if p_ru.get() != 0 {
         bufferlen = bufferlen.wrapping_add(vim_snprintf_safelen(
-            buffer.offset(bufferlen as isize),
+            buffer.add(bufferlen),
             (IOSIZE as size_t).wrapping_sub(bufferlen),
             ngettext(
                 b"%ld line --%d%%--\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3834,7 +3831,7 @@ pub unsafe extern "C" fn fileinfo(
         ));
     } else {
         bufferlen = bufferlen.wrapping_add(vim_snprintf_safelen(
-            buffer.offset(bufferlen as isize),
+            buffer.add(bufferlen),
             (IOSIZE as size_t).wrapping_sub(bufferlen),
             gettext(b"line %ld of %ld --%d%%-- col \0".as_ptr() as *const ::core::ffi::c_char),
             (*curwin.get()).w_cursor.lnum as int64_t,
@@ -3846,7 +3843,7 @@ pub unsafe extern "C" fn fileinfo(
         ));
         validate_virtcol(curwin.get());
         bufferlen = bufferlen.wrapping_add(col_print(
-            buffer.offset(bufferlen as isize),
+            buffer.add(bufferlen),
             (IOSIZE as size_t).wrapping_sub(bufferlen),
             (*curwin.get()).w_cursor.col as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
             (*curwin.get()).w_virtcol as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
@@ -3854,7 +3851,7 @@ pub unsafe extern "C" fn fileinfo(
     }
     append_arg_number(
         curwin.get(),
-        buffer.offset(bufferlen as isize),
+        buffer.add(bufferlen),
         (IOSIZE as size_t).wrapping_sub(bufferlen),
     );
     if dont_truncate {
@@ -4464,7 +4461,7 @@ unsafe extern "C" fn chk_modeline(
     let mut linecopy: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     linecopy = xstrnsave(s, len);
     s = linecopy;
-    line_end = s.offset(len as isize);
+    line_end = s.add(len);
     estack_push(
         ETYPE_MODELINE,
         b"modelines\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4927,7 +4924,7 @@ pub unsafe extern "C" fn read_buffer_into(
     loop {
         if lplen == 0 as size_t {
             len = 0 as size_t;
-        } else if *lp.offset(written as isize) as ::core::ffi::c_int == NL {
+        } else if *lp.add(written) as ::core::ffi::c_int == NL {
             len = 1 as size_t;
             if (*sb).size == (*sb).capacity {
                 (*sb).capacity = if (*sb).capacity != 0 {
@@ -4943,13 +4940,13 @@ pub unsafe extern "C" fn read_buffer_into(
             };
             let c2rust_fresh7 = (*sb).size;
             (*sb).size = (*sb).size.wrapping_add(1);
-            *(*sb).items.offset(c2rust_fresh7 as isize) = '\0' as ::core::ffi::c_char;
+            *(*sb).items.add(c2rust_fresh7) = '\0' as ::core::ffi::c_char;
         } else {
-            let mut s: *mut ::core::ffi::c_char = vim_strchr(lp.offset(written as isize), NL);
+            let mut s: *mut ::core::ffi::c_char = vim_strchr(lp.add(written), NL);
             len = if s.is_null() {
                 lplen.wrapping_sub(written)
             } else {
-                s.offset_from(lp.offset(written as isize)) as size_t
+                s.offset_from(lp.add(written)) as size_t
             };
             if len > 0 as size_t {
                 if (*sb).capacity < (*sb).size.wrapping_add(len) {
@@ -4968,8 +4965,8 @@ pub unsafe extern "C" fn read_buffer_into(
                 }
                 assert!(!(*sb).items.is_null(), "(*sb).items");
                 memcpy(
-                    (*sb).items.offset((*sb).size as isize) as *mut ::core::ffi::c_void,
-                    lp.offset(written as isize) as *const ::core::ffi::c_void,
+                    (*sb).items.add((*sb).size) as *mut ::core::ffi::c_void,
+                    lp.add(written) as *const ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(len),
                 );
                 (*sb).size = (*sb).size.wrapping_add(len);
@@ -4995,7 +4992,7 @@ pub unsafe extern "C" fn read_buffer_into(
                 };
                 let c2rust_fresh8 = (*sb).size;
                 (*sb).size = (*sb).size.wrapping_add(1);
-                *(*sb).items.offset(c2rust_fresh8 as isize) = '\n' as ::core::ffi::c_char;
+                *(*sb).items.add(c2rust_fresh8) = '\n' as ::core::ffi::c_char;
             }
             lnum += 1;
             if lnum > end {

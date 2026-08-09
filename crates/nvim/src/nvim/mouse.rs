@@ -2110,7 +2110,7 @@ unsafe extern "C" fn mouse_check_grid(
     }
     let off: size_t =
         (*(*gp).line_offset.offset(click_row as isize)).wrapping_add(click_col as size_t);
-    let mut col_from_screen: colnr_T = *(*gp).vcols.offset(off as isize);
+    let mut col_from_screen: colnr_T = *(*gp).vcols.add(off);
     if col_from_screen >= 0 as ::core::ffi::c_int {
         *vcolp = col_from_screen;
     }

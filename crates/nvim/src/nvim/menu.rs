@@ -1336,7 +1336,7 @@ pub unsafe extern "C" fn get_menu_names(
                 && menu_is_separator((*menu.get()).dname) as ::core::ffi::c_int != 0
             || *(*menu.get())
                 .dname
-                .offset(strlen((*menu.get()).dname).wrapping_sub(1 as size_t) as isize)
+                .add(strlen((*menu.get()).dname).wrapping_sub(1 as size_t))
                 as ::core::ffi::c_int
                 == '.' as ::core::ffi::c_int)
     {
@@ -1607,14 +1607,13 @@ unsafe extern "C" fn popup_mode_name(
     let mut p: *mut ::core::ffi::c_char = xstrnsave(name, len.wrapping_add(mode_chars_len));
     memmove(
         p.offset(5 as ::core::ffi::c_int as isize)
-            .offset(mode_chars_len as isize) as *mut ::core::ffi::c_void,
+            .add(mode_chars_len) as *mut ::core::ffi::c_void,
         p.offset(5 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
         len.wrapping_sub(4 as size_t),
     );
     let mut i: size_t = 0 as size_t;
     while i < mode_chars_len {
-        *p.offset((5 as size_t).wrapping_add(i) as isize) =
-            *(*menu_mode_chars.ptr())[idx as usize].offset(i as isize);
+        *p.add((5 as size_t).wrapping_add(i)) = *(*menu_mode_chars.ptr())[idx as usize].add(i);
         i = i.wrapping_add(1);
     }
     return p;
@@ -1686,7 +1685,7 @@ pub unsafe extern "C" fn menu_is_toolbar(name: *const ::core::ffi::c_char) -> bo
 pub unsafe extern "C" fn menu_is_separator(mut name: *mut ::core::ffi::c_char) -> bool {
     return *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '-' as ::core::ffi::c_int
-        && *name.offset(strlen(name).wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
+        && *name.add(strlen(name).wrapping_sub(1 as size_t)) as ::core::ffi::c_int
             == '-' as ::core::ffi::c_int;
 }
 unsafe extern "C" fn menu_is_hidden(mut name: *mut ::core::ffi::c_char) -> bool {

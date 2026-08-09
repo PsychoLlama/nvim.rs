@@ -273,12 +273,12 @@ pub unsafe extern "C" fn get_exception_string(
             );
             strcpy(ret.offset(4 as ::core::ffi::c_int as isize), cmdname);
             strcpy(
-                ret.offset((4 as size_t).wrapping_add(cmdlen) as isize),
+                ret.add((4 as size_t).wrapping_add(cmdlen)),
                 b"):\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             );
             val = ret
                 .offset(4 as ::core::ffi::c_int as isize)
-                .offset(cmdlen as isize)
+                .add(cmdlen)
                 .offset(2 as ::core::ffi::c_int as isize);
         } else {
             ret = xstrnsave(
@@ -326,7 +326,7 @@ pub unsafe extern "C" fn get_exception_string(
                     strcat(val, p);
                     *p.offset(-2 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
                     snprintf(
-                        val.offset(strlen(p) as isize),
+                        val.add(strlen(p)),
                         strlen(b" (%s)\0".as_ptr() as *const ::core::ffi::c_char),
                         b" (%s)\0".as_ptr() as *const ::core::ffi::c_char,
                         mesg.offset(1 as ::core::ffi::c_int as isize),

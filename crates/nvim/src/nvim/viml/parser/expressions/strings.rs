@@ -21,14 +21,10 @@ pub(super) unsafe extern "C" fn parse_quoted_string(
     token: LexExprToken,
     is_invalid: bool,
 ) {
-    let pline: ParserLine = *(*pstate)
-        .reader
-        .lines
-        .items
-        .offset(token.start.line as isize);
-    let s: *const ::core::ffi::c_char = pline.data.offset(token.start.col as isize);
+    let pline: ParserLine = *(*pstate).reader.lines.items.add(token.start.line);
+    let s: *const ::core::ffi::c_char = pline.data.add(token.start.col);
     let e: *const ::core::ffi::c_char = s
-        .offset(token.len as isize)
+        .add(token.len)
         .offset(-(token.data.str.closed as ::core::ffi::c_int as isize));
     let mut p: *const ::core::ffi::c_char = s.offset(1 as ::core::ffi::c_int as isize);
     let is_double: bool = token.type_0 == kExprLexDoubleQuotedString;
@@ -99,7 +95,7 @@ pub(super) unsafe extern "C" fn parse_quoted_string(
                         p as *const ::core::ffi::c_void,
                         chunk_e_0.offset_from(p) as size_t,
                     );
-                    v_p = v_p.offset((chunk_e_0.offset_from(p) as size_t).wrapping_add(1) as isize);
+                    v_p = v_p.add((chunk_e_0.offset_from(p) as size_t).wrapping_add(1));
                     *v_p.offset(-1 as ::core::ffi::c_int as isize) = '\'' as ::core::ffi::c_char;
                     p = chunk_e_0.offset(2 as ::core::ffi::c_int as isize);
                 }
@@ -230,7 +226,7 @@ pub(super) unsafe extern "C" fn parse_quoted_string(
                         p as *const ::core::ffi::c_void,
                         chunk_e_1.offset_from(p) as size_t,
                     );
-                    v_p_0 = v_p_0.offset(chunk_e_1.offset_from(p) as size_t as isize);
+                    v_p_0 = v_p_0.add(chunk_e_1.offset_from(p) as size_t);
                     p = chunk_e_1.offset(1 as ::core::ffi::c_int as isize);
                     if p == e {
                         let c2rust_fresh37 = v_p_0;
@@ -391,7 +387,7 @@ pub(super) unsafe extern "C" fn parse_quoted_string(
                                 )
                                     as size_t;
                                 if special_len != 0 {
-                                    v_p_0 = v_p_0.offset(special_len as isize);
+                                    v_p_0 = v_p_0.add(special_len);
                                 } else {
                                     is_unknown = true;
                                     mb_copy_char(&raw mut p, &raw mut v_p_0);

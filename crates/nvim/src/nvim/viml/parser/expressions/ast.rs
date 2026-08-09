@@ -493,11 +493,11 @@ pub(super) unsafe extern "C" fn east_set_error(
     if !(*ret_ast_err).msg.is_null() {
         return;
     }
-    let pline: ParserLine = *(*pstate).reader.lines.items.offset(start.line as isize);
+    let pline: ParserLine = *(*pstate).reader.lines.items.add(start.line);
     (*ret_ast_err).msg = msg;
     (*ret_ast_err).arg_len = pline.size.wrapping_sub(start.col) as ::core::ffi::c_int;
     (*ret_ast_err).arg = if !pline.data.is_null() {
-        pline.data.offset(start.col as isize)
+        pline.data.add(start.col)
     } else {
         ::core::ptr::null::<::core::ffi::c_char>()
     };

@@ -521,7 +521,7 @@ unsafe fn nv_K_getcmd(
             *buflen = snprintf(buf, bufsize, c"%s ".as_ptr(), kp) as size_t;
             if (*cap).count0 != 0 {
                 *buflen += snprintf(
-                    buf.offset(*buflen as isize),
+                    buf.add(*buflen),
                     bufsize - *buflen,
                     c"%ld ".as_ptr(),
                     (*cap).count0 as int64_t,
@@ -556,29 +556,16 @@ unsafe fn nv_K_getcmd(
             ) as size_t;
         }
         do_cmdline_cmd(c"tabnew".as_ptr());
-        *buflen += snprintf(
-            buf.offset(*buflen as isize),
-            bufsize - *buflen,
-            c"terminal ".as_ptr(),
-        ) as size_t;
+        *buflen += snprintf(buf.add(*buflen), bufsize - *buflen, c"terminal ".as_ptr()) as size_t;
         if (*cap).count0 == 0 && isman_s {
             // `man -s` with no section is just `man`.
-            *buflen += snprintf(
-                buf.offset(*buflen as isize),
-                bufsize - *buflen,
-                c"man ".as_ptr(),
-            ) as size_t;
+            *buflen += snprintf(buf.add(*buflen), bufsize - *buflen, c"man ".as_ptr()) as size_t;
         } else {
-            *buflen += snprintf(
-                buf.offset(*buflen as isize),
-                bufsize - *buflen,
-                c"%s ".as_ptr(),
-                kp,
-            ) as size_t;
+            *buflen += snprintf(buf.add(*buflen), bufsize - *buflen, c"%s ".as_ptr(), kp) as size_t;
         }
         if (*cap).count0 != 0 && (isman || isman_s) {
             *buflen += snprintf(
-                buf.offset(*buflen as isize),
+                buf.add(*buflen),
                 bufsize - *buflen,
                 c"%ld ".as_ptr(),
                 (*cap).count0 as int64_t,
@@ -808,18 +795,18 @@ pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
             xfree(owned as *mut c_void);
             let plen = strlen(quoted);
             buf = xrealloc(buf as *mut c_void, buflen + plen + 1) as *mut c_char;
-            strcpy(buf.offset(buflen as isize), quoted);
+            strcpy(buf.add(buflen), quoted);
             buflen += plen;
             xfree(quoted as *mut c_void);
         } else {
             let escapes = ident_escapes(cmdchar, tag_cmd);
-            let end = append_escaped(buf.offset(buflen as isize), &mut word, n, escapes);
+            let end = append_escaped(buf.add(buflen), &mut word, n, escapes);
             buflen = end.offset_from(buf) as size_t;
         }
 
         if cmdchar == '*' as c_int || cmdchar == '#' as c_int {
             if !g_cmd && vim_iswordp(mb_prevptr(get_cursor_line_ptr(), word)) {
-                strcpy(buf.offset(buflen as isize), c"\\>".as_ptr() as *mut c_char);
+                strcpy(buf.add(buflen), c"\\>".as_ptr() as *mut c_char);
                 buflen += c"\\>".count_bytes() as size_t;
             }
             // The search goes into the history as if it had been typed.

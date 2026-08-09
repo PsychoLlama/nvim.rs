@@ -447,7 +447,7 @@ pub unsafe extern "C" fn win_float_remove(mut bang: bool, mut count: ::core::ffi
         };
         let c2rust_fresh0 = float_win_arr.size;
         float_win_arr.size = float_win_arr.size.wrapping_add(1);
-        let c2rust_lvalue_ptr = &raw mut *float_win_arr.items.offset(c2rust_fresh0 as isize);
+        let c2rust_lvalue_ptr = &raw mut *float_win_arr.items.add(c2rust_fresh0);
         *c2rust_lvalue_ptr = wp;
         wp = (*wp).w_prev;
     }
@@ -467,7 +467,7 @@ pub unsafe extern "C" fn win_float_remove(mut bang: bool, mut count: ::core::ffi
     }
     let mut i: size_t = 0 as size_t;
     while i < float_win_arr.size {
-        let mut wp_0: *mut win_T = *float_win_arr.items.offset(i as isize);
+        let mut wp_0: *mut win_T = *float_win_arr.items.add(i);
         if win_valid(wp_0) as ::core::ffi::c_int != 0
             && win_close(wp_0, false_0 != 0, false_0 != 0) == FAIL
         {

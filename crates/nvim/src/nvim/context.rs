@@ -78,11 +78,11 @@ pub unsafe extern "C" fn ctx_size() -> size_t {
 }
 pub unsafe extern "C" fn ctx_get(mut index: size_t) -> *mut Context {
     if index < (*ctx_stack.ptr()).size {
-        return (*ctx_stack.ptr()).items.offset(
+        return (*ctx_stack.ptr()).items.add(
             (*ctx_stack.ptr())
                 .size
                 .wrapping_sub(index)
-                .wrapping_sub(1 as size_t) as isize,
+                .wrapping_sub(1 as size_t),
         );
     }
     return ::core::ptr::null_mut::<Context>();
@@ -110,7 +110,7 @@ pub unsafe extern "C" fn ctx_save(mut ctx: *mut Context, flags: ::core::ffi::c_i
         };
         let c2rust_fresh0 = (*ctx_stack.ptr()).size;
         (*ctx_stack.ptr()).size = (*ctx_stack.ptr()).size.wrapping_add(1);
-        *(*ctx_stack.ptr()).items.offset(c2rust_fresh0 as isize) = Context {
+        *(*ctx_stack.ptr()).items.add(c2rust_fresh0) = Context {
             regs: String_0 {
                 data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 size: 0 as size_t,
@@ -133,11 +133,11 @@ pub unsafe extern "C" fn ctx_save(mut ctx: *mut Context, flags: ::core::ffi::c_i
                 items: ::core::ptr::null_mut::<Object>(),
             },
         };
-        ctx = (*ctx_stack.ptr()).items.offset(
+        ctx = (*ctx_stack.ptr()).items.add(
             (*ctx_stack.ptr())
                 .size
                 .wrapping_sub(0 as size_t)
-                .wrapping_sub(1 as size_t) as isize,
+                .wrapping_sub(1 as size_t),
         );
     }
     if flags & kCtxRegs as ::core::ffi::c_int != 0 {
@@ -165,9 +165,7 @@ pub unsafe extern "C" fn ctx_restore(mut ctx: *mut Context, flags: ::core::ffi::
             return false_0 != 0;
         }
         (*ctx_stack.ptr()).size = (*ctx_stack.ptr()).size.wrapping_sub(1);
-        ctx = (*ctx_stack.ptr())
-            .items
-            .offset((*ctx_stack.ptr()).size as isize);
+        ctx = (*ctx_stack.ptr()).items.add((*ctx_stack.ptr()).size);
         free_ctx = true_0 != 0;
     }
     let mut op_shada: OptVal = get_option_value(kOptShada, OPT_GLOBAL as ::core::ffi::c_int);
@@ -297,7 +295,7 @@ unsafe extern "C" fn ctx_save_funcs(mut ctx: *mut Context, mut scriptonly: bool)
                     };
                     let c2rust_fresh1 = (*ctx).funcs.size;
                     (*ctx).funcs.size = (*ctx).funcs.size.wrapping_add(1);
-                    *(*ctx).funcs.items.offset(c2rust_fresh1 as isize) = object {
+                    *(*ctx).funcs.items.add(c2rust_fresh1) = object {
                         type_0: kObjectTypeString,
                         data: C2Rust_Unnamed_0 { string: func_body },
                     };
@@ -312,7 +310,7 @@ unsafe extern "C" fn ctx_save_funcs(mut ctx: *mut Context, mut scriptonly: bool)
 unsafe extern "C" fn ctx_restore_funcs(mut ctx: *mut Context) {
     let mut i: size_t = 0 as size_t;
     while i < (*ctx).funcs.size {
-        do_cmdline_cmd((*(*ctx).funcs.items.offset(i as isize)).data.string.data);
+        do_cmdline_cmd((*(*ctx).funcs.items.add(i)).data.string.data);
         i = i.wrapping_add(1);
     }
 }
@@ -357,7 +355,7 @@ pub unsafe extern "C" fn ctx_to_dict(mut ctx: *mut Context, mut arena: *mut Aren
     let mut rv: Dict = arena_dict(arena, 5 as size_t);
     let c2rust_fresh2 = rv.size;
     rv.size = rv.size.wrapping_add(1);
-    *rv.items.offset(c2rust_fresh2 as isize) = key_value_pair {
+    *rv.items.add(c2rust_fresh2) = key_value_pair {
         key: cstr_as_string(b"regs\0".as_ptr() as *const ::core::ffi::c_char),
         value: object {
             type_0: kObjectTypeArray,
@@ -368,7 +366,7 @@ pub unsafe extern "C" fn ctx_to_dict(mut ctx: *mut Context, mut arena: *mut Aren
     };
     let c2rust_fresh3 = rv.size;
     rv.size = rv.size.wrapping_add(1);
-    *rv.items.offset(c2rust_fresh3 as isize) = key_value_pair {
+    *rv.items.add(c2rust_fresh3) = key_value_pair {
         key: cstr_as_string(b"jumps\0".as_ptr() as *const ::core::ffi::c_char),
         value: object {
             type_0: kObjectTypeArray,
@@ -379,7 +377,7 @@ pub unsafe extern "C" fn ctx_to_dict(mut ctx: *mut Context, mut arena: *mut Aren
     };
     let c2rust_fresh4 = rv.size;
     rv.size = rv.size.wrapping_add(1);
-    *rv.items.offset(c2rust_fresh4 as isize) = key_value_pair {
+    *rv.items.add(c2rust_fresh4) = key_value_pair {
         key: cstr_as_string(b"bufs\0".as_ptr() as *const ::core::ffi::c_char),
         value: object {
             type_0: kObjectTypeArray,
@@ -390,7 +388,7 @@ pub unsafe extern "C" fn ctx_to_dict(mut ctx: *mut Context, mut arena: *mut Aren
     };
     let c2rust_fresh5 = rv.size;
     rv.size = rv.size.wrapping_add(1);
-    *rv.items.offset(c2rust_fresh5 as isize) = key_value_pair {
+    *rv.items.add(c2rust_fresh5) = key_value_pair {
         key: cstr_as_string(b"gvars\0".as_ptr() as *const ::core::ffi::c_char),
         value: object {
             type_0: kObjectTypeArray,
@@ -401,7 +399,7 @@ pub unsafe extern "C" fn ctx_to_dict(mut ctx: *mut Context, mut arena: *mut Aren
     };
     let c2rust_fresh6 = rv.size;
     rv.size = rv.size.wrapping_add(1);
-    *rv.items.offset(c2rust_fresh6 as isize) = key_value_pair {
+    *rv.items.add(c2rust_fresh6) = key_value_pair {
         key: cstr_as_string(b"funcs\0".as_ptr() as *const ::core::ffi::c_char),
         value: object {
             type_0: kObjectTypeArray,
@@ -423,7 +421,7 @@ pub unsafe extern "C" fn ctx_from_dict(
     while i < dict.size
         && !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int)
     {
-        let mut item: KeyValuePair = *dict.items.offset(i as isize);
+        let mut item: KeyValuePair = *dict.items.add(i);
         if item.value.type_0 as ::core::ffi::c_uint
             == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
         {

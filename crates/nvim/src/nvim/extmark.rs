@@ -710,7 +710,7 @@ unsafe extern "C" fn push_mark(
     };
     let c2rust_fresh0 = (*array).size;
     (*array).size = (*array).size.wrapping_add(1);
-    *(*array).items.offset(c2rust_fresh0 as isize) = mark;
+    *(*array).items.add(c2rust_fresh0) = mark;
 }
 pub unsafe extern "C" fn extmark_from_id(
     mut buf: *mut buf_T,
@@ -941,7 +941,7 @@ pub unsafe extern "C" fn extmark_splice_delete(
             };
             let c2rust_fresh1 = (*uvp).size;
             (*uvp).size = (*uvp).size.wrapping_add(1);
-            *(*uvp).items.offset(c2rust_fresh1 as isize) = undo;
+            *(*uvp).items.add(c2rust_fresh1) = undo;
         }
         marktree_itr_next(
             &raw mut (*buf).b_marktree as *mut MarkTree,
@@ -1216,7 +1216,7 @@ pub unsafe extern "C" fn extmark_splice_impl(
             let mut item: *mut ExtmarkUndoObject = (*uhp_0)
                 .uh_extmark
                 .items
-                .offset((*uhp_0).uh_extmark.size.wrapping_sub(1 as size_t) as isize);
+                .add((*uhp_0).uh_extmark.size.wrapping_sub(1 as size_t));
             if (*item).type_0 as ::core::ffi::c_uint
                 == kExtmarkSplice as ::core::ffi::c_int as ::core::ffi::c_uint
             {
@@ -1286,7 +1286,7 @@ pub unsafe extern "C" fn extmark_splice_impl(
             };
             let c2rust_fresh3 = (*uhp_0).uh_extmark.size;
             (*uhp_0).uh_extmark.size = (*uhp_0).uh_extmark.size.wrapping_add(1);
-            *(*uhp_0).uh_extmark.items.offset(c2rust_fresh3 as isize) = undo_object {
+            *(*uhp_0).uh_extmark.items.add(c2rust_fresh3) = undo_object {
                 type_0: kExtmarkSplice,
                 data: C2Rust_Unnamed_6 { splice: splice_0 },
             };
@@ -1413,7 +1413,7 @@ pub unsafe extern "C" fn extmark_move_region(
         };
         let c2rust_fresh2 = (*uhp).uh_extmark.size;
         (*uhp).uh_extmark.size = (*uhp).uh_extmark.size.wrapping_add(1);
-        *(*uhp).uh_extmark.items.offset(c2rust_fresh2 as isize) = undo_object {
+        *(*uhp).uh_extmark.items.add(c2rust_fresh2) = undo_object {
             type_0: kExtmarkMove,
             data: C2Rust_Unnamed_6 { move_0: move_0 },
         };

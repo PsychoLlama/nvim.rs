@@ -1207,7 +1207,7 @@ unsafe extern "C" fn cmd_with_count(
     let mut len: size_t = xstrlcpy(bufp, cmd, bufsize);
     if Prenum > 0 as int64_t && len < bufsize {
         vim_snprintf(
-            bufp.offset(len as isize),
+            bufp.add(len),
             bufsize.wrapping_sub(len),
             b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
             Prenum,
@@ -6259,7 +6259,7 @@ pub unsafe extern "C" fn win_free(mut wp: *mut win_T, mut tp: *mut tabpage_T) {
         let mut pos_null: size_t = (*buf).b_wininfo.size;
         let mut i_0: size_t = 0 as size_t;
         while i_0 < (*buf).b_wininfo.size {
-            let mut wip: *mut WinInfo = *(*buf).b_wininfo.items.offset(i_0 as isize);
+            let mut wip: *mut WinInfo = *(*buf).b_wininfo.items.add(i_0);
             if (*wip).wi_win == wp {
                 wip_wp = wip;
                 pos_wip = i_0;
@@ -6284,16 +6284,15 @@ pub unsafe extern "C" fn win_free(mut wp: *mut win_T, mut tp: *mut tabpage_T) {
                 } else {
                     pos_wip
                 };
-                free_wininfo(*(*buf).b_wininfo.items.offset(pos_delete as isize));
+                free_wininfo(*(*buf).b_wininfo.items.add(pos_delete));
                 (*buf).b_wininfo.size = (*buf).b_wininfo.size.wrapping_sub(1 as size_t);
                 (pos_delete < (*buf).b_wininfo.size
                     && !memmove(
-                        (*buf).b_wininfo.items.offset(pos_delete as isize)
-                            as *mut ::core::ffi::c_void,
+                        (*buf).b_wininfo.items.add(pos_delete) as *mut ::core::ffi::c_void,
                         (*buf)
                             .b_wininfo
                             .items
-                            .offset(pos_delete.wrapping_add(1 as size_t) as isize)
+                            .add(pos_delete.wrapping_add(1 as size_t))
                             as *const ::core::ffi::c_void,
                         (*buf)
                             .b_wininfo

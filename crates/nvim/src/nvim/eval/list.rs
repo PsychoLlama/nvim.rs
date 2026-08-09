@@ -739,7 +739,7 @@ unsafe extern "C" fn count_string(
         while *p as ::core::ffi::c_int != NUL {
             if mb_strnicmp(p, needle, needlelen) == 0 as ::core::ffi::c_int {
                 n += 1;
-                p = p.offset(needlelen as isize);
+                p = p.add(needlelen);
             } else {
                 p = p.offset(utfc_ptr2len(p as *mut ::core::ffi::c_char) as isize);
             }
@@ -752,7 +752,7 @@ unsafe extern "C" fn count_string(
                 break;
             }
             n += 1;
-            p = next.offset(needlelen as isize);
+            p = next.add(needlelen);
         }
     }
     return n;

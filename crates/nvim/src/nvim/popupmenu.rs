@@ -360,7 +360,7 @@ unsafe fn pum_publish_external(
             let src = &*array.offset(i);
             let mut item = arena_array(&raw mut arena, 4);
             for text in [src.pum_text, src.pum_kind, src.pum_extra, src.pum_info] {
-                *item.items.offset(item.size as isize) = Object {
+                *item.items.add(item.size) = Object {
                     type_0: kObjectTypeString,
                     data: C2Rust_Unnamed_12 {
                         string: cstr_as_string(text),
@@ -368,7 +368,7 @@ unsafe fn pum_publish_external(
                 };
                 item.size += 1;
             }
-            *arr.items.offset(arr.size as isize) = Object {
+            *arr.items.add(arr.size) = Object {
                 type_0: kObjectTypeArray,
                 data: C2Rust_Unnamed_12 { array: item },
             };

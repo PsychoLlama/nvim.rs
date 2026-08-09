@@ -1491,7 +1491,7 @@ unsafe extern "C" fn get_view_file(mut c: ::core::ffi::c_char) -> *mut ::core::f
     ) as *mut ::core::ffi::c_char;
     strcpy(retval, p_vdir.get());
     add_pathsep(retval);
-    let mut s: *mut ::core::ffi::c_char = retval.offset(strlen(retval) as isize);
+    let mut s: *mut ::core::ffi::c_char = retval.add(strlen(retval));
     let mut p_0: *mut ::core::ffi::c_char = sname;
     while *p_0 != 0 {
         if *p_0 as ::core::ffi::c_int == '=' as ::core::ffi::c_int {

@@ -249,10 +249,9 @@ pub unsafe extern "C" fn stl_clear_click_defs(
         let mut i: size_t = 0 as size_t;
         while i < click_defs_size {
             if i == 0 as size_t
-                || (*click_defs.offset(i as isize)).func
-                    != (*click_defs.offset(i.wrapping_sub(1 as size_t) as isize)).func
+                || (*click_defs.add(i)).func != (*click_defs.add(i.wrapping_sub(1 as size_t))).func
             {
-                xfree((*click_defs.offset(i as isize)).func as *mut ::core::ffi::c_void);
+                xfree((*click_defs.add(i)).func as *mut ::core::ffi::c_void);
             }
             i = i.wrapping_add(1);
         }
@@ -570,7 +569,7 @@ unsafe extern "C" fn win_redr_custom(
                     };
                     let c2rust_fresh1 = chunk.size;
                     chunk.size = chunk.size.wrapping_add(1);
-                    *chunk.items.offset(c2rust_fresh1 as isize) = object {
+                    *chunk.items.add(c2rust_fresh1) = object {
                         type_0: kObjectTypeInteger,
                         data: C2Rust_Unnamed {
                             integer: curattr as Integer,
@@ -590,7 +589,7 @@ unsafe extern "C" fn win_redr_custom(
                     };
                     let c2rust_fresh2 = chunk.size;
                     chunk.size = chunk.size.wrapping_add(1);
-                    *chunk.items.offset(c2rust_fresh2 as isize) = object {
+                    *chunk.items.add(c2rust_fresh2) = object {
                         type_0: kObjectTypeString,
                         data: C2Rust_Unnamed {
                             string: String_0 {
@@ -617,7 +616,7 @@ unsafe extern "C" fn win_redr_custom(
                     };
                     let c2rust_fresh3 = chunk.size;
                     chunk.size = chunk.size.wrapping_add(1);
-                    *chunk.items.offset(c2rust_fresh3 as isize) = object {
+                    *chunk.items.add(c2rust_fresh3) = object {
                         type_0: kObjectTypeInteger,
                         data: C2Rust_Unnamed {
                             integer: curgroup as Integer,
@@ -637,7 +636,7 @@ unsafe extern "C" fn win_redr_custom(
                     };
                     let c2rust_fresh4 = content.size;
                     content.size = content.size.wrapping_add(1);
-                    *content.items.offset(c2rust_fresh4 as isize) = object {
+                    *content.items.add(c2rust_fresh4) = object {
                         type_0: kObjectTypeArray,
                         data: C2Rust_Unnamed { array: chunk },
                     };
@@ -877,7 +876,7 @@ pub unsafe extern "C" fn redraw_ruler() {
         chunk.items = &raw mut chunk__items as *mut Object;
         let c2rust_fresh35 = chunk.size;
         chunk.size = chunk.size.wrapping_add(1);
-        *chunk.items.offset(c2rust_fresh35 as isize) = object {
+        *chunk.items.add(c2rust_fresh35) = object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
                 integer: attr as Integer,
@@ -885,7 +884,7 @@ pub unsafe extern "C" fn redraw_ruler() {
         };
         let c2rust_fresh36 = chunk.size;
         chunk.size = chunk.size.wrapping_add(1);
-        *chunk.items.offset(c2rust_fresh36 as isize) = object {
+        *chunk.items.add(c2rust_fresh36) = object {
             type_0: kObjectTypeString,
             data: C2Rust_Unnamed {
                 string: cstr_as_string(&raw mut buffer as *mut ::core::ffi::c_char),
@@ -893,7 +892,7 @@ pub unsafe extern "C" fn redraw_ruler() {
         };
         let c2rust_fresh37 = chunk.size;
         chunk.size = chunk.size.wrapping_add(1);
-        *chunk.items.offset(c2rust_fresh37 as isize) = object {
+        *chunk.items.add(c2rust_fresh37) = object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
                 integer: HLF_MSG as Integer,
@@ -905,7 +904,7 @@ pub unsafe extern "C" fn redraw_ruler() {
         );
         let c2rust_fresh38 = content.size;
         content.size = content.size.wrapping_add(1);
-        *content.items.offset(c2rust_fresh38 as isize) = object {
+        *content.items.add(c2rust_fresh38) = object {
             type_0: kObjectTypeArray,
             data: C2Rust_Unnamed { array: chunk },
         };
@@ -975,7 +974,7 @@ unsafe extern "C" fn ui_ext_tabline_update() {
         let mut tab_info: Dict = arena_dict(&raw mut arena, 2 as size_t);
         let c2rust_fresh45 = tab_info.size;
         tab_info.size = tab_info.size.wrapping_add(1);
-        *tab_info.items.offset(c2rust_fresh45 as isize) = key_value_pair {
+        *tab_info.items.add(c2rust_fresh45) = key_value_pair {
             key: cstr_as_string(b"tab\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeTabpage,
@@ -992,7 +991,7 @@ unsafe extern "C" fn ui_ext_tabline_update() {
         get_trans_bufname((*cwp).w_buffer);
         let c2rust_fresh46 = tab_info.size;
         tab_info.size = tab_info.size.wrapping_add(1);
-        *tab_info.items.offset(c2rust_fresh46 as isize) = key_value_pair {
+        *tab_info.items.add(c2rust_fresh46) = key_value_pair {
             key: cstr_as_string(b"name\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeString,
@@ -1006,7 +1005,7 @@ unsafe extern "C" fn ui_ext_tabline_update() {
         };
         let c2rust_fresh47 = tabs.size;
         tabs.size = tabs.size.wrapping_add(1);
-        *tabs.items.offset(c2rust_fresh47 as isize) = object {
+        *tabs.items.add(c2rust_fresh47) = object {
             type_0: kObjectTypeDict,
             data: C2Rust_Unnamed { dict: tab_info },
         };
@@ -1031,7 +1030,7 @@ unsafe extern "C" fn ui_ext_tabline_update() {
             let mut buffer_info: Dict = arena_dict(&raw mut arena, 2 as size_t);
             let c2rust_fresh48 = buffer_info.size;
             buffer_info.size = buffer_info.size.wrapping_add(1);
-            *buffer_info.items.offset(c2rust_fresh48 as isize) = key_value_pair {
+            *buffer_info.items.add(c2rust_fresh48) = key_value_pair {
                 key: cstr_as_string(b"buffer\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeBuffer,
@@ -1043,7 +1042,7 @@ unsafe extern "C" fn ui_ext_tabline_update() {
             get_trans_bufname(buf_0);
             let c2rust_fresh49 = buffer_info.size;
             buffer_info.size = buffer_info.size.wrapping_add(1);
-            *buffer_info.items.offset(c2rust_fresh49 as isize) = key_value_pair {
+            *buffer_info.items.add(c2rust_fresh49) = key_value_pair {
                 key: cstr_as_string(b"name\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeString,
@@ -1057,7 +1056,7 @@ unsafe extern "C" fn ui_ext_tabline_update() {
             };
             let c2rust_fresh50 = buffers.size;
             buffers.size = buffers.size.wrapping_add(1);
-            *buffers.items.offset(c2rust_fresh50 as isize) = object {
+            *buffers.items.add(c2rust_fresh50) = object {
                 type_0: kObjectTypeDict,
                 data: C2Rust_Unnamed { dict: buffer_info },
             };
@@ -1449,9 +1448,8 @@ pub unsafe extern "C" fn build_stl_str_hl(
     let mut prevchar_isflag: bool = true_0 != 0;
     let mut prevchar_isitem: bool = false_0 != 0;
     let mut out_p: *mut ::core::ffi::c_char = out;
-    let mut out_end_p: *mut ::core::ffi::c_char = out
-        .offset(outlen as isize)
-        .offset(-(1 as ::core::ffi::c_int as isize));
+    let mut out_end_p: *mut ::core::ffi::c_char =
+        out.add(outlen).offset(-(1 as ::core::ffi::c_int as isize));
     let mut fmt_p: *mut ::core::ffi::c_char = usefmt;
     's_2297: while *fmt_p as ::core::ffi::c_int != NUL {
         if curitem.get() == stl_items_len.get() as ::core::ffi::c_int {
@@ -2068,14 +2066,14 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                         parsed_usefmt,
                                                     )
                                                         as *mut ::core::ffi::c_char)
-                                                        .offset(parsed_usefmt as isize);
+                                                        .add(parsed_usefmt);
                                                     new_fmt_p = (memcpy(
                                                         new_fmt_p as *mut ::core::ffi::c_void,
                                                         str as *const ::core::ffi::c_void,
                                                         str_length,
                                                     )
                                                         as *mut ::core::ffi::c_char)
-                                                        .offset(str_length as isize);
+                                                        .add(str_length);
                                                     new_fmt_p = (memcpy(
                                                         new_fmt_p as *mut ::core::ffi::c_void,
                                                         b"%}\0".as_ptr()
@@ -2091,7 +2089,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                         fmt_length,
                                                     )
                                                         as *mut ::core::ffi::c_char)
-                                                        .offset(fmt_length as isize);
+                                                        .add(fmt_length);
                                                     *new_fmt_p = 0 as ::core::ffi::c_char;
                                                     new_fmt_p = ::core::ptr::null_mut::<
                                                         ::core::ffi::c_char,
@@ -2107,7 +2105,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                                     *ptr__0 = NULL;
                                                     let _ = *ptr__0;
                                                     usefmt = new_fmt;
-                                                    fmt_p = usefmt.offset(parsed_usefmt as isize);
+                                                    fmt_p = usefmt.add(parsed_usefmt);
                                                     evaldepth += 1;
                                                     continue 's_2297;
                                                 } else {
@@ -2561,7 +2559,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                         while i < fdc {
                                             buflen = buflen.wrapping_add(schar_get(
                                                 (&raw mut buf_tmp as *mut ::core::ffi::c_char)
-                                                    .offset(buflen as isize),
+                                                    .add(buflen),
                                                 fold_buf[i as usize],
                                             ));
                                             i += 1;
@@ -2571,7 +2569,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                     let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                                     while i_0 < width {
                                         (*(*stl_items.ptr()).offset(curitem.get() as isize))
-                                            .start = out_p.offset(signlen as isize);
+                                            .start = out_p.add(signlen);
                                         if fdc == 0 as ::core::ffi::c_int {
                                             let mut sattr: SignTextAttrs =
                                                 *(*stcp).sattrs.offset(i_0 as isize);
@@ -2580,7 +2578,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                             {
                                                 signlen = signlen.wrapping_add(describe_sign_text(
                                                     (&raw mut buf_tmp as *mut ::core::ffi::c_char)
-                                                        .offset(signlen as isize),
+                                                        .add(signlen),
                                                     &raw mut sattr.text as *mut schar_T,
                                                 ));
                                                 (*(*stl_items.ptr())
@@ -2785,22 +2783,22 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                 *t_6 = *t_6.offset(-3 as ::core::ffi::c_int as isize);
                                 t_6 = t_6.offset(1);
                                 *t_6 = NUL as ::core::ffi::c_char;
-                                out_p = out_p.offset(vim_snprintf_safelen(
+                                out_p = out_p.add(vim_snprintf_safelen(
                                     out_p,
                                     remaining_buf_len,
                                     &raw mut nstr as *mut ::core::ffi::c_char,
                                     0 as ::core::ffi::c_int,
                                     num,
                                     n_4,
-                                ) as isize);
+                                ));
                             } else {
-                                out_p = out_p.offset(vim_snprintf_safelen(
+                                out_p = out_p.add(vim_snprintf_safelen(
                                     out_p,
                                     remaining_buf_len,
                                     &raw mut nstr as *mut ::core::ffi::c_char,
                                     minwid_0,
                                     num,
-                                ) as isize);
+                                ));
                             }
                         } else {
                             (*(*stl_items.ptr()).offset(curitem.get() as isize)).type_0 = Empty;
@@ -2905,7 +2903,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
             *c2rust_fresh34 = '>' as ::core::ffi::c_char;
             *trunc_p = NUL as ::core::ffi::c_char;
         } else {
-            let mut end: *mut ::core::ffi::c_char = out.offset(outputlen as isize);
+            let mut end: *mut ::core::ffi::c_char = out.add(outputlen);
             let mut trunc_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while width_0 >= maxwidth {
                 width_0 -= ptr2cells(trunc_p.offset(trunc_len as isize));

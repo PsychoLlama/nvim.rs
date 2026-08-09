@@ -305,7 +305,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
         );
         let c2rust_fresh0 = dic.size;
         dic.size = dic.size.wrapping_add(1);
-        *dic.items.offset(c2rust_fresh0 as isize) = key_value_pair {
+        *dic.items.add(c2rust_fresh0) = key_value_pair {
             key: cstr_as_string(b"name\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeString,
@@ -316,7 +316,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
         };
         let c2rust_fresh1 = dic.size;
         dic.size = dic.size.wrapping_add(1);
-        *dic.items.offset(c2rust_fresh1 as isize) = key_value_pair {
+        *dic.items.add(c2rust_fresh1) = key_value_pair {
             key: cstr_as_string(b"short_name\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeString,
@@ -328,7 +328,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
         if (*cur).used_for as ::core::ffi::c_int & SHAPE_MOUSE != 0 {
             let c2rust_fresh2 = dic.size;
             dic.size = dic.size.wrapping_add(1);
-            *dic.items.offset(c2rust_fresh2 as isize) = key_value_pair {
+            *dic.items.add(c2rust_fresh2) = key_value_pair {
                 key: cstr_as_string(b"mouse_shape\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeInteger,
@@ -361,7 +361,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             }
             let c2rust_fresh3 = dic.size;
             dic.size = dic.size.wrapping_add(1);
-            *dic.items.offset(c2rust_fresh3 as isize) = key_value_pair {
+            *dic.items.add(c2rust_fresh3) = key_value_pair {
                 key: cstr_as_string(b"cursor_shape\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeString,
@@ -370,7 +370,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             };
             let c2rust_fresh4 = dic.size;
             dic.size = dic.size.wrapping_add(1);
-            *dic.items.offset(c2rust_fresh4 as isize) = key_value_pair {
+            *dic.items.add(c2rust_fresh4) = key_value_pair {
                 key: cstr_as_string(b"cell_percentage\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeInteger,
@@ -381,7 +381,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             };
             let c2rust_fresh5 = dic.size;
             dic.size = dic.size.wrapping_add(1);
-            *dic.items.offset(c2rust_fresh5 as isize) = key_value_pair {
+            *dic.items.add(c2rust_fresh5) = key_value_pair {
                 key: cstr_as_string(b"blinkwait\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeInteger,
@@ -392,7 +392,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             };
             let c2rust_fresh6 = dic.size;
             dic.size = dic.size.wrapping_add(1);
-            *dic.items.offset(c2rust_fresh6 as isize) = key_value_pair {
+            *dic.items.add(c2rust_fresh6) = key_value_pair {
                 key: cstr_as_string(b"blinkon\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeInteger,
@@ -403,7 +403,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             };
             let c2rust_fresh7 = dic.size;
             dic.size = dic.size.wrapping_add(1);
-            *dic.items.offset(c2rust_fresh7 as isize) = key_value_pair {
+            *dic.items.add(c2rust_fresh7) = key_value_pair {
                 key: cstr_as_string(b"blinkoff\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeInteger,
@@ -414,7 +414,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             };
             let c2rust_fresh8 = dic.size;
             dic.size = dic.size.wrapping_add(1);
-            *dic.items.offset(c2rust_fresh8 as isize) = key_value_pair {
+            *dic.items.add(c2rust_fresh8) = key_value_pair {
                 key: cstr_as_string(b"hl_id\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeInteger,
@@ -425,7 +425,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             };
             let c2rust_fresh9 = dic.size;
             dic.size = dic.size.wrapping_add(1);
-            *dic.items.offset(c2rust_fresh9 as isize) = key_value_pair {
+            *dic.items.add(c2rust_fresh9) = key_value_pair {
                 key: cstr_as_string(b"id_lm\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeInteger,
@@ -436,7 +436,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             };
             let c2rust_fresh10 = dic.size;
             dic.size = dic.size.wrapping_add(1);
-            *dic.items.offset(c2rust_fresh10 as isize) = key_value_pair {
+            *dic.items.add(c2rust_fresh10) = key_value_pair {
                 key: cstr_as_string(b"attr_id\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeInteger,
@@ -451,7 +451,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             };
             let c2rust_fresh11 = dic.size;
             dic.size = dic.size.wrapping_add(1);
-            *dic.items.offset(c2rust_fresh11 as isize) = key_value_pair {
+            *dic.items.add(c2rust_fresh11) = key_value_pair {
                 key: cstr_as_string(b"attr_id_lm\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeInteger,
@@ -467,7 +467,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
         }
         let c2rust_fresh12 = all.size;
         all.size = all.size.wrapping_add(1);
-        *all.items.offset(c2rust_fresh12 as isize) = object {
+        *all.items.add(c2rust_fresh12) = object {
             type_0: kObjectTypeDict,
             data: C2Rust_Unnamed { dict: dic },
         };
@@ -661,7 +661,7 @@ pub unsafe extern "C" fn parse_shape_opt(
                             vim_strchr(p, '-' as ::core::ffi::c_int);
                         if commap.is_null() {
                             if endp.is_null() {
-                                endp = p.offset(strlen(p) as isize);
+                                endp = p.add(strlen(p));
                             }
                         } else if endp > commap || endp.is_null() {
                             endp = commap;

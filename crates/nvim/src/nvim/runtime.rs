@@ -656,7 +656,7 @@ unsafe extern "C" fn get_runtime_cmd_flags(
         where_len,
     ) == 0 as ::core::ffi::c_int
     {
-        *argp = skipwhite(arg.offset(where_len as isize));
+        *argp = skipwhite(arg.add(where_len));
         return DIP_START as ::core::ffi::c_int + DIP_NORTP as ::core::ffi::c_int;
     }
     if strncmp(
@@ -665,7 +665,7 @@ unsafe extern "C" fn get_runtime_cmd_flags(
         where_len,
     ) == 0 as ::core::ffi::c_int
     {
-        *argp = skipwhite(arg.offset(where_len as isize));
+        *argp = skipwhite(arg.add(where_len));
         return DIP_OPT as ::core::ffi::c_int + DIP_NORTP as ::core::ffi::c_int;
     }
     if strncmp(
@@ -674,7 +674,7 @@ unsafe extern "C" fn get_runtime_cmd_flags(
         where_len,
     ) == 0 as ::core::ffi::c_int
     {
-        *argp = skipwhite(arg.offset(where_len as isize));
+        *argp = skipwhite(arg.add(where_len));
         return DIP_START as ::core::ffi::c_int
             + DIP_OPT as ::core::ffi::c_int
             + DIP_NORTP as ::core::ffi::c_int;
@@ -685,7 +685,7 @@ unsafe extern "C" fn get_runtime_cmd_flags(
         where_len,
     ) == 0 as ::core::ffi::c_int
     {
-        *argp = skipwhite(arg.offset(where_len as isize));
+        *argp = skipwhite(arg.add(where_len));
         return DIP_START as ::core::ffi::c_int + DIP_OPT as ::core::ffi::c_int;
     }
     return 0 as ::core::ffi::c_int;
@@ -877,7 +877,7 @@ pub unsafe extern "C" fn do_in_path(
         {
             add_pathsep(buf);
             strcat(buf, prefix);
-            tail = buf.offset(strlen(buf) as isize);
+            tail = buf.add(strlen(buf));
             let mut np: *mut ::core::ffi::c_char = name;
             while *np as ::core::ffi::c_int != NUL
                 && (do_all as ::core::ffi::c_int != 0 || !did_one)
@@ -975,7 +975,7 @@ unsafe extern "C" fn copy_runtime_search_path(src: RuntimeSearchPath) -> Runtime
     };
     let mut j: size_t = 0 as size_t;
     while j < src.size {
-        let mut item: SearchPathItem = *src.items.offset(j as isize);
+        let mut item: SearchPathItem = *src.items.add(j);
         if dst.size == dst.capacity {
             dst.capacity = if dst.capacity != 0 {
                 dst.capacity << 1 as ::core::ffi::c_int
@@ -990,7 +990,7 @@ unsafe extern "C" fn copy_runtime_search_path(src: RuntimeSearchPath) -> Runtime
         };
         let c2rust_fresh4 = dst.size;
         dst.size = dst.size.wrapping_add(1);
-        *dst.items.offset(c2rust_fresh4 as isize) = SearchPathItem {
+        *dst.items.add(c2rust_fresh4) = SearchPathItem {
             path: xstrdup(item.path),
             after: item.after,
             pack_inserted: item.pack_inserted,
@@ -1037,7 +1037,7 @@ unsafe extern "C" fn do_in_cached_path(
     let mut do_all: bool = flags & DIP_ALL as ::core::ffi::c_int != 0 as ::core::ffi::c_int;
     let mut j: size_t = 0 as size_t;
     while j < path.size {
-        let mut item: SearchPathItem = *path.items.offset(j as isize);
+        let mut item: SearchPathItem = *path.items.add(j);
         let mut buflen: size_t = strlen(item.path);
         's_32: {
             if flags & (DIP_NOAFTER as ::core::ffi::c_int | DIP_AFTER as ::core::ffi::c_int) != 0 {
@@ -1062,7 +1062,7 @@ unsafe extern "C" fn do_in_cached_path(
                 strcpy(&raw mut buf as *mut ::core::ffi::c_char, item.path);
                 add_pathsep(&raw mut buf as *mut ::core::ffi::c_char);
                 let mut tail: *mut ::core::ffi::c_char = (&raw mut buf as *mut ::core::ffi::c_char)
-                    .offset(strlen(&raw mut buf as *mut ::core::ffi::c_char) as isize);
+                    .add(strlen(&raw mut buf as *mut ::core::ffi::c_char));
                 let mut np: *mut ::core::ffi::c_char = name;
                 while *np as ::core::ffi::c_int != NUL
                     && (do_all as ::core::ffi::c_int != 0 || !did_one)
@@ -1148,11 +1148,11 @@ pub unsafe extern "C" fn runtime_inspect(mut arena: *mut Arena) -> Array {
     let mut rv: Array = arena_array(arena, path.size);
     let mut i: size_t = 0 as size_t;
     while i < path.size {
-        let mut item: *mut SearchPathItem = path.items.offset(i as isize);
+        let mut item: *mut SearchPathItem = path.items.add(i);
         let mut entry: Dict = arena_dict(arena, 5 as size_t);
         let c2rust_fresh8 = entry.size;
         entry.size = entry.size.wrapping_add(1);
-        *entry.items.offset(c2rust_fresh8 as isize) = key_value_pair {
+        *entry.items.add(c2rust_fresh8) = key_value_pair {
             key: cstr_as_string(b"path\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeString,
@@ -1164,7 +1164,7 @@ pub unsafe extern "C" fn runtime_inspect(mut arena: *mut Arena) -> Array {
         if (*item).after {
             let c2rust_fresh9 = entry.size;
             entry.size = entry.size.wrapping_add(1);
-            *entry.items.offset(c2rust_fresh9 as isize) = key_value_pair {
+            *entry.items.add(c2rust_fresh9) = key_value_pair {
                 key: cstr_as_string(b"after\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeBoolean,
@@ -1175,7 +1175,7 @@ pub unsafe extern "C" fn runtime_inspect(mut arena: *mut Arena) -> Array {
         if (*item).pack_inserted {
             let c2rust_fresh10 = entry.size;
             entry.size = entry.size.wrapping_add(1);
-            *entry.items.offset(c2rust_fresh10 as isize) = key_value_pair {
+            *entry.items.add(c2rust_fresh10) = key_value_pair {
                 key: cstr_as_string(b"pack_inserted\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeBoolean,
@@ -1186,7 +1186,7 @@ pub unsafe extern "C" fn runtime_inspect(mut arena: *mut Arena) -> Array {
         if (*item).has_lua as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
             let c2rust_fresh11 = entry.size;
             entry.size = entry.size.wrapping_add(1);
-            *entry.items.offset(c2rust_fresh11 as isize) = key_value_pair {
+            *entry.items.add(c2rust_fresh11) = key_value_pair {
                 key: cstr_as_string(b"has_lua\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeBoolean,
@@ -1199,7 +1199,7 @@ pub unsafe extern "C" fn runtime_inspect(mut arena: *mut Arena) -> Array {
         }
         let c2rust_fresh12 = entry.size;
         entry.size = entry.size.wrapping_add(1);
-        *entry.items.offset(c2rust_fresh12 as isize) = key_value_pair {
+        *entry.items.add(c2rust_fresh12) = key_value_pair {
             key: cstr_as_string(b"pos_in_rtp\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeInteger,
@@ -1210,7 +1210,7 @@ pub unsafe extern "C" fn runtime_inspect(mut arena: *mut Arena) -> Array {
         };
         let c2rust_fresh13 = rv.size;
         rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh13 as isize) = object {
+        *rv.items.add(c2rust_fresh13) = object {
             type_0: kObjectTypeDict,
             data: C2Rust_Unnamed { dict: entry },
         };
@@ -1270,7 +1270,7 @@ unsafe extern "C" fn runtime_get_named_common(
     let mut rv: Array = arena_array(arena, path.size.wrapping_mul(pat.size));
     let mut i: size_t = 0 as size_t;
     '_done: while i < path.size {
-        let mut item: *mut SearchPathItem = path.items.offset(i as isize);
+        let mut item: *mut SearchPathItem = path.items.add(i);
         's_6: {
             if lua {
                 if (*item).has_lua as ::core::ffi::c_int == kNone as ::core::ffi::c_int {
@@ -1292,7 +1292,7 @@ unsafe extern "C" fn runtime_get_named_common(
                 if j >= pat.size {
                     break 's_6;
                 }
-                let mut pat_item: Object = *pat.items.offset(j as isize);
+                let mut pat_item: Object = *pat.items.add(j);
                 if pat_item.type_0 as ::core::ffi::c_uint
                     == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
@@ -1307,7 +1307,7 @@ unsafe extern "C" fn runtime_get_named_common(
                         if os_file_is_readable(buf) {
                             let c2rust_fresh14 = rv.size;
                             rv.size = rv.size.wrapping_add(1);
-                            *rv.items.offset(c2rust_fresh14 as isize) = object {
+                            *rv.items.add(c2rust_fresh14) = object {
                                 type_0: kObjectTypeString,
                                 data: C2Rust_Unnamed {
                                     string: arena_string(arena, cstr_as_string(buf)),
@@ -1429,7 +1429,7 @@ unsafe extern "C" fn push_path(
         };
         let c2rust_fresh6 = (*search_path).size;
         (*search_path).size = (*search_path).size.wrapping_add(1);
-        *(*search_path).items.offset(c2rust_fresh6 as isize) = SearchPathItem {
+        *(*search_path).items.add(c2rust_fresh6) = SearchPathItem {
             path: (*key_alloc).data,
             after: after,
             pack_inserted: false,
@@ -1505,7 +1505,7 @@ unsafe extern "C" fn expand_pack_entry(
                 ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
             );
             xstrlcpy(
-                (buf.ptr() as *mut ::core::ffi::c_char).offset(pack_entry_len as isize),
+                (buf.ptr() as *mut ::core::ffi::c_char).add(pack_entry_len),
                 start_pat[i as usize] as *const ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 4096]>().wrapping_sub(pack_entry_len),
             );
@@ -1541,7 +1541,7 @@ unsafe extern "C" fn expand_pack_entry(
             };
             let c2rust_fresh7 = (*after_path).size;
             (*after_path).size = (*after_path).size.wrapping_add(1);
-            let c2rust_lvalue_ptr = &raw mut *(*after_path).items.offset(c2rust_fresh7 as isize);
+            let c2rust_lvalue_ptr = &raw mut *(*after_path).items.add(c2rust_fresh7);
             *c2rust_lvalue_ptr = after;
         }
         i += 1;
@@ -1550,13 +1550,11 @@ unsafe extern "C" fn expand_pack_entry(
 unsafe extern "C" fn path_is_after(mut buf: *mut ::core::ffi::c_char, mut buflen: size_t) -> bool {
     return buflen >= 5 as size_t
         && (!(buflen >= 6 as size_t)
-            || vim_ispathsep(
-                *buf.offset(buflen.wrapping_sub(6 as size_t) as isize) as ::core::ffi::c_int
-            ) as ::core::ffi::c_int
+            || vim_ispathsep(*buf.add(buflen.wrapping_sub(6 as size_t)) as ::core::ffi::c_int)
+                as ::core::ffi::c_int
                 != 0)
         && strcmp(
-            buf.offset(buflen as isize)
-                .offset(-(5 as ::core::ffi::c_int as isize)),
+            buf.add(buflen).offset(-(5 as ::core::ffi::c_int as isize)),
             b"after\0".as_ptr() as *const ::core::ffi::c_char,
         ) == 0 as ::core::ffi::c_int;
 }
@@ -1606,7 +1604,7 @@ unsafe extern "C" fn runtime_search_path_build() -> RuntimeSearchPath {
         };
         let c2rust_fresh5 = pack_entries.size;
         pack_entries.size = pack_entries.size.wrapping_add(1);
-        *pack_entries.items.offset(c2rust_fresh5 as isize) = the_entry;
+        *pack_entries.items.add(c2rust_fresh5) = the_entry;
         map_put_String_int(&raw mut pack_used, the_entry, 0 as ::core::ffi::c_int);
     }
     let mut rtp_entry: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -1659,7 +1657,7 @@ unsafe extern "C" fn runtime_search_path_build() -> RuntimeSearchPath {
     );
     let mut i: size_t = 0 as size_t;
     while i < pack_entries.size {
-        let mut item: String_0 = *pack_entries.items.offset(i as isize);
+        let mut item: String_0 = *pack_entries.items.add(i);
         let mut h_0: handle_T = map_get_String_int(&raw mut pack_used, item);
         if h_0 == 0 as ::core::ffi::c_int {
             expand_pack_entry(
@@ -1678,11 +1676,11 @@ unsafe extern "C" fn runtime_search_path_build() -> RuntimeSearchPath {
         expand_rtp_entry(
             &raw mut search_path,
             &raw mut rtp_used,
-            *after_path.items.offset(i_0 as isize),
+            *after_path.items.add(i_0),
             true_0 != 0,
             sentinel_pos_in_rtp,
         );
-        xfree(*after_path.items.offset(i_0 as isize) as *mut ::core::ffi::c_void);
+        xfree(*after_path.items.add(i_0) as *mut ::core::ffi::c_void);
         i_0 = i_0.wrapping_add(1);
     }
     while *rtp_entry as ::core::ffi::c_int != NUL {
@@ -1732,7 +1730,7 @@ pub unsafe extern "C" fn did_set_runtimepackpath(
 unsafe extern "C" fn runtime_search_path_free(mut path: RuntimeSearchPath) {
     let mut j: size_t = 0 as size_t;
     while j < path.size {
-        let mut item: SearchPathItem = *path.items.offset(j as isize);
+        let mut item: SearchPathItem = *path.items.add(j);
         xfree(item.path as *mut ::core::ffi::c_void);
         j = j.wrapping_add(1);
     }
@@ -1967,7 +1965,7 @@ unsafe extern "C" fn add_pack_dir_to_rtp(
             }
         }
         if insp.is_null() {
-            insp = (*p_rtp.ptr()).offset(strlen(p_rtp.get()) as isize);
+            insp = (*p_rtp.ptr()).add(strlen(p_rtp.get()));
         }
         afterdir = concat_fnames(
             fname,
@@ -2002,11 +2000,11 @@ unsafe extern "C" fn add_pack_dir_to_rtp(
             if *insp as ::core::ffi::c_int == NUL {
                 let c2rust_fresh15 = new_rtp_len;
                 new_rtp_len = new_rtp_len.wrapping_add(1);
-                *new_rtp.offset(c2rust_fresh15 as isize) = ',' as ::core::ffi::c_char;
+                *new_rtp.add(c2rust_fresh15) = ',' as ::core::ffi::c_char;
                 first_pos = first_pos.wrapping_add(1);
             }
             memmove(
-                new_rtp.offset(new_rtp_len as isize) as *mut ::core::ffi::c_void,
+                new_rtp.add(new_rtp_len) as *mut ::core::ffi::c_void,
                 fname as *const ::core::ffi::c_void,
                 addlen.wrapping_sub(1 as size_t),
             );
@@ -2014,37 +2012,37 @@ unsafe extern "C" fn add_pack_dir_to_rtp(
             if *insp as ::core::ffi::c_int != NUL {
                 let c2rust_fresh16 = new_rtp_len;
                 new_rtp_len = new_rtp_len.wrapping_add(1);
-                *new_rtp.offset(c2rust_fresh16 as isize) = ',' as ::core::ffi::c_char;
+                *new_rtp.add(c2rust_fresh16) = ',' as ::core::ffi::c_char;
             }
             after_pos = 0 as size_t;
             if afterlen > 0 as size_t && !after_insp.is_null() {
                 let mut keep_after: size_t = after_insp.offset_from(p_rtp.get()) as size_t;
                 memmove(
-                    new_rtp.offset(new_rtp_len as isize) as *mut ::core::ffi::c_void,
-                    (*p_rtp.ptr()).offset(keep as isize) as *const ::core::ffi::c_void,
+                    new_rtp.add(new_rtp_len) as *mut ::core::ffi::c_void,
+                    (*p_rtp.ptr()).add(keep) as *const ::core::ffi::c_void,
                     keep_after.wrapping_sub(keep),
                 );
                 new_rtp_len = new_rtp_len.wrapping_add(keep_after.wrapping_sub(keep));
                 memmove(
-                    new_rtp.offset(new_rtp_len as isize) as *mut ::core::ffi::c_void,
+                    new_rtp.add(new_rtp_len) as *mut ::core::ffi::c_void,
                     afterdir as *const ::core::ffi::c_void,
                     afterlen.wrapping_sub(1 as size_t),
                 );
                 new_rtp_len = new_rtp_len.wrapping_add(afterlen.wrapping_sub(1 as size_t));
                 let c2rust_fresh17 = new_rtp_len;
                 new_rtp_len = new_rtp_len.wrapping_add(1);
-                *new_rtp.offset(c2rust_fresh17 as isize) = ',' as ::core::ffi::c_char;
+                *new_rtp.add(c2rust_fresh17) = ',' as ::core::ffi::c_char;
                 keep = keep_after;
                 after_pos = keep_after;
             }
-            if *(*p_rtp.ptr()).offset(keep as isize) as ::core::ffi::c_int != NUL {
+            if *(*p_rtp.ptr()).add(keep) as ::core::ffi::c_int != NUL {
                 memmove(
-                    new_rtp.offset(new_rtp_len as isize) as *mut ::core::ffi::c_void,
-                    (*p_rtp.ptr()).offset(keep as isize) as *const ::core::ffi::c_void,
+                    new_rtp.add(new_rtp_len) as *mut ::core::ffi::c_void,
+                    (*p_rtp.ptr()).add(keep) as *const ::core::ffi::c_void,
                     oldlen.wrapping_sub(keep).wrapping_add(1 as size_t),
                 );
             } else {
-                *new_rtp.offset(new_rtp_len as isize) = NUL as ::core::ffi::c_char;
+                *new_rtp.add(new_rtp_len) = NUL as ::core::ffi::c_char;
             }
             if afterlen > 0 as size_t && after_insp.is_null() {
                 after_pos = xstrlcat(
@@ -2707,7 +2705,7 @@ unsafe extern "C" fn ExpandRTDir_int(
     let mut pat_pathsep_cnt: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut i_0: size_t = 0 as size_t;
     while i_0 < pat_len {
-        if vim_ispathsep(*pat.offset(i_0 as isize) as ::core::ffi::c_int) {
+        if vim_ispathsep(*pat.add(i_0) as ::core::ffi::c_int) {
             pat_pathsep_cnt += 1;
         }
         i_0 = i_0.wrapping_add(1);
@@ -2717,7 +2715,7 @@ unsafe extern "C" fn ExpandRTDir_int(
         let mut match_0: *mut ::core::ffi::c_char =
             *((*gap).ga_data as *mut *mut ::core::ffi::c_char).offset(i_1 as isize);
         let mut s: *mut ::core::ffi::c_char = match_0;
-        let mut e: *mut ::core::ffi::c_char = s.offset(strlen(s) as isize);
+        let mut e: *mut ::core::ffi::c_char = s.add(strlen(s));
         if e.offset_from(s) > 4 as isize
             && !keep_ext
             && (strncasecmp(
@@ -2944,15 +2942,15 @@ unsafe extern "C" fn strcpy_comma_escaped(
     let mut shift: size_t = 0 as size_t;
     let mut i: size_t = 0 as size_t;
     while i < len {
-        if *src.offset(i as isize) as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
+        if *src.add(i) as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
             let c2rust_fresh22 = shift;
             shift = shift.wrapping_add(1);
-            *dest.offset(i.wrapping_add(c2rust_fresh22) as isize) = '\\' as ::core::ffi::c_char;
+            *dest.add(i.wrapping_add(c2rust_fresh22)) = '\\' as ::core::ffi::c_char;
         }
-        *dest.offset(i.wrapping_add(shift) as isize) = *src.offset(i as isize);
+        *dest.add(i.wrapping_add(shift)) = *src.add(i);
         i = i.wrapping_add(1);
     }
-    return dest.offset(len.wrapping_add(shift) as isize);
+    return dest.add(len.wrapping_add(shift));
 }
 #[inline]
 unsafe extern "C" fn compute_double_env_sep_len(
@@ -2985,8 +2983,7 @@ unsafe extern "C" fn compute_double_env_sep_len(
                     ))
                     .wrapping_add(common_suf_len)
                     .wrapping_add(
-                        (after_pathsep(dir, dir.offset(dir_len as isize)) == 0)
-                            as ::core::ffi::c_int as size_t,
+                        (after_pathsep(dir, dir.add(dir_len)) == 0) as ::core::ffi::c_int as size_t,
                     )
                     .wrapping_mul(2 as size_t)
                     .wrapping_add(single_suf_len),
@@ -3059,7 +3056,7 @@ unsafe extern "C" fn add_env_sep_dirs(
                 appname as *const ::core::ffi::c_void,
                 appname_len,
             );
-            dest = dest.offset(appname_len as isize);
+            dest = dest.add(appname_len);
             if !suf1.is_null() {
                 let c2rust_fresh24 = dest;
                 dest = dest.offset(1);
@@ -3069,7 +3066,7 @@ unsafe extern "C" fn add_env_sep_dirs(
                     suf1 as *const ::core::ffi::c_void,
                     len1,
                 );
-                dest = dest.offset(len1 as isize);
+                dest = dest.add(len1);
                 if !suf2.is_null() {
                     let c2rust_fresh25 = dest;
                     dest = dest.offset(1);
@@ -3079,7 +3076,7 @@ unsafe extern "C" fn add_env_sep_dirs(
                         suf2 as *const ::core::ffi::c_void,
                         len2,
                     );
-                    dest = dest.offset(len2 as isize);
+                    dest = dest.add(len2);
                 }
             }
             let c2rust_fresh26 = dest;
@@ -3133,7 +3130,7 @@ unsafe extern "C" fn add_dir(
             IObuff.ptr() as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
             appname_len,
         );
-        dest = dest.offset(appname_len as isize);
+        dest = dest.add(appname_len);
         if !suf1.is_null() {
             let c2rust_fresh19 = dest;
             dest = dest.offset(1);
@@ -3143,7 +3140,7 @@ unsafe extern "C" fn add_dir(
                 suf1 as *const ::core::ffi::c_void,
                 len1,
             );
-            dest = dest.offset(len1 as isize);
+            dest = dest.add(len1);
             if !suf2.is_null() {
                 let c2rust_fresh20 = dest;
                 dest = dest.offset(1);
@@ -3153,7 +3150,7 @@ unsafe extern "C" fn add_dir(
                     suf2 as *const ::core::ffi::c_void,
                     len2,
                 );
-                dest = dest.offset(len2 as isize);
+                dest = dest.add(len2);
             }
         }
     }
@@ -3219,7 +3216,7 @@ pub unsafe extern "C" fn runtimepath_default(mut clean_arg: bool) -> *mut ::core
                     .wrapping_add(SITE_SIZE)
                     .wrapping_add(1 as size_t)
                     .wrapping_add(
-                        (after_pathsep(data_home, data_home.offset(data_len as isize)) == 0)
+                        (after_pathsep(data_home, data_home.add(data_len)) == 0)
                             as ::core::ffi::c_int as size_t,
                     )
                     .wrapping_mul(2 as size_t)
@@ -3241,7 +3238,7 @@ pub unsafe extern "C" fn runtimepath_default(mut clean_arg: bool) -> *mut ::core
                     .wrapping_add(appname_len)
                     .wrapping_add(1 as size_t)
                     .wrapping_add(
-                        (after_pathsep(config_home, config_home.offset(config_len as isize)) == 0)
+                        (after_pathsep(config_home, config_home.add(config_len)) == 0)
                             as ::core::ffi::c_int as size_t,
                     )
                     .wrapping_mul(2 as size_t)
@@ -3989,7 +3986,7 @@ unsafe extern "C" fn do_source_ext(
                     args.items = &raw mut args__items as *mut Object;
                     let c2rust_fresh0 = args.size;
                     args.size = args.size.wrapping_add(1);
-                    *args.items.offset(c2rust_fresh0 as isize) = object {
+                    *args.items.add(c2rust_fresh0) = object {
                         type_0: kObjectTypeInteger,
                         data: C2Rust_Unnamed {
                             integer: (*curbuf.get()).handle as Integer,
@@ -3997,7 +3994,7 @@ unsafe extern "C" fn do_source_ext(
                     };
                     let c2rust_fresh1 = args.size;
                     args.size = args.size.wrapping_add(1);
-                    *args.items.offset(c2rust_fresh1 as isize) = object {
+                    *args.items.add(c2rust_fresh1) = object {
                         type_0: kObjectTypeInteger,
                         data: C2Rust_Unnamed {
                             integer: (*eap).line1 as Integer,
@@ -4005,7 +4002,7 @@ unsafe extern "C" fn do_source_ext(
                     };
                     let c2rust_fresh2 = args.size;
                     args.size = args.size.wrapping_add(1);
-                    *args.items.offset(c2rust_fresh2 as isize) = object {
+                    *args.items.add(c2rust_fresh2) = object {
                         type_0: kObjectTypeInteger,
                         data: C2Rust_Unnamed {
                             integer: (*eap).line2 as Integer,
@@ -4860,7 +4857,7 @@ pub unsafe extern "C" fn autoload_name(
     );
     memcpy(
         scriptname
-            .offset(::core::mem::size_of::<[::core::ffi::c_char; 10]>() as isize)
+            .add(::core::mem::size_of::<[::core::ffi::c_char; 10]>())
             .offset(-(1 as ::core::ffi::c_int as isize)) as *mut ::core::ffi::c_void,
         name as *const ::core::ffi::c_void,
         name_len,
@@ -4873,14 +4870,14 @@ pub unsafe extern "C" fn autoload_name(
         .wrapping_add(1 as size_t)
         < name_len
     {
-        if *scriptname.offset(i as isize) as ::core::ffi::c_int == AUTOLOAD_CHAR {
-            *scriptname.offset(i as isize) = '/' as ::core::ffi::c_char;
+        if *scriptname.add(i) as ::core::ffi::c_int == AUTOLOAD_CHAR {
+            *scriptname.add(i) = '/' as ::core::ffi::c_char;
             auchar_idx = i;
         }
         i = i.wrapping_add(1);
     }
     memcpy(
-        scriptname.offset(auchar_idx as isize) as *mut ::core::ffi::c_void,
+        scriptname.add(auchar_idx) as *mut ::core::ffi::c_void,
         b".vim\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>(),
     );

@@ -900,7 +900,7 @@ pub unsafe fn unpack_keydict(
         }
         (*ks).is_set_ |= flag;
 
-        let mem = retval.cast::<c_char>().offset((*field).ptr_off as isize);
+        let mem = retval.cast::<c_char>().add((*field).ptr_off);
         match (*field).type_0 {
             field_type::BOOLEAN => {
                 // Read straight off the wire: both boolean encodings differ

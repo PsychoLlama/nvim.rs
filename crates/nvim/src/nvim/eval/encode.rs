@@ -69,7 +69,7 @@ pub unsafe extern "C" fn encode_list_write(
         return;
     }
     let list: *mut list_T = data as *mut list_T;
-    let end: *const ::core::ffi::c_char = buf.offset(len as isize);
+    let end: *const ::core::ffi::c_char = buf.add(len);
     let mut line_end: *const ::core::ffi::c_char = buf;
     let mut li: *mut listitem_T = tv_list_last(list);
     if !li.is_null() {
@@ -90,13 +90,13 @@ pub unsafe extern "C" fn encode_list_write(
                 str as *mut ::core::ffi::c_void,
                 li_len.wrapping_add(line_length).wrapping_add(1 as size_t),
             ) as *mut ::core::ffi::c_char;
-            str = (*li).li_tv.vval.v_string.offset(li_len as isize);
+            str = (*li).li_tv.vval.v_string.add(li_len);
             memcpy(
                 str as *mut ::core::ffi::c_void,
                 buf as *const ::core::ffi::c_void,
                 line_length,
             );
-            *str.offset(line_length as isize) = 0 as ::core::ffi::c_char;
+            *str.add(line_length) = 0 as ::core::ffi::c_char;
             memchrsub(
                 str as *mut ::core::ffi::c_void,
                 NUL as ::core::ffi::c_char,
@@ -290,7 +290,7 @@ pub unsafe extern "C" fn encode_read_from_list(
     nbuf: size_t,
     read_bytes: *mut size_t,
 ) -> ::core::ffi::c_int {
-    let buf_end: *mut ::core::ffi::c_char = buf.offset(nbuf as isize);
+    let buf_end: *mut ::core::ffi::c_char = buf.add(nbuf);
     let mut p: *mut ::core::ffi::c_char = buf;
     while p < buf_end {
         debug_assert!(
@@ -305,11 +305,7 @@ pub unsafe extern "C" fn encode_read_from_list(
             );
             let c2rust_fresh27 = (*state).offset;
             (*state).offset = (*state).offset.wrapping_add(1);
-            let ch: ::core::ffi::c_char = *(*(*state).li)
-                .li_tv
-                .vval
-                .v_string
-                .offset(c2rust_fresh27 as isize);
+            let ch: ::core::ffi::c_char = *(*(*state).li).li_tv.vval.v_string.add(c2rust_fresh27);
             let c2rust_fresh28 = p;
             p = p.offset(1);
             *c2rust_fresh28 =
@@ -471,11 +467,11 @@ pub(crate) unsafe extern "C" fn convert_to_json_string(
         let mut str_len: size_t = 0 as size_t;
         let mut i: size_t = 0 as size_t;
         while i < utf_len {
-            let ch: ::core::ffi::c_int = utf_ptr2char(utf_buf.offset(i as isize));
+            let ch: ::core::ffi::c_int = utf_ptr2char(utf_buf.add(i));
             let shift: size_t = if ch == 0 as ::core::ffi::c_int {
                 1 as size_t
             } else {
-                utf_ptr2len(utf_buf.offset(i as isize)) as size_t
+                utf_ptr2len(utf_buf.add(i)) as size_t
             };
             debug_assert!(shift > 0 as size_t, "shift > 0");
             i = i.wrapping_add(shift);
@@ -492,7 +488,7 @@ pub(crate) unsafe extern "C" fn convert_to_json_string(
                             ),
                             utf_len.wrapping_sub(i.wrapping_sub(shift))
                                 as ::core::ffi::c_int,
-                            utf_buf.offset(i as isize).offset(-(shift as isize)),
+                            utf_buf.add(i).offset(-(shift as isize)),
                         );
                         xfree(tofree as *mut ::core::ffi::c_void);
                         return FAIL;
@@ -506,7 +502,7 @@ pub(crate) unsafe extern "C" fn convert_to_json_string(
                             ),
                             utf_len.wrapping_sub(i.wrapping_sub(shift))
                                 as ::core::ffi::c_int,
-                            utf_buf.offset(i as isize).offset(-(shift as isize)),
+                            utf_buf.add(i).offset(-(shift as isize)),
                         );
                         xfree(tofree as *mut ::core::ffi::c_void);
                         return FAIL;
@@ -532,7 +528,7 @@ pub(crate) unsafe extern "C" fn convert_to_json_string(
         ga_grow(gap, str_len as ::core::ffi::c_int);
         let mut i_0: size_t = 0 as size_t;
         while i_0 < utf_len {
-            let ch_0: ::core::ffi::c_int = utf_ptr2char(utf_buf.offset(i_0 as isize));
+            let ch_0: ::core::ffi::c_int = utf_ptr2char(utf_buf.add(i_0));
             let shift_0: size_t = if ch_0 == 0 as ::core::ffi::c_int {
                 1 as size_t
             } else {
@@ -541,7 +537,7 @@ pub(crate) unsafe extern "C" fn convert_to_json_string(
             debug_assert!(shift_0 > 0 as size_t, "shift > 0");
             debug_assert!(
                 ch_0 == 0 as ::core::ffi::c_int
-                    || shift_0 == utf_ptr2len(utf_buf.offset(i_0 as isize)) as size_t,
+                    || shift_0 == utf_ptr2len(utf_buf.add(i_0)) as size_t,
                 "ch == 0 || shift == ((size_t)utf_ptr2len(utf_buf + i))"
             );
             match ch_0 {
@@ -558,7 +554,7 @@ pub(crate) unsafe extern "C" fn convert_to_json_string(
                     if ch_0 >= 0x20 as ::core::ffi::c_int
                         && utf_printable(ch_0) as ::core::ffi::c_int != 0
                     {
-                        ga_concat_len(gap, utf_buf.offset(i_0 as isize), shift_0);
+                        ga_concat_len(gap, utf_buf.add(i_0), shift_0);
                     } else if ch_0 < SURROGATE_FIRST_CHAR {
                         let c2rust_lvalue: [::core::ffi::c_char; 6] = [
                             '\\' as ::core::ffi::c_char,

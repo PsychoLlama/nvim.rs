@@ -67,7 +67,7 @@ pub unsafe extern "C" fn ui_comp_init() {
     };
     let c2rust_fresh0 = (*layers.ptr()).size;
     (*layers.ptr()).size = (*layers.ptr()).size.wrapping_add(1);
-    let c2rust_lvalue_ptr = &raw mut *(*layers.ptr()).items.offset(c2rust_fresh0 as isize);
+    let c2rust_lvalue_ptr = &raw mut *(*layers.ptr()).items.add(c2rust_fresh0);
     *c2rust_lvalue_ptr = default_grid.ptr();
     curgrid.set(default_grid.ptr());
 }
@@ -116,21 +116,20 @@ pub unsafe extern "C" fn ui_comp_should_draw() -> bool {
 }
 pub unsafe extern "C" fn ui_comp_layers_adjust(mut layer_idx: size_t, mut raise: bool) {
     let mut size: size_t = (*layers.ptr()).size;
-    let mut layer: *mut ScreenGrid = *(*layers.ptr()).items.offset(layer_idx as isize);
+    let mut layer: *mut ScreenGrid = *(*layers.ptr()).items.add(layer_idx);
     if raise {
         while layer_idx < size.wrapping_sub(1 as size_t)
             && (*layer).zindex
                 > (**(*layers.ptr())
                     .items
-                    .offset(layer_idx.wrapping_add(1 as size_t) as isize))
+                    .add(layer_idx.wrapping_add(1 as size_t)))
                 .zindex
         {
-            *(*layers.ptr()).items.offset(layer_idx as isize) = *(*layers.ptr())
+            *(*layers.ptr()).items.add(layer_idx) = *(*layers.ptr())
                 .items
-                .offset(layer_idx.wrapping_add(1 as size_t) as isize);
-            (**(*layers.ptr()).items.offset(layer_idx as isize)).comp_index = layer_idx;
-            (**(*layers.ptr()).items.offset(layer_idx as isize)).pending_comp_index_update =
-                true_0 != 0;
+                .add(layer_idx.wrapping_add(1 as size_t));
+            (**(*layers.ptr()).items.add(layer_idx)).comp_index = layer_idx;
+            (**(*layers.ptr()).items.add(layer_idx)).pending_comp_index_update = true_0 != 0;
             layer_idx = layer_idx.wrapping_add(1);
         }
     } else {
@@ -138,19 +137,18 @@ pub unsafe extern "C" fn ui_comp_layers_adjust(mut layer_idx: size_t, mut raise:
             && (*layer).zindex
                 < (**(*layers.ptr())
                     .items
-                    .offset(layer_idx.wrapping_sub(1 as size_t) as isize))
+                    .add(layer_idx.wrapping_sub(1 as size_t)))
                 .zindex
         {
-            *(*layers.ptr()).items.offset(layer_idx as isize) = *(*layers.ptr())
+            *(*layers.ptr()).items.add(layer_idx) = *(*layers.ptr())
                 .items
-                .offset(layer_idx.wrapping_sub(1 as size_t) as isize);
-            (**(*layers.ptr()).items.offset(layer_idx as isize)).comp_index = layer_idx;
-            (**(*layers.ptr()).items.offset(layer_idx as isize)).pending_comp_index_update =
-                true_0 != 0;
+                .add(layer_idx.wrapping_sub(1 as size_t));
+            (**(*layers.ptr()).items.add(layer_idx)).comp_index = layer_idx;
+            (**(*layers.ptr()).items.add(layer_idx)).pending_comp_index_update = true_0 != 0;
             layer_idx = layer_idx.wrapping_sub(1);
         }
     }
-    *(*layers.ptr()).items.offset(layer_idx as isize) = layer;
+    *(*layers.ptr()).items.add(layer_idx) = layer;
     (*layer).comp_index = layer_idx;
     (*layer).pending_comp_index_update = true_0 != 0;
 }
@@ -221,7 +219,7 @@ pub unsafe extern "C" fn ui_comp_put_grid(
         moved = true_0 != 0;
         let mut i: size_t = 0 as size_t;
         while i < (*layers.ptr()).size {
-            if *(*layers.ptr()).items.offset(i as isize) == grid {
+            if *(*layers.ptr()).items.add(i) == grid {
                 abort();
             }
             i = i.wrapping_add(1);
@@ -230,7 +228,7 @@ pub unsafe extern "C" fn ui_comp_put_grid(
         while insert_at > 0 as size_t
             && (**(*layers.ptr())
                 .items
-                .offset(insert_at.wrapping_sub(1 as size_t) as isize))
+                .add(insert_at.wrapping_sub(1 as size_t)))
             .zindex
                 > (*grid).zindex
         {
@@ -239,11 +237,11 @@ pub unsafe extern "C" fn ui_comp_put_grid(
         if !(*curwin.ptr()).is_null()
             && *(*layers.ptr())
                 .items
-                .offset(insert_at.wrapping_sub(1 as size_t) as isize)
+                .add(insert_at.wrapping_sub(1 as size_t))
                 == &raw mut (*curwin.get()).w_grid_alloc
             && (**(*layers.ptr())
                 .items
-                .offset(insert_at.wrapping_sub(1 as size_t) as isize))
+                .add(insert_at.wrapping_sub(1 as size_t)))
             .zindex
                 == (*grid).zindex
             && !on_top
@@ -265,14 +263,13 @@ pub unsafe extern "C" fn ui_comp_put_grid(
         (*layers.ptr()).size = (*layers.ptr()).size.wrapping_add(1);
         let mut i_0: size_t = (*layers.ptr()).size.wrapping_sub(1 as size_t);
         while i_0 > insert_at {
-            *(*layers.ptr()).items.offset(i_0 as isize) = *(*layers.ptr())
-                .items
-                .offset(i_0.wrapping_sub(1 as size_t) as isize);
-            (**(*layers.ptr()).items.offset(i_0 as isize)).comp_index = i_0;
-            (**(*layers.ptr()).items.offset(i_0 as isize)).pending_comp_index_update = true_0 != 0;
+            *(*layers.ptr()).items.add(i_0) =
+                *(*layers.ptr()).items.add(i_0.wrapping_sub(1 as size_t));
+            (**(*layers.ptr()).items.add(i_0)).comp_index = i_0;
+            (**(*layers.ptr()).items.add(i_0)).pending_comp_index_update = true_0 != 0;
             i_0 = i_0.wrapping_sub(1);
         }
-        *(*layers.ptr()).items.offset(insert_at as isize) = grid;
+        *(*layers.ptr()).items.add(insert_at) = grid;
         (*grid).comp_row = row;
         (*grid).comp_col = col;
         (*grid).comp_index = insert_at;
@@ -303,11 +300,9 @@ pub unsafe extern "C" fn ui_comp_remove_grid(mut grid: *mut ScreenGrid) {
     }
     let mut i: size_t = (*grid).comp_index;
     while i < (*layers.ptr()).size.wrapping_sub(1 as size_t) {
-        *(*layers.ptr()).items.offset(i as isize) = *(*layers.ptr())
-            .items
-            .offset(i.wrapping_add(1 as size_t) as isize);
-        (**(*layers.ptr()).items.offset(i as isize)).comp_index = i;
-        (**(*layers.ptr()).items.offset(i as isize)).pending_comp_index_update = true_0 != 0;
+        *(*layers.ptr()).items.add(i) = *(*layers.ptr()).items.add(i.wrapping_add(1 as size_t));
+        (**(*layers.ptr()).items.add(i)).comp_index = i;
+        (**(*layers.ptr()).items.add(i)).pending_comp_index_update = true_0 != 0;
         i = i.wrapping_add(1);
     }
     (*layers.ptr()).size = (*layers.ptr()).size.wrapping_sub(1);
@@ -322,8 +317,8 @@ pub unsafe extern "C" fn ui_comp_set_grid(mut handle: handle_T) -> bool {
     let mut grid: *mut ScreenGrid = ::core::ptr::null_mut::<ScreenGrid>();
     let mut i: size_t = 0 as size_t;
     while i < (*layers.ptr()).size {
-        if (**(*layers.ptr()).items.offset(i as isize)).handle == handle {
-            grid = *(*layers.ptr()).items.offset(i as isize);
+        if (**(*layers.ptr()).items.add(i)).handle == handle {
+            grid = *(*layers.ptr()).items.add(i);
             break;
         } else {
             i = i.wrapping_add(1);
@@ -339,19 +334,17 @@ pub unsafe extern "C" fn ui_comp_raise_grid(mut grid: *mut ScreenGrid, mut new_i
     let mut old_index: size_t = (*grid).comp_index;
     let mut i: size_t = old_index;
     while i < new_index {
-        *(*layers.ptr()).items.offset(i as isize) = *(*layers.ptr())
-            .items
-            .offset(i.wrapping_add(1 as size_t) as isize);
-        (**(*layers.ptr()).items.offset(i as isize)).comp_index = i;
-        (**(*layers.ptr()).items.offset(i as isize)).pending_comp_index_update = true_0 != 0;
+        *(*layers.ptr()).items.add(i) = *(*layers.ptr()).items.add(i.wrapping_add(1 as size_t));
+        (**(*layers.ptr()).items.add(i)).comp_index = i;
+        (**(*layers.ptr()).items.add(i)).pending_comp_index_update = true_0 != 0;
         i = i.wrapping_add(1);
     }
-    *(*layers.ptr()).items.offset(new_index as isize) = grid;
+    *(*layers.ptr()).items.add(new_index) = grid;
     (*grid).comp_index = new_index;
     (*grid).pending_comp_index_update = true_0 != 0;
     let mut i_0: size_t = old_index;
     while i_0 < new_index {
-        let mut grid2: *mut ScreenGrid = *(*layers.ptr()).items.offset(i_0 as isize);
+        let mut grid2: *mut ScreenGrid = *(*layers.ptr()).items.add(i_0);
         let mut startcol: ::core::ffi::c_int = if (*grid).comp_col > (*grid2).comp_col {
             (*grid).comp_col
         } else {
@@ -393,7 +386,7 @@ pub unsafe extern "C" fn ui_comp_grid_cursor_goto(
     if curgrid.get() != default_grid.ptr() {
         let mut new_index: size_t = (*layers.ptr()).size.wrapping_sub(1 as size_t);
         while new_index > 1 as size_t
-            && (**(*layers.ptr()).items.offset(new_index as isize)).zindex > (*curgrid.get()).zindex
+            && (**(*layers.ptr()).items.add(new_index)).zindex > (*curgrid.get()).zindex
         {
             new_index = new_index.wrapping_sub(1);
         }
@@ -506,19 +499,17 @@ unsafe extern "C" fn compose_line(
     }
     let mut col: ::core::ffi::c_int = startcol as ::core::ffi::c_int;
     let mut grid: *mut ScreenGrid = ::core::ptr::null_mut::<ScreenGrid>();
-    let mut bg_line: *mut schar_T = (*default_grid.ptr()).chars.offset(
-        (*(*default_grid.ptr()).line_offset.offset(row as isize)).wrapping_add(startcol as size_t)
-            as isize,
+    let mut bg_line: *mut schar_T = (*default_grid.ptr()).chars.add(
+        (*(*default_grid.ptr()).line_offset.offset(row as isize)).wrapping_add(startcol as size_t),
     );
-    let mut bg_attrs: *mut sattr_T = (*default_grid.ptr()).attrs.offset(
-        (*(*default_grid.ptr()).line_offset.offset(row as isize)).wrapping_add(startcol as size_t)
-            as isize,
+    let mut bg_attrs: *mut sattr_T = (*default_grid.ptr()).attrs.add(
+        (*(*default_grid.ptr()).line_offset.offset(row as isize)).wrapping_add(startcol as size_t),
     );
     while (col as Integer) < endcol {
         let mut until: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut i: size_t = 0 as size_t;
         while i < (*layers.ptr()).size {
-            let mut g: *mut ScreenGrid = *(*layers.ptr()).items.offset(i as isize);
+            let mut g: *mut ScreenGrid = *(*layers.ptr()).items.add(i);
             let mut grid_width: ::core::ffi::c_int = if (*g).cols < (*g).comp_width {
                 (*g).cols
             } else {
@@ -577,17 +568,17 @@ unsafe extern "C" fn compose_line(
             memcpy(
                 (*linebuf.ptr()).offset((col as Integer - startcol) as isize)
                     as *mut ::core::ffi::c_void,
-                (*grid).chars.offset(off as isize) as *const ::core::ffi::c_void,
+                (*grid).chars.add(off) as *const ::core::ffi::c_void,
                 n.wrapping_mul(::core::mem::size_of::<schar_T>()),
             );
             memcpy(
                 (*attrbuf.ptr()).offset((col as Integer - startcol) as isize)
                     as *mut ::core::ffi::c_void,
-                (*grid).attrs.offset(off as isize) as *const ::core::ffi::c_void,
+                (*grid).attrs.add(off) as *const ::core::ffi::c_void,
                 n.wrapping_mul(::core::mem::size_of::<sattr_T>()),
             );
             if (*grid).comp_col + (*grid).cols > until
-                && *(*grid).chars.offset(off.wrapping_add(n) as isize) == NUL as schar_T
+                && *(*grid).chars.add(off.wrapping_add(n)) == NUL as schar_T
             {
                 *(*linebuf.ptr())
                     .offset(((until - 1 as ::core::ffi::c_int) as Integer - startcol) as isize) =
@@ -1020,7 +1011,7 @@ pub unsafe extern "C" fn ui_comp_msg_set_pos(
 unsafe extern "C" fn curgrid_covered_above(mut row: ::core::ffi::c_int) -> bool {
     let mut above_msg: bool = *(*layers.ptr())
         .items
-        .offset((*layers.ptr()).size.wrapping_sub(1 as size_t) as isize)
+        .add((*layers.ptr()).size.wrapping_sub(1 as size_t))
         == msg_grid.ptr()
         && row
             < msg_current_row.get()
@@ -1076,12 +1067,12 @@ pub unsafe extern "C" fn ui_comp_grid_scroll(
                     0 as Integer
                 })
         {
-            if *(*curgrid.get()).attrs.offset(
+            if *(*curgrid.get()).attrs.add(
                 (*(*curgrid.get())
                     .line_offset
                     .offset((r - (*curgrid.get()).comp_row) as isize))
                 .wrapping_add(left as size_t)
-                .wrapping_sub((*curgrid.get()).comp_col as size_t) as isize,
+                .wrapping_sub((*curgrid.get()).comp_col as size_t),
             ) >= 0 as sattr_T
             {
                 compose_line(r as Integer, left, right, 0 as LineFlags);

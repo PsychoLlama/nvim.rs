@@ -55,7 +55,7 @@ pub unsafe extern "C" fn buf_updates_register(
         };
         let c2rust_fresh0 = (*buf).update_callbacks.size;
         (*buf).update_callbacks.size = (*buf).update_callbacks.size.wrapping_add(1);
-        *(*buf).update_callbacks.items.offset(c2rust_fresh0 as isize) = cb;
+        *(*buf).update_callbacks.items.add(c2rust_fresh0) = cb;
         if cb.utf_sizes {
             (*buf).update_need_codepoints = true_0 != 0;
         }
@@ -64,7 +64,7 @@ pub unsafe extern "C" fn buf_updates_register(
     let mut size: size_t = (*buf).update_channels.size;
     let mut i: size_t = 0 as size_t;
     while i < size {
-        if *(*buf).update_channels.items.offset(i as isize) == channel_id {
+        if *(*buf).update_channels.items.add(i) == channel_id {
             return true_0 != 0;
         }
         i = i.wrapping_add(1);
@@ -83,7 +83,7 @@ pub unsafe extern "C" fn buf_updates_register(
     };
     let c2rust_fresh1 = (*buf).update_channels.size;
     (*buf).update_channels.size = (*buf).update_channels.size.wrapping_add(1);
-    *(*buf).update_channels.items.offset(c2rust_fresh1 as isize) = channel_id;
+    *(*buf).update_channels.items.add(c2rust_fresh1) = channel_id;
     if send_buffer {
         let mut args: Array = ARRAY_DICT_INIT;
         let mut args__items: [Object; 6] = [Object {
@@ -94,7 +94,7 @@ pub unsafe extern "C" fn buf_updates_register(
         args.items = &raw mut args__items as *mut Object;
         let c2rust_fresh2 = args.size;
         args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh2 as isize) = object {
+        *args.items.add(c2rust_fresh2) = object {
             type_0: kObjectTypeBuffer,
             data: C2Rust_Unnamed {
                 integer: (*buf).handle as Integer,
@@ -102,7 +102,7 @@ pub unsafe extern "C" fn buf_updates_register(
         };
         let c2rust_fresh3 = args.size;
         args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh3 as isize) = object {
+        *args.items.add(c2rust_fresh3) = object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
                 integer: buf_get_changedtick(buf),
@@ -110,7 +110,7 @@ pub unsafe extern "C" fn buf_updates_register(
         };
         let c2rust_fresh4 = args.size;
         args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh4 as isize) = object {
+        *args.items.add(c2rust_fresh4) = object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
                 integer: 0 as Integer,
@@ -118,7 +118,7 @@ pub unsafe extern "C" fn buf_updates_register(
         };
         let c2rust_fresh5 = args.size;
         args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh5 as isize) = object {
+        *args.items.add(c2rust_fresh5) = object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
                 integer: -1 as Integer,
@@ -142,13 +142,13 @@ pub unsafe extern "C" fn buf_updates_register(
         }
         let c2rust_fresh6 = args.size;
         args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh6 as isize) = object {
+        *args.items.add(c2rust_fresh6) = object {
             type_0: kObjectTypeArray,
             data: C2Rust_Unnamed { array: linedata },
         };
         let c2rust_fresh7 = args.size;
         args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh7 as isize) = object {
+        *args.items.add(c2rust_fresh7) = object {
             type_0: kObjectTypeBoolean,
             data: C2Rust_Unnamed { boolean: false },
         };
@@ -176,7 +176,7 @@ pub unsafe extern "C" fn buf_updates_send_end(mut buf: *mut buf_T, mut channelid
     args.items = &raw mut args__items as *mut Object;
     let c2rust_fresh10 = args.size;
     args.size = args.size.wrapping_add(1);
-    *args.items.offset(c2rust_fresh10 as isize) = object {
+    *args.items.add(c2rust_fresh10) = object {
         type_0: kObjectTypeBuffer,
         data: C2Rust_Unnamed {
             integer: (*buf).handle as Integer,
@@ -197,12 +197,11 @@ pub unsafe extern "C" fn buf_updates_unregister(mut buf: *mut buf_T, mut channel
     let mut found: size_t = 0 as size_t;
     let mut i: size_t = 0 as size_t;
     while i < size {
-        if *(*buf).update_channels.items.offset(i as isize) == channelid {
+        if *(*buf).update_channels.items.add(i) == channelid {
             found = found.wrapping_add(1);
         } else {
             if i != j {
-                *(*buf).update_channels.items.offset(j as isize) =
-                    *(*buf).update_channels.items.offset(i as isize);
+                *(*buf).update_channels.items.add(j) = *(*buf).update_channels.items.add(i);
             }
             j = j.wrapping_add(1);
         }
@@ -229,7 +228,7 @@ pub unsafe extern "C" fn buf_free_callbacks(mut buf: *mut buf_T) {
     (*buf).update_channels.items = ::core::ptr::null_mut::<uint64_t>();
     let mut i: size_t = 0 as size_t;
     while i < (*buf).update_callbacks.size {
-        buffer_update_callbacks_free(*(*buf).update_callbacks.items.offset(i as isize));
+        buffer_update_callbacks_free(*(*buf).update_callbacks.items.add(i));
         i = i.wrapping_add(1);
     }
     xfree((*buf).update_callbacks.items as *mut ::core::ffi::c_void);
@@ -242,7 +241,7 @@ pub unsafe extern "C" fn buf_updates_unload(mut buf: *mut buf_T, mut can_reload:
     if size != 0 {
         let mut i: size_t = 0 as size_t;
         while i < size {
-            buf_updates_send_end(buf, *(*buf).update_channels.items.offset(i as isize));
+            buf_updates_send_end(buf, *(*buf).update_channels.items.add(i));
             i = i.wrapping_add(1);
         }
         xfree((*buf).update_channels.items as *mut ::core::ffi::c_void);
@@ -256,7 +255,7 @@ pub unsafe extern "C" fn buf_updates_unload(mut buf: *mut buf_T, mut can_reload:
     let mut j: size_t = 0 as size_t;
     let mut i_0: size_t = 0 as size_t;
     while i_0 < (*buf).update_callbacks.size {
-        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.offset(i_0 as isize);
+        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.add(i_0);
         let mut thecb: LuaRef = LUA_NOREF;
         let mut keep: bool = false_0 != 0;
         if can_reload as ::core::ffi::c_int != 0 && cb.on_reload != LUA_NOREF {
@@ -275,7 +274,7 @@ pub unsafe extern "C" fn buf_updates_unload(mut buf: *mut buf_T, mut can_reload:
             args.items = &raw mut args__items as *mut Object;
             let c2rust_fresh11 = args.size;
             args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh11 as isize) = object {
+            *args.items.add(c2rust_fresh11) = object {
                 type_0: kObjectTypeBuffer,
                 data: C2Rust_Unnamed {
                     integer: (*buf).handle as Integer,
@@ -301,11 +300,8 @@ pub unsafe extern "C" fn buf_updates_unload(mut buf: *mut buf_T, mut can_reload:
         if keep {
             let c2rust_fresh12 = j;
             j = j.wrapping_add(1);
-            *(*buf)
-                .update_callbacks
-                .items
-                .offset(c2rust_fresh12 as isize) =
-                *(*buf).update_callbacks.items.offset(i_0 as isize);
+            *(*buf).update_callbacks.items.add(c2rust_fresh12) =
+                *(*buf).update_callbacks.items.add(i_0);
         } else {
             buffer_update_callbacks_free(cb);
         }
@@ -354,7 +350,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
     }
     let mut i: size_t = 0 as size_t;
     while i < (*buf).update_channels.size {
-        let mut channelid: uint64_t = *(*buf).update_channels.items.offset(i as isize);
+        let mut channelid: uint64_t = *(*buf).update_channels.items.add(i);
         let mut args: Array = ARRAY_DICT_INIT;
         let mut args__items: [Object; 6] = [Object {
             type_0: kObjectTypeNil,
@@ -364,7 +360,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
         args.items = &raw mut args__items as *mut Object;
         let c2rust_fresh13 = args.size;
         args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh13 as isize) = object {
+        *args.items.add(c2rust_fresh13) = object {
             type_0: kObjectTypeBuffer,
             data: C2Rust_Unnamed {
                 integer: (*buf).handle as Integer,
@@ -372,7 +368,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
         };
         let c2rust_fresh14 = args.size;
         args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh14 as isize) = if send_tick as ::core::ffi::c_int != 0 {
+        *args.items.add(c2rust_fresh14) = if send_tick as ::core::ffi::c_int != 0 {
             object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
@@ -387,7 +383,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
         };
         let c2rust_fresh15 = args.size;
         args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh15 as isize) = object {
+        *args.items.add(c2rust_fresh15) = object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
                 integer: (firstline - 1 as linenr_T) as Integer,
@@ -395,7 +391,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
         };
         let c2rust_fresh16 = args.size;
         args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh16 as isize) = object {
+        *args.items.add(c2rust_fresh16) = object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
                 integer: (firstline - 1 as linenr_T) as int64_t + num_removed,
@@ -403,13 +399,13 @@ pub unsafe extern "C" fn buf_updates_send_changes(
         };
         let c2rust_fresh17 = args.size;
         args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh17 as isize) = object {
+        *args.items.add(c2rust_fresh17) = object {
             type_0: kObjectTypeArray,
             data: C2Rust_Unnamed { array: linedata },
         };
         let c2rust_fresh18 = args.size;
         args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh18 as isize) = object {
+        *args.items.add(c2rust_fresh18) = object {
             type_0: kObjectTypeBoolean,
             data: C2Rust_Unnamed { boolean: false },
         };
@@ -439,7 +435,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
     let mut j: size_t = 0 as size_t;
     let mut i_0: size_t = 0 as size_t;
     while i_0 < (*buf).update_callbacks.size {
-        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.offset(i_0 as isize);
+        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.add(i_0);
         let mut keep: bool = true_0 != 0;
         if cb.on_lines != LUA_NOREF && (cb.preview as ::core::ffi::c_int != 0 || !cmdpreview.get())
         {
@@ -452,7 +448,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
             args_0.items = &raw mut args__items_0 as *mut Object;
             let c2rust_fresh19 = args_0.size;
             args_0.size = args_0.size.wrapping_add(1);
-            *args_0.items.offset(c2rust_fresh19 as isize) = object {
+            *args_0.items.add(c2rust_fresh19) = object {
                 type_0: kObjectTypeBuffer,
                 data: C2Rust_Unnamed {
                     integer: (*buf).handle as Integer,
@@ -460,8 +456,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
             };
             let c2rust_fresh20 = args_0.size;
             args_0.size = args_0.size.wrapping_add(1);
-            *args_0.items.offset(c2rust_fresh20 as isize) = if send_tick as ::core::ffi::c_int != 0
-            {
+            *args_0.items.add(c2rust_fresh20) = if send_tick as ::core::ffi::c_int != 0 {
                 object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -476,7 +471,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
             };
             let c2rust_fresh21 = args_0.size;
             args_0.size = args_0.size.wrapping_add(1);
-            *args_0.items.offset(c2rust_fresh21 as isize) = object {
+            *args_0.items.add(c2rust_fresh21) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
                     integer: (firstline - 1 as linenr_T) as Integer,
@@ -484,7 +479,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
             };
             let c2rust_fresh22 = args_0.size;
             args_0.size = args_0.size.wrapping_add(1);
-            *args_0.items.offset(c2rust_fresh22 as isize) = object {
+            *args_0.items.add(c2rust_fresh22) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
                     integer: (firstline - 1 as linenr_T) as int64_t + num_removed,
@@ -492,7 +487,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
             };
             let c2rust_fresh23 = args_0.size;
             args_0.size = args_0.size.wrapping_add(1);
-            *args_0.items.offset(c2rust_fresh23 as isize) = object {
+            *args_0.items.add(c2rust_fresh23) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
                     integer: (firstline - 1 as linenr_T) as int64_t + num_added,
@@ -500,7 +495,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
             };
             let c2rust_fresh24 = args_0.size;
             args_0.size = args_0.size.wrapping_add(1);
-            *args_0.items.offset(c2rust_fresh24 as isize) = object {
+            *args_0.items.add(c2rust_fresh24) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
                     integer: deleted_bytes as Integer,
@@ -509,7 +504,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
             if cb.utf_sizes {
                 let c2rust_fresh25 = args_0.size;
                 args_0.size = args_0.size.wrapping_add(1);
-                *args_0.items.offset(c2rust_fresh25 as isize) = object {
+                *args_0.items.add(c2rust_fresh25) = object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
                         integer: deleted_codepoints as Integer,
@@ -517,7 +512,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
                 };
                 let c2rust_fresh26 = args_0.size;
                 args_0.size = args_0.size.wrapping_add(1);
-                *args_0.items.offset(c2rust_fresh26 as isize) = object {
+                *args_0.items.add(c2rust_fresh26) = object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
                         integer: deleted_codeunits as Integer,
@@ -551,11 +546,8 @@ pub unsafe extern "C" fn buf_updates_send_changes(
         if keep {
             let c2rust_fresh27 = j;
             j = j.wrapping_add(1);
-            *(*buf)
-                .update_callbacks
-                .items
-                .offset(c2rust_fresh27 as isize) =
-                *(*buf).update_callbacks.items.offset(i_0 as isize);
+            *(*buf).update_callbacks.items.add(c2rust_fresh27) =
+                *(*buf).update_callbacks.items.add(i_0);
         }
         i_0 = i_0.wrapping_add(1);
     }
@@ -579,7 +571,7 @@ pub unsafe extern "C" fn buf_updates_send_splice(
     let mut j: size_t = 0 as size_t;
     let mut i: size_t = 0 as size_t;
     while i < (*buf).update_callbacks.size {
-        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.offset(i as isize);
+        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.add(i);
         let mut keep: bool = true_0 != 0;
         if cb.on_bytes != LUA_NOREF && (cb.preview as ::core::ffi::c_int != 0 || !cmdpreview.get())
         {
@@ -592,7 +584,7 @@ pub unsafe extern "C" fn buf_updates_send_splice(
             args.items = &raw mut args__items as *mut Object;
             let c2rust_fresh28 = args.size;
             args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh28 as isize) = object {
+            *args.items.add(c2rust_fresh28) = object {
                 type_0: kObjectTypeBuffer,
                 data: C2Rust_Unnamed {
                     integer: (*buf).handle as Integer,
@@ -600,7 +592,7 @@ pub unsafe extern "C" fn buf_updates_send_splice(
             };
             let c2rust_fresh29 = args.size;
             args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh29 as isize) = object {
+            *args.items.add(c2rust_fresh29) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
                     integer: buf_get_changedtick(buf),
@@ -608,7 +600,7 @@ pub unsafe extern "C" fn buf_updates_send_splice(
             };
             let c2rust_fresh30 = args.size;
             args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh30 as isize) = object {
+            *args.items.add(c2rust_fresh30) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
                     integer: start_row as Integer,
@@ -616,7 +608,7 @@ pub unsafe extern "C" fn buf_updates_send_splice(
             };
             let c2rust_fresh31 = args.size;
             args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh31 as isize) = object {
+            *args.items.add(c2rust_fresh31) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
                     integer: start_col as Integer,
@@ -624,7 +616,7 @@ pub unsafe extern "C" fn buf_updates_send_splice(
             };
             let c2rust_fresh32 = args.size;
             args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh32 as isize) = object {
+            *args.items.add(c2rust_fresh32) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
                     integer: start_byte as i64,
@@ -632,7 +624,7 @@ pub unsafe extern "C" fn buf_updates_send_splice(
             };
             let c2rust_fresh33 = args.size;
             args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh33 as isize) = object {
+            *args.items.add(c2rust_fresh33) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
                     integer: old_row as Integer,
@@ -640,7 +632,7 @@ pub unsafe extern "C" fn buf_updates_send_splice(
             };
             let c2rust_fresh34 = args.size;
             args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh34 as isize) = object {
+            *args.items.add(c2rust_fresh34) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
                     integer: old_col as Integer,
@@ -648,7 +640,7 @@ pub unsafe extern "C" fn buf_updates_send_splice(
             };
             let c2rust_fresh35 = args.size;
             args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh35 as isize) = object {
+            *args.items.add(c2rust_fresh35) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
                     integer: old_byte as i64,
@@ -656,7 +648,7 @@ pub unsafe extern "C" fn buf_updates_send_splice(
             };
             let c2rust_fresh36 = args.size;
             args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh36 as isize) = object {
+            *args.items.add(c2rust_fresh36) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
                     integer: new_row as Integer,
@@ -664,7 +656,7 @@ pub unsafe extern "C" fn buf_updates_send_splice(
             };
             let c2rust_fresh37 = args.size;
             args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh37 as isize) = object {
+            *args.items.add(c2rust_fresh37) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
                     integer: new_col as Integer,
@@ -672,7 +664,7 @@ pub unsafe extern "C" fn buf_updates_send_splice(
             };
             let c2rust_fresh38 = args.size;
             args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh38 as isize) = object {
+            *args.items.add(c2rust_fresh38) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
                     integer: new_byte as i64,
@@ -705,11 +697,8 @@ pub unsafe extern "C" fn buf_updates_send_splice(
         if keep {
             let c2rust_fresh39 = j;
             j = j.wrapping_add(1);
-            *(*buf)
-                .update_callbacks
-                .items
-                .offset(c2rust_fresh39 as isize) =
-                *(*buf).update_callbacks.items.offset(i as isize);
+            *(*buf).update_callbacks.items.add(c2rust_fresh39) =
+                *(*buf).update_callbacks.items.add(i);
         }
         i = i.wrapping_add(1);
     }
@@ -718,14 +707,14 @@ pub unsafe extern "C" fn buf_updates_send_splice(
 pub unsafe extern "C" fn buf_updates_changedtick(mut buf: *mut buf_T) {
     let mut i: size_t = 0 as size_t;
     while i < (*buf).update_channels.size {
-        let mut channel_id: uint64_t = *(*buf).update_channels.items.offset(i as isize);
+        let mut channel_id: uint64_t = *(*buf).update_channels.items.add(i);
         buf_updates_changedtick_single(buf, channel_id);
         i = i.wrapping_add(1);
     }
     let mut j: size_t = 0 as size_t;
     let mut i_0: size_t = 0 as size_t;
     while i_0 < (*buf).update_callbacks.size {
-        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.offset(i_0 as isize);
+        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.add(i_0);
         let mut keep: bool = true_0 != 0;
         if cb.on_changedtick != LUA_NOREF {
             let mut args: Array = ARRAY_DICT_INIT;
@@ -737,7 +726,7 @@ pub unsafe extern "C" fn buf_updates_changedtick(mut buf: *mut buf_T) {
             args.items = &raw mut args__items as *mut Object;
             let c2rust_fresh40 = args.size;
             args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh40 as isize) = object {
+            *args.items.add(c2rust_fresh40) = object {
                 type_0: kObjectTypeBuffer,
                 data: C2Rust_Unnamed {
                     integer: (*buf).handle as Integer,
@@ -745,7 +734,7 @@ pub unsafe extern "C" fn buf_updates_changedtick(mut buf: *mut buf_T) {
             };
             let c2rust_fresh41 = args.size;
             args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh41 as isize) = object {
+            *args.items.add(c2rust_fresh41) = object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
                     integer: buf_get_changedtick(buf),
@@ -778,11 +767,8 @@ pub unsafe extern "C" fn buf_updates_changedtick(mut buf: *mut buf_T) {
         if keep {
             let c2rust_fresh42 = j;
             j = j.wrapping_add(1);
-            *(*buf)
-                .update_callbacks
-                .items
-                .offset(c2rust_fresh42 as isize) =
-                *(*buf).update_callbacks.items.offset(i_0 as isize);
+            *(*buf).update_callbacks.items.add(c2rust_fresh42) =
+                *(*buf).update_callbacks.items.add(i_0);
         }
         i_0 = i_0.wrapping_add(1);
     }
@@ -801,7 +787,7 @@ pub unsafe extern "C" fn buf_updates_changedtick_single(
     args.items = &raw mut args__items as *mut Object;
     let c2rust_fresh8 = args.size;
     args.size = args.size.wrapping_add(1);
-    *args.items.offset(c2rust_fresh8 as isize) = object {
+    *args.items.add(c2rust_fresh8) = object {
         type_0: kObjectTypeBuffer,
         data: C2Rust_Unnamed {
             integer: (*buf).handle as Integer,
@@ -809,7 +795,7 @@ pub unsafe extern "C" fn buf_updates_changedtick_single(
     };
     let c2rust_fresh9 = args.size;
     args.size = args.size.wrapping_add(1);
-    *args.items.offset(c2rust_fresh9 as isize) = object {
+    *args.items.add(c2rust_fresh9) = object {
         type_0: kObjectTypeInteger,
         data: C2Rust_Unnamed {
             integer: buf_get_changedtick(buf),

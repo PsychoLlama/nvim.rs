@@ -248,7 +248,7 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
             }
 
             let prefixlen = p.offset_from(newsub) as usize; // not including the tilde
-            let postfix = p.offset(tildelen as isize);
+            let postfix = p.add(tildelen);
             if newsublen == 0 {
                 newsublen = strlen(newsub);
             }
@@ -274,12 +274,12 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
             let tmpsub: *mut c_char = xmalloc(tmpsublen + 1).cast();
             memmove(tmpsub.cast(), newsub.cast(), prefixlen);
             memmove(
-                tmpsub.offset(prefixlen as isize).cast(),
+                tmpsub.add(prefixlen).cast(),
                 reg_prev_sub.get().cast(),
                 reg_prev_sublen.get(),
             );
             let expanded = prefixlen + reg_prev_sublen.get();
-            strcpy(tmpsub.offset(expanded as isize), postfix);
+            strcpy(tmpsub.add(expanded), postfix);
 
             if newsub != source {
                 xfree(newsub.cast());
@@ -287,7 +287,7 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
             newsub = tmpsub;
             newsublen = tmpsublen;
             // Rescan from just past what the tilde expanded into.
-            p = newsub.offset(expanded as isize);
+            p = newsub.add(expanded);
         }
 
         if error {

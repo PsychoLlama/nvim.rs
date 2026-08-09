@@ -715,7 +715,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                 if len != 0 as size_t {
                     msg_puts(
                         (b"    \0".as_ptr() as *const ::core::ffi::c_char)
-                            .offset((4 as size_t).wrapping_sub(len) as isize),
+                            .add((4 as size_t).wrapping_sub(len)),
                     );
                 }
                 msg_outtrans((*cmd).uc_name, HLF_D, false_0 != 0);
@@ -729,7 +729,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                         });
                     msg_puts(
                         (spaces.ptr() as *mut ::core::ffi::c_char)
-                            .offset(len.wrapping_sub(4 as size_t) as isize),
+                            .add(len.wrapping_sub(4 as size_t)),
                     );
                     len = 21 as size_t;
                 }
@@ -776,7 +776,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                 if a & (EX_RANGE as uint32_t | EX_COUNT as uint32_t) != 0 {
                     if a & EX_COUNT as uint32_t != 0 {
                         let mut rc: ::core::ffi::c_int = snprintf(
-                            (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
+                            (IObuff.ptr() as *mut ::core::ffi::c_char).add(len),
                             (IOSIZE as size_t).wrapping_sub(len),
                             b"%ldc\0".as_ptr() as *const ::core::ffi::c_char,
                             (*cmd).uc_def,
@@ -789,7 +789,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                         (*IObuff.ptr())[c2rust_fresh8 as usize] = '%' as ::core::ffi::c_char;
                     } else if (*cmd).uc_def >= 0 as int64_t {
                         let mut rc_0: ::core::ffi::c_int = snprintf(
-                            (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
+                            (IObuff.ptr() as *mut ::core::ffi::c_char).add(len),
                             (IOSIZE as size_t).wrapping_sub(len),
                             b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
                             (*cmd).uc_def,
@@ -820,7 +820,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                             == (*cmd).uc_addr_type as ::core::ffi::c_uint
                     {
                         let mut rc_1: ::core::ffi::c_int = snprintf(
-                            (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
+                            (IObuff.ptr() as *mut ::core::ffi::c_char).add(len),
                             (IOSIZE as size_t).wrapping_sub(len),
                             b"%s\0".as_ptr() as *const ::core::ffi::c_char,
                             (*addr_type_complete.ptr())[j as usize].shortname,
@@ -843,7 +843,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                 let mut cmd_compl: *mut ::core::ffi::c_char = get_command_complete((*cmd).uc_compl);
                 if !cmd_compl.is_null() {
                     let mut rc_2: ::core::ffi::c_int = snprintf(
-                        (IObuff.ptr() as *mut ::core::ffi::c_char).offset(len as isize),
+                        (IObuff.ptr() as *mut ::core::ffi::c_char).add(len),
                         (IOSIZE as size_t).wrapping_sub(len),
                         b"%s\0".as_ptr() as *const ::core::ffi::c_char,
                         get_command_complete((*cmd).uc_compl),
@@ -1177,7 +1177,7 @@ unsafe extern "C" fn uc_scan_attr(
                                         0 as ::core::ffi::c_int,
                                     );
                                     *argt = (*argt as ::core::ffi::c_uint | EX_ZEROR) as uint32_t;
-                                    if p != val.offset(vallen as isize) || vallen == 0 as size_t {
+                                    if p != val.add(vallen) || vallen == 0 as size_t {
                                         break '_invalid_count;
                                     }
                                 }
@@ -1212,7 +1212,7 @@ unsafe extern "C" fn uc_scan_attr(
                                         true_0 != 0,
                                         0 as ::core::ffi::c_int,
                                     );
-                                    if p_0 != val.offset(vallen as isize) {
+                                    if p_0 != val.add(vallen) {
                                         break '_invalid_count;
                                     }
                                 }
@@ -1278,14 +1278,14 @@ unsafe extern "C" fn uc_scan_attr(
                                 *argt = (*argt as ::core::ffi::c_uint | EX_ZEROR) as uint32_t;
                             }
                         } else {
-                            let mut ch: ::core::ffi::c_char = *attr.offset(len as isize);
-                            *attr.offset(len as isize) = NUL as ::core::ffi::c_char;
+                            let mut ch: ::core::ffi::c_char = *attr.add(len);
+                            *attr.add(len) = NUL as ::core::ffi::c_char;
                             semsg_c!(
                                 gettext(b"E181: Invalid attribute: %s\0".as_ptr()
                                     as *const ::core::ffi::c_char),
                                 attr,
                             );
-                            *attr.offset(len as isize) = ch;
+                            *attr.add(len) = ch;
                             return FAIL;
                         }
                         break 's_409;
@@ -1667,41 +1667,39 @@ pub unsafe extern "C" fn uc_split_args_iter(
     }
     let mut pos: size_t = *end;
     while pos < arglen
-        && ascii_iswhite(*arg.offset(pos as isize) as ::core::ffi::c_int) as ::core::ffi::c_int != 0
+        && ascii_iswhite(*arg.add(pos) as ::core::ffi::c_int) as ::core::ffi::c_int != 0
     {
         pos = pos.wrapping_add(1);
     }
     let mut l: size_t = 0 as size_t;
     while pos < arglen.wrapping_sub(1 as size_t) {
-        if *arg.offset(pos as isize) as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-            && (*arg.offset(pos.wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
+        if *arg.add(pos) as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
+            && (*arg.add(pos.wrapping_add(1 as size_t)) as ::core::ffi::c_int
                 == '\\' as ::core::ffi::c_int
-                || ascii_iswhite(
-                    *arg.offset(pos.wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
-                ) as ::core::ffi::c_int
+                || ascii_iswhite(*arg.add(pos.wrapping_add(1 as size_t)) as ::core::ffi::c_int)
+                    as ::core::ffi::c_int
                     != 0)
         {
             pos = pos.wrapping_add(1);
             let c2rust_fresh13 = l;
             l = l.wrapping_add(1);
-            *buf.offset(c2rust_fresh13 as isize) = *arg.offset(pos as isize);
+            *buf.add(c2rust_fresh13) = *arg.add(pos);
         } else {
             let c2rust_fresh14 = l;
             l = l.wrapping_add(1);
-            *buf.offset(c2rust_fresh14 as isize) = *arg.offset(pos as isize);
+            *buf.add(c2rust_fresh14) = *arg.add(pos);
         }
-        if ascii_iswhite(*arg.offset(pos.wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int)
-        {
+        if ascii_iswhite(*arg.add(pos.wrapping_add(1 as size_t)) as ::core::ffi::c_int) {
             *end = pos.wrapping_add(1 as size_t);
             *len = l;
             return false_0 != 0;
         }
         pos = pos.wrapping_add(1);
     }
-    if pos < arglen && !ascii_iswhite(*arg.offset(pos as isize) as ::core::ffi::c_int) {
+    if pos < arglen && !ascii_iswhite(*arg.add(pos) as ::core::ffi::c_int) {
         let c2rust_fresh15 = l;
         l = l.wrapping_add(1);
-        *buf.offset(c2rust_fresh15 as isize) = *arg.offset(pos as isize);
+        *buf.add(c2rust_fresh15) = *arg.add(pos);
     }
     *len = l;
     return true_0 != 0;
@@ -1714,7 +1712,7 @@ pub unsafe extern "C" fn uc_nargs_upper_bound(
     let mut nargs: size_t = 0 as size_t;
     let mut i: size_t = 0 as size_t;
     while i < arglen {
-        let mut is_white: bool = ascii_iswhite(*arg.offset(i as isize) as ::core::ffi::c_int);
+        let mut is_white: bool = ascii_iswhite(*arg.add(i) as ::core::ffi::c_int);
         if was_white as ::core::ffi::c_int != 0 && !is_white {
             nargs = nargs.wrapping_add(1);
         }
@@ -1769,9 +1767,8 @@ unsafe extern "C" fn uc_split_args(
     } else {
         let mut i: size_t = 0 as size_t;
         while i < argc {
-            let mut p_0: *const ::core::ffi::c_char = *args.offset(i as isize);
-            let mut arg_end: *const ::core::ffi::c_char =
-                (*args.offset(i as isize)).offset(*arglens.offset(i as isize) as isize);
+            let mut p_0: *const ::core::ffi::c_char = *args.add(i);
+            let mut arg_end: *const ::core::ffi::c_char = (*args.add(i)).add(*arglens.add(i));
             while p_0 < arg_end {
                 if *p_0 as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
                     || *p_0 as ::core::ffi::c_int == '"' as ::core::ffi::c_int
@@ -1856,9 +1853,8 @@ unsafe extern "C" fn uc_split_args(
     } else {
         let mut i_0: size_t = 0 as size_t;
         while i_0 < argc {
-            let mut p_2: *const ::core::ffi::c_char = *args.offset(i_0 as isize);
-            let mut arg_end_0: *const ::core::ffi::c_char =
-                (*args.offset(i_0 as isize)).offset(*arglens.offset(i_0 as isize) as isize);
+            let mut p_2: *const ::core::ffi::c_char = *args.add(i_0);
+            let mut arg_end_0: *const ::core::ffi::c_char = (*args.add(i_0)).add(*arglens.add(i_0));
             while p_2 < arg_end_0 {
                 if *p_2 as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
                     || *p_2 as ::core::ffi::c_int == '"' as ::core::ffi::c_int
@@ -2116,7 +2112,7 @@ pub unsafe extern "C" fn uc_mods(
     }
     result = result.wrapping_add(add_win_cmd_modifiers(buf, cmod, &raw mut multi_mods));
     if quote as ::core::ffi::c_int != 0 && !buf.is_null() {
-        buf = buf.offset(result.wrapping_sub(2 as size_t) as isize);
+        buf = buf.add(result.wrapping_sub(2 as size_t));
         *buf = '"' as ::core::ffi::c_char;
     }
     return result;
@@ -2365,7 +2361,7 @@ unsafe extern "C" fn uc_check_code(
                     *c2rust_fresh23 = '"' as ::core::ffi::c_char;
                 }
                 strcpy(buf, &raw mut num_buf as *mut ::core::ffi::c_char);
-                buf = buf.offset(num_len as isize);
+                buf = buf.add(num_len);
                 if quote != 0 {
                     *buf = '"' as ::core::ffi::c_char;
                 }
@@ -2475,7 +2471,7 @@ pub unsafe extern "C" fn do_ucmd(mut eap: *mut exarg_T, mut preview: bool) -> ::
                             p as *const ::core::ffi::c_void,
                             len,
                         );
-                        q = q.offset(len as isize);
+                        q = q.add(len);
                     }
                     let c2rust_fresh17 = q;
                     q = q.offset(1);
@@ -2497,7 +2493,7 @@ pub unsafe extern "C" fn do_ucmd(mut eap: *mut exarg_T, mut preview: bool) -> ::
                     p as *const ::core::ffi::c_void,
                     len_0,
                 );
-                q = q.offset(len_0 as isize);
+                q = q.add(len_0);
             }
             len_0 = uc_check_code(
                 start,
@@ -2517,7 +2513,7 @@ pub unsafe extern "C" fn do_ucmd(mut eap: *mut exarg_T, mut preview: bool) -> ::
             if buf.is_null() {
                 totlen = totlen.wrapping_add(len_0);
             } else {
-                q = q.offset(len_0 as isize);
+                q = q.add(len_0);
             }
         }
         if !buf.is_null() {
@@ -2570,7 +2566,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         let mut cmd: *mut ucmd_T = ((*gap).ga_data as *mut ucmd_T).offset(i as isize);
         let c2rust_fresh45 = d.size;
         d.size = d.size.wrapping_add(1);
-        *d.items.offset(c2rust_fresh45 as isize) = key_value_pair {
+        *d.items.add(c2rust_fresh45) = key_value_pair {
             key: cstr_as_string(b"name\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeString,
@@ -2581,7 +2577,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         };
         let c2rust_fresh46 = d.size;
         d.size = d.size.wrapping_add(1);
-        *d.items.offset(c2rust_fresh46 as isize) = key_value_pair {
+        *d.items.add(c2rust_fresh46) = key_value_pair {
             key: cstr_as_string(b"definition\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeString,
@@ -2592,7 +2588,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         };
         let c2rust_fresh47 = d.size;
         d.size = d.size.wrapping_add(1);
-        *d.items.offset(c2rust_fresh47 as isize) = key_value_pair {
+        *d.items.add(c2rust_fresh47) = key_value_pair {
             key: cstr_as_string(b"script_id\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeInteger,
@@ -2603,7 +2599,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         };
         let c2rust_fresh48 = d.size;
         d.size = d.size.wrapping_add(1);
-        *d.items.offset(c2rust_fresh48 as isize) = key_value_pair {
+        *d.items.add(c2rust_fresh48) = key_value_pair {
             key: cstr_as_string(b"bang\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeBoolean,
@@ -2614,7 +2610,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         };
         let c2rust_fresh49 = d.size;
         d.size = d.size.wrapping_add(1);
-        *d.items.offset(c2rust_fresh49 as isize) = key_value_pair {
+        *d.items.add(c2rust_fresh49) = key_value_pair {
             key: cstr_as_string(b"bar\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeBoolean,
@@ -2625,7 +2621,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         };
         let c2rust_fresh50 = d.size;
         d.size = d.size.wrapping_add(1);
-        *d.items.offset(c2rust_fresh50 as isize) = key_value_pair {
+        *d.items.add(c2rust_fresh50) = key_value_pair {
             key: cstr_as_string(b"register\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeBoolean,
@@ -2636,7 +2632,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         };
         let c2rust_fresh51 = d.size;
         d.size = d.size.wrapping_add(1);
-        *d.items.offset(c2rust_fresh51 as isize) = key_value_pair {
+        *d.items.add(c2rust_fresh51) = key_value_pair {
             key: cstr_as_string(b"keepscript\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeBoolean,
@@ -2648,7 +2644,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         if (*cmd).uc_preview_luaref != LUA_NOREF {
             let c2rust_fresh52 = d.size;
             d.size = d.size.wrapping_add(1);
-            *d.items.offset(c2rust_fresh52 as isize) = key_value_pair {
+            *d.items.add(c2rust_fresh52) = key_value_pair {
                 key: cstr_as_string(b"preview\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeLuaRef,
@@ -2661,7 +2657,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         if (*cmd).uc_luaref != LUA_NOREF {
             let c2rust_fresh53 = d.size;
             d.size = d.size.wrapping_add(1);
-            *d.items.offset(c2rust_fresh53 as isize) = key_value_pair {
+            *d.items.add(c2rust_fresh53) = key_value_pair {
                 key: cstr_as_string(b"callback\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeLuaRef,
@@ -2693,7 +2689,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         }
         let c2rust_fresh54 = d.size;
         d.size = d.size.wrapping_add(1);
-        *d.items.offset(c2rust_fresh54 as isize) = key_value_pair {
+        *d.items.add(c2rust_fresh54) = key_value_pair {
             key: cstr_as_string(b"nargs\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeString,
@@ -2708,7 +2704,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         if (*cmd).uc_compl_luaref != LUA_NOREF {
             let c2rust_fresh55 = d.size;
             d.size = d.size.wrapping_add(1);
-            *d.items.offset(c2rust_fresh55 as isize) = key_value_pair {
+            *d.items.add(c2rust_fresh55) = key_value_pair {
                 key: cstr_as_string(b"complete\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeLuaRef,
@@ -2721,7 +2717,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
             let mut cmd_compl: *mut ::core::ffi::c_char = get_command_complete((*cmd).uc_compl);
             let c2rust_fresh56 = d.size;
             d.size = d.size.wrapping_add(1);
-            *d.items.offset(c2rust_fresh56 as isize) = key_value_pair {
+            *d.items.add(c2rust_fresh56) = key_value_pair {
                 key: cstr_as_string(b"complete\0".as_ptr() as *const ::core::ffi::c_char),
                 value: if cmd_compl.is_null() {
                     object {
@@ -2740,7 +2736,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         }
         let c2rust_fresh57 = d.size;
         d.size = d.size.wrapping_add(1);
-        *d.items.offset(c2rust_fresh57 as isize) = key_value_pair {
+        *d.items.add(c2rust_fresh57) = key_value_pair {
             key: cstr_as_string(b"complete_arg\0".as_ptr() as *const ::core::ffi::c_char),
             value: if (*cmd).uc_compl_arg.is_null() {
                 object {
@@ -2783,7 +2779,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         }
         let c2rust_fresh58 = d.size;
         d.size = d.size.wrapping_add(1);
-        *d.items.offset(c2rust_fresh58 as isize) = key_value_pair {
+        *d.items.add(c2rust_fresh58) = key_value_pair {
             key: cstr_as_string(b"count\0".as_ptr() as *const ::core::ffi::c_char),
             value: obj,
         };
@@ -2831,7 +2827,7 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         }
         let c2rust_fresh59 = d.size;
         d.size = d.size.wrapping_add(1);
-        *d.items.offset(c2rust_fresh59 as isize) = key_value_pair {
+        *d.items.add(c2rust_fresh59) = key_value_pair {
             key: cstr_as_string(b"range\0".as_ptr() as *const ::core::ffi::c_char),
             value: obj,
         };
@@ -2861,13 +2857,13 @@ pub unsafe extern "C" fn commands_array(mut buf: *mut buf_T, mut arena: *mut Are
         }
         let c2rust_fresh60 = d.size;
         d.size = d.size.wrapping_add(1);
-        *d.items.offset(c2rust_fresh60 as isize) = key_value_pair {
+        *d.items.add(c2rust_fresh60) = key_value_pair {
             key: cstr_as_string(b"addr\0".as_ptr() as *const ::core::ffi::c_char),
             value: obj,
         };
         let c2rust_fresh61 = rv.size;
         rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh61 as isize) = key_value_pair {
+        *rv.items.add(c2rust_fresh61) = key_value_pair {
             key: cstr_as_string((*cmd).uc_name),
             value: object {
                 type_0: kObjectTypeDict,
