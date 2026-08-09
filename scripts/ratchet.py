@@ -40,6 +40,21 @@ unmeasured, as they were when they lived at the repo root):
               or their modules are rewritten; vim_snprintf/vim_vsnprintf
               (vim's own user-visible format language) are expected to be
               the long-lived remainder.
+  cell_ptr    raw escape-hatch accesses to global editor state:
+              GlobalCell/SharedCell `.ptr()` and `.as_raw()`. The cells
+              themselves are the safe replacement for c2rust's mutable
+              statics, but `ptr()` hands back a bare `*mut T` and reinstates
+              every obligation the cell exists to check — it was the
+              landing zone for the mechanical conversion, not a destination.
+              Call sites narrow to get/set/with/with_mut as their modules
+              are rewritten, and cells whose state can simply be owned are
+              deleted outright; both show up here. Counting accesses rather
+              than cells is deliberate: converting a surviving `extern`
+              global into a real cell is progress, and a metric over cell
+              *declarations* would book it as regression. The needles are
+              receiver-blind, as everything else here is; today no other
+              type in the tree has a nullary `ptr()`/`as_raw()`, and one
+              that did would only over-count, which is the safe direction.
   lines       line count. No file may exceed 1,000 lines; files already over
               the cap are grandfathered at their committed size and may
               shrink or hold, never grow. New files start at the cap.
@@ -121,6 +136,7 @@ COUNTED = {
     "static_mut": ("static mut ",),
     "no_mangle": ("#[unsafe(no_mangle)]",),
     "variadic": (": ...",),
+    "cell_ptr": (".ptr()", ".as_raw()"),
 }
 FORBID = "#![forbid(unsafe_code)]"
 DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
