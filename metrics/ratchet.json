@@ -1,7 +1,7 @@
 {
   "internal_exports": 34,
   "files_without_forbid_unsafe": 934,
-  "files_without_deny_unsafe_op": 141,
+  "files_without_deny_unsafe_op": 139,
   "files": {
     "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe_lines": 54},
     "crates/nvim/src/cjson/lua_cjson/decode.rs": {"unsafe_lines": 175},
@@ -130,7 +130,7 @@
     "crates/nvim/src/nvim/channel/reader.rs": {"cell_ptr": 1, "unsafe_lines": 170},
     "crates/nvim/src/nvim/charset.rs": {"cell_ptr": 5, "no_mangle": 2, "unsafe_lines": 399},
     "crates/nvim/src/nvim/charset/display.rs": {"cell_ptr": 10, "unsafe_lines": 320},
-    "crates/nvim/src/nvim/clipboard.rs": {"unsafe_lines": 210},
+    "crates/nvim/src/nvim/clipboard.rs": {"unsafe_lines": 120},
     "crates/nvim/src/nvim/cmdexpand/bufpat.rs": {"cell_ptr": 12, "unsafe_lines": 282},
     "crates/nvim/src/nvim/cmdexpand/cmdname.rs": {"unsafe_lines": 379},
     "crates/nvim/src/nvim/cmdexpand/context.rs": {"cell_ptr": 3, "unsafe_lines": 379},
@@ -434,7 +434,7 @@
     "crates/nvim/src/nvim/indent_c/paren.rs": {"cell_ptr": 2, "unsafe_lines": 194},
     "crates/nvim/src/nvim/indent_c/recog.rs": {"unsafe_lines": 264},
     "crates/nvim/src/nvim/indent_c/toplevel.rs": {"unsafe_lines": 79},
-    "crates/nvim/src/nvim/input.rs": {"cell_ptr": 10, "unsafe_lines": 179},
+    "crates/nvim/src/nvim/input.rs": {"unsafe_lines": 65},
     "crates/nvim/src/nvim/insexpand.rs": {"unsafe_lines": 2},
     "crates/nvim/src/nvim/insexpand/callbacks.rs": {"cell_ptr": 22, "unsafe_lines": 459},
     "crates/nvim/src/nvim/insexpand/getexp.rs": {"cell_ptr": 31, "unsafe_lines": 613},
