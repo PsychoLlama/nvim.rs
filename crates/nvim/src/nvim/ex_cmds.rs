@@ -50,17 +50,15 @@ use crate::src::nvim::change::{
 };
 use crate::src::nvim::channel::channel_job_running;
 use crate::src::nvim::charset::{
-    getdigits_int, skiptobin, skiptodigit, skiptohex, skiptowhite, skipwhite, transchar,
-    transchar_nonprint, vim_isIDc, vim_isprintc, vim_str2nr,
+    getdigits_int, skiptobin, skiptodigit, skiptohex, skiptowhite, skipwhite, vim_isIDc, vim_str2nr,
 };
 use crate::src::nvim::cmdhist::add_to_history;
 use crate::src::nvim::cursor::{
     check_cursor, check_cursor_col, check_cursor_lnum, check_pos, coladvance, get_cursor_line_ptr,
-    get_cursor_pos_ptr,
 };
 use crate::src::nvim::decoration::bufhl_add_hl_pos_offset;
 use crate::src::nvim::diff::{diff_buf_add, diff_invalidate};
-use crate::src::nvim::digraph::{get_digraph_for_char, keymap_init};
+use crate::src::nvim::digraph::keymap_init;
 use crate::src::nvim::drawscreen::{
     UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, number_width, redraw_curbuf_later, redraw_later,
     show_cursor_info_later, update_screen,
@@ -87,7 +85,7 @@ use crate::src::nvim::getchar::{AppendToRedobuff, AppendToRedobuffLit};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::help::prepare_help_buffer;
 use crate::src::nvim::highlight_group::{HLF_N, HLF_R, syn_check_group};
-use crate::src::nvim::indent::{get_indent, get_indent_lnum, set_indent};
+use crate::src::nvim::indent::get_indent_lnum;
 use crate::src::nvim::input::prompt_for_input;
 use crate::src::nvim::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::src::nvim::main::{
@@ -108,9 +106,7 @@ use crate::src::nvim::main::{
     skip_redraw, sub_nlines, sub_nsubs, swap_exists_action, textlock,
 };
 use crate::src::nvim::mark::{mark_adjust, mark_adjust_nofold, set_last_cursor, setpcmark};
-use crate::src::nvim::mbyte::{
-    utf_char2bytes, utf_iscomposing_first, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
-};
+use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memline::{
     makeswapname, ml_append, ml_append_buf, ml_clearmarked, ml_delete, ml_delete_flags,
     ml_find_line_or_offset, ml_firstmarked, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len,
@@ -121,9 +117,8 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::message::{
     emsg, message_filtered, messaging, msg, msg_check_for_delay, msg_clr_eos, msg_end,
-    msg_ext_set_kind, msg_multiline, msg_outnum, msg_outtrans, msg_prt_line, msg_putchar, msg_puts,
-    msg_puts_hl, msg_sb_eol, msg_start, msg_starthere, msgmore, set_keep_msg, vim_dialog_yesno,
-    wait_return,
+    msg_ext_set_kind, msg_outnum, msg_outtrans, msg_prt_line, msg_putchar, msg_puts, msg_puts_hl,
+    msg_start, msg_starthere, msgmore, set_keep_msg, vim_dialog_yesno, wait_return,
 };
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::r#move::{
@@ -133,7 +128,7 @@ use crate::src::nvim::r#move::{
 use crate::src::nvim::normal::reset_VIsual;
 use crate::src::nvim::ops::do_join;
 use crate::src::nvim::option::{
-    buf_copy_options, copy_option_part, get_fileformat, magic_isset, set_option_direct, shortmess,
+    buf_copy_options, copy_option_part, magic_isset, set_option_direct, shortmess,
 };
 use crate::src::nvim::options::{kOptFoldcolumn, kOptInccommand, kOptShortmess};
 use crate::src::nvim::os::env::expand_env_save;
@@ -142,13 +137,12 @@ use crate::src::nvim::os::fs::{
 };
 use crate::src::nvim::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
-    __ctype_b_loc, atoi, atol, gettext, log10, memcpy, memmove, memset, ngettext, qsort, snprintf,
+    __ctype_b_loc, atol, gettext, log10, memcpy, memmove, memset, ngettext, qsort, snprintf,
     strcasecmp, strcat, strchr, strcmp, strcoll, strcpy, strlen, strncmp, strtod, time,
 };
 use crate::src::nvim::os::shell::call_shell;
 use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::path::{fix_fname, invocation_path_tail};
-use crate::src::nvim::plines::linetabsize_str;
 use crate::src::nvim::plines::{getvcol, plines_m_win_fill};
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM, equalpos};
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit, profile_zero};

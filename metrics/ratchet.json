@@ -333,7 +333,7 @@
     "crates/nvim/src/nvim/ex_cmds/subst/exec.rs": {"cell_ptr": 51, "lines": 1270, "unsafe_lines": 1246},
     "crates/nvim/src/nvim/ex_cmds/subst/parse.rs": {"cell_ptr": 3, "unsafe_lines": 176},
     "crates/nvim/src/nvim/ex_cmds/subst/report.rs": {"cell_ptr": 5, "unsafe_lines": 269},
-    "crates/nvim/src/nvim/ex_cmds/text.rs": {"cell_ptr": 10, "unsafe_lines": 255},
+    "crates/nvim/src/nvim/ex_cmds/text.rs": {"cell_ptr": 3, "unsafe_lines": 107},
     "crates/nvim/src/nvim/ex_cmds/write.rs": {"cell_ptr": 8, "unsafe_lines": 632},
     "crates/nvim/src/nvim/ex_cmds2.rs": {"unsafe_lines": 419},
     "crates/nvim/src/nvim/ex_cmds2/listdo.rs": {"unsafe_lines": 228},
