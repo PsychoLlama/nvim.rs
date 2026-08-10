@@ -522,12 +522,11 @@ pub unsafe fn ex_sort(eap: *mut exarg_T) {
             break 'sortend;
         }
         // SAFETY: the range is inside the current buffer.
-        let Some((lines, maxlen)) =
+        let Some((mut lines, maxlen)) =
             (unsafe { collect_sort_keys(line1, line2, &spec, &mut regmatch) })
         else {
             break 'sortend;
         };
-        let mut lines = lines;
 
         // Allocate the two buffers that can hold the longest line, then sort
         // the array of line numbers.  Note: can't be interrupted!
