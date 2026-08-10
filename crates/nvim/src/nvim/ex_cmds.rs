@@ -46,7 +46,6 @@ use crate::src::nvim::buffer_updates::buf_updates_send_changes;
 use crate::src::nvim::bufwrite::{WriteRequest, buf_write};
 use crate::src::nvim::change::{
     appended_lines, appended_lines_mark, changed_bytes, changed_lines, del_lines, deleted_lines,
-    deleted_lines_mark,
 };
 use crate::src::nvim::channel::channel_job_running;
 use crate::src::nvim::charset::{
@@ -85,23 +84,21 @@ use crate::src::nvim::getchar::{AppendToRedobuff, AppendToRedobuffLit};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::help::prepare_help_buffer;
 use crate::src::nvim::highlight_group::{HLF_N, HLF_R, syn_check_group};
-use crate::src::nvim::indent::get_indent_lnum;
 use crate::src::nvim::input::prompt_for_input;
 use crate::src::nvim::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::src::nvim::main::{
-    Columns, IObuff, KeyTyped, RedrawingDisabled, Rows, State, au_new_curbuf, autocmd_busy,
-    bangredo, cmdmod, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf, curtab,
-    curwin, did_check_timestamps, e_argreq, e_backslash, e_bufloaded,
-    e_cannot_switch_to_a_closing_buffer, e_cant_read_file_str, e_curdir, e_exists, e_interr,
-    e_invarg, e_invarg2, e_invcmd, e_isadir2, e_modifiable, e_nopresub, e_noprev, e_noprevre,
-    e_notmp, e_patnotf2, e_readonly, e_sandbox, e_trailing_arg, e_val_too_large_len, e_zerocount,
-    emsg_silent, ex_no_reprint, ex_normal_busy, exiting, exmode_active, first_tabpage, firstbuf,
-    firstwin, g_do_tagpreview, getout, global_busy, got_int, highlight_match, info_message,
-    keep_help_flag, lastwin, lines_left, msg_buf, msg_col, msg_didout, msg_listdo_overwrite,
-    msg_row, msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent, need_check_timestamps,
-    need_wait_return, no_u_sync, no_wait_return, p_awa, p_ch, p_confirm, p_cpo, p_cwh, p_dir, p_gd,
-    p_ic, p_icm, p_lz, p_rdt, p_report, p_sh, p_shm, p_shq, p_so, p_sol, p_srr, p_stmp, p_ur,
-    p_verbose, p_wa, p_warn, p_window, p_write, quit_more, redraw_tabline, sandbox,
+    IObuff, KeyTyped, RedrawingDisabled, Rows, State, au_new_curbuf, autocmd_busy, bangredo,
+    cmdmod, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf, curtab, curwin,
+    did_check_timestamps, e_argreq, e_backslash, e_bufloaded, e_cannot_switch_to_a_closing_buffer,
+    e_cant_read_file_str, e_curdir, e_exists, e_interr, e_invarg, e_invarg2, e_invcmd, e_isadir2,
+    e_modifiable, e_nopresub, e_noprev, e_noprevre, e_notmp, e_patnotf2, e_readonly, e_sandbox,
+    e_trailing_arg, e_val_too_large_len, e_zerocount, emsg_silent, ex_normal_busy, exiting,
+    exmode_active, first_tabpage, firstbuf, firstwin, g_do_tagpreview, getout, global_busy,
+    got_int, highlight_match, info_message, keep_help_flag, msg_buf, msg_col, msg_didout,
+    msg_listdo_overwrite, msg_row, msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent,
+    need_check_timestamps, need_wait_return, no_u_sync, no_wait_return, p_awa, p_ch, p_confirm,
+    p_cpo, p_cwh, p_dir, p_gd, p_ic, p_icm, p_lz, p_rdt, p_report, p_sh, p_shm, p_shq, p_so, p_sol,
+    p_srr, p_stmp, p_ur, p_verbose, p_wa, p_warn, p_write, quit_more, redraw_tabline, sandbox,
     search_match_endcol, search_match_lines, secure, silent_mode, skip_redraw, sub_nlines,
     sub_nsubs, swap_exists_action, textlock,
 };
@@ -112,7 +109,7 @@ use crate::src::nvim::memline::{
     ml_get_buf, ml_get_buf_len, ml_get_len, ml_replace, ml_replace_buf, ml_setmarked,
 };
 use crate::src::nvim::memory::{
-    xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup, xstrlcat, xstrlcpy,
+    xcalloc, xfree, xmalloc, xmallocz, xrealloc, xstrdup, xstrlcat, xstrlcpy,
 };
 use crate::src::nvim::message::{
     emsg, message_filtered, messaging, msg, msg_check_for_delay, msg_clr_eos, msg_end,
@@ -156,7 +153,6 @@ use crate::src::nvim::search::{
     SEARCH_HIS, get_search_pat, last_search_pat, save_re_pat, search_regcomp,
 };
 use crate::src::nvim::spell::parse_spelllang;
-use crate::src::nvim::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
 use crate::src::nvim::strings::{
     concat_str, vim_snprintf, vim_snprintf_add, vim_snprintf_safelen, vim_strchr,
     vim_strsave_escaped, xstrnsave,
@@ -174,7 +170,7 @@ use crate::src::nvim::types::{
     regmatch_T, regmmatch_T, regprog_T, size_t, tabpage_T, time_t, uint8_t, uint64_t, uvarnumber_T,
     varnumber_T, win_T,
 };
-use crate::src::nvim::ui::{ui_cursor_goto, ui_cursor_shape, ui_has};
+use crate::src::nvim::ui::{ui_cursor_goto, ui_has};
 use crate::src::nvim::undo::{
     bufIsChanged, curbufIsChanged, u_inssub, u_save, u_save_cursor, u_savecommon, u_savedel,
     u_savesub, u_sync, u_unchanged,
@@ -401,12 +397,6 @@ pub const CPO_ALTWRITE: ::core::ffi::c_int = 'A' as ::core::ffi::c_int;
 pub const CPO_OVERNEW: ::core::ffi::c_int = 'O' as ::core::ffi::c_int;
 pub const CPO_REMMARK: ::core::ffi::c_int = 'R' as ::core::ffi::c_int;
 pub const CPO_UNDO: ::core::ffi::c_int = 'u' as ::core::ffi::c_int;
-static e_non_numeric_argument_to_z: GlobalCell<[::core::ffi::c_char; 33]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
-            *b"E144: Non-numeric argument to :z\0",
-        )
-    });
 pub unsafe extern "C" fn check_secure() -> bool {
     unsafe {
         if secure.get() != 0 {

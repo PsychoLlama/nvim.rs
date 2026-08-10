@@ -281,7 +281,7 @@ unsafe fn fold_move_range(line1: linenr_T, line2: linenr_T, dest: linenr_T) {
 ///
 /// # Safety
 /// The current buffer must be live.
-unsafe fn set_op_range(start: linenr_T, end: linenr_T) {
+pub(super) unsafe fn set_op_range(start: linenr_T, end: linenr_T) {
     if cmdmod.with(|mods| mods.cmod_flags) & CMOD_LOCKMARKS as c_int != 0 {
         return;
     }
