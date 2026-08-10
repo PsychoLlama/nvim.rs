@@ -1,0 +1,328 @@
+//! The `c` flag: ask before each substitution.
+//!
+//! Two prompts, because Ex mode has no screen to highlight on.  In Ex mode
+//! the line is printed and a row of `^` under the match is used as the
+//! prompt; otherwise the match is highlighted in the buffer -- which means
+//! temporarily putting the *partly substituted* line back, since the earlier
+//! substitutions on this line have not reached the buffer yet, and then
+//! putting the original back before returning.
+//!
+//! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use super::super::{CPO_UNDO, ESC, EXPAND_NOTHING, IOSIZE, NUL, false_0};
+use super::exec::Sub;
+use super::subflags;
+use crate::src::nvim::drawscreen::{
+    UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
+};
+use crate::src::nvim::eval::typval::kCallbackNone;
+use crate::src::nvim::ex_cmds::print_line_no_prefix;
+use crate::src::nvim::ex_getln::{getcmdline_prompt, gotocmdline};
+use crate::src::nvim::highlight_group::HLF_R;
+use crate::src::nvim::input::prompt_for_input;
+use crate::src::nvim::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
+use crate::src::nvim::main::{
+    IObuff, RedrawingDisabled, State, curwin, ex_normal_busy, exmode_active, highlight_match,
+    msg_didout, need_wait_return, no_u_sync, p_cpo, p_lz, search_match_endcol, search_match_lines,
+};
+use crate::src::nvim::memline::{ml_get, ml_get_len, ml_replace};
+use crate::src::nvim::memory::{xfree, xmallocz, xstrdup};
+use crate::src::nvim::message::msg_putchar;
+use crate::src::nvim::mouse::setmouse;
+use crate::src::nvim::r#move::{
+    do_check_cursorbind, scrolldown_clamp, scrollup_clamp, update_topline, validate_cursor,
+};
+use crate::src::nvim::os::libc::{gettext, memset, snprintf, strlen};
+use crate::src::nvim::plines::getvcol;
+use crate::src::nvim::strings::{concat_str, vim_strchr, xstrnsave};
+use crate::src::nvim::types::ui::kUIMessages;
+use crate::src::nvim::types::{Callback, Callback_data, colnr_T, linenr_T, size_t};
+use crate::src::nvim::ui::ui_has;
+use core::ffi::{c_char, c_int, c_void};
+use core::ptr;
+
+/// What the prompt decided for this match.
+pub(super) enum Confirm {
+    /// Replace it -- `y`, and also `a` and `l`, which change the flags first.
+    Replace,
+    /// Leave it: `n`.
+    Skip,
+    /// Stop the whole substitute: `q`, `<Esc>` or `CTRL-C`.
+    Quit,
+}
+
+/// An empty callback, for a prompt that has no completion function.
+fn no_callback() -> Callback {
+    Callback {
+        data: Callback_data {
+            funcref: ptr::null_mut(),
+        },
+        type_0: kCallbackNone,
+    }
+}
+
+/// Does 'cpoptions' contain `u`?  Then undo is not synced while asking.
+///
+/// Re-read after the prompt, as upstream does: the user can change the option
+/// from the command line the prompt runs.
+fn cpo_no_undo_sync() -> bool {
+    // SAFETY: 'cpoptions' is a live string option.
+    !unsafe { vim_strchr(p_cpo.get(), CPO_UNDO) }.is_null()
+}
+
+/// Ex mode's prompt: print the line, then a row of `^` under the match.
+///
+/// # Safety
+/// Main thread; `st` must describe a live match on `st.lnum`.
+unsafe fn prompt_exmode(st: &Sub) -> c_int {
+    // SAFETY: caller's contract.
+    unsafe {
+        print_line_no_prefix(
+            st.lnum,
+            subflags.with(|flags| flags.do_number),
+            subflags.with(|flags| flags.do_list),
+        )
+    };
+
+    let mut sc = 0 as colnr_T;
+    let mut ec = 0 as colnr_T;
+    // SAFETY: the cursor is at the start of the match; moving it to the last
+    // byte of the match and back is what gives the match's screen columns.
+    unsafe {
+        getvcol(
+            curwin.get(),
+            &raw mut (*curwin.get()).w_cursor,
+            &raw mut sc,
+            ptr::null_mut(),
+            ptr::null_mut(),
+        );
+        (*curwin.get()).w_cursor.col = (st.regmatch.endpos[0].col - 1 as c_int).max(0 as c_int);
+        getvcol(
+            curwin.get(),
+            &raw mut (*curwin.get()).w_cursor,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            &raw mut ec,
+        );
+        (*curwin.get()).w_cursor.col = st.regmatch.startpos[0].col;
+        if subflags.with(|flags| flags.do_number) || (*curwin.get()).w_onebuf_opt.wo_nu != 0 {
+            let numw = number_width(curwin.get()) + 1 as c_int;
+            sc += numw;
+            ec += numw;
+        }
+    }
+
+    // SAFETY: the prompt is `ec + 1` bytes of spaces and carets inside an
+    // `ec + 2` byte zeroed allocation.
+    let typed = unsafe {
+        let prompt = xmallocz((ec as size_t).wrapping_add(1 as size_t)) as *mut c_char;
+        memset(prompt as *mut c_void, ' ' as c_int, sc as size_t);
+        memset(
+            prompt.offset(sc as isize) as *mut c_void,
+            '^' as c_int,
+            ((ec - sc) as size_t).wrapping_add(1 as size_t),
+        );
+        let resp = getcmdline_prompt(
+            -1 as c_int,
+            prompt,
+            0 as c_int,
+            EXPAND_NOTHING as c_int,
+            ptr::null(),
+            no_callback(),
+            false,
+            ptr::null_mut(),
+        );
+        if !ui_has(kUIMessages) {
+            msg_putchar('\n' as c_int);
+        }
+        xfree(prompt as *mut c_void);
+        if resp.is_null() {
+            // getcmdline_prompt() answers NULL when there is no command line
+            // to return.
+            NUL
+        } else {
+            let typed = *resp as u8 as c_int;
+            xfree(resp as *mut c_void);
+            typed
+        }
+    };
+
+    // When ":normal" runs out of characters we get an empty line.  Use "q" to
+    // get out of the loop.
+    if ex_normal_busy.get() != 0 && typed == NUL {
+        'q' as c_int
+    } else {
+        typed
+    }
+}
+
+/// The screen prompt: highlight the match, ask, then put everything back.
+///
+/// # Safety
+/// Main thread; `st` must describe a live match on `st.lnum`.
+unsafe fn prompt_visual(st: &Sub) -> c_int {
+    let mut orig_line: *mut c_char = ptr::null_mut();
+    let mut len_change = 0 as c_int;
+    let save_p_lz = p_lz.get();
+    // SAFETY: the current window is live.
+    let save_p_fen = unsafe { (*curwin.get()).w_onebuf_opt.wo_fen };
+    // SAFETY: as above.
+    unsafe { (*curwin.get()).w_onebuf_opt.wo_fen = false_0 };
+
+    // Invert the matched string; the inversion is removed afterwards.
+    let temp = RedrawingDisabled.get();
+    RedrawingDisabled.set(0 as c_int);
+    // Avoid calling update_screen() in vgetorpeek().
+    p_lz.set(false_0);
+
+    if !st.new_start.is_null() {
+        // There already was a substitution and we would like to show it, but
+        // we cannot really update the line -- that would change what matches.
+        // Replace it temporarily and change it back afterwards.
+        // SAFETY: `lnum` is a line of the buffer and the pieces are live.
+        unsafe {
+            orig_line = xstrnsave(ml_get(st.lnum), ml_get_len(st.lnum) as size_t);
+            let new_line = concat_str(st.new_start, st.sub_firstline.add(st.copycol as usize));
+            // Position the cursor relative to the end of the line: the
+            // previous substitute may have inserted or deleted characters
+            // before it.
+            len_change = strlen(new_line) as c_int - strlen(orig_line) as c_int;
+            (*curwin.get()).w_cursor.col += len_change;
+            ml_replace(st.lnum, new_line, false);
+        }
+    }
+
+    search_match_lines.set(st.regmatch.endpos[0].lnum - st.regmatch.startpos[0].lnum);
+    search_match_endcol.set(st.regmatch.endpos[0].col + len_change);
+    if search_match_lines.get() == 0 as linenr_T && search_match_endcol.get() == 0 as colnr_T {
+        // Highlight at least one character for /^/.
+        search_match_endcol.set(1 as colnr_T);
+    }
+    highlight_match.set(true);
+
+    // SAFETY: the current window is live.
+    unsafe {
+        update_topline(curwin.get());
+        validate_cursor(curwin.get());
+        redraw_later(curwin.get(), UPD_SOME_VALID);
+        show_cursor_info_later(true);
+        update_screen();
+        redraw_later(curwin.get(), UPD_SOME_VALID);
+        (*curwin.get()).w_onebuf_opt.wo_fen = save_p_fen;
+    }
+
+    // SAFETY: `IObuff` is `IOSIZE` bytes, the format takes one string, and
+    // the prompt is a fresh copy of it.
+    let typed = unsafe {
+        let iobuff = IObuff.ptr() as *mut c_char;
+        snprintf(
+            iobuff,
+            IOSIZE as size_t,
+            gettext(
+                c"replace with %s? (y)es/(n)o/(a)ll/(q)uit/(l)ast/scroll up(^E)/down(^Y)".as_ptr(),
+            ),
+            st.sub,
+        );
+        let prompt = xstrdup(iobuff);
+        let typed = prompt_for_input(prompt, HLF_R, true, ptr::null_mut());
+        highlight_match.set(false);
+        xfree(prompt as *mut c_void);
+        typed
+    };
+
+    msg_didout.set(false); // don't scroll up
+    // SAFETY: message state.
+    unsafe { gotocmdline(true) };
+    p_lz.set(save_p_lz);
+    RedrawingDisabled.set(temp);
+
+    // Restore the line.
+    if !orig_line.is_null() {
+        // SAFETY: `lnum` is a line of the buffer and `orig_line` its saved
+        // text, which `ml_replace` takes ownership of.
+        unsafe { ml_replace(st.lnum, orig_line, false) };
+    }
+    typed
+}
+
+/// Ask about this match, looping over the answers that only scroll.
+///
+/// # Safety
+/// Main thread; `st` must describe a live match on `st.lnum`.
+pub(super) unsafe fn ask_confirm(st: &mut Sub) -> Confirm {
+    let mut typed = 0 as c_int;
+    let save_state = State.get();
+    // SAFETY: the current window is live.
+    unsafe {
+        (*curwin.get()).w_cursor.col = st.regmatch.startpos[0].col;
+        if (*curwin.get()).w_onebuf_opt.wo_crb != 0 {
+            do_check_cursorbind();
+        }
+    }
+    if cpo_no_undo_sync() {
+        no_u_sync.set(no_u_sync.get() + 1);
+    }
+
+    // Loop until 'y', 'n', 'q', CTRL-E or CTRL-Y is typed.
+    while subflags.with(|flags| flags.do_ask) {
+        // SAFETY: caller's contract.
+        typed = unsafe {
+            if exmode_active.get() {
+                prompt_exmode(st)
+            } else {
+                prompt_visual(st)
+            }
+        };
+
+        need_wait_return.set(false); // no hit-return prompt
+        if typed == 'q' as c_int || typed == ESC || typed == Ctrl_C {
+            st.got_quit = true;
+            break;
+        }
+        if typed == 'n' as c_int || typed == 'y' as c_int {
+            break;
+        }
+        if typed == 'l' as c_int {
+            // Last: replace and then stop.
+            subflags.with_mut(|flags| flags.do_all = false);
+            st.line2 = st.lnum;
+            break;
+        }
+        if typed == 'a' as c_int {
+            subflags.with_mut(|flags| flags.do_ask = false);
+            break;
+        }
+        if typed == Ctrl_E {
+            // SAFETY: the current window is live.
+            unsafe { scrollup_clamp() };
+        } else if typed == Ctrl_Y {
+            // SAFETY: as above.
+            unsafe { scrolldown_clamp() };
+        }
+    }
+    State.set(save_state);
+    // SAFETY: main thread.
+    unsafe { setmouse() };
+    if cpo_no_undo_sync() {
+        no_u_sync.set(no_u_sync.get() - 1);
+    }
+
+    if typed == 'n' as c_int {
+        // For a multi-line match, put matchcol at the NUL at the end of the
+        // line and set nmatch to one, so that we continue looking for a match
+        // on the next line.  Avoids that ":%s/\nB\@=//gc" and ":%s/\n/,\r/gc"
+        // get stuck when pressing 'n'.
+        if st.nmatch > 1 as c_int {
+            // SAFETY: the copied line is NUL-terminated.
+            st.matchcol = unsafe { strlen(st.sub_firstline) } as colnr_T;
+            st.skip_match = true;
+        }
+        return Confirm::Skip;
+    }
+    if st.got_quit {
+        return Confirm::Quit;
+    }
+    Confirm::Replace
+}

@@ -148,8 +148,10 @@ unsafe fn global_pattern(eap: *mut exarg_T) -> Option<GlobalPat> {
         };
         return None;
     };
+    // The delimiter is handed on as a `char`, so a high byte arrives
+    // sign-extended -- which is what indexes the ctype table upstream.
     // SAFETY: message state.
-    if unsafe { check_regexp_delim(delim as c_int) } == FAIL {
+    if unsafe { check_regexp_delim(delim as c_char as c_int) } == FAIL {
         return None;
     }
 

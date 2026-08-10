@@ -45,6 +45,21 @@ pub(crate) static old_sub: GlobalCell<SubReplacementString> =
         additional_data: ptr::null_mut(),
     });
 
+/// The `:s` flags in force.  Process-wide, because `:&&` and a bare `:s`
+/// reuse the previous command's flags, and because a `\=` replacement can
+/// run another `:s` that must not leave its own flags behind (`do_sub` saves
+/// and restores this around the expression).
+pub(crate) static subflags: GlobalCell<subflags_T> = GlobalCell::new(subflags_T {
+    do_all: false,
+    do_ask: false,
+    do_count: false,
+    do_error: true,
+    do_print: false,
+    do_list: false,
+    do_number: false,
+    do_ic: kSubHonorOptions,
+});
+
 /// Set by `do_sub` when a `:global` is running, so that `global_exe` puts the
 /// cursor on the first non-blank once the whole command is done.
 pub(crate) static global_need_beginline: GlobalCell<bool> = GlobalCell::new(false);
@@ -225,7 +240,7 @@ pub(crate) unsafe fn sub_grow_buf(
 /// Main thread; `cmd` must be a live NUL-terminated string.
 pub(crate) unsafe fn sub_parse_flags(
     cmd: *mut c_char,
-    subflags: &mut subflags_T,
+    flags: &mut subflags_T,
     which_pat: &mut c_int,
 ) -> *mut c_char {
     // SAFETY: caller's contract.
@@ -236,40 +251,40 @@ pub(crate) unsafe fn sub_parse_flags(
     if bytes.first() == Some(&b'&') {
         i = 1;
     } else {
-        subflags.do_all = p_gd.get() != 0;
-        subflags.do_ask = false;
-        subflags.do_error = true;
-        subflags.do_print = false;
-        subflags.do_list = false;
-        subflags.do_count = false;
-        subflags.do_number = false;
-        subflags.do_ic = kSubHonorOptions;
+        flags.do_all = p_gd.get() != 0;
+        flags.do_ask = false;
+        flags.do_error = true;
+        flags.do_print = false;
+        flags.do_list = false;
+        flags.do_count = false;
+        flags.do_number = false;
+        flags.do_ic = kSubHonorOptions;
     }
     while i < bytes.len() {
         // Note that 'g' and 'c' are always inverted, and 'r' never is.
         match bytes[i] {
-            b'g' => subflags.do_all = !subflags.do_all,
-            b'c' => subflags.do_ask = !subflags.do_ask,
-            b'n' => subflags.do_count = true,
-            b'e' => subflags.do_error = !subflags.do_error,
+            b'g' => flags.do_all = !flags.do_all,
+            b'c' => flags.do_ask = !flags.do_ask,
+            b'n' => flags.do_count = true,
+            b'e' => flags.do_error = !flags.do_error,
             b'r' => *which_pat = RE_LAST as c_int, // use last used regexp
-            b'p' => subflags.do_print = true,
+            b'p' => flags.do_print = true,
             b'#' => {
-                subflags.do_print = true;
-                subflags.do_number = true;
+                flags.do_print = true;
+                flags.do_number = true;
             }
             b'l' => {
-                subflags.do_print = true;
-                subflags.do_list = true;
+                flags.do_print = true;
+                flags.do_list = true;
             }
-            b'i' => subflags.do_ic = kSubIgnoreCase, // ignore case
-            b'I' => subflags.do_ic = kSubMatchCase,  // don't ignore case
+            b'i' => flags.do_ic = kSubIgnoreCase, // ignore case
+            b'I' => flags.do_ic = kSubMatchCase,  // don't ignore case
             _ => break,
         }
         i += 1;
     }
-    if subflags.do_count {
-        subflags.do_ask = false;
+    if flags.do_count {
+        flags.do_ask = false;
     }
     cmd.wrapping_add(i)
 }
