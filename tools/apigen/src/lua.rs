@@ -415,6 +415,52 @@ fn lex(file: &str, source: &str) -> Result<Vec<(Tok, usize)>, String> {
     Ok(toks)
 }
 
+/// Every `local NAME = <integer>` a Lua source file declares, with
+/// `bit.bor(..)` of already-declared names folded.
+///
+/// `ex_cmds.lua` writes its command flags as thirty of these and then uses
+/// them by name in the table, so the table alone does not say what a row
+/// means. A `local` bound to anything else (`local M = {}`,
+/// `local bit = require 'bit'`) is skipped rather than rejected: the file is
+/// allowed to have working parts, and a flag that stopped being an integer
+/// would fail later, at the row that names it.
+pub fn read_int_locals(file: &str, source: &str) -> Result<BTreeMap<String, i64>, String> {
+    let toks = lex(file, source)?;
+    let mut out: BTreeMap<String, i64> = BTreeMap::new();
+    for (i, (tok, _)) in toks.iter().enumerate() {
+        if *tok != Tok::Name("local".into()) {
+            continue;
+        }
+        let (Some((Tok::Name(name), _)), Some((Tok::Punct('='), _))) =
+            (toks.get(i + 1), toks.get(i + 2))
+        else {
+            continue;
+        };
+        let mut parser = Parser {
+            file,
+            toks: toks.clone(),
+            pos: i + 3,
+        };
+        let Ok(value) = parser.value() else { continue };
+        if let Some(n) = fold_int(&value, &out) {
+            out.insert(name.clone(), n);
+        }
+    }
+    Ok(out)
+}
+
+/// An integer literal, a name already bound to one, or `bit.bor` over those.
+pub fn fold_int(value: &Value, known: &BTreeMap<String, i64>) -> Option<i64> {
+    match value {
+        Value::Int(n) => Some(*n),
+        Value::Ref(name) => known.get(name).copied(),
+        Value::Call(f, args) if f == "bit.bor" => args
+            .iter()
+            .try_fold(0, |acc, arg| fold_int(arg, known).map(|n| acc | n)),
+        _ => None,
+    }
+}
+
 /// Read the table a Lua source file assigns to `binding` — `local options`
 /// in `options.lua`, `M.funcs` in `eval.lua`. The binding is spelled as Lua
 /// and lexed with the same rules as the file, so a dotted name works.

@@ -24,6 +24,10 @@
 //                 source declares — the UI events, the error kinds, the
 //                 handle types and the version's API levels — come from a
 //                 second spec (`--metadata-spec`).
+//   --cmdtable-file
+//                 the Ex command table and its lookup indices, and
+//   --cmdidx-file the `CMD_*` names that index it, both from the vendored
+//                 `ex_cmds.lua` (`--ex-cmds-lua`).
 //   --options-dir the option table, from the vendored `options.lua` upstream
 //                 fed to src/gen/gen_options.lua. That one is metadata, not
 //                 Rust, so it is read by the small Lua reader in `lua.rs`
@@ -56,6 +60,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 mod eval_funcs;
+mod ex_cmds;
 mod lua;
 mod options;
 
@@ -3402,6 +3407,9 @@ fn run() -> Result<(), String> {
     let mut options_dir = None;
     let mut eval_lua = None;
     let mut eval_dir = None;
+    let mut ex_cmds_lua = None;
+    let mut cmdtable_file = None;
+    let mut cmdidx_file = None;
     let mut metadata_file = None;
     let mut config = None;
     let mut check = false;
@@ -3419,6 +3427,9 @@ fn run() -> Result<(), String> {
             "--options-dir" => options_dir = Some(PathBuf::from(value()?)),
             "--eval-lua" => eval_lua = Some(PathBuf::from(value()?)),
             "--eval-dir" => eval_dir = Some(PathBuf::from(value()?)),
+            "--ex-cmds-lua" => ex_cmds_lua = Some(PathBuf::from(value()?)),
+            "--cmdtable-file" => cmdtable_file = Some(PathBuf::from(value()?)),
+            "--cmdidx-file" => cmdidx_file = Some(PathBuf::from(value()?)),
             "--metadata-file" => metadata_file = Some(PathBuf::from(value()?)),
             "--rustfmt-config" => config = Some(PathBuf::from(value()?)),
             "--check" => check = true,
@@ -3435,6 +3446,9 @@ fn run() -> Result<(), String> {
     let options_dir = options_dir.ok_or("--options-dir is required")?;
     let eval_lua = eval_lua.ok_or("--eval-lua is required")?;
     let eval_dir = eval_dir.ok_or("--eval-dir is required")?;
+    let ex_cmds_lua = ex_cmds_lua.ok_or("--ex-cmds-lua is required")?;
+    let cmdtable_file = cmdtable_file.ok_or("--cmdtable-file is required")?;
+    let cmdidx_file = cmdidx_file.ok_or("--cmdidx-file is required")?;
     let metadata_file = metadata_file.ok_or("--metadata-file is required")?;
     let config = config.ok_or("--rustfmt-config is required")?;
 
@@ -3531,20 +3545,29 @@ fn run() -> Result<(), String> {
             );
         }
     }
-    // The metadata is a single module, not a tree: it lives beside
-    // hand-written ones, so it gets no stale-file sweep.
-    let metadata = rustfmt(&config, &generate_metadata(&root, &api, &specs, &sidecar)?)?;
-    if std::fs::read_to_string(&metadata_file).unwrap_or_default() != metadata {
-        if check {
-            return Err(format!(
-                "{} is stale; run `just apigen`",
-                metadata_file.display()
-            ));
+    // These live beside hand-written modules rather than in a tree of their
+    // own, so they get no stale-file sweep.
+    let (cmdtable, cmdidx) = ex_cmds::generate(&ex_cmds_lua)?;
+    let singles = [
+        (
+            metadata_file,
+            generate_metadata(&root, &api, &specs, &sidecar)?,
+            "metadata",
+        ),
+        (cmdtable_file, cmdtable, "Ex command table"),
+        (cmdidx_file, cmdidx, "cmdidx_T"),
+    ];
+    for (path, text, what) in singles {
+        let text = rustfmt(&config, &text)?;
+        if std::fs::read_to_string(&path).unwrap_or_default() == text {
+            continue;
         }
-        std::fs::write(&metadata_file, &metadata)
-            .map_err(|e| format!("{}: {e}", metadata_file.display()))?;
+        if check {
+            return Err(format!("{} is stale; run `just apigen`", path.display()));
+        }
+        std::fs::write(&path, &text).map_err(|e| format!("{}: {e}", path.display()))?;
         wrote = true;
-        eprintln!("apigen: wrote {} (metadata)", metadata_file.display());
+        eprintln!("apigen: wrote {} ({what})", path.display());
     }
 
     if wrote {

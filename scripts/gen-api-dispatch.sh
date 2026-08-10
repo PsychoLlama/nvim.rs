@@ -11,9 +11,12 @@
 # that has to compile, be formatted and be measured by the ratchet like
 # everything else.
 #
-# Two of them read metadata rather than Rust: the vendored
-# crates/nvim/src/nvim/options.lua and crates/nvim/src/nvim/eval.lua, the same
-# files upstream fed to src/gen/gen_options.lua and src/gen/gen_eval.lua.
+# Three of them read metadata rather than Rust: the vendored
+# crates/nvim/src/nvim/{options,eval,ex_cmds}.lua, the same files upstream fed
+# to src/gen/gen_options.lua, src/gen/gen_eval.lua and src/gen/gen_ex_cmds.lua.
+# ex_cmds.lua yields two single modules rather than a directory --- the Ex
+# command table with its two lookup indices, and the CMD_* names that index it
+# --- which have to be generated together or they drift apart.
 #
 # `--check` regenerates in memory and fails if the committed file differs, so
 # a signature change that nobody re-generated for is a CI failure rather than
@@ -39,5 +42,8 @@ cargo build --release --quiet --manifest-path "$root/tools/apigen/Cargo.toml"
   --eval-lua "$root/crates/nvim/src/nvim/eval.lua" \
   --eval-dir "$root/crates/nvim/src/nvim/eval/funcs/table" \
   --metadata-file "$root/crates/nvim/src/nvim/api/private/metadata.rs" \
+  --ex-cmds-lua "$root/crates/nvim/src/nvim/ex_cmds.lua" \
+  --cmdtable-file "$root/crates/nvim/src/nvim/ex_docmd/cmdtable.rs" \
+  --cmdidx-file "$root/crates/nvim/src/nvim/types/cmdidx.rs" \
   --rustfmt-config "$root/rustfmt.toml" \
   "$@"
