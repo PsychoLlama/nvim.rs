@@ -77,8 +77,8 @@ use crate::src::nvim::mbyte::{
 };
 use crate::src::nvim::memline::ml_get;
 use crate::src::nvim::memory::{
-    memcnt, strequal, try_malloc, xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz, xrealloc,
-    xstrdup, xstrlcat, xstrlcpy,
+    strequal, try_malloc, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup, xstrlcat,
+    xstrlcpy,
 };
 use crate::src::nvim::message::{
     emsg, message_filtered, msg_ext_set_kind, msg_ext_ui_flush, msg_outtrans, msg_putchar,
@@ -88,7 +88,7 @@ use crate::src::nvim::option::{copy_option_part, set_option_value_give_err, vimr
 use crate::src::nvim::options::kOptRuntimepath;
 use crate::src::nvim::os::env::{
     default_lib_dir, expand_env, expand_env_save, home_replace, home_replace_save, os_setenv,
-    vim_env_iter, vim_env_iter_rev, vim_get_prefix_from_exepath, vim_getenv,
+    vim_get_prefix_from_exepath, vim_getenv,
 };
 use crate::src::nvim::os::fs::{os_file_is_readable, os_isdir, os_open, os_set_cloexec};
 use crate::src::nvim::os::input::line_breakcheck;
@@ -98,9 +98,9 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::src::nvim::path::{
-    FreeWild, add_pathsep, after_pathsep, append_path, concat_fnames, fix_fname,
-    gen_expand_wildcards, get_past_head, path_fnamecmp, path_fnamencmp, path_tail,
-    path_with_extension, vim_ispathsep, vim_ispathsep_nocolon,
+    FreeWild, add_pathsep, append_path, concat_fnames, fix_fname, gen_expand_wildcards,
+    get_past_head, path_fnamecmp, path_fnamencmp, path_tail, path_with_extension, vim_ispathsep,
+    vim_ispathsep_nocolon,
 };
 use crate::src::nvim::profile::{
     prof_child_enter, prof_child_exit, profile_add, profile_end, profile_init, profile_self,

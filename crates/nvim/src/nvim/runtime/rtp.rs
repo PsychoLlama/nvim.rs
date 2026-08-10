@@ -4,507 +4,370 @@
 //! directories, each in its standard order, with `site` and `after`
 //! variants, `$VIMRUNTIME`, and the library directory -- concatenated into
 //! one comma-separated option value with every embedded comma and backslash
-//! escaped.  `compute_double_env_sep_len` and `add_env_sep_dirs` handle the
-//! directory *lists* ($XDG_CONFIG_DIRS and $XDG_DATA_DIRS), which are
-//! colon-separated and appear twice each, once plain and once with a
-//! suffix.
+//! escaped.
+//!
+//! Everything but reading the environment and handing the result back as
+//! `xmalloc`ed memory happens in [`RtpParts::build`], which is safe code over
+//! byte slices and is what the tests at the bottom of this file exercise.
+//! The C built the same string in two passes -- one to compute the exact
+//! length, one to fill a buffer of it -- and asserted afterwards that the two
+//! agreed; a growable `Vec` needs only the second, so the whole of
+//! `compute_double_env_sep_len` and the arithmetic beside it is gone.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
 
-unsafe extern "C" fn strcpy_comma_escaped(
-    mut dest: *mut ::core::ffi::c_char,
-    mut src: *const ::core::ffi::c_char,
-    len: size_t,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        let mut shift: size_t = 0 as size_t;
-        let mut i: size_t = 0 as size_t;
-        while i < len {
-            if *src.add(i) as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
-                let c2rust_fresh22 = shift;
-                shift = shift.wrapping_add(1);
-                *dest.add(i.wrapping_add(c2rust_fresh22)) = '\\' as ::core::ffi::c_char;
-            }
-            *dest.add(i.wrapping_add(shift)) = *src.add(i);
-            i = i.wrapping_add(1);
+use core::ffi::{CStr, c_char};
+use core::ptr;
+
+/// The suffix under a data directory that holds installed-by-hand runtime
+/// files, as opposed to the user's own.
+const SITE: &[u8] = b"site";
+
+/// The suffix whose entries load *after* everything else, which is why they
+/// are appended in reverse.
+const AFTER: &[u8] = b"after";
+
+/// The strings the default 'runtimepath' is assembled from, once the
+/// environment has been read.
+///
+/// A `NULL` from the environment and an empty value behave identically
+/// everywhere below -- both contribute nothing -- so both arrive here as an
+/// empty slice.
+struct RtpParts<'a> {
+    /// `$NVIM_APPNAME`, or `nvim`: the component appended to each *home*
+    /// directory and to every entry of the two dirs lists.
+    appname: &'a [u8],
+    config_home: &'a [u8],
+    /// `$XDG_CONFIG_DIRS`, [`ENV_SEPCHAR`]-separated.
+    config_dirs: &'a [u8],
+    data_home: &'a [u8],
+    /// `$XDG_DATA_DIRS`, [`ENV_SEPCHAR`]-separated.
+    data_dirs: &'a [u8],
+    vimruntime: &'a [u8],
+    libdir: &'a [u8],
+}
+
+impl RtpParts<'_> {
+    /// The default 'runtimepath': comma-separated and NUL-terminated, or
+    /// empty when nothing contributed a directory at all.
+    ///
+    /// The order is the contract -- config first, then data, then the
+    /// runtime and library directories, then the same list again in reverse
+    /// with `after` appended.
+    fn build(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        self.push_dir(&mut out, self.config_home, true, &[]);
+        self.push_list(&mut out, self.config_dirs, &[], Order::Forward);
+        self.push_dir(&mut out, self.data_home, true, &[SITE]);
+        self.push_list(&mut out, self.data_dirs, &[SITE], Order::Forward);
+        self.push_dir(&mut out, self.vimruntime, false, &[]);
+        self.push_dir(&mut out, self.libdir, false, &[]);
+        self.push_list(&mut out, self.data_dirs, &[SITE, AFTER], Order::Reverse);
+        self.push_dir(&mut out, self.data_home, true, &[SITE, AFTER]);
+        self.push_list(&mut out, self.config_dirs, &[AFTER], Order::Reverse);
+        self.push_dir(&mut out, self.config_home, true, &[AFTER]);
+        if let Some(last) = out.last_mut() {
+            // Overwrite the trailing comma rather than dropping it: the
+            // option value is a C string and wants the terminator anyway.
+            *last = 0;
         }
-        return dest.add(len.wrapping_add(shift));
+        out
+    }
+
+    /// Append one directory and its trailing comma.
+    ///
+    /// `named` distinguishes the two XDG *homes*, which are shared with
+    /// other applications and so get the appname (and any suffixes) below
+    /// them, from `$VIMRUNTIME` and the library directory, which are ours
+    /// already and are taken verbatim.
+    fn push_dir(&self, out: &mut Vec<u8>, dir: &[u8], named: bool, sufs: &[&[u8]]) {
+        if dir.is_empty() {
+            return;
+        }
+        push_comma_escaped(out, dir);
+        if named {
+            self.push_components(out, sufs);
+        }
+        out.push(b',');
+    }
+
+    /// Append every non-empty entry of an [`ENV_SEPCHAR`]-separated list,
+    /// each with the appname and `sufs` below it.
+    fn push_list(&self, out: &mut Vec<u8>, val: &[u8], sufs: &[&[u8]], order: Order) {
+        for dir in entries(val, order) {
+            push_comma_escaped(out, dir);
+            self.push_components(out, sufs);
+            out.push(b',');
+        }
+    }
+
+    /// Append `/<appname>` and then each of `sufs`, separated by [`PATHSEP`].
+    ///
+    /// The leading separator is only written when the directory did not
+    /// already end in one (C's `after_pathsep`, which on this platform is
+    /// exactly "the previous byte is a [`PATHSEP`]").
+    fn push_components(&self, out: &mut Vec<u8>, sufs: &[&[u8]]) {
+        let sep = PATHSEP as u8;
+        if out.last() != Some(&sep) {
+            out.push(sep);
+        }
+        out.extend_from_slice(self.appname);
+        for suf in sufs {
+            out.push(sep);
+            out.extend_from_slice(suf);
+        }
     }
 }
 
-#[inline]
-unsafe extern "C" fn compute_double_env_sep_len(
-    val: *const ::core::ffi::c_char,
-    common_suf_len: size_t,
-    single_suf_len: size_t,
-) -> size_t {
-    unsafe {
-        if val.is_null() || *val as ::core::ffi::c_int == NUL {
-            return 0 as size_t;
+/// Which end of an [`ENV_SEPCHAR`]-separated list to start from.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Order {
+    Forward,
+    Reverse,
+}
+
+/// The non-empty entries of an [`ENV_SEPCHAR`]-separated list.
+///
+/// This is `vim_env_iter`/`vim_env_iter_rev` without the pointer walk: both
+/// skip a zero-length component, so both are a `split` with the empties
+/// filtered out.
+fn entries(val: &[u8], order: Order) -> impl Iterator<Item = &[u8]> {
+    let mut fwd = val
+        .split(|&b| b == ENV_SEPCHAR as u8)
+        .filter(|d| !d.is_empty());
+    let mut rev = fwd.clone();
+    core::iter::from_fn(move || match order {
+        Order::Forward => fwd.next(),
+        Order::Reverse => rev.next_back(),
+    })
+}
+
+/// Append `src` with every comma backslash-escaped.
+///
+/// 'runtimepath' is comma-separated and a directory may legitimately contain
+/// one, so this is what keeps such a directory a single entry.
+fn push_comma_escaped(out: &mut Vec<u8>, src: &[u8]) {
+    for &byte in src {
+        if byte == b',' {
+            out.push(b'\\');
         }
-        let mut ret: size_t = 0 as size_t;
-        let mut iter: *const ::core::ffi::c_void = ::core::ptr::null::<::core::ffi::c_void>();
-        loop {
-            let mut dir_len: size_t = 0;
-            let mut dir: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-            iter = vim_env_iter(
-                ENV_SEPCHAR as ::core::ffi::c_char,
-                val,
-                iter,
-                &raw mut dir,
-                &raw mut dir_len,
-            );
-            if !dir.is_null() && dir_len > 0 as size_t {
-                ret = ret.wrapping_add(
-                    dir_len
-                        .wrapping_add(memcnt(
-                            dir as *const ::core::ffi::c_void,
-                            ',' as ::core::ffi::c_char,
-                            dir_len,
-                        ))
-                        .wrapping_add(common_suf_len)
-                        .wrapping_add(
-                            (after_pathsep(dir, dir.add(dir_len)) == 0) as ::core::ffi::c_int
-                                as size_t,
-                        )
-                        .wrapping_mul(2 as size_t)
-                        .wrapping_add(single_suf_len),
-                );
-            }
-            if iter.is_null() {
-                break;
-            }
-        }
-        return ret;
+        out.push(byte);
     }
 }
 
-#[inline]
-unsafe extern "C" fn add_env_sep_dirs(
-    mut dest: *mut ::core::ffi::c_char,
-    val: *const ::core::ffi::c_char,
-    suf1: *const ::core::ffi::c_char,
-    len1: size_t,
-    suf2: *const ::core::ffi::c_char,
-    len2: size_t,
-    forward: bool,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        if val.is_null() || *val as ::core::ffi::c_int == NUL {
-            return dest;
-        }
-        let mut iter: *const ::core::ffi::c_void = ::core::ptr::null::<::core::ffi::c_void>();
-        let mut appname: *const ::core::ffi::c_char = get_appname(false_0 != 0);
-        let appname_len: size_t = strlen(appname);
-        loop {
-            let mut dir_len: size_t = 0;
-            let mut dir: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-            iter = if forward as ::core::ffi::c_int != 0 {
-                Some(
-                    vim_env_iter
-                        as unsafe extern "C" fn(
-                            ::core::ffi::c_char,
-                            *const ::core::ffi::c_char,
-                            *const ::core::ffi::c_void,
-                            *mut *const ::core::ffi::c_char,
-                            *mut size_t,
-                        )
-                            -> *const ::core::ffi::c_void,
-                )
-            } else {
-                Some(
-                    vim_env_iter_rev
-                        as unsafe extern "C" fn(
-                            ::core::ffi::c_char,
-                            *const ::core::ffi::c_char,
-                            *const ::core::ffi::c_void,
-                            *mut *const ::core::ffi::c_char,
-                            *mut size_t,
-                        )
-                            -> *const ::core::ffi::c_void,
-                )
-            }
-            .expect("non-null function pointer")(
-                ENV_SEPCHAR as ::core::ffi::c_char,
-                val,
-                iter,
-                &raw mut dir,
-                &raw mut dir_len,
-            );
-            if !dir.is_null() && dir_len > 0 as size_t {
-                dest = strcpy_comma_escaped(dest, dir, dir_len);
-                if after_pathsep(dest.offset(-(1 as ::core::ffi::c_int as isize)), dest) == 0 {
-                    let c2rust_fresh23 = dest;
-                    dest = dest.offset(1);
-                    *c2rust_fresh23 = PATHSEP as ::core::ffi::c_char;
-                }
-                memmove(
-                    dest as *mut ::core::ffi::c_void,
-                    appname as *const ::core::ffi::c_void,
-                    appname_len,
-                );
-                dest = dest.add(appname_len);
-                if !suf1.is_null() {
-                    let c2rust_fresh24 = dest;
-                    dest = dest.offset(1);
-                    *c2rust_fresh24 = PATHSEP as ::core::ffi::c_char;
-                    memmove(
-                        dest as *mut ::core::ffi::c_void,
-                        suf1 as *const ::core::ffi::c_void,
-                        len1,
-                    );
-                    dest = dest.add(len1);
-                    if !suf2.is_null() {
-                        let c2rust_fresh25 = dest;
-                        dest = dest.offset(1);
-                        *c2rust_fresh25 = PATHSEP as ::core::ffi::c_char;
-                        memmove(
-                            dest as *mut ::core::ffi::c_void,
-                            suf2 as *const ::core::ffi::c_void,
-                            len2,
-                        );
-                        dest = dest.add(len2);
-                    }
-                }
-                let c2rust_fresh26 = dest;
-                dest = dest.offset(1);
-                *c2rust_fresh26 = ',' as ::core::ffi::c_char;
-            }
-            if iter.is_null() {
-                break;
-            }
-        }
-        return dest;
+/// A possibly-null C string as bytes, without its terminator.
+///
+/// # Safety
+/// `s` is null or NUL-terminated, and stays valid for the borrow.
+unsafe fn bytes_of<'a>(s: *const c_char) -> &'a [u8] {
+    if s.is_null() {
+        return &[];
     }
+    // SAFETY: the caller's contract.
+    unsafe { CStr::from_ptr(s) }.to_bytes()
 }
 
-#[inline]
-unsafe extern "C" fn add_dir(
-    mut dest: *mut ::core::ffi::c_char,
-    dir: *const ::core::ffi::c_char,
-    dir_len: size_t,
-    type_0: XDGVarType,
-    suf1: *const ::core::ffi::c_char,
-    len1: size_t,
-    suf2: *const ::core::ffi::c_char,
-    len2: size_t,
-) -> *mut ::core::ffi::c_char {
+/// Where nvim's Lua runtime files were installed.
+///
+/// The configured path when it exists, else `lib/nvim` beside the binary's
+/// install prefix -- which is what makes a relocated or AppImage build find
+/// its own files.
+pub unsafe extern "C" fn get_lib_dir() -> *mut c_char {
+    // SAFETY: `default_lib_dir` is a NUL-terminated build-time constant, and
+    // `exe_name` is `MAXPATHL` bytes for the two calls that fill it.
     unsafe {
-        if dir.is_null() || dir_len == 0 as size_t {
-            return dest;
-        }
-        dest = strcpy_comma_escaped(dest, dir, dir_len);
-        let mut append_nvim: bool = type_0 as ::core::ffi::c_int
-            == kXDGDataHome as ::core::ffi::c_int
-            || type_0 as ::core::ffi::c_int == kXDGConfigHome as ::core::ffi::c_int;
-        if append_nvim {
-            if after_pathsep(dest.offset(-(1 as ::core::ffi::c_int as isize)), dest) == 0 {
-                let c2rust_fresh18 = dest;
-                dest = dest.offset(1);
-                *c2rust_fresh18 = PATHSEP as ::core::ffi::c_char;
-            }
-            let mut appname: *const ::core::ffi::c_char = get_appname(false_0 != 0);
-            let mut appname_len: size_t = strlen(appname);
-            debug_assert!(
-                appname_len
-                    < ((1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as usize)
-                        .wrapping_sub(::core::mem::size_of::<[::core::ffi::c_char; 6]>()),
-                "appname_len < (IOSIZE - sizeof(\\\"-data\\\"))"
-            );
-            xmemcpyz(
-                IObuff.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
-                appname as *const ::core::ffi::c_void,
-                appname_len,
-            );
-            xmemcpyz(
-                dest as *mut ::core::ffi::c_void,
-                IObuff.ptr() as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
-                appname_len,
-            );
-            dest = dest.add(appname_len);
-            if !suf1.is_null() {
-                let c2rust_fresh19 = dest;
-                dest = dest.offset(1);
-                *c2rust_fresh19 = PATHSEP as ::core::ffi::c_char;
-                memmove(
-                    dest as *mut ::core::ffi::c_void,
-                    suf1 as *const ::core::ffi::c_void,
-                    len1,
-                );
-                dest = dest.add(len1);
-                if !suf2.is_null() {
-                    let c2rust_fresh20 = dest;
-                    dest = dest.offset(1);
-                    *c2rust_fresh20 = PATHSEP as ::core::ffi::c_char;
-                    memmove(
-                        dest as *mut ::core::ffi::c_void,
-                        suf2 as *const ::core::ffi::c_void,
-                        len2,
-                    );
-                    dest = dest.add(len2);
-                }
-            }
-        }
-        let c2rust_fresh21 = dest;
-        dest = dest.offset(1);
-        *c2rust_fresh21 = ',' as ::core::ffi::c_char;
-        return dest;
-    }
-}
-
-pub unsafe extern "C" fn get_lib_dir() -> *mut ::core::ffi::c_char {
-    unsafe {
-        if strlen(default_lib_dir.get()) != 0 as size_t
-            && os_isdir(default_lib_dir.get()) as ::core::ffi::c_int != 0
-        {
+        // TODO(bfredl): too fragile? Ideally default_lib_dir would be made
+        // empty in an appimage build.
+        if strlen(default_lib_dir.get()) != 0 && os_isdir(default_lib_dir.get()) {
             return xstrdup(default_lib_dir.get());
         }
-        let mut exe_name: [::core::ffi::c_char; 4096] = [0; 4096];
-        vim_get_prefix_from_exepath(&raw mut exe_name as *mut ::core::ffi::c_char);
+        let mut exe_name = [0 as c_char; MAXPATHL as usize];
+        vim_get_prefix_from_exepath(exe_name.as_mut_ptr());
         if append_path(
-            &raw mut exe_name as *mut ::core::ffi::c_char,
+            exe_name.as_mut_ptr(),
             c"lib/nvim".as_ptr(),
             MAXPATHL as size_t,
         ) == OK
         {
-            return xstrdup(&raw mut exe_name as *mut ::core::ffi::c_char);
+            return xstrdup(exe_name.as_ptr());
         }
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        ptr::null_mut()
     }
 }
 
-pub unsafe extern "C" fn runtimepath_default(mut clean_arg: bool) -> *mut ::core::ffi::c_char {
+/// The startup value of 'runtimepath'.
+///
+/// Answers null when nothing contributed a directory -- no XDG variables, no
+/// `$VIMRUNTIME` and no library directory -- which is what the option code
+/// reads as "leave the built-in default alone".
+///
+/// # Safety
+/// Reads the environment; must run on the main thread, like every other
+/// caller of `stdpaths_get_xdg_var`.
+pub unsafe extern "C" fn runtimepath_default(clean_arg: bool) -> *mut c_char {
+    // SAFETY: every pointer below is either null or an owned NUL-terminated
+    // string, freed once at the end and not borrowed past that point.
     unsafe {
-        let mut rtp_cur: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut rtp_size: size_t = 0 as size_t;
-        let data_home: *mut ::core::ffi::c_char = if clean_arg as ::core::ffi::c_int != 0 {
-            ::core::ptr::null_mut::<::core::ffi::c_char>()
+        // `--clean` starts from the packaged runtime only: no user config,
+        // no user data.
+        let data_home = if clean_arg {
+            ptr::null_mut()
         } else {
             stdpaths_get_xdg_var(kXDGDataHome)
         };
-        let config_home: *mut ::core::ffi::c_char = if clean_arg as ::core::ffi::c_int != 0 {
-            ::core::ptr::null_mut::<::core::ffi::c_char>()
+        let config_home = if clean_arg {
+            ptr::null_mut()
         } else {
             stdpaths_get_xdg_var(kXDGConfigHome)
         };
-        let vimruntime: *mut ::core::ffi::c_char = vim_getenv(c"VIMRUNTIME".as_ptr());
-        let libdir: *mut ::core::ffi::c_char = get_lib_dir();
-        let data_dirs: *mut ::core::ffi::c_char = stdpaths_get_xdg_var(kXDGDataDirs);
-        let config_dirs: *mut ::core::ffi::c_char = stdpaths_get_xdg_var(kXDGConfigDirs);
-        let mut data_len: size_t = 0 as size_t;
-        let mut config_len: size_t = 0 as size_t;
-        let mut vimruntime_len: size_t = 0 as size_t;
-        let mut libdir_len: size_t = 0 as size_t;
-        let mut appname_len: size_t = strlen(get_appname(false_0 != 0));
-        if !data_home.is_null() {
-            data_len = strlen(data_home);
-            let mut nvim_data_size: size_t = appname_len;
-            if data_len != 0 as size_t {
-                rtp_size = (rtp_size as ::core::ffi::c_ulong).wrapping_add(
-                    data_len
-                        .wrapping_add(memcnt(
-                            data_home as *const ::core::ffi::c_void,
-                            ',' as ::core::ffi::c_char,
-                            data_len,
-                        ))
-                        .wrapping_add(nvim_data_size)
-                        .wrapping_add(1 as size_t)
-                        .wrapping_add(SITE_SIZE)
-                        .wrapping_add(1 as size_t)
-                        .wrapping_add(
-                            (after_pathsep(data_home, data_home.add(data_len)) == 0)
-                                as ::core::ffi::c_int as size_t,
-                        )
-                        .wrapping_mul(2 as size_t)
-                        .wrapping_add(AFTER_SIZE)
-                        .wrapping_add(1 as size_t) as ::core::ffi::c_ulong,
-                ) as size_t;
-            }
+        let vimruntime = vim_getenv(c"VIMRUNTIME".as_ptr());
+        let libdir = get_lib_dir();
+        let data_dirs = stdpaths_get_xdg_var(kXDGDataDirs);
+        let config_dirs = stdpaths_get_xdg_var(kXDGConfigDirs);
+
+        let rtp = RtpParts {
+            appname: bytes_of(get_appname(false)),
+            config_home: bytes_of(config_home),
+            config_dirs: bytes_of(config_dirs),
+            data_home: bytes_of(data_home),
+            data_dirs: bytes_of(data_dirs),
+            vimruntime: bytes_of(vimruntime),
+            libdir: bytes_of(libdir),
         }
-        if !config_home.is_null() {
-            config_len = strlen(config_home);
-            if config_len != 0 as size_t {
-                rtp_size = (rtp_size as ::core::ffi::c_ulong).wrapping_add(
-                    config_len
-                        .wrapping_add(memcnt(
-                            config_home as *const ::core::ffi::c_void,
-                            ',' as ::core::ffi::c_char,
-                            config_len,
-                        ))
-                        .wrapping_add(appname_len)
-                        .wrapping_add(1 as size_t)
-                        .wrapping_add(
-                            (after_pathsep(config_home, config_home.add(config_len)) == 0)
-                                as ::core::ffi::c_int as size_t,
-                        )
-                        .wrapping_mul(2 as size_t)
-                        .wrapping_add(AFTER_SIZE)
-                        .wrapping_add(1 as size_t) as ::core::ffi::c_ulong,
-                ) as size_t;
-            }
+        .build();
+
+        xfree(data_dirs.cast());
+        xfree(config_dirs.cast());
+        xfree(data_home.cast());
+        xfree(config_home.cast());
+        xfree(vimruntime.cast());
+        xfree(libdir.cast());
+
+        if rtp.is_empty() {
+            return ptr::null_mut();
         }
-        if !vimruntime.is_null() {
-            vimruntime_len = strlen(vimruntime);
-            if vimruntime_len != 0 as size_t {
-                rtp_size = rtp_size.wrapping_add(
-                    vimruntime_len
-                        .wrapping_add(memcnt(
-                            vimruntime as *const ::core::ffi::c_void,
-                            ',' as ::core::ffi::c_char,
-                            vimruntime_len,
-                        ))
-                        .wrapping_add(1 as size_t),
-                );
-            }
-        }
-        if !libdir.is_null() {
-            libdir_len = strlen(libdir);
-            if libdir_len != 0 as size_t {
-                rtp_size = rtp_size.wrapping_add(
-                    libdir_len
-                        .wrapping_add(memcnt(
-                            libdir as *const ::core::ffi::c_void,
-                            ',' as ::core::ffi::c_char,
-                            libdir_len,
-                        ))
-                        .wrapping_add(1 as size_t),
-                );
-            }
-        }
-        rtp_size = rtp_size.wrapping_add(compute_double_env_sep_len(
-            data_dirs,
-            appname_len
-                .wrapping_add(1 as size_t)
-                .wrapping_add(SITE_SIZE)
-                .wrapping_add(1 as size_t),
-            AFTER_SIZE.wrapping_add(1 as size_t),
-        ));
-        rtp_size = rtp_size.wrapping_add(compute_double_env_sep_len(
-            config_dirs,
-            appname_len.wrapping_add(1 as size_t),
-            AFTER_SIZE.wrapping_add(1 as size_t),
-        ));
-        let mut rtp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if rtp_size != 0 as size_t {
-            rtp = xmalloc(rtp_size) as *mut ::core::ffi::c_char;
-            rtp_cur = rtp;
-            rtp_cur = add_dir(
-                rtp_cur,
-                config_home,
-                config_len,
-                kXDGConfigHome,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                0 as size_t,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                0 as size_t,
-            );
-            rtp_cur = add_env_sep_dirs(
-                rtp_cur,
-                config_dirs,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                0 as size_t,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                0 as size_t,
-                true_0 != 0,
-            );
-            rtp_cur = add_dir(
-                rtp_cur,
-                data_home,
-                data_len,
-                kXDGDataHome,
-                c"site".as_ptr(),
-                SITE_SIZE,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                0 as size_t,
-            );
-            rtp_cur = add_env_sep_dirs(
-                rtp_cur,
-                data_dirs,
-                c"site".as_ptr(),
-                SITE_SIZE,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                0 as size_t,
-                true_0 != 0,
-            );
-            rtp_cur = add_dir(
-                rtp_cur,
-                vimruntime,
-                vimruntime_len,
-                kXDGNone,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                0 as size_t,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                0 as size_t,
-            );
-            rtp_cur = add_dir(
-                rtp_cur,
-                libdir,
-                libdir_len,
-                kXDGNone,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                0 as size_t,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                0 as size_t,
-            );
-            rtp_cur = add_env_sep_dirs(
-                rtp_cur,
-                data_dirs,
-                c"site".as_ptr(),
-                SITE_SIZE,
-                c"after".as_ptr(),
-                AFTER_SIZE,
-                false_0 != 0,
-            );
-            rtp_cur = add_dir(
-                rtp_cur,
-                data_home,
-                data_len,
-                kXDGDataHome,
-                c"site".as_ptr(),
-                SITE_SIZE,
-                c"after".as_ptr(),
-                AFTER_SIZE,
-            );
-            rtp_cur = add_env_sep_dirs(
-                rtp_cur,
-                config_dirs,
-                c"after".as_ptr(),
-                AFTER_SIZE,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                0 as size_t,
-                false_0 != 0,
-            );
-            rtp_cur = add_dir(
-                rtp_cur,
-                config_home,
-                config_len,
-                kXDGConfigHome,
-                c"after".as_ptr(),
-                AFTER_SIZE,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                0 as size_t,
-            );
-            *rtp_cur.offset(-1 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
-            debug_assert!(
-                rtp_cur.offset_from(rtp) as size_t == rtp_size,
-                "(size_t)(rtp_cur - rtp) == rtp_size"
-            );
-        }
-        xfree(data_dirs as *mut ::core::ffi::c_void);
-        xfree(config_dirs as *mut ::core::ffi::c_void);
-        xfree(data_home as *mut ::core::ffi::c_void);
-        xfree(config_home as *mut ::core::ffi::c_void);
-        xfree(vimruntime as *mut ::core::ffi::c_void);
-        xfree(libdir as *mut ::core::ffi::c_void);
-        return rtp;
+        let out = xmalloc(rtp.len()) as *mut c_char;
+        ptr::copy_nonoverlapping(rtp.as_ptr(), out.cast(), rtp.len());
+        out
     }
 }
 
-pub const SITE_SIZE: usize =
-    ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1_usize);
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-pub const AFTER_SIZE: usize =
-    ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1_usize);
+    /// The builder's answer as a string, with the NUL dropped.
+    fn build(parts: &RtpParts) -> String {
+        let mut out = parts.build();
+        assert_eq!(out.pop(), Some(0));
+        String::from_utf8(out).unwrap()
+    }
+
+    fn parts<'a>() -> RtpParts<'a> {
+        RtpParts {
+            appname: b"nvim",
+            config_home: b"",
+            config_dirs: b"",
+            data_home: b"",
+            data_dirs: b"",
+            vimruntime: b"",
+            libdir: b"",
+        }
+    }
+
+    #[test]
+    fn nothing_set_builds_nothing() {
+        assert!(
+            RtpParts {
+                appname: b"nvim",
+                ..parts()
+            }
+            .build()
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn homes_come_first_and_after_comes_last() {
+        let got = build(&RtpParts {
+            config_home: b"/c",
+            data_home: b"/d",
+            vimruntime: b"/rt",
+            libdir: b"/lib",
+            ..parts()
+        });
+        assert_eq!(
+            got,
+            "/c/nvim,/d/nvim/site,/rt,/lib,/d/nvim/site/after,/c/nvim/after"
+        );
+    }
+
+    #[test]
+    fn dirs_lists_appear_twice_and_the_after_half_is_reversed() {
+        let got = build(&RtpParts {
+            config_dirs: b"/e1:/e2",
+            data_dirs: b"/s1:/s2",
+            ..parts()
+        });
+        assert_eq!(
+            got,
+            "/e1/nvim,/e2/nvim,/s1/nvim/site,/s2/nvim/site,\
+             /s2/nvim/site/after,/s1/nvim/site/after,/e2/nvim/after,/e1/nvim/after"
+        );
+    }
+
+    #[test]
+    fn empty_list_entries_are_skipped() {
+        let got = build(&RtpParts {
+            config_dirs: b":/e1::/e2:",
+            ..parts()
+        });
+        assert_eq!(got, "/e1/nvim,/e2/nvim,/e2/nvim/after,/e1/nvim/after");
+    }
+
+    #[test]
+    fn commas_in_a_directory_are_escaped() {
+        let got = build(&RtpParts {
+            config_home: b"/co,mma",
+            ..parts()
+        });
+        assert_eq!(got, "/co\\,mma/nvim,/co\\,mma/nvim/after");
+    }
+
+    #[test]
+    fn a_trailing_separator_is_not_doubled() {
+        let got = build(&RtpParts {
+            config_home: b"/c/",
+            config_dirs: b"/e/",
+            ..parts()
+        });
+        assert_eq!(got, "/c/nvim,/e/nvim,/e/nvim/after,/c/nvim/after");
+    }
+
+    #[test]
+    fn the_appname_is_what_names_every_home_component() {
+        let got = build(&RtpParts {
+            appname: b"probe",
+            config_home: b"/c",
+            data_dirs: b"/s",
+            ..parts()
+        });
+        assert_eq!(
+            got,
+            "/c/probe,/s/probe/site,/s/probe/site/after,/c/probe/after"
+        );
+    }
+
+    #[test]
+    fn the_runtime_and_library_directories_take_no_components() {
+        let got = build(&RtpParts {
+            vimruntime: b"/rt/",
+            libdir: b"/li,b",
+            ..parts()
+        });
+        assert_eq!(got, "/rt/,/li\\,b");
+    }
+}
