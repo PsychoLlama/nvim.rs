@@ -620,7 +620,7 @@ pub unsafe fn do_cmdline(
             // drops anything pending; one in a catch clause finishes the
             // exception it caught. This also frees the `cs_forinfo`s.
             loop {
-                let mut idx = cleanup_conditionals(&raw mut cstack, 0, 1);
+                let mut idx = cleanup_conditionals(&raw mut cstack, 0, true);
                 if idx >= 0 {
                     // Drop a try block that is not in its finally clause.
                     idx -= 1;

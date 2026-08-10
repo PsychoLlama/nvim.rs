@@ -482,7 +482,7 @@ pub unsafe fn do_return(
 
         // Cleanup (and inactivate) conditionals, but stop when a `:finally`
         // is reached: the return still has to be pending until that has run.
-        let idx = cleanup_conditionals((*eap).cstack, 0, 1);
+        let idx = cleanup_conditionals((*eap).cstack, 0, true);
         if idx >= 0 {
             // A `:finally` is going to run first; remember the return value.
             (*cstack).cs_pending[idx as usize] = CSTP_RETURN as c_char;

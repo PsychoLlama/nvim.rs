@@ -831,7 +831,7 @@ pub unsafe extern "C" fn do_finish(eap: *mut exarg_T, reanimate: bool) {
         // conditional not in its finally clause -- which then is to be executed
         // next -- is found.  In that case make the `":finish"` pending for
         // execution at the `":endtry"`.  Otherwise, finish normally.
-        let idx = cleanup_conditionals((*eap).cstack, 0, true_0);
+        let idx = cleanup_conditionals((*eap).cstack, 0, true);
         if idx >= 0 {
             (*(*eap).cstack).cs_pending[idx as usize] = CSTP_FINISH as c_char;
             report_make_pending(CSTP_FINISH, NULL_0);
