@@ -1,10 +1,52 @@
+//! The ex commands that did not fit anywhere else: the script-host shims,
+//! the "may I abandon this buffer" family, `:argdo` and its seven siblings,
+//! `:compiler`, `:checktime` and `:drop`.
+//!
+//! Two groups carry the weight of the file.
+//!
+//! **Abandoning a changed buffer.** [`check_changed`] answers "is this
+//! buffer modified in a way that forbids leaving it", and everything that
+//! wants to leave one -- `:quit`, `:edit`, `:bdelete`, closing a window --
+//! routes through that answer. With 'confirm' (or the `:confirm` modifier)
+//! the answer comes from a dialog instead ([`dialog_changed`]), which may
+//! write the file, write *every* file, or mark them all unchanged.
+//! [`check_changed_any`] is the `:qall` form: it orders the buffers
+//! most-interesting-first -- the current buffer, then the current tab
+//! page's, then the other tab pages', then the rest -- and reports on the
+//! first one that says no, making it current so the user can see it.
+//!
+//! **`:argdo` and friends.** [`ex_listdo`] runs one command once per
+//! argument, window, tab page, buffer or quickfix entry. Upstream tells the
+//! eight commands apart by comparing `eap->cmdidx` against a `CMD_*`
+//! constant at a dozen separate points; [`ListDo`] makes that decision once,
+//! at the top, and the rest of the walk asks the enum.
+//!
+//! # Safety
+//!
+//! Every function here takes editor state by raw pointer -- the `exarg_T` of
+//! the command being executed, or a `buf_T`/`win_T`/`tabpage_T` out of one
+//! of the editor's own lists -- and every one of them runs on the main
+//! thread with those lists live. That is the contract the `unsafe fn`s below
+//! share; each states it once by reference and does not restate it.
+//!
+//! What the contract does *not* buy is stability. Nearly everything here can
+//! run autocommands -- a write, a buffer switch, the command `:argdo` was
+//! given -- and an autocommand can delete the very buffer under examination.
+//! So the `bufref_T` re-checks that follow such a call are load-bearing, and
+//! a walk that a callee can invalidate restarts from `firstbuf` instead of
+//! trusting the `b_next` it read before. [`buffers`] and its two siblings
+//! are only for the walks where that cannot happen.
+//!
+//! Original: `src/nvim/ex_cmds2.c`, Vim/Neovim, Vim license.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+mod listdo;
+
 use crate::semsg_c;
-use crate::src::nvim::arglist::{do_argfile, editing_arg_idx, ex_all, ex_rewind, set_arglist};
-use crate::src::nvim::autocmd::{
-    EVENT_SYNTAX, apply_autocmds, au_event_disable, au_event_restore, aucmd_prepbuf, aucmd_restbuf,
-};
+use crate::src::nvim::arglist::{ex_all, ex_rewind, set_arglist};
 use crate::src::nvim::buffer::{
-    bt_dontwrite, buf_hide, buf_set_name, buf_spname, buflist_findnr, bufref_valid, goto_buffer,
+    bt_dontwrite, buf_hide, buf_set_name, buf_spname, buflist_findnr, bufref_valid,
     no_write_message, no_write_message_nobang, set_bufref, set_curbuf,
 };
 use crate::src::nvim::bufwrite::{WriteRequest, buf_write};
@@ -21,1038 +63,888 @@ use crate::src::nvim::ex_cmds::{check_overwrite, set_swapcommand};
 use crate::src::nvim::ex_docmd::{dialog_msg, do_cmdline, do_cmdline_cmd};
 use crate::src::nvim::ex_getln::script_get;
 use crate::src::nvim::fileio::{buf_check_timestamp, check_timestamps};
-use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::HLF_W;
 use crate::src::nvim::main::{
-    cmdline_row, cmdmod, curbuf, curtab, curwin, e_noname, e_winfixbuf_cannot_go_to_buffer,
-    emsg_off, exiting, first_tabpage, firstbuf, firstwin, got_int, listcmd_busy, msg_col,
-    msg_didany, msg_didout, msg_listdo_overwrite, msg_row, no_check_timestamps, no_wait_return,
-    p_aw, p_awa, p_confirm, p_write, prevwin, vgetc_busy,
+    cmdline_row, cmdmod, curbuf, curtab, curwin, emsg_off, exiting, first_tabpage, firstbuf,
+    firstwin, msg_col, msg_didany, msg_didout, msg_row, no_check_timestamps, no_wait_return, p_aw,
+    p_awa, p_confirm, p_write, vgetc_busy,
 };
-use crate::src::nvim::mark::setpcmark;
-use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
+use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::message::{
-    emsg, msg, msg_source, vim_dialog_yesnoallcancel, vim_dialog_yesnocancel, wait_return,
+    VIM_ALL, VIM_DISCARDALL, VIM_NO, VIM_YES, emsg, msg, msg_source, vim_dialog_yesnoallcancel,
+    vim_dialog_yesnocancel, wait_return,
 };
-use crate::src::nvim::r#move::validate_cursor;
-use crate::src::nvim::normal::do_check_scrollbind;
-use crate::src::nvim::os::libc::{gettext, snprintf, strlen};
+use crate::src::nvim::os::libc::strlen;
 use crate::src::nvim::path::vim_FullName;
-use crate::src::nvim::pos::MAXLNUM;
-use crate::src::nvim::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
 use crate::src::nvim::runtime::{DIP_ALL, source_runtime_vim_lua};
-use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::types::{
-    CMD_append, CMD_argdo, CMD_bufdo, CMD_cdo, CMD_cfdo, CMD_first, CMD_ldo, CMD_lfdo, CMD_sfirst,
-    CMD_tabdo, CMD_windo, CMOD_CONFIRM, VV_SWAPCOMMAND, aco_save_T, aentry_T, buf_T, bufref_T,
-    cmd_addr_T, cstack_T, dobuf_action_values, dobuf_start_values, exarg, exarg_T, linenr_T,
-    list_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint8_t, uint64_t, varnumber_T, win_T,
+    CMD_first, CMD_sfirst, CMOD_CONFIRM, VV_SWAPCOMMAND, aentry_T, buf_T, bufref_T, exarg_T,
+    linenr_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, varnumber_T, win_T,
 };
 use crate::src::nvim::undo::bufIsChanged;
-use crate::src::nvim::window::{
-    goto_tabpage_tp, goto_tabpage_win, valid_tabpage, win_goto, win_split, win_valid,
+use crate::src::nvim::window::goto_tabpage_win;
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
+
+use flag::{
+    CCGD_ALLBUF, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DIALOG_MSG_SIZE, DOBUF_GOTO,
+    DOBUF_UNLOAD, DOCMD_VERBOSE, FAIL, MAXPATHL, ML_EMPTY, NUL, OK, VIM_QUESTION,
 };
-pub const ADDR_LINES: cmd_addr_T = 0;
-pub const DOBUF_WIPE: dobuf_action_values = 4;
-pub const DOBUF_DEL: dobuf_action_values = 3;
-pub const DOBUF_UNLOAD: dobuf_action_values = 2;
-pub const DOBUF_GOTO: dobuf_action_values = 0;
-pub const DOBUF_FIRST: dobuf_start_values = 1;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const VIM_QUESTION: C2Rust_Unnamed_17 = 4;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const VIM_DISCARDALL: C2Rust_Unnamed_18 = 6;
-pub const VIM_ALL: C2Rust_Unnamed_18 = 5;
-pub const VIM_NO: C2Rust_Unnamed_18 = 3;
-pub const VIM_YES: C2Rust_Unnamed_18 = 2;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const CCGD_EXCMD: C2Rust_Unnamed_19 = 16;
-pub const CCGD_ALLBUF: C2Rust_Unnamed_19 = 8;
-pub const CCGD_FORCEIT: C2Rust_Unnamed_19 = 4;
-pub const CCGD_MULTWIN: C2Rust_Unnamed_19 = 2;
-pub const CCGD_AW: C2Rust_Unnamed_19 = 1;
-pub const DOCMD_NOWAIT: C2Rust_Unnamed_20 = 2;
-pub const DOCMD_VERBOSE: C2Rust_Unnamed_20 = 1;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const BF_SYN_SET: ::core::ffi::c_int = 0x200 as ::core::ffi::c_int;
-pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static e_compiler_not_supported_str: GlobalCell<[::core::ffi::c_char; 33]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
-            *b"E666: Compiler not supported: %s\0",
-        )
-    });
-pub unsafe fn ex_ruby(mut eap: *mut exarg_T) {
-    script_host_execute(c"ruby".as_ptr() as *mut ::core::ffi::c_char, eap);
+
+pub use listdo::ex_listdo;
+
+/// Constants the transpiler copied in from the headers this module includes.
+mod flag {
+    use super::c_int;
+    use crate::src::nvim::types::{dobuf_action_values, dobuf_start_values};
+
+    /// `buf_T.b_flags`: the Syntax autocommands ran for this buffer.
+    pub const BF_SYN_SET: c_int = 0x200;
+
+    /// `check_changed` flags.
+    pub const CCGD_AW: c_int = 1;
+    pub const CCGD_MULTWIN: c_int = 2;
+    pub const CCGD_FORCEIT: c_int = 4;
+    pub const CCGD_ALLBUF: c_int = 8;
+    pub const CCGD_EXCMD: c_int = 16;
+
+    /// `do_buffer` actions and starting points.
+    pub const DOBUF_GOTO: dobuf_action_values = 0;
+    pub const DOBUF_UNLOAD: dobuf_action_values = 2;
+    pub const DOBUF_FIRST: dobuf_start_values = 1;
+
+    /// `do_cmdline` flags.
+    pub const DOCMD_VERBOSE: c_int = 1;
+    pub const DOCMD_NOWAIT: c_int = 2;
+
+    /// `do_dialog` types; the answers live in `message.rs`.
+    pub const VIM_QUESTION: c_int = 4;
+
+    /// The buffer `dialog_msg` formats into.
+    pub const DIALOG_MSG_SIZE: usize = 1000;
+
+    /// `memline` flags: the buffer holds a single empty line.
+    pub const ML_EMPTY: c_int = 0x1;
+
+    pub const MAXPATHL: usize = 4096;
+    pub const NUL: c_char = 0;
+    pub const OK: c_int = 1;
+    pub const FAIL: c_int = 0;
+
+    use core::ffi::c_char;
 }
-pub unsafe fn ex_rubyfile(mut eap: *mut exarg_T) {
-    script_host_execute_file(c"ruby".as_ptr() as *mut ::core::ffi::c_char, eap);
+
+// -- List walks -------------------------------------------------------------
+//
+// The editor's buffer, window and tab page lists as iterators. Only for
+// walks nothing inside can invalidate; see the module docs.
+
+/// Every buffer, oldest first.
+fn buffers() -> impl Iterator<Item = *mut buf_T> {
+    let mut next = firstbuf.get();
+    core::iter::from_fn(move || {
+        let buf = next;
+        if buf.is_null() {
+            return None;
+        }
+        // SAFETY: the buffer list is the editor's own and is live.
+        next = unsafe { (*buf).b_next };
+        Some(buf)
+    })
 }
-pub unsafe fn ex_rubydo(mut eap: *mut exarg_T) {
-    script_host_do_range(c"ruby".as_ptr() as *mut ::core::ffi::c_char, eap);
+
+/// Every tab page, in order.
+fn tabpages() -> impl Iterator<Item = *mut tabpage_T> {
+    let mut next = first_tabpage.get();
+    core::iter::from_fn(move || {
+        let tp = next;
+        if tp.is_null() {
+            return None;
+        }
+        // SAFETY: the tab page list is the editor's own and is live.
+        next = unsafe { (*tp).tp_next };
+        Some(tp)
+    })
 }
-pub unsafe fn ex_python3(mut eap: *mut exarg_T) {
-    script_host_execute(c"python3".as_ptr() as *mut ::core::ffi::c_char, eap);
+
+/// Every window of `tp`. The current tab page keeps its window list in
+/// `firstwin` rather than in the tab page struct, which is why this is not a
+/// plain walk of `tp_firstwin`.
+fn windows_in_tab(tp: *mut tabpage_T) -> impl Iterator<Item = *mut win_T> {
+    let mut next = if tp == curtab.get() {
+        firstwin.get()
+    } else {
+        // SAFETY: `tp` is a live tab page.
+        unsafe { (*tp).tp_firstwin }
+    };
+    core::iter::from_fn(move || {
+        let wp = next;
+        if wp.is_null() {
+            return None;
+        }
+        // SAFETY: the window list is the editor's own and is live.
+        next = unsafe { (*wp).w_next };
+        Some(wp)
+    })
 }
-pub unsafe fn ex_py3file(mut eap: *mut exarg_T) {
-    script_host_execute_file(c"python3".as_ptr() as *mut ::core::ffi::c_char, eap);
+
+/// Every window of every tab page, paired with the tab page holding it.
+fn tab_windows() -> impl Iterator<Item = (*mut tabpage_T, *mut win_T)> {
+    tabpages().flat_map(|tp| windows_in_tab(tp).map(move |wp| (tp, wp)))
 }
-pub unsafe fn ex_pydo3(mut eap: *mut exarg_T) {
-    script_host_do_range(c"python3".as_ptr() as *mut ::core::ffi::c_char, eap);
+
+// -- The script-host commands ----------------------------------------------
+//
+// `:ruby`, `:python3` and `:perl` are not implemented here at all: each one
+// hands its text, its file name or its range to the provider of that name
+// and lets the remote plugin host do the work.
+
+/// `:ruby`
+pub unsafe fn ex_ruby(eap: *mut exarg_T) {
+    unsafe { script_host_execute(c"ruby", eap) }
 }
-pub unsafe fn ex_perl(mut eap: *mut exarg_T) {
-    script_host_execute(c"perl".as_ptr() as *mut ::core::ffi::c_char, eap);
+
+/// `:rubyfile`
+pub unsafe fn ex_rubyfile(eap: *mut exarg_T) {
+    unsafe { script_host_execute_file(c"ruby", eap) }
 }
-pub unsafe fn ex_perlfile(mut eap: *mut exarg_T) {
-    script_host_execute_file(c"perl".as_ptr() as *mut ::core::ffi::c_char, eap);
+
+/// `:rubydo`
+pub unsafe fn ex_rubydo(eap: *mut exarg_T) {
+    unsafe { script_host_do_range(c"ruby", eap) }
 }
-pub unsafe fn ex_perldo(mut eap: *mut exarg_T) {
-    script_host_do_range(c"perl".as_ptr() as *mut ::core::ffi::c_char, eap);
+
+/// `:python3`
+pub unsafe fn ex_python3(eap: *mut exarg_T) {
+    unsafe { script_host_execute(c"python3", eap) }
 }
-pub unsafe extern "C" fn autowrite(mut buf: *mut buf_T, mut forceit: bool) -> ::core::ffi::c_int {
-    let mut bufref: bufref_T = bufref_T::default();
-    if !(p_aw.get() != 0 || p_awa.get() != 0)
-        || p_write.get() == 0
-        || bt_dontwrite(buf) as ::core::ffi::c_int != 0
-        || !forceit && (*buf).b_p_ro != 0
-        || (*buf).b_ffname.is_null()
-    {
-        return FAIL;
+
+/// `:py3file`
+pub unsafe fn ex_py3file(eap: *mut exarg_T) {
+    unsafe { script_host_execute_file(c"python3", eap) }
+}
+
+/// `:pydo3`
+pub unsafe fn ex_pydo3(eap: *mut exarg_T) {
+    unsafe { script_host_do_range(c"python3", eap) }
+}
+
+/// `:perl`
+pub unsafe fn ex_perl(eap: *mut exarg_T) {
+    unsafe { script_host_execute(c"perl", eap) }
+}
+
+/// `:perlfile`
+pub unsafe fn ex_perlfile(eap: *mut exarg_T) {
+    unsafe { script_host_execute_file(c"perl", eap) }
+}
+
+/// `:perldo`
+pub unsafe fn ex_perldo(eap: *mut exarg_T) {
+    unsafe { script_host_do_range(c"perl", eap) }
+}
+
+/// Hand the command's own text to the provider, with the range.
+///
+/// # Safety
+/// Module contract.
+unsafe fn script_host_execute(name: &CStr, eap: *mut exarg_T) {
+    // SAFETY: module contract; `script_get` returns an owned string that
+    // `tv_list_append_allocated_string` takes over.
+    unsafe {
+        let mut len: size_t = 0;
+        let script = script_get(eap, &raw mut len);
+        if script.is_null() {
+            return;
+        }
+        let args = tv_list_alloc(3 as ptrdiff_t);
+        tv_list_append_allocated_string(args, script);
+        tv_list_append_number(args, (*eap).line1 as c_int as varnumber_T);
+        tv_list_append_number(args, (*eap).line2 as c_int as varnumber_T);
+        eval_call_provider(
+            name.as_ptr().cast_mut(),
+            c"execute".as_ptr().cast_mut(),
+            args,
+            true,
+        );
     }
-    set_bufref(&raw mut bufref, buf);
-    let mut r: ::core::ffi::c_int = buf_write_all(buf, forceit);
-    if bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
-        && bufIsChanged(buf) as ::core::ffi::c_int != 0
-    {
-        r = FAIL;
-    }
-    return r;
 }
-pub unsafe extern "C" fn autowrite_all() {
+
+/// Hand the argument, as a full path, to the provider.
+///
+/// # Safety
+/// Module contract.
+unsafe fn script_host_execute_file(name: &CStr, eap: *mut exarg_T) {
+    // SAFETY: module contract; `buffer` is `MAXPATHL` bytes as promised.
+    unsafe {
+        if (*eap).skip != 0 {
+            return;
+        }
+        let mut buffer: [c_char; MAXPATHL] = [0; MAXPATHL];
+        vim_FullName((*eap).arg, buffer.as_mut_ptr(), MAXPATHL, false);
+
+        let args = tv_list_alloc(3 as ptrdiff_t);
+        tv_list_append_string(args, buffer.as_ptr(), -1 as ssize_t);
+        tv_list_append_number(args, (*eap).line1 as c_int as varnumber_T);
+        tv_list_append_number(args, (*eap).line2 as c_int as varnumber_T);
+        eval_call_provider(
+            name.as_ptr().cast_mut(),
+            c"execute_file".as_ptr().cast_mut(),
+            args,
+            true,
+        );
+    }
+}
+
+/// Hand the range and the command's text to the provider, range first.
+///
+/// # Safety
+/// Module contract.
+unsafe fn script_host_do_range(name: &CStr, eap: *mut exarg_T) {
+    // SAFETY: module contract.
+    unsafe {
+        if (*eap).skip != 0 {
+            return;
+        }
+        let args = tv_list_alloc(3 as ptrdiff_t);
+        tv_list_append_number(args, (*eap).line1 as c_int as varnumber_T);
+        tv_list_append_number(args, (*eap).line2 as c_int as varnumber_T);
+        tv_list_append_string(args, (*eap).arg, -1 as ssize_t);
+        eval_call_provider(
+            name.as_ptr().cast_mut(),
+            c"do_range".as_ptr().cast_mut(),
+            args,
+            true,
+        );
+    }
+}
+
+// -- Writing out, and asking about it --------------------------------------
+
+/// Write `buf` if 'autowrite' or 'autowriteall' is set.
+///
+/// Careful: autocommands may make `buf` invalid.
+///
+/// # Safety
+/// Module contract.
+pub unsafe fn autowrite(buf: *mut buf_T, forceit: bool) -> c_int {
+    // SAFETY: module contract.
+    unsafe {
+        if !(p_aw.get() != 0 || p_awa.get() != 0)
+            || p_write.get() == 0
+            // never autowrite a "nofile" or "nowrite" buffer
+            || bt_dontwrite(buf)
+            || (!forceit && (*buf).b_p_ro != 0)
+            || (*buf).b_ffname.is_null()
+        {
+            return FAIL;
+        }
+        let mut bufref = bufref_T::default();
+        set_bufref(&raw mut bufref, buf);
+        let r = buf_write_all(buf, forceit);
+
+        // The write can succeed and still leave the buffer changed, e.g. on
+        // a conversion error. That is a failure.
+        if bufref_valid(&raw mut bufref) && bufIsChanged(buf) {
+            return FAIL;
+        }
+        r
+    }
+}
+
+/// Flush every buffer except the ones that are readonly or never written.
+///
+/// # Safety
+/// Module contract.
+pub unsafe fn autowrite_all() {
     if !(p_aw.get() != 0 || p_awa.get() != 0) || p_write.get() == 0 {
         return;
     }
-    let mut buf: *mut buf_T = firstbuf.get();
-    while !buf.is_null() {
-        if bufIsChanged(buf) as ::core::ffi::c_int != 0 && (*buf).b_p_ro == 0 && !bt_dontwrite(buf)
-        {
-            let mut bufref: bufref_T = bufref_T::default();
-            set_bufref(&raw mut bufref, buf);
-            buf_write_all(buf, false_0 != 0);
-            if !bufref_valid(&raw mut bufref) {
-                buf = firstbuf.get();
-            }
-        }
-        buf = (*buf).b_next;
-    }
-}
-pub unsafe extern "C" fn check_changed(mut buf: *mut buf_T, mut flags: ::core::ffi::c_int) -> bool {
-    let mut forceit: bool = flags & CCGD_FORCEIT as ::core::ffi::c_int != 0;
-    let mut bufref: bufref_T = bufref_T::default();
-    set_bufref(&raw mut bufref, buf);
-    if !forceit
-        && bufIsChanged(buf) as ::core::ffi::c_int != 0
-        && (flags & CCGD_MULTWIN as ::core::ffi::c_int != 0
-            || (*buf).b_nwindows <= 1 as ::core::ffi::c_int)
-        && (flags & CCGD_AW as ::core::ffi::c_int == 0 || autowrite(buf, forceit) == FAIL)
-    {
-        if (p_confirm.get() != 0
-            || (*cmdmod.ptr()).cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0)
-            && p_write.get() != 0
-        {
-            let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            if flags & CCGD_ALLBUF as ::core::ffi::c_int != 0 {
-                let mut buf2: *mut buf_T = firstbuf.get();
-                while !buf2.is_null() {
-                    if bufIsChanged(buf2) as ::core::ffi::c_int != 0 && !(*buf2).b_ffname.is_null()
-                    {
-                        count += 1;
-                    }
-                    buf2 = (*buf2).b_next;
-                }
-            }
-            if !bufref_valid(&raw mut bufref) {
-                return false_0 != 0;
-            }
-            dialog_changed(buf, count > 1 as ::core::ffi::c_int);
-            if !bufref_valid(&raw mut bufref) {
-                return false_0 != 0;
-            }
-            return bufIsChanged(buf);
-        }
-        if flags & CCGD_EXCMD as ::core::ffi::c_int != 0 {
-            no_write_message();
-        } else {
-            no_write_message_nobang(curbuf.get());
-        }
-        return true_0 != 0;
-    }
-    return false_0 != 0;
-}
-pub unsafe extern "C" fn dialog_changed(mut buf: *mut buf_T, mut checkall: bool) {
-    let mut buff: [::core::ffi::c_char; 1000] = [0; 1000];
-    let mut ret: ::core::ffi::c_int = 0;
-    let mut ea: exarg_T = exarg {
-        arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        args: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-        arglens: ::core::ptr::null_mut::<size_t>(),
-        argc: 0,
-        nextcmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        cmdlinep: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-        cmdline_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        cmdidx: CMD_append,
-        argt: 0,
-        skip: 0,
-        forceit: false_0,
-        addr_count: 0,
-        line1: 0,
-        line2: 0,
-        addr_type: ADDR_LINES,
-        flags: 0,
-        do_ecmd_cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        do_ecmd_lnum: 0,
-        append: false_0,
-        usefilter: 0,
-        amount: 0,
-        regname: 0,
-        force_bin: 0,
-        read_edit: 0,
-        mkdir_p: 0,
-        force_ff: 0,
-        force_enc: 0,
-        bad_char: 0,
-        useridx: 0,
-        errmsg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        ea_getline: None,
-        cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        cstack: ::core::ptr::null_mut::<cstack_T>(),
-    };
-    dialog_msg(
-        &raw mut buff as *mut ::core::ffi::c_char,
-        gettext(c"Save changes to \"%s\"?".as_ptr()),
-        (*buf).b_fname,
-    );
-    if checkall {
-        ret = vim_dialog_yesnoallcancel(
-            VIM_QUESTION as ::core::ffi::c_int,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            &raw mut buff as *mut ::core::ffi::c_char,
-            1 as ::core::ffi::c_int,
-        );
-    } else {
-        ret = vim_dialog_yesnocancel(
-            VIM_QUESTION as ::core::ffi::c_int,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            &raw mut buff as *mut ::core::ffi::c_char,
-            1 as ::core::ffi::c_int,
-        );
-    }
-    if ret == VIM_YES as ::core::ffi::c_int {
-        let mut empty_bufname: bool = (*buf).b_fname.is_null();
-        if empty_bufname {
-            buf_set_name(
-                (*buf).handle as ::core::ffi::c_int,
-                c"Untitled".as_ptr() as *mut ::core::ffi::c_char,
-            );
-        }
-        if check_overwrite(
-            &raw mut ea,
-            buf,
-            (*buf).b_fname,
-            (*buf).b_ffname,
-            false_0 != 0,
-        ) == OK
-        {
-            if buf_write_all(buf, false_0 != 0) == OK {
-                return;
-            }
-        }
-        if empty_bufname {
-            (*buf).b_fname = ::core::ptr::null_mut::<::core::ffi::c_char>();
-            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                &raw mut (*buf).b_ffname as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr_);
-            *ptr_ = NULL;
-            let _ = *ptr_;
-            let mut ptr__0: *mut *mut ::core::ffi::c_void =
-                &raw mut (*buf).b_sfname as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr__0);
-            *ptr__0 = NULL;
-            let _ = *ptr__0;
-        }
-    } else if ret == VIM_NO as ::core::ffi::c_int {
-        unchanged(buf, true_0 != 0, false_0 != 0);
-    } else if ret == VIM_ALL as ::core::ffi::c_int {
-        let mut buf2: *mut buf_T = firstbuf.get();
-        while !buf2.is_null() {
-            if bufIsChanged(buf2) as ::core::ffi::c_int != 0
-                && !(*buf2).b_ffname.is_null()
-                && (*buf2).b_p_ro == 0
-            {
-                let mut bufref: bufref_T = bufref_T::default();
-                set_bufref(&raw mut bufref, buf2);
-                if !(*buf2).b_fname.is_null()
-                    && check_overwrite(
-                        &raw mut ea,
-                        buf2,
-                        (*buf2).b_fname,
-                        (*buf2).b_ffname,
-                        false_0 != 0,
-                    ) == OK
-                {
-                    buf_write_all(buf2, false_0 != 0);
-                }
-                if !bufref_valid(&raw mut bufref) {
-                    buf2 = firstbuf.get();
-                }
-            }
-            buf2 = (*buf2).b_next;
-        }
-    } else if ret == VIM_DISCARDALL as ::core::ffi::c_int {
-        let mut buf2_0: *mut buf_T = firstbuf.get();
-        while !buf2_0.is_null() {
-            unchanged(buf2_0, true_0 != 0, false_0 != 0);
-            buf2_0 = (*buf2_0).b_next;
-        }
-    }
-}
-pub unsafe extern "C" fn dialog_close_terminal(mut buf: *mut buf_T) -> bool {
-    let mut buff: [::core::ffi::c_char; 1000] = [0; 1000];
-    dialog_msg(
-        &raw mut buff as *mut ::core::ffi::c_char,
-        gettext(c"Close \"%s\"?".as_ptr()),
-        (if !(*buf).b_fname.is_null() {
-            (*buf).b_fname as *const ::core::ffi::c_char
-        } else {
-            c"?".as_ptr()
-        }) as *mut ::core::ffi::c_char,
-    );
-    let mut ret: ::core::ffi::c_int = vim_dialog_yesnocancel(
-        VIM_QUESTION as ::core::ffi::c_int,
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        &raw mut buff as *mut ::core::ffi::c_char,
-        1 as ::core::ffi::c_int,
-    );
-    return ret == VIM_YES as ::core::ffi::c_int;
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn can_abandon(mut buf: *mut buf_T, mut forceit: bool) -> bool {
-    return buf_hide(buf) as ::core::ffi::c_int != 0
-        || !bufIsChanged(buf)
-        || (*buf).b_nwindows > 1 as ::core::ffi::c_int
-        || autowrite(buf, forceit) == OK
-        || forceit as ::core::ffi::c_int != 0;
-}
-unsafe extern "C" fn add_bufnum(
-    mut bufnrs: *mut ::core::ffi::c_int,
-    mut bufnump: *mut ::core::ffi::c_int,
-    mut nr: ::core::ffi::c_int,
-) {
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < *bufnump {
-        if *bufnrs.offset(i as isize) == nr {
-            return;
-        }
-        i += 1;
-    }
-    *bufnrs.offset(*bufnump as isize) = nr;
-    *bufnump = *bufnump + 1 as ::core::ffi::c_int;
-}
-pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -> bool {
-    let mut ret: bool = false_0 != 0;
-    let mut i: ::core::ffi::c_int = 0;
-    let mut bufnum: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut bufcount: size_t = 0 as size_t;
-    let mut buf: *mut buf_T = firstbuf.get();
-    while !buf.is_null() {
-        bufcount = bufcount.wrapping_add(1);
-        buf = (*buf).b_next;
-    }
-    if bufcount == 0 as size_t {
-        return false_0 != 0;
-    }
-    let mut bufnrs: *mut ::core::ffi::c_int =
-        xmalloc(::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul(bufcount))
-            as *mut ::core::ffi::c_int;
-    let c2rust_fresh0 = bufnum;
-    bufnum = bufnum + 1;
-    *bufnrs.offset(c2rust_fresh0 as isize) = (*curbuf.get()).handle as ::core::ffi::c_int;
-    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-        firstwin.get()
-    } else {
-        (*curtab.get()).tp_firstwin
-    };
-    while !wp.is_null() {
-        if (*wp).w_buffer != curbuf.get() {
-            add_bufnum(
-                bufnrs,
-                &raw mut bufnum,
-                (*(*wp).w_buffer).handle as ::core::ffi::c_int,
-            );
-        }
-        wp = (*wp).w_next;
-    }
-    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-    while !tp.is_null() {
-        if tp != curtab.get() {
-            let mut wp_0: *mut win_T = if tp == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tp).tp_firstwin
-            };
-            while !wp_0.is_null() {
-                add_bufnum(
-                    bufnrs,
-                    &raw mut bufnum,
-                    (*(*wp_0).w_buffer).handle as ::core::ffi::c_int,
-                );
-                wp_0 = (*wp_0).w_next;
-            }
-        }
-        tp = (*tp).tp_next as *mut tabpage_T;
-    }
-    let mut buf_0: *mut buf_T = firstbuf.get();
-    while !buf_0.is_null() {
-        add_bufnum(
-            bufnrs,
-            &raw mut bufnum,
-            (*buf_0).handle as ::core::ffi::c_int,
-        );
-        buf_0 = (*buf_0).b_next;
-    }
-    let mut buf_1: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-    i = 0 as ::core::ffi::c_int;
-    while i < bufnum {
-        buf_1 = buflist_findnr(*bufnrs.offset(i as isize));
-        if !buf_1.is_null() {
-            if (!hidden || (*buf_1).b_nwindows == 0 as ::core::ffi::c_int)
-                && bufIsChanged(buf_1) as ::core::ffi::c_int != 0
-            {
-                let mut bufref: bufref_T = bufref_T::default();
-                set_bufref(&raw mut bufref, buf_1);
-                if check_changed(
-                    buf_1,
-                    (if p_awa.get() != 0 {
-                        CCGD_AW as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    }) | CCGD_MULTWIN as ::core::ffi::c_int
-                        | CCGD_ALLBUF as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int
-                    != 0
-                    && bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
-                {
-                    break;
-                }
-            }
-        }
-        i += 1;
-    }
-    '_theend: {
-        if i < bufnum {
-            ret = true_0 != 0;
-            exiting.set(false_0 != 0);
-            if !(p_confirm.get() != 0
-                || (*cmdmod.ptr()).cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0)
-            {
-                if vgetc_busy.get() > 0 as ::core::ffi::c_int {
-                    msg_row.set(cmdline_row.get());
-                    msg_col.set(0 as ::core::ffi::c_int);
-                    msg_didout.set(false_0 != 0);
-                }
-                if (if !(*buf_1).terminal.is_null()
-                    && channel_job_running((*buf_1).b_p_channel as uint64_t) as ::core::ffi::c_int
-                        != 0
-                {
-                    semsg_c!(
-                        gettext(c"E947: Job still running in buffer \"%s\"".as_ptr()),
-                        (*buf_1).b_fname,
-                    ) as ::core::ffi::c_int
-                } else {
-                    semsg_c!(
-                        gettext(c"E162: No write since last change for buffer \"%s\"".as_ptr(),),
-                        if !buf_spname(buf_1).is_null() {
-                            buf_spname(buf_1)
-                        } else {
-                            (*buf_1).b_fname
-                        },
-                    ) as ::core::ffi::c_int
-                }) != 0
-                    && msg_didany.get() as ::core::ffi::c_int != 0
-                {
-                    let mut save: ::core::ffi::c_int = no_wait_return.get();
-                    no_wait_return.set(false_0);
-                    wait_return(false_0);
-                    no_wait_return.set(save);
-                }
-            }
-            '_buf_found: {
-                if buf_1 != curbuf.get() {
-                    let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-                    loop {
-                        if tp_0.is_null() {
-                            break '_buf_found;
-                        }
-                        let mut wp_1: *mut win_T = if tp_0 == curtab.get() {
-                            firstwin.get()
-                        } else {
-                            (*tp_0).tp_firstwin
-                        };
-                        while !wp_1.is_null() {
-                            if (*wp_1).w_buffer == buf_1 {
-                                let mut bufref_0: bufref_T = bufref_T::default();
-                                set_bufref(&raw mut bufref_0, buf_1);
-                                goto_tabpage_win(tp_0 as *mut tabpage_T, wp_1);
-                                if !bufref_valid(&raw mut bufref_0) {
-                                    break '_theend;
-                                } else {
-                                    break '_buf_found;
-                                }
-                            } else {
-                                wp_1 = (*wp_1).w_next;
-                            }
-                        }
-                        tp_0 = (*tp_0).tp_next as *mut tabpage_T;
-                    }
-                }
-            }
-            if buf_1 != curbuf.get() {
-                set_curbuf(
-                    buf_1,
-                    if unload as ::core::ffi::c_int != 0 {
-                        DOBUF_UNLOAD as ::core::ffi::c_int
-                    } else {
-                        DOBUF_GOTO as ::core::ffi::c_int
-                    },
-                    true_0 != 0,
-                );
-            }
-        }
-    }
-    xfree(bufnrs as *mut ::core::ffi::c_void);
-    return ret;
-}
-pub unsafe extern "C" fn check_fname() -> ::core::ffi::c_int {
-    if (*curbuf.get()).b_ffname.is_null() {
-        emsg(gettext(&raw const e_noname as *const ::core::ffi::c_char));
-        return FAIL;
-    }
-    return OK;
-}
-pub unsafe extern "C" fn buf_write_all(
-    mut buf: *mut buf_T,
-    mut forceit: bool,
-) -> ::core::ffi::c_int {
-    let mut old_curbuf: *mut buf_T = curbuf.get();
-    let mut retval: ::core::ffi::c_int = buf_write(
-        buf,
-        (*buf).b_ffname,
-        (*buf).b_fname,
-        1 as linenr_T,
-        (*buf).b_ml.ml_line_count,
-        ::core::ptr::null_mut::<exarg_T>(),
-        WriteRequest {
-            append: false,
-            forceit,
-            reset_changed: true,
-            filtering: false,
-        },
-    );
-    if curbuf.get() != old_curbuf {
-        msg_source(HLF_W);
-        msg(
-            gettext(c"Warning: Entered other buffer unexpectedly (check autocommands)".as_ptr()),
-            0 as ::core::ffi::c_int,
-        );
-    }
-    return retval;
-}
-pub unsafe fn ex_listdo(mut eap: *mut exarg_T) {
-    if (*curwin.get()).w_onebuf_opt.wo_wfb != 0 {
-        if ((*eap).cmdidx as ::core::ffi::c_int == CMD_ldo as ::core::ffi::c_int
-            || (*eap).cmdidx as ::core::ffi::c_int == CMD_lfdo as ::core::ffi::c_int)
-            && (*eap).forceit == 0
-        {
-            emsg(gettext(
-                &raw const e_winfixbuf_cannot_go_to_buffer as *const ::core::ffi::c_char,
-            ));
-            return;
-        }
-        if win_valid(prevwin.get()) as ::core::ffi::c_int != 0
-            && (*prevwin.get()).w_onebuf_opt.wo_wfb == 0
-        {
-            win_goto(prevwin.get());
-        }
-        if (*curwin.get()).w_onebuf_opt.wo_wfb != 0 {
-            win_split(0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-            if (*curwin.get()).w_onebuf_opt.wo_wfb != 0 {
-                emsg(gettext(
-                    &raw const e_winfixbuf_cannot_go_to_buffer as *const ::core::ffi::c_char,
-                ));
-                return;
-            }
-        }
-    }
-    let mut save_ei: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    (*msg_listdo_overwrite.ptr()) += 1;
-    if (*eap).cmdidx as ::core::ffi::c_int != CMD_windo as ::core::ffi::c_int
-        && (*eap).cmdidx as ::core::ffi::c_int != CMD_tabdo as ::core::ffi::c_int
-    {
-        save_ei = au_event_disable(c",Syntax".as_ptr() as *mut ::core::ffi::c_char);
-        let mut buf: *mut buf_T = firstbuf.get();
+    // SAFETY: module contract. A write's autocommands can delete the buffer
+    // being walked, which is why this is not `buffers()`: upstream resumes
+    // from `firstbuf` when that happens.
+    unsafe {
+        let mut buf = firstbuf.get();
         while !buf.is_null() {
-            (*buf).b_flags &= !BF_SYN_SET;
+            if bufIsChanged(buf) && (*buf).b_p_ro == 0 && !bt_dontwrite(buf) {
+                let mut bufref = bufref_T::default();
+                set_bufref(&raw mut bufref, buf);
+                buf_write_all(buf, false);
+                if !bufref_valid(&raw mut bufref) {
+                    buf = firstbuf.get();
+                }
+            }
             buf = (*buf).b_next;
         }
     }
-    if (*eap).cmdidx as ::core::ffi::c_int == CMD_windo as ::core::ffi::c_int
-        || (*eap).cmdidx as ::core::ffi::c_int == CMD_tabdo as ::core::ffi::c_int
-        || buf_hide(curbuf.get()) as ::core::ffi::c_int != 0
-        || !check_changed(
-            curbuf.get(),
-            CCGD_AW as ::core::ffi::c_int
-                | (if (*eap).forceit != 0 {
-                    CCGD_FORCEIT as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                })
-                | CCGD_EXCMD as ::core::ffi::c_int,
-        )
-    {
-        let mut next_fnum: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut wp: *mut win_T = firstwin.get();
-        let mut tp: *mut tabpage_T = first_tabpage.get();
-        match (*eap).cmdidx as ::core::ffi::c_int {
-            528 => {
-                while !wp.is_null() && (i as linenr_T + 1 as linenr_T) < (*eap).line1 {
-                    i += 1;
-                    wp = (*wp).w_next;
-                }
-            }
-            455 => {
-                while !tp.is_null() && (i as linenr_T + 1 as linenr_T) < (*eap).line1 {
-                    i += 1;
-                    tp = (*tp).tp_next;
-                }
-            }
-            10 => {
-                i = (*eap).line1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
-            }
-            _ => {}
-        }
-        let mut buf_0: *mut buf_T = curbuf.get();
-        let mut qf_size: size_t = 0 as size_t;
-        if (*eap).cmdidx as ::core::ffi::c_int == CMD_bufdo as ::core::ffi::c_int {
-            buf_0 = firstbuf.get();
-            while !buf_0.is_null()
-                && (((*buf_0).handle as linenr_T) < (*eap).line1 || (*buf_0).b_p_bl == 0)
-            {
-                if (*buf_0).handle as linenr_T > (*eap).line2 {
-                    buf_0 = ::core::ptr::null_mut::<buf_T>();
-                    break;
-                } else {
-                    buf_0 = (*buf_0).b_next;
-                }
-            }
-            if !buf_0.is_null() {
-                goto_buffer(
-                    eap,
-                    DOBUF_FIRST as ::core::ffi::c_int,
-                    FORWARD as ::core::ffi::c_int,
-                    (*buf_0).handle as ::core::ffi::c_int,
-                );
-            }
-        } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_cdo as ::core::ffi::c_int
-            || (*eap).cmdidx as ::core::ffi::c_int == CMD_ldo as ::core::ffi::c_int
-            || (*eap).cmdidx as ::core::ffi::c_int == CMD_cfdo as ::core::ffi::c_int
-            || (*eap).cmdidx as ::core::ffi::c_int == CMD_lfdo as ::core::ffi::c_int
-        {
-            qf_size = qf_get_valid_size(eap);
-            debug_assert!((*eap).line1 >= 0 as linenr_T, "eap->line1 >= 0");
-            if qf_size == 0 as size_t || (*eap).line1 as size_t > qf_size {
-                buf_0 = ::core::ptr::null_mut::<buf_T>();
+}
+
+/// Whether `buf` was changed and so cannot be abandoned. `flags` is a set of
+/// the `CCGD_*` values.
+///
+/// # Safety
+/// Module contract.
+pub unsafe fn check_changed(buf: *mut buf_T, flags: c_int) -> bool {
+    let forceit = flags & CCGD_FORCEIT != 0;
+    let mut bufref = bufref_T::default();
+    // SAFETY: module contract, here and at every `unsafe` below.
+    unsafe { set_bufref(&raw mut bufref, buf) };
+
+    let blocked = unsafe {
+        !forceit
+            && bufIsChanged(buf)
+            && (flags & CCGD_MULTWIN != 0 || (*buf).b_nwindows <= 1)
+            && (flags & CCGD_AW == 0 || autowrite(buf, forceit) == FAIL)
+    };
+    if !blocked {
+        return false;
+    }
+
+    let confirm = (p_confirm.get() != 0
+        || cmdmod.with(|m| m.cmod_flags) & CMOD_CONFIRM as c_int != 0)
+        && p_write.get() != 0;
+    if !confirm {
+        unsafe {
+            if flags & CCGD_EXCMD != 0 {
+                no_write_message();
             } else {
-                ex_cc(eap);
-                buf_0 = curbuf.get();
-                i = (*eap).line1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
-                if (*eap).addr_count <= 0 as ::core::ffi::c_int {
-                    debug_assert!(
-                        qf_size < MAXLNUM as ::core::ffi::c_int as size_t,
-                        "qf_size < MAXLNUM"
-                    );
-                    (*eap).line2 = qf_size as linenr_T;
-                }
+                no_write_message_nobang(curbuf.get());
             }
-        } else {
-            setpcmark();
         }
-        listcmd_busy.set(true_0 != 0);
-        while !got_int.get() && !buf_0.is_null() {
-            let mut execute: bool = true_0 != 0;
-            if (*eap).cmdidx as ::core::ffi::c_int == CMD_argdo as ::core::ffi::c_int {
-                if i == (*(*curwin.get()).w_alist).al_ga.ga_len {
-                    break;
-                }
-                if (*curwin.get()).w_arg_idx != i || !editing_arg_idx(curwin.get()) {
-                    do_argfile(eap, i);
-                }
-                if (*curwin.get()).w_arg_idx != i {
-                    break;
-                }
-            } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_windo as ::core::ffi::c_int {
-                if !win_valid(wp) {
-                    break;
-                }
-                debug_assert!(!wp.is_null(), "wp");
-                execute = !(*wp).w_floating
-                    || !(*wp).w_config.hide && (*wp).w_config.focusable as ::core::ffi::c_int != 0;
-                if execute {
-                    win_goto(wp);
-                    if curwin.get() != wp {
-                        break;
-                    }
-                }
-                wp = (*wp).w_next;
-            } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_tabdo as ::core::ffi::c_int {
-                if !valid_tabpage(tp) {
-                    break;
-                }
-                debug_assert!(!tp.is_null(), "tp");
-                goto_tabpage_tp(tp, true_0 != 0, true_0 != 0);
-                tp = (*tp).tp_next;
-            } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_bufdo as ::core::ffi::c_int {
-                next_fnum = -1 as ::core::ffi::c_int;
-                let mut bp: *mut buf_T = (*curbuf.get()).b_next;
-                while !bp.is_null() {
-                    if (*bp).b_p_bl != 0 {
-                        next_fnum = (*bp).handle as ::core::ffi::c_int;
-                        break;
-                    } else {
-                        bp = (*bp).b_next;
-                    }
-                }
+        return true;
+    }
+
+    // Ask. "Save all" is only offered when more than one buffer would want
+    // saving.
+    let mut count = 0;
+    if flags & CCGD_ALLBUF != 0 {
+        for buf2 in buffers() {
+            if unsafe { bufIsChanged(buf2) && !(*buf2).b_ffname.is_null() } {
+                count += 1;
             }
-            i += 1;
-            if execute {
-                do_cmdline(
-                    (*eap).arg,
-                    (*eap).ea_getline,
-                    (*eap).cookie,
-                    DOCMD_VERBOSE as ::core::ffi::c_int + DOCMD_NOWAIT as ::core::ffi::c_int,
-                );
+        }
+    }
+    // An autocommand may have deleted the buffer; then it is not changed now.
+    if !unsafe { bufref_valid(&raw mut bufref) } {
+        return false;
+    }
+    unsafe { dialog_changed(buf, count > 1) };
+    if !unsafe { bufref_valid(&raw mut bufref) } {
+        return false;
+    }
+    unsafe { bufIsChanged(buf) }
+}
+
+/// Ask what to do about abandoning the changed buffer `buf`. The caller must
+/// have checked 'write' first. `checkall` offers to deal with every changed
+/// buffer at once.
+///
+/// # Safety
+/// Module contract.
+pub unsafe fn dialog_changed(buf: *mut buf_T, checkall: bool) {
+    let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
+    // `check_overwrite` needs an exarg_T; upstream hands it an all-zero one.
+    let mut ea = exarg_T::default();
+
+    // SAFETY: module contract; `buff` is `DIALOG_MSG_SIZE` bytes, as
+    // `dialog_msg` requires.
+    unsafe {
+        dialog_msg(
+            buff.as_mut_ptr(),
+            c"Save changes to \"%s\"?".as_ptr().cast_mut(),
+            (*buf).b_fname,
+        );
+        let ret = if checkall {
+            vim_dialog_yesnoallcancel(VIM_QUESTION, ptr::null_mut(), buff.as_mut_ptr(), 1)
+        } else {
+            vim_dialog_yesnocancel(VIM_QUESTION, ptr::null_mut(), buff.as_mut_ptr(), 1)
+        };
+
+        if ret == VIM_YES as c_int {
+            let empty_bufname = (*buf).b_fname.is_null();
+            if empty_bufname {
+                buf_set_name((*buf).handle as c_int, c"Untitled".as_ptr().cast_mut());
             }
-            if (*eap).cmdidx as ::core::ffi::c_int == CMD_bufdo as ::core::ffi::c_int {
-                if next_fnum < 0 as ::core::ffi::c_int || next_fnum as linenr_T > (*eap).line2 {
-                    break;
-                }
-                let mut buf_still_exists: bool = false_0 != 0;
-                let mut bp_0: *mut buf_T = firstbuf.get();
-                while !bp_0.is_null() {
-                    if (*bp_0).handle == next_fnum {
-                        buf_still_exists = true_0 != 0;
-                        break;
-                    } else {
-                        bp_0 = (*bp_0).b_next;
-                    }
-                }
-                if !buf_still_exists {
-                    break;
-                }
-                goto_buffer(
-                    eap,
-                    DOBUF_FIRST as ::core::ffi::c_int,
-                    FORWARD as ::core::ffi::c_int,
-                    next_fnum,
-                );
-                if (*curbuf.get()).handle != next_fnum {
-                    break;
-                }
-            }
-            if (*eap).cmdidx as ::core::ffi::c_int == CMD_cdo as ::core::ffi::c_int
-                || (*eap).cmdidx as ::core::ffi::c_int == CMD_ldo as ::core::ffi::c_int
-                || (*eap).cmdidx as ::core::ffi::c_int == CMD_cfdo as ::core::ffi::c_int
-                || (*eap).cmdidx as ::core::ffi::c_int == CMD_lfdo as ::core::ffi::c_int
+            if check_overwrite(&raw mut ea, buf, (*buf).b_fname, (*buf).b_ffname, false) == OK
+                // didn't hit Cancel
+                && buf_write_all(buf, false) == OK
             {
-                debug_assert!(i >= 0 as ::core::ffi::c_int, "i >= 0");
-                if i as size_t >= qf_size || i as linenr_T >= (*eap).line2 {
-                    break;
+                return;
+            }
+            // Restore the empty name when the write failed or was cancelled.
+            if empty_bufname {
+                (*buf).b_fname = ptr::null_mut();
+                xfree((*buf).b_ffname.cast());
+                (*buf).b_ffname = ptr::null_mut();
+                xfree((*buf).b_sfname.cast());
+                (*buf).b_sfname = ptr::null_mut();
+            }
+        } else if ret == VIM_NO as c_int {
+            unchanged(buf, true, false);
+        } else if ret == VIM_ALL as c_int {
+            write_all_writable();
+        } else if ret == VIM_DISCARDALL as c_int {
+            for buf2 in buffers() {
+                unchanged(buf2, true, false);
+            }
+        }
+    }
+}
+
+/// The "Save All" answer: write every modified buffer that can be written.
+/// Readonly ones are skipped, since those need confirming individually.
+///
+/// # Safety
+/// Module contract.
+unsafe fn write_all_writable() {
+    let mut ea = exarg_T::default();
+    // SAFETY: module contract. As in `autowrite_all`, a write's
+    // autocommands can delete the buffer being walked.
+    unsafe {
+        let mut buf = firstbuf.get();
+        while !buf.is_null() {
+            if bufIsChanged(buf) && !(*buf).b_ffname.is_null() && (*buf).b_p_ro == 0 {
+                let mut bufref = bufref_T::default();
+                set_bufref(&raw mut bufref, buf);
+                if !(*buf).b_fname.is_null()
+                    && check_overwrite(&raw mut ea, buf, (*buf).b_fname, (*buf).b_ffname, false)
+                        == OK
+                {
+                    // didn't hit Cancel
+                    buf_write_all(buf, false);
                 }
-                let mut qf_idx: size_t = qf_get_cur_idx(eap);
-                ex_cnext(eap);
-                if qf_get_cur_idx(eap) == qf_idx {
-                    break;
+                if !bufref_valid(&raw mut bufref) {
+                    buf = firstbuf.get();
                 }
             }
-            if (*eap).cmdidx as ::core::ffi::c_int == CMD_windo as ::core::ffi::c_int
-                && execute as ::core::ffi::c_int != 0
-            {
-                validate_cursor(curwin.get());
-                if (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
-                    do_check_scrollbind(true_0 != 0);
-                }
+            buf = (*buf).b_next;
+        }
+    }
+}
+
+/// Ask whether to close the terminal buffer `buf`.
+///
+/// # Safety
+/// Module contract.
+pub unsafe fn dialog_close_terminal(buf: *mut buf_T) -> bool {
+    let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
+    // SAFETY: module contract; `buff` is `DIALOG_MSG_SIZE` bytes.
+    unsafe {
+        let name = if (*buf).b_fname.is_null() {
+            c"?".as_ptr().cast_mut()
+        } else {
+            (*buf).b_fname
+        };
+        dialog_msg(
+            buff.as_mut_ptr(),
+            c"Close \"%s\"?".as_ptr().cast_mut(),
+            name,
+        );
+        vim_dialog_yesnocancel(VIM_QUESTION, ptr::null_mut(), buff.as_mut_ptr(), 1)
+            == VIM_YES as c_int
+    }
+}
+
+/// Whether `buf` can be abandoned -- by hiding it, autowriting it or
+/// unloading it.
+///
+/// # Safety
+/// Module contract.
+pub unsafe fn can_abandon(buf: *mut buf_T, forceit: bool) -> bool {
+    // SAFETY: module contract.
+    unsafe {
+        buf_hide(buf)
+            || !bufIsChanged(buf)
+            || (*buf).b_nwindows > 1
+            || autowrite(buf, forceit) == OK
+            || forceit
+    }
+}
+
+/// The buffers to ask about, most interesting first: the current buffer, the
+/// current tab page's, the other tab pages', then everything else. Each
+/// buffer number appears once.
+///
+/// # Safety
+/// Module contract, and there is at least one buffer.
+unsafe fn changed_check_order() -> Vec<c_int> {
+    fn push_unique(nrs: &mut Vec<c_int>, nr: c_int) {
+        if !nrs.contains(&nr) {
+            nrs.push(nr);
+        }
+    }
+
+    // SAFETY: caller contract; none of these walks runs editor code.
+    unsafe {
+        let mut nrs = Vec::new();
+        nrs.push((*curbuf.get()).handle as c_int);
+        for wp in windows_in_tab(curtab.get()) {
+            if (*wp).w_buffer != curbuf.get() {
+                push_unique(&mut nrs, (*(*wp).w_buffer).handle as c_int);
             }
-            if (*eap).cmdidx as ::core::ffi::c_int == CMD_windo as ::core::ffi::c_int
-                || (*eap).cmdidx as ::core::ffi::c_int == CMD_tabdo as ::core::ffi::c_int
-            {
-                if i as linenr_T + 1 as linenr_T > (*eap).line2 {
-                    break;
-                }
+        }
+        for (tp, wp) in tab_windows() {
+            if tp != curtab.get() {
+                push_unique(&mut nrs, (*(*wp).w_buffer).handle as c_int);
             }
-            if (*eap).cmdidx as ::core::ffi::c_int == CMD_argdo as ::core::ffi::c_int
-                && i as linenr_T >= (*eap).line2
-            {
+        }
+        for buf in buffers() {
+            push_unique(&mut nrs, (*buf).handle as c_int);
+        }
+        nrs
+    }
+}
+
+/// Whether any buffer was changed and cannot be abandoned; that buffer then
+/// becomes the current one.
+///
+/// `hidden` checks only hidden buffers. `unload` unloads the buffer rather
+/// than hiding it, which is what `:q!` wants.
+///
+/// # Safety
+/// Module contract.
+pub unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
+    if firstbuf.get().is_null() {
+        return false;
+    }
+    // SAFETY: module contract.
+    unsafe {
+        let mut culprit = ptr::null_mut::<buf_T>();
+        for nr in changed_check_order() {
+            let buf = buflist_findnr(nr);
+            if buf.is_null() || (hidden && (*buf).b_nwindows != 0) || !bufIsChanged(buf) {
+                continue;
+            }
+            let mut bufref = bufref_T::default();
+            set_bufref(&raw mut bufref, buf);
+            // Try auto-writing the buffer. If that fails but the buffer no
+            // longer exists it is not changed, and that is fine.
+            let flags = if p_awa.get() != 0 { CCGD_AW } else { 0 } | CCGD_MULTWIN | CCGD_ALLBUF;
+            if check_changed(buf, flags) && bufref_valid(&raw mut bufref) {
+                // Didn't save -- still changed.
+                culprit = buf;
                 break;
             }
         }
-        listcmd_busy.set(false_0 != 0);
-    }
-    (*msg_listdo_overwrite.ptr()) -= 1;
-    if !save_ei.is_null() {
-        let mut bnext: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-        let mut aco: aco_save_T = aco_save_T::default();
-        au_event_restore(save_ei);
-        let mut buf_1: *mut buf_T = firstbuf.get();
-        while !buf_1.is_null() {
-            bnext = (*buf_1).b_next;
-            if (*buf_1).b_nwindows > 0 as ::core::ffi::c_int && (*buf_1).b_flags & BF_SYN_SET != 0 {
-                (*buf_1).b_flags &= !BF_SYN_SET;
-                if buf_1 == curbuf.get() {
-                    apply_autocmds(
-                        EVENT_SYNTAX,
-                        (*curbuf.get()).b_p_syn,
-                        (*curbuf.get()).b_fname,
-                        true_0 != 0,
-                        curbuf.get(),
-                    );
-                } else {
-                    aucmd_prepbuf(&raw mut aco, buf_1);
-                    apply_autocmds(
-                        EVENT_SYNTAX,
-                        (*buf_1).b_p_syn,
-                        (*buf_1).b_fname,
-                        true_0 != 0,
-                        buf_1,
-                    );
-                    aucmd_restbuf(&raw mut aco);
+        if culprit.is_null() {
+            return false;
+        }
+
+        exiting.set(false);
+        // With ":confirm" the dialog was the message; do not add an error.
+        if !(p_confirm.get() != 0 || cmdmod.with(|m| m.cmod_flags) & CMOD_CONFIRM as c_int != 0) {
+            report_unwritten(culprit);
+        }
+
+        // Try to find a window that already shows the buffer.
+        if culprit != curbuf.get() {
+            for (tp, wp) in tab_windows() {
+                if (*wp).w_buffer != culprit {
+                    continue;
                 }
-                bnext = firstbuf.get();
+                let mut bufref = bufref_T::default();
+                set_bufref(&raw mut bufref, culprit);
+                goto_tabpage_win(tp, wp);
+                // Paranoia: did autocommands wipe out the changed buffer?
+                if !bufref_valid(&raw mut bufref) {
+                    return true;
+                }
+                break;
             }
-            buf_1 = bnext;
+        }
+
+        // Otherwise open the changed buffer in the current window.
+        if culprit != curbuf.get() {
+            set_curbuf(
+                culprit,
+                if unload { DOBUF_UNLOAD } else { DOBUF_GOTO } as c_int,
+                true,
+            );
+        }
+        true
+    }
+}
+
+/// The "you have not written this" error for [`check_changed_any`], plus the
+/// `wait_return` that keeps it readable when a redraw is about to follow.
+///
+/// # Safety
+/// Module contract.
+unsafe fn report_unwritten(buf: *mut buf_T) {
+    // `wait_return` is a no-op while `vgetc` is busy (Quit used from a window
+    // menu); make sure the message does not scroll up then.
+    if vgetc_busy.get() > 0 {
+        msg_row.set(cmdline_row.get());
+        msg_col.set(0);
+        msg_didout.set(false);
+    }
+    // SAFETY: module contract.
+    unsafe {
+        let shown =
+            if !(*buf).terminal.is_null() && channel_job_running((*buf).b_p_channel as uint64_t) {
+                semsg_c!(
+                    c"E947: Job still running in buffer \"%s\"".as_ptr(),
+                    (*buf).b_fname
+                )
+            } else {
+                let name = if buf_spname(buf).is_null() {
+                    (*buf).b_fname
+                } else {
+                    buf_spname(buf)
+                };
+                semsg_c!(
+                    c"E162: No write since last change for buffer \"%s\"".as_ptr(),
+                    name,
+                )
+            };
+        // Only makes sense if the error is shown, which `cause_errthrow` may
+        // prevent.
+        if shown && msg_didany.get() {
+            let save = no_wait_return.get();
+            no_wait_return.set(0);
+            wait_return(0);
+            no_wait_return.set(save);
         }
     }
 }
-pub unsafe fn ex_compiler(mut eap: *mut exarg_T) {
-    let mut old_cur_comp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if *(*eap).arg as ::core::ffi::c_int == NUL {
-        do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.vim')".as_ptr());
-        do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.lua')".as_ptr());
-        return;
-    }
-    let mut bufsize: size_t = strlen((*eap).arg).wrapping_add(14 as size_t);
-    let mut buf: *mut ::core::ffi::c_char = xmalloc(bufsize) as *mut ::core::ffi::c_char;
-    if (*eap).forceit != 0 {
-        do_cmdline_cmd(c"command -nargs=* -keepscript CompilerSet set <args>".as_ptr());
-    } else {
-        old_cur_comp = get_var_value(c"g:current_compiler".as_ptr());
-        if !old_cur_comp.is_null() {
-            old_cur_comp = xstrdup(old_cur_comp);
+
+/// `FAIL` and an error message when the current buffer has no file name,
+/// `OK` when it has one.
+///
+/// # Safety
+/// Module contract.
+pub unsafe fn check_fname() -> c_int {
+    // SAFETY: module contract.
+    unsafe {
+        if (*curbuf.get()).b_ffname.is_null() {
+            emsg(c"E32: No file name".as_ptr());
+            return FAIL;
         }
-        do_cmdline_cmd(c"command -nargs=* -keepscript CompilerSet setlocal <args>".as_ptr());
     }
-    do_unlet(
-        c"g:current_compiler".as_ptr(),
-        ::core::mem::size_of::<[::core::ffi::c_char; 19]>().wrapping_sub(1 as size_t),
-        true_0 != 0,
-    );
-    do_unlet(
-        c"b:current_compiler".as_ptr(),
-        ::core::mem::size_of::<[::core::ffi::c_char; 19]>().wrapping_sub(1 as size_t),
-        true_0 != 0,
-    );
-    snprintf(buf, bufsize, c"compiler/%s.*".as_ptr(), (*eap).arg);
-    if source_runtime_vim_lua(buf, DIP_ALL as ::core::ffi::c_int) == FAIL {
-        semsg_c!(
-            gettext((e_compiler_not_supported_str.ptr() as *const _) as *const ::core::ffi::c_char),
-            (*eap).arg,
-        );
-    }
-    xfree(buf as *mut ::core::ffi::c_void);
-    do_cmdline_cmd(c":delcommand CompilerSet".as_ptr());
-    let mut p: *mut ::core::ffi::c_char = get_var_value(c"g:current_compiler".as_ptr());
-    if !p.is_null() {
-        set_internal_string_var(c"b:current_compiler".as_ptr(), p);
-    }
-    if (*eap).forceit == 0 {
-        if !old_cur_comp.is_null() {
-            set_internal_string_var(c"g:current_compiler".as_ptr(), old_cur_comp);
-            xfree(old_cur_comp as *mut ::core::ffi::c_void);
-        } else {
-            do_unlet(
-                c"g:current_compiler".as_ptr(),
-                ::core::mem::size_of::<[::core::ffi::c_char; 19]>().wrapping_sub(1 as size_t),
-                true_0 != 0,
+    OK
+}
+
+/// Write out the whole of `buf`.
+///
+/// # Safety
+/// Module contract.
+pub unsafe fn buf_write_all(buf: *mut buf_T, forceit: bool) -> c_int {
+    let old_curbuf = curbuf.get();
+    // SAFETY: module contract.
+    let retval = unsafe {
+        buf_write(
+            buf,
+            (*buf).b_ffname,
+            (*buf).b_fname,
+            1 as linenr_T,
+            (*buf).b_ml.ml_line_count,
+            ptr::null_mut(),
+            WriteRequest {
+                append: false,
+                forceit,
+                reset_changed: true,
+                filtering: false,
+            },
+        )
+    };
+    if curbuf.get() != old_curbuf {
+        // SAFETY: module contract.
+        unsafe {
+            msg_source(HLF_W);
+            msg(
+                c"Warning: Entered other buffer unexpectedly (check autocommands)".as_ptr(),
+                0,
             );
         }
     }
+    retval
 }
-pub unsafe fn ex_checktime(mut eap: *mut exarg_T) {
-    let mut save_no_check_timestamps: ::core::ffi::c_int = no_check_timestamps.get();
-    no_check_timestamps.set(0 as ::core::ffi::c_int);
-    if (*eap).addr_count == 0 as ::core::ffi::c_int {
-        check_timestamps(false_0);
-    } else {
-        let mut buf: *mut buf_T = buflist_findnr((*eap).line2 as ::core::ffi::c_int);
-        if !buf.is_null() {
-            buf_check_timestamp(buf);
+
+// -- The rest ---------------------------------------------------------------
+
+/// `:compiler[!] {name}`
+///
+/// The compiler plugin is expected to set `current_compiler`, so the name is
+/// unlet first and read back afterwards. Without `!` the setting is local to
+/// the buffer, which means saving and restoring the global the plugin wrote.
+///
+/// # Safety
+/// Module contract.
+pub unsafe fn ex_compiler(eap: *mut exarg_T) {
+    const CURRENT_COMPILER: &CStr = c"g:current_compiler";
+    const B_CURRENT_COMPILER: &CStr = c"b:current_compiler";
+
+    // SAFETY: module contract; `eap->arg` is NUL-terminated.
+    unsafe {
+        if *(*eap).arg == NUL {
+            // List all compiler scripts.
+            do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.vim')".as_ptr());
+            do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.lua')".as_ptr());
+            return;
+        }
+
+        // To stay backwards compatible "current_compiler" is always what the
+        // plugin sets; "g:" is explicit so that this works inside a
+        // function. Save the old value, then set "b:current_compiler" from
+        // whatever the plugin leaves behind and put the old value back.
+        let mut old_cur_comp = ptr::null_mut();
+        if (*eap).forceit != 0 {
+            // ":compiler! {name}" sets global options.
+            do_cmdline_cmd(c"command -nargs=* -keepscript CompilerSet set <args>".as_ptr());
+        } else {
+            old_cur_comp = get_var_value(CURRENT_COMPILER.as_ptr());
+            if !old_cur_comp.is_null() {
+                old_cur_comp = xstrdup(old_cur_comp);
+            }
+            do_cmdline_cmd(c"command -nargs=* -keepscript CompilerSet setlocal <args>".as_ptr());
+        }
+        do_unlet(
+            CURRENT_COMPILER.as_ptr(),
+            CURRENT_COMPILER.count_bytes(),
+            true,
+        );
+        do_unlet(
+            B_CURRENT_COMPILER.as_ptr(),
+            B_CURRENT_COMPILER.count_bytes(),
+            true,
+        );
+
+        let mut pattern = Vec::with_capacity(strlen((*eap).arg) + 12);
+        pattern.extend_from_slice(b"compiler/");
+        pattern.extend_from_slice(CStr::from_ptr((*eap).arg).to_bytes());
+        pattern.extend_from_slice(b".*\0");
+        if source_runtime_vim_lua(pattern.as_mut_ptr().cast(), DIP_ALL as c_int) == FAIL {
+            semsg_c!(c"E666: Compiler not supported: %s".as_ptr(), (*eap).arg);
+        }
+
+        do_cmdline_cmd(c":delcommand CompilerSet".as_ptr());
+
+        // Set "b:current_compiler" from "current_compiler".
+        let p = get_var_value(CURRENT_COMPILER.as_ptr());
+        if !p.is_null() {
+            set_internal_string_var(B_CURRENT_COMPILER.as_ptr(), p);
+        }
+
+        // Restore "current_compiler" for ":compiler {name}".
+        if (*eap).forceit == 0 {
+            if old_cur_comp.is_null() {
+                do_unlet(
+                    CURRENT_COMPILER.as_ptr(),
+                    CURRENT_COMPILER.count_bytes(),
+                    true,
+                );
+            } else {
+                set_internal_string_var(CURRENT_COMPILER.as_ptr(), old_cur_comp);
+                xfree(old_cur_comp.cast());
+            }
+        }
+    }
+}
+
+/// `:checktime [buffer]`
+///
+/// # Safety
+/// Module contract.
+pub unsafe fn ex_checktime(eap: *mut exarg_T) {
+    let save_no_check_timestamps = no_check_timestamps.get();
+    no_check_timestamps.set(0);
+    // SAFETY: module contract.
+    unsafe {
+        if (*eap).addr_count == 0 {
+            // The default is all buffers.
+            check_timestamps(0);
+        } else {
+            let buf = buflist_findnr((*eap).line2 as c_int);
+            if !buf.is_null() {
+                // Cannot happen?
+                buf_check_timestamp(buf);
+            }
         }
     }
     no_check_timestamps.set(save_no_check_timestamps);
 }
-unsafe extern "C" fn script_host_execute(
-    mut name: *mut ::core::ffi::c_char,
-    mut eap: *mut exarg_T,
-) {
-    let mut len: size_t = 0;
-    let script: *mut ::core::ffi::c_char = script_get(eap, &raw mut len);
-    if !script.is_null() {
-        let args: *mut list_T = tv_list_alloc(3 as ptrdiff_t);
-        tv_list_append_allocated_string(args, script);
-        tv_list_append_number(args, (*eap).line1 as ::core::ffi::c_int as varnumber_T);
-        tv_list_append_number(args, (*eap).line2 as ::core::ffi::c_int as varnumber_T);
-        eval_call_provider(
-            name,
-            c"execute".as_ptr() as *mut ::core::ffi::c_char,
-            args,
-            true_0 != 0,
-        );
-    }
-}
-unsafe extern "C" fn script_host_execute_file(
-    mut name: *mut ::core::ffi::c_char,
-    mut eap: *mut exarg_T,
-) {
-    if (*eap).skip == 0 {
-        let mut buffer: [uint8_t; 4096] = [0; 4096];
-        vim_FullName(
-            (*eap).arg,
-            &raw mut buffer as *mut uint8_t as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[uint8_t; 4096]>(),
-            false_0 != 0,
-        );
-        let mut args: *mut list_T = tv_list_alloc(3 as ptrdiff_t);
-        tv_list_append_string(
-            args,
-            &raw mut buffer as *mut uint8_t as *const ::core::ffi::c_char,
-            -1 as ssize_t,
-        );
-        tv_list_append_number(args, (*eap).line1 as ::core::ffi::c_int as varnumber_T);
-        tv_list_append_number(args, (*eap).line2 as ::core::ffi::c_int as varnumber_T);
-        eval_call_provider(
-            name,
-            c"execute_file".as_ptr() as *mut ::core::ffi::c_char,
-            args,
-            true_0 != 0,
-        );
-    }
-}
-unsafe extern "C" fn script_host_do_range(
-    mut name: *mut ::core::ffi::c_char,
-    mut eap: *mut exarg_T,
-) {
-    if (*eap).skip == 0 {
-        let mut args: *mut list_T = tv_list_alloc(3 as ptrdiff_t);
-        tv_list_append_number(args, (*eap).line1 as ::core::ffi::c_int as varnumber_T);
-        tv_list_append_number(args, (*eap).line2 as ::core::ffi::c_int as varnumber_T);
-        tv_list_append_string(args, (*eap).arg, -1 as ssize_t);
-        eval_call_provider(
-            name,
-            c"do_range".as_ptr() as *mut ::core::ffi::c_char,
-            args,
-            true_0 != 0,
-        );
-    }
-}
-pub unsafe fn ex_drop(mut eap: *mut exarg_T) {
-    let mut split: bool = false_0 != 0;
-    set_arglist((*eap).arg);
-    if (*(*curwin.get()).w_alist).al_ga.ga_len == 0 as ::core::ffi::c_int {
-        return;
-    }
-    if (*cmdmod.ptr()).cmod_tab != 0 {
-        ex_all(eap);
-        (*cmdmod.ptr()).cmod_tab = 0 as ::core::ffi::c_int;
-        ex_rewind(eap);
-        return;
-    }
-    let mut buf: *mut buf_T = buflist_findnr(
-        (*((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)
-            .offset(0 as ::core::ffi::c_int as isize))
-        .ae_fnum,
-    );
-    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-    while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab.get() {
-            firstwin.get()
-        } else {
-            (*tp).tp_firstwin
-        };
-        while !wp.is_null() {
-            if (*wp).w_buffer == buf {
-                goto_tabpage_win(tp as *mut tabpage_T, wp);
-                (*curwin.get()).w_arg_idx = 0 as ::core::ffi::c_int;
-                if !bufIsChanged(curbuf.get()) {
-                    let save_ar: ::core::ffi::c_int = (*curbuf.get()).b_p_ar;
-                    (*curbuf.get()).b_p_ar = true_0;
-                    buf_check_timestamp(curbuf.get());
-                    (*curbuf.get()).b_p_ar = save_ar;
-                }
-                if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
-                    ex_rewind(eap);
-                }
-                if !(*eap).do_ecmd_cmd.is_null() {
-                    let mut did_set_swapcommand: bool =
-                        set_swapcommand((*eap).do_ecmd_cmd, 0 as linenr_T);
-                    do_cmdline(
-                        (*eap).do_ecmd_cmd,
-                        None,
-                        NULL,
-                        DOCMD_VERBOSE as ::core::ffi::c_int,
-                    );
-                    if did_set_swapcommand {
-                        set_vim_var_string(
-                            VV_SWAPCOMMAND,
-                            ::core::ptr::null::<::core::ffi::c_char>(),
-                            -1 as ptrdiff_t,
-                        );
-                    }
-                }
-                return;
-            }
-            wp = (*wp).w_next;
+
+/// `:drop`: open the first argument in a window, redefining the argument
+/// list.
+///
+/// # Safety
+/// Module contract.
+pub unsafe fn ex_drop(eap: *mut exarg_T) {
+    // SAFETY: module contract.
+    unsafe {
+        // Check whether the first argument is already being edited in a
+        // window and jump there if so. Checking all of them would be
+        // complicated and mostly only one file is dropped. Wildcards are
+        // ignored too, since a file name containing one is very unlikely.
+        set_arglist((*eap).arg);
+
+        // Expanding wildcards may leave the argument list empty, e.g. when
+        // editing "foo.pyc" with ".pyc" in 'wildignore'. Assume an error
+        // message was already given for that.
+        if (*(*curwin.get()).w_alist).al_ga.ga_len == 0 {
+            return;
         }
-        tp = (*tp).tp_next as *mut tabpage_T;
+
+        if cmdmod.with(|m| m.cmod_tab) != 0 {
+            // ":tab drop file ...": open a tab for each argument not yet
+            // edited in a window. Like ":tab all" but without closing
+            // windows or tabs.
+            ex_all(eap);
+            cmdmod.with_mut(|m| m.cmod_tab = 0);
+            ex_rewind(eap);
+            return;
+        }
+
+        // ":drop file ...": edit the first argument, jumping to an existing
+        // window if there is one, editing in the current window if its
+        // buffer can be abandoned, and otherwise opening a new window.
+        let buf =
+            buflist_findnr((*((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T)).ae_fnum);
+        for (tp, wp) in tab_windows() {
+            if (*wp).w_buffer != buf {
+                continue;
+            }
+            goto_tabpage_win(tp, wp);
+            (*curwin.get()).w_arg_idx = 0;
+            if !bufIsChanged(curbuf.get()) {
+                // Reload the file if it is newer.
+                let save_ar = (*curbuf.get()).b_p_ar;
+                (*curbuf.get()).b_p_ar = 1;
+                buf_check_timestamp(curbuf.get());
+                (*curbuf.get()).b_p_ar = save_ar;
+            }
+            if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
+                ex_rewind(eap);
+            }
+            // Execute [+cmd]. No need to execute [++opts]: those only apply
+            // to newly loaded buffers.
+            if !(*eap).do_ecmd_cmd.is_null() {
+                let did_set_swapcommand = set_swapcommand((*eap).do_ecmd_cmd, 0 as linenr_T);
+                do_cmdline((*eap).do_ecmd_cmd, None, ptr::null_mut(), DOCMD_VERBOSE);
+                if did_set_swapcommand {
+                    set_vim_var_string(VV_SWAPCOMMAND, ptr::null(), -1 as ptrdiff_t);
+                }
+            }
+            return;
+        }
+
+        // Is the current buffer changed? If so the current window has to be
+        // split or data could be lost. 'hidden' makes that unnecessary,
+        // since then the buffer is not lost.
+        let mut split = false;
+        if !buf_hide(curbuf.get()) {
+            emsg_off.set(emsg_off.get() + 1);
+            split = check_changed(curbuf.get(), CCGD_AW | CCGD_EXCMD);
+            emsg_off.set(emsg_off.get() - 1);
+        }
+
+        // Fake a ":sfirst" or ":first" to edit the first argument.
+        if split {
+            (*eap).cmdidx = CMD_sfirst;
+            *(*eap).cmd = b's' as c_char;
+        } else {
+            (*eap).cmdidx = CMD_first;
+        }
+        ex_rewind(eap);
     }
-    if !buf_hide(curbuf.get()) {
-        (*emsg_off.ptr()) += 1;
-        split = check_changed(
-            curbuf.get(),
-            CCGD_AW as ::core::ffi::c_int | CCGD_EXCMD as ::core::ffi::c_int,
-        );
-        (*emsg_off.ptr()) -= 1;
-    }
-    if split {
-        (*eap).cmdidx = CMD_sfirst;
-        *(*eap).cmd.offset(0 as ::core::ffi::c_int as isize) = 's' as ::core::ffi::c_char;
-    } else {
-        (*eap).cmdidx = CMD_first;
-    }
-    ex_rewind(eap);
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

@@ -15,7 +15,6 @@
 {"symbol":"bufref_valid","kind":"fn","file":"crates/nvim/src/nvim/buffer.rs","class":"internal","refs":[]}
 {"symbol":"build_stl_str_hl","kind":"fn","file":"crates/nvim/src/nvim/statusline.rs","class":"test","refs":["unit-specs","functional-specs"]}
 {"symbol":"callback_free","kind":"fn","file":"crates/nvim/src/nvim/eval/typval/watcher.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"can_abandon","kind":"fn","file":"crates/nvim/src/nvim/ex_cmds2.rs","class":"internal","refs":[]}
 {"symbol":"ccs_tab","kind":"static","file":"crates/nvim/src/nvim/viml/parser/expressions/ast.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"changed","kind":"fn","file":"crates/nvim/src/nvim/change/flag.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"check_ff_value","kind":"fn","file":"crates/nvim/src/nvim/optionstr/flags.rs","class":"test","refs":["unit-specs"]}

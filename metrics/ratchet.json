@@ -1,7 +1,7 @@
 {
-  "internal_exports": 27,
-  "files_without_forbid_unsafe": 955,
-  "files_without_deny_unsafe_op": 124,
+  "internal_exports": 26,
+  "files_without_forbid_unsafe": 956,
+  "files_without_deny_unsafe_op": 123,
   "files": {
     "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe_lines": 54},
     "crates/nvim/src/cjson/lua_cjson/decode.rs": {"unsafe_lines": 175},
@@ -335,7 +335,8 @@
     "crates/nvim/src/nvim/ex_cmds/subst/report.rs": {"cell_ptr": 5, "unsafe_lines": 269},
     "crates/nvim/src/nvim/ex_cmds/text.rs": {"cell_ptr": 10, "unsafe_lines": 255},
     "crates/nvim/src/nvim/ex_cmds/write.rs": {"cell_ptr": 8, "unsafe_lines": 632},
-    "crates/nvim/src/nvim/ex_cmds2.rs": {"cell_ptr": 9, "lines": 1058, "no_mangle": 1, "unsafe_lines": 971},
+    "crates/nvim/src/nvim/ex_cmds2.rs": {"unsafe_lines": 419},
+    "crates/nvim/src/nvim/ex_cmds2/listdo.rs": {"unsafe_lines": 228},
     "crates/nvim/src/nvim/ex_docmd/address.rs": {"cell_ptr": 1, "unsafe_lines": 742},
     "crates/nvim/src/nvim/ex_docmd/api.rs": {"cell_ptr": 15, "unsafe_lines": 273},
     "crates/nvim/src/nvim/ex_docmd/argopt.rs": {"cell_ptr": 2, "unsafe_lines": 335},
