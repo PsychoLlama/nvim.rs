@@ -51,7 +51,11 @@ pub unsafe extern "C" fn runtime_init() {
 ///
 /// # Safety
 /// `size`/`capacity`/`items` must describe one kvec whose items are `T`.
-unsafe fn kv_pushp<T>(size: &mut size_t, capacity: &mut size_t, items: &mut *mut T) -> *mut T {
+pub(crate) unsafe fn kv_pushp<T>(
+    size: &mut size_t,
+    capacity: &mut size_t,
+    items: &mut *mut T,
+) -> *mut T {
     if *size == *capacity {
         *capacity = if *capacity != 0 { *capacity << 1 } else { 8 };
         // SAFETY: the kvec's buffer is either null or an `xrealloc`able block

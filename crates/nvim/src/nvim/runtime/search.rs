@@ -155,7 +155,7 @@ fn has_extension(fname: *mut c_char, ext: &CStr) -> bool {
 ///
 /// # Safety
 /// `fnames` must hold `num_fnames` entries and stay put for the borrow.
-unsafe fn matches<'a>(num_fnames: c_int, fnames: *mut *mut c_char) -> &'a [*mut c_char] {
+pub(crate) unsafe fn matches<'a>(num_fnames: c_int, fnames: *mut *mut c_char) -> &'a [*mut c_char] {
     if fnames.is_null() || num_fnames <= 0 {
         return &[];
     }

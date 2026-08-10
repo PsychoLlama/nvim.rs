@@ -404,9 +404,6 @@ static runtime_search_path_mutex: SharedCell<uv_mutex_t> = SharedCell::new(pthre
     },
 });
 static runtime_expand_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static APP_ADD_DIR: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static APP_LOAD: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static APP_BOTH: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub const EINTR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

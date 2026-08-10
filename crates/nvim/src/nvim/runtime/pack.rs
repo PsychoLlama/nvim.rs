@@ -2,496 +2,642 @@
 //! startup.
 //!
 //! A package is a directory under 'packpath' that gets *added to
-//! 'runtimepath'* and then sourced.  `add_pack_dir_to_rtp` is the hard half --
-//! it has to insert the package at the right point in the option string,
+//! 'runtimepath'* and then sourced.  [`add_pack_dir_to_rtp`] is the hard half
+//! -- it has to insert the package at the right point in the option string,
 //! after the last non-`after` entry that is a prefix of it, and insert its own
 //! `after/` directory symmetrically at the other end, so that a package's
-//! `after/` still runs after everything it should.  `load_pack_plugin` sources
-//! what the package contains, and the `add_*_pack_plugins` family walks the
-//! `start` (loaded at startup) and `opt` (loaded on demand) trees.
+//! `after/` still runs after everything it should.  [`load_pack_plugin`]
+//! sources what the package contains, and the `add_*_pack_plugins` family
+//! walks the `start` (loaded at startup) and `opt` (loaded on demand) trees.
+//!
+//! Adding an *opt* package also splices the two new directories straight into
+//! the cached search path rather than paying for a rebuild -- see
+//! [`splice_cached_path`], which is why `pos_in_rtp` has to be a byte offset
+//! into 'runtimepath' and not merely an ordinal.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
 
-unsafe extern "C" fn add_pack_dir_to_rtp(
-    mut fname: *mut ::core::ffi::c_char,
-    mut is_pack: bool,
-) -> ::core::ffi::c_int {
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ptr;
+
+/// Which half of a package's work [`add_pack_plugins`] should do.
+///
+/// Upstream keeps three `static int`s and hands their *addresses* to
+/// `do_in_path` as cookies, purely because three distinct addresses were the
+/// cheapest three distinct tokens available.  Three small non-zero integers
+/// are the same tokens without the globals; the value never leaves this file.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(usize)]
+enum PackWork {
+    /// `:packadd!` — add the directory to 'runtimepath' and stop there.
+    AddDir = 1,
+    /// Startup — the directories are already in 'runtimepath'; source them.
+    Load = 2,
+    /// `:packadd` — both.
+    Both = 3,
+}
+
+impl PackWork {
+    /// This token as a `do_in_path` cookie.
+    fn cookie(self) -> *mut c_void {
+        ptr::without_provenance_mut(self as usize)
+    }
+
+    /// The token a cookie carries, if it is one of ours.
+    fn from_cookie(cookie: *mut c_void) -> Option<Self> {
+        match cookie.addr() {
+            1 => Some(Self::AddDir),
+            2 => Some(Self::Load),
+            3 => Some(Self::Both),
+            _ => None,
+        }
+    }
+
+    /// Whether the package directory wants adding to 'runtimepath'.
+    ///
+    /// Upstream tests `cookie != &APP_LOAD`, so anything that is not `Load` —
+    /// a cookie from outside this file included — means yes.
+    fn adds_dir(work: Option<Self>) -> bool {
+        work != Some(Self::Load)
+    }
+
+    /// Whether the package's plugins want sourcing.  As [`Self::adds_dir`].
+    fn sources(work: Option<Self>) -> bool {
+        work != Some(Self::AddDir)
+    }
+}
+
+/// The 'runtimepath' prefix a package directory sits under, resolved.
+///
+/// `fname` is `{rtp}/pack/{name}/{start,opt}/{name}`, so the answer is
+/// `{rtp}/` — the four path separators back — run through `fix_fname`, which
+/// is the form the entries of 'runtimepath' are compared against.  Answers
+/// null when the path cannot be resolved.
+///
+/// # Safety
+/// `fname` must be a writable NUL-terminated path.
+unsafe fn package_root(fname: *mut c_char) -> *mut c_char {
+    // SAFETY: `fname` is a NUL-terminated path this walk stays inside.
     unsafe {
-        let mut afterlen: size_t = 0;
-        let mut oldlen: size_t = 0;
-        let mut addlen: size_t = 0;
-        let mut new_rtp_capacity: size_t = 0;
-        let mut new_rtp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut keep: size_t = 0;
-        let mut first_pos: size_t = 0;
-        let mut new_rtp_len: size_t = 0;
-        let mut after_pos: size_t = 0;
-        let mut was_valid: bool = false;
-        let mut afterdir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut retval: ::core::ffi::c_int = FAIL;
-        let mut p1: *mut ::core::ffi::c_char = get_past_head(fname);
-        let mut p2: *mut ::core::ffi::c_char = p1;
-        let mut p3: *mut ::core::ffi::c_char = p1;
-        let mut p4: *mut ::core::ffi::c_char = p1;
-        let mut p: *mut ::core::ffi::c_char = p1;
+        let mut p1 = get_past_head(fname);
+        let (mut p2, mut p3, mut p4) = (p1, p1, p1);
+        let mut p = p1;
         while *p != 0 {
-            if vim_ispathsep_nocolon(*p as ::core::ffi::c_int) {
+            if vim_ispathsep_nocolon(*p as c_int) {
                 p4 = p3;
                 p3 = p2;
                 p2 = p1;
                 p1 = p;
             }
-            p = p.offset(utfc_ptr2len(p) as isize);
+            p = p.add(utfc_ptr2len(p) as usize);
         }
-        p4 = p4.offset(1);
-        let mut c: ::core::ffi::c_char = *p4;
-        *p4 = NUL as ::core::ffi::c_char;
-        let ffname: *mut ::core::ffi::c_char = fix_fname(fname);
-        *p4 = c;
-        if ffname.is_null() {
-            return FAIL;
+        // Cut *after* the separator, so `fix_fname` is asked about a directory
+        // and expands its symlink.
+        let cut = p4.add(1);
+        let c = *cut;
+        *cut = 0;
+        let ffname = fix_fname(fname);
+        *cut = c;
+        ffname
+    }
+}
+
+/// Where in 'runtimepath' a package and its `after/` directory belong.
+///
+/// Both are pointers *into* 'runtimepath' — the option is rebuilt around
+/// them, so they are only valid until it is written.
+struct InsertPoints {
+    /// The entry to insert before; the option's terminator when the package
+    /// belongs at the end.
+    insp: *const c_char,
+    /// The first `after/` entry, or null when 'runtimepath' has none.
+    after_insp: *const c_char,
+}
+
+/// Find `ffname` in 'runtimepath', ignoring `/` versus `\`, and stop at the
+/// first `after/` directory.
+///
+/// Answers `None` when an entry could not be resolved, which upstream treats
+/// as a failure of the whole operation.
+///
+/// # Safety
+/// `ffname` must be NUL-terminated and `fname_len` its length.
+unsafe fn find_insert_points(ffname: *const c_char, fname_len: size_t) -> Option<InsertPoints> {
+    let mut buf = [0 as c_char; MAXPATHL as usize];
+    let mut insp: *const c_char = ptr::null();
+    let mut after_insp: *const c_char = ptr::null();
+    let mut entry: *const c_char = p_rtp.get();
+
+    // SAFETY: `entry` walks 'runtimepath' and `buf` has `MAXPATHL` bytes.
+    while unsafe { *entry } != 0 {
+        let cur_entry = entry;
+        // SAFETY: as above.
+        unsafe {
+            copy_option_part(
+                &raw mut entry as *mut *mut c_char,
+                buf.as_mut_ptr(),
+                MAXPATHL as size_t,
+                c",".as_ptr().cast_mut(),
+            );
         }
-        let mut fname_len: size_t = strlen(ffname);
-        let mut buf: [::core::ffi::c_char; 4096] = [0; 4096];
-        let mut insp: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut after_insp: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut entry: *const ::core::ffi::c_char = p_rtp.get();
-        '_theend: {
-            while *entry as ::core::ffi::c_int != NUL {
-                let mut cur_entry: *const ::core::ffi::c_char = entry;
-                copy_option_part(
-                    &raw mut entry as *mut *mut ::core::ffi::c_char,
-                    &raw mut buf as *mut ::core::ffi::c_char,
-                    MAXPATHL as size_t,
-                    c",".as_ptr() as *mut ::core::ffi::c_char,
-                );
-                let mut p_0: *mut ::core::ffi::c_char =
-                    strstr(&raw mut buf as *mut ::core::ffi::c_char, c"after".as_ptr());
-                let mut is_after: bool = !p_0.is_null()
-                    && p_0 > &raw mut buf as *mut ::core::ffi::c_char
-                    && vim_ispathsep(
-                        *p_0.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    ) as ::core::ffi::c_int
-                        != 0
-                    && (vim_ispathsep(
-                        *p_0.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    ) as ::core::ffi::c_int
-                        != 0
-                        || *p_0.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            == NUL
-                        || *p_0.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            == ',' as ::core::ffi::c_int);
-                if is_after {
-                    if insp.is_null() {
-                        insp = cur_entry;
-                    }
-                    after_insp = cur_entry;
-                    break;
-                } else {
-                    if !insp.is_null() {
-                        continue;
-                    }
-                    add_pathsep(&raw mut buf as *mut ::core::ffi::c_char);
-                    let rtp_ffname: *mut ::core::ffi::c_char =
-                        fix_fname(&raw mut buf as *mut ::core::ffi::c_char);
-                    if rtp_ffname.is_null() {
-                        break '_theend;
-                    }
-                    if path_fnamencmp(rtp_ffname, ffname, fname_len) == 0 as ::core::ffi::c_int {
-                        insp = entry;
-                    }
-                    xfree(rtp_ffname as *mut ::core::ffi::c_void);
-                }
-            }
+        // SAFETY: `buf` is NUL-terminated; the `p[5]` reads are inside it
+        // because `strstr` found five bytes of "after" there.
+        let is_after = unsafe {
+            let p = strstr(buf.as_mut_ptr(), c"after".as_ptr());
+            !p.is_null()
+                && p > buf.as_mut_ptr()
+                && vim_ispathsep(*p.sub(1) as c_int)
+                && (vim_ispathsep(*p.add(5) as c_int)
+                    || *p.add(5) == 0
+                    || *p.add(5) == b',' as c_char)
+        };
+        if is_after {
             if insp.is_null() {
-                insp = (*p_rtp.ptr()).add(strlen(p_rtp.get()));
+                // "ffname" was not found before the first `after/` directory,
+                // so it goes in front of this entry.
+                insp = cur_entry;
             }
-            afterdir = concat_fnames(fname, c"after".as_ptr(), true_0 != 0);
-            afterlen = 0 as size_t;
-            if if is_pack as ::core::ffi::c_int != 0 {
-                pack_has_entries(afterdir) as ::core::ffi::c_int
+            after_insp = cur_entry;
+            break;
+        }
+        if !insp.is_null() {
+            continue;
+        }
+        // SAFETY: `buf` has room for the separator (`copy_option_part` stopped
+        // short of `MAXPATHL`), and `fix_fname` answers an owned string.
+        unsafe {
+            add_pathsep(buf.as_mut_ptr());
+            let rtp_ffname = fix_fname(buf.as_mut_ptr());
+            if rtp_ffname.is_null() {
+                return None;
+            }
+            if path_fnamencmp(rtp_ffname, ffname, fname_len) == 0 {
+                // Insert after this entry, and its comma.
+                insp = entry;
+            }
+            xfree(rtp_ffname.cast());
+        }
+    }
+
+    if insp.is_null() {
+        // Neither "fname" nor an `after/` directory: append at the end.
+        // SAFETY: 'runtimepath' is NUL-terminated.
+        insp = unsafe { p_rtp.get().add(strlen(p_rtp.get())) };
+    }
+    Some(InsertPoints { insp, after_insp })
+}
+
+/// The new 'runtimepath', and where the two new entries landed in it.
+struct Spliced {
+    rtp: *mut c_char,
+    /// Byte offset of the package directory.
+    first_pos: size_t,
+    /// Byte offset of the comma before its `after/` directory; zero when
+    /// there is no `after/`.
+    after_pos: size_t,
+}
+
+/// Build the new 'runtimepath' with `fname` spliced in at `insp` and
+/// `afterdir` at `after_insp`.
+///
+/// 'runtimepath' is `{keep}{keep_after}{rest}`, and the answer is
+/// `{keep},{fname}{keep_after},{afterdir}{rest}` — or, when there was no
+/// `after/` entry to sit in front of, `{keep},{fname}{rest},{afterdir}`.
+///
+/// Answers `None` when the allocation failed.
+///
+/// # Safety
+/// `points` must still describe the current 'runtimepath'; `fname` and
+/// `afterdir` must be NUL-terminated, and `addlen`/`afterlen` their lengths
+/// plus one for the comma (`afterlen` is zero when there is no `after/`).
+unsafe fn splice_rtp(
+    fname: *mut c_char,
+    afterdir: *mut c_char,
+    addlen: size_t,
+    afterlen: size_t,
+    points: &InsertPoints,
+) -> Option<Spliced> {
+    // SAFETY: 'runtimepath' is NUL-terminated.
+    let oldlen = unsafe { strlen(p_rtp.get()) };
+    let capacity = oldlen + addlen + afterlen + 1; // +1 for the NUL
+    // SAFETY: `try_malloc` answers null rather than aborting.
+    let new_rtp = unsafe { try_malloc(capacity) }.cast::<c_char>();
+    if new_rtp.is_null() {
+        return None;
+    }
+
+    // SAFETY: every write below stays inside `capacity`, which was sized from
+    // the same three lengths. `insp` points into 'runtimepath'.
+    unsafe {
+        let mut keep = points.insp.offset_from(p_rtp.get()) as size_t;
+        let mut first_pos = keep;
+        memmove(new_rtp.cast(), p_rtp.get().cast(), keep);
+        let mut len = keep;
+        if *points.insp == 0 {
+            // Appending at the end: the comma goes before.
+            *new_rtp.add(len) = b',' as c_char;
+            len += 1;
+            first_pos += 1;
+        }
+        memmove(new_rtp.add(len).cast(), fname.cast(), addlen - 1);
+        len += addlen - 1;
+        if *points.insp != 0 {
+            *new_rtp.add(len) = b',' as c_char;
+            len += 1;
+        }
+
+        let mut after_pos = 0;
+        if afterlen > 0 && !points.after_insp.is_null() {
+            let keep_after = points.after_insp.offset_from(p_rtp.get()) as size_t;
+            memmove(
+                new_rtp.add(len).cast(),
+                p_rtp.get().add(keep).cast(),
+                keep_after - keep,
+            );
+            len += keep_after - keep;
+            memmove(new_rtp.add(len).cast(), afterdir.cast(), afterlen - 1);
+            len += afterlen - 1;
+            *new_rtp.add(len) = b',' as c_char;
+            len += 1;
+            keep = keep_after;
+            after_pos = keep_after;
+        }
+
+        if *p_rtp.get().add(keep) != 0 {
+            memmove(
+                new_rtp.add(len).cast(),
+                p_rtp.get().add(keep).cast(),
+                oldlen - keep + 1,
+            );
+        } else {
+            *new_rtp.add(len) = 0;
+        }
+
+        if afterlen > 0 && points.after_insp.is_null() {
+            // No `after/` entry to sit in front of: append it at the end.
+            after_pos = xstrlcat(new_rtp, c",".as_ptr(), capacity);
+            xstrlcat(new_rtp, afterdir, capacity);
+        }
+
+        Some(Spliced {
+            rtp: new_rtp,
+            first_pos,
+            after_pos,
+        })
+    }
+}
+
+/// Shift the tail of the cached search path up to make room for one entry
+/// belonging at byte offset `pos`, and write `item` into the slot it frees.
+///
+/// Entries whose own `pos_in_rtp` is at or past `pos` move up by `gap` slots
+/// and gain `shift` bytes of offset; the first one that is not is where the
+/// new entry belongs.  `gap` is 2 while an `after/` entry is still to be
+/// placed below the one being inserted, and 1 once it is.  Answers the next
+/// free index.
+///
+/// # Safety
+/// `path` must have `gap` free slots above `i`, and `i` must be at least
+/// `gap - 1`.
+unsafe fn shift_up_and_insert(
+    path: &mut RuntimeSearchPath,
+    mut i: ssize_t,
+    gap: ssize_t,
+    shift: size_t,
+    pos: size_t,
+    item: SearchPathItem,
+) -> ssize_t {
+    // SAFETY: every index touched is below `size`, which the caller grew.
+    unsafe {
+        while i >= gap - 1 {
+            let prev = i - gap;
+            if i > gap - 1 && (*path.items.offset(prev)).pos_in_rtp >= pos {
+                let moved = *path.items.offset(prev);
+                *path.items.offset(i) = SearchPathItem {
+                    pos_in_rtp: moved.pos_in_rtp + shift,
+                    ..moved
+                };
+                i -= 1;
+                continue;
+            }
+            *path.items.offset(i) = item;
+            return i - 1;
+        }
+    }
+    i
+}
+
+/// Splice a newly added package into the cached search path.
+///
+/// Rebuilding the whole path for a `:packadd optpack` is needlessly slow when
+/// the answer differs from the old one by two entries in known places.  This
+/// is only done for `opt` packages: a `pack/*/start/*` bundle is added with
+/// wildcards still in it, which wants a real expansion.
+///
+/// # Safety
+/// `fname` and `afterdir` must be NUL-terminated; `first_pos`/`after_pos` and
+/// `addlen`/`afterlen` must be what [`splice_rtp`] answered for them.
+unsafe fn splice_cached_path(
+    fname: *mut c_char,
+    afterdir: *mut c_char,
+    addlen: size_t,
+    afterlen: size_t,
+    first_pos: size_t,
+    after_pos: size_t,
+) {
+    runtime_search_path_valid.set(true);
+    runtime_search_path_valid_thread.set(false);
+    runtime_search_path.with_mut(|path| {
+        // SAFETY: the two `kv_pushp`s below make the slots the shifting needs,
+        // and nothing here reenters the cell.
+        unsafe {
+            kv_pushp(&mut path.size, &mut path.capacity, &mut path.items);
+            let mut i = path.size as ssize_t - 1;
+            if afterlen > 0 {
+                kv_pushp(&mut path.size, &mut path.capacity, &mut path.items);
+                i += 1;
+                i = shift_up_and_insert(
+                    path,
+                    i,
+                    2,
+                    addlen + afterlen,
+                    after_pos,
+                    SearchPathItem {
+                        path: xstrdup(afterdir),
+                        after: true,
+                        pack_inserted: true,
+                        has_lua: kNone,
+                        pos_in_rtp: after_pos + addlen,
+                    },
+                );
+            }
+            shift_up_and_insert(
+                path,
+                i,
+                1,
+                addlen,
+                first_pos,
+                SearchPathItem {
+                    path: xstrdup(fname),
+                    after: false,
+                    pack_inserted: true,
+                    has_lua: kNone,
+                    pos_in_rtp: first_pos,
+                },
+            );
+        }
+    });
+}
+
+/// Add the package directory `fname` to 'runtimepath'.
+///
+/// `is_pack` says this is a `pack/*/start/*` bundle rather than a plain
+/// directory, which changes how its `after/` is tested for and keeps the
+/// cached path from being spliced.
+///
+/// # Safety
+/// `fname` must be a writable NUL-terminated path.
+unsafe fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> c_int {
+    // SAFETY: `fname` is the caller's path.
+    let ffname = unsafe { package_root(fname) };
+    if ffname.is_null() {
+        return FAIL;
+    }
+    // SAFETY: `ffname` is an owned NUL-terminated string, freed below.
+    let fname_len = unsafe { strlen(ffname) };
+    let points = unsafe { find_insert_points(ffname, fname_len) };
+
+    let mut afterdir = ptr::null_mut();
+    let mut retval = FAIL;
+    if let Some(points) = points {
+        // SAFETY: `fname` is NUL-terminated; `afterdir` is owned and freed
+        // below.
+        unsafe {
+            afterdir = concat_fnames(fname, c"after".as_ptr(), true);
+            // Does `{fname}/after` exist — and, for a bundle, hold anything?
+            let has_after = if is_pack {
+                pack_has_entries(afterdir)
             } else {
-                os_isdir(afterdir) as ::core::ffi::c_int
-            } != 0
-            {
-                afterlen = strlen(afterdir).wrapping_add(1 as size_t);
-            }
-            oldlen = strlen(p_rtp.get());
-            addlen = strlen(fname).wrapping_add(1 as size_t);
-            new_rtp_capacity = oldlen
-                .wrapping_add(addlen)
-                .wrapping_add(afterlen)
-                .wrapping_add(1 as size_t);
-            new_rtp = try_malloc(new_rtp_capacity) as *mut ::core::ffi::c_char;
-            if !new_rtp.is_null() {
-                keep = insp.offset_from(p_rtp.get()) as size_t;
-                first_pos = keep;
-                memmove(
-                    new_rtp as *mut ::core::ffi::c_void,
-                    p_rtp.get() as *const ::core::ffi::c_void,
-                    keep,
-                );
-                new_rtp_len = keep;
-                if *insp as ::core::ffi::c_int == NUL {
-                    let c2rust_fresh15 = new_rtp_len;
-                    new_rtp_len = new_rtp_len.wrapping_add(1);
-                    *new_rtp.add(c2rust_fresh15) = ',' as ::core::ffi::c_char;
-                    first_pos = first_pos.wrapping_add(1);
-                }
-                memmove(
-                    new_rtp.add(new_rtp_len) as *mut ::core::ffi::c_void,
-                    fname as *const ::core::ffi::c_void,
-                    addlen.wrapping_sub(1 as size_t),
-                );
-                new_rtp_len = new_rtp_len.wrapping_add(addlen.wrapping_sub(1 as size_t));
-                if *insp as ::core::ffi::c_int != NUL {
-                    let c2rust_fresh16 = new_rtp_len;
-                    new_rtp_len = new_rtp_len.wrapping_add(1);
-                    *new_rtp.add(c2rust_fresh16) = ',' as ::core::ffi::c_char;
-                }
-                after_pos = 0 as size_t;
-                if afterlen > 0 as size_t && !after_insp.is_null() {
-                    let mut keep_after: size_t = after_insp.offset_from(p_rtp.get()) as size_t;
-                    memmove(
-                        new_rtp.add(new_rtp_len) as *mut ::core::ffi::c_void,
-                        (*p_rtp.ptr()).add(keep) as *const ::core::ffi::c_void,
-                        keep_after.wrapping_sub(keep),
-                    );
-                    new_rtp_len = new_rtp_len.wrapping_add(keep_after.wrapping_sub(keep));
-                    memmove(
-                        new_rtp.add(new_rtp_len) as *mut ::core::ffi::c_void,
-                        afterdir as *const ::core::ffi::c_void,
-                        afterlen.wrapping_sub(1 as size_t),
-                    );
-                    new_rtp_len = new_rtp_len.wrapping_add(afterlen.wrapping_sub(1 as size_t));
-                    let c2rust_fresh17 = new_rtp_len;
-                    new_rtp_len = new_rtp_len.wrapping_add(1);
-                    *new_rtp.add(c2rust_fresh17) = ',' as ::core::ffi::c_char;
-                    keep = keep_after;
-                    after_pos = keep_after;
-                }
-                if *(*p_rtp.ptr()).add(keep) as ::core::ffi::c_int != NUL {
-                    memmove(
-                        new_rtp.add(new_rtp_len) as *mut ::core::ffi::c_void,
-                        (*p_rtp.ptr()).add(keep) as *const ::core::ffi::c_void,
-                        oldlen.wrapping_sub(keep).wrapping_add(1 as size_t),
-                    );
-                } else {
-                    *new_rtp.add(new_rtp_len) = NUL as ::core::ffi::c_char;
-                }
-                if afterlen > 0 as size_t && after_insp.is_null() {
-                    after_pos = xstrlcat(new_rtp, c",".as_ptr(), new_rtp_capacity);
-                    xstrlcat(new_rtp, afterdir, new_rtp_capacity);
-                }
-                was_valid = runtime_search_path_valid.get();
+                os_isdir(afterdir)
+            };
+            let afterlen = if has_after { strlen(afterdir) + 1 } else { 0 };
+            let addlen = strlen(fname) + 1; // +1 for the comma
+
+            if let Some(spliced) = splice_rtp(fname, afterdir, addlen, afterlen, &points) {
+                let was_valid = runtime_search_path_valid.get();
                 set_option_value_give_err(
                     kOptRuntimepath,
                     OptVal {
                         type_0: kOptValTypeString,
                         data: OptValData {
-                            string: cstr_as_string(new_rtp),
+                            string: cstr_as_string(spliced.rtp),
                         },
                     },
-                    0 as ::core::ffi::c_int,
+                    0,
                 );
                 debug_assert!(
                     !runtime_search_path_valid.get(),
                     "!runtime_search_path_valid"
                 );
-                if was_valid as ::core::ffi::c_int != 0
-                    && !is_pack
-                    && (*runtime_search_path_ref.ptr()).is_null()
-                {
-                    runtime_search_path_valid.set(true_0 != 0);
-                    runtime_search_path_valid_thread.set(false_0 != 0);
-                    if (*runtime_search_path.ptr()).size == (*runtime_search_path.ptr()).capacity {
-                        (*runtime_search_path.ptr()).capacity =
-                            if (*runtime_search_path.ptr()).capacity != 0 {
-                                (*runtime_search_path.ptr()).capacity << 1 as ::core::ffi::c_int
-                            } else {
-                                8 as size_t
-                            };
-                        (*runtime_search_path.ptr()).items = xrealloc(
-                            (*runtime_search_path.ptr()).items as *mut ::core::ffi::c_void,
-                            ::core::mem::size_of::<SearchPathItem>()
-                                .wrapping_mul((*runtime_search_path.ptr()).capacity),
-                        )
-                            as *mut SearchPathItem;
-                    } else {
-                    };
-                    (*runtime_search_path.ptr()).size =
-                        (*runtime_search_path.ptr()).size.wrapping_add(1);
-                    let mut i: ssize_t =
-                        (*runtime_search_path.ptr()).size as ssize_t - 1 as ssize_t;
-                    if afterlen > 0 as size_t {
-                        if (*runtime_search_path.ptr()).size
-                            == (*runtime_search_path.ptr()).capacity
-                        {
-                            (*runtime_search_path.ptr()).capacity =
-                                if (*runtime_search_path.ptr()).capacity != 0 {
-                                    (*runtime_search_path.ptr()).capacity << 1 as ::core::ffi::c_int
-                                } else {
-                                    8 as size_t
-                                };
-                            (*runtime_search_path.ptr()).items = xrealloc(
-                                (*runtime_search_path.ptr()).items as *mut ::core::ffi::c_void,
-                                ::core::mem::size_of::<SearchPathItem>()
-                                    .wrapping_mul((*runtime_search_path.ptr()).capacity),
-                            )
-                                as *mut SearchPathItem;
-                        } else {
-                        };
-                        (*runtime_search_path.ptr()).size =
-                            (*runtime_search_path.ptr()).size.wrapping_add(1);
-                        i += 1 as ssize_t;
-                        while i >= 1 as ssize_t {
-                            if i > 1 as ssize_t
-                                && (*(*runtime_search_path.ptr())
-                                    .items
-                                    .offset((i - 2 as ssize_t) as isize))
-                                .pos_in_rtp
-                                    >= after_pos
-                            {
-                                *(*runtime_search_path.ptr()).items.offset(i as isize) =
-                                    *(*runtime_search_path.ptr())
-                                        .items
-                                        .offset((i - 2 as ssize_t) as isize);
-                                (*(*runtime_search_path.ptr()).items.offset(i as isize))
-                                    .pos_in_rtp =
-                                    (*(*runtime_search_path.ptr()).items.offset(i as isize))
-                                        .pos_in_rtp
-                                        .wrapping_add(addlen.wrapping_add(afterlen));
-                                i -= 1;
-                            } else {
-                                *(*runtime_search_path.ptr()).items.offset(i as isize) =
-                                    SearchPathItem {
-                                        path: xstrdup(afterdir),
-                                        after: true_0 != 0,
-                                        pack_inserted: true_0 != 0,
-                                        has_lua: kNone,
-                                        pos_in_rtp: after_pos.wrapping_add(addlen),
-                                    };
-                                i -= 1;
-                                break;
-                            }
-                        }
-                    }
-                    while i >= 0 as ssize_t {
-                        if i > 0 as ssize_t
-                            && (*(*runtime_search_path.ptr())
-                                .items
-                                .offset((i - 1 as ssize_t) as isize))
-                            .pos_in_rtp
-                                >= first_pos
-                        {
-                            *(*runtime_search_path.ptr()).items.offset(i as isize) =
-                                *(*runtime_search_path.ptr())
-                                    .items
-                                    .offset((i - 1 as ssize_t) as isize);
-                            (*(*runtime_search_path.ptr()).items.offset(i as isize)).pos_in_rtp =
-                                (*(*runtime_search_path.ptr()).items.offset(i as isize))
-                                    .pos_in_rtp
-                                    .wrapping_add(addlen);
-                            i -= 1;
-                        } else {
-                            *(*runtime_search_path.ptr()).items.offset(i as isize) =
-                                SearchPathItem {
-                                    path: xstrdup(fname),
-                                    after: false_0 != 0,
-                                    pack_inserted: true_0 != 0,
-                                    has_lua: kNone,
-                                    pos_in_rtp: first_pos,
-                                };
-                            break;
-                        }
-                    }
+                if was_valid && !is_pack && runtime_search_path_ref.get().is_null() {
+                    splice_cached_path(
+                        fname,
+                        afterdir,
+                        addlen,
+                        afterlen,
+                        spliced.first_pos,
+                        spliced.after_pos,
+                    );
                 }
-                xfree(new_rtp as *mut ::core::ffi::c_void);
+                xfree(spliced.rtp.cast());
                 retval = OK;
             }
         }
-        xfree(ffname as *mut ::core::ffi::c_void);
-        xfree(afterdir as *mut ::core::ffi::c_void);
-        return retval;
     }
+
+    // SAFETY: both are this frame's own allocations.
+    unsafe {
+        xfree(ffname.cast());
+        xfree(afterdir.cast());
+    }
+    retval
 }
 
-unsafe extern "C" fn load_pack_plugin(
-    mut opt: bool,
-    mut fname: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+/// `"%s/plugin/**/*"` — every plugin file a package holds.
+const PLUGIN_PATTERN: &CStr = c"%s/plugin/**/*";
+
+/// `"%s/ftdetect/*"` — an opt package's filetype detection.
+const FTDETECT_PATTERN: &CStr = c"%s/ftdetect/*";
+
+/// Source the scripts in a package's `plugin` directory.
+///
+/// For `opt` packages the `ftdetect` scripts are sourced too; `start`
+/// packages already have those picked up by `filetype.lua`.
+///
+/// # Safety
+/// `fname` must be a NUL-terminated path.
+unsafe fn load_pack_plugin(opt: bool, fname: *mut c_char) -> c_int {
+    // SAFETY: `fname` is the caller's path; `ffname` and `pat` are owned and
+    // freed below.
     unsafe {
-        static plugpat: GlobalCell<[::core::ffi::c_char; 15]> = GlobalCell::new(unsafe {
-            ::core::mem::transmute::<[u8; 15], [::core::ffi::c_char; 15]>(*b"%s/plugin/**/*\0")
-        });
-        static ftpat: GlobalCell<[::core::ffi::c_char; 14]> = GlobalCell::new(unsafe {
-            ::core::mem::transmute::<[u8; 14], [::core::ffi::c_char; 14]>(*b"%s/ftdetect/*\0")
-        });
-        let ffname: *mut ::core::ffi::c_char = fix_fname(fname);
-        let mut len: size_t =
-            strlen(ffname).wrapping_add(::core::mem::size_of::<[::core::ffi::c_char; 15]>());
-        let mut pat: *mut ::core::ffi::c_char = xmallocz(len) as *mut ::core::ffi::c_char;
-        vim_snprintf(
-            pat,
-            len,
-            (plugpat.ptr() as *const _) as *const ::core::ffi::c_char,
-            ffname,
-        );
-        gen_expand_wildcards_and_cb(
-            1 as ::core::ffi::c_int,
-            &raw mut pat,
-            EW_FILE,
-            true_0 != 0,
-            Visitor {
-                callback: Some(source_callback_vim_lua as DoInRuntimepathCBFn),
-                cookie: NULL_0,
-            },
-        );
-        let mut cmd: *mut ::core::ffi::c_char = xstrdup(c"g:did_load_filetypes".as_ptr());
-        if opt as ::core::ffi::c_int != 0 && eval_to_number(cmd, false_0 != 0) > 0 as varnumber_T {
+        let ffname = fix_fname(fname);
+        let len = strlen(ffname) + PLUGIN_PATTERN.count_bytes() + 1;
+        let mut pat = xmallocz(len).cast::<c_char>();
+        let visitor = Visitor {
+            callback: Some(source_callback_vim_lua as DoInRuntimepathCBFn),
+            cookie: ptr::null_mut(),
+        };
+
+        vim_snprintf(pat, len, PLUGIN_PATTERN.as_ptr(), ffname);
+        gen_expand_wildcards_and_cb(1, &raw mut pat, EW_FILE, true, visitor);
+
+        // When runtime/filetype.lua has not been loaded yet, these scripts
+        // are found when it is.
+        let cmd = xstrdup(c"g:did_load_filetypes".as_ptr());
+        if opt && eval_to_number(cmd, false) > 0 {
             do_cmdline_cmd(c"augroup filetypedetect".as_ptr());
-            vim_snprintf(
-                pat,
-                len,
-                (ftpat.ptr() as *const _) as *const ::core::ffi::c_char,
-                ffname,
-            );
-            gen_expand_wildcards_and_cb(
-                1 as ::core::ffi::c_int,
-                &raw mut pat,
-                EW_FILE,
-                true_0 != 0,
-                Visitor {
-                    callback: Some(source_callback_vim_lua as DoInRuntimepathCBFn),
-                    cookie: NULL_0,
-                },
-            );
+            vim_snprintf(pat, len, FTDETECT_PATTERN.as_ptr(), ffname);
+            gen_expand_wildcards_and_cb(1, &raw mut pat, EW_FILE, true, visitor);
             do_cmdline_cmd(c"augroup END".as_ptr());
         }
-        xfree(cmd as *mut ::core::ffi::c_void);
-        xfree(pat as *mut ::core::ffi::c_void);
-        xfree(ffname as *mut ::core::ffi::c_void);
-        return OK;
+        xfree(cmd.cast());
+        xfree(pat.cast());
+        xfree(ffname.cast());
     }
+    OK
 }
 
-unsafe extern "C" fn add_pack_plugins(
-    mut opt: bool,
-    mut num_fnames: ::core::ffi::c_int,
-    mut fnames: *mut *mut ::core::ffi::c_char,
-    mut all: bool,
-    mut cookie: *mut ::core::ffi::c_void,
+/// Whether `fname` is already an entry of 'runtimepath'.
+///
+/// # Safety
+/// `fname` must be NUL-terminated.
+unsafe fn rtp_has_entry(fname: *mut c_char) -> bool {
+    let mut buf = [0 as c_char; MAXPATHL as usize];
+    let mut p: *const c_char = p_rtp.get();
+    // SAFETY: `p` walks 'runtimepath'; `buf` has `MAXPATHL` bytes.
+    while unsafe { *p } != 0 {
+        // SAFETY: as above.
+        unsafe {
+            copy_option_part(
+                &raw mut p as *mut *mut c_char,
+                buf.as_mut_ptr(),
+                MAXPATHL as size_t,
+                c",".as_ptr().cast_mut(),
+            );
+            if path_fnamecmp(buf.as_mut_ptr(), fname) == 0 {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Add each package in `fnames` to 'runtimepath' and/or source it, as the
+/// cookie asks.
+///
+/// # Safety
+/// `fnames` must hold `num_fnames` NUL-terminated paths.
+unsafe fn add_pack_plugins(
+    opt: bool,
+    num_fnames: c_int,
+    fnames: *mut *mut c_char,
+    all: bool,
+    cookie: *mut c_void,
 ) {
-    unsafe {
-        let mut did_one: bool = false_0 != 0;
-        if cookie != APP_LOAD.ptr() as *mut ::core::ffi::c_void {
-            let mut buf: [::core::ffi::c_char; 4096] = [0; 4096];
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < num_fnames {
-                let mut found: bool = false_0 != 0;
-                let mut p: *const ::core::ffi::c_char = p_rtp.get();
-                while *p as ::core::ffi::c_int != NUL {
-                    copy_option_part(
-                        &raw mut p as *mut *mut ::core::ffi::c_char,
-                        &raw mut buf as *mut ::core::ffi::c_char,
-                        MAXPATHL as size_t,
-                        c",".as_ptr() as *mut ::core::ffi::c_char,
-                    );
-                    if path_fnamecmp(
-                        &raw mut buf as *mut ::core::ffi::c_char,
-                        *fnames.offset(i as isize),
-                    ) != 0 as ::core::ffi::c_int
-                    {
-                        continue;
-                    }
-                    found = true_0 != 0;
-                    break;
-                }
-                if !found {
-                    if add_pack_dir_to_rtp(*fnames.offset(i as isize), false_0 != 0) == FAIL {
-                        return;
-                    }
-                }
-                did_one = true_0 != 0;
-                if !all {
-                    break;
-                }
-                i += 1;
+    // SAFETY: the callback contract.
+    let fnames = unsafe { matches(num_fnames, fnames) };
+    let work = PackWork::from_cookie(cookie);
+    let mut did_one = false;
+
+    if PackWork::adds_dir(work) {
+        for &fname in fnames {
+            // SAFETY: one of the caller's paths.
+            if unsafe { !rtp_has_entry(fname) && add_pack_dir_to_rtp(fname, false) == FAIL } {
+                return;
+            }
+            did_one = true;
+            if !all {
+                break;
             }
         }
-        if !all && did_one as ::core::ffi::c_int != 0 {
-            return;
-        }
-        if cookie != APP_ADD_DIR.ptr() as *mut ::core::ffi::c_void {
-            let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i_0 < num_fnames {
-                load_pack_plugin(opt, *fnames.offset(i_0 as isize));
-                if !all {
-                    break;
-                }
-                i_0 += 1;
+    }
+
+    if !all && did_one {
+        return;
+    }
+
+    if PackWork::sources(work) {
+        for &fname in fnames {
+            // SAFETY: as above.
+            unsafe { load_pack_plugin(opt, fname) };
+            if !all {
+                break;
             }
         }
     }
 }
 
+/// [`add_pack_plugins`] for a `start` package.
+///
+/// # Safety
+/// As [`add_pack_plugins`].
 unsafe extern "C" fn add_start_pack_plugins(
-    mut num_fnames: ::core::ffi::c_int,
-    mut fnames: *mut *mut ::core::ffi::c_char,
-    mut all: bool,
-    mut cookie: *mut ::core::ffi::c_void,
+    num_fnames: c_int,
+    fnames: *mut *mut c_char,
+    all: bool,
+    cookie: *mut c_void,
 ) -> bool {
-    unsafe {
-        add_pack_plugins(false_0 != 0, num_fnames, fnames, all, cookie);
-        return num_fnames > 0 as ::core::ffi::c_int;
-    }
+    // SAFETY: the callback contract.
+    unsafe { add_pack_plugins(false, num_fnames, fnames, all, cookie) };
+    num_fnames > 0
 }
 
+/// [`add_pack_plugins`] for an `opt` package.
+///
+/// # Safety
+/// As [`add_pack_plugins`].
 unsafe extern "C" fn add_opt_pack_plugins(
-    mut num_fnames: ::core::ffi::c_int,
-    mut fnames: *mut *mut ::core::ffi::c_char,
-    mut all: bool,
-    mut cookie: *mut ::core::ffi::c_void,
+    num_fnames: c_int,
+    fnames: *mut *mut c_char,
+    all: bool,
+    cookie: *mut c_void,
 ) -> bool {
-    unsafe {
-        add_pack_plugins(true_0 != 0, num_fnames, fnames, all, cookie);
-        return num_fnames > 0 as ::core::ffi::c_int;
-    }
+    // SAFETY: the callback contract.
+    unsafe { add_pack_plugins(true, num_fnames, fnames, all, cookie) };
+    num_fnames > 0
 }
 
+/// Add all packages in the `start` directories to 'runtimepath'.
 pub unsafe extern "C" fn add_pack_start_dirs() {
+    // SAFETY: `add_pack_start_dir` ignores its cookie.
     unsafe {
         do_in_path(
             p_pp.get(),
             c"".as_ptr(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            DIP_ALL as ::core::ffi::c_int + DIP_DIR as ::core::ffi::c_int,
-            Some(
-                add_pack_start_dir
-                    as unsafe extern "C" fn(
-                        ::core::ffi::c_int,
-                        *mut *mut ::core::ffi::c_char,
-                        bool,
-                        *mut ::core::ffi::c_void,
-                    ) -> bool,
-            ),
-            NULL_0,
+            ptr::null_mut(),
+            DIP_ALL as c_int + DIP_DIR as c_int,
+            Some(add_pack_start_dir as DoInRuntimepathCBFn),
+            ptr::null_mut(),
         );
     }
 }
 
-unsafe extern "C" fn pack_has_entries(mut buf: *mut ::core::ffi::c_char) -> bool {
+/// Whether the wildcard pattern `buf` matches any directory at all.
+///
+/// # Safety
+/// `buf` must be a NUL-terminated pattern.
+unsafe fn pack_has_entries(buf: *mut c_char) -> bool {
+    let mut num_files: c_int = 0;
+    let mut files: *mut *mut c_char = ptr::null_mut();
+    let mut pat = [buf];
+    // SAFETY: a one-element pattern array; the matches are ours to free.
     unsafe {
-        let mut num_files: ::core::ffi::c_int = 0;
-        let mut files: *mut *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-        let mut pat: [*mut ::core::ffi::c_char; 1] = [buf as *mut ::core::ffi::c_char];
         if gen_expand_wildcards(
-            1 as ::core::ffi::c_int,
-            &raw mut pat as *mut *mut ::core::ffi::c_char,
+            1,
+            pat.as_mut_ptr(),
             &raw mut num_files,
             &raw mut files,
             EW_DIR,
@@ -499,219 +645,175 @@ unsafe extern "C" fn pack_has_entries(mut buf: *mut ::core::ffi::c_char) -> bool
         {
             FreeWild(num_files, files);
         }
-        return num_files > 0 as ::core::ffi::c_int;
     }
+    num_files > 0
 }
 
+/// The two shapes a 'packpath' entry's `start` packages can take.
+const START_PATTERNS: [&CStr; 2] = [c"/start/*", c"/pack/*/start/*"];
+
+/// Add one 'packpath' directory's `start` packages to 'runtimepath'.
+///
+/// # Safety
+/// `fnames` must hold `num_fnames` NUL-terminated directories.
 unsafe extern "C" fn add_pack_start_dir(
-    mut num_fnames: ::core::ffi::c_int,
-    mut fnames: *mut *mut ::core::ffi::c_char,
-    mut all: bool,
-    mut _cookie: *mut ::core::ffi::c_void,
+    num_fnames: c_int,
+    fnames: *mut *mut c_char,
+    all: bool,
+    _cookie: *mut c_void,
 ) -> bool {
-    unsafe {
-        static buf: GlobalCell<[::core::ffi::c_char; 4096]> = GlobalCell::new([0; 4096]);
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < num_fnames {
-            let mut start_pat: [*mut ::core::ffi::c_char; 2] = [
-                c"/start/*".as_ptr() as *mut ::core::ffi::c_char,
-                c"/pack/*/start/*".as_ptr() as *mut ::core::ffi::c_char,
-            ];
-            let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while j < 2 as ::core::ffi::c_int {
-                if strlen(*fnames.offset(i as isize))
-                    .wrapping_add(strlen(start_pat[j as usize] as *const ::core::ffi::c_char))
-                    .wrapping_add(1 as size_t)
-                    <= MAXPATHL as size_t
-                {
-                    xstrlcpy(
-                        buf.ptr() as *mut ::core::ffi::c_char,
-                        *fnames.offset(i as isize),
-                        MAXPATHL as size_t,
-                    );
-                    xstrlcat(
-                        buf.ptr() as *mut ::core::ffi::c_char,
-                        start_pat[j as usize] as *const ::core::ffi::c_char,
-                        ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
-                    );
-                    if pack_has_entries(buf.ptr() as *mut ::core::ffi::c_char) {
-                        add_pack_dir_to_rtp(buf.ptr() as *mut ::core::ffi::c_char, true_0 != 0);
-                    }
+    let mut buf = [0 as c_char; MAXPATHL as usize];
+    // SAFETY: the callback contract.
+    let fnames = unsafe { matches(num_fnames, fnames) };
+    for &fname in fnames {
+        for start_pat in START_PATTERNS {
+            // SAFETY: the length test keeps both halves inside `buf`, and
+            // `xstrlcpy`/`xstrlcat` NUL-terminate within the size given.
+            unsafe {
+                if strlen(fname) + start_pat.count_bytes() + 1 > MAXPATHL as size_t {
+                    continue;
                 }
-                j += 1;
+                xstrlcpy(buf.as_mut_ptr(), fname, MAXPATHL as size_t);
+                xstrlcat(buf.as_mut_ptr(), start_pat.as_ptr(), buf.len());
+                if pack_has_entries(buf.as_mut_ptr()) {
+                    add_pack_dir_to_rtp(buf.as_mut_ptr(), true);
+                }
             }
-            if !all {
-                break;
-            }
-            i += 1;
         }
-        return num_fnames > 1 as ::core::ffi::c_int;
+        if !all {
+            break;
+        }
     }
+    num_fnames > 1
 }
 
+/// Load the plugins of every package in the `start` directories.
 pub unsafe extern "C" fn load_start_packages() {
+    did_source_packages.set(true);
+    // SAFETY: `add_start_pack_plugins` takes a `PackWork` cookie.
     unsafe {
-        did_source_packages.set(true_0 != 0);
-        do_in_path(
-            p_pp.get(),
-            c"".as_ptr(),
-            c"pack/*/start/*".as_ptr() as *mut ::core::ffi::c_char,
-            DIP_ALL as ::core::ffi::c_int + DIP_DIR as ::core::ffi::c_int,
-            Some(
-                add_start_pack_plugins
-                    as unsafe extern "C" fn(
-                        ::core::ffi::c_int,
-                        *mut *mut ::core::ffi::c_char,
-                        bool,
-                        *mut ::core::ffi::c_void,
-                    ) -> bool,
-            ),
-            APP_LOAD.ptr() as *mut ::core::ffi::c_void,
-        );
-        do_in_path(
-            p_pp.get(),
-            c"".as_ptr(),
-            c"start/*".as_ptr() as *mut ::core::ffi::c_char,
-            DIP_ALL as ::core::ffi::c_int + DIP_DIR as ::core::ffi::c_int,
-            Some(
-                add_start_pack_plugins
-                    as unsafe extern "C" fn(
-                        ::core::ffi::c_int,
-                        *mut *mut ::core::ffi::c_char,
-                        bool,
-                        *mut ::core::ffi::c_void,
-                    ) -> bool,
-            ),
-            APP_LOAD.ptr() as *mut ::core::ffi::c_void,
-        );
-        update_runtime_search_path_thread(false_0 != 0);
+        for name in [c"pack/*/start/*", c"start/*"] {
+            do_in_path(
+                p_pp.get(),
+                c"".as_ptr(),
+                name.as_ptr().cast_mut(),
+                DIP_ALL as c_int + DIP_DIR as c_int,
+                Some(add_start_pack_plugins as DoInRuntimepathCBFn),
+                PackWork::Load.cookie(),
+            );
+        }
+        update_runtime_search_path_thread(false);
     }
 }
 
-pub unsafe fn ex_packloadall(mut eap: *mut exarg_T) {
+/// `:packloadall[!]`.
+pub unsafe fn ex_packloadall(eap: *mut exarg_T) {
+    // SAFETY: `eap` is the live command.
+    if did_source_packages.get() && unsafe { (*eap).forceit } == 0 {
+        return;
+    }
+    // One round to add every directory to 'runtimepath', then a second to
+    // load the plugins, so a plugin may use another plugin's autoload
+    // directory.
+    // SAFETY: neither reads the command.
     unsafe {
-        if !did_source_packages.get() || (*eap).forceit != 0 {
+        add_pack_start_dirs();
+        load_start_packages();
+    }
+}
+
+/// Read all the plugin files at startup.
+pub unsafe extern "C" fn load_plugins() {
+    if p_lpl.get() == 0 {
+        return;
+    }
+    let plugin_pattern = c"plugin/**/*".as_ptr().cast_mut();
+    // SAFETY: the whole body is startup sequencing over NUL-terminated
+    // patterns; `rtp_copy` is owned only when it was copied.
+    unsafe {
+        let mut rtp_copy = p_rtp.get();
+        if !did_source_packages.get() {
+            rtp_copy = xstrdup(p_rtp.get());
             add_pack_start_dirs();
+        }
+
+        // Not `source_runtime_vim_lua` yet, so `:packloadall` can be checked
+        // for below. NB: after this call "rtp_copy" may have been freed, if it
+        // was not copied.
+        source_in_path_vim_lua(
+            rtp_copy,
+            plugin_pattern,
+            DIP_ALL as c_int | DIP_NOAFTER as c_int,
+        );
+        time_msg_now(c"loading rtp plugins");
+
+        // Only source "start" packages when a `:packloadall` has not already.
+        if !did_source_packages.get() {
+            xfree(rtp_copy.cast());
             load_start_packages();
         }
+        time_msg_now(c"loading packages");
+
+        source_runtime_vim_lua(plugin_pattern, DIP_ALL as c_int | DIP_AFTER as c_int);
+        time_msg_now(c"loading after plugins");
     }
 }
 
-pub unsafe extern "C" fn load_plugins() {
-    unsafe {
-        if p_lpl.get() != 0 {
-            let mut rtp_copy: *mut ::core::ffi::c_char = p_rtp.get();
-            let plugin_pattern: *mut ::core::ffi::c_char =
-                c"plugin/**/*".as_ptr() as *mut ::core::ffi::c_char;
-            if !did_source_packages.get() {
-                rtp_copy = xstrdup(p_rtp.get());
-                add_pack_start_dirs();
-            }
-            source_in_path_vim_lua(
-                rtp_copy,
-                plugin_pattern,
-                DIP_ALL as ::core::ffi::c_int | DIP_NOAFTER as ::core::ffi::c_int,
-            );
-            if !(*time_fd.ptr()).is_null() {
-                time_msg(
-                    c"loading rtp plugins".as_ptr(),
-                    ::core::ptr::null::<proftime_T>(),
-                );
-            }
-            if !did_source_packages.get() {
-                xfree(rtp_copy as *mut ::core::ffi::c_void);
-                load_start_packages();
-            }
-            if !(*time_fd.ptr()).is_null() {
-                time_msg(
-                    c"loading packages".as_ptr(),
-                    ::core::ptr::null::<proftime_T>(),
-                );
-            }
-            source_runtime_vim_lua(
-                plugin_pattern,
-                DIP_ALL as ::core::ffi::c_int | DIP_AFTER as ::core::ffi::c_int,
-            );
-            if !(*time_fd.ptr()).is_null() {
-                time_msg(
-                    c"loading after plugins".as_ptr(),
-                    ::core::ptr::null::<proftime_T>(),
-                );
-            }
-        }
+/// `TIME_MSG()`: note a startup milestone, when `--startuptime` asked for one.
+///
+/// # Safety
+/// `msg` outlives the call, which every literal does.
+unsafe fn time_msg_now(msg: &CStr) {
+    if time_fd.get().is_null() {
+        return;
     }
+    // SAFETY: a literal, and the null proftime means "now".
+    unsafe { time_msg(msg.as_ptr(), ptr::null()) };
 }
 
-pub unsafe fn ex_packadd(mut eap: *mut exarg_T) {
+/// `pack/*/{start,opt}/{name}` — where `:packadd` looks.
+const PACKADD_PATTERN: &CStr = c"pack/*/%s/%s";
+
+/// `:packadd[!] {name}`.
+pub unsafe fn ex_packadd(eap: *mut exarg_T) {
+    // SAFETY: `eap` is the live command; `pat` is owned and freed below.
     unsafe {
-        static plugpat: GlobalCell<[::core::ffi::c_char; 13]> = GlobalCell::new(unsafe {
-            ::core::mem::transmute::<[u8; 13], [::core::ffi::c_char; 13]>(*b"pack/*/%s/%s\0")
-        });
-        let mut res: ::core::ffi::c_int = OK;
-        let len: size_t = ::core::mem::size_of::<[::core::ffi::c_char; 13]>()
-            .wrapping_add(strlen((*eap).arg))
-            .wrapping_add(5 as size_t);
-        let mut pat: *mut ::core::ffi::c_char = xmallocz(len) as *mut ::core::ffi::c_char;
-        let mut cookie: *mut ::core::ffi::c_void = (if (*eap).forceit != 0 {
-            APP_ADD_DIR.ptr()
+        let arg = (*eap).arg;
+        let len = PACKADD_PATTERN.count_bytes() + 1 + strlen(arg) + 5;
+        let pat = xmallocz(len).cast::<c_char>();
+        let cookie = if (*eap).forceit != 0 {
+            PackWork::AddDir
         } else {
-            APP_BOTH.ptr()
-        }) as *mut ::core::ffi::c_void;
+            PackWork::Both
+        }
+        .cookie();
+
+        // Only look under "start" when loading packages was not done yet.
+        let mut res = OK;
         if !did_source_packages.get() {
-            vim_snprintf(
-                pat,
-                len,
-                (plugpat.ptr() as *const _) as *const ::core::ffi::c_char,
-                c"start".as_ptr(),
-                (*eap).arg,
-            );
+            vim_snprintf(pat, len, PACKADD_PATTERN.as_ptr(), c"start".as_ptr(), arg);
             res = do_in_path(
                 p_pp.get(),
                 c"".as_ptr(),
                 pat,
-                DIP_ALL as ::core::ffi::c_int + DIP_DIR as ::core::ffi::c_int,
-                Some(
-                    add_start_pack_plugins
-                        as unsafe extern "C" fn(
-                            ::core::ffi::c_int,
-                            *mut *mut ::core::ffi::c_char,
-                            bool,
-                            *mut ::core::ffi::c_void,
-                        ) -> bool,
-                ),
+                DIP_ALL as c_int + DIP_DIR as c_int,
+                Some(add_start_pack_plugins as DoInRuntimepathCBFn),
                 cookie,
             );
         }
-        vim_snprintf(
-            pat,
-            len,
-            (plugpat.ptr() as *const _) as *const ::core::ffi::c_char,
-            c"opt".as_ptr(),
-            (*eap).arg,
-        );
+
+        // Give a "not found" error when nothing was found in 'start' or 'opt'.
+        vim_snprintf(pat, len, PACKADD_PATTERN.as_ptr(), c"opt".as_ptr(), arg);
         do_in_path(
             p_pp.get(),
             c"".as_ptr(),
             pat,
-            DIP_ALL as ::core::ffi::c_int
-                + DIP_DIR as ::core::ffi::c_int
-                + (if res == FAIL {
-                    DIP_ERR as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                }),
-            Some(
-                add_opt_pack_plugins
-                    as unsafe extern "C" fn(
-                        ::core::ffi::c_int,
-                        *mut *mut ::core::ffi::c_char,
-                        bool,
-                        *mut ::core::ffi::c_void,
-                    ) -> bool,
-            ),
+            DIP_ALL as c_int + DIP_DIR as c_int + if res == FAIL { DIP_ERR as c_int } else { 0 },
+            Some(add_opt_pack_plugins as DoInRuntimepathCBFn),
             cookie,
         );
-        update_runtime_search_path_thread(false_0 != 0);
-        xfree(pat as *mut ::core::ffi::c_void);
+
+        update_runtime_search_path_thread(false);
+        xfree(pat.cast());
     }
 }

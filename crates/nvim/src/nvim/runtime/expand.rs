@@ -1,383 +1,360 @@
 //! Command-line completion for the runtime commands.
 //!
-//! `ExpandRTDir` completes a file name against a set of 'runtimepath'
+//! [`ExpandRTDir`] completes a file name against a set of 'runtimepath'
 //! subdirectories -- what `:colorscheme`, `:compiler`, `:runtime` and friends
-//! offer -- and `ExpandPackAddDir` does the same for `:packadd` against
-//! 'packpath'.  `expand_runtime_cmd` is `:runtime`'s own two-stage
+//! offer -- and [`ExpandPackAddDir`] does the same for `:packadd` against
+//! 'packpath'.  [`expand_runtime_cmd`] is `:runtime`'s own two-stage
 //! completion, where the first word may be one of the `START`/`OPT`/`PACK`/
 //! `ALL` qualifiers and everything after it is a path.
+//!
+//! Every match is offered as a *bare* name: the directory the search started
+//! from and the `.vim`/`.lua` extension are trimmed back off again, keeping
+//! only as many path components as the pattern itself spelled
+//! ([`trim_match`]).
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
 
-unsafe extern "C" fn ExpandRTDir_int(
-    mut pat: *mut ::core::ffi::c_char,
-    mut pat_len: size_t,
-    mut flags: ::core::ffi::c_int,
-    mut keep_ext: bool,
-    mut gap: *mut garray_T,
-    mut dirnames: *mut *mut ::core::ffi::c_char,
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
+use core::slice;
+
+/// What a completion round looks for: script files, or — on the second round,
+/// where a directory name is being completed — anything.
+const SCRIPTS: &CStr = c"*.{vim,lua}";
+const ANYTHING: &CStr = c"*";
+
+/// Write `{prefix}{dir}/{pat}{suffix}` into `buf`, dropping the directory and
+/// its separator when `dir` is empty.
+///
+/// # Safety
+/// `buf` must be writable for `buf_len` bytes; `dir` and `pat` must be
+/// NUL-terminated.
+unsafe fn build_pattern(
+    buf: *mut c_char,
+    buf_len: size_t,
+    prefix: &CStr,
+    dir: *mut c_char,
+    pat: *mut c_char,
+    suffix: &CStr,
 ) {
+    // SAFETY: the caller's buffer and strings; `snprintf` truncates within
+    // `buf_len` and NUL-terminates.
     unsafe {
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while !(*dirnames.offset(i as isize)).is_null() {
-            let buf_len: size_t = strlen(*dirnames.offset(i as isize))
-                .wrapping_add(pat_len)
-                .wrapping_add(64 as size_t);
-            let mut buf: *mut ::core::ffi::c_char = xmalloc(buf_len) as *mut ::core::ffi::c_char;
-            let mut glob_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            let mut expand_dirs: bool = false_0 != 0;
-            snprintf(
-                buf,
-                buf_len,
-                c"%s%s%s%s".as_ptr(),
-                if **dirnames.offset(i as isize) as ::core::ffi::c_int != 0 {
-                    *dirnames.offset(i as isize) as *const ::core::ffi::c_char
-                } else {
-                    c"".as_ptr()
-                },
-                if **dirnames.offset(i as isize) as ::core::ffi::c_int != 0 {
-                    c"/".as_ptr()
-                } else {
-                    c"".as_ptr()
-                },
-                pat,
-                c"*.{vim,lua}".as_ptr(),
-            );
-            loop {
-                if flags & DIP_NORTP as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-                    globpath(p_rtp.get(), buf, gap, glob_flags, expand_dirs);
-                }
-                if flags & DIP_START as ::core::ffi::c_int != 0 {
-                    snprintf(
-                        buf,
-                        buf_len,
-                        c"pack/*/start/*/%s%s%s%s".as_ptr(),
-                        if **dirnames.offset(i as isize) as ::core::ffi::c_int != 0 {
-                            *dirnames.offset(i as isize) as *const ::core::ffi::c_char
-                        } else {
-                            c"".as_ptr()
-                        },
-                        if **dirnames.offset(i as isize) as ::core::ffi::c_int != 0 {
-                            c"/".as_ptr()
-                        } else {
-                            c"".as_ptr()
-                        },
-                        pat,
-                        if expand_dirs as ::core::ffi::c_int != 0 {
-                            c"*".as_ptr()
-                        } else {
-                            c"*.{vim,lua}".as_ptr()
-                        },
-                    );
-                    globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs);
-                    snprintf(
-                        buf,
-                        buf_len,
-                        c"start/*/%s%s%s%s".as_ptr(),
-                        if **dirnames.offset(i as isize) as ::core::ffi::c_int != 0 {
-                            *dirnames.offset(i as isize) as *const ::core::ffi::c_char
-                        } else {
-                            c"".as_ptr()
-                        },
-                        if **dirnames.offset(i as isize) as ::core::ffi::c_int != 0 {
-                            c"/".as_ptr()
-                        } else {
-                            c"".as_ptr()
-                        },
-                        pat,
-                        if expand_dirs as ::core::ffi::c_int != 0 {
-                            c"*".as_ptr()
-                        } else {
-                            c"*.{vim,lua}".as_ptr()
-                        },
-                    );
-                    globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs);
-                }
-                if flags & DIP_OPT as ::core::ffi::c_int != 0 {
-                    snprintf(
-                        buf,
-                        buf_len,
-                        c"pack/*/opt/*/%s%s%s%s".as_ptr(),
-                        if **dirnames.offset(i as isize) as ::core::ffi::c_int != 0 {
-                            *dirnames.offset(i as isize) as *const ::core::ffi::c_char
-                        } else {
-                            c"".as_ptr()
-                        },
-                        if **dirnames.offset(i as isize) as ::core::ffi::c_int != 0 {
-                            c"/".as_ptr()
-                        } else {
-                            c"".as_ptr()
-                        },
-                        pat,
-                        if expand_dirs as ::core::ffi::c_int != 0 {
-                            c"*".as_ptr()
-                        } else {
-                            c"*.{vim,lua}".as_ptr()
-                        },
-                    );
-                    globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs);
-                    snprintf(
-                        buf,
-                        buf_len,
-                        c"opt/*/%s%s%s%s".as_ptr(),
-                        if **dirnames.offset(i as isize) as ::core::ffi::c_int != 0 {
-                            *dirnames.offset(i as isize) as *const ::core::ffi::c_char
-                        } else {
-                            c"".as_ptr()
-                        },
-                        if **dirnames.offset(i as isize) as ::core::ffi::c_int != 0 {
-                            c"/".as_ptr()
-                        } else {
-                            c"".as_ptr()
-                        },
-                        pat,
-                        if expand_dirs as ::core::ffi::c_int != 0 {
-                            c"*".as_ptr()
-                        } else {
-                            c"*.{vim,lua}".as_ptr()
-                        },
-                    );
-                    globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs);
-                }
-                if !(**dirnames.offset(i as isize) as ::core::ffi::c_int == NUL && !expand_dirs) {
-                    break;
-                }
-                snprintf(buf, buf_len, c"%s*".as_ptr(), pat);
-                glob_flags = WILD_ADD_SLASH;
-                expand_dirs = true_0 != 0;
-            }
-            xfree(buf as *mut ::core::ffi::c_void);
-            i += 1;
-        }
-        let mut pat_pathsep_cnt: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut i_0: size_t = 0 as size_t;
-        while i_0 < pat_len {
-            if vim_ispathsep(*pat.add(i_0) as ::core::ffi::c_int) {
-                pat_pathsep_cnt += 1;
-            }
-            i_0 = i_0.wrapping_add(1);
-        }
-        let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i_1 < (*gap).ga_len {
-            let mut match_0: *mut ::core::ffi::c_char =
-                *((*gap).ga_data as *mut *mut ::core::ffi::c_char).offset(i_1 as isize);
-            let mut s: *mut ::core::ffi::c_char = match_0;
-            let mut e: *mut ::core::ffi::c_char = s.add(strlen(s));
-            if e.offset_from(s) > 4_isize
-                && !keep_ext
-                && (strncasecmp(
-                    e.offset(-(4 as ::core::ffi::c_int as isize)),
-                    c".vim".as_ptr() as *mut ::core::ffi::c_char,
-                    4 as ::core::ffi::c_int as size_t,
-                ) == 0 as ::core::ffi::c_int
-                    || strncasecmp(
-                        e.offset(-(4 as ::core::ffi::c_int as isize)),
-                        c".lua".as_ptr() as *mut ::core::ffi::c_char,
-                        4 as ::core::ffi::c_int as size_t,
-                    ) == 0 as ::core::ffi::c_int)
-            {
-                e = e.offset(-(4 as ::core::ffi::c_int as isize));
-                *e = NUL as ::core::ffi::c_char;
-            }
-            let mut match_pathsep_cnt: ::core::ffi::c_int = if e > s
-                && *e.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '/' as ::core::ffi::c_int
-            {
-                -1 as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            };
-            s = e;
-            while s > match_0 {
-                if vim_ispathsep(*s as ::core::ffi::c_int) as ::core::ffi::c_int != 0 && {
-                    match_pathsep_cnt += 1;
-                    match_pathsep_cnt > pat_pathsep_cnt
-                } {
-                    break;
-                }
-                s = s.offset(
-                    -((utf_head_off(match_0, s.offset(-(1 as ::core::ffi::c_int as isize)))
-                        + 1 as ::core::ffi::c_int) as isize),
-                );
-            }
-            s = s.offset(1);
-            if s != match_0 {
-                debug_assert!(e.offset_from(s) + 1_isize >= 0_isize, "(e - s) + 1 >= 0");
-                memmove(
-                    match_0 as *mut ::core::ffi::c_void,
-                    s as *const ::core::ffi::c_void,
-                    (e.offset_from(s) as size_t).wrapping_add(1 as size_t),
-                );
-            }
-            i_1 += 1;
-        }
-        if (*gap).ga_len <= 0 as ::core::ffi::c_int {
-            return;
-        }
-        ga_remove_duplicate_strings(gap);
+        let (dir, sep) = if *dir != 0 {
+            (dir.cast_const(), c"/".as_ptr())
+        } else {
+            (c"".as_ptr(), c"".as_ptr())
+        };
+        snprintf(
+            buf,
+            buf_len,
+            c"%s%s%s%s%s".as_ptr(),
+            prefix.as_ptr(),
+            dir,
+            sep,
+            pat,
+            suffix.as_ptr(),
+        );
     }
 }
 
-pub unsafe extern "C" fn ExpandRTDir(
-    mut pat: *mut ::core::ffi::c_char,
-    mut flags: ::core::ffi::c_int,
-    mut num_file: *mut ::core::ffi::c_int,
-    mut file: *mut *mut *mut ::core::ffi::c_char,
-    mut dirnames: *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+/// Glob `pat` under `dir` in 'runtimepath' and in 'packpath''s package trees,
+/// collecting the matches in `gap`.
+///
+/// When `dir` is empty this runs twice: once for script files, once more with
+/// `WILD_ADD_SLASH` for directories, which is what makes `:runtime` complete a
+/// subdirectory name.
+///
+/// # Safety
+/// `buf` must be writable for `buf_len` bytes; `dir`, `pat` must be
+/// NUL-terminated and `gap` an initialised array of allocated strings.
+unsafe fn glob_rounds(
+    pat: *mut c_char,
+    buf: *mut c_char,
+    buf_len: size_t,
+    dir: *mut c_char,
+    flags: c_int,
+    gap: *mut garray_T,
+) {
+    let mut glob_flags = 0;
+    let mut expand_dirs = false;
+    // SAFETY: the caller's buffer and strings, and `globpath` only appends.
     unsafe {
-        *num_file = 0 as ::core::ffi::c_int;
-        *file = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-        let mut ga: garray_T = garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        };
-        ga_init(
-            &raw mut ga,
-            ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-            10 as ::core::ffi::c_int,
-        );
-        ExpandRTDir_int(pat, strlen(pat), flags, false_0 != 0, &raw mut ga, dirnames);
-        if ga.ga_len <= 0 as ::core::ffi::c_int {
-            return FAIL;
+        build_pattern(buf, buf_len, c"", dir, pat, SCRIPTS);
+        loop {
+            if flags & DIP_NORTP as c_int == 0 {
+                globpath(p_rtp.get(), buf, gap, glob_flags, expand_dirs);
+            }
+            let suffix = if expand_dirs { ANYTHING } else { SCRIPTS };
+            if flags & DIP_START as c_int != 0 {
+                for prefix in [c"pack/*/start/*/", c"start/*/"] {
+                    build_pattern(buf, buf_len, prefix, dir, pat, suffix);
+                    globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs);
+                }
+            }
+            if flags & DIP_OPT as c_int != 0 {
+                for prefix in [c"pack/*/opt/*/", c"opt/*/"] {
+                    build_pattern(buf, buf_len, prefix, dir, pat, suffix);
+                    globpath(p_pp.get(), buf, gap, glob_flags, expand_dirs);
+                }
+            }
+            // Second round, for directories.
+            if *dir != 0 || expand_dirs {
+                return;
+            }
+            snprintf(buf, buf_len, c"%s*".as_ptr(), pat);
+            glob_flags = WILD_ADD_SLASH;
+            expand_dirs = true;
         }
-        *file = ga.ga_data as *mut *mut ::core::ffi::c_char;
+    }
+}
+
+/// Cut a match back to the name the user is completing: no `.vim`/`.lua`
+/// extension, and no more leading path components than the pattern spelled.
+///
+/// Rewrites the string in place, which is what the garray holds.
+///
+/// # Safety
+/// `matched` must be a NUL-terminated allocated string.
+unsafe fn trim_match(matched: *mut c_char, keep_ext: bool, pat_pathsep_cnt: c_int) {
+    // SAFETY: `matched` is NUL-terminated, and every walk below stays between
+    // its first byte and its terminator.
+    unsafe {
+        let mut e = matched.add(strlen(matched));
+        if e.offset_from(matched) > 4
+            && !keep_ext
+            && (strncasecmp(e.sub(4), c".vim".as_ptr(), 4) == 0
+                || strncasecmp(e.sub(4), c".lua".as_ptr(), 4) == 0)
+        {
+            e = e.sub(4);
+            *e = 0;
+        }
+
+        // A trailing slash is a component the pattern did not have to spell.
+        let mut match_pathsep_cnt = if e > matched && *e.sub(1) == b'/' as c_char {
+            -1
+        } else {
+            0
+        };
+        let mut s = e;
+        while s > matched {
+            if vim_ispathsep(*s as c_int) {
+                match_pathsep_cnt += 1;
+                if match_pathsep_cnt > pat_pathsep_cnt {
+                    break;
+                }
+            }
+            s = s.sub(utf_head_off(matched, s.sub(1)) as usize + 1);
+        }
+        s = s.add(1);
+        if s != matched {
+            debug_assert!(e.offset_from(s) + 1 >= 0, "(e - s) + 1 >= 0");
+            memmove(matched.cast(), s.cast(), (e.offset_from(s) as size_t) + 1);
+        }
+    }
+}
+
+/// The garray's strings as a slice.
+///
+/// # Safety
+/// `gap` must be an initialised array of `char *`.
+unsafe fn ga_strings<'a>(gap: *mut garray_T) -> &'a [*mut c_char] {
+    // SAFETY: the caller's garray, `ga_len` entries long.
+    unsafe {
+        if (*gap).ga_len <= 0 {
+            return &[];
+        }
+        slice::from_raw_parts((*gap).ga_data.cast::<*mut c_char>(), (*gap).ga_len as usize)
+    }
+}
+
+/// Collect the completion matches for `pat` under each of `dirnames`.
+///
+/// # Safety
+/// `pat` must be NUL-terminated with length `pat_len`, `gap` an initialised
+/// array of allocated strings, and `dirnames` a NULL-terminated array of
+/// NUL-terminated directory names.
+unsafe fn ExpandRTDir_int(
+    pat: *mut c_char,
+    pat_len: size_t,
+    flags: c_int,
+    keep_ext: bool,
+    gap: *mut garray_T,
+    dirnames: *mut *mut c_char,
+) {
+    // TODO(bfredl): this is bullshit, expandpath should not reinvent path
+    // logic.
+    let mut i = 0;
+    // SAFETY: `dirnames` is NULL-terminated.
+    while !unsafe { *dirnames.add(i) }.is_null() {
+        // SAFETY: as above; `buf` is sized for the longest pattern built into
+        // it (the longest prefix is fifteen bytes, the longest suffix eleven).
+        unsafe {
+            let dir = *dirnames.add(i);
+            let buf_len = strlen(dir) + pat_len + 64;
+            let buf = xmalloc(buf_len).cast::<c_char>();
+            glob_rounds(pat, buf, buf_len, dir, flags, gap);
+            xfree(buf.cast());
+        }
+        i += 1;
+    }
+
+    // SAFETY: `pat` has `pat_len` readable bytes.
+    let pat_pathsep_cnt = unsafe { slice::from_raw_parts(pat, pat_len) }
+        .iter()
+        .filter(|&&b| vim_ispathsep(b as c_int))
+        .count() as c_int;
+
+    // SAFETY: the garray holds `ga_len` allocated strings.
+    for &matched in unsafe { ga_strings(gap) } {
+        // SAFETY: as above.
+        unsafe { trim_match(matched, keep_ext, pat_pathsep_cnt) };
+    }
+
+    // SAFETY: as above.
+    if unsafe { (*gap).ga_len } > 0 {
+        // Sort and remove the duplicates that several `dirnames` produce.
+        // SAFETY: as above.
+        unsafe { ga_remove_duplicate_strings(gap) };
+    }
+}
+
+/// A garray of `char *` with room for ten.
+fn new_string_garray() -> garray_T {
+    let mut ga = garray_T::default();
+    // SAFETY: `ga` is a fresh local, and `ga_init` only writes its fields.
+    unsafe { ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 10) };
+    ga
+}
+
+/// Hand a completed garray to an out-parameter pair, or answer FAIL when it
+/// is empty.
+///
+/// # Safety
+/// Both out-parameters must be writable, and `ga` must own its strings.
+unsafe fn take_matches(ga: garray_T, num_file: *mut c_int, file: *mut *mut *mut c_char) -> c_int {
+    if ga.ga_len <= 0 {
+        return FAIL;
+    }
+    // SAFETY: the caller's out-parameters; the garray's buffer is handed over.
+    unsafe {
+        *file = ga.ga_data.cast();
         *num_file = ga.ga_len;
-        return OK;
+    }
+    OK
+}
+
+/// Expand color scheme, compiler or filetype names.
+///
+/// Searches `{runtimepath}/{dirnames}/{pat}.{vim,lua}`; `DIP_START` adds
+/// `{packpath}/pack/*/start/*/{dirnames}/...` and `DIP_OPT` the `opt`
+/// equivalent.  `dirnames` is an array of one or more directory names.
+///
+/// # Safety
+/// As [`ExpandRTDir_int`]; both out-parameters must be writable.
+pub unsafe extern "C" fn ExpandRTDir(
+    pat: *mut c_char,
+    flags: c_int,
+    num_file: *mut c_int,
+    file: *mut *mut *mut c_char,
+    dirnames: *mut *mut c_char,
+) -> c_int {
+    // SAFETY: the caller's out-parameters and strings.
+    unsafe {
+        *num_file = 0;
+        *file = ptr::null_mut();
+        let mut ga = new_string_garray();
+        ExpandRTDir_int(pat, strlen(pat), flags, false, &raw mut ga, dirnames);
+        take_matches(ga, num_file, file)
     }
 }
 
+/// The `[where]` qualifiers `:runtime` completion offers.
+///
+/// Deliberately a second copy of the words `get_runtime_cmd_flags` parses:
+/// what completion proposes and what the command accepts are separate
+/// questions, and upstream spells them separately too.
+const WHERE_VALUES: [&CStr; 4] = [c"START", c"OPT", c"PACK", c"ALL"];
+
+/// Command-line completion for the `:runtime` command.
+///
+/// # Safety
+/// `pat` must be NUL-terminated and both out-parameters writable.
 pub unsafe extern "C" fn expand_runtime_cmd(
-    mut pat: *mut ::core::ffi::c_char,
-    mut numMatches: *mut ::core::ffi::c_int,
-    mut matches: *mut *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+    pat: *mut c_char,
+    num_matches: *mut c_int,
+    matches: *mut *mut *mut c_char,
+) -> c_int {
+    // SAFETY: the caller's out-parameters and pattern.
     unsafe {
-        *numMatches = 0 as ::core::ffi::c_int;
-        *matches = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-        let mut ga: garray_T = garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        };
-        ga_init(
-            &raw mut ga,
-            ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-            10 as ::core::ffi::c_int,
-        );
-        let pat_len: size_t = strlen(pat);
-        let mut dirnames: [*mut ::core::ffi::c_char; 2] = [
-            c"".as_ptr() as *mut ::core::ffi::c_char,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        ];
+        *num_matches = 0;
+        *matches = ptr::null_mut();
+        let mut ga = new_string_garray();
+        let pat_len = strlen(pat);
+        let mut dirnames = [c"".as_ptr().cast_mut(), ptr::null_mut()];
         ExpandRTDir_int(
             pat,
             pat_len,
             runtime_expand_flags.get(),
-            true_0 != 0,
+            true,
             &raw mut ga,
-            &raw mut dirnames as *mut *mut ::core::ffi::c_char,
+            dirnames.as_mut_ptr(),
         );
-        if runtime_expand_flags.get() == 0 as ::core::ffi::c_int {
-            let mut where_values: [*mut ::core::ffi::c_char; 4] = [
-                c"START".as_ptr() as *mut ::core::ffi::c_char,
-                c"OPT".as_ptr() as *mut ::core::ffi::c_char,
-                c"PACK".as_ptr() as *mut ::core::ffi::c_char,
-                c"ALL".as_ptr() as *mut ::core::ffi::c_char,
-            ];
-            let mut i: size_t = 0 as size_t;
-            while i < ::core::mem::size_of::<[*mut ::core::ffi::c_char; 4]>()
-                .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[*mut ::core::ffi::c_char; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-                        == 0) as ::core::ffi::c_int as usize,
-                )
-            {
-                if strncmp(pat, where_values[i as usize], pat_len) == 0 as ::core::ffi::c_int {
-                    ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                    *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) =
-                        xstrdup(where_values[i as usize]);
+
+        // Complete the [where] argument too, when none was given.
+        if runtime_expand_flags.get() == 0 {
+            for value in WHERE_VALUES {
+                if strncmp(pat, value.as_ptr(), pat_len) == 0 {
+                    ga_grow(&raw mut ga, 1);
+                    *ga.ga_data.cast::<*mut c_char>().offset(ga.ga_len as isize) =
+                        xstrdup(value.as_ptr());
                     ga.ga_len += 1;
                 }
-                i = i.wrapping_add(1);
             }
         }
-        if ga.ga_len <= 0 as ::core::ffi::c_int {
-            return FAIL;
-        }
-        *matches = ga.ga_data as *mut *mut ::core::ffi::c_char;
-        *numMatches = ga.ga_len;
-        return OK;
+
+        take_matches(ga, num_matches, matches)
     }
 }
 
+/// Expand `:packadd` names: `{packpath}/pack/*/opt/{pat}`.
+///
+/// # Safety
+/// `pat` must be NUL-terminated and both out-parameters writable.
 pub unsafe extern "C" fn ExpandPackAddDir(
-    mut pat: *mut ::core::ffi::c_char,
-    mut num_file: *mut ::core::ffi::c_int,
-    mut file: *mut *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+    pat: *mut c_char,
+    num_file: *mut c_int,
+    file: *mut *mut *mut c_char,
+) -> c_int {
+    // SAFETY: the caller's out-parameters and pattern; `s` is owned and freed
+    // below.
     unsafe {
-        let mut ga: garray_T = garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        };
-        *num_file = 0 as ::core::ffi::c_int;
-        *file = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-        let mut pat_len: size_t = strlen(pat);
-        ga_init(
-            &raw mut ga,
-            ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-            10 as ::core::ffi::c_int,
-        );
-        let mut buflen: size_t = pat_len.wrapping_add(26 as size_t);
-        let mut s: *mut ::core::ffi::c_char = xmalloc(buflen) as *mut ::core::ffi::c_char;
-        snprintf(s, buflen, c"pack/*/opt/%s*".as_ptr(), pat);
-        globpath(
-            p_pp.get(),
-            s,
-            &raw mut ga,
-            0 as ::core::ffi::c_int,
-            true_0 != 0,
-        );
-        snprintf(s, buflen, c"opt/%s*".as_ptr(), pat);
-        globpath(
-            p_pp.get(),
-            s,
-            &raw mut ga,
-            0 as ::core::ffi::c_int,
-            true_0 != 0,
-        );
-        xfree(s as *mut ::core::ffi::c_void);
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < ga.ga_len {
-            let mut match_0: *mut ::core::ffi::c_char =
-                *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(i as isize);
-            s = path_tail(match_0);
-            memmove(
-                match_0 as *mut ::core::ffi::c_void,
-                s as *const ::core::ffi::c_void,
-                strlen(s).wrapping_add(1 as size_t),
-            );
-            i += 1;
+        *num_file = 0;
+        *file = ptr::null_mut();
+        let mut ga = new_string_garray();
+
+        let buflen = strlen(pat) + 26;
+        let s = xmalloc(buflen).cast::<c_char>();
+        for fmt in [c"pack/*/opt/%s*", c"opt/%s*"] {
+            snprintf(s, buflen, fmt.as_ptr(), pat);
+            globpath(p_pp.get(), s, &raw mut ga, 0, true);
         }
-        if ga.ga_len <= 0 as ::core::ffi::c_int {
+        xfree(s.cast());
+
+        // Offer the package name, not the path it was found at.
+        for &matched in ga_strings(&raw mut ga) {
+            let tail = path_tail(matched);
+            memmove(matched.cast(), tail.cast(), strlen(tail) + 1);
+        }
+
+        if ga.ga_len <= 0 {
             return FAIL;
         }
+        // Sort and remove the duplicates the two patterns can produce.
         ga_remove_duplicate_strings(&raw mut ga);
-        *file = ga.ga_data as *mut *mut ::core::ffi::c_char;
-        *num_file = ga.ga_len;
-        return OK;
+        take_matches(ga, num_file, file)
     }
 }
