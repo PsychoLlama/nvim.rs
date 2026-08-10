@@ -11,55 +11,52 @@
 //! queued events and from Vimscript callbacks that may be running when it
 //! closes.
 //!
+//! # Why this module stays on raw pointers
+//!
+//! Nothing here turns a `*mut Channel` into a `&mut Channel` that outlives a
+//! call. A channel's address is handed to libuv, to the stream layer and to
+//! the terminal as an opaque `data` word at setup time, so almost every
+//! function in this file can be reentered *through a pointer this module did
+//! not derive* — `close_cb`, `on_channel_data`, `term_close` all arrive that
+//! way. A long-lived `&mut` would make each of those a distinct, conflicting
+//! borrow. The narrow `unsafe` blocks below are therefore per-access, and the
+//! module's globals are reached through the two named raw accessors
+//! ([`channel_map`] and [`main_events`]) rather than `GlobalCell::with_mut`,
+//! whose borrow tracking cannot be held across an event-loop turn.
+//!
 //! [`msgpack_rpc::channel`]: crate::src::nvim::msgpack_rpc::channel
 
-use crate::semsg_c;
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
 
-use crate::src::nvim::eval::typval::{callback_free, kCallbackNone, tv_dict_free};
-use crate::src::nvim::event::libuv_proc::libuv_proc_init;
+use crate::src::nvim::eval::typval::callback_free;
 use crate::src::nvim::event::r#loop::one_arg_event;
 use crate::src::nvim::event::multiqueue::{
     multiqueue_free, multiqueue_new_child, multiqueue_put_event,
 };
-use crate::src::nvim::event::proc::{
-    exit_on_closed_chan, proc_free, proc_get_exepath, proc_spawn, proc_stop,
-};
-use crate::src::nvim::event::rstream::{
-    rstream_init, rstream_init_fd, rstream_may_close, rstream_start, rstream_start_inner,
-    rstream_stop_inner,
-};
-use crate::src::nvim::event::socket::{socket_connect, socket_watcher_accept};
+use crate::src::nvim::event::proc::proc_free;
+use crate::src::nvim::event::rstream::rstream_may_close;
 use crate::src::nvim::event::stream::stream_may_close;
-use crate::src::nvim::event::wstream::{
-    wstream_init, wstream_init_fd, wstream_new_buffer, wstream_write,
-};
+use crate::src::nvim::event::wstream::{wstream_new_buffer, wstream_write};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::{LOGLVL_INF, logmsg_c};
 use crate::src::nvim::lua::executor::api_free_luaref;
 use crate::src::nvim::main::{
-    channels, e_invarg2, e_invchan, e_invstream, e_invstreamrpc, e_jobspawn, embedded_mode,
-    exiting, headless_mode, main_loop, ui_client_channel_id,
+    channels, e_invchan, e_invstream, e_invstreamrpc, exiting, main_loop,
 };
 use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
-use crate::src::nvim::memory::{xfree, xmemdup, xstrdup};
+use crate::src::nvim::memory::{xfree, xmemdup};
 use crate::src::nvim::msgpack_rpc::channel::call_stack::CallStack;
-use crate::src::nvim::msgpack_rpc::channel::{rpc_close, rpc_free, rpc_init, rpc_start};
-use crate::src::nvim::msgpack_rpc::server::server_owns_pipe_address;
+use crate::src::nvim::msgpack_rpc::channel::{rpc_close, rpc_free, rpc_init};
 use crate::src::nvim::os::fs::os_write;
-use crate::src::nvim::os::libc::{dup2, fcntl, freopen, gettext, stderr};
-use crate::src::nvim::os::pty_proc_unix::{
-    pty_proc_close_master, pty_proc_init, pty_proc_resize, pty_proc_resume,
-};
-use crate::src::nvim::os::shell::shell_free_argv;
-use crate::src::nvim::terminal::{
-    terminal_alloc, terminal_close, terminal_destroy, terminal_receive, terminal_set_state,
-};
+use crate::src::nvim::os::libc::{freopen, gettext, stderr};
+use crate::src::nvim::os::pty_proc_unix::pty_proc_close_master;
+use crate::src::nvim::terminal::{terminal_close, terminal_receive};
+use crate::src::nvim::types::libc::STDERR_FILENO;
 use crate::src::nvim::types::{
-    Callback, CallbackReader, Channel, ChannelPart, ChannelStdinMode, ChannelStreamType, Dict,
-    InternalState, LuaRef, OptInt, Proc, PtyProc, RStream, RpcState, SocketWatcher, Stream,
-    TerminalOptions, buf_T, dict_T, ptr_t, size_t, uint16_t, uint64_t, varnumber_T,
+    Channel, ChannelPart, ChannelStreamType, Dict, InternalState, Loop, LuaRef, Map_uint64_t_ptr_t,
+    MultiQueue, Proc, PtyProc, RStream, RpcState, Stream, ptr_t, size_t, uint64_t,
 };
 
 /// Values these belong to other modules; nested so they stay out of the flat
@@ -97,21 +94,64 @@ mod known {
 use known::*;
 
 pub mod info;
+pub mod open;
 pub mod reader;
+pub mod term;
 
 pub use info::{
     channel_all_info, channel_create_event, channel_info, channel_info_changed, channel_job_running,
 };
+pub use open::{channel_connect, channel_from_connection, channel_from_stdio, channel_job_start};
 pub use reader::{
     callback_reader_free, callback_reader_start, channel_reader_callbacks, on_channel_data,
     on_job_stderr,
 };
-use reader::{callback_reader_set, schedule_channel_event};
+pub use term::channel_terminal_alloc;
 
-/// Whether stdio has already been claimed. Only one channel may own it.
-static did_stdio: GlobalCell<bool> = GlobalCell::new(false);
 /// The next dynamically allocated channel id. The first two are reserved.
 static next_chan_id: GlobalCell<uint64_t> = GlobalCell::new((CHAN_STDERR + 1) as uint64_t);
+
+// ---------------------------------------------------------------------------
+// Globals, as this module reaches them
+// ---------------------------------------------------------------------------
+
+/// The channel registry: id → `*mut Channel`.
+///
+/// The one raw escape from `channels`. A `with_mut` borrow cannot be used
+/// here: the map is walked while closing channels, and closing one queues an
+/// event whose handler deletes from the same map.
+fn channel_map() -> *mut Map_uint64_t_ptr_t {
+    channels.ptr()
+}
+
+/// The event loop, as libuv and the stream layer take it.
+pub(super) fn main_loop_ptr() -> *mut Loop {
+    main_loop.ptr()
+}
+
+/// The main event queue, which is where deferred frees and autocommands go.
+fn main_events() -> *mut MultiQueue {
+    // SAFETY: `main_loop` is a live, fully initialised `Loop` from
+    // `event_init` until the process exits.
+    unsafe { (*main_loop_ptr()).events }
+}
+
+/// The address of one of the shared `e_*` message strings.
+///
+/// They are `GlobalCell`s only because the transpiler made every C global one;
+/// nothing ever writes them, so a shared pointer is all a caller wants and
+/// `ptr()`'s exclusive-access contract does not apply. `GlobalCell` is
+/// `repr(transparent)` over its contents, so this is the array's address.
+fn message<const N: usize>(msg: &'static GlobalCell<[c_char; N]>) -> *const c_char {
+    ptr::from_ref(msg).cast()
+}
+
+/// The translated text of one of them.
+pub(super) fn translated<const N: usize>(msg: &'static GlobalCell<[c_char; N]>) -> *const c_char {
+    // SAFETY: gettext answers either its argument or a pointer into the loaded
+    // message catalog; both outlive the call.
+    unsafe { gettext(message(msg)) }
+}
 
 // ---------------------------------------------------------------------------
 // Transports
@@ -130,44 +170,71 @@ static next_chan_id: GlobalCell<uint64_t> = GlobalCell::new((CHAN_STDERR + 1) as
 ///
 /// Valid for both kinds of job: `LibuvProc` and `PtyProc` both begin with the
 /// `Proc` this returns, and the two are told apart by `Proc::type_0`.
+///
+/// # Safety
+/// `chan` points at a live channel whose transport is a job.
 pub unsafe fn channel_proc(chan: *mut Channel) -> *mut Proc {
-    debug_assert!((*chan).streamtype == kChannelStreamProc);
-    &raw mut (*chan).stream.proc
+    debug_assert!(unsafe { (*chan).streamtype } == kChannelStreamProc);
+    // SAFETY: the caller's live channel; `Channel_stream` is `repr(C)` and
+    // `LibuvProc`/`PtyProc` both start with their `Proc`, so all three spell
+    // the same address.
+    unsafe { &raw mut (*chan).stream.proc }
 }
 
 /// The pty master behind a pty job.
+///
+/// # Safety
+/// `chan` points at a live channel whose transport is a *pty* job.
 pub unsafe fn channel_pty(chan: *mut Channel) -> *mut PtyProc {
-    debug_assert!((*chan).streamtype == kChannelStreamProc);
-    debug_assert!((*chan).stream.proc.type_0 as c_int == kProcTypePty);
-    &raw mut (*chan).stream.pty
+    debug_assert!(unsafe { (*chan).streamtype } == kChannelStreamProc);
+    debug_assert!(unsafe { (*chan).stream.proc.type_0 } as c_int == kProcTypePty);
+    // SAFETY: as `channel_proc`, with the caller's stronger promise.
+    unsafe { &raw mut (*chan).stream.pty }
 }
 
 /// The in-process endpoint behind an internal channel.
+///
+/// # Safety
+/// `chan` points at a live channel whose transport is internal.
 pub unsafe fn channel_internal(chan: *mut Channel) -> *mut InternalState {
-    debug_assert!((*chan).streamtype == kChannelStreamInternal);
-    &raw mut (*chan).stream.internal
+    debug_assert!(unsafe { (*chan).streamtype } == kChannelStreamInternal);
+    // SAFETY: the caller's live channel, projected to the active member.
+    unsafe { &raw mut (*chan).stream.internal }
 }
 
 /// The stream this channel writes to.
 ///
 /// Only the three transports with a real handle have one; the internal and
 /// stderr channels are written to by other means and never reach here.
+///
+/// # Safety
+/// `chan` points at a live channel with a write stream.
 pub unsafe fn channel_instream(chan: *mut Channel) -> *mut Stream {
-    match (*chan).streamtype {
-        kChannelStreamProc => &raw mut (*chan).stream.proc.in_0,
-        kChannelStreamSocket => &raw mut (*chan).stream.socket.s,
-        kChannelStreamStdio => &raw mut (*chan).stream.stdio.out,
-        other => unreachable!("channel stream type {other} has no write stream"),
+    // SAFETY: the caller's live channel, projected to the member its
+    // `streamtype` says is active.
+    unsafe {
+        match (*chan).streamtype {
+            kChannelStreamProc => &raw mut (*chan).stream.proc.in_0,
+            kChannelStreamSocket => &raw mut (*chan).stream.socket.s,
+            kChannelStreamStdio => &raw mut (*chan).stream.stdio.out,
+            other => unreachable!("channel stream type {other} has no write stream"),
+        }
     }
 }
 
 /// The stream this channel reads from. See [`channel_instream`].
+///
+/// # Safety
+/// `chan` points at a live channel with a read stream.
 pub unsafe fn channel_outstream(chan: *mut Channel) -> *mut RStream {
-    match (*chan).streamtype {
-        kChannelStreamProc => &raw mut (*chan).stream.proc.out,
-        kChannelStreamSocket => &raw mut (*chan).stream.socket,
-        kChannelStreamStdio => &raw mut (*chan).stream.stdio.in_0,
-        other => unreachable!("channel stream type {other} has no read stream"),
+    // SAFETY: as `channel_instream`.
+    unsafe {
+        match (*chan).streamtype {
+            kChannelStreamProc => &raw mut (*chan).stream.proc.out,
+            kChannelStreamSocket => &raw mut (*chan).stream.socket,
+            kChannelStreamStdio => &raw mut (*chan).stream.stdio.in_0,
+            other => unreachable!("channel stream type {other} has no read stream"),
+        }
     }
 }
 
@@ -176,46 +243,49 @@ pub unsafe fn channel_outstream(chan: *mut Channel) -> *mut RStream {
 // ---------------------------------------------------------------------------
 
 /// The channel registered under `id`, or null.
+///
+/// # Safety
+/// The answer is only live until the next event-loop turn frees it.
 pub unsafe fn find_channel(id: uint64_t) -> *mut Channel {
-    let map = channels.ptr();
-    let slot = mh_get_uint64_t(&raw mut (*map).set, id);
+    let map = channel_map();
+    // SAFETY: the registry is a live map for the process's lifetime.
+    let slot = unsafe { mh_get_uint64_t(&raw mut (*map).set, id) };
     // The hash's "absent" slot index.
     if slot == u32::MAX {
         return ptr::null_mut();
     }
-    *(*map).values.add(slot as usize) as *mut Channel
+    // SAFETY: an occupied slot index is in range of the value array, and every
+    // value in it was registered by `channel_alloc`.
+    unsafe { *(*map).values.add(slot as usize) as *mut Channel }
 }
 
 /// Opens the stderr channel and the RPC event queue.
+///
+/// # Safety
+/// Called once, from startup, after the event loop exists.
 pub unsafe fn channel_init() {
-    channel_alloc(kChannelStreamStderr);
-    rpc_init();
+    // SAFETY: the caller's promise.
+    unsafe {
+        channel_alloc(kChannelStreamStderr);
+        rpc_init();
+    }
 }
 
-/// Registers a new channel of `type_0` and hands out the caller's reference.
+/// A channel with no transport and no callbacks yet.
 ///
-/// The stdio and stderr channels have fixed ids; everything else takes the
-/// next one. `Channel` owns heap state (the RPC call stack), so it is a real
-/// allocation rather than a zeroed block — the transport union is still
-/// zeroed, because each transport's setup writes it whole.
-pub unsafe fn channel_alloc(type_0: ChannelStreamType) -> *mut Channel {
-    let id = match type_0 {
-        kChannelStreamStdio => CHAN_STDIO as uint64_t,
-        kChannelStreamStderr => CHAN_STDERR as uint64_t,
-        _ => {
-            let id = next_chan_id.get();
-            next_chan_id.set(id.wrapping_add(1));
-            id
-        }
-    };
-    // Channel ids are handed to Vimscript as numbers.
-    debug_assert!(id <= i64::MAX as uint64_t);
-    let chan = Box::into_raw(Box::new(Channel {
+/// `Channel` owns heap state (the RPC call stack), so it is a real value
+/// rather than a zeroed block — but the transport union and the three callback
+/// slots stay zeroed, which is what their readers test for.
+fn blank_channel(id: uint64_t, type_0: ChannelStreamType, events: *mut MultiQueue) -> Channel {
+    Channel {
         id,
         refcount: 1,
-        events: multiqueue_new_child((*main_loop.ptr()).events),
+        events,
         streamtype: type_0,
-        stream: mem::zeroed(),
+        // SAFETY: `Channel_stream` is a union of plain data; each transport's
+        // setup writes its member whole before anything reads it, and the
+        // stderr transport's one `bool` means "open" as zero.
+        stream: unsafe { mem::zeroed() },
         is_rpc: false,
         detach: false,
         rpc: RpcState {
@@ -228,63 +298,131 @@ pub unsafe fn channel_alloc(type_0: ChannelStreamType) -> *mut Channel {
             client_type: 0,
         },
         term: ptr::null_mut(),
-        on_data: mem::zeroed(),
-        on_stderr: mem::zeroed(),
-        on_exit: mem::zeroed(),
+        // SAFETY: a zeroed `CallbackReader`/`Callback` is the "none" state —
+        // `kCallbackNone` is 0 and every pointer in them is nullable.
+        on_data: unsafe { mem::zeroed() },
+        on_stderr: unsafe { mem::zeroed() },
+        on_exit: unsafe { mem::zeroed() },
         exit_status: -1,
         callback_busy: false,
         callback_scheduled: false,
-    }));
-    let slot = map_put_ref_uint64_t_ptr_t(channels.ptr(), id, ptr::null_mut(), ptr::null_mut());
-    *slot = chan as ptr_t;
+    }
+}
+
+/// Registers a new channel of `type_0` and hands out the caller's reference.
+///
+/// The stdio and stderr channels have fixed ids; everything else takes the
+/// next one.
+///
+/// # Safety
+/// The event loop exists; the answer is one owned reference.
+pub unsafe fn channel_alloc(type_0: ChannelStreamType) -> *mut Channel {
+    let id = match type_0 {
+        kChannelStreamStdio => CHAN_STDIO as uint64_t,
+        kChannelStreamStderr => CHAN_STDERR as uint64_t,
+        _ => {
+            let id = next_chan_id.get();
+            next_chan_id.set(id.wrapping_add(1));
+            id
+        }
+    };
+    // Channel ids are handed to Vimscript as numbers.
+    debug_assert!(id <= i64::MAX as uint64_t);
+    // SAFETY: the main queue is live, and `multiqueue_new_child` hands back a
+    // queue this channel owns until `channel_destroy` frees it.
+    let events = unsafe { multiqueue_new_child(main_events()) };
+    let chan = Box::into_raw(Box::new(blank_channel(id, type_0, events)));
+    // SAFETY: the registry is live, and `id` is fresh, so the slot the map
+    // hands back is this channel's alone.
+    unsafe {
+        *map_put_ref_uint64_t_ptr_t(channel_map(), id, ptr::null_mut(), ptr::null_mut()) =
+            chan as ptr_t
+    };
     chan
 }
 
 /// Closes every channel. Called on exit.
+///
+/// # Safety
+/// Called from the main thread with the registry live.
 pub unsafe fn channel_teardown() {
-    let map = channels.ptr();
-    for i in 0..(*map).set.h.n_keys {
-        let chan = *(*map).values.add(i as usize) as *mut Channel;
-        channel_close((*chan).id, kChannelPartAll, ptr::null_mut());
+    let map = channel_map();
+    // SAFETY: the registry's key and value arrays are `n_keys` long, and every
+    // value is a live channel. The ids are snapshotted rather than walked live
+    // because closing a channel queues a free event against the same map.
+    let ids: Vec<uint64_t> = unsafe {
+        (0..(*map).set.h.n_keys as usize)
+            .map(|i| (*(*(*map).values.add(i)).cast::<Channel>()).id)
+            .collect()
+    };
+    for id in ids {
+        // SAFETY: each id named a live channel a moment ago, and
+        // `channel_close` tolerates one that has since gone.
+        unsafe { channel_close(id, kChannelPartAll, ptr::null_mut()) };
     }
 }
 
+/// # Safety
+/// `chan` is a live channel the caller already holds a reference to.
 pub unsafe fn channel_incref(chan: *mut Channel) {
-    (*chan).refcount += 1;
+    // SAFETY: the caller's live channel.
+    unsafe { (*chan).refcount += 1 };
 }
 
 /// Drops a reference, scheduling the free once the last one goes.
 ///
 /// The free is deferred to an event because the caller is very often a libuv
 /// callback still standing on the channel's own memory.
+///
+/// # Safety
+/// `chan` is live and the caller owns the reference it is dropping.
 pub unsafe fn channel_decref(chan: *mut Channel) {
-    (*chan).refcount -= 1;
-    if (*chan).refcount == 0 {
-        multiqueue_put_event(
-            (*main_loop.ptr()).events,
-            one_arg_event(Some(free_channel_event), chan as *mut c_void),
-        );
+    // SAFETY: the caller's live, owned reference.
+    let last = unsafe {
+        (*chan).refcount -= 1;
+        (*chan).refcount == 0
+    };
+    if last {
+        // SAFETY: the main queue is live and takes ownership of the event.
+        unsafe {
+            multiqueue_put_event(
+                main_events(),
+                one_arg_event(Some(free_channel_event), chan.cast()),
+            )
+        };
     }
 }
 
 unsafe extern "C" fn free_channel_event(argv: *mut *mut c_void) {
-    let chan = *argv as *mut Channel;
-    map_del_uint64_t_ptr_t(channels.ptr(), (*chan).id, ptr::null_mut());
-    channel_destroy(chan);
+    // SAFETY: the event carries the one remaining reference to a channel that
+    // `channel_decref` dropped to zero.
+    unsafe {
+        let chan = (*argv).cast::<Channel>();
+        map_del_uint64_t_ptr_t(channel_map(), (*chan).id, ptr::null_mut());
+        channel_destroy(chan);
+    }
 }
 
+/// Frees a channel and everything hanging off it.
+///
+/// # Safety
+/// `chan` has no references left and is no longer in the registry.
 unsafe fn channel_destroy(chan: *mut Channel) {
-    if (*chan).is_rpc {
-        rpc_free(chan);
+    // SAFETY: the caller's unreferenced channel; each `free` below matches the
+    // setup that ran when the corresponding feature was turned on.
+    unsafe {
+        if (*chan).is_rpc {
+            rpc_free(chan);
+        }
+        if (*chan).streamtype == kChannelStreamProc {
+            proc_free(channel_proc(chan));
+        }
+        callback_reader_free(&raw mut (*chan).on_data);
+        callback_reader_free(&raw mut (*chan).on_stderr);
+        callback_free(&raw mut (*chan).on_exit);
+        multiqueue_free((*chan).events);
+        drop(Box::from_raw(chan));
     }
-    if (*chan).streamtype == kChannelStreamProc {
-        proc_free(channel_proc(chan));
-    }
-    callback_reader_free(&raw mut (*chan).on_data);
-    callback_reader_free(&raw mut (*chan).on_stderr);
-    callback_free(&raw mut (*chan).on_exit);
-    multiqueue_free((*chan).events);
-    drop(Box::from_raw(chan));
 }
 
 /// Unwinds a channel that never got off the ground.
@@ -292,20 +430,26 @@ unsafe fn channel_destroy(chan: *mut Channel) {
 /// Only valid for the channel that took the most recent id, and only before
 /// anything else has taken a reference — which is what the two assertions say.
 /// Giving the id back keeps `job_spec`'s expectations about consecutive ids.
-unsafe fn channel_destroy_early(chan: *mut Channel) {
+///
+/// # Safety
+/// `chan` is the most recently allocated channel and is unreferenced.
+pub(super) unsafe fn channel_destroy_early(chan: *mut Channel) {
     next_chan_id.set(next_chan_id.get().wrapping_sub(1));
-    assert!(
-        (*chan).id == next_chan_id.get(),
-        "channel id was not the last"
-    );
-    map_del_uint64_t_ptr_t(channels.ptr(), (*chan).id, ptr::null_mut());
-    (*chan).id = 0;
-    (*chan).refcount -= 1;
-    assert!((*chan).refcount == 0, "channel was already referenced");
-    multiqueue_put_event(
-        (*main_loop.ptr()).events,
-        one_arg_event(Some(free_channel_event), chan as *mut c_void),
-    );
+    // SAFETY: the caller's channel, still registered and still theirs alone.
+    unsafe {
+        assert!(
+            (*chan).id == next_chan_id.get(),
+            "channel id was not the last"
+        );
+        map_del_uint64_t_ptr_t(channel_map(), (*chan).id, ptr::null_mut());
+        (*chan).id = 0;
+        (*chan).refcount -= 1;
+        assert!((*chan).refcount == 0, "channel was already referenced");
+        multiqueue_put_event(
+            main_events(),
+            one_arg_event(Some(free_channel_event), chan.cast()),
+        );
+    }
 }
 
 /// The empty `Dict`, which is what a channel starts with and what
@@ -319,8 +463,10 @@ fn empty_dict() -> Dict {
 }
 
 /// The stream layer's close callback: the channel is what owns the stream.
-unsafe extern "C" fn close_cb(_stream: *mut Stream, data: *mut c_void) {
-    channel_decref(data as *mut Channel);
+pub(super) unsafe extern "C" fn close_cb(_stream: *mut Stream, data: *mut c_void) {
+    // SAFETY: `data` is the channel the stream was set up with, and the stream
+    // held one reference to it.
+    unsafe { channel_decref(data.cast()) };
 }
 
 // ---------------------------------------------------------------------------
@@ -332,364 +478,172 @@ unsafe extern "C" fn close_cb(_stream: *mut Stream, data: *mut c_void) {
 /// Which parts exist depends on the transport, and an RPC channel only accepts
 /// `kChannelPartRpc`/`kChannelPartAll` — its stdin and stdout carry the
 /// protocol and cannot be closed separately.
+///
+/// # Safety
+/// Called from the main thread; `error`, if given, is writable.
 pub unsafe fn channel_close(id: uint64_t, part: ChannelPart, error: *mut *const c_char) -> bool {
-    let mut dummy: *const c_char = ptr::null();
-    let error = if error.is_null() {
-        &raw mut dummy
-    } else {
-        error
-    };
+    // SAFETY: the caller's promise.
+    match unsafe { close_channel_part(id, part) } {
+        Ok(()) => true,
+        Err(msg) => {
+            if !error.is_null() {
+                // SAFETY: the caller's writable out-parameter.
+                unsafe { *error = msg };
+            }
+            false
+        }
+    }
+}
 
-    let chan = find_channel(id);
+/// [`channel_close`] with the out-parameter turned back into a result.
+///
+/// # Safety
+/// Called from the main thread with the registry live.
+unsafe fn close_channel_part(id: uint64_t, part: ChannelPart) -> Result<(), *const c_char> {
+    // SAFETY: the caller's promise; the answer is used before the next turn.
+    let chan = unsafe { find_channel(id) };
     if chan.is_null() {
         // An id below the watermark named a channel that has already gone,
         // which is not an error: closing twice is allowed.
-        if id < next_chan_id.get() {
-            return true;
-        }
-        *error = e_invchan.ptr() as *const c_char;
-        return false;
+        return if id < next_chan_id.get() {
+            Ok(())
+        } else {
+            Err(message(&e_invchan))
+        };
     }
+    // SAFETY: a live registry entry.
+    let (streamtype, is_rpc) = unsafe { ((*chan).streamtype, (*chan).is_rpc) };
 
     let close_main = part == kChannelPartRpc || part == kChannelPartAll;
     if close_main {
-        if (*chan).is_rpc {
-            rpc_close(chan);
+        if is_rpc {
+            // SAFETY: an RPC channel's protocol state is live while it is.
+            unsafe { rpc_close(chan) };
         } else if part == kChannelPartRpc {
-            *error = e_invstream.ptr() as *const c_char;
-            return false;
+            return Err(message(&e_invstream));
         }
-    } else if (part == kChannelPartStdin || part == kChannelPartStdout) && (*chan).is_rpc {
-        *error = e_invstreamrpc.ptr() as *const c_char;
-        return false;
+    } else if (part == kChannelPartStdin || part == kChannelPartStdout) && is_rpc {
+        return Err(message(&e_invstreamrpc));
     }
 
-    match (*chan).streamtype {
-        kChannelStreamSocket => {
-            if !close_main {
-                *error = e_invstream.ptr() as *const c_char;
-                return false;
-            }
-            rstream_may_close(&raw mut (*chan).stream.socket);
-        }
-        kChannelStreamProc => {
-            let proc = channel_proc(chan);
-            if part == kChannelPartStdin || close_main {
-                stream_may_close(&raw mut (*proc).in_0);
-            }
-            if part == kChannelPartStdout || close_main {
-                rstream_may_close(&raw mut (*proc).out);
-            }
-            if part == kChannelPartStderr || part == kChannelPartAll {
-                rstream_may_close(&raw mut (*proc).err);
-            }
-            if (*proc).type_0 as c_int == kProcTypePty && part == kChannelPartAll {
-                pty_proc_close_master(channel_pty(chan));
-            }
-        }
-        kChannelStreamStdio => {
-            if part == kChannelPartStdin || close_main {
-                rstream_may_close(&raw mut (*chan).stream.stdio.in_0);
-            }
-            if part == kChannelPartStdout || close_main {
-                stream_may_close(&raw mut (*chan).stream.stdio.out);
-            }
-            // This process's stderr belongs to the stderr channel, not here.
-            if part == kChannelPartStderr {
-                *error = e_invstream.ptr() as *const c_char;
-                return false;
-            }
-        }
-        kChannelStreamStderr => {
-            if part != kChannelPartAll && part != kChannelPartStderr {
-                *error = e_invstream.ptr() as *const c_char;
-                return false;
-            }
-            if !(*chan).stream.err.closed {
-                (*chan).stream.err.closed = true;
-                // On the way out the descriptor is about to go anyway, and
-                // reopening it would swallow anything still being written.
-                if !exiting.get() {
-                    freopen(c"/dev/null".as_ptr(), c"w".as_ptr(), stderr);
+    // SAFETY: `chan` is live and each arm touches only the transport its
+    // `streamtype` selected.
+    unsafe {
+        match streamtype {
+            kChannelStreamSocket => {
+                if !close_main {
+                    return Err(message(&e_invstream));
                 }
-                channel_decref(chan);
+                rstream_may_close(&raw mut (*chan).stream.socket);
             }
+            kChannelStreamProc => close_job_parts(chan, part, close_main),
+            kChannelStreamStdio => close_stdio_parts(chan, part, close_main)?,
+            kChannelStreamStderr => close_stderr(chan, part)?,
+            kChannelStreamInternal => {
+                if !close_main {
+                    return Err(message(&e_invstream));
+                }
+                close_internal(chan);
+            }
+            _ => {}
         }
-        kChannelStreamInternal => {
-            if !close_main {
-                *error = e_invstream.ptr() as *const c_char;
-                return false;
-            }
-            // An internal channel with a terminal is closed by closing the
-            // terminal; without one there is nothing but the reference.
-            if (*chan).term.is_null() {
-                channel_decref(chan);
-            } else {
-                let internal = channel_internal(chan);
-                api_free_luaref((*internal).cb);
-                (*internal).cb = LUA_NOREF as LuaRef;
-                (*internal).closed = true;
-                terminal_close(&raw mut (*chan).term, 0);
-                (*chan).exit_status = 0;
-            }
-        }
-        _ => {}
     }
-    true
+    Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// Opening
-// ---------------------------------------------------------------------------
-
-/// Spawns a child process and wires a channel to it.
+/// Closes the requested halves of a job's pipes, and its pty master last.
 ///
-/// Returns null and writes `status_out` on failure: 0 when the arguments were
-/// rejected, otherwise the spawn's libuv error.
-#[allow(clippy::too_many_arguments)]
-pub unsafe fn channel_job_start(
-    argv: *mut *mut c_char,
-    exepath: *const c_char,
-    on_stdout: CallbackReader,
-    on_stderr: CallbackReader,
-    on_exit: Callback,
-    pty: bool,
-    rpc: bool,
-    overlapped: bool,
-    detach: bool,
-    stdin_mode: ChannelStdinMode,
-    cwd: *const c_char,
-    pty_width: uint16_t,
-    pty_height: uint16_t,
-    env: *mut dict_T,
-    status_out: *mut varnumber_T,
-) -> *mut Channel {
-    let chan = channel_alloc(kChannelStreamProc);
-    (*chan).on_data = on_stdout;
-    (*chan).on_stderr = on_stderr;
-    (*chan).on_exit = on_exit;
-
-    if pty {
-        // A detached child has no controlling terminal to hand a pty to.
-        if detach {
-            semsg_c!(
-                gettext(e_invarg2.ptr() as *const c_char),
-                c"terminal/pty job cannot be detached".as_ptr(),
-            );
-            shell_free_argv(argv);
-            if !env.is_null() {
-                tv_dict_free(env);
-            }
-            channel_destroy_early(chan);
-            *status_out = 0;
-            return ptr::null_mut();
+/// # Safety
+/// `chan` is a live job channel.
+unsafe fn close_job_parts(chan: *mut Channel, part: ChannelPart, close_main: bool) {
+    // SAFETY: the caller's live job channel.
+    unsafe {
+        let proc = channel_proc(chan);
+        if part == kChannelPartStdin || close_main {
+            stream_may_close(&raw mut (*proc).in_0);
         }
-        (*chan).stream.pty = pty_proc_init(main_loop.ptr(), chan as *mut c_void);
-        if pty_width > 0 {
-            (*chan).stream.pty.width = pty_width;
+        if part == kChannelPartStdout || close_main {
+            rstream_may_close(&raw mut (*proc).out);
         }
-        if pty_height > 0 {
-            (*chan).stream.pty.height = pty_height;
+        if part == kChannelPartStderr || part == kChannelPartAll {
+            rstream_may_close(&raw mut (*proc).err);
         }
-    } else {
-        (*chan).stream.uv = libuv_proc_init(main_loop.ptr(), chan as *mut c_void);
-    }
-
-    let proc = channel_proc(chan);
-    (*proc).argv = argv;
-    (*proc).exepath = exepath;
-    (*proc).cb = Some(channel_proc_exit_cb);
-    (*proc).state_cb = Some(channel_proc_state_cb);
-    (*proc).events = (*chan).events;
-    (*proc).detach = detach;
-    (*proc).cwd = cwd;
-    (*proc).env = env;
-    (*proc).overlapped = overlapped;
-
-    // A pty multiplexes both directions onto the master, so it always reads
-    // and never has a separate stderr.
-    let (has_out, has_err) = if (*proc).type_0 as c_int == kProcTypePty {
-        (true, false)
-    } else {
-        (*proc).fwd_err = (*chan).on_stderr.fwd_err;
-        (
-            rpc || callback_reader_set((*chan).on_data),
-            callback_reader_set((*chan).on_stderr),
-        )
-    };
-    let has_in = stdin_mode == kChannelStdinPipe;
-
-    // The name is copied because the failure message is formatted after the
-    // spawn has taken ownership of `argv`.
-    let cmd = xstrdup(proc_get_exepath(proc));
-    let status = proc_spawn(proc, has_in, has_out, has_err);
-    if status != 0 {
-        semsg_c!(
-            gettext(e_jobspawn.ptr() as *const c_char),
-            crate::src::nvim::event::libuv::uv_strerror(status),
-            cmd,
-        );
-        xfree(cmd as *mut c_void);
-        if !(*proc).env.is_null() {
-            tv_dict_free((*proc).env);
+        if (*proc).type_0 as c_int == kProcTypePty && part == kChannelPartAll {
+            pty_proc_close_master(channel_pty(chan));
         }
-        channel_destroy_early(chan);
-        *status_out = (*proc).status as varnumber_T;
-        return ptr::null_mut();
     }
-    xfree(cmd as *mut c_void);
-    if !(*proc).env.is_null() {
-        tv_dict_free((*proc).env);
-    }
-
-    if has_in {
-        wstream_init(&raw mut (*proc).in_0, 0);
-    }
-    if has_out {
-        rstream_init(&raw mut (*proc).out);
-    }
-    if rpc {
-        rpc_start(chan);
-    } else if has_out {
-        callback_reader_start(&raw mut (*chan).on_data, c"stdout".as_ptr());
-        rstream_start(
-            &raw mut (*proc).out,
-            Some(on_channel_data),
-            chan as *mut c_void,
-        );
-    }
-    if has_err {
-        callback_reader_start(&raw mut (*chan).on_stderr, c"stderr".as_ptr());
-        rstream_init(&raw mut (*proc).err);
-        rstream_start(
-            &raw mut (*proc).err,
-            Some(on_job_stderr),
-            chan as *mut c_void,
-        );
-    }
-    *status_out = (*chan).id as varnumber_T;
-    chan
 }
 
-/// Connects to a socket (or, for an address this process is itself listening
-/// on, to itself) and returns the channel id, or 0 on failure.
-pub unsafe fn channel_connect(
-    tcp: bool,
-    address: *const c_char,
-    rpc: bool,
-    on_output: CallbackReader,
-    timeout: c_int,
-    error: *mut *const c_char,
-) -> uint64_t {
-    // Talking to our own listening socket would deadlock: the reply cannot be
-    // read while this process is blocked writing the request. An internal
-    // channel short-circuits the transport instead.
-    if !tcp && rpc && server_owns_pipe_address(address) {
-        let channel = channel_alloc(kChannelStreamInternal);
-        (*channel_internal(channel)).cb = LUA_NOREF as LuaRef;
-        rpc_start(channel);
-        channel_create_event(channel, address);
-        return (*channel).id;
-    }
-
-    let channel = channel_alloc(kChannelStreamSocket);
-    if !socket_connect(
-        main_loop.ptr(),
-        &raw mut (*channel).stream.socket,
-        tcp,
-        address,
-        timeout,
-        error,
-    ) {
-        channel_decref(channel);
-        return 0;
-    }
-    attach_socket(channel);
-    if rpc {
-        rpc_start(channel);
-    } else {
-        (*channel).on_data = on_output;
-        callback_reader_start(&raw mut (*channel).on_data, c"data".as_ptr());
-        rstream_start(
-            &raw mut (*channel).stream.socket,
-            Some(on_channel_data),
-            channel as *mut c_void,
-        );
-    }
-    channel_create_event(channel, address);
-    (*channel).id
-}
-
-/// Takes over an accepted connection from a listening socket. Always RPC.
-pub unsafe fn channel_from_connection(watcher: *mut SocketWatcher) {
-    let channel = channel_alloc(kChannelStreamSocket);
-    socket_watcher_accept(watcher, &raw mut (*channel).stream.socket);
-    attach_socket(channel);
-    rpc_start(channel);
-    channel_create_event(channel, (&raw mut (*watcher).addr) as *mut c_char);
-}
-
-/// Gives a connected socket its owner and its buffers.
-unsafe fn attach_socket(channel: *mut Channel) {
-    let socket = &raw mut (*channel).stream.socket;
-    (*socket).s.internal_close_cb = Some(close_cb);
-    (*socket).s.internal_data = channel as *mut c_void;
-    wstream_init(&raw mut (*socket).s, 0);
-    rstream_init(socket);
-}
-
-/// Wires a channel to this process's own stdin and stdout.
+/// Closes this process's own stdin/stdout.
 ///
-/// Only one may exist, and only when nothing else is using the terminal.
-pub unsafe fn channel_from_stdio(
-    rpc: bool,
-    on_output: CallbackReader,
-    error: *mut *const c_char,
-) -> uint64_t {
-    if !headless_mode.get() && !embedded_mode.get() {
-        *error = gettext(c"can only be opened in headless mode".as_ptr());
-        return 0;
+/// # Safety
+/// `chan` is a live stdio channel.
+unsafe fn close_stdio_parts(
+    chan: *mut Channel,
+    part: ChannelPart,
+    close_main: bool,
+) -> Result<(), *const c_char> {
+    // This process's stderr belongs to the stderr channel, not here.
+    if part == kChannelPartStderr {
+        return Err(message(&e_invstream));
     }
-    if did_stdio.get() {
-        *error = gettext(c"channel was already open".as_ptr());
-        return 0;
+    // SAFETY: the caller's live stdio channel.
+    unsafe {
+        if part == kChannelPartStdin || close_main {
+            rstream_may_close(&raw mut (*chan).stream.stdio.in_0);
+        }
+        if part == kChannelPartStdout || close_main {
+            stream_may_close(&raw mut (*chan).stream.stdio.out);
+        }
     }
-    did_stdio.set(true);
+    Ok(())
+}
 
-    let channel = channel_alloc(kChannelStreamStdio);
-    let mut stdin_dup_fd = STDIN_FILENO;
-    let mut stdout_dup_fd = STDOUT_FILENO;
-    if embedded_mode.get() {
-        // The embedder owns fds 0 and 1; move them aside and point what is
-        // left at stderr, so a stray `print` cannot corrupt the protocol.
-        stdin_dup_fd = fcntl(STDIN_FILENO, F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
-        stdout_dup_fd = fcntl(STDOUT_FILENO, F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
-        dup2(STDERR_FILENO, STDOUT_FILENO);
-        dup2(STDERR_FILENO, STDIN_FILENO);
+/// Closes the stderr channel, which is a descriptor rather than a stream.
+///
+/// # Safety
+/// `chan` is the live stderr channel.
+unsafe fn close_stderr(chan: *mut Channel, part: ChannelPart) -> Result<(), *const c_char> {
+    if part != kChannelPartAll && part != kChannelPartStderr {
+        return Err(message(&e_invstream));
     }
-    rstream_init_fd(
-        main_loop.ptr(),
-        &raw mut (*channel).stream.stdio.in_0,
-        stdin_dup_fd,
-    );
-    wstream_init_fd(
-        main_loop.ptr(),
-        &raw mut (*channel).stream.stdio.out,
-        stdout_dup_fd,
-        0,
-    );
-    if rpc {
-        rpc_start(channel);
-    } else {
-        (*channel).on_data = on_output;
-        callback_reader_start(&raw mut (*channel).on_data, c"stdin".as_ptr());
-        rstream_start(
-            &raw mut (*channel).stream.stdio.in_0,
-            Some(on_channel_data),
-            channel as *mut c_void,
-        );
+    // SAFETY: the caller's live stderr channel, whose transport is one flag.
+    unsafe {
+        if (*chan).stream.err.closed {
+            return Ok(());
+        }
+        (*chan).stream.err.closed = true;
+        // On the way out the descriptor is about to go anyway, and reopening
+        // it would swallow anything still being written.
+        if !exiting.get() {
+            freopen(c"/dev/null".as_ptr(), c"w".as_ptr(), stderr);
+        }
+        channel_decref(chan);
     }
-    (*channel).id
+    Ok(())
+}
+
+/// Closes an internal channel.
+///
+/// One with a terminal is closed by closing the terminal; without one there is
+/// nothing to release but the reference.
+///
+/// # Safety
+/// `chan` is a live internal channel.
+unsafe fn close_internal(chan: *mut Channel) {
+    // SAFETY: the caller's live internal channel.
+    unsafe {
+        if (*chan).term.is_null() {
+            channel_decref(chan);
+            return;
+        }
+        let internal = channel_internal(chan);
+        api_free_luaref((*internal).cb);
+        (*internal).cb = LUA_NOREF as LuaRef;
+        (*internal).closed = true;
+        terminal_close(&raw mut (*chan).term, 0);
+        (*chan).exit_status = 0;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -700,6 +654,10 @@ pub unsafe fn channel_from_stdio(
 ///
 /// `data_owned` hands this function the buffer: it is either passed straight
 /// to the write queue or freed here.
+///
+/// # Safety
+/// `data` is `len` readable bytes, owned by this call when `data_owned`;
+/// `error` is writable.
 pub unsafe fn channel_send(
     id: uint64_t,
     data: *mut c_char,
@@ -707,195 +665,95 @@ pub unsafe fn channel_send(
     data_owned: bool,
     error: *mut *const c_char,
 ) -> size_t {
+    // SAFETY: the caller's promise. Every arm either hands `data` to the write
+    // queue and returns, or falls through to the free below.
+    unsafe {
+        let chan = find_channel(id);
+        if chan.is_null() {
+            *error = translated(&e_invchan);
+        } else {
+            match send_to_channel(chan, data, len, data_owned) {
+                Ok(Sent::Bytes(n)) => {
+                    if data_owned {
+                        xfree(data.cast());
+                    }
+                    return n;
+                }
+                Ok(Sent::Queued(n)) => return n,
+                Err(msg) => *error = gettext(msg.as_ptr()),
+            }
+        }
+        if data_owned {
+            xfree(data.cast());
+        }
+        0
+    }
+}
+
+/// How much of a [`channel_send`] got through, and who owns the buffer now.
+enum Sent {
+    /// Written here; the caller still owns the buffer.
+    Bytes(size_t),
+    /// Handed to the write queue, which owns the buffer.
+    Queued(size_t),
+}
+
+/// The transport-specific half of [`channel_send`].
+///
+/// # Safety
+/// As [`channel_send`], with `chan` live.
+unsafe fn send_to_channel(
+    chan: *mut Channel,
+    data: *mut c_char,
+    len: size_t,
+    data_owned: bool,
+) -> Result<Sent, &'static CStr> {
     const CLOSED: &CStr = c"Can't send data to closed stream";
     const RAW_TO_RPC: &CStr = c"Can't send raw data to rpc channel";
 
-    let mut written = 0;
-    let chan = find_channel(id);
-    if chan.is_null() {
-        *error = gettext(e_invchan.ptr() as *const c_char);
-    } else if (*chan).streamtype == kChannelStreamStderr {
-        if (*chan).stream.err.closed {
-            *error = gettext(CLOSED.as_ptr());
-        } else {
-            // stderr is not on the event loop; it is written synchronously and
-            // a short write is reported as such.
-            let wres = os_write(STDERR_FILENO, data, len, false);
-            if wres >= 0 {
-                written = wres as size_t;
+    // SAFETY: the caller's live channel and readable buffer.
+    unsafe {
+        match (*chan).streamtype {
+            kChannelStreamStderr => {
+                if (*chan).stream.err.closed {
+                    return Err(CLOSED);
+                }
+                // stderr is not on the event loop; it is written synchronously
+                // and a short write is reported as such.
+                let wres = os_write(STDERR_FILENO, data, len, false);
+                Ok(Sent::Bytes(if wres >= 0 { wres as size_t } else { 0 }))
+            }
+            kChannelStreamInternal => {
+                if (*chan).is_rpc {
+                    return Err(RAW_TO_RPC);
+                }
+                if (*chan).term.is_null() || (*channel_internal(chan)).closed {
+                    return Err(CLOSED);
+                }
+                terminal_receive((*chan).term, data, len);
+                Ok(Sent::Bytes(len))
+            }
+            _ => {
+                let in_0 = channel_instream(chan);
+                if (*in_0).closed {
+                    return Err(CLOSED);
+                }
+                if (*chan).is_rpc {
+                    return Err(RAW_TO_RPC);
+                }
+                let owned = if data_owned {
+                    data.cast::<c_void>()
+                } else {
+                    xmemdup(data.cast(), len)
+                };
+                let buf = wstream_new_buffer(owned.cast(), len, 1, Some(xfree));
+                // The write queue owns the buffer from here either way.
+                Ok(Sent::Queued(if wstream_write(in_0, buf) == 0 {
+                    len
+                } else {
+                    0
+                }))
             }
         }
-    } else if (*chan).streamtype == kChannelStreamInternal {
-        if (*chan).is_rpc {
-            *error = gettext(RAW_TO_RPC.as_ptr());
-        } else if (*chan).term.is_null() || (*channel_internal(chan)).closed {
-            *error = gettext(CLOSED.as_ptr());
-        } else {
-            terminal_receive((*chan).term, data, len);
-            written = len;
-        }
-    } else {
-        let in_0 = channel_instream(chan);
-        if (*in_0).closed {
-            *error = gettext(CLOSED.as_ptr());
-        } else if (*chan).is_rpc {
-            *error = gettext(RAW_TO_RPC.as_ptr());
-        } else {
-            let owned = if data_owned {
-                data as *mut c_void
-            } else {
-                xmemdup(data as *const c_void, len)
-            };
-            let buf = wstream_new_buffer(owned as *mut c_char, len, 1, Some(xfree));
-            // The write queue owns the buffer either way, so this returns
-            // without the free below.
-            return if wstream_write(in_0, buf) == 0 {
-                len
-            } else {
-                0
-            };
-        }
     }
-    if data_owned {
-        xfree(data as *mut c_void);
-    }
-    written
-}
-
-// ---------------------------------------------------------------------------
-// Process callbacks
-// ---------------------------------------------------------------------------
-
-/// The child exited, or its handles closed. `status` is negative for the
-/// latter, which is what "closed without an exit status" means here.
-unsafe extern "C" fn channel_proc_exit_cb(_proc: *mut Proc, status: c_int, data: *mut c_void) {
-    let chan = data as *mut Channel;
-    if !(*chan).term.is_null() {
-        terminal_close(&raw mut (*chan).term, status);
-    }
-    // A UI client whose server died: try to reconnect before following it.
-    if !exiting.get() && ui_client_channel_id.get() == (*chan).id {
-        ui_client_attach_to_restarted_server();
-        if ui_client_channel_id.get() == (*chan).id {
-            exit_on_closed_chan(status);
-        }
-    }
-    let exited = status >= 0;
-    if exited && (*chan).on_exit.type_0 != kCallbackNone {
-        schedule_channel_event(chan);
-    }
-    if exited {
-        (*chan).exit_status = status;
-    }
-    channel_decref(chan);
-}
-
-/// The child was stopped or continued; only a terminal cares.
-unsafe extern "C" fn channel_proc_state_cb(_proc: *mut Proc, suspended: bool, data: *mut c_void) {
-    let chan = data as *mut Channel;
-    if !(*chan).term.is_null() {
-        terminal_set_state((*chan).term, suspended);
-    }
-}
-
-use crate::src::nvim::types::channel::kChannelStdinPipe;
-use crate::src::nvim::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
-use crate::src::nvim::ui_client::ui_client_attach_to_restarted_server;
-
-// ---------------------------------------------------------------------------
-// The terminal bridge
-// ---------------------------------------------------------------------------
-
-/// Gives `buf` a terminal driven by this channel's pty.
-pub unsafe fn channel_terminal_alloc(buf: *mut buf_T, chan: *mut Channel) {
-    let pty = channel_pty(chan);
-    let topts = TerminalOptions {
-        data: chan as *mut c_void,
-        width: (*pty).width,
-        height: (*pty).height,
-        read_pause_cb: Some(term_read_pause),
-        write_cb: Some(term_write),
-        resize_cb: Some(term_resize),
-        resume_cb: Some(term_resume),
-        close_cb: Some(term_close),
-        force_crlf: false,
-    };
-    (*buf).b_p_channel = (*chan).id as OptInt;
-    channel_incref(chan);
-    (*chan).term = terminal_alloc(buf, topts);
-}
-
-/// Back-pressure from the terminal: stop reading while it catches up.
-unsafe extern "C" fn term_read_pause(pause: bool, data: *mut c_void) {
-    let chan = data as *mut Channel;
-    let out = &raw mut (*chan).stream.proc.out;
-    if (*out).s.closed {
-        return;
-    }
-    if pause {
-        rstream_stop_inner(out);
-    } else {
-        rstream_start_inner(out);
-    }
-}
-
-/// The user typed into the terminal; forward it to the child.
-unsafe extern "C" fn term_write(buf: *const c_char, size: size_t, data: *mut c_void) {
-    let chan = data as *mut Channel;
-    let in_0 = &raw mut (*chan).stream.proc.in_0;
-    if (*in_0).closed {
-        logmsg_c!(
-            LOGLVL_INF,
-            ptr::null(),
-            c"term_write".as_ptr(),
-            918,
-            true,
-            c"write failed: stream is closed".as_ptr(),
-        );
-        return;
-    }
-    let wbuf = wstream_new_buffer(
-        xmemdup(buf as *const c_void, size) as *mut c_char,
-        size,
-        1,
-        Some(xfree),
-    );
-    wstream_write(in_0, wbuf);
-}
-
-unsafe extern "C" fn term_resize(width: uint16_t, height: uint16_t, data: *mut c_void) {
-    let chan = data as *mut Channel;
-    pty_proc_resize(channel_pty(chan), width, height);
-}
-
-unsafe extern "C" fn term_resume(data: *mut c_void) {
-    let chan = data as *mut Channel;
-    pty_proc_resume(channel_pty(chan));
-}
-
-/// The terminal window went away: stop the child and wait for its streams.
-unsafe extern "C" fn term_close(data: *mut c_void) {
-    let chan = data as *mut Channel;
-    proc_stop(channel_proc(chan));
-    multiqueue_put_event((*chan).events, one_arg_event(Some(term_delayed_free), data));
-}
-
-/// Frees the terminal once nothing is still writing through it.
-///
-/// Re-queues itself while either stream has a request outstanding, because
-/// those requests hold buffers the terminal owns.
-unsafe extern "C" fn term_delayed_free(argv: *mut *mut c_void) {
-    let chan = *argv as *mut Channel;
-    let proc = &raw mut (*chan).stream.proc;
-    if (*proc).in_0.pending_reqs != 0 || (*proc).out.s.pending_reqs != 0 {
-        multiqueue_put_event(
-            (*chan).events,
-            one_arg_event(Some(term_delayed_free), chan as *mut c_void),
-        );
-        return;
-    }
-    if !(*chan).term.is_null() {
-        terminal_destroy(&raw mut (*chan).term);
-    }
-    channel_decref(chan);
 }
