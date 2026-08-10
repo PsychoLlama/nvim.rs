@@ -20,14 +20,14 @@
 //! | `last_current_SID_seq` | [`source`] | [`source`] |
 //! | `runtime_search_path` | [`cache`] | [`cache`], via [`search`]'s `do_in_runtimepath` |
 //! | `runtime_search_path_valid` | [`cache`]'s invalidate/validate pair | [`cache`] |
-//! | `runtime_search_path_thread` + `_valid_thread` + `_ref` + `_mutex` | [`cache`], for the off-main-loop reader | [`cache`], [`search`] |
+//! | `runtime_search_path_thread` + `_mutex` | [`cache`], for the off-main-loop reader | [`cache`], [`search`] — **`SharedCell`, see below** |
+//! | `runtime_search_path_valid_thread` | [`cache`], [`pack`] | [`cache`] |
 //! | `runtime_expand_flags` | [`search`]'s `set_context_in_runtime_cmd` | [`expand`]'s `expand_runtime_cmd` |
-//! | `APP_ADD_DIR` / `APP_LOAD` / `APP_BOTH` | never | [`pack`] — three distinct addresses used as tokens, not values |
-//! | `value_init_int` | never | the map/set helpers below, as a zero to point at |
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::api::private::helpers::{
-    api_clear_error, arena_array, arena_dict, arena_string, cstr_as_string, cstr_to_string,
+    api_clear_error, arena_array, arena_dict, arena_string, array_add, cstr_as_string,
+    cstr_to_string, dict_put,
 };
 use crate::src::nvim::autocmd::{
     EVENT_SOURCECMD, EVENT_SOURCEPOST, EVENT_SOURCEPRE, apply_autocmds, has_autocmd,
@@ -58,7 +58,7 @@ use crate::src::nvim::garray::{
     ga_remove_duplicate_strings, ga_set_growsize,
 };
 use crate::src::nvim::getchar::openscript;
-use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::lua::executor::{
     nlua_exec, nlua_exec_file, nlua_exec_ga, nlua_is_deferred_safe,
@@ -112,15 +112,15 @@ use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, Arena, Array, BoolVarValue,
     CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, Error, EvalFuncData, FILE, Integer,
-    LineGetter, LineGetterFn, LuaRetMode, MHPutStatus, Map_String_int, MapHash, Object, OptInt,
-    OptVal, OptValData, OptValType, Set_String, String_0, TriState, VAR_DICT, VAR_FIXED,
+    LineGetter, LineGetterFn, LuaRetMode, MHPutStatus, Map_String_int, MapHash, Object, ObjectType,
+    OptInt, OptVal, OptValData, OptValType, Set_String, String_0, TriState, VAR_DICT, VAR_FIXED,
     VAR_LOCKED, XDGVarType, buf_T, cmd_addr_T, dict_T, estack_T, estack_T_es_info, estack_arg_T,
     etype_T, exarg_T, expand_T, funccal_entry_T, garray_T, handle_T, int64_t, kBoolVarFalse,
     kErrorTypeNone, kFalse, kNone, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, kTrue, key_value_pair, linenr_T, list_T, object,
-    object_data, optset_T, proftime_T, pthread_mutex_t, ptrdiff_t, regmatch_T, scid_T,
-    scriptitem_T, sctx_T, size_t, ssize_t, typval_T, typval_vval_union, ufunc_T, uint8_t, uint32_t,
-    uv_mutex_t, varnumber_T, vimconv_T,
+    kObjectTypeNil, kObjectTypeString, kTrue, linenr_T, list_T, object, object_data, optset_T,
+    proftime_T, pthread_mutex_t, ptrdiff_t, regmatch_T, scid_T, scriptitem_T, sctx_T, size_t,
+    ssize_t, typval_T, typval_vval_union, ufunc_T, uint8_t, uint32_t, uv_mutex_t, varnumber_T,
+    vimconv_T,
 };
 use crate::src::nvim::usercmd::add_win_cmd_modifiers;
 use crate::{semsg_c, smsg_c};
@@ -248,7 +248,6 @@ pub const ARRAY_DICT_INIT: Array = Array {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
 };
-static value_init_int: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,
@@ -311,9 +310,11 @@ unsafe extern "C" fn map_get_String_int(
     mut key: String_0,
 ) -> ::core::ffi::c_int {
     unsafe {
+        // The absent value is `value_init_int`, a `static int` upstream never
+        // writes: zero.
         let mut k: uint32_t = mh_get_String(&raw mut (*map).set, key);
         return if k == MH_TOMBSTONE as uint32_t {
-            value_init_int.get()
+            0
         } else {
             *(*map).values.offset(k as isize)
         };
@@ -373,13 +374,21 @@ static runtime_search_path: GlobalCell<RuntimeSearchPath> = GlobalCell::new(Runt
     capacity: 0,
     items: ::core::ptr::null_mut::<SearchPathItem>(),
 });
-static runtime_search_path_thread: GlobalCell<RuntimeSearchPath> =
-    GlobalCell::new(RuntimeSearchPath {
+/// The snapshot the worker threads read, and the mutex that guards it.
+///
+/// These two are [`SharedCell`]s rather than [`GlobalCell`]s because
+/// `runtime_get_named_thread` really does run off the main thread — it is
+/// `vim._get_runtime` as a `vim.uv.new_thread` state sees it, and every
+/// `require()` in such a thread reaches it. `GlobalCell`'s debug main-thread
+/// assertion would abort there; the mutex is the coordination, exactly as it
+/// is in C.
+static runtime_search_path_thread: SharedCell<RuntimeSearchPath> =
+    SharedCell::new(RuntimeSearchPath {
         size: 0,
         capacity: 0,
         items: ::core::ptr::null_mut::<SearchPathItem>(),
     });
-static runtime_search_path_mutex: GlobalCell<uv_mutex_t> = GlobalCell::new(pthread_mutex_t {
+static runtime_search_path_mutex: SharedCell<uv_mutex_t> = SharedCell::new(pthread_mutex_t {
     __data: __pthread_mutex_s {
         __lock: 0,
         __count: 0,

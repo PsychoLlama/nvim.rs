@@ -345,16 +345,10 @@ unsafe extern "C" fn load_pack_plugin(
             &raw mut pat,
             EW_FILE,
             true_0 != 0,
-            Some(
-                source_callback_vim_lua
-                    as unsafe extern "C" fn(
-                        ::core::ffi::c_int,
-                        *mut *mut ::core::ffi::c_char,
-                        bool,
-                        *mut ::core::ffi::c_void,
-                    ) -> bool,
-            ),
-            NULL_0,
+            Visitor {
+                callback: Some(source_callback_vim_lua as DoInRuntimepathCBFn),
+                cookie: NULL_0,
+            },
         );
         let mut cmd: *mut ::core::ffi::c_char = xstrdup(c"g:did_load_filetypes".as_ptr());
         if opt as ::core::ffi::c_int != 0 && eval_to_number(cmd, false_0 != 0) > 0 as varnumber_T {
@@ -370,16 +364,10 @@ unsafe extern "C" fn load_pack_plugin(
                 &raw mut pat,
                 EW_FILE,
                 true_0 != 0,
-                Some(
-                    source_callback_vim_lua
-                        as unsafe extern "C" fn(
-                            ::core::ffi::c_int,
-                            *mut *mut ::core::ffi::c_char,
-                            bool,
-                            *mut ::core::ffi::c_void,
-                        ) -> bool,
-                ),
-                NULL_0,
+                Visitor {
+                    callback: Some(source_callback_vim_lua as DoInRuntimepathCBFn),
+                    cookie: NULL_0,
+                },
             );
             do_cmdline_cmd(c"augroup END".as_ptr());
         }
