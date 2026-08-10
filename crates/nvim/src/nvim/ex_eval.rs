@@ -646,10 +646,9 @@ pub unsafe fn cleanup_conditionals(
     inclusive: bool,
 ) -> c_int {
     let mut stop = false;
-    let mut idx = 0;
-    // SAFETY: module contract.
+    // SAFETY: module contract, here and for the walk below.
+    let mut idx = unsafe { (*cstack).cs_idx };
     unsafe {
-        idx = (*cstack).cs_idx;
         while idx >= 0 {
             if (*cstack).cs_flags[idx as usize] & CSF_TRY != 0 {
                 discard_finally_pending(cstack, idx);
