@@ -208,9 +208,11 @@ unsafe fn close_unused_window(
         }
     }
     // SAFETY: `wp` is live, and `wpnext` is re-validated because closing a
-    // window runs autocommands.
+    // window runs autocommands. Whether the buffer goes with the window is
+    // asked again here rather than reused from above: a successful
+    // `autowrite` leaves it unchanged, and then it is the close's to free.
     unsafe {
-        win_close(wp, !hide && !changed, false);
+        win_close(wp, !buf_hide(buf) && !bufIsChanged(buf), false);
         if win_valid(wpnext) {
             return wpnext;
         }
