@@ -2,7 +2,6 @@
   "files": {
     "crates/nvim/src/nvim/base64.rs": 2,
     "crates/nvim/src/nvim/buffer.rs": 2,
-    "crates/nvim/src/nvim/digraph.rs": 1,
     "crates/nvim/src/nvim/drawscreen/mode.rs": 1,
     "crates/nvim/src/nvim/drawscreen/winupdate.rs": 1,
     "crates/nvim/src/nvim/eval/callback.rs": 1,

@@ -7,6 +7,8 @@
 //! ordered list that shadows it (`:digraph`, `digraph_set()`). Lookups scan
 //! the user list first, in insertion order, then the default table.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 mod tables;
 
 use crate::src::nvim::charset::char2cells;
@@ -24,21 +26,21 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::{HLF_8, HLF_CM};
 use crate::src::nvim::keycodes::K_BS;
 use crate::src::nvim::main::{
-    Columns, allow_keys, cmdline_star, curbuf, curwin, e_number_exp, emsg_skip, got_int, msg_col,
-    no_mapping, p_cpo, p_dg, p_enc,
+    Columns, allow_keys, cmdline_star, curbuf, curwin, emsg_skip, got_int, msg_col, no_mapping,
+    p_cpo, p_dg, p_enc,
 };
 use crate::src::nvim::mapping::do_map;
 use crate::src::nvim::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_iscomposing_first};
 use crate::src::nvim::memory::{xfree, xmemdupz};
-use crate::src::nvim::message::{emsg, msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar};
+use crate::src::nvim::message::{msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar};
 use crate::src::nvim::normal::add_to_showcmd;
 use crate::src::nvim::os::input::fast_breakcheck;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::runtime::{getsourceline, source_runtime};
 use crate::src::nvim::state::MODE_LANGMAP;
 use crate::src::nvim::types::{
-    BoolVarValue, EvalFuncData, OptInt, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, exarg_T,
-    garray_T, int16_t, list_T, typval_T, varnumber_T, win_T,
+    BoolVarValue, EvalFuncData, OptInt, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, buf_T,
+    exarg_T, garray_T, int16_t, list_T, typval_T, varnumber_T, win_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -46,16 +48,14 @@ use std::ffi::CString;
 const NUL: c_int = 0;
 const ESC: c_int = 27;
 const CTRL_H: c_int = 8;
-/// Special key code for `<BS>` (`K_BS` upstream).
 const OK: c_int = 1;
 const FAIL: c_int = 0;
-/// Highlight ids used by the `:digraphs` listing.
 
 const K_BOOL_VAR_FALSE: BoolVarValue = 0;
 const K_BOOL_VAR_TRUE: BoolVarValue = 1;
 
-const E_DIGRAPH_SETLIST: &[u8] =
-    b"E1216: digraph_setlist() argument must be a list of lists with two items\0";
+const E_DIGRAPH_SETLIST: &str =
+    "E1216: digraph_setlist() argument must be a list of lists with two items";
 
 /// A digraph mapping: two input characters and the resulting codepoint.
 ///
@@ -227,10 +227,7 @@ fn check_digraph_chars_valid(char1: c_int, char2: c_int) -> bool {
         return false;
     }
     if char1 == ESC || char2 == ESC {
-        // SAFETY: plain message call with a static string.
-        unsafe {
-            emsg(gettext(c"E104: Escape not allowed in digraph".as_ptr()));
-        }
+        crate::semsg!("E104: Escape not allowed in digraph");
         return false;
     }
     true
@@ -279,9 +276,8 @@ pub fn putdigraph(mut s: &[u8]) {
             return;
         }
         s = skip_white(s);
-        if !s.first().map_or(false, u8::is_ascii_digit) {
-            // SAFETY: plain message call with a static string.
-            unsafe { emsg(gettext(e_number_exp.ptr() as *const c_char)) };
+        if !s.first().is_some_and(u8::is_ascii_digit) {
+            crate::semsg!("E39: Number expected");
             return;
         }
         let (n, rest) = parse_digits(s);
@@ -299,14 +295,19 @@ fn outtrans(bytes: &[u8], hl_id: c_int) {
 }
 
 fn digraph_header(name: &[u8]) {
-    // SAFETY: name is NUL-terminated; gettext returns a valid C string.
-    unsafe {
-        if msg_col.get() > 0 {
-            msg_putchar('\n' as c_int);
-        }
-        msg_outtrans(gettext(name.as_ptr() as *const c_char), HLF_CM, false);
-        msg_putchar('\n' as c_int);
+    if msg_col.get() > 0 {
+        newline();
     }
+    // SAFETY: `name` is NUL-terminated and outlives the call; gettext hands
+    // back a valid C string.
+    unsafe { msg_outtrans(gettext(name.as_ptr() as *const c_char), HLF_CM, false) };
+    newline();
+}
+
+/// `msg_putchar('\n')`: end the current message line.
+fn newline() {
+    // SAFETY: plain message output, no arguments.
+    unsafe { msg_putchar('\n' as c_int) };
 }
 
 /// Print one digraph. With `previous`, print a section header when this
@@ -328,14 +329,12 @@ fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
         }
         *previous = dp.result;
     }
-    // SAFETY: plain message output.
-    unsafe {
-        if msg_col.get() > Columns.get() - LIST_WIDTH {
-            msg_putchar('\n' as c_int);
-        }
-        if msg_col.get() % LIST_WIDTH != 0 {
-            msg_advance((msg_col.get() / LIST_WIDTH + 1) * LIST_WIDTH);
-        }
+    if msg_col.get() > Columns.get() - LIST_WIDTH {
+        newline();
+    }
+    if msg_col.get() % LIST_WIDTH != 0 {
+        // SAFETY: plain message output with a plain value argument.
+        unsafe { msg_advance((msg_col.get() / LIST_WIDTH + 1) * LIST_WIDTH) };
     }
     outtrans(&[dp.char1, dp.char2, b' '], 0);
     let mut buf = [0u8; 12];
@@ -360,11 +359,9 @@ fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
 /// `:digraphs[!]` — list the active digraphs, with `use_headers` grouping
 /// them under Unicode block headers.
 pub fn listdigraphs(use_headers: bool) {
-    // SAFETY: plain message output.
-    unsafe {
-        msg_ext_set_kind(c"list_cmd".as_ptr());
-        msg_putchar('\n' as c_int);
-    }
+    // SAFETY: static string argument, message state only.
+    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    newline();
     let mut previous: c_int = 0;
     for dp in tables::DEFAULT_DIGRAPHS.iter() {
         if got_int.get() {
@@ -402,13 +399,18 @@ pub fn listdigraphs(use_headers: bool) {
 ///
 /// `l` must be a valid list.
 unsafe fn getlist_append_pair(dp: &Digraph, l: *mut list_T) {
-    let l2 = tv_list_alloc(2);
-    tv_list_append_list(l, l2);
     let chars = [dp.char1, dp.char2, 0];
-    tv_list_append_string(l2, chars.as_ptr() as *const c_char, -1);
     let mut buf = [0u8; 7];
-    utf_char2bytes(dp.result, buf.as_mut_ptr() as *mut c_char);
-    tv_list_append_string(l2, buf.as_ptr() as *const c_char, -1);
+    // SAFETY: `l` is a valid list; `utf_char2bytes` writes at most six bytes
+    // into `buf`; both local buffers are NUL-terminated and outlive the
+    // appends, which copy what they keep.
+    unsafe {
+        let l2 = tv_list_alloc(2);
+        tv_list_append_list(l, l2);
+        tv_list_append_string(l2, chars.as_ptr() as *const c_char, -1);
+        utf_char2bytes(dp.result, buf.as_mut_ptr() as *mut c_char);
+        tv_list_append_string(l2, buf.as_ptr() as *const c_char, -1);
+    }
 }
 
 /// Build the `digraph_getlist()` result: user digraphs, plus the effective
@@ -419,8 +421,13 @@ unsafe fn getlist_append_pair(dp: &Digraph, l: *mut list_T) {
 /// `rettv` must be a valid return-value slot.
 unsafe fn digraph_getlist_common(list_all: bool, rettv: *mut typval_T) {
     let user_len = USER_DIGRAPHS.with(|user| user.len());
-    tv_list_alloc_ret(rettv, (tables::DEFAULT_DIGRAPHS.len() + user_len) as isize);
-    let list = (*rettv).vval.v_list;
+    let capacity = (tables::DEFAULT_DIGRAPHS.len() + user_len) as isize;
+    // SAFETY: `rettv` is a valid return slot, so the list it is given owns
+    // itself from here on.
+    let list = unsafe {
+        tv_list_alloc_ret(rettv, capacity);
+        (*rettv).vval.v_list
+    };
     if list_all {
         for dp in tables::DEFAULT_DIGRAPHS.iter() {
             if got_int.get() {
@@ -428,7 +435,8 @@ unsafe fn digraph_getlist_common(list_all: bool, rettv: *mut typval_T) {
             }
             let result = get_exact_digraph(dp.char1 as c_int, dp.char2 as c_int, false);
             if result != 0 && result != dp.char2 as c_int {
-                getlist_append_pair(&Digraph { result, ..*dp }, list);
+                // SAFETY: `list` is the list just allocated into `rettv`.
+                unsafe { getlist_append_pair(&Digraph { result, ..*dp }, list) };
             }
         }
     }
@@ -437,68 +445,103 @@ unsafe fn digraph_getlist_common(list_all: bool, rettv: *mut typval_T) {
         if got_int.get() {
             break;
         }
-        getlist_append_pair(dp, list);
+        // SAFETY: as above.
+        unsafe { getlist_append_pair(dp, list) };
     }
 }
 
-/// Get the two digraph characters from a typval argument. Emits E1214 on
-/// anything but exactly two characters.
+/// Decode the leading character of `s`, and answer it with what follows —
+/// `mb_cptr2char_adv` over a slice. A NUL first byte decodes to 0 and
+/// consumes nothing, exactly as the C did.
+fn next_char(s: &[u8]) -> (c_int, &[u8]) {
+    let start = s.as_ptr() as *const c_char;
+    let mut p = start;
+    // SAFETY: `s` is a prefix of a NUL-terminated string, so the decoder
+    // stops at the terminator at the latest and advances `p` by the length
+    // of exactly the character it decoded.
+    let c = unsafe { mb_cptr2char_adv(&raw mut p) };
+    let used = (p as usize - start as usize).min(s.len());
+    (c, &s[used..])
+}
+
+/// The string value of `arg`, `None` when the typval is not one (which is
+/// where `tv_get_string_buf_chk` reports its own error).
 ///
 /// # Safety
 ///
-/// `arg` must be a valid typval.
-unsafe fn get_digraph_chars(arg: *const typval_T, char1: &mut c_int, char2: &mut c_int) -> c_int {
-    let mut buf_chars = [0 as c_char; 65];
-    let chars = tv_get_string_buf_chk(arg, buf_chars.as_mut_ptr());
-    let mut p = chars;
-    if !p.is_null() && *p as c_int != NUL {
-        *char1 = mb_cptr2char_adv(&mut p);
-        if *p as c_int != NUL {
-            *char2 = mb_cptr2char_adv(&mut p);
-            if *p as c_int == NUL {
-                if check_digraph_chars_valid(*char1, *char2) {
-                    return OK;
-                }
-                return FAIL;
+/// `arg` must be a valid typval, and `buf` — the scratch space a non-string
+/// value is rendered into — must outlive the returned slice.
+unsafe fn tv_string(arg: *const typval_T, buf: &mut [c_char; 65]) -> Option<&[u8]> {
+    // SAFETY: caller contract; the result is null or a NUL-terminated string
+    // owned by the typval or by `buf`, both of which outlive the borrow.
+    unsafe {
+        let s = tv_get_string_buf_chk(arg, buf.as_mut_ptr());
+        (!s.is_null()).then(|| CStr::from_ptr(s).to_bytes())
+    }
+}
+
+/// The two digraph characters of `chars`. Reports E1214 on anything but
+/// exactly two characters, `None` included: a non-string argument reads as
+/// the string "[NULL]", which is what the C `%s` format path printed.
+fn digraph_chars(chars: Option<&[u8]>) -> Option<(c_int, c_int)> {
+    if let Some(bytes) = chars.filter(|b| !b.is_empty()) {
+        let (char1, rest) = next_char(bytes);
+        if !rest.is_empty() {
+            let (char2, rest) = next_char(rest);
+            if rest.is_empty() {
+                return check_digraph_chars_valid(char1, char2).then_some((char1, char2));
             }
         }
     }
-    // `chars` is NULL when the typval wasn't a string; the C format path
-    // printed NULL `%s` arguments as "[NULL]".
-    let chars = if chars.is_null() {
-        "[NULL]".into()
-    } else {
-        CStr::from_ptr(chars).to_string_lossy()
-    };
-    crate::semsg!("E1214: Digraph must be just two characters: {chars}");
-    FAIL
+    let text = chars.map_or("[NULL]".into(), String::from_utf8_lossy);
+    crate::semsg!("E1214: Digraph must be just two characters: {text}");
+    None
 }
 
-/// Shared body of `digraph_set()` and `digraph_setlist()`.
+/// Shared body of `digraph_set()` and `digraph_setlist()`. The digraph
+/// argument is only read once the characters check out, so a bad pair
+/// reports its own error and nothing else.
 ///
 /// # Safety
 ///
 /// Both arguments must be valid typvals.
 unsafe fn digraph_set_common(argchars: *const typval_T, argdigraph: *const typval_T) -> bool {
-    let mut char1 = 0;
-    let mut char2 = 0;
-    if get_digraph_chars(argchars, &mut char1, &mut char2) == FAIL {
+    let mut buf_chars = [0 as c_char; 65];
+    // SAFETY: caller contract; `buf_chars` outlives the borrow.
+    let chars = unsafe { tv_string(argchars, &mut buf_chars) };
+    let Some((char1, char2)) = digraph_chars(chars) else {
         return false;
-    }
+    };
     let mut buf_digraph = [0 as c_char; 65];
-    let digraph = tv_get_string_buf_chk(argdigraph, buf_digraph.as_mut_ptr());
-    if digraph.is_null() {
+    // SAFETY: caller contract; `buf_digraph` outlives the borrow.
+    let Some(digraph) = (unsafe { tv_string(argdigraph, &mut buf_digraph) }) else {
         return false;
-    }
-    let mut p = digraph;
-    let n = mb_cptr2char_adv(&mut p);
-    if *p as c_int != NUL {
-        let digraph = CStr::from_ptr(digraph).to_string_lossy();
-        crate::semsg!("E1215: Digraph must be one character: {digraph}");
+    };
+    let (n, rest) = next_char(digraph);
+    if !rest.is_empty() {
+        let text = String::from_utf8_lossy(digraph);
+        crate::semsg!("E1215: Digraph must be one character: {text}");
         return false;
     }
     register_digraph(char1, char2, n);
     true
+}
+
+/// Store a `v:true`/`v:false` result.
+///
+/// # Safety
+///
+/// `rettv` must be a valid return-value slot.
+unsafe fn set_bool_ret(rettv: *mut typval_T, value: bool) {
+    // SAFETY: caller contract.
+    unsafe {
+        (*rettv).v_type = VAR_BOOL;
+        (*rettv).vval.v_bool = if value {
+            K_BOOL_VAR_TRUE
+        } else {
+            K_BOOL_VAR_FALSE
+        };
+    }
 }
 
 /// `digraph_get()`.
@@ -511,13 +554,18 @@ pub unsafe extern "C" fn f_digraph_get(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    (*rettv).v_type = VAR_STRING;
-    (*rettv).vval.v_string = core::ptr::null_mut();
-    let digraphs = tv_get_string_chk(argvars);
+    // SAFETY: caller contract; the result slot starts out empty.
+    let digraphs = unsafe {
+        (*rettv).v_type = VAR_STRING;
+        (*rettv).vval.v_string = core::ptr::null_mut();
+        tv_get_string_chk(argvars)
+    };
     if digraphs.is_null() {
         return;
     }
-    let bytes = CStr::from_ptr(digraphs).to_bytes();
+    // SAFETY: a non-null `tv_get_string_chk` result is a NUL-terminated
+    // string owned by the typval, which outlives this call.
+    let bytes = unsafe { CStr::from_ptr(digraphs).to_bytes() };
     if bytes.len() != 2 {
         crate::semsg!(
             "E1214: Digraph must be just two characters: {}",
@@ -528,8 +576,12 @@ pub unsafe extern "C" fn f_digraph_get(
     // The chars go through `char` in C, hence the sign extension.
     let code = digraph_get(bytes[0] as i8 as c_int, bytes[1] as i8 as c_int, false);
     let mut buf = [0u8; 7];
-    let len = utf_char2bytes(code, buf.as_mut_ptr() as *mut c_char) as usize;
-    (*rettv).vval.v_string = xmemdupz(buf.as_ptr() as *const c_void, len) as *mut c_char;
+    // SAFETY: `utf_char2bytes` writes at most six bytes into `buf`, and
+    // `xmemdupz` copies exactly the `len` it wrote.
+    unsafe {
+        let len = utf_char2bytes(code, buf.as_mut_ptr() as *mut c_char) as usize;
+        (*rettv).vval.v_string = xmemdupz(buf.as_ptr() as *const c_void, len) as *mut c_char;
+    }
 }
 
 /// `digraph_getlist()`.
@@ -542,11 +594,15 @@ pub unsafe extern "C" fn f_digraph_getlist(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    if tv_check_for_opt_bool_arg(argvars, 0) == FAIL {
+    // SAFETY: caller contract.
+    if unsafe { tv_check_for_opt_bool_arg(argvars, 0) } == FAIL {
         return;
     }
-    let list_all = (*argvars).v_type != VAR_UNKNOWN && tv_get_bool(argvars) != 0 as varnumber_T;
-    digraph_getlist_common(list_all, rettv);
+    // SAFETY: caller contract; the optional argument was just type-checked.
+    let list_all =
+        unsafe { (*argvars).v_type != VAR_UNKNOWN && tv_get_bool(argvars) != 0 as varnumber_T };
+    // SAFETY: caller contract.
+    unsafe { digraph_getlist_common(list_all, rettv) };
 }
 
 /// `digraph_set()`.
@@ -559,12 +615,10 @@ pub unsafe extern "C" fn f_digraph_set(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    (*rettv).v_type = VAR_BOOL;
-    (*rettv).vval.v_bool = K_BOOL_VAR_FALSE;
-    if !digraph_set_common(argvars, argvars.offset(1)) {
-        return;
-    }
-    (*rettv).vval.v_bool = K_BOOL_VAR_TRUE;
+    // SAFETY: caller contract; `digraph_set()` takes two arguments.
+    let set = unsafe { digraph_set_common(argvars, argvars.offset(1)) };
+    // SAFETY: caller contract.
+    unsafe { set_bool_ret(rettv, set) };
 }
 
 /// `digraph_setlist()`.
@@ -577,35 +631,53 @@ pub unsafe extern "C" fn f_digraph_setlist(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    (*rettv).v_type = VAR_BOOL;
-    (*rettv).vval.v_bool = K_BOOL_VAR_FALSE;
-    if (*argvars).v_type != VAR_LIST {
-        emsg(gettext(E_DIGRAPH_SETLIST.as_ptr() as *const c_char));
-        return;
-    }
-    let pl = (*argvars).vval.v_list;
+    // SAFETY: caller contract.
+    let set = unsafe { digraph_setlist_common(argvars) };
+    // SAFETY: caller contract.
+    unsafe { set_bool_ret(rettv, set) };
+}
+
+/// Body of `digraph_setlist()`: the argument must be a list of two-item
+/// `[chars, digraph]` lists. Stops at the first bad entry, keeping the
+/// digraphs registered before it.
+///
+/// # Safety
+///
+/// `arg` must be a valid typval.
+unsafe fn digraph_setlist_common(arg: *const typval_T) -> bool {
+    // SAFETY: caller contract; the list is only read once its type is known.
+    let pl = unsafe {
+        if (*arg).v_type != VAR_LIST {
+            crate::semsg!("{E_DIGRAPH_SETLIST}");
+            return false;
+        }
+        (*arg).vval.v_list
+    };
     if pl.is_null() {
-        (*rettv).vval.v_bool = K_BOOL_VAR_TRUE;
-        return;
+        return true;
     }
-    let mut pli = (*pl).lv_first;
-    while !pli.is_null() {
-        if (*pli).li_tv.v_type != VAR_LIST {
-            emsg(gettext(E_DIGRAPH_SETLIST.as_ptr() as *const c_char));
-            return;
+    // SAFETY: `pl` is a valid list; the walk only follows its links, and
+    // `digraph_set_common` does not touch the list it is reading from.
+    unsafe {
+        let mut pli = (*pl).lv_first;
+        while !pli.is_null() {
+            if (*pli).li_tv.v_type != VAR_LIST {
+                crate::semsg!("{E_DIGRAPH_SETLIST}");
+                return false;
+            }
+            let l = (*pli).li_tv.vval.v_list;
+            if l.is_null() || (*l).lv_len != 2 {
+                crate::semsg!("{E_DIGRAPH_SETLIST}");
+                return false;
+            }
+            let first = (*l).lv_first;
+            if !digraph_set_common(&(*first).li_tv, &(*(*first).li_next).li_tv) {
+                return false;
+            }
+            pli = (*pli).li_next;
         }
-        let l = (*pli).li_tv.vval.v_list;
-        if l.is_null() || (*l).lv_len != 2 {
-            emsg(gettext(E_DIGRAPH_SETLIST.as_ptr() as *const c_char));
-            return;
-        }
-        let first = (*l).lv_first;
-        if !digraph_set_common(&(*first).li_tv, &(*(*first).li_next).li_tv) {
-            return;
-        }
-        pli = (*pli).li_next;
     }
-    (*rettv).vval.v_bool = K_BOOL_VAR_TRUE;
+    true
 }
 
 // ---------------------------------------------------------------------------
@@ -630,39 +702,44 @@ struct kmap_T {
 /// Source the keymap file for the current buffer's 'keymap' (or unload
 /// language mappings when it is empty). Returns an error message or null.
 pub fn keymap_init() -> *const c_char {
-    // SAFETY: curbuf is valid; the sourced script may change buffer options
-    // but not free the buffer out from under us.
-    unsafe {
-        let buf = curbuf.get();
+    let buf = curbuf.get();
+    // SAFETY: curbuf is valid, and the 'keymap' value it holds is a
+    // NUL-terminated option string.
+    let keymap = unsafe {
         (*buf).b_kmap_state &= !(KEYMAP_INIT as int16_t);
-        if *(*buf).b_p_keymap as c_int == NUL {
-            // Stop any active keymap and clear the b:keymap_name variable.
-            keymap_unload();
-            do_cmdline_cmd(c"unlet! b:keymap_name".as_ptr());
-        } else {
-            // Source the keymap file; snapshot the names first because the
-            // script can set 'keymap' itself.
-            let keymap = CStr::from_ptr((*buf).b_p_keymap).to_bytes().to_vec();
-            let enc = CStr::from_ptr(p_enc.get()).to_bytes().to_vec();
-            let mut name = Vec::with_capacity(keymap.len() + enc.len() + 13);
-            name.extend_from_slice(b"keymap/");
-            name.extend_from_slice(&keymap);
-            name.push(b'_');
-            name.extend_from_slice(&enc);
-            name.extend_from_slice(b".vim\0");
-            if source_runtime(name.as_mut_ptr() as *mut c_char, 0) == FAIL {
-                // Try without encoding.
-                let mut name = Vec::with_capacity(keymap.len() + 12);
-                name.extend_from_slice(b"keymap/");
-                name.extend_from_slice(&keymap);
-                name.extend_from_slice(b".vim\0");
-                if source_runtime(name.as_mut_ptr() as *mut c_char, 0) == FAIL {
-                    return c"E544: Keymap file not found".as_ptr();
-                }
-            }
-        }
+        CStr::from_ptr((*buf).b_p_keymap).to_bytes().to_vec()
+    };
+    if keymap.is_empty() {
+        // Stop any active keymap and clear the b:keymap_name variable.
+        keymap_unload();
+        // SAFETY: a static command string, run like any other ex command.
+        unsafe { do_cmdline_cmd(c"unlet! b:keymap_name".as_ptr()) };
+        return core::ptr::null();
     }
-    core::ptr::null()
+    // Source the keymap file, first for this encoding and then without it.
+    // The name is snapshotted above because the script can set 'keymap'.
+    // SAFETY: 'encoding' is a NUL-terminated option string.
+    let enc = unsafe { CStr::from_ptr(p_enc.get()).to_bytes().to_vec() };
+    if source_keymap_file(&keymap, Some(&enc)) || source_keymap_file(&keymap, None) {
+        return core::ptr::null();
+    }
+    c"E544: Keymap file not found".as_ptr()
+}
+
+/// Source `keymap/{name}_{enc}.vim` from the runtime path — or
+/// `keymap/{name}.vim` without an encoding — and report whether it was found.
+fn source_keymap_file(keymap: &[u8], enc: Option<&[u8]>) -> bool {
+    let mut name = Vec::with_capacity(keymap.len() + enc.map_or(0, |e| e.len() + 1) + 12);
+    name.extend_from_slice(b"keymap/");
+    name.extend_from_slice(keymap);
+    if let Some(enc) = enc {
+        name.push(b'_');
+        name.extend_from_slice(enc);
+    }
+    name.extend_from_slice(b".vim\0");
+    // SAFETY: `name` is NUL-terminated and outlives the call, which only
+    // reads it.
+    unsafe { source_runtime(name.as_mut_ptr() as *mut c_char, 0) != FAIL }
 }
 
 /// `:loadkeymap` — read language mappings from the file being sourced.
@@ -671,72 +748,135 @@ pub fn keymap_init() -> *const c_char {
 ///
 /// `eap` must be a valid command block (ex-command contract).
 pub unsafe fn ex_loadkeymap(eap: *mut exarg_T) {
-    if !getline_equal(
-        (*eap).ea_getline,
-        (*eap).cookie,
-        Some(getsourceline as unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char),
-    ) {
-        emsg(gettext(
-            c"E105: Using :loadkeymap not in a sourced file".as_ptr(),
-        ));
+    // SAFETY: caller contract; the getter and its cookie are the sourcing
+    // machinery's, and `getline_equal` only compares them.
+    let sourced = unsafe {
+        getline_equal(
+            (*eap).ea_getline,
+            (*eap).cookie,
+            Some(
+                getsourceline
+                    as unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char,
+            ),
+        )
+    };
+    if !sourced {
+        crate::semsg!("E105: Using :loadkeymap not in a sourced file");
         return;
     }
     // Stop any active keymap and load the new entries.
     keymap_unload();
     let buf = curbuf.get();
-    (*buf).b_kmap_state = 0;
-    ga_init(
-        &raw mut (*buf).b_kmap_ga,
-        core::mem::size_of::<kmap_T>() as c_int,
-        20,
-    );
+    // SAFETY: curbuf is valid and `keymap_unload` left its keymap garray
+    // cleared.
+    unsafe {
+        (*buf).b_kmap_state = 0;
+        ga_init(
+            &raw mut (*buf).b_kmap_ga,
+            core::mem::size_of::<kmap_T>() as c_int,
+            20,
+        );
+    }
     // Set 'cpoptions' to "C" to avoid line continuation.
     let save_cpo = p_cpo.get();
     p_cpo.set(c"C".as_ptr() as *mut c_char);
-    // Get each line of the sourced file, break at the end.
+    // SAFETY: caller contract; the line getter was just checked to be the
+    // sourcing one, and `buf`'s garray was just initialised for `kmap_T`.
+    unsafe { read_keymap_entries(eap, buf) };
+    // SAFETY: the entries just read own two NUL-terminated strings each.
+    unsafe { apply_keymap_entries(buf) };
+    p_cpo.set(save_cpo);
+    // SAFETY: curbuf is still valid.
+    unsafe {
+        (*buf).b_kmap_state |= KEYMAP_LOADED as int16_t;
+        status_redraw_curbuf();
+    }
+}
+
+/// Read `{from} {to}` pairs from the file being sourced into `buf`'s keymap
+/// garray, until the line getter runs out. Blank lines and `"` comments are
+/// skipped; an over-long or half-empty entry is dropped, and an empty `to`
+/// reports E791.
+///
+/// # Safety
+///
+/// `eap` must be a live command block whose line getter is the sourcing one,
+/// and `buf` a valid buffer whose `b_kmap_ga` is initialised for `kmap_T`.
+unsafe fn read_keymap_entries(eap: *mut exarg_T, buf: *mut buf_T) {
     loop {
-        let line = (*eap).ea_getline.expect("non-null line getter")(0, (*eap).cookie, 0, true);
+        // SAFETY: caller contract; the getter answers an owned heap line or
+        // null at end of file.
+        let line =
+            unsafe { (*eap).ea_getline.expect("non-null line getter")(0, (*eap).cookie, 0, true) };
         if line.is_null() {
             break;
         }
-        let bytes = CStr::from_ptr(line).to_bytes();
+        // SAFETY: the line is NUL-terminated and owned until freed below.
+        let bytes = unsafe { CStr::from_ptr(line).to_bytes() };
         let s = skip_white(bytes);
         if !s.is_empty() && s[0] != b'"' {
             let (from, rest) = split_at_white(s);
             let (to, _) = split_at_white(skip_white(rest));
             if from.len() + to.len() >= KMAP_LLEN || from.is_empty() || to.is_empty() {
                 if to.is_empty() {
-                    emsg(gettext(c"E791: Empty keymap entry".as_ptr()));
+                    crate::semsg!("E791: Empty keymap entry");
                 }
             } else {
-                let kp =
-                    ga_append_via_ptr(&raw mut (*buf).b_kmap_ga, core::mem::size_of::<kmap_T>())
-                        as *mut kmap_T;
-                (*kp).from = xmemdupz(from.as_ptr() as *const c_void, from.len()) as *mut c_char;
-                (*kp).to = xmemdupz(to.as_ptr() as *const c_void, to.len()) as *mut c_char;
+                // SAFETY: the garray is sized for `kmap_T`, so the appended
+                // slot is one; `xmemdupz` copies both slices out of `line`.
+                unsafe {
+                    let kp = ga_append_via_ptr(
+                        &raw mut (*buf).b_kmap_ga,
+                        core::mem::size_of::<kmap_T>(),
+                    ) as *mut kmap_T;
+                    (*kp).from =
+                        xmemdupz(from.as_ptr() as *const c_void, from.len()) as *mut c_char;
+                    (*kp).to = xmemdupz(to.as_ptr() as *const c_void, to.len()) as *mut c_char;
+                }
             }
         }
-        xfree(line as *mut c_void);
+        // SAFETY: the line is ours to free, and nothing borrows it now.
+        unsafe { xfree(line as *mut c_void) };
     }
-    // Setup the mappings for the current entries.
-    for i in 0..(*buf).b_kmap_ga.ga_len {
-        let kp = ((*buf).b_kmap_ga.ga_data as *mut kmap_T).offset(i as isize);
-        let mut cmd = Vec::with_capacity(KMAP_LLEN + 11);
-        cmd.extend_from_slice(b"<buffer> ");
-        cmd.extend_from_slice(CStr::from_ptr((*kp).from).to_bytes());
+}
+
+/// Make every entry of `buf`'s keymap garray a buffer-local language mapping.
+///
+/// # Safety
+///
+/// `buf` must be a valid buffer whose `b_kmap_ga` holds live `kmap_T`s.
+unsafe fn apply_keymap_entries(buf: *mut buf_T) {
+    // SAFETY: caller contract; the garray holds `ga_len` entries with
+    // NUL-terminated strings, and `do_map` only reads the command it is
+    // given.
+    unsafe {
+        for i in 0..(*buf).b_kmap_ga.ga_len {
+            let kp = ((*buf).b_kmap_ga.ga_data as *mut kmap_T).offset(i as isize);
+            let from = CStr::from_ptr((*kp).from).to_bytes();
+            let to = CStr::from_ptr((*kp).to).to_bytes();
+            let mut cmd = keymap_map_cmd(from, Some(to));
+            do_map(
+                MAPTYPE_MAP,
+                cmd.as_mut_ptr() as *mut c_char,
+                MODE_LANGMAP,
+                false,
+            );
+        }
+    }
+}
+
+/// The `:lmap`/`:lunmap` argument for one keymap entry: `<buffer> {from}`,
+/// plus ` {to}` when mapping. NUL-terminated for `do_map`.
+fn keymap_map_cmd(from: &[u8], to: Option<&[u8]>) -> Vec<u8> {
+    let mut cmd = Vec::with_capacity(KMAP_LLEN + 11);
+    cmd.extend_from_slice(b"<buffer> ");
+    cmd.extend_from_slice(from);
+    if let Some(to) = to {
         cmd.push(b' ');
-        cmd.extend_from_slice(CStr::from_ptr((*kp).to).to_bytes());
-        cmd.push(0);
-        do_map(
-            MAPTYPE_MAP,
-            cmd.as_mut_ptr() as *mut c_char,
-            MODE_LANGMAP,
-            false,
-        );
+        cmd.extend_from_slice(to);
     }
-    p_cpo.set(save_cpo);
-    (*buf).b_kmap_state |= KEYMAP_LOADED as int16_t;
-    status_redraw_curbuf();
+    cmd.push(0);
+    cmd
 }
 
 /// Free the string entries of a keymap garray (the garray itself is the
@@ -746,30 +886,33 @@ pub unsafe fn ex_loadkeymap(eap: *mut exarg_T) {
 ///
 /// `kmap_ga` must be a valid keymap garray (`buf_T::b_kmap_ga`).
 pub unsafe fn keymap_ga_clear(kmap_ga: *mut garray_T) {
-    for i in 0..(*kmap_ga).ga_len {
-        let kp = ((*kmap_ga).ga_data as *mut kmap_T).offset(i as isize);
-        xfree((*kp).from as *mut c_void);
-        xfree((*kp).to as *mut c_void);
+    // SAFETY: caller contract; the garray holds `ga_len` live entries, and
+    // each owns its two strings.
+    unsafe {
+        for i in 0..(*kmap_ga).ga_len {
+            let kp = ((*kmap_ga).ga_data as *mut kmap_T).offset(i as isize);
+            xfree((*kp).from as *mut c_void);
+            xfree((*kp).to as *mut c_void);
+        }
     }
 }
 
 /// Stop using 'keymap': remove the language mappings and free the entries.
 fn keymap_unload() {
-    // SAFETY: curbuf is valid; do_map only parses the given command.
+    let buf = curbuf.get();
+    // SAFETY: curbuf is valid.
+    if unsafe { (*buf).b_kmap_state } as c_int & KEYMAP_LOADED == 0 {
+        return;
+    }
+    // Set 'cpoptions' to "C" to avoid line continuation.
+    let save_cpo = p_cpo.get();
+    p_cpo.set(c"C".as_ptr() as *mut c_char);
+    // SAFETY: the garray holds `ga_len` entries with NUL-terminated strings;
+    // `do_map` only reads the command, and the entries own what is freed.
     unsafe {
-        let buf = curbuf.get();
-        if (*buf).b_kmap_state as c_int & KEYMAP_LOADED == 0 {
-            return;
-        }
-        // Set 'cpoptions' to "C" to avoid line continuation.
-        let save_cpo = p_cpo.get();
-        p_cpo.set(c"C".as_ptr() as *mut c_char);
         for i in 0..(*buf).b_kmap_ga.ga_len {
             let kp = ((*buf).b_kmap_ga.ga_data as *mut kmap_T).offset(i as isize);
-            let mut cmd = Vec::with_capacity(KMAP_LLEN + 10);
-            cmd.extend_from_slice(b"<buffer> ");
-            cmd.extend_from_slice(CStr::from_ptr((*kp).from).to_bytes());
-            cmd.push(0);
+            let mut cmd = keymap_map_cmd(CStr::from_ptr((*kp).from).to_bytes(), None);
             do_map(
                 MAPTYPE_UNMAP,
                 cmd.as_mut_ptr() as *mut c_char,
@@ -778,7 +921,10 @@ fn keymap_unload() {
             );
         }
         keymap_ga_clear(&raw mut (*buf).b_kmap_ga);
-        p_cpo.set(save_cpo);
+    }
+    p_cpo.set(save_cpo);
+    // SAFETY: the garray's entries were just freed, so clearing it is safe.
+    unsafe {
         ga_clear(&raw mut (*buf).b_kmap_ga);
         (*buf).b_kmap_state &= !(KEYMAP_LOADED as int16_t);
         status_redraw_curbuf();
@@ -794,27 +940,37 @@ fn keymap_unload() {
 /// `wp` and its buffer must be valid; curwin/curbuf are restored before
 /// returning.
 pub unsafe fn keymap_str(wp: *mut win_T) -> Option<CString> {
-    if (*(*wp).w_buffer).b_p_iminsert != B_IMODE_LMAP {
+    // SAFETY: caller contract; the window's buffer is valid.
+    let buf = unsafe { (*wp).w_buffer };
+    // SAFETY: as above.
+    if unsafe { (*buf).b_p_iminsert } != B_IMODE_LMAP {
         return None;
     }
     let old_curbuf = curbuf.get();
     let old_curwin = curwin.get();
     // Evaluate b:keymap_name in wp's buffer.
-    curbuf.set((*wp).w_buffer);
+    curbuf.set(buf);
     curwin.set(wp);
     emsg_skip.set(emsg_skip.get() + 1);
     let mut expr = *b"b:keymap_name\0";
-    let s = eval_to_string(expr.as_mut_ptr() as *mut c_char, false, false);
+    // SAFETY: `expr` is NUL-terminated and outlives the call; the result is
+    // an owned heap string or null.
+    let s = unsafe { eval_to_string(expr.as_mut_ptr() as *mut c_char, false, false) };
     emsg_skip.set(emsg_skip.get() - 1);
     curbuf.set(old_curbuf);
     curwin.set(old_curwin);
-    let name = if !s.is_null() && *s as c_int != NUL {
-        CStr::from_ptr(s).to_owned()
-    } else if (*(*wp).w_buffer).b_kmap_state as c_int & KEYMAP_LOADED != 0 {
-        CStr::from_ptr((*(*wp).w_buffer).b_p_keymap).to_owned()
-    } else {
-        CString::new("lang").expect("no interior NUL")
+    // SAFETY: `s` is null or NUL-terminated, and 'keymap' is an option
+    // string; both are copied here, and `s` is ours to free afterwards.
+    let name = unsafe {
+        let name = if !s.is_null() && *s as c_int != NUL {
+            CStr::from_ptr(s).to_owned()
+        } else if (*buf).b_kmap_state as c_int & KEYMAP_LOADED != 0 {
+            CStr::from_ptr((*buf).b_p_keymap).to_owned()
+        } else {
+            CString::new("lang").expect("no interior NUL")
+        };
+        xfree(s as *mut c_void);
+        name
     };
-    xfree(s as *mut c_void);
     Some(name)
 }
