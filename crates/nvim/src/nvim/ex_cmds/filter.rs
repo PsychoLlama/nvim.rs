@@ -1,654 +1,958 @@
 //! Handing buffer text to a shell -- `:!cmd`, `:range!cmd` and `:shell`.
 //!
-//! `do_bang` is the command-line half: it expands `!` to the previous command
-//! (`prevcmd`), `%`/`#` to file names, and decides whether this is a filter (a
+//! [`do_bang`] is the command-line half: it expands `!` to the previous command
+//! ([`prevcmd`]), applies 'shellquote', and decides whether this is a filter (a
 //! range was given) or a plain `:!`.  `do_filter` is the buffer half: write the
 //! range to a temp file, run the command with the file redirected in and its
 //! output redirected out, read the output back over the range, and fix the
-//! cursor.  `make_filter_cmd` and `append_redir` build that shell line from
-//! 'shell', 'shellredir' and 'shellpipe'; `print_line` is `:print`'s and
+//! cursor.  [`make_filter_cmd`] and [`append_redir`] build that shell line from
+//! 'shell', 'shellredir' and 'shellpipe'; [`print_line`] is `:print`'s and
 //! `:number`'s output, shared with `:global`.
+//!
+//! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use super::{
+    BL_FIX, BL_WHITE, CPO_REMMARK, FAIL, NUL, OK, READ_FILTER, buf_autocmd, check_secure, false_0,
+    kExtmarkNOOP, kShellOptDoOut, kShellOptFilter, kShellOptRead, kShellOptWrite, true_0,
+};
+use crate::semsg_c;
+use crate::src::nvim::autocmd::{EVENT_SHELLCMDPOST, EVENT_SHELLFILTERPOST};
+use crate::src::nvim::bufwrite::{WriteRequest, buf_write};
+use crate::src::nvim::change::{appended_lines_mark, del_lines};
+use crate::src::nvim::charset::skipwhite;
+use crate::src::nvim::drawscreen::{UPD_VALID, number_width, redraw_curbuf_later};
+use crate::src::nvim::edit::beginline;
+use crate::src::nvim::ex_cmds2::autowrite_all;
+use crate::src::nvim::ex_eval::aborting;
+use crate::src::nvim::fileio::{readfile, vim_tempname, write_lnum_adjust};
+use crate::src::nvim::fold::foldUpdate;
+use crate::src::nvim::getchar::{AppendToRedobuff, AppendToRedobuffLit};
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight_group::HLF_N;
+use crate::src::nvim::main::{
+    Rows, autocmd_busy, bangredo, cmdmod, curbuf, curwin, did_check_timestamps,
+    e_cant_read_file_str, e_noprev, e_notmp, firstbuf, global_busy, got_int, info_message, msg_buf,
+    msg_col, msg_didout, msg_row, msg_scroll, msg_silent, need_check_timestamps, no_wait_return,
+    p_cpo, p_report, p_sh, p_shq, p_srr, p_stmp, p_warn, silent_mode,
+};
+use crate::src::nvim::mark::mark_adjust;
+use crate::src::nvim::memline::ml_get;
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::message::{
+    MSG_BUF_LEN, emsg, message_filtered, msg, msg_clr_eos, msg_end, msg_ext_set_kind, msg_outtrans,
+    msg_prt_line, msg_putchar, msg_puts, msg_puts_hl, msg_start, msgmore, set_keep_msg,
+    wait_return,
+};
+use crate::src::nvim::r#move::{changed_line_abv_curs, invalidate_botline_win};
+use crate::src::nvim::os::fs::os_remove;
+use crate::src::nvim::os::input::os_breakcheck;
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::os::shell::call_shell;
+use crate::src::nvim::path::invocation_path_tail;
+use crate::src::nvim::pos::MAXLNUM;
+use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
+use crate::src::nvim::types::ui::kUIMessages;
+use crate::src::nvim::types::{CMOD_KEEPMARKS, CMOD_LOCKMARKS, OptInt, buf_T, exarg_T, linenr_T};
+use crate::src::nvim::ui::{ui_cursor_goto, ui_has};
+use crate::src::nvim::undo::{bufIsChanged, u_save};
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
 
-static prevcmd: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+/// The last `:!` command, so that a later `!` in the argument can stand for
+/// it.  An `xmalloc`ed C string, owned by this module.
+static prevcmd: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 
-unsafe extern "C" fn prevcmd_is_set() -> ::core::ffi::c_int {
+/// Copy `bytes` into a fresh `xmalloc` allocation, NUL-terminated.
+///
+/// # Safety
+/// The caller owns the result and must release it with `xfree`.  `bytes` must
+/// hold no interior NUL, or the C string will end early.
+unsafe fn xmalloc_cstr(bytes: &[u8]) -> *mut c_char {
+    // SAFETY: the allocation is `bytes.len() + 1` long, so the copy and the
+    // terminator both land inside it.
     unsafe {
-        if (*prevcmd.ptr()).is_null() {
-            emsg(gettext(&raw const e_noprev as *const ::core::ffi::c_char));
-            return false_0;
-        }
-        return true_0;
+        let buf = xmalloc(bytes.len() + 1) as *mut c_char;
+        ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), buf, bytes.len());
+        *buf.add(bytes.len()) = 0;
+        buf
     }
 }
 
-pub unsafe extern "C" fn do_bang(
-    mut addr_count: ::core::ffi::c_int,
-    mut eap: *mut exarg_T,
-    mut forceit: bool,
-    mut do_in: bool,
-    mut do_out: bool,
+/// The bytes of a C string, without its terminator.
+///
+/// # Safety
+/// `s` must be a live NUL-terminated string that outlives the borrow.
+unsafe fn cstr_bytes<'a>(s: *const c_char) -> &'a [u8] {
+    // SAFETY: caller's contract.
+    unsafe { CStr::from_ptr(s) }.to_bytes()
+}
+
+/// Check that [`prevcmd`] is set; if it is not, report it.
+///
+/// # Safety
+/// Main thread, message state ready.
+unsafe fn prevcmd_is_set() -> bool {
+    if prevcmd.get().is_null() {
+        // SAFETY: `e_noprev` is a NUL-terminated message.
+        unsafe { emsg(gettext(&raw const e_noprev as *const c_char)) };
+        return false;
+    }
+    true
+}
+
+/// Handle `:!cmd`, and the `:r !cmd` / `:w !cmd` forms.
+///
+/// Bangs in the argument stand for the previously entered command, which this
+/// then remembers.
+///
+/// # Safety
+/// `eap` must be the live Ex-command argument.
+pub unsafe fn do_bang(
+    addr_count: c_int,
+    eap: *mut exarg_T,
+    forceit: bool,
+    do_in: bool,
+    do_out: bool,
 ) {
-    unsafe {
-        let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
-        let mut line1: linenr_T = (*eap).line1;
-        let mut line2: linenr_T = (*eap).line2;
-        let mut newcmd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut free_newcmd: bool = false_0 != 0;
-        let mut scroll_save: ::core::ffi::c_int = msg_scroll.get();
-        if check_secure() {
+    // SAFETY: caller's contract.
+    let (arg, line1, line2) = unsafe { ((*eap).arg, (*eap).line1, (*eap).line2) };
+    let scroll_save = msg_scroll.get();
+    // Disallow shell commands in secure mode.
+    // SAFETY: main thread, message state.
+    if unsafe { check_secure() } {
+        return;
+    }
+
+    if addr_count == 0 {
+        // ":!" -- the shell may look at the files on disk, so 'autowriteall'
+        // gets to put them there first.  Don't scroll here.
+        msg_scroll.set(false_0);
+        // SAFETY: main thread; writing every changed buffer is re-entrant but
+        // holds no state of ours.
+        unsafe { autowrite_all() };
+        msg_scroll.set(scroll_save);
+    }
+
+    // Assemble the command out of the argument's `!`-separated pieces, each
+    // bang standing for the whole of the previous command.
+    let mut ins_prevcmd = forceit;
+    // SAFETY: `arg` is the command's NUL-terminated argument.
+    let mut trail = unsafe { cstr_bytes(skipwhite(arg)) }.to_vec();
+    let mut head: Vec<u8> = Vec::new();
+    let assembled = loop {
+        // SAFETY: main thread, message state.
+        if ins_prevcmd && !unsafe { prevcmd_is_set() } {
             return;
         }
-        if addr_count == 0 as ::core::ffi::c_int {
-            msg_scroll.set(false_0);
-            autowrite_all();
-            msg_scroll.set(scroll_save);
+        let mut text = head;
+        if ins_prevcmd {
+            // SAFETY: checked non-NULL just above.
+            text.extend_from_slice(unsafe { cstr_bytes(prevcmd.get()) });
         }
-        let mut ins_prevcmd: bool = forceit;
-        let mut trailarg: *mut ::core::ffi::c_char = skipwhite(arg);
-        loop {
-            let mut len: size_t = strlen(trailarg).wrapping_add(1 as size_t);
-            if !newcmd.is_null() {
-                len = len.wrapping_add(strlen(newcmd));
+        // Only the newly appended argument is scanned for a bang, but the
+        // escape test may look one byte back into what came before it.
+        let scan_from = text.len();
+        text.extend_from_slice(&trail);
+        match split_at_bang(&mut text, scan_from) {
+            Some(at) => {
+                trail = text[at + 1..].to_vec();
+                text.truncate(at);
+                head = text;
+                ins_prevcmd = true;
             }
-            if ins_prevcmd {
-                if prevcmd_is_set() == 0 {
-                    xfree(newcmd as *mut ::core::ffi::c_void);
-                    return;
-                }
-                len = len.wrapping_add(strlen(prevcmd.get()));
-            }
-            let mut t: *mut ::core::ffi::c_char = xmalloc(len) as *mut ::core::ffi::c_char;
-            *t = NUL as ::core::ffi::c_char;
-            if !newcmd.is_null() {
-                strcat(t, newcmd);
-            }
-            if ins_prevcmd {
-                strcat(t, prevcmd.get());
-            }
-            let mut p: *mut ::core::ffi::c_char = t.add(strlen(t));
-            strcat(t, trailarg);
-            xfree(newcmd as *mut ::core::ffi::c_void);
-            newcmd = t;
-            trailarg = ::core::ptr::null_mut::<::core::ffi::c_char>();
-            while *p != 0 {
-                if *p as ::core::ffi::c_int == '!' as ::core::ffi::c_int {
-                    if p > newcmd
-                        && *p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            == '\\' as ::core::ffi::c_int
-                    {
-                        memmove(
-                            p.offset(-(1 as ::core::ffi::c_int as isize))
-                                as *mut ::core::ffi::c_void,
-                            p as *const ::core::ffi::c_void,
-                            strlen(p).wrapping_add(1 as size_t),
-                        );
-                    } else {
-                        trailarg = p;
-                        let c2rust_fresh4 = trailarg;
-                        trailarg = trailarg.offset(1);
-                        *c2rust_fresh4 = NUL as ::core::ffi::c_char;
-                        ins_prevcmd = true_0 != 0;
-                        break;
-                    }
-                }
-                p = p.offset(1);
-            }
-            if trailarg.is_null() {
-                break;
-            }
+            None => break text,
         }
-        if strlen(newcmd) > 0 as size_t {
-            xfree(prevcmd.get() as *mut ::core::ffi::c_void);
-            prevcmd.set(newcmd);
-        } else {
-            free_newcmd = true_0 != 0;
+    };
+
+    // SAFETY: the bytes come from C strings, so they hold no interior NUL.
+    let mut newcmd = unsafe { xmalloc_cstr(&assembled) };
+    let mut free_newcmd = assembled.is_empty();
+    if !free_newcmd {
+        // SAFETY: `prevcmd` is our own allocation, or NULL.
+        unsafe { xfree(prevcmd.get().cast()) };
+        prevcmd.set(newcmd);
+    }
+
+    'theend: {
+        if bangredo.get() {
+            // Put the command in the redo buffer.
+            // SAFETY: main thread, message state.
+            if !unsafe { prevcmd_is_set() } {
+                break 'theend;
+            }
+            // SAFETY: `prevcmd` is a live C string and `cmd` our own copy.
+            unsafe {
+                let cmd = vim_strsave_escaped(prevcmd.get(), c"%#".as_ptr());
+                AppendToRedobuffLit(cmd, -1);
+                xfree(cmd.cast());
+                AppendToRedobuff(c"\n".as_ptr());
+            }
+            bangredo.set(false_0 != 0);
         }
-        '_theend: {
-            if bangredo.get() {
-                if prevcmd_is_set() == 0 {
-                    break '_theend;
-                } else {
-                    let mut cmd: *mut ::core::ffi::c_char =
-                        vim_strsave_escaped(prevcmd.get(), c"%#".as_ptr());
-                    AppendToRedobuffLit(cmd, -1 as ::core::ffi::c_int);
-                    xfree(cmd as *mut ::core::ffi::c_void);
-                    AppendToRedobuff(c"\n".as_ptr());
-                    bangredo.set(false_0 != 0);
-                }
+
+        // SAFETY: 'shellquote' is a live option string.
+        let shq = unsafe { cstr_bytes(p_shq.get()) };
+        if !shq.is_empty() {
+            if free_newcmd {
+                // SAFETY: our own allocation.
+                unsafe { xfree(newcmd.cast()) };
             }
-            if *p_shq.get() as ::core::ffi::c_int != NUL {
-                if free_newcmd {
-                    xfree(newcmd as *mut ::core::ffi::c_void);
-                }
-                newcmd = xmalloc(
-                    strlen(prevcmd.get())
-                        .wrapping_add((2 as size_t).wrapping_mul(strlen(p_shq.get())))
-                        .wrapping_add(1 as size_t),
-                ) as *mut ::core::ffi::c_char;
-                strcpy(newcmd, p_shq.get());
-                strcat(newcmd, prevcmd.get());
-                strcat(newcmd, p_shq.get());
-                free_newcmd = true_0 != 0;
-            }
-            if addr_count == 0 as ::core::ffi::c_int {
+            // SAFETY: `prevcmd` is live -- either `prevcmd_is_set` passed
+            // above, or the assembled command was just stored in it.
+            let mut quoted = shq.to_vec();
+            quoted.extend_from_slice(unsafe { cstr_bytes(prevcmd.get()) });
+            quoted.extend_from_slice(shq);
+            // SAFETY: option and command bytes, so no interior NUL.
+            newcmd = unsafe { xmalloc_cstr(&quoted) };
+            free_newcmd = true;
+        }
+
+        if addr_count == 0 {
+            // Echo the command; it is not remembered in the message history.
+            // SAFETY: main thread, message state; `newcmd` is a live string.
+            unsafe {
                 msg_start();
                 msg_ext_set_kind(c"shell_cmd".as_ptr());
-                msg_putchar(':' as ::core::ffi::c_int);
-                msg_putchar('!' as ::core::ffi::c_int);
-                msg_outtrans(newcmd, 0 as ::core::ffi::c_int, false_0 != 0);
+                msg_putchar(':' as c_int);
+                msg_putchar('!' as c_int);
+                msg_outtrans(newcmd, 0, false);
                 msg_clr_eos();
-                ui_cursor_goto(msg_row.get(), msg_col.get());
-                do_shell(newcmd, 0 as ::core::ffi::c_int);
-            } else {
+            }
+            ui_cursor_goto(msg_row.get(), msg_col.get());
+            // SAFETY: as above.
+            unsafe { do_shell(newcmd, 0) };
+        } else {
+            // SAFETY: `eap` is the caller's live argument and `newcmd` a live
+            // string; the autocommand runs with the current buffer.
+            unsafe {
                 do_filter(line1, line2, eap, newcmd, do_in, do_out);
-                apply_autocmds(
-                    EVENT_SHELLFILTERPOST,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    false_0 != 0,
-                    curbuf.get(),
-                );
+                buf_autocmd(EVENT_SHELLFILTERPOST, curbuf.get());
             }
         }
-        if free_newcmd {
-            xfree(newcmd as *mut ::core::ffi::c_void);
+    }
+
+    if free_newcmd {
+        // SAFETY: our own allocation.
+        unsafe { xfree(newcmd.cast()) };
+    }
+}
+
+/// Find the next unescaped `!` in `text` at or after `from`, removing the
+/// backslash from each escaped one on the way.
+///
+/// Upstream removes the backslash with a `memmove` and then steps the scan
+/// past the byte that slid into its place, so `\!x` swallows the `x` as well;
+/// that quirk is user-visible and is kept.
+fn split_at_bang(text: &mut Vec<u8>, from: usize) -> Option<usize> {
+    let mut p = from;
+    while p < text.len() {
+        if text[p] == b'!' {
+            if p > 0 && text[p - 1] == b'\\' {
+                text.remove(p - 1);
+            } else {
+                return Some(p);
+            }
+        }
+        p += 1;
+    }
+    None
+}
+
+/// A `vim_tempname` allocation: taken off disk and freed when it goes out of
+/// scope, which is what upstream's `filterend` label does by hand.
+struct TempFile(*mut c_char);
+
+impl TempFile {
+    /// # Safety
+    /// Main thread; the temp directory must be available.
+    unsafe fn new() -> Option<TempFile> {
+        // SAFETY: caller's contract.
+        let name = unsafe { vim_tempname() };
+        (!name.is_null()).then_some(TempFile(name))
+    }
+
+    /// The file name, or NULL when there is no such file.
+    fn name(this: &Option<TempFile>) -> *mut c_char {
+        this.as_ref().map_or(ptr::null_mut(), |f| f.0)
+    }
+}
+
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        // SAFETY: our own `vim_tempname` allocation.
+        unsafe {
+            os_remove(self.0);
+            xfree(self.0.cast());
         }
     }
 }
 
-unsafe extern "C" fn do_filter(
-    mut line1: linenr_T,
-    mut line2: linenr_T,
-    mut eap: *mut exarg_T,
-    mut cmd: *mut ::core::ffi::c_char,
-    mut do_in: bool,
-    mut do_out: bool,
+/// Run `cmd` over lines `line1`..`line2`, replacing them with its output.
+///
+/// `do_in` asks for the range on the command's stdin, `do_out` for its stdout
+/// back into the buffer; `:w !cmd` is the first alone, `:r !cmd` the second.
+/// Either side travels through a pipe unless 'shelltemp' asks for files.
+///
+/// # Safety
+/// `eap` and `cmd` must be live, and the range must be lines of the current
+/// buffer.
+unsafe fn do_filter(
+    line1: linenr_T,
+    line2: linenr_T,
+    eap: *mut exarg_T,
+    cmd: *mut c_char,
+    do_in: bool,
+    do_out: bool,
 ) {
+    // SAFETY: caller's contract.
+    if unsafe { *cmd } as c_int == NUL {
+        return; // no filter command
+    }
+
+    let old_curbuf = curbuf.get();
+    // SAFETY: `curbuf` and `curwin` are the live current buffer and window.
+    let (orig_start, orig_end, cursor_save) = unsafe {
+        (
+            (*curbuf.get()).b_op_start,
+            (*curbuf.get()).b_op_end,
+            (*curwin.get()).w_cursor,
+        )
+    };
+    let stmp = p_stmp.get();
+
+    // Temporarily disable lockmarks since that's needed to propagate changed
+    // regions of the buffer for foldUpdate(), linecount, etc.
+    let save_cmod_flags = cmdmod.with(|mods| mods.cmod_flags);
+    cmdmod.with_mut(|mods| mods.cmod_flags &= !(CMOD_LOCKMARKS as c_int));
+
+    let mut linecount = line2 - line1 + 1;
+    // SAFETY: `curwin` is the live current window and `line1` a line of it.
     unsafe {
-        let mut read_linecount: linenr_T = 0;
-        let mut cmd_buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut itmp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut otmp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut old_curbuf: *mut buf_T = curbuf.get();
-        let mut shell_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let orig_start: pos_T = (*curbuf.get()).b_op_start;
-        let orig_end: pos_T = (*curbuf.get()).b_op_end;
-        let stmp: ::core::ffi::c_int = p_stmp.get();
-        if *cmd as ::core::ffi::c_int == NUL {
-            return;
-        }
-        let save_cmod_flags: ::core::ffi::c_int = (*cmdmod.ptr()).cmod_flags;
-        (*cmdmod.ptr()).cmod_flags &= !(CMOD_LOCKMARKS as ::core::ffi::c_int);
-        let mut cursor_save: pos_T = (*curwin.get()).w_cursor;
-        let mut linecount: linenr_T = line2 - line1 + 1 as linenr_T;
         (*curwin.get()).w_cursor.lnum = line1;
-        (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+        (*curwin.get()).w_cursor.col = 0;
         changed_line_abv_curs();
         invalidate_botline_win(curwin.get());
-        if do_out {
-            shell_flags |= kShellOptDoOut as ::core::ffi::c_int;
-        }
-        '_filterend: {
-            if !do_in && do_out as ::core::ffi::c_int != 0 && stmp == 0 {
-                shell_flags |= kShellOptRead as ::core::ffi::c_int;
-                (*curwin.get()).w_cursor.lnum = line2;
-            } else if do_in as ::core::ffi::c_int != 0 && !do_out && stmp == 0 {
-                shell_flags |= kShellOptWrite as ::core::ffi::c_int;
+    }
+
+    // When using temp files:
+    // 1. * Form temp file names
+    // 2. * Write the lines to a temp file
+    // 3.   Run the filter command on the temp file
+    // 4. * Read the output of the command into the buffer
+    // 5. * Delete the original lines to be filtered
+    // 6. * Remove the temp files
+    //
+    // When writing the input with a pipe or when catching the output with a
+    // pipe only need to do 3.
+    let mut shell_flags = if do_out { kShellOptDoOut as c_int } else { 0 };
+    let mut itmp = None;
+    let mut otmp = None;
+    let mut no_tempname = false;
+    if stmp == 0 && (do_in || do_out) {
+        if do_in {
+            shell_flags |= kShellOptWrite as c_int;
+            // SAFETY: `curbuf` is live.
+            unsafe {
                 (*curbuf.get()).b_op_start.lnum = line1;
                 (*curbuf.get()).b_op_end.lnum = line2;
-            } else if do_in as ::core::ffi::c_int != 0
-                && do_out as ::core::ffi::c_int != 0
-                && stmp == 0
-            {
-                shell_flags |=
-                    kShellOptRead as ::core::ffi::c_int | kShellOptWrite as ::core::ffi::c_int;
-                (*curbuf.get()).b_op_start.lnum = line1;
-                (*curbuf.get()).b_op_end.lnum = line2;
-                (*curwin.get()).w_cursor.lnum = line2;
-            } else if do_in as ::core::ffi::c_int != 0 && {
-                itmp = vim_tempname();
-                itmp.is_null()
-            } || do_out as ::core::ffi::c_int != 0 && {
-                otmp = vim_tempname();
-                otmp.is_null()
-            } {
-                emsg(gettext(&raw const e_notmp as *const ::core::ffi::c_char));
-                break '_filterend;
             }
-            (*no_wait_return.ptr()) += 1;
-            if !itmp.is_null()
-                && buf_write(
+        }
+        if do_out {
+            shell_flags |= kShellOptRead as c_int;
+            // SAFETY: `curwin` is live.
+            unsafe { (*curwin.get()).w_cursor.lnum = line2 };
+        }
+    } else {
+        if do_in {
+            // SAFETY: main thread.
+            itmp = unsafe { TempFile::new() };
+            no_tempname = itmp.is_none();
+        }
+        if !no_tempname && do_out {
+            // SAFETY: as above.
+            otmp = unsafe { TempFile::new() };
+            no_tempname = otmp.is_none();
+        }
+        if no_tempname {
+            // SAFETY: a live message string.
+            unsafe { emsg(gettext(&raw const e_notmp as *const c_char)) };
+        }
+    }
+
+    'filterend: {
+        if no_tempname {
+            break 'filterend;
+        }
+
+        // The writing and reading of temp files will not be shown.
+        // Vi also doesn't do this and the messages are not very informative.
+        no_wait_return.set(no_wait_return.get() + 1); // don't wait_return() while busy
+        if itmp.is_some()
+            // SAFETY: `eap` is live and the range is the current buffer's.
+            && unsafe {
+                buf_write(
                     curbuf.get(),
-                    itmp,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                    TempFile::name(&itmp),
+                    ptr::null_mut(),
                     line1,
                     line2,
                     eap,
                     WriteRequest::filter(),
-                ) == FAIL
-            {
-                if !ui_has(kUIMessages) {
-                    msg_putchar('\n' as ::core::ffi::c_int);
-                }
-                (*no_wait_return.ptr()) -= 1;
-                if !aborting() {
-                    semsg_c!(gettext(c"E482: Can't create file %s".as_ptr()), itmp,);
-                }
-            } else if curbuf.get() == old_curbuf {
-                if !do_out {
-                    msg_putchar('\n' as ::core::ffi::c_int);
-                }
-                cmd_buf = make_filter_cmd(cmd, itmp, otmp, do_in);
-                ui_cursor_goto(
-                    Rows.get() - 1 as ::core::ffi::c_int,
-                    0 as ::core::ffi::c_int,
-                );
-                '_error: {
-                    if do_out {
-                        if u_save(line2, line2 + 1 as linenr_T) == FAIL {
-                            xfree(cmd_buf as *mut ::core::ffi::c_void);
-                            break '_error;
-                        } else {
-                            redraw_curbuf_later(UPD_VALID);
-                        }
-                    }
-                    read_linecount = (*curbuf.get()).b_ml.ml_line_count;
-                    call_shell(
-                        cmd_buf,
-                        kShellOptFilter as ::core::ffi::c_int | shell_flags,
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    );
-                    xfree(cmd_buf as *mut ::core::ffi::c_void);
-                    did_check_timestamps.set(false_0 != 0);
-                    need_check_timestamps.set(true_0 != 0);
-                    os_breakcheck();
-                    got_int.set(false_0 != 0);
-                    if do_out {
-                        if !otmp.is_null() {
-                            if readfile(
-                                otmp,
-                                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                                line2,
-                                0 as linenr_T,
-                                MAXLNUM as ::core::ffi::c_int as linenr_T,
-                                eap,
-                                READ_FILTER as ::core::ffi::c_int,
-                                false_0 != 0,
-                            ) != OK
-                            {
-                                if !aborting() {
-                                    msg_putchar('\n' as ::core::ffi::c_int);
-                                    semsg_c!(
-                                        gettext(
-                                            &raw const e_cant_read_file_str
-                                                as *const ::core::ffi::c_char,
-                                        ),
-                                        otmp,
-                                    );
-                                }
-                                break '_error;
-                            } else if curbuf.get() != old_curbuf {
-                                break '_filterend;
-                            }
-                        }
-                        read_linecount = (*curbuf.get()).b_ml.ml_line_count - read_linecount;
-                        if shell_flags & kShellOptRead as ::core::ffi::c_int != 0 {
-                            (*curbuf.get()).b_op_start.lnum = line2 + 1 as linenr_T;
-                            (*curbuf.get()).b_op_end.lnum = (*curwin.get()).w_cursor.lnum;
-                            appended_lines_mark(line2, read_linecount as ::core::ffi::c_int);
-                        }
-                        if do_in {
-                            if (*cmdmod.ptr()).cmod_flags & CMOD_KEEPMARKS as ::core::ffi::c_int
-                                != 0
-                                || vim_strchr(p_cpo.get(), CPO_REMMARK).is_null()
-                            {
-                                if read_linecount >= linecount {
-                                    mark_adjust(
-                                        line1,
-                                        line2,
-                                        linecount,
-                                        0 as linenr_T,
-                                        kExtmarkNOOP,
-                                    );
-                                } else {
-                                    mark_adjust(
-                                        line1,
-                                        line1 + read_linecount - 1 as linenr_T,
-                                        linecount,
-                                        0 as linenr_T,
-                                        kExtmarkNOOP,
-                                    );
-                                    mark_adjust(
-                                        line1 + read_linecount,
-                                        line2,
-                                        MAXLNUM as ::core::ffi::c_int as linenr_T,
-                                        0 as linenr_T,
-                                        kExtmarkNOOP,
-                                    );
-                                }
-                            }
-                            (*curwin.get()).w_cursor.lnum = line1;
-                            del_lines(linecount, true_0 != 0);
-                            (*curbuf.get()).b_op_start.lnum -= linecount;
-                            (*curbuf.get()).b_op_end.lnum -= linecount;
-                            write_lnum_adjust(-linecount);
-                            foldUpdate(
-                                curwin.get(),
-                                (*curbuf.get()).b_op_start.lnum,
-                                (*curbuf.get()).b_op_end.lnum,
-                            );
-                        } else {
-                            linecount = (*curbuf.get()).b_op_end.lnum
-                                - (*curbuf.get()).b_op_start.lnum
-                                + 1 as linenr_T;
-                            (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_op_end.lnum;
-                        }
-                        beginline(BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
-                        (*no_wait_return.ptr()) -= 1;
-                        if linecount as OptInt > p_report.get() {
-                            if do_in {
-                                vim_snprintf(
-                                    msg_buf.ptr() as *mut ::core::ffi::c_char,
-                                    ::core::mem::size_of::<[::core::ffi::c_char; 480]>(),
-                                    gettext(c"%ld lines filtered".as_ptr()),
-                                    linecount as int64_t,
-                                );
-                                if msg(
-                                    msg_buf.ptr() as *mut ::core::ffi::c_char,
-                                    0 as ::core::ffi::c_int,
-                                ) as ::core::ffi::c_int
-                                    != 0
-                                    && msg_scroll.get() == 0
-                                {
-                                    set_keep_msg(
-                                        msg_buf.ptr() as *mut ::core::ffi::c_char,
-                                        0 as ::core::ffi::c_int,
-                                    );
-                                }
-                            } else {
-                                msgmore(linecount as ::core::ffi::c_int);
-                            }
-                        }
-                        break '_filterend;
-                    }
-                }
-                (*curwin.get()).w_cursor = cursor_save;
-                (*no_wait_return.ptr()) -= 1;
-                wait_return(false_0);
+                )
+            } == FAIL
+        {
+            if !ui_has(kUIMessages) {
+                // SAFETY: message state. Keep message from buf_write().
+                unsafe { msg_putchar('\n' as c_int) };
             }
+            no_wait_return.set(no_wait_return.get() - 1);
+            if !aborting() {
+                // SAFETY: one `%s` for one string. Will call wait_return().
+                unsafe {
+                    semsg_c!(
+                        gettext(c"E482: Can't create file %s".as_ptr()),
+                        TempFile::name(&itmp),
+                    );
+                }
+            }
+            break 'filterend;
         }
-        (*cmdmod.ptr()).cmod_flags = save_cmod_flags;
         if curbuf.get() != old_curbuf {
-            (*no_wait_return.ptr()) -= 1;
+            break 'filterend;
+        }
+
+        if !do_out {
+            // SAFETY: message state.
+            unsafe { msg_putchar('\n' as c_int) };
+        }
+
+        'error: {
+            // SAFETY: `cmd` is live and the temp names are ours.
+            let cmd_buf = unsafe {
+                make_filter_cmd(cmd, TempFile::name(&itmp), TempFile::name(&otmp), do_in)
+            };
+            ui_cursor_goto(Rows.get() - 1, 0);
+
+            if do_out {
+                // SAFETY: `line2` is a line of the current buffer.
+                if unsafe { u_save(line2, line2 + 1) } == FAIL {
+                    // SAFETY: `cmd_buf` is our own allocation.
+                    unsafe { xfree(cmd_buf.cast()) };
+                    break 'error;
+                }
+                // SAFETY: main thread, redraw state.
+                unsafe { redraw_curbuf_later(UPD_VALID) };
+            }
+            // SAFETY: `curbuf` is live.
+            let mut read_linecount = unsafe { (*curbuf.get()).b_ml.ml_line_count };
+
+            // SAFETY: `cmd_buf` is a live command line and ours to free.
+            // Pass on the kShellOptDoOut flag when the output is redirected.
+            unsafe {
+                call_shell(
+                    cmd_buf,
+                    kShellOptFilter as c_int | shell_flags,
+                    ptr::null_mut(),
+                );
+                xfree(cmd_buf.cast());
+            }
+
+            did_check_timestamps.set(false_0 != 0);
+            need_check_timestamps.set(true_0 != 0);
+
+            // When interrupting the shell command, it may still have produced
+            // some useful output.  Reset got_int here, so that readfile()
+            // won't cancel reading.
+            os_breakcheck();
+            got_int.set(false_0 != 0);
+
+            if !do_out {
+                break 'error;
+            }
+
+            if otmp.is_some() {
+                // SAFETY: `otmp` is a live file name and `eap` the caller's.
+                let read = unsafe {
+                    readfile(
+                        TempFile::name(&otmp),
+                        ptr::null_mut(),
+                        line2,
+                        0,
+                        MAXLNUM as linenr_T,
+                        eap,
+                        READ_FILTER as c_int,
+                        false,
+                    )
+                };
+                if read != OK {
+                    if !aborting() {
+                        // SAFETY: message state; one `%s` for one string.
+                        unsafe {
+                            msg_putchar('\n' as c_int);
+                            semsg_c!(
+                                gettext(&raw const e_cant_read_file_str as *const c_char),
+                                TempFile::name(&otmp),
+                            );
+                        }
+                    }
+                    break 'error;
+                }
+                if curbuf.get() != old_curbuf {
+                    break 'filterend;
+                }
+            }
+
+            // SAFETY: `curbuf` is live.
+            read_linecount = unsafe { (*curbuf.get()).b_ml.ml_line_count } - read_linecount;
+
+            if shell_flags & kShellOptRead as c_int != 0 {
+                // SAFETY: as above; the read appended after `line2`.
+                unsafe {
+                    (*curbuf.get()).b_op_start.lnum = line2 + 1;
+                    (*curbuf.get()).b_op_end.lnum = (*curwin.get()).w_cursor.lnum;
+                    appended_lines_mark(line2, read_linecount as c_int);
+                }
+            }
+
+            if do_in {
+                if cmdmod.with(|mods| mods.cmod_flags) & CMOD_KEEPMARKS as c_int != 0
+                    // SAFETY: 'cpoptions' is a live option string.
+                    || unsafe { vim_strchr(p_cpo.get(), CPO_REMMARK) }.is_null()
+                {
+                    // TODO(bfredl): Currently not active for extmarks. What
+                    // would we do if columns don't match, assume added/deleted
+                    // bytes at the end of each line?
+                    // SAFETY: the two ranges are lines of the current buffer.
+                    unsafe {
+                        if read_linecount >= linecount {
+                            // move all marks from old lines to new lines
+                            mark_adjust(line1, line2, linecount, 0, kExtmarkNOOP);
+                        } else {
+                            // move marks from old lines to new lines, delete
+                            // marks that are in deleted lines
+                            mark_adjust(
+                                line1,
+                                line1 + read_linecount - 1,
+                                linecount,
+                                0,
+                                kExtmarkNOOP,
+                            );
+                            mark_adjust(
+                                line1 + read_linecount,
+                                line2,
+                                MAXLNUM as linenr_T,
+                                0,
+                                kExtmarkNOOP,
+                            );
+                        }
+                    }
+                }
+
+                // Put cursor on first filtered line for ":range!cmd".
+                // Adjust '[ and '] (set by buf_write()).
+                // SAFETY: the original range is still in the buffer, ahead of
+                // what the filter appended.
+                unsafe {
+                    (*curwin.get()).w_cursor.lnum = line1;
+                    del_lines(linecount, true);
+                    (*curbuf.get()).b_op_start.lnum -= linecount;
+                    (*curbuf.get()).b_op_end.lnum -= linecount;
+                    // adjust last line for next write
+                    write_lnum_adjust(-linecount);
+                    foldUpdate(
+                        curwin.get(),
+                        (*curbuf.get()).b_op_start.lnum,
+                        (*curbuf.get()).b_op_end.lnum,
+                    );
+                }
+            } else {
+                // Put cursor on last new line for ":r !cmd".
+                // SAFETY: `curbuf`/`curwin` are live.
+                unsafe {
+                    linecount = (*curbuf.get()).b_op_end.lnum - (*curbuf.get()).b_op_start.lnum + 1;
+                    (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_op_end.lnum;
+                }
+            }
+
+            // SAFETY: cursor on first non-blank.
+            unsafe { beginline(BL_WHITE as c_int | BL_FIX as c_int) };
+            no_wait_return.set(no_wait_return.get() - 1);
+
+            if linecount as OptInt > p_report.get() {
+                if do_in {
+                    report_filtered(linecount);
+                } else {
+                    // SAFETY: message state.
+                    unsafe { msgmore(linecount as c_int) };
+                }
+            }
+            break 'filterend;
+        }
+
+        // put cursor back in same position for ":w !cmd"
+        // SAFETY: `curwin` is live and `cursor_save` came from it.
+        unsafe { (*curwin.get()).w_cursor = cursor_save };
+        no_wait_return.set(no_wait_return.get() - 1);
+        // SAFETY: message state.
+        unsafe { wait_return(false_0) };
+    }
+
+    cmdmod.with_mut(|mods| mods.cmod_flags = save_cmod_flags);
+    if curbuf.get() != old_curbuf {
+        no_wait_return.set(no_wait_return.get() - 1);
+        // SAFETY: a literal.
+        unsafe {
             emsg(gettext(
                 c"E135: *Filter* Autocommands must not change current buffer".as_ptr(),
             ));
-        } else if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0 {
+        }
+    } else if cmdmod.with(|mods| mods.cmod_flags) & CMOD_LOCKMARKS as c_int != 0 {
+        // SAFETY: `curbuf` is live and the marks came from it.
+        unsafe {
             (*curbuf.get()).b_op_start = orig_start;
             (*curbuf.get()).b_op_end = orig_end;
         }
-        if !itmp.is_null() {
-            os_remove(itmp);
-        }
-        if !otmp.is_null() {
-            os_remove(otmp);
-        }
-        xfree(itmp as *mut ::core::ffi::c_void);
-        xfree(otmp as *mut ::core::ffi::c_void);
     }
 }
 
-pub unsafe extern "C" fn do_shell(
-    mut cmd: *mut ::core::ffi::c_char,
-    mut flags: ::core::ffi::c_int,
-) {
+/// `:range!cmd`'s "N lines filtered", kept in `msg_buf` so that it can survive
+/// a redraw.
+fn report_filtered(linecount: linenr_T) {
+    let buf = msg_buf.ptr() as *mut c_char;
+    // SAFETY: `msg_buf` is `MSG_BUF_LEN` bytes and no reference into it is
+    // outstanding; one `%ld` for one `int64_t`.  `msg` and `set_keep_msg` copy
+    // what they are given.
     unsafe {
-        if check_secure() {
-            msg_end();
-            return;
+        vim_snprintf(
+            buf,
+            MSG_BUF_LEN as usize,
+            gettext(c"%ld lines filtered".as_ptr()),
+            linecount as i64,
+        );
+        if msg(buf, 0) && msg_scroll.get() == 0 {
+            // save message to display it after redraw
+            set_keep_msg(buf, 0);
         }
-        msg_putchar('\r' as ::core::ffi::c_int);
-        msg_putchar('\n' as ::core::ffi::c_int);
-        if p_warn.get() != 0 && !autocmd_busy.get() && msg_silent.get() == 0 as ::core::ffi::c_int {
-            let mut buf: *mut buf_T = firstbuf.get();
+    }
+}
+
+/// Call a shell to execute `cmd`; a NULL `cmd` starts an interactive shell.
+///
+/// `flags` may be `kShellOptDoOut` when the output is redirected.
+///
+/// # Safety
+/// `cmd` must be a live C string, or NULL.
+pub unsafe fn do_shell(cmd: *mut c_char, flags: c_int) {
+    // SAFETY: main thread, message state.
+    if unsafe { check_secure() } {
+        unsafe { msg_end() };
+        return;
+    }
+
+    // For the sake of the terminal, the shell's output starts on a fresh line.
+    // SAFETY: message state.
+    unsafe {
+        msg_putchar('\r' as c_int);
+        msg_putchar('\n' as c_int);
+    }
+
+    if p_warn.get() != 0 && !autocmd_busy.get() && msg_silent.get() == 0 {
+        let mut buf: *mut buf_T = firstbuf.get();
+        // SAFETY: the buffer list is the editor's own and is live.
+        unsafe {
             while !buf.is_null() {
                 if bufIsChanged(buf) {
                     msg_puts(gettext(c"[No write since last change]\n".as_ptr()));
                     break;
-                } else {
-                    buf = (*buf).b_next;
                 }
+                buf = (*buf).b_next;
             }
         }
-        ui_cursor_goto(msg_row.get(), msg_col.get());
-        call_shell(cmd, flags, ::core::ptr::null_mut::<::core::ffi::c_char>());
-        if msg_silent.get() == 0 as ::core::ffi::c_int {
-            msg_didout.set(true_0 != 0);
-        }
-        did_check_timestamps.set(false_0 != 0);
-        need_check_timestamps.set(true_0 != 0);
-        msg_row.set(Rows.get() - 1 as ::core::ffi::c_int);
-        msg_col.set(0 as ::core::ffi::c_int);
-        apply_autocmds(
-            EVENT_SHELLCMDPOST,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            false_0 != 0,
-            curbuf.get(),
-        );
+    }
+
+    ui_cursor_goto(msg_row.get(), msg_col.get());
+    // SAFETY: `cmd` is the caller's live command line.
+    unsafe { call_shell(cmd, flags, ptr::null_mut()) };
+
+    if msg_silent.get() == 0 {
+        msg_didout.set(true_0 != 0);
+    }
+    did_check_timestamps.set(false_0 != 0);
+    need_check_timestamps.set(true_0 != 0);
+
+    // Put the cursor back where it was: the shell wrote over the screen.
+    msg_row.set(Rows.get() - 1);
+    msg_col.set(0);
+    // SAFETY: the autocommand runs with the current buffer.
+    unsafe {
+        buf_autocmd(EVENT_SHELLCMDPOST, curbuf.get());
     }
 }
 
+/// Which shell 'shell' names, as far as building a command line goes.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Shell {
+    /// `begin; ...; end` instead of `(...)`.
+    Fish,
+    /// PowerShell: no grouping, and `Get-Content` instead of `<`.
+    Pwsh,
+    /// Anything else, treated as Bourne-compatible.
+    Posix,
+}
+
+/// Classify 'shell' by the tail of its invocation path.
+///
+/// # Safety
+/// Main thread; 'shell' must be a live option string.
+unsafe fn shell_kind() -> Shell {
+    // SAFETY: caller's contract; a NULL length asks only for the tail.
+    let tail = unsafe { cstr_bytes(invocation_path_tail(p_sh.get(), ptr::null_mut())) };
+    if tail.starts_with(b"fish") {
+        Shell::Fish
+    } else if tail.starts_with(b"pwsh") || tail.starts_with(b"powershell") {
+        Shell::Pwsh
+    } else {
+        Shell::Posix
+    }
+}
+
+/// The shell command that runs `cmd` with `itmp` as its input file and `otmp`
+/// as its output file, either of which may be NULL.  `do_in` says whether the
+/// command is fed anything on stdin at all.
+///
+/// # Safety
+/// The three strings must be live, apart from the NULLs allowed above.  The
+/// result is the caller's to `xfree`.
 pub unsafe extern "C" fn make_filter_cmd(
-    mut cmd: *mut ::core::ffi::c_char,
-    mut itmp: *mut ::core::ffi::c_char,
-    mut otmp: *mut ::core::ffi::c_char,
-    mut do_in: bool,
-) -> *mut ::core::ffi::c_char {
+    cmd: *mut c_char,
+    itmp: *mut c_char,
+    otmp: *mut c_char,
+    do_in: bool,
+) -> *mut c_char {
+    // SAFETY: caller's contract, plus the live option strings.
+    let (shell, cmd_bytes, itmp_bytes, srr_len) = unsafe {
+        (
+            shell_kind(),
+            cstr_bytes(cmd),
+            (!itmp.is_null()).then(|| cstr_bytes(itmp)),
+            if otmp.is_null() {
+                0
+            } else {
+                cstr_bytes(p_srr.get()).len()
+            },
+        )
+    };
+
+    // Upstream sizes the buffer up front and `append_redir` writes into what
+    // is left over, so the allocation has to carry the redirection's room too
+    // even though nothing has been written there yet.  The `sizeof(...) - 1`
+    // additions upstream spells out are the literals below.
+    let mut len = cmd_bytes.len() + 1; // at least enough space for cmd + NUL
+    len += match shell {
+        Shell::Fish => b"begin; ; end".len(),
+        Shell::Pwsh => 0,
+        Shell::Posix => b"()".len(),
+    };
+    if let Some(itmp_bytes) = itmp_bytes {
+        len += itmp_bytes.len()
+            + match shell {
+                // +6: #20530
+                Shell::Pwsh => b"& { Get-Content  | &  }".len() + 6,
+                _ => b" {  <  } ".len(),
+            };
+    }
+    if do_in && shell == Shell::Pwsh {
+        len += b" $input | ".len() + 1; // upstream counts the NUL here
+    }
+    if !otmp.is_null() {
+        // SAFETY: checked non-NULL.
+        len += unsafe { cstr_bytes(otmp) }.len() + srr_len + 2; // two extra spaces
+    }
+
+    let text = filter_cmd_text(shell, cmd_bytes, itmp_bytes, !otmp.is_null(), do_in);
+    debug_assert!(text.len() < len, "make_filter_cmd undersized its buffer");
+    // SAFETY: `len` is at least `text.len() + 1` and `append_redir` writes
+    // only within the remainder.
     unsafe {
-        let mut is_fish_shell: bool = strncmp(
-            invocation_path_tail(p_sh.get(), ::core::ptr::null_mut::<size_t>()),
-            c"fish".as_ptr(),
-            4 as size_t,
-        ) == 0 as ::core::ffi::c_int;
-        let mut is_pwsh: bool = strncmp(
-            invocation_path_tail(p_sh.get(), ::core::ptr::null_mut::<size_t>()),
-            c"pwsh".as_ptr(),
-            4 as size_t,
-        ) == 0 as ::core::ffi::c_int
-            || strncmp(
-                invocation_path_tail(p_sh.get(), ::core::ptr::null_mut::<size_t>()),
-                c"powershell".as_ptr(),
-                10 as size_t,
-            ) == 0 as ::core::ffi::c_int;
-        let mut len: size_t = strlen(cmd).wrapping_add(1 as size_t);
-        len = (len as ::core::ffi::c_ulong).wrapping_add(
-            (if is_fish_shell as ::core::ffi::c_int != 0 {
-                ::core::mem::size_of::<[::core::ffi::c_char; 13]>().wrapping_sub(1_usize)
-            } else if !is_pwsh {
-                ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1_usize)
-            } else {
-                0_usize
-            }) as ::core::ffi::c_ulong,
-        ) as size_t;
-        if !itmp.is_null() {
-            len = (len as ::core::ffi::c_ulong).wrapping_add(
-                (if is_pwsh as ::core::ffi::c_int != 0 {
-                    strlen(itmp)
-                        .wrapping_add(::core::mem::size_of::<[::core::ffi::c_char; 24]>())
-                        .wrapping_sub(1 as size_t)
-                        .wrapping_add(6 as size_t)
-                } else {
-                    strlen(itmp)
-                        .wrapping_add(::core::mem::size_of::<[::core::ffi::c_char; 10]>())
-                        .wrapping_sub(1 as size_t)
-                }) as ::core::ffi::c_ulong,
-            ) as size_t;
-        }
-        if do_in as ::core::ffi::c_int != 0 && is_pwsh as ::core::ffi::c_int != 0 {
-            len = (len as ::core::ffi::c_ulong)
-                .wrapping_add(
-                    ::core::mem::size_of::<[::core::ffi::c_char; 11]>() as ::core::ffi::c_ulong
-                ) as size_t;
-        }
-        if !otmp.is_null() {
-            len = len.wrapping_add(
-                strlen(otmp)
-                    .wrapping_add(strlen(p_srr.get()))
-                    .wrapping_add(2 as size_t),
-            );
-        }
-        let buf: *mut ::core::ffi::c_char = xmalloc(len) as *mut ::core::ffi::c_char;
-        if is_pwsh {
-            if !itmp.is_null() {
-                xstrlcpy(
-                    buf,
-                    c"& { Get-Content ".as_ptr(),
-                    len.wrapping_sub(1 as size_t),
-                );
-                xstrlcat(buf, itmp, len.wrapping_sub(1 as size_t));
-                xstrlcat(buf, c" | & ".as_ptr(), len.wrapping_sub(1 as size_t));
-                xstrlcat(buf, cmd, len.wrapping_sub(1 as size_t));
-                xstrlcat(buf, c" }".as_ptr(), len.wrapping_sub(1 as size_t));
-            } else if do_in {
-                xstrlcpy(buf, c" $input | ".as_ptr(), len.wrapping_sub(1 as size_t));
-                xstrlcat(buf, cmd, len);
-            } else {
-                xstrlcpy(buf, cmd, len);
-            }
-        } else {
-            if !itmp.is_null() || !otmp.is_null() {
-                let mut fmt: *mut ::core::ffi::c_char =
-                    (if is_fish_shell as ::core::ffi::c_int != 0 {
-                        c"begin; %s; end".as_ptr()
-                    } else {
-                        c"(%s)".as_ptr()
-                    }) as *mut ::core::ffi::c_char;
-                vim_snprintf(buf, len, fmt, cmd);
-            } else {
-                xstrlcpy(buf, cmd, len);
-            }
-            if !itmp.is_null() {
-                xstrlcat(buf, c" < ".as_ptr(), len.wrapping_sub(1 as size_t));
-                xstrlcat(buf, itmp, len.wrapping_sub(1 as size_t));
-            }
-        }
+        let buf = xmalloc(len) as *mut c_char;
+        ptr::copy_nonoverlapping(text.as_ptr().cast::<c_char>(), buf, text.len());
+        *buf.add(text.len()) = 0;
         if !otmp.is_null() {
             append_redir(buf, len, p_srr.get(), otmp);
         }
-        return buf;
+        buf
     }
 }
 
-pub unsafe extern "C" fn append_redir(
-    buf: *mut ::core::ffi::c_char,
-    buflen: size_t,
-    opt: *const ::core::ffi::c_char,
-    fname: *const ::core::ffi::c_char,
-) {
-    unsafe {
-        let end: *mut ::core::ffi::c_char = buf.add(strlen(buf));
-        let mut p: *const ::core::ffi::c_char = opt;
-        loop {
-            p = strchr(p, '%' as ::core::ffi::c_int);
-            if p.is_null() {
-                break;
-            }
-            if *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == 's' as ::core::ffi::c_int
-            {
-                break;
-            }
-            if *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '%' as ::core::ffi::c_int
-            {
-                p = p.offset(1);
-            }
-            p = p.offset(1);
+/// The command line itself, before any output redirection is appended.
+fn filter_cmd_text(
+    shell: Shell,
+    cmd: &[u8],
+    itmp: Option<&[u8]>,
+    has_otmp: bool,
+    do_in: bool,
+) -> Vec<u8> {
+    let mut buf = Vec::new();
+    match (shell, itmp) {
+        // FIXME: should we add "-Encoding utf8"?
+        // FIXME: add `&` ourself or leave to user?
+        (Shell::Pwsh, Some(itmp)) => {
+            buf.extend_from_slice(b"& { Get-Content ");
+            buf.extend_from_slice(itmp);
+            buf.extend_from_slice(b" | & ");
+            buf.extend_from_slice(cmd);
+            buf.extend_from_slice(b" }");
         }
-        if !p.is_null() {
-            *end = ' ' as ::core::ffi::c_char;
-            vim_snprintf(
-                end.offset(1 as ::core::ffi::c_int as isize),
-                (buflen as ptrdiff_t
-                    - end
-                        .offset(1 as ::core::ffi::c_int as isize)
-                        .offset_from(buf)) as size_t,
-                opt,
-                fname,
-            );
-        } else {
-            vim_snprintf(
-                end,
-                (buflen as ptrdiff_t - end.offset_from(buf)) as size_t,
-                c" %s %s".as_ptr(),
-                opt,
-                fname,
-            );
-        };
+        (Shell::Pwsh, None) => {
+            if do_in {
+                buf.extend_from_slice(b" $input | ");
+            }
+            buf.extend_from_slice(cmd);
+        }
+        (_, itmp) => {
+            // Put delimiters around the command (for concatenated commands)
+            // when redirecting input and/or output.
+            if itmp.is_some() || has_otmp {
+                wrap_group(shell, cmd, &mut buf);
+            } else {
+                buf.extend_from_slice(cmd);
+            }
+            if let Some(itmp) = itmp {
+                buf.extend_from_slice(b" < ");
+                buf.extend_from_slice(itmp);
+            }
+        }
+    }
+    buf
+}
+
+/// `(cmd)`, or fish's `begin; cmd; end`.
+fn wrap_group(shell: Shell, cmd: &[u8], buf: &mut Vec<u8>) {
+    if shell == Shell::Fish {
+        buf.extend_from_slice(b"begin; ");
+        buf.extend_from_slice(cmd);
+        buf.extend_from_slice(b"; end");
+    } else {
+        buf.push(b'(');
+        buf.extend_from_slice(cmd);
+        buf.push(b')');
     }
 }
 
-pub unsafe extern "C" fn print_line_no_prefix(
-    mut lnum: linenr_T,
-    mut use_number: bool,
-    mut list: bool,
+/// Append output redirection for `fname` to the end of `buf`.
+///
+/// `opt` is a separator or a format string: a `%s` in it is replaced by
+/// `fname`, and otherwise a space, `opt`, a space and `fname` are appended.
+///
+/// # Safety
+/// `buf` must be a NUL-terminated string in an allocation of `buflen` bytes,
+/// with room left for what is appended; `opt` and `fname` must be live.
+pub unsafe extern "C" fn append_redir(
+    buf: *mut c_char,
+    buflen: usize,
+    opt: *const c_char,
+    fname: *const c_char,
 ) {
+    // SAFETY: caller's contract.
+    let used = unsafe { cstr_bytes(buf) }.len();
+    // SAFETY: as above.
+    let formats = has_percent_s(unsafe { cstr_bytes(opt) });
+    // SAFETY: `used` is inside the allocation, and the writes below stay
+    // within `buflen`.  One `%s` for one string in either format.
     unsafe {
-        let mut numbuf: [::core::ffi::c_char; 30] = [0; 30];
-        if (*curwin.get()).w_onebuf_opt.wo_nu != 0 || use_number as ::core::ffi::c_int != 0 {
+        if formats {
+            // not really needed?  Not with sh, ksh or bash
+            *buf.add(used) = b' ' as c_char;
+            vim_snprintf(buf.add(used + 1), buflen - used - 1, opt, fname);
+        } else {
+            vim_snprintf(buf.add(used), buflen - used, c" %s %s".as_ptr(), opt, fname);
+        }
+    }
+}
+
+/// Does `opt` carry a `%s` conversion?
+///
+/// A `%%` is an escaped percent and the byte after it is skipped, so `"%%s"`
+/// answers false -- which a plain search for `"%s"` would get wrong.
+fn has_percent_s(opt: &[u8]) -> bool {
+    let mut i = 0;
+    while i < opt.len() {
+        if opt[i] == b'%' {
+            match opt.get(i + 1) {
+                Some(b's') => return true,
+                Some(b'%') => i += 1, // skip %%
+                _ => {}
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
+/// Print line `lnum`, without the leading newline `:print` puts out.
+///
+/// # Safety
+/// `lnum` must be a line of the current buffer.
+pub unsafe fn print_line_no_prefix(lnum: linenr_T, use_number: bool, list: bool) {
+    // SAFETY: `curwin` is the live current window.
+    if unsafe { (*curwin.get()).w_onebuf_opt.wo_nu } != 0 || use_number {
+        let mut numbuf: [c_char; 30] = [0; 30];
+        // SAFETY: a `%*d` for the width and the line number, into a buffer of
+        // its own size.  Highlight line nrs.
+        unsafe {
             vim_snprintf(
-                &raw mut numbuf as *mut ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 30]>(),
+                numbuf.as_mut_ptr(),
+                numbuf.len(),
                 c"%*d ".as_ptr(),
                 number_width(curwin.get()),
                 lnum,
             );
-            msg_puts_hl(
-                &raw mut numbuf as *mut ::core::ffi::c_char,
-                HLF_N + 1 as ::core::ffi::c_int,
-                false_0 != 0,
-            );
+            msg_puts_hl(numbuf.as_ptr(), HLF_N + 1, false);
         }
-        msg_prt_line(ml_get(lnum), list);
     }
+    // SAFETY: caller's contract.
+    unsafe { msg_prt_line(ml_get(lnum), list) };
 }
 
-pub(crate) static global_need_msg_kind: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+/// Start a new message only once during `:global`.
+pub(crate) static global_need_msg_kind: GlobalCell<bool> = GlobalCell::new(false);
 
-pub unsafe extern "C" fn print_line(
-    mut lnum: linenr_T,
-    mut use_number: bool,
-    mut list: bool,
-    mut first: bool,
-) {
-    unsafe {
-        let mut save_silent: bool = silent_mode.get();
-        if message_filtered(ml_get(lnum)) {
-            return;
-        }
-        silent_mode.set(false_0 != 0);
-        info_message.set(true_0 != 0);
-        if (global_busy.get() == 0 || global_need_msg_kind.get() as ::core::ffi::c_int != 0)
-            && first as ::core::ffi::c_int != 0
-        {
+/// Print a text line.  Also in silent mode (`ex -s`).
+///
+/// # Safety
+/// `lnum` must be a line of the current buffer.
+pub unsafe fn print_line(lnum: linenr_T, use_number: bool, list: bool, first: bool) {
+    let save_silent = silent_mode.get();
+
+    // apply :filter /pat/
+    // SAFETY: caller's contract.
+    if unsafe { message_filtered(ml_get(lnum)) } {
+        return;
+    }
+
+    silent_mode.set(false_0 != 0);
+    info_message.set(true_0 != 0); // use stdout, not stderr
+    if (global_busy.get() == 0 || global_need_msg_kind.get()) && first {
+        // SAFETY: message state.
+        unsafe {
             msg_start();
             msg_ext_set_kind(c"list_cmd".as_ptr());
-            global_need_msg_kind.set(false_0 != 0);
-        } else if !save_silent {
-            msg_putchar('\n' as ::core::ffi::c_int);
         }
-        print_line_no_prefix(lnum, use_number, list);
-        if save_silent {
-            msg_putchar('\n' as ::core::ffi::c_int);
-            silent_mode.set(save_silent);
-        }
-        info_message.set(false_0 != 0);
+        global_need_msg_kind.set(false);
+    } else if !save_silent {
+        // don't want trailing newline with regular messaging
+        // SAFETY: message state.
+        unsafe { msg_putchar('\n' as c_int) };
     }
+
+    // SAFETY: caller's contract.
+    unsafe { print_line_no_prefix(lnum, use_number, list) };
+    if save_silent {
+        // SAFETY: message state.
+        unsafe { msg_putchar('\n' as c_int) };
+        silent_mode.set(save_silent);
+    }
+    info_message.set(false_0 != 0);
 }
