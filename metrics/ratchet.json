@@ -1,7 +1,7 @@
 {
-  "internal_exports": 34,
+  "internal_exports": 27,
   "files_without_forbid_unsafe": 938,
-  "files_without_deny_unsafe_op": 134,
+  "files_without_deny_unsafe_op": 133,
   "files": {
     "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe_lines": 54},
     "crates/nvim/src/cjson/lua_cjson/decode.rs": {"unsafe_lines": 175},
@@ -346,7 +346,7 @@
     "crates/nvim/src/nvim/ex_docmd/verify.rs": {"unsafe_lines": 8},
     "crates/nvim/src/nvim/ex_docmd/window.rs": {"cell_ptr": 12, "unsafe_lines": 374},
     "crates/nvim/src/nvim/ex_eval.rs": {"cell_ptr": 32, "lines": 1784, "unsafe_lines": 1702},
-    "crates/nvim/src/nvim/ex_getln.rs": {"unsafe_lines": 29},
+    "crates/nvim/src/nvim/ex_getln.rs": {"unsafe_lines": 26},
     "crates/nvim/src/nvim/ex_getln/buffer.rs": {"cell_ptr": 10, "unsafe_lines": 210},
     "crates/nvim/src/nvim/ex_getln/cmdpreview.rs": {"cell_ptr": 4, "unsafe_lines": 326},
     "crates/nvim/src/nvim/ex_getln/cmdwin.rs": {"cell_ptr": 33, "unsafe_lines": 300},
@@ -509,7 +509,7 @@
     "crates/nvim/src/nvim/lua/treesitter/ranges.rs": {"unsafe_lines": 159},
     "crates/nvim/src/nvim/lua/treesitter/tree.rs": {"unsafe_lines": 94},
     "crates/nvim/src/nvim/lua/xdiff.rs": {"unsafe_lines": 555},
-    "crates/nvim/src/nvim/main.rs": {"cell_ptr": 2, "lines": 2032, "no_mangle": 26, "unsafe_lines": 10},
+    "crates/nvim/src/nvim/main.rs": {"cell_ptr": 2, "lines": 2030, "no_mangle": 19, "unsafe_lines": 1},
     "crates/nvim/src/nvim/main/args.rs": {"cell_ptr": 6, "unsafe_lines": 489},
     "crates/nvim/src/nvim/main/buffers.rs": {"cell_ptr": 10, "unsafe_lines": 348},
     "crates/nvim/src/nvim/main/config.rs": {"cell_ptr": 7, "unsafe_lines": 208},

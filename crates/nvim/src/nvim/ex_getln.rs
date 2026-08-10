@@ -83,7 +83,7 @@ use crate::src::nvim::main::{
     mouse_row, msg_col, msg_didout, msg_no_more, msg_row, msg_scroll, msg_scrolled, msg_silent,
     need_wait_return, new_last_cmdline, no_abbr, no_hlsearch, no_mapping, p_ari, p_arshape,
     p_cedit, p_ch, p_cpo, p_cwh, p_hls, p_ic, p_icm, p_is, p_paste, p_ru, p_scs, p_stl, p_tal,
-    p_tbidi, p_wbr, p_wc, p_wcm, p_wim, p_wmnu, quit_more, redir_off, redraw_cmdline,
+    p_tbidi, p_wbr, p_wc, p_wcm, p_wim, p_wmnu, pum_want, quit_more, redir_off, redraw_cmdline,
     redraw_tabline, redrawing_cmdline, restart_edit, search_first_line, search_last_line,
     search_match_endcol, search_match_lines, skip_redraw, skip_win_fix_cursor, textlock, typebuf,
     wild_menu_showing, wim_flags,
@@ -206,9 +206,6 @@ mod eval;
 pub use self::eval::*;
 mod prompt;
 pub use self::prompt::*;
-unsafe extern "C" {
-    static pum_want: GlobalCell<C2Rust_Unnamed_51>;
-}
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub const kMHExisting: MHPutStatus = 0;
@@ -457,14 +454,6 @@ pub(crate) enum KeyOutcome {
     GotoNormalMode,
 }
 pub const OPT_LOCAL: C2Rust_Unnamed_53 = 2;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_51 {
-    pub active: bool,
-    pub item: ::core::ffi::c_int,
-    pub insert: bool,
-    pub finish: bool,
-}
 pub type C2Rust_Unnamed_53 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_58 = ::core::ffi::c_int;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;

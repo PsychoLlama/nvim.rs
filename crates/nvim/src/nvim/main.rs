@@ -1,3 +1,9 @@
+//! The editor's global state: upstream's `globals.h` has no translation unit
+//! of its own, so the transpiler parked every `EXTERN` declaration here beside
+//! `main()`. What follows is that header — roughly a thousand `GlobalCell`s
+//! read from all over the tree. The startup path lives in the submodules.
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
 use crate::src::nvim::options::{
     kOptArabic, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptErrorfile, kOptKeymap, kOptRightleft,
@@ -58,12 +64,11 @@ pub(crate) const fn c_bytes<const N: usize>(bytes: &[u8; N]) -> [c_char; N] {
 /// The C spells this as the `TIME_MSG` macro; it appears two dozen times
 /// across the startup, and the `time_fd` test is the whole of it.
 pub(crate) unsafe fn time_msg_at(what: &core::ffi::CStr) {
-    // SAFETY: `time_fd` is the startup-timing file, opened once by
-    // `init_startuptime` and closed by `time_finish`.
-    unsafe {
-        if !time_fd.get().is_null() {
-            time_msg(what.as_ptr(), ::core::ptr::null::<proftime_T>());
-        }
+    if !time_fd.get().is_null() {
+        // SAFETY: `time_fd` is the startup-timing file, opened once by
+        // `init_startuptime` and closed by `time_finish`; `what` outlives the
+        // call and the second argument is the "no elapsed time" null.
+        unsafe { time_msg(what.as_ptr(), ::core::ptr::null::<proftime_T>()) };
     }
 }
 
@@ -272,7 +277,6 @@ pub static autocmd_bufnr: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static autocmd_match: GlobalCell<*mut c_char> =
     GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static did_cursorhold: GlobalCell<bool> = GlobalCell::new(true);
-#[unsafe(no_mangle)]
 pub static aucmd_win_vec: GlobalCell<AucmdWinVec> = GlobalCell::new(AucmdWinVec {
     size: 0 as size_t,
     capacity: 0 as size_t,
@@ -954,19 +958,14 @@ pub static mouse_dragging: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static root_menu: GlobalCell<*mut vimmenu_T> =
     GlobalCell::new(::core::ptr::null_mut::<vimmenu_T>());
 pub static sys_menu: GlobalCell<bool> = GlobalCell::new(false);
-#[unsafe(no_mangle)]
 pub static firstwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-#[unsafe(no_mangle)]
 pub static lastwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-#[unsafe(no_mangle)]
 pub static prevwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 #[unsafe(no_mangle)]
 pub static curwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 pub static topframe: GlobalCell<*mut frame_T> = GlobalCell::new(::core::ptr::null_mut::<frame_T>());
-#[unsafe(no_mangle)]
 pub static first_tabpage: GlobalCell<*mut tabpage_T> =
     GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
-#[unsafe(no_mangle)]
 pub static curtab: GlobalCell<*mut tabpage_T> =
     GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
 pub static lastused_tabpage: GlobalCell<*mut tabpage_T> =
@@ -1989,7 +1988,6 @@ pub static pum_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid {
     comp_disabled: false,
     pending_comp_index_update: true,
 });
-#[unsafe(no_mangle)]
 pub static pum_want: GlobalCell<PumWant> = GlobalCell::new(PumWant {
     active: false,
     item: 0,
