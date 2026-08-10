@@ -1,721 +1,930 @@
 //! `:sort` and `:uniq`.
 //!
-//! Both read the whole range into an array of `sorti_T` -- one entry per line,
-//! holding either the number parsed out of it, the float, or the byte range the
-//! comparison should use -- sort or scan that array, and write the lines back
-//! in the new order.  The comparison is `sort_compare`, which dispatches on the
-//! flag statics (`sort_nr`, `sort_flt`, `sort_rx`, `sort_ic`, `sort_lc`) that
-//! `ex_sort` sets from the command's flags; `sort_abort` is how a comparator
-//! that hit an error stops libc's `qsort` early, since it cannot return one.
-//! `/pat/` restricts the comparison to what the pattern matched, which is why
-//! the comparator can reach the regex engine.
+//! Both look at one *key* per line -- the whole line, or the part a `/pat/`
+//! argument picked out of it, or the number or float parsed from that part --
+//! and then either reorder the range by the key ([`ex_sort`]) or delete the
+//! lines whose key repeats ([`ex_uniq`]).
+//!
+//! `:sort` builds the whole key array first, hands it to `qsort` and appends
+//! the lines back in the new order below the range before deleting the
+//! original.  That keeps the line *text* in the memline: only the keys, and
+//! one line at a time, are ever copied.  Its comparator cannot report an
+//! error, so an interrupt is signalled through [`SORT_ABORT`], which makes
+//! every further comparison answer "equal" and `qsort` finish quickly.
+//!
+//! `:uniq` never reorders, so it walks the range once and deletes as it goes.
+//!
+//! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use super::{
+    BL_FIX, BL_WHITE, FAIL, MAXLNUM, NUL, RE_MAGIC, STR2NR_BIN, STR2NR_FORCE, STR2NR_HEX,
+    STR2NR_OCT, e_interr, e_invarg, e_invarg2, e_noprevre, kExtmarkNOOP, kExtmarkUndo, true_0,
+};
+use crate::semsg_c;
+use crate::src::nvim::ascii::ascii_iswhite;
+use crate::src::nvim::change::changed_lines;
+use crate::src::nvim::charset::{skiptobin, skiptodigit, skiptohex, skipwhite, vim_str2nr};
+use crate::src::nvim::edit::beginline;
+use crate::src::nvim::ex_docmd::check_nextcmd;
+use crate::src::nvim::extmark::extmark_splice;
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{curbuf, curwin, got_int, p_ic};
+use crate::src::nvim::mark::mark_adjust;
+use crate::src::nvim::memline::{ml_append, ml_delete, ml_get, ml_get_len};
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::message::{emsg, msgmore};
+use crate::src::nvim::os::input::fast_breakcheck;
+use crate::src::nvim::os::libc::{
+    gettext, memcpy, qsort, strcasecmp, strcmp, strcoll, strcpy, strtod,
+};
+use crate::src::nvim::regexp::{skip_regexp_err, vim_regcomp, vim_regexec, vim_regfree};
+use crate::src::nvim::search::last_search_pat;
+use crate::src::nvim::types::{
+    ExtmarkOp, bcount_t, colnr_T, exarg_T, float_T, linenr_T, regmatch_T, size_t, varnumber_T,
+};
+use crate::src::nvim::undo::u_save;
+use core::cmp::Ordering;
+use core::ffi::{c_char, c_int, c_void};
+use core::ptr;
 
-static sortbuf1: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+/// How two keys are compared as *text*: `l` asks the locale, `i` folds case,
+/// and `l` wins when both are given because upstream tests it first.
+#[derive(Clone, Copy)]
+struct StringOrder {
+    locale: bool,
+    ignore_case: bool,
+}
 
-static sortbuf2: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+/// The comparison mode, which `sort_compare` reads and cannot be handed.
+static SORT_ORDER: GlobalCell<StringOrder> = GlobalCell::new(StringOrder {
+    locale: false,
+    ignore_case: false,
+});
 
-static sort_lc: GlobalCell<bool> = GlobalCell::new(false);
+/// Set once the user interrupts a sort.  There is no way to stop `qsort`
+/// immediately, but a comparator that always answers "equal" makes it decide
+/// it is done; the half-sorted array is then thrown away.
+static SORT_ABORT: GlobalCell<bool> = GlobalCell::new(false);
 
-static sort_ic: GlobalCell<bool> = GlobalCell::new(false);
+/// A buffer big enough for the longest line of the range, used to hold one
+/// line's key across a call that may invalidate the memline's own copy.
+/// `:sort`'s comparator needs a second one for the same reason.
+static SORTBUF1: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+static SORTBUF2: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 
-static sort_nr: GlobalCell<bool> = GlobalCell::new(false);
+/// What one line is sorted on.  Every line of a range gets the same variant:
+/// the flags decide which once, before the range is walked.
+#[derive(Clone, Copy)]
+enum SortKey {
+    /// The byte range of the line the comparison looks at.
+    Text { start: colnr_T, end: colnr_T },
+    /// The integer parsed out of that range.  A line without one sorts
+    /// before every line with one, which is what `Option`'s order says.
+    Number(Option<varnumber_T>),
+    /// The float parsed out of that range.
+    Float(float_T),
+}
 
-static sort_rx: GlobalCell<bool> = GlobalCell::new(false);
+/// One line of the range, as `:sort` sees it.
+#[derive(Clone, Copy)]
+struct SortLine {
+    lnum: linenr_T,
+    key: SortKey,
+}
 
-static sort_flt: GlobalCell<bool> = GlobalCell::new(false);
-
-static sort_abort: GlobalCell<bool> = GlobalCell::new(false);
-
-unsafe extern "C" fn string_compare(
-    mut s1: *const ::core::ffi::c_void,
-    mut s2: *const ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
+/// Compare two NUL-terminated keys as text.
+///
+/// # Safety
+/// Both must be NUL-terminated.
+unsafe fn string_compare(s1: *const c_char, s2: *const c_char) -> c_int {
+    let order = SORT_ORDER.get();
+    // SAFETY: caller's contract.
     unsafe {
-        if sort_lc.get() {
-            return strcoll(
-                s1 as *const ::core::ffi::c_char,
-                s2 as *const ::core::ffi::c_char,
-            );
-        }
-        return if sort_ic.get() as ::core::ffi::c_int != 0 {
-            strcasecmp(
-                s1 as *mut ::core::ffi::c_char,
-                s2 as *mut ::core::ffi::c_char,
-            )
+        if order.locale {
+            strcoll(s1, s2)
+        } else if order.ignore_case {
+            strcasecmp(s1.cast_mut(), s2.cast_mut())
         } else {
-            strcmp(
-                s1 as *const ::core::ffi::c_char,
-                s2 as *const ::core::ffi::c_char,
-            )
-        };
+            strcmp(s1, s2)
+        }
     }
 }
 
-unsafe extern "C" fn sort_compare(
-    mut s1: *const ::core::ffi::c_void,
-    mut s2: *const ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut l1: sorti_T = *(s1 as *mut sorti_T);
-        let mut l2: sorti_T = *(s2 as *mut sorti_T);
-        let mut result: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if sort_abort.get() {
-            return 0 as ::core::ffi::c_int;
-        }
-        fast_breakcheck();
-        if got_int.get() {
-            sort_abort.set(true_0 != 0);
-        }
-        if sort_nr.get() {
-            if l1.st_u.num.is_number as ::core::ffi::c_int
-                != l2.st_u.num.is_number as ::core::ffi::c_int
-            {
-                result = if l1.st_u.num.is_number as ::core::ffi::c_int
-                    > l2.st_u.num.is_number as ::core::ffi::c_int
-                {
-                    1 as ::core::ffi::c_int
-                } else {
-                    -1 as ::core::ffi::c_int
-                };
+/// `qsort`'s comparator over the `SortLine` array.
+///
+/// # Safety
+/// `s1` and `s2` must point at elements of that array.
+unsafe extern "C" fn sort_compare(s1: *const c_void, s2: *const c_void) -> c_int {
+    // SAFETY: caller's contract.
+    let (l1, l2) = unsafe { (*s1.cast::<SortLine>(), *s2.cast::<SortLine>()) };
+
+    if SORT_ABORT.get() {
+        return 0;
+    }
+    // The only way out of a long sort.
+    fast_breakcheck();
+    if got_int.get() {
+        SORT_ABORT.set(true);
+    }
+
+    let order = match (l1.key, l2.key) {
+        (SortKey::Number(a), SortKey::Number(b)) => a.cmp(&b),
+        // Not `partial_cmp`: upstream tests `==` then `>`, so a NaN sorts
+        // before everything, including itself.
+        (SortKey::Float(a), SortKey::Float(b)) => {
+            if a == b {
+                Ordering::Equal
+            } else if a > b {
+                Ordering::Greater
             } else {
-                result = if l1.st_u.num.value == l2.st_u.num.value {
-                    0 as ::core::ffi::c_int
-                } else if l1.st_u.num.value > l2.st_u.num.value {
-                    1 as ::core::ffi::c_int
-                } else {
-                    -1 as ::core::ffi::c_int
-                };
+                Ordering::Less
             }
-        } else if sort_flt.get() {
-            result = if l1.st_u.value_flt == l2.st_u.value_flt {
-                0 as ::core::ffi::c_int
-            } else if l1.st_u.value_flt > l2.st_u.value_flt {
-                1 as ::core::ffi::c_int
-            } else {
-                -1 as ::core::ffi::c_int
-            };
-        } else {
-            memcpy(
-                sortbuf1.get() as *mut ::core::ffi::c_void,
-                ml_get(l1.lnum).offset(l1.st_u.line.start_col_nr as isize)
-                    as *const ::core::ffi::c_void,
-                (l1.st_u.line.end_col_nr - l1.st_u.line.start_col_nr + 1 as varnumber_T) as size_t,
-            );
-            *(*sortbuf1.ptr())
-                .offset((l1.st_u.line.end_col_nr - l1.st_u.line.start_col_nr) as isize) =
-                NUL as ::core::ffi::c_char;
-            memcpy(
-                sortbuf2.get() as *mut ::core::ffi::c_void,
-                ml_get(l2.lnum).offset(l2.st_u.line.start_col_nr as isize)
-                    as *const ::core::ffi::c_void,
-                (l2.st_u.line.end_col_nr - l2.st_u.line.start_col_nr + 1 as varnumber_T) as size_t,
-            );
-            *(*sortbuf2.ptr())
-                .offset((l2.st_u.line.end_col_nr - l2.st_u.line.start_col_nr) as isize) =
-                NUL as ::core::ffi::c_char;
-            result = string_compare(
-                sortbuf1.get() as *const ::core::ffi::c_void,
-                sortbuf2.get() as *const ::core::ffi::c_void,
-            );
         }
-        if result == 0 as ::core::ffi::c_int {
-            return l1.lnum as ::core::ffi::c_int - l2.lnum as ::core::ffi::c_int;
+        (SortKey::Text { .. }, SortKey::Text { .. }) => {
+            // SAFETY: both lines are still in the buffer, and the two
+            // buffers hold the longest line of the range.
+            unsafe {
+                copy_key(SORTBUF1.get(), l1);
+                copy_key(SORTBUF2.get(), l2);
+                match string_compare(SORTBUF1.get(), SORTBUF2.get()) {
+                    0 => Ordering::Equal,
+                    n if n < 0 => Ordering::Less,
+                    _ => Ordering::Greater,
+                }
+            }
         }
-        return result;
+        // Unreachable: every key has the same shape.  Falling back on the
+        // line order keeps the comparator a total one either way.
+        _ => Ordering::Equal,
+    };
+
+    match order {
+        // If two lines have the same value, preserve the original order.
+        Ordering::Equal => l1.lnum - l2.lnum,
+        Ordering::Less => -1,
+        Ordering::Greater => 1,
     }
 }
 
-pub unsafe fn ex_sort(mut eap: *mut exarg_T) {
+/// Copy the compared part of `line`'s text into `buf`, NUL-terminated.
+///
+/// # Safety
+/// `buf` must have room for the range and its NUL; `line.lnum` must be a line
+/// of the current buffer and `line.key` a [`SortKey::Text`].
+unsafe fn copy_key(buf: *mut c_char, line: SortLine) {
+    let SortKey::Text { start, end } = line.key else {
+        return;
+    };
+    let len = (end - start) as usize;
+    // SAFETY: caller's contract.  Upstream copies the byte past the range as
+    // well and then overwrites it with the NUL.
     unsafe {
+        memcpy(
+            buf.cast(),
+            ml_get(line.lnum).add(start as usize).cast(),
+            len as size_t,
+        );
+        *buf.add(len) = NUL as c_char;
+    }
+}
+
+/// A zeroed `regmatch_T`; only `regprog` is meaningful before a match.
+fn no_regmatch() -> regmatch_T {
+    regmatch_T {
+        regprog: ptr::null_mut(),
+        startp: [ptr::null_mut(); 10],
+        endp: [ptr::null_mut(); 10],
+        rm_matchcol: 0,
+        rm_ic: false,
+    }
+}
+
+/// The `/pat/` argument both commands accept in place of a flag letter.
+///
+/// Returns the index of the closing delimiter, which upstream overwrites with
+/// a NUL so the pattern is its own string -- the scan resumes one byte past
+/// it.  `None` means it failed, with the reason already reported.
+///
+/// # Safety
+/// `arg` must be the command's NUL-terminated argument and `at` must index
+/// the opening delimiter.
+unsafe fn compile_sort_pattern(
+    arg: *mut c_char,
+    at: usize,
+    regmatch: &mut regmatch_T,
+) -> Option<usize> {
+    // SAFETY: caller's contract.
+    unsafe {
+        let delim = arg.add(at);
+        let end = skip_regexp_err(delim.add(1), *delim as c_int, true_0);
+        if end.is_null() {
+            return None;
+        }
+        *end = NUL as c_char;
+
+        // Use the last search pattern if the sort pattern is empty.
+        regmatch.regprog = if end == delim.add(1) {
+            if last_search_pat().is_null() {
+                emsg(gettext(&raw const e_noprevre as *const c_char));
+                return None;
+            }
+            vim_regcomp(last_search_pat(), RE_MAGIC)
+        } else {
+            vim_regcomp(delim.add(1), RE_MAGIC)
+        };
+        if regmatch.regprog.is_null() {
+            return None;
+        }
+        regmatch.rm_ic = p_ic.get() != 0;
+        Some(end.offset_from(arg) as usize)
+    }
+}
+
+/// True for the letters that can only ever be flags, so that anything else is
+/// a pattern delimiter.
+fn is_alpha(byte: u8) -> bool {
+    byte.is_ascii_alphabetic()
+}
+
+/// The flags `:sort` was given.
+struct SortSpec {
+    /// `u`: drop a line equal to the one before it.
+    unique: bool,
+    /// `r`: compare what the pattern matched, not what follows it.
+    use_match: bool,
+    /// The `STR2NR_*` base `b`/`o`/`x` forced, or zero.
+    radix: c_int,
+    /// `n`/`b`/`o`/`x`: compare as integers.
+    numeric: bool,
+    /// `f`: compare as floats.
+    float: bool,
+}
+
+/// Read `:sort`'s flags and its optional pattern.  `false` means the command
+/// was rejected, with the reason already reported.
+///
+/// # Safety
+/// `eap` must be a live Ex command.
+unsafe fn parse_sort_flags(
+    eap: *mut exarg_T,
+    spec: &mut SortSpec,
+    regmatch: &mut regmatch_T,
+) -> bool {
+    // SAFETY: caller's contract.
+    let arg = unsafe { (*eap).arg };
+    let mut order = StringOrder {
+        locale: false,
+        ignore_case: false,
+    };
+    // Only one of 'n', 'b', 'o', 'f' and 'x' is allowed.
+    let mut formats = 0;
+    let mut at = 0;
+
+    loop {
+        // The pattern arm rewrites the argument as it goes, so each byte is
+        // read from the buffer rather than from a slice taken up front.
+        // SAFETY: `at` has not passed the argument's NUL.
+        let byte = unsafe { *arg.add(at) } as u8;
+        match byte {
+            0 => break,
+            b'i' => order.ignore_case = true,
+            b'l' => order.locale = true,
+            b'r' => spec.use_match = true,
+            b'n' => {
+                spec.numeric = true;
+                formats += 1;
+            }
+            b'f' => {
+                spec.float = true;
+                formats += 1;
+            }
+            b'b' => {
+                spec.radix = STR2NR_BIN as c_int + STR2NR_FORCE as c_int;
+                formats += 1;
+            }
+            b'o' => {
+                spec.radix = STR2NR_OCT as c_int + STR2NR_FORCE as c_int;
+                formats += 1;
+            }
+            b'x' => {
+                spec.radix = STR2NR_HEX as c_int + STR2NR_FORCE as c_int;
+                formats += 1;
+            }
+            b'u' => spec.unique = true,
+            // A comment starts here.
+            b'"' => break,
+            _ if ascii_iswhite(byte as c_int) => {}
+            _ => {
+                // SAFETY: `at` indexes the argument's own bytes.
+                let next = unsafe { check_nextcmd(arg.add(at)) };
+                if !next.is_null() {
+                    // SAFETY: caller's contract.
+                    unsafe { (*eap).nextcmd = next };
+                    break;
+                }
+                if is_alpha(byte) || !regmatch.regprog.is_null() {
+                    // SAFETY: as above.
+                    unsafe {
+                        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg.add(at))
+                    };
+                    return false;
+                }
+                // SAFETY: as above.
+                match unsafe { compile_sort_pattern(arg, at, regmatch) } {
+                    Some(end) => at = end,
+                    None => return false,
+                }
+            }
+        }
+        at += 1;
+    }
+
+    SORT_ORDER.set(order);
+    if formats > 1 {
+        // SAFETY: a static message.
+        unsafe { emsg(gettext(&raw const e_invarg as *const c_char)) };
+        return false;
+    }
+    // From here on "numeric" covers every integer format.
+    spec.numeric |= spec.radix != 0;
+    true
+}
+
+/// The part of `line` the comparison should look at: the whole line when
+/// there is no pattern, what the pattern matched under `r`, what follows the
+/// match otherwise -- and nothing at all for a line the pattern misses.
+///
+/// # Safety
+/// `line` must be a live buffer line of `len` bytes.
+unsafe fn match_range(
+    regmatch: &mut regmatch_T,
+    line: *mut c_char,
+    len: c_int,
+    use_match: bool,
+) -> (colnr_T, colnr_T) {
+    if regmatch.regprog.is_null() {
+        return (0, len);
+    }
+    // SAFETY: caller's contract.
+    unsafe {
+        if !vim_regexec(regmatch, line, 0) {
+            return (0, 0);
+        }
+        let start = regmatch.startp[0].offset_from(line) as colnr_T;
+        let end = regmatch.endp[0].offset_from(line) as colnr_T;
+        if use_match { (start, end) } else { (end, len) }
+    }
+}
+
+/// The number or float in `line[start..end]`.
+///
+/// The line is temporarily terminated at `end` so that `vim_str2nr` and
+/// `strtod` cannot read digits past the match.
+///
+/// # Safety
+/// `line` must be a live buffer line and `start`/`end` byte offsets into it.
+unsafe fn number_key(line: *mut c_char, start: colnr_T, end: colnr_T, spec: &SortSpec) -> SortKey {
+    // SAFETY: caller's contract.
+    unsafe {
+        let stop = line.add(end as usize);
+        let saved = *stop;
+        *stop = NUL as c_char;
+        let from = line.add(start as usize);
+
+        let key = if spec.float {
+            let mut s = skipwhite(from);
+            if *s == '+' as c_char {
+                s = skipwhite(s.add(1));
+            }
+            // An empty line sorts before any number.
+            SortKey::Float(if *s == NUL as c_char {
+                -float_T::MAX
+            } else {
+                strtod(s, ptr::null_mut())
+            })
+        } else {
+            let mut s = if spec.radix & STR2NR_HEX as c_int != 0 {
+                skiptohex(from)
+            } else if spec.radix & STR2NR_BIN as c_int != 0 {
+                skiptobin(from).cast_mut()
+            } else {
+                skiptodigit(from)
+            };
+            // Include a preceding negative sign.
+            if s > from && *s.sub(1) == '-' as c_char {
+                s = s.sub(1);
+            }
+            if *s == NUL as c_char {
+                // A line without a number sorts before any number.
+                SortKey::Number(None)
+            } else {
+                let mut value: varnumber_T = 0;
+                vim_str2nr(
+                    s,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    spec.radix,
+                    &mut value,
+                    ptr::null_mut(),
+                    0,
+                    false,
+                    ptr::null_mut(),
+                );
+                SortKey::Number(Some(value))
+            }
+        };
+
+        *stop = saved;
+        key
+    }
+}
+
+/// Build one [`SortLine`] per line of the range, and report the longest line.
+///
+/// `None` means the user interrupted the scan.  Doing the pattern match and
+/// the number conversion once per line here is what keeps them out of the
+/// comparator.
+///
+/// # Safety
+/// The range must be lines of the current buffer.
+unsafe fn collect_sort_keys(
+    line1: linenr_T,
+    line2: linenr_T,
+    spec: &SortSpec,
+    regmatch: &mut regmatch_T,
+) -> Option<(Vec<SortLine>, c_int)> {
+    let mut lines = Vec::with_capacity((line2 - line1 + 1) as usize);
+    let mut maxlen = 0;
+
+    for lnum in line1..=line2 {
+        // SAFETY: `lnum` is a line of the current buffer.
+        let (text, len) = unsafe { (ml_get(lnum), ml_get_len(lnum)) };
+        maxlen = maxlen.max(len);
+
+        // SAFETY: as above.
+        let (start, end) = unsafe { match_range(regmatch, text, len, spec.use_match) };
+        let key = if spec.numeric || spec.float {
+            // SAFETY: as above.
+            unsafe { number_key(text, start, end, spec) }
+        } else {
+            SortKey::Text { start, end }
+        };
+        lines.push(SortLine { lnum, key });
+
+        if !regmatch.regprog.is_null() {
+            fast_breakcheck();
+        }
+        if got_int.get() {
+            return None;
+        }
+    }
+    Some((lines, maxlen))
+}
+
+/// `:sort`.
+///
+/// # Safety
+/// `eap` must be a live Ex command whose range is inside the current buffer.
+pub unsafe fn ex_sort(eap: *mut exarg_T) {
+    // SAFETY: caller's contract.
+    let (forceit, line1, line2) = unsafe { ((*eap).forceit, (*eap).line1, (*eap).line2) };
+    let mut count = (line2 - line1) as size_t + 1;
+
+    // Sorting one line is really quick!
+    if count <= 1 {
+        return;
+    }
+    // SAFETY: the range is inside the current buffer.
+    if unsafe { u_save(line1 - 1, line2 + 1) } == FAIL {
+        return;
+    }
+
+    SORTBUF1.set(ptr::null_mut());
+    SORTBUF2.set(ptr::null_mut());
+    SORT_ABORT.set(false);
+    let mut regmatch = no_regmatch();
+    let mut spec = SortSpec {
+        unique: false,
+        use_match: false,
+        radix: 0,
+        numeric: false,
+        float: false,
+    };
+    // Buffer contents changed.
+    let mut change_occurred = false;
+    let mut lnum = line2;
+
+    'sortend: {
+        // SAFETY: caller's contract.
+        if !unsafe { parse_sort_flags(eap, &mut spec, &mut regmatch) } {
+            break 'sortend;
+        }
+        // SAFETY: the range is inside the current buffer.
+        let Some((lines, maxlen)) =
+            (unsafe { collect_sort_keys(line1, line2, &spec, &mut regmatch) })
+        else {
+            break 'sortend;
+        };
+        let mut lines = lines;
+
+        // Allocate the two buffers that can hold the longest line, then sort
+        // the array of line numbers.  Note: can't be interrupted!
+        // SAFETY: both are freed below, on every path.
+        unsafe {
+            SORTBUF1.set(xmalloc(maxlen as size_t + 1).cast());
+            SORTBUF2.set(xmalloc(maxlen as size_t + 1).cast());
+            qsort(
+                lines.as_mut_ptr().cast(),
+                count,
+                size_of::<SortLine>(),
+                Some(sort_compare),
+            );
+        }
+        if SORT_ABORT.get() {
+            break 'sortend;
+        }
+
+        // Insert the lines in the sorted order below the last one.
         let mut old_count: bcount_t = 0;
         let mut new_count: bcount_t = 0;
-        let mut lnum_0: linenr_T = 0;
-        let mut deleted: linenr_T = 0;
-        let mut regmatch: regmatch_T = regmatch_T {
-            regprog: ::core::ptr::null_mut::<regprog_T>(),
-            startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-            endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-            rm_matchcol: 0,
-            rm_ic: false,
-        };
-        let mut maxlen: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut count: size_t = (((*eap).line2 - (*eap).line1) as size_t).wrapping_add(1 as size_t);
-        let mut i: size_t = 0;
-        let mut unique: bool = false_0 != 0;
-        let mut sort_what: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if count <= 1 as size_t {
-            return;
-        }
-        if u_save((*eap).line1 - 1 as linenr_T, (*eap).line2 + 1 as linenr_T) == FAIL {
-            return;
-        }
-        sortbuf1.set(::core::ptr::null_mut::<::core::ffi::c_char>());
-        sortbuf2.set(::core::ptr::null_mut::<::core::ffi::c_char>());
-        regmatch.regprog = ::core::ptr::null_mut::<regprog_T>();
-        let mut nrs: *mut sorti_T =
-            xmalloc(count.wrapping_mul(::core::mem::size_of::<sorti_T>())) as *mut sorti_T;
-        sort_flt.set(false_0 != 0);
-        sort_nr.set(sort_flt.get());
-        sort_rx.set(sort_nr.get());
-        sort_lc.set(sort_rx.get());
-        sort_ic.set(sort_lc.get());
-        sort_abort.set(sort_ic.get());
-        let mut format_found: size_t = 0 as size_t;
-        let mut change_occurred: bool = false_0 != 0;
-        let mut p: *mut ::core::ffi::c_char = (*eap).arg;
-        '_sortend: {
-            while *p as ::core::ffi::c_int != NUL {
-                if !ascii_iswhite(*p as ::core::ffi::c_int) {
-                    if *p as ::core::ffi::c_int == 'i' as ::core::ffi::c_int {
-                        sort_ic.set(true_0 != 0);
-                    } else if *p as ::core::ffi::c_int == 'l' as ::core::ffi::c_int {
-                        sort_lc.set(true_0 != 0);
-                    } else if *p as ::core::ffi::c_int == 'r' as ::core::ffi::c_int {
-                        sort_rx.set(true_0 != 0);
-                    } else if *p as ::core::ffi::c_int == 'n' as ::core::ffi::c_int {
-                        sort_nr.set(true_0 != 0);
-                        format_found = format_found.wrapping_add(1);
-                    } else if *p as ::core::ffi::c_int == 'f' as ::core::ffi::c_int {
-                        sort_flt.set(true_0 != 0);
-                        format_found = format_found.wrapping_add(1);
-                    } else if *p as ::core::ffi::c_int == 'b' as ::core::ffi::c_int {
-                        sort_what =
-                            STR2NR_BIN as ::core::ffi::c_int + STR2NR_FORCE as ::core::ffi::c_int;
-                        format_found = format_found.wrapping_add(1);
-                    } else if *p as ::core::ffi::c_int == 'o' as ::core::ffi::c_int {
-                        sort_what =
-                            STR2NR_OCT as ::core::ffi::c_int + STR2NR_FORCE as ::core::ffi::c_int;
-                        format_found = format_found.wrapping_add(1);
-                    } else if *p as ::core::ffi::c_int == 'x' as ::core::ffi::c_int {
-                        sort_what =
-                            STR2NR_HEX as ::core::ffi::c_int + STR2NR_FORCE as ::core::ffi::c_int;
-                        format_found = format_found.wrapping_add(1);
-                    } else if *p as ::core::ffi::c_int == 'u' as ::core::ffi::c_int {
-                        unique = true_0 != 0;
-                    } else if *p as ::core::ffi::c_int == '"' as ::core::ffi::c_int {
-                        break;
-                    } else if !check_nextcmd(p).is_null() {
-                        (*eap).nextcmd = check_nextcmd(p);
-                        break;
-                    } else if !(*p as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-                        && *p as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-                        || *p as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-                            && *p as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint)
-                        && regmatch.regprog.is_null()
-                    {
-                        let mut s: *mut ::core::ffi::c_char = skip_regexp_err(
-                            p.offset(1 as ::core::ffi::c_int as isize),
-                            *p as ::core::ffi::c_int,
-                            true_0,
-                        );
-                        if s.is_null() {
-                            break '_sortend;
-                        }
-                        *s = NUL as ::core::ffi::c_char;
-                        if s == p.offset(1 as ::core::ffi::c_int as isize) {
-                            if last_search_pat().is_null() {
-                                emsg(gettext(&raw const e_noprevre as *const ::core::ffi::c_char));
-                                break '_sortend;
-                            } else {
-                                regmatch.regprog = vim_regcomp(last_search_pat(), RE_MAGIC);
-                            }
-                        } else {
-                            regmatch.regprog =
-                                vim_regcomp(p.offset(1 as ::core::ffi::c_int as isize), RE_MAGIC);
-                        }
-                        if regmatch.regprog.is_null() {
-                            break '_sortend;
-                        }
-                        p = s;
-                        regmatch.rm_ic = p_ic.get() != 0;
-                    } else {
-                        semsg_c!(
-                            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                            p,
-                        );
-                        break '_sortend;
-                    }
-                }
-                p = p.offset(1);
-            }
-            if format_found > 1 as size_t {
-                emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
+        let mut placed = 0;
+        while placed < count {
+            let from = if forceit != 0 {
+                count - placed - 1
             } else {
-                sort_nr.set(sort_nr.get() as ::core::ffi::c_int | sort_what != 0);
-                let mut lnum: linenr_T = (*eap).line1;
-                while lnum <= (*eap).line2 {
-                    let mut s_0: *mut ::core::ffi::c_char = ml_get(lnum);
-                    let mut len: ::core::ffi::c_int = ml_get_len(lnum);
-                    maxlen = if maxlen > len { maxlen } else { len };
-                    let mut start_col: colnr_T = 0 as colnr_T;
-                    let mut end_col: colnr_T = len as colnr_T;
-                    if !regmatch.regprog.is_null()
-                        && vim_regexec(&raw mut regmatch, s_0, 0 as colnr_T) as ::core::ffi::c_int
-                            != 0
-                    {
-                        if sort_rx.get() {
-                            start_col = regmatch.startp[0 as ::core::ffi::c_int as usize]
-                                .offset_from(s_0)
-                                as colnr_T;
-                            end_col = regmatch.endp[0 as ::core::ffi::c_int as usize]
-                                .offset_from(s_0) as colnr_T;
-                        } else {
-                            start_col = regmatch.endp[0 as ::core::ffi::c_int as usize]
-                                .offset_from(s_0)
-                                as colnr_T;
-                        }
-                    } else if !regmatch.regprog.is_null() {
-                        end_col = 0 as ::core::ffi::c_int as colnr_T;
-                    }
-                    if sort_nr.get() as ::core::ffi::c_int != 0
-                        || sort_flt.get() as ::core::ffi::c_int != 0
-                    {
-                        let mut s2: *mut ::core::ffi::c_char = s_0.offset(end_col as isize);
-                        let mut c: ::core::ffi::c_char = *s2;
-                        *s2 = NUL as ::core::ffi::c_char;
-                        let mut p_0: *mut ::core::ffi::c_char = s_0.offset(start_col as isize);
-                        if sort_nr.get() {
-                            if sort_what & STR2NR_HEX as ::core::ffi::c_int != 0 {
-                                s_0 = skiptohex(p_0);
-                            } else if sort_what & STR2NR_BIN as ::core::ffi::c_int != 0 {
-                                s_0 = skiptobin(p_0) as *mut ::core::ffi::c_char;
-                            } else {
-                                s_0 = skiptodigit(p_0);
-                            }
-                            if s_0 > p_0
-                                && *s_0.offset(-1 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int
-                                    == '-' as ::core::ffi::c_int
-                            {
-                                s_0 = s_0.offset(-1);
-                            }
-                            if *s_0 as ::core::ffi::c_int == NUL {
-                                (*nrs.offset((lnum - (*eap).line1) as isize))
-                                    .st_u
-                                    .num
-                                    .is_number = false_0 != 0;
-                                (*nrs.offset((lnum - (*eap).line1) as isize)).st_u.num.value =
-                                    0 as varnumber_T;
-                            } else {
-                                (*nrs.offset((lnum - (*eap).line1) as isize))
-                                    .st_u
-                                    .num
-                                    .is_number = true_0 != 0;
-                                vim_str2nr(
-                                    s_0,
-                                    ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                                    ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                                    sort_what,
-                                    &raw mut (*nrs.offset((lnum - (*eap).line1) as isize))
-                                        .st_u
-                                        .num
-                                        .value,
-                                    ::core::ptr::null_mut::<uvarnumber_T>(),
-                                    0 as ::core::ffi::c_int,
-                                    false_0 != 0,
-                                    ::core::ptr::null_mut::<bool>(),
-                                );
-                            }
-                        } else {
-                            s_0 = skipwhite(p_0);
-                            if *s_0 as ::core::ffi::c_int == '+' as ::core::ffi::c_int {
-                                s_0 = skipwhite(s_0.offset(1 as ::core::ffi::c_int as isize));
-                            }
-                            if *s_0 as ::core::ffi::c_int == NUL {
-                                (*nrs.offset((lnum - (*eap).line1) as isize)).st_u.value_flt =
-                                    -DBL_MAX as float_T;
-                            } else {
-                                (*nrs.offset((lnum - (*eap).line1) as isize)).st_u.value_flt =
-                                    strtod(s_0, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>())
-                                        as float_T;
-                            }
-                        }
-                        *s2 = c;
-                    } else {
-                        (*nrs.offset((lnum - (*eap).line1) as isize))
-                            .st_u
-                            .line
-                            .start_col_nr = start_col as varnumber_T;
-                        (*nrs.offset((lnum - (*eap).line1) as isize))
-                            .st_u
-                            .line
-                            .end_col_nr = end_col as varnumber_T;
-                    }
-                    (*nrs.offset((lnum - (*eap).line1) as isize)).lnum = lnum;
-                    if !regmatch.regprog.is_null() {
-                        fast_breakcheck();
-                    }
-                    if got_int.get() {
-                        break '_sortend;
-                    }
-                    lnum += 1;
-                }
-                sortbuf1.set(xmalloc((maxlen as size_t).wrapping_add(1 as size_t))
-                    as *mut ::core::ffi::c_char);
-                sortbuf2.set(xmalloc((maxlen as size_t).wrapping_add(1 as size_t))
-                    as *mut ::core::ffi::c_char);
-                qsort(
-                    nrs as *mut ::core::ffi::c_void,
-                    count,
-                    ::core::mem::size_of::<sorti_T>(),
-                    Some(
-                        sort_compare
-                            as unsafe extern "C" fn(
-                                *const ::core::ffi::c_void,
-                                *const ::core::ffi::c_void,
-                            )
-                                -> ::core::ffi::c_int,
-                    ),
-                );
-                if !sort_abort.get() {
-                    old_count = 0 as bcount_t;
-                    new_count = 0 as bcount_t;
-                    lnum_0 = (*eap).line2;
-                    i = 0 as size_t;
-                    while i < count {
-                        let get_lnum: linenr_T = (*nrs.add(if (*eap).forceit != 0 {
-                            count.wrapping_sub(i).wrapping_sub(1 as size_t)
-                        } else {
-                            i
-                        }))
-                        .lnum;
-                        if get_lnum + (count as linenr_T - 1 as linenr_T) != lnum_0 {
-                            change_occurred = true_0 != 0;
-                        }
-                        let mut s_1: *mut ::core::ffi::c_char = ml_get(get_lnum);
-                        let mut bytelen: colnr_T = ml_get_len(get_lnum) + 1 as colnr_T;
-                        old_count += bytelen as bcount_t;
-                        if !unique
-                            || i == 0 as size_t
-                            || string_compare(
-                                s_1 as *const ::core::ffi::c_void,
-                                sortbuf1.get() as *const ::core::ffi::c_void,
-                            ) != 0 as ::core::ffi::c_int
-                        {
-                            strcpy(sortbuf1.get(), s_1);
-                            let c2rust_fresh3 = lnum_0;
-                            lnum_0 = lnum_0 + 1;
-                            if ml_append(c2rust_fresh3, sortbuf1.get(), 0 as colnr_T, false_0 != 0)
-                                == FAIL
-                            {
-                                break;
-                            }
-                            new_count += bytelen as bcount_t;
-                        }
-                        fast_breakcheck();
-                        if got_int.get() {
-                            break '_sortend;
-                        }
-                        i = i.wrapping_add(1);
-                    }
-                    if i == count {
-                        i = 0 as size_t;
-                        while i < count {
-                            ml_delete((*eap).line1);
-                            i = i.wrapping_add(1);
-                        }
-                    } else {
-                        count = 0 as size_t;
-                    }
-                    deleted = count as linenr_T - (lnum_0 - (*eap).line2);
-                    if deleted > 0 as linenr_T {
-                        mark_adjust(
-                            (*eap).line2 - deleted,
-                            (*eap).line2,
-                            MAXLNUM as ::core::ffi::c_int as linenr_T,
-                            -deleted,
-                            kExtmarkNOOP,
-                        );
-                        msgmore(-(deleted as ::core::ffi::c_int));
-                    } else if deleted < 0 as linenr_T {
-                        mark_adjust(
-                            (*eap).line2,
-                            MAXLNUM as ::core::ffi::c_int as linenr_T,
-                            -deleted,
-                            0 as linenr_T,
-                            kExtmarkNOOP,
-                        );
-                    }
-                    if change_occurred as ::core::ffi::c_int != 0 || deleted != 0 as linenr_T {
-                        extmark_splice(
-                            curbuf.get(),
-                            (*eap).line1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                            0 as colnr_T,
-                            count as ::core::ffi::c_int,
-                            0 as colnr_T,
-                            old_count,
-                            lnum_0 as ::core::ffi::c_int - (*eap).line2 as ::core::ffi::c_int,
-                            0 as colnr_T,
-                            new_count,
-                            kExtmarkUndo,
-                        );
-                        changed_lines(
-                            curbuf.get(),
-                            (*eap).line1,
-                            0 as colnr_T,
-                            (*eap).line2 + 1 as linenr_T,
-                            -deleted,
-                            true_0 != 0,
-                        );
-                    }
-                    (*curwin.get()).w_cursor.lnum = (*eap).line1;
-                    beginline(BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
-                }
+                placed
+            };
+            let get_lnum = lines[from].lnum;
+
+            // If the original line number of the line being placed is not
+            // the same as "lnum" (accounting for offset), the buffer changed.
+            if get_lnum + (count as linenr_T - 1) != lnum {
+                change_occurred = true;
             }
+
+            // SAFETY: `get_lnum` is still a line of the current buffer.
+            let stop = unsafe {
+                let text = ml_get(get_lnum);
+                // Include the EOL in the byte length.
+                let bytelen = (ml_get_len(get_lnum) + 1) as bcount_t;
+                old_count += bytelen;
+                if spec.unique && placed > 0 && string_compare(text, SORTBUF1.get()) == 0 {
+                    false
+                } else {
+                    // Copy the line into a buffer: it may become invalid in
+                    // `ml_append`, and "unique" needs it next time round.
+                    strcpy(SORTBUF1.get(), text);
+                    let failed = ml_append(lnum, SORTBUF1.get(), 0, false) == FAIL;
+                    lnum += 1;
+                    if !failed {
+                        new_count += bytelen;
+                    }
+                    failed
+                }
+            };
+            if stop {
+                break;
+            }
+
+            fast_breakcheck();
+            if got_int.get() {
+                break 'sortend;
+            }
+            placed += 1;
         }
-        xfree(nrs as *mut ::core::ffi::c_void);
-        xfree(sortbuf1.get() as *mut ::core::ffi::c_void);
-        xfree(sortbuf2.get() as *mut ::core::ffi::c_void);
+
+        // Delete the original lines if appending worked.
+        if placed == count {
+            for _ in 0..count {
+                // SAFETY: the range is still there, below the new lines.
+                unsafe { ml_delete(line1) };
+            }
+        } else {
+            count = 0;
+        }
+
+        // Adjust marks for deleted (or added) lines and prepare for display.
+        let deleted = count as linenr_T - (lnum - line2);
+        // SAFETY: the range is the one just rewritten.
+        unsafe {
+            if deleted > 0 {
+                mark_adjust(
+                    line2 - deleted,
+                    line2,
+                    MAXLNUM as linenr_T,
+                    -deleted,
+                    kExtmarkNOOP,
+                );
+                msgmore(-deleted);
+            } else if deleted < 0 {
+                mark_adjust(line2, MAXLNUM as linenr_T, -deleted, 0, kExtmarkNOOP);
+            }
+
+            if change_occurred || deleted != 0 {
+                extmark_splice(
+                    curbuf.get(),
+                    line1 - 1,
+                    0,
+                    count as c_int,
+                    0,
+                    old_count,
+                    lnum - line2,
+                    0,
+                    new_count,
+                    kExtmarkUndo,
+                );
+                changed_lines(curbuf.get(), line1, 0, line2 + 1, -deleted, true);
+            }
+
+            (*curwin.get()).w_cursor.lnum = line1;
+            beginline((BL_WHITE | BL_FIX) as c_int);
+        }
+    }
+
+    // SAFETY: each is either null or ours.
+    unsafe {
+        xfree(SORTBUF1.get().cast());
+        xfree(SORTBUF2.get().cast());
         vim_regfree(regmatch.regprog);
         if got_int.get() {
-            emsg(gettext(&raw const e_interr as *const ::core::ffi::c_char));
+            emsg(gettext(&raw const e_interr as *const c_char));
         }
     }
 }
 
-pub unsafe fn ex_uniq(mut eap: *mut exarg_T) {
-    unsafe {
-        let mut match_continue: bool = false;
-        let mut next_is_unmatch: bool = false;
-        let mut done_lnum: linenr_T = 0;
-        let mut delete_lnum: linenr_T = 0;
-        let mut regmatch: regmatch_T = regmatch_T {
-            regprog: ::core::ptr::null_mut::<regprog_T>(),
-            startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-            endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-            rm_matchcol: 0,
-            rm_ic: false,
+/// Which lines `:uniq` keeps.
+#[derive(Clone, Copy, PartialEq)]
+enum UniqMode {
+    /// The plain form: collapse each run of equal lines to its first.
+    Dedup,
+    /// `:uniq!`: keep only the lines that do repeat.
+    OnlyRepeated,
+    /// `:uniq u`: keep only the lines that do not.
+    OnlyUnique,
+}
+
+/// The running state of `:uniq`'s single pass over the range.
+struct UniqScan {
+    /// The previous line was part of a run of equal lines.
+    in_run: bool,
+    /// The next line must be treated as *not* matching, because this step
+    /// already deleted the line it would have been compared against.
+    force_unmatch: bool,
+    /// The last line `:uniq!` has already decided about.
+    done_lnum: linenr_T,
+}
+
+impl UniqScan {
+    /// Decide what one line means: the line to delete (zero for none), and
+    /// whether its key becomes the one the next line is compared against.
+    fn step(
+        &mut self,
+        mode: UniqMode,
+        i: linenr_T,
+        count: linenr_T,
+        lnum: linenr_T,
+        is_match: bool,
+    ) -> (linenr_T, bool) {
+        let is_match = is_match && !core::mem::replace(&mut self.force_unmatch, false);
+        match mode {
+            UniqMode::Dedup if is_match => (lnum, false),
+            UniqMode::Dedup => (0, true),
+
+            UniqMode::OnlyRepeated if is_match => {
+                self.done_lnum = lnum - 1;
+                self.in_run = true;
+                (lnum, false)
+            }
+            UniqMode::OnlyRepeated => {
+                // The line before this one ended a run of one, so it is the
+                // one to drop -- and this line has then lost the line it was
+                // compared against.
+                let delete = if i > 0 && !self.in_run && lnum - 1 > self.done_lnum {
+                    self.force_unmatch = true;
+                    lnum - 1
+                } else if i >= count - 1 {
+                    lnum
+                } else {
+                    0
+                };
+                self.in_run = false;
+                (delete, true)
+            }
+
+            UniqMode::OnlyUnique if is_match => {
+                let delete = if self.in_run { lnum } else { lnum - 1 };
+                self.in_run = true;
+                (delete, false)
+            }
+            UniqMode::OnlyUnique => {
+                // Only reachable once the previous step deleted this line's
+                // predecessor and reset the index to zero.
+                let delete = if i == 0 && self.in_run { lnum } else { 0 };
+                self.in_run = false;
+                (delete, true)
+            }
+        }
+    }
+}
+
+/// Read `:uniq`'s flags and its optional pattern.  `false` means the command
+/// was rejected, with the reason already reported.
+///
+/// # Safety
+/// `eap` must be a live Ex command.
+unsafe fn parse_uniq_flags(
+    eap: *mut exarg_T,
+    mode: &mut UniqMode,
+    use_match: &mut bool,
+    regmatch: &mut regmatch_T,
+) -> bool {
+    // SAFETY: caller's contract.
+    let arg = unsafe { (*eap).arg };
+    let mut order = StringOrder {
+        locale: false,
+        ignore_case: false,
+    };
+    let mut at = 0;
+
+    loop {
+        // SAFETY: `at` has not passed the argument's NUL.
+        let byte = unsafe { *arg.add(at) } as u8;
+        match byte {
+            0 => break,
+            b'i' => order.ignore_case = true,
+            b'l' => order.locale = true,
+            b'r' => *use_match = true,
+            // 'u' is only valid when '!' is not given.
+            b'u' => {
+                if *mode != UniqMode::OnlyRepeated {
+                    *mode = UniqMode::OnlyUnique;
+                }
+            }
+            // A comment starts here.
+            b'"' => break,
+            _ if ascii_iswhite(byte as c_int) => {}
+            _ => {
+                // SAFETY: `at` indexes the argument's own bytes.
+                let next = unsafe { check_nextcmd(arg.add(at)) };
+                // SAFETY: caller's contract.
+                if !next.is_null() && unsafe { (*eap).nextcmd }.is_null() {
+                    // SAFETY: as above.
+                    unsafe { (*eap).nextcmd = next };
+                    break;
+                }
+                if is_alpha(byte) || !regmatch.regprog.is_null() {
+                    // SAFETY: as above.
+                    unsafe {
+                        semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg.add(at))
+                    };
+                    return false;
+                }
+                // SAFETY: as above.
+                match unsafe { compile_sort_pattern(arg, at, regmatch) } {
+                    Some(end) => at = end,
+                    None => return false,
+                }
+            }
+        }
+        at += 1;
+    }
+
+    SORT_ORDER.set(order);
+    true
+}
+
+/// `:uniq`.
+///
+/// # Safety
+/// `eap` must be a live Ex command whose range is inside the current buffer.
+pub unsafe fn ex_uniq(eap: *mut exarg_T) {
+    // SAFETY: caller's contract.
+    let (forceit, line1, line2) = unsafe { ((*eap).forceit, (*eap).line1, (*eap).line2) };
+    let mut count = line2 - line1 + 1;
+
+    // Uniq one line is really quick!
+    if count <= 1 {
+        return;
+    }
+    // SAFETY: the range is inside the current buffer.
+    if unsafe { u_save(line1 - 1, line2 + 1) } == FAIL {
+        return;
+    }
+
+    SORTBUF1.set(ptr::null_mut());
+    SORT_ABORT.set(false);
+    let mut regmatch = no_regmatch();
+    let mut mode = if forceit != 0 {
+        UniqMode::OnlyRepeated
+    } else {
+        UniqMode::Dedup
+    };
+    let mut use_match = false;
+    let mut change_occurred = false;
+    let mut deleted = 0;
+
+    'uniqend: {
+        // SAFETY: caller's contract.
+        if !unsafe { parse_uniq_flags(eap, &mut mode, &mut use_match, &mut regmatch) } {
+            break 'uniqend;
+        }
+
+        // Find the length of the longest line.
+        let mut maxlen = 0;
+        for lnum in line1..=line2 {
+            // SAFETY: `lnum` is a line of the current buffer.
+            maxlen = maxlen.max(unsafe { ml_get_len(lnum) });
+            if got_int.get() {
+                break 'uniqend;
+            }
+        }
+        // SAFETY: freed below, on every path.
+        SORTBUF1.set(unsafe { xmalloc(maxlen as size_t + 1) }.cast());
+
+        let mut scan = UniqScan {
+            in_run: false,
+            force_unmatch: false,
+            done_lnum: line1 - 1,
         };
-        let mut maxlen: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut count: linenr_T = (*eap).line2 - (*eap).line1 + 1 as linenr_T;
-        let mut keep_only_unique: bool = false_0 != 0;
-        let mut keep_only_not_unique: bool = (*eap).forceit != 0;
-        let mut deleted: linenr_T = 0 as linenr_T;
-        if count <= 1 as linenr_T {
-            return;
-        }
-        if u_save((*eap).line1 - 1 as linenr_T, (*eap).line2 + 1 as linenr_T) == FAIL {
-            return;
-        }
-        sortbuf1.set(::core::ptr::null_mut::<::core::ffi::c_char>());
-        regmatch.regprog = ::core::ptr::null_mut::<regprog_T>();
-        sort_flt.set(false_0 != 0);
-        sort_nr.set(sort_flt.get());
-        sort_rx.set(sort_nr.get());
-        sort_lc.set(sort_rx.get());
-        sort_ic.set(sort_lc.get());
-        sort_abort.set(sort_ic.get());
-        let mut change_occurred: bool = false_0 != 0;
-        let mut p: *mut ::core::ffi::c_char = (*eap).arg;
-        '_uniqend: {
-            while *p as ::core::ffi::c_int != NUL {
-                if !ascii_iswhite(*p as ::core::ffi::c_int) {
-                    if *p as ::core::ffi::c_int == 'i' as ::core::ffi::c_int {
-                        sort_ic.set(true_0 != 0);
-                    } else if *p as ::core::ffi::c_int == 'l' as ::core::ffi::c_int {
-                        sort_lc.set(true_0 != 0);
-                    } else if *p as ::core::ffi::c_int == 'r' as ::core::ffi::c_int {
-                        sort_rx.set(true_0 != 0);
-                    } else if *p as ::core::ffi::c_int == 'u' as ::core::ffi::c_int {
-                        if !keep_only_not_unique {
-                            keep_only_unique = true_0 != 0;
-                        }
-                    } else if *p as ::core::ffi::c_int == '"' as ::core::ffi::c_int {
-                        break;
-                    } else if (*eap).nextcmd.is_null() && !check_nextcmd(p).is_null() {
-                        (*eap).nextcmd = check_nextcmd(p);
-                        break;
-                    } else if !(*p as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-                        && *p as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-                        || *p as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-                            && *p as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint)
-                        && regmatch.regprog.is_null()
-                    {
-                        let mut s: *mut ::core::ffi::c_char = skip_regexp_err(
-                            p.offset(1 as ::core::ffi::c_int as isize),
-                            *p as ::core::ffi::c_int,
-                            true_0,
-                        );
-                        if s.is_null() {
-                            break '_uniqend;
-                        }
-                        *s = NUL as ::core::ffi::c_char;
-                        if s == p.offset(1 as ::core::ffi::c_int as isize) {
-                            if last_search_pat().is_null() {
-                                emsg(gettext(&raw const e_noprevre as *const ::core::ffi::c_char));
-                                break '_uniqend;
-                            } else {
-                                regmatch.regprog = vim_regcomp(last_search_pat(), RE_MAGIC);
-                            }
-                        } else {
-                            regmatch.regprog =
-                                vim_regcomp(p.offset(1 as ::core::ffi::c_int as isize), RE_MAGIC);
-                        }
-                        if regmatch.regprog.is_null() {
-                            break '_uniqend;
-                        }
-                        p = s;
-                        regmatch.rm_ic = p_ic.get() != 0;
-                    } else {
-                        semsg_c!(
-                            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                            p,
-                        );
-                        break '_uniqend;
-                    }
-                }
-                p = p.offset(1);
-            }
-            let mut lnum: linenr_T = (*eap).line1;
-            while lnum <= (*eap).line2 {
-                let mut len: ::core::ffi::c_int = ml_get_len(lnum);
-                if maxlen < len {
-                    maxlen = len;
-                }
-                if got_int.get() {
-                    break '_uniqend;
-                }
-                lnum += 1;
-            }
-            sortbuf1
-                .set(xmalloc((maxlen as size_t).wrapping_add(1 as size_t))
-                    as *mut ::core::ffi::c_char);
-            match_continue = false_0 != 0;
-            next_is_unmatch = false_0 != 0;
-            done_lnum = (*eap).line1 - 1 as linenr_T;
-            delete_lnum = 0 as linenr_T;
-            let mut i: linenr_T = 0 as linenr_T;
-            while i < count {
-                let mut get_lnum: linenr_T = (*eap).line1 + i;
-                let mut s_0: *mut ::core::ffi::c_char = ml_get(get_lnum);
-                let mut len_0: ::core::ffi::c_int = ml_get_len(get_lnum);
-                let mut start_col: colnr_T = 0 as colnr_T;
-                let mut end_col: colnr_T = len_0 as colnr_T;
-                if !regmatch.regprog.is_null()
-                    && vim_regexec(&raw mut regmatch, s_0, 0 as colnr_T) as ::core::ffi::c_int != 0
-                {
-                    if sort_rx.get() {
-                        start_col = regmatch.startp[0 as ::core::ffi::c_int as usize]
-                            .offset_from(s_0) as colnr_T;
-                        end_col = regmatch.endp[0 as ::core::ffi::c_int as usize].offset_from(s_0)
-                            as colnr_T;
-                    } else {
-                        start_col = regmatch.endp[0 as ::core::ffi::c_int as usize].offset_from(s_0)
-                            as colnr_T;
-                    }
-                } else if !regmatch.regprog.is_null() {
-                    end_col = 0 as ::core::ffi::c_int as colnr_T;
-                }
-                let mut save_c: ::core::ffi::c_char = NUL as ::core::ffi::c_char;
-                if end_col > 0 as ::core::ffi::c_int {
-                    save_c = *s_0.offset(end_col as isize);
-                    *s_0.offset(end_col as isize) = NUL as ::core::ffi::c_char;
-                }
-                let mut is_match: bool = if i > 0 as linenr_T {
-                    (string_compare(
-                        s_0.offset(start_col as isize) as *const ::core::ffi::c_void,
-                        sortbuf1.get() as *const ::core::ffi::c_void,
-                    ) == 0) as ::core::ffi::c_int
+        let mut i = 0;
+        while i < count {
+            let get_lnum = line1 + i;
+            // SAFETY: `get_lnum` is a line of the current buffer.
+            let (text, len) = unsafe { (ml_get(get_lnum), ml_get_len(get_lnum)) };
+            // SAFETY: as above.
+            let (start, end) = unsafe { match_range(&mut regmatch, text, len, use_match) };
+
+            // Terminate the line at the end of the key, compare it with the
+            // one before, and put the byte back.
+            // SAFETY: `start` and `end` are offsets into this line.
+            let (delete_lnum, _) = unsafe {
+                let saved = if end > 0 {
+                    Some(core::mem::replace(
+                        &mut *text.add(end as usize),
+                        NUL as c_char,
+                    ))
                 } else {
-                    false_0
-                } != 0;
-                delete_lnum = 0 as ::core::ffi::c_int as linenr_T;
-                if next_is_unmatch {
-                    is_match = false_0 != 0;
-                    next_is_unmatch = false_0 != 0;
+                    None
+                };
+                let is_match =
+                    i > 0 && string_compare(text.add(start as usize), SORTBUF1.get()) == 0;
+                let step = scan.step(mode, i, count, get_lnum, is_match);
+                if step.1 {
+                    strcpy(SORTBUF1.get(), text.add(start as usize));
                 }
-                if !keep_only_unique && !keep_only_not_unique {
-                    if is_match {
-                        delete_lnum = get_lnum;
-                    } else {
-                        strcpy(sortbuf1.get(), s_0.offset(start_col as isize));
-                    }
-                } else if keep_only_not_unique {
-                    if is_match {
-                        done_lnum = get_lnum - 1 as linenr_T;
-                        delete_lnum = get_lnum;
-                        match_continue = true_0 != 0;
-                    } else {
-                        if i > 0 as linenr_T
-                            && !match_continue
-                            && get_lnum - 1 as linenr_T > done_lnum
-                        {
-                            delete_lnum = get_lnum - 1 as linenr_T;
-                            next_is_unmatch = true_0 != 0;
-                        } else if i >= count - 1 as linenr_T {
-                            delete_lnum = get_lnum;
-                        }
-                        match_continue = false_0 != 0;
-                        strcpy(sortbuf1.get(), s_0.offset(start_col as isize));
-                    }
-                } else if is_match {
-                    if !match_continue {
-                        delete_lnum = get_lnum - 1 as linenr_T;
-                    } else {
-                        delete_lnum = get_lnum;
-                    }
-                    match_continue = true_0 != 0;
-                } else {
-                    if i == 0 as linenr_T && match_continue as ::core::ffi::c_int != 0 {
-                        delete_lnum = get_lnum;
-                    }
-                    match_continue = false_0 != 0;
-                    strcpy(sortbuf1.get(), s_0.offset(start_col as isize));
+                if let Some(saved) = saved {
+                    *text.add(end as usize) = saved;
                 }
-                if end_col > 0 as ::core::ffi::c_int {
-                    *s_0.offset(end_col as isize) = save_c;
-                }
-                if delete_lnum > 0 as linenr_T {
-                    ml_delete(delete_lnum);
-                    i = (i as ::core::ffi::c_int
-                        - (get_lnum - delete_lnum + 1 as linenr_T) as ::core::ffi::c_int)
-                        as linenr_T;
-                    count -= 1;
-                    deleted += 1;
-                    change_occurred = true_0 != 0;
-                }
-                fast_breakcheck();
-                if got_int.get() {
-                    break '_uniqend;
-                }
-                i += 1;
+                step
+            };
+
+            if delete_lnum > 0 {
+                // SAFETY: it is a line of the range.
+                unsafe { ml_delete(delete_lnum) };
+                i -= get_lnum - delete_lnum + 1;
+                count -= 1;
+                deleted += 1;
+                change_occurred = true;
             }
+
+            fast_breakcheck();
+            if got_int.get() {
+                break 'uniqend;
+            }
+            i += 1;
+        }
+
+        // Adjust marks for deleted lines and prepare for displaying.
+        // SAFETY: the range is the one just rewritten.
+        unsafe {
             mark_adjust(
-                (*eap).line2 - deleted,
-                (*eap).line2,
-                MAXLNUM as ::core::ffi::c_int as linenr_T,
+                line2 - deleted,
+                line2,
+                MAXLNUM as linenr_T,
                 -deleted,
-                (if change_occurred as ::core::ffi::c_int != 0 {
-                    kExtmarkUndo as ::core::ffi::c_int
+                if change_occurred {
+                    kExtmarkUndo
                 } else {
-                    kExtmarkNOOP as ::core::ffi::c_int
-                }) as ExtmarkOp,
+                    kExtmarkNOOP
+                } as ExtmarkOp,
             );
-            msgmore(-(deleted as ::core::ffi::c_int));
+            msgmore(-deleted);
             if change_occurred {
-                changed_lines(
-                    curbuf.get(),
-                    (*eap).line1,
-                    0 as colnr_T,
-                    (*eap).line2 + 1 as linenr_T,
-                    -deleted,
-                    true_0 != 0,
-                );
+                changed_lines(curbuf.get(), line1, 0, line2 + 1, -deleted, true);
             }
-            (*curwin.get()).w_cursor.lnum = (*eap).line1;
-            beginline(BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
+            (*curwin.get()).w_cursor.lnum = line1;
+            beginline((BL_WHITE | BL_FIX) as c_int);
         }
-        xfree(sortbuf1.get() as *mut ::core::ffi::c_void);
+    }
+
+    // SAFETY: it is either null or ours.
+    unsafe {
+        xfree(SORTBUF1.get().cast());
         vim_regfree(regmatch.regprog);
         if got_int.get() {
-            emsg(gettext(&raw const e_interr as *const ::core::ffi::c_char));
+            emsg(gettext(&raw const e_interr as *const c_char));
         }
     }
 }

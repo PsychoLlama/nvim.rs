@@ -48,9 +48,7 @@ use crate::src::nvim::change::{
     appended_lines, appended_lines_mark, changed_bytes, changed_lines, del_lines, deleted_lines,
 };
 use crate::src::nvim::channel::channel_job_running;
-use crate::src::nvim::charset::{
-    getdigits_int, skiptobin, skiptodigit, skiptohex, skiptowhite, skipwhite, vim_isIDc, vim_str2nr,
-};
+use crate::src::nvim::charset::{getdigits_int, skiptowhite, skipwhite, vim_isIDc};
 use crate::src::nvim::cmdhist::add_to_history;
 use crate::src::nvim::cursor::{
     check_cursor, check_cursor_col, check_cursor_lnum, coladvance, get_cursor_line_ptr,
@@ -97,7 +95,7 @@ use crate::src::nvim::main::{
     got_int, highlight_match, info_message, keep_help_flag, msg_buf, msg_col, msg_didout,
     msg_listdo_overwrite, msg_row, msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent,
     need_check_timestamps, need_wait_return, no_u_sync, no_wait_return, p_awa, p_ch, p_confirm,
-    p_cpo, p_cwh, p_dir, p_gd, p_ic, p_icm, p_lz, p_rdt, p_report, p_sh, p_shm, p_shq, p_so, p_sol,
+    p_cpo, p_cwh, p_dir, p_gd, p_icm, p_lz, p_rdt, p_report, p_sh, p_shm, p_shq, p_so, p_sol,
     p_srr, p_stmp, p_ur, p_verbose, p_wa, p_warn, p_write, quit_more, redraw_tabline, sandbox,
     search_match_endcol, search_match_lines, secure, silent_mode, skip_redraw, sub_nlines,
     sub_nsubs, swap_exists_action, textlock,
@@ -131,10 +129,10 @@ use crate::src::nvim::os::env::expand_env_save;
 use crate::src::nvim::os::fs::{
     os_file_is_writable, os_file_mkdir, os_isdir, os_nodetype, os_path_exists, os_remove,
 };
-use crate::src::nvim::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
+use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
-    __ctype_b_loc, atol, gettext, log10, memcpy, memmove, memset, ngettext, qsort, snprintf,
-    strcasecmp, strcat, strchr, strcmp, strcoll, strcpy, strlen, strncmp, strtod, time,
+    __ctype_b_loc, atol, gettext, log10, memmove, memset, ngettext, snprintf, strcat, strchr,
+    strcmp, strcpy, strlen, strncmp, time,
 };
 use crate::src::nvim::os::shell::call_shell;
 use crate::src::nvim::os::time::os_time;
@@ -143,15 +141,10 @@ use crate::src::nvim::plines::{getvcol, plines_m_win_fill};
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM, equalpos};
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit, profile_zero};
 use crate::src::nvim::regexp::{
-    RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST, vim_regcomp, vim_regexec, vim_regexec_multi,
-    vim_regfree,
+    RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST, vim_regexec_multi, vim_regfree,
 };
-use crate::src::nvim::regexp::{
-    regtilde, skip_regexp, skip_regexp_err, skip_regexp_ex, vim_regsub_multi,
-};
-use crate::src::nvim::search::{
-    SEARCH_HIS, get_search_pat, last_search_pat, save_re_pat, search_regcomp,
-};
+use crate::src::nvim::regexp::{regtilde, skip_regexp, skip_regexp_ex, vim_regsub_multi};
+use crate::src::nvim::search::{SEARCH_HIS, get_search_pat, save_re_pat, search_regcomp};
 use crate::src::nvim::spell::parse_spelllang;
 use crate::src::nvim::strings::{
     concat_str, vim_snprintf, vim_snprintf_add, vim_snprintf_safelen, vim_strchr,
@@ -165,10 +158,9 @@ use crate::src::nvim::types::{
     CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, Callback, Callback_data as C2Rust_Unnamed_5, ExtmarkOp,
     OptInt, OptVal, OptValData, OptValType, String_0, SubReplacementString, Timestamp,
     UndoObjectType, VV_OLDFILES, VV_SWAPCOMMAND, bcount_t, bfa_values, bln_values, buf_T, bufref_T,
-    colnr_T, dobuf_action_values, exarg_T, float_T, fmark_T, getf_retvalues, handle_T, int32_t,
-    int64_t, linenr_T, list_T, listitem_T, lpos_T, magic_T, pos_T, proftime_T, ptrdiff_t,
-    regmatch_T, regmmatch_T, regprog_T, size_t, tabpage_T, time_t, uint8_t, uint64_t, uvarnumber_T,
-    varnumber_T, win_T,
+    colnr_T, dobuf_action_values, exarg_T, fmark_T, getf_retvalues, handle_T, int32_t, int64_t,
+    linenr_T, list_T, listitem_T, lpos_T, magic_T, pos_T, proftime_T, ptrdiff_t, regmmatch_T,
+    regprog_T, size_t, tabpage_T, time_t, uint8_t, uint64_t, win_T,
 };
 use crate::src::nvim::ui::{ui_cursor_goto, ui_has};
 use crate::src::nvim::undo::{
@@ -260,31 +252,6 @@ pub type C2Rust_Unnamed_29 = ::core::ffi::c_int;
 pub const ECMD_ONE: C2Rust_Unnamed_29 = 1;
 pub const ECMD_LAST: C2Rust_Unnamed_29 = -1;
 pub const ECMD_LASTL: C2Rust_Unnamed_29 = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct sorti_T {
-    pub lnum: linenr_T,
-    pub st_u: C2Rust_Unnamed_30,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_30 {
-    pub line: C2Rust_Unnamed_32,
-    pub num: C2Rust_Unnamed_31,
-    pub value_flt: float_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_31 {
-    pub value: varnumber_T,
-    pub is_number: bool,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_32 {
-    pub start_col_nr: varnumber_T,
-    pub end_col_nr: varnumber_T,
-}
 pub const ML_DEL_MESSAGE: C2Rust_Unnamed_39 = 1;
 pub const kShellOptRead: C2Rust_Unnamed_42 = 16;
 pub const READ_FILTER: C2Rust_Unnamed_37 = 2;
