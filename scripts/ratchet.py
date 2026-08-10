@@ -210,9 +210,15 @@ def mask(text):
             # A char literal, or a lifetime — `'a` looks like the start of
             # one until the closing quote fails to show up.
             if i + 1 < n and text[i + 1] == "\\":
-                j = i + 2
+                # The escape consumes exactly one character, so the earliest
+                # the closing quote can sit is i+3 -- and starting the scan
+                # there is what makes `'\\'` terminate. Treating the second
+                # backslash as an escape instead (`j += 2`) walked straight
+                # past the closing quote and blanked source as far as the
+                # next quote in the file, taking its braces with it.
+                j = i + 3
                 while j < n and text[j] != "'":
-                    j += 2 if text[j] == "\\" else 1
+                    j += 1
                 j = min(j + 1, n)
             elif i + 2 < n and text[i + 2] == "'":
                 j = i + 3
@@ -412,6 +418,12 @@ SELF_TEST = [
     ("/* unsafe { /* nested */ } */\nfn f() {}\n", 0),
     # A brace in a char literal must not desynchronise the scanner.
     ("fn f() {\n    unsafe {\n        g('{');\n    }\n    h();\n}\n", 3),
+    # ... and neither must an escaped one. `'\\'` ends at its own quote; a
+    # scanner that reads the second backslash as an escape runs on to the
+    # next quote in the file and eats every brace in between.
+    ("fn f() {\n    unsafe {\n        g('\\\\');\n    }\n    h('x');\n}\n", 3),
+    ("fn f() {\n    unsafe {\n        g('\\'');\n    }\n    h('x');\n}\n", 3),
+    ("fn f() {\n    unsafe {\n        g('\\u{1b}');\n    }\n    h('x');\n}\n", 3),
     ("fn f<'a>(x: &'a u8) {}\n", 0),
     # An unsafe fn body is implicitly unsafe throughout without the deny.
     ("unsafe fn f() {\n    g();\n}\n", 3),
