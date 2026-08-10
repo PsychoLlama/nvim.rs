@@ -687,7 +687,10 @@ impl UniqScan {
         lnum: linenr_T,
         is_match: bool,
     ) -> (linenr_T, bool) {
-        let is_match = is_match && !core::mem::replace(&mut self.force_unmatch, false);
+        // The flag is cleared whether or not it had anything to override;
+        // `&&` would short-circuit past that when `is_match` is already false.
+        let forced = core::mem::replace(&mut self.force_unmatch, false);
+        let is_match = is_match && !forced;
         match mode {
             UniqMode::Dedup if is_match => (lnum, false),
             UniqMode::Dedup => (0, true),
