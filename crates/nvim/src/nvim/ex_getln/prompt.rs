@@ -212,14 +212,7 @@ pub unsafe fn get_user_input(
             // input() with a third argument: completion
             let xp_namelen = strlen(xp_name) as ::core::ffi::c_int;
             let mut argt: uint32_t = 0;
-            if parse_compl_arg(
-                xp_name,
-                xp_namelen,
-                &raw mut xp_type,
-                &raw mut argt,
-                &raw mut xp_arg,
-            ) == FAIL
-            {
+            if parse_compl_arg(xp_name, xp_namelen, &mut xp_type, &mut argt, &mut xp_arg) == FAIL {
                 return;
             }
         }

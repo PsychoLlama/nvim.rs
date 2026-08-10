@@ -389,9 +389,9 @@ pub unsafe extern "C" fn create_user_command(
                                 == parse_compl_arg(
                                     (*opts).complete.data.string.data,
                                     (*opts).complete.data.string.size as ::core::ffi::c_int,
-                                    &raw mut context,
-                                    &raw mut argt,
-                                    &raw mut compl_arg,
+                                    &mut context,
+                                    &mut argt,
+                                    &mut compl_arg,
                                 ))
                             {
                                 api_err_invalid(

@@ -38,7 +38,6 @@
     "crates/nvim/src/nvim/tui/cursor.rs": 1,
     "crates/nvim/src/nvim/tui/paint.rs": 1,
     "crates/nvim/src/nvim/ui/sinks.rs": 2,
-    "crates/nvim/src/nvim/usercmd.rs": 1,
     "crates/nvim/src/nvim/viml/parser/expressions/lexer.rs": 1,
     "crates/nvim/src/nvim/viml/parser/expressions/strings.rs": 2,
     "crates/nvim/src/nvim/vterm/damage.rs": 1,
