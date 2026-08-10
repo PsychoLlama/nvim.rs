@@ -1,7 +1,7 @@
 {
   "internal_exports": 27,
-  "files_without_forbid_unsafe": 952,
-  "files_without_deny_unsafe_op": 126,
+  "files_without_forbid_unsafe": 953,
+  "files_without_deny_unsafe_op": 125,
   "files": {
     "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe_lines": 54},
     "crates/nvim/src/cjson/lua_cjson/decode.rs": {"unsafe_lines": 175},
@@ -418,7 +418,8 @@
     "crates/nvim/src/nvim/grid/line.rs": {"cell_ptr": 12, "unsafe_lines": 495},
     "crates/nvim/src/nvim/grid/schar.rs": {"cell_ptr": 9, "no_mangle": 2, "unsafe_lines": 154},
     "crates/nvim/src/nvim/hashtab.rs": {"no_mangle": 1, "unsafe_lines": 162},
-    "crates/nvim/src/nvim/help.rs": {"cell_ptr": 40, "lines": 1343, "unsafe_lines": 1247},
+    "crates/nvim/src/nvim/help.rs": {"cell_ptr": 2, "unsafe_lines": 340},
+    "crates/nvim/src/nvim/help/tags.rs": {"cell_ptr": 7, "unsafe_lines": 277},
     "crates/nvim/src/nvim/highlight.rs": {"cell_ptr": 6, "unsafe_lines": 173},
     "crates/nvim/src/nvim/highlight/blend.rs": {"cell_ptr": 2, "unsafe_lines": 45},
     "crates/nvim/src/nvim/highlight/dict.rs": {"unsafe_lines": 247},
