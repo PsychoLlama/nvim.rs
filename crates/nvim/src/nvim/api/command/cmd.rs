@@ -13,13 +13,32 @@
 //! execute. Each stage answers "may we keep going?" -- `false`/`None` means
 //! either `err` is set or the Dict asked for nothing executable, both of
 //! which end the call without running anything.
+//!
+//! # What the references here promise
+//!
+//! Two contracts hold for every function below, and stating them once is what
+//! lets the stages be ordinary safe code rather than a chain of `unsafe fn`s:
+//!
+//! - **A `&KeyDict_cmd` (or a sub-keyset reference) is the dispatcher's own
+//!   decoded Dict.** Every `String` field in it is NUL-terminated and every
+//!   `Array` is valid for its `size`, because `api_dict_to_keydict` is the
+//!   only thing that ever fills one. Reading a field is therefore safe; only
+//!   *dereferencing* the `data` pointer needs a block, and the note there
+//!   names which key the byte belongs to.
+//! - **This runs on the main thread inside the API dispatcher**, so the
+//!   editor globals the `ex_docmd` entry points consult (`curbuf`, the
+//!   command table, the register table) are live for the whole call.
+//!
+//! What is left `unsafe fn` is what those two do not cover: the raw `arena`,
+//! and `ea.arg` pointing into a command line only the caller can vouch for.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::api::private::helpers::{array_add, has_key};
-use ::core::ffi::{c_char, c_int, c_uint};
+use crate::src::nvim::types::FieldHashfn;
+use ::core::ffi::{CStr, c_char, c_int, c_uint};
 use ::core::ptr;
 
 const EMPTY_STRING: String_0 = String_0 {
@@ -33,6 +52,68 @@ const EMPTY_ARRAY: Array = Array {
     items: ptr::null_mut(),
 };
 
+// The four `api_*` reporters, as safe calls. All any of them needs is a live
+// `Error` to write into and NUL-terminated text, and `&mut Error` plus `&CStr`
+// say exactly that -- so every validation failure below reads as ordinary
+// code. The `%s` indirection on the literal arms is upstream's: the message
+// text is data, not a format, and must not be reinterpreted as one.
+
+/// `api_set_error(err, kErrorTypeValidation, "%s", msg)`.
+fn err_validation(err: &mut Error, msg: &CStr) {
+    // SAFETY: `err` is live; `%s` takes exactly the one NUL-terminated arg.
+    unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg.as_ptr()) };
+}
+
+/// `api_set_error` with a one-`%s` format and a C string to fill it.
+fn err_validation_str(err: &mut Error, fmt: &CStr, arg: *const c_char) {
+    // SAFETY: `err` is live; the caller pairs a one-`%s` format with a
+    // NUL-terminated argument.
+    unsafe { api_set_error(err, kErrorTypeValidation, fmt.as_ptr(), arg) };
+}
+
+/// "Required: 'name'".
+fn err_required(err: &mut Error, name: &CStr) {
+    // SAFETY: `err` is live and `name` NUL-terminated.
+    unsafe { api_err_required(err, name.as_ptr()) };
+}
+
+/// "Invalid name: expected `expected`, got `actual`" -- a null `actual` drops
+/// the "got" half, which is how upstream spells "no value to quote".
+fn err_expected(err: &mut Error, name: &CStr, expected: &CStr, actual: *const c_char) {
+    // SAFETY: `err` is live, both literals are NUL-terminated, and `actual` is
+    // null or a NUL-terminated string.
+    unsafe { api_err_exp(err, name.as_ptr(), expected.as_ptr(), actual) };
+}
+
+/// "Invalid `name`: 'value'".
+fn err_invalid(err: &mut Error, name: &CStr, value: &CStr) {
+    // SAFETY: as `err_expected`.
+    unsafe { api_err_invalid(err, name.as_ptr(), value.as_ptr(), 0, true) };
+}
+
+/// [`err_invalid`] where the offending value is a pointer into the caller's
+/// own text rather than a literal.
+fn err_invalid_ptr(err: &mut Error, name: &CStr, value: *const c_char) {
+    // SAFETY: as `err_expected`.
+    unsafe { api_err_invalid(err, name.as_ptr(), value, 0, true) };
+}
+
+/// Decode one of `cmd`'s sub-keyset Dicts (`magic`, `mods`, `mods.filter`)
+/// into a fresh `K`. `None` means the decoder rejected a key and set `err`.
+///
+/// `get_field` must be `K`'s own generated field lookup: the decoder writes
+/// through the offsets it hands back, so pairing it with a different keyset
+/// would write outside `K`.
+fn sub_keyset<K>(dict: Dict, get_field: FieldHashfn, err: &mut Error) -> Option<K> {
+    // SAFETY: every keydict is a plain C aggregate whose all-zero state is
+    // "no key set" -- which is what the decoder expects to start from -- and
+    // `get_field` is `K`'s own lookup, per the contract above.
+    unsafe {
+        let mut out: K = ::core::mem::zeroed();
+        api_dict_to_keydict((&raw mut out).cast(), get_field, dict, err).then_some(out)
+    }
+}
+
 pub unsafe extern "C" fn nvim_cmd(
     channel_id: uint64_t,
     cmd: *mut KeyDict_cmd,
@@ -42,8 +123,9 @@ pub unsafe extern "C" fn nvim_cmd(
 ) -> String_0 {
     // SAFETY: the dispatcher decodes both keydicts onto its own frame and
     // keeps them alive across the call; neither is reachable from anything
-    // this function runs, so a shared borrow of each holds throughout.
-    let (cmd, opts) = unsafe { (&*cmd, &*opts) };
+    // this function runs, so a shared borrow of each holds throughout. `err`
+    // is the dispatcher's own slot, ours alone until we return.
+    let (cmd, opts, err) = unsafe { (&*cmd, &*opts, &mut *err) };
 
     // SAFETY: `exarg_T` and `CmdParseInfo` are plain C aggregates whose
     // all-zero state is the valid "nothing parsed yet" one; the C original
@@ -84,7 +166,7 @@ unsafe fn prepare_cmd(
     cmdinfo: &mut CmdParseInfo,
     cmdline: &mut *mut c_char,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> bool {
     // SAFETY (all): each stage takes the arena/error the caller was handed.
     let range_only = match unsafe { resolve_command(cmd, ea, arena, err) } {
@@ -113,14 +195,12 @@ unsafe fn prepare_cmd(
         unsafe { set_cmd_addr_type(ea, first) };
     }
 
-    let addressed = unsafe {
-        apply_range(cmd, ea, err)
-            && apply_count(cmd, ea, count_from_first_arg, err)
-            && apply_register(cmd, ea, err)
-            && apply_bang(cmd, ea, err)
-            && apply_magic(cmd, ea, cmdinfo, err)
-            && apply_mods(cmd, ea, cmdinfo, err)
-    };
+    let addressed = apply_range(cmd, ea, err)
+        && apply_count(cmd, ea, count_from_first_arg, err)
+        && apply_register(cmd, ea, err)
+        && apply_bang(cmd, ea, err)
+        && apply_magic(cmd, ea, cmdinfo, err)
+        && apply_mods(cmd, ea, cmdinfo, err);
     if !addressed {
         return false;
     }
@@ -149,11 +229,10 @@ unsafe fn resolve_command(
     cmd: &KeyDict_cmd,
     ea: &mut exarg_T,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Option<bool> {
     if !has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__cmd) {
-        // SAFETY: `err` is the caller's.
-        unsafe { api_err_required(err, c"cmd".as_ptr()) };
+        err_required(err, c"cmd");
         return None;
     }
 
@@ -163,15 +242,7 @@ unsafe fn resolve_command(
     let has_mods = has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__mods);
 
     if !named && !has_range && !has_mods {
-        // SAFETY: `err` is the caller's.
-        unsafe {
-            api_err_exp(
-                err,
-                c"cmd".as_ptr(),
-                c"non-empty String".as_ptr(),
-                ptr::null(),
-            )
-        };
+        err_expected(err, c"cmd", c"non-empty String", ptr::null());
         return None;
     }
 
@@ -210,28 +281,13 @@ unsafe fn resolve_command(
     }
 
     if !(!p.is_null() && ea.cmdidx as c_int != CMD_SIZE as c_int) && !range_only {
-        // SAFETY: `err` is the caller's, `cmdname` NUL-terminated.
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"Command not found: %s".as_ptr(),
-                cmdname,
-            )
-        };
+        err_validation_str(err, c"Command not found: %s", cmdname);
         return None;
     }
 
+    // SAFETY: `ea.cmdidx` came out of `find_ex_command`.
     if !range_only && unsafe { is_cmd_ni(ea.cmdidx) } {
-        // SAFETY: as above.
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"Command not implemented: %s".as_ptr(),
-                cmdname,
-            )
-        };
+        err_validation_str(err, c"Command not implemented: %s", cmdname);
         return None;
     }
 
@@ -247,15 +303,7 @@ unsafe fn resolve_command(
             strncmp(fullname, cmdname, strlen(cmdname)) == 0
         };
         if !matched {
-            // SAFETY: `err` is the caller's, `cmdname` NUL-terminated.
-            unsafe {
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    c"Invalid command: \"%s\"".as_ptr(),
-                    cmdname,
-                )
-            };
+            err_validation_str(err, c"Invalid command: \"%s\"", cmdname);
             return None;
         }
     }
@@ -280,7 +328,7 @@ unsafe fn collect_args(
     ea: &mut exarg_T,
     args: &mut Array,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Option<bool> {
     // For a command that takes a count but no regular arguments, a lone
     // numeric argument *is* the count.
@@ -341,31 +389,21 @@ unsafe fn collect_args(
             },
             kObjectTypeString => {
                 // An all-whitespace argument would vanish into the separators.
-                // SAFETY: the union arm is a String, `err` is the caller's.
+                // SAFETY: the union arm is a String, per `type_0`.
                 if unsafe { string_iswhite(elem.data.string) } {
-                    unsafe {
-                        api_err_exp(
-                            err,
-                            c"command arg".as_ptr(),
-                            c"non-whitespace".as_ptr(),
-                            ptr::null(),
-                        )
-                    };
+                    err_expected(err, c"command arg", c"non-whitespace", ptr::null());
                     return None;
                 }
                 // SAFETY: `args` has room, reserved above.
                 unsafe { array_add(args, elem) };
             }
             _ => {
-                // SAFETY: `err` is the caller's.
-                unsafe {
-                    api_err_exp(
-                        err,
-                        c"command arg".as_ptr(),
-                        c"valid type".as_ptr(),
-                        api_typename(elem.type_0),
-                    )
-                };
+                err_expected(
+                    err,
+                    c"command arg",
+                    c"valid type",
+                    api_typename(elem.type_0),
+                );
                 return None;
             }
         }
@@ -379,15 +417,7 @@ unsafe fn collect_args(
         _ => args.size == 0,
     };
     if !argc_valid {
-        // SAFETY: `err` is the caller's.
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"%s".as_ptr(),
-                c"Wrong number of arguments".as_ptr(),
-            )
-        };
+        err_validation(err, c"Wrong number of arguments");
         return None;
     }
 
@@ -395,23 +425,14 @@ unsafe fn collect_args(
 }
 
 /// Apply `cmd.range`, then fall back to the command's default range.
-unsafe fn apply_range(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: *mut Error) -> bool {
+fn apply_range(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
     if has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__range) {
         if ea.argt & EX_RANGE as uint32_t == 0 {
-            // SAFETY: `err` is the caller's, `cmd.cmd` NUL-terminated.
-            unsafe { err_cannot_accept(err, c"range".as_ptr(), cmd) };
+            err_cannot_accept(err, c"range", cmd);
             return false;
         }
         if cmd.range.size > 2 {
-            // SAFETY: `err` is the caller's.
-            unsafe {
-                api_err_exp(
-                    err,
-                    c"range".as_ptr(),
-                    c"<=2 elements".as_ptr(),
-                    ptr::null(),
-                )
-            };
+            err_expected(err, c"range", c"<=2 elements", ptr::null());
             return false;
         }
 
@@ -419,17 +440,10 @@ unsafe fn apply_range(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: *mut Error) -> b
         ea.addr_count = range.size as c_int;
         for i in 0..range.size {
             // SAFETY: `i` is in bounds; the union arm is chosen by `type_0`.
-            let elem: Object = unsafe { *range.items.add(i) };
-            if elem.type_0 != kObjectTypeInteger || unsafe { elem.data.integer } < 0 {
-                // SAFETY: `err` is the caller's.
-                unsafe {
-                    api_err_exp(
-                        err,
-                        c"range element".as_ptr(),
-                        c"non-negative Integer".as_ptr(),
-                        ptr::null(),
-                    )
-                };
+            let bound = unsafe { *range.items.add(i) };
+            let bound = (bound.type_0 == kObjectTypeInteger).then(|| unsafe { bound.data.integer });
+            if bound.is_none_or(|n| n < 0) {
+                err_expected(err, c"range element", c"non-negative Integer", ptr::null());
                 return false;
             }
         }
@@ -437,30 +451,33 @@ unsafe fn apply_range(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: *mut Error) -> b
         if range.size > 0 {
             // SAFETY: both indices are in bounds and every item is an Integer,
             // checked above.
-            unsafe {
-                ea.line1 = (*range.items).data.integer as linenr_T;
-                ea.line2 = (*range.items.add(range.size - 1)).data.integer as linenr_T;
-            }
+            let (first, last) = unsafe {
+                (
+                    (*range.items).data.integer,
+                    (*range.items.add(range.size - 1)).data.integer,
+                )
+            };
+            ea.line1 = first as linenr_T;
+            ea.line2 = last as linenr_T;
         }
         // SAFETY: `ea` is resolved.
         if !unsafe { invalid_range(ea) }.is_null() {
-            // SAFETY: `err` is the caller's.
-            unsafe { api_err_invalid(err, c"range".as_ptr(), c"".as_ptr(), 0, true) };
+            err_invalid(err, c"range", c"");
             return false;
         }
     }
 
     if ea.addr_count == 0 {
-        // SAFETY: `ea` is resolved.
-        unsafe {
-            if ea.argt & EX_DFLALL as uint32_t != 0 {
-                set_cmd_dflall_range(ea);
-            } else {
-                ea.line2 = get_cmd_default_range(ea);
-                ea.line1 = ea.line2;
-                if ea.addr_type as c_uint == ADDR_OTHER as c_uint {
-                    ea.line2 = 1;
-                }
+        if ea.argt & EX_DFLALL as uint32_t != 0 {
+            // SAFETY: `ea` is resolved; both entry points read it and the
+            // editor globals, per the module contract.
+            unsafe { set_cmd_dflall_range(ea) };
+        } else {
+            // SAFETY: as above.
+            ea.line2 = unsafe { get_cmd_default_range(ea) };
+            ea.line1 = ea.line2;
+            if ea.addr_type as c_uint == ADDR_OTHER as c_uint {
+                ea.line2 = 1;
             }
         }
     }
@@ -469,92 +486,60 @@ unsafe fn apply_range(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: *mut Error) -> b
 }
 
 /// Apply `cmd.count`.
-unsafe fn apply_count(
+fn apply_count(
     cmd: &KeyDict_cmd,
     ea: &mut exarg_T,
     count_from_first_arg: bool,
-    err: *mut Error,
+    err: &mut Error,
 ) -> bool {
     if !has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__count) {
         return true;
     }
     if count_from_first_arg {
-        // SAFETY: `err` is the caller's.
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"%s".as_ptr(),
-                c"Cannot specify both 'count' and numeric argument".as_ptr(),
-            )
-        };
+        err_validation(err, c"Cannot specify both 'count' and numeric argument");
         return false;
     }
     if ea.argt & EX_COUNT as uint32_t == 0 {
-        // SAFETY: `err` is the caller's, `cmd.cmd` NUL-terminated.
-        unsafe { err_cannot_accept(err, c"count".as_ptr(), cmd) };
+        err_cannot_accept(err, c"count", cmd);
         return false;
     }
     if cmd.count < 0 as Integer {
-        // SAFETY: `err` is the caller's.
-        unsafe {
-            api_err_exp(
-                err,
-                c"count".as_ptr(),
-                c"non-negative Integer".as_ptr(),
-                ptr::null(),
-            )
-        };
+        err_expected(err, c"count", c"non-negative Integer", ptr::null());
         return false;
     }
-    // SAFETY: `ea` is resolved.
+    // SAFETY: `ea` is resolved; `set_cmd_count` only writes its address
+    // fields.
     unsafe { set_cmd_count(ea, cmd.count as linenr_T, true) };
     true
 }
 
 /// Apply `cmd.reg`.
-unsafe fn apply_register(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: *mut Error) -> bool {
+fn apply_register(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
     if !has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__reg) {
         return true;
     }
     if ea.argt & EX_REGSTR as uint32_t == 0 {
-        // SAFETY: `err` is the caller's, `cmd.cmd` NUL-terminated.
-        unsafe { err_cannot_accept(err, c"register".as_ptr(), cmd) };
+        err_cannot_accept(err, c"register", cmd);
         return false;
     }
     if cmd.reg.size != 1 {
-        // SAFETY: `err` is the caller's; `cmd.reg` is NUL-terminated.
-        unsafe {
-            api_err_exp(
-                err,
-                c"reg".as_ptr(),
-                c"single character".as_ptr(),
-                cmd.reg.data,
-            )
-        };
+        err_expected(err, c"reg", c"single character", cmd.reg.data);
         return false;
     }
 
     // SAFETY: the size is 1, so byte 0 is in bounds.
     let regname = unsafe { *cmd.reg.data };
     if regname as c_int == '=' as c_int {
-        // SAFETY: `err` is the caller's.
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"%s".as_ptr(),
-                c"Cannot use register \"=".as_ptr(),
-            )
-        };
+        err_validation(err, c"Cannot use register \"=");
         return false;
     }
     // `:put`/`:iput` read the register, everything else writes it.
     let writing = (ea.cmdidx as c_int) >= 0
         && ea.cmdidx as c_int != CMD_put as c_int
         && ea.cmdidx as c_int != CMD_iput as c_int;
-    // SAFETY: `err` is the caller's.
+    // SAFETY: `valid_yank_reg` reads only the register tables.
     if !unsafe { valid_yank_reg(regname as c_int, writing) } {
+        // SAFETY: `err` is live; `%c` takes the one `c_int`.
         unsafe {
             api_set_error(
                 err,
@@ -570,11 +555,10 @@ unsafe fn apply_register(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: *mut Error) -
 }
 
 /// Apply `cmd.bang`.
-unsafe fn apply_bang(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: *mut Error) -> bool {
+fn apply_bang(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
     ea.forceit = cmd.bang as c_int;
     if ea.forceit != 0 && ea.argt & EX_BANG as uint32_t == 0 {
-        // SAFETY: `err` is the caller's, `cmd.cmd` NUL-terminated.
-        unsafe { err_cannot_accept(err, c"bang".as_ptr(), cmd) };
+        err_cannot_accept(err, c"bang", cmd);
         return false;
     }
     true
@@ -582,27 +566,26 @@ unsafe fn apply_bang(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: *mut Error) -> bo
 
 /// "Command cannot accept `what`: `name`" -- the shape four of the stages
 /// above raise when a field contradicts the command's `argt`.
-///
-/// # Safety
-/// `err` must be live and `cmd.cmd` NUL-terminated.
-unsafe fn err_cannot_accept(err: *mut Error, what: *const c_char, cmd: &KeyDict_cmd) {
+fn err_cannot_accept(err: &mut Error, what: &CStr, cmd: &KeyDict_cmd) {
+    // SAFETY: `err` is live; `what` and `cmd.cmd` are both NUL-terminated,
+    // and the format takes exactly those two.
     unsafe {
         api_set_error(
             err,
             kErrorTypeValidation,
             c"Command cannot accept %s: %s".as_ptr(),
-            what,
+            what.as_ptr(),
             cmd.cmd.data,
         )
     };
 }
 
 /// Unpack the `magic` sub-keyset, defaulting each half to what `argt` says.
-unsafe fn apply_magic(
+fn apply_magic(
     cmd: &KeyDict_cmd,
     ea: &mut exarg_T,
     cmdinfo: &mut CmdParseInfo,
-    err: *mut Error,
+    err: &mut Error,
 ) -> bool {
     let argt_file = ea.argt & EX_XFILE as uint32_t != 0;
     let argt_bar = ea.argt & EX_TRLBAR as uint32_t != 0;
@@ -613,19 +596,10 @@ unsafe fn apply_magic(
         return true;
     }
 
-    // SAFETY: `magic` is a plain C aggregate whose zero state means "no key
-    // set"; `api_dict_to_keydict` fills it from `cmd.magic`.
-    let mut magic: KeyDict_cmd_magic = unsafe { ::core::mem::zeroed() };
-    if !unsafe {
-        api_dict_to_keydict(
-            (&raw mut magic).cast(),
-            Some(KeyDict_cmd_magic_get_field as _),
-            cmd.magic,
-            err,
-        )
-    } {
+    let get_field = Some(KeyDict_cmd_magic_get_field as _);
+    let Some(magic) = sub_keyset::<KeyDict_cmd_magic>(cmd.magic, get_field, err) else {
         return false;
-    }
+    };
 
     cmdinfo.magic.file = if has_key(magic.is_set__cmd_magic_, KEYSET_OPTIDX_cmd_magic__file) {
         magic.file
@@ -648,33 +622,24 @@ unsafe fn apply_magic(
 }
 
 /// Unpack the `mods` sub-keyset into `cmdinfo.cmdmod`.
-unsafe fn apply_mods(
+fn apply_mods(
     cmd: &KeyDict_cmd,
     ea: &exarg_T,
     cmdinfo: &mut CmdParseInfo,
-    err: *mut Error,
+    err: &mut Error,
 ) -> bool {
     if !has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__mods) {
         return true;
     }
 
-    // SAFETY: as in `apply_magic`.
-    let mut mods: KeyDict_cmd_mods = unsafe { ::core::mem::zeroed() };
-    if !unsafe {
-        api_dict_to_keydict(
-            (&raw mut mods).cast(),
-            Some(KeyDict_cmd_mods_get_field as _),
-            cmd.mods,
-            err,
-        )
-    } {
+    let get_field = Some(KeyDict_cmd_mods_get_field as _);
+    let Some(mods) = sub_keyset::<KeyDict_cmd_mods>(cmd.mods, get_field, err) else {
         return false;
-    }
+    };
     let mods = &mods;
 
     if has_key(mods.is_set__cmd_mods_, KEYSET_OPTIDX_cmd_mods__filter)
-        // SAFETY: `err` is the caller's.
-        && !unsafe { apply_filter_mod(mods, cmdinfo, err) }
+        && !apply_filter_mod(mods, cmdinfo, err)
     {
         return false;
     }
@@ -696,13 +661,13 @@ unsafe fn apply_mods(
     }
     if has_key(mods.is_set__cmd_mods_, KEYSET_OPTIDX_cmd_mods__split) {
         // SAFETY: `mods.split` is a NUL-terminated keydict String.
-        match unsafe { split_direction(mods.split.data) } {
+        let split = unsafe { CStr::from_ptr(mods.split.data) };
+        match split_direction(split) {
             Some(Some(bit)) => cmdinfo.cmdmod.cmod_split |= bit,
             // The empty string is "no direction", not a bad one.
             Some(None) => {}
             None => {
-                // SAFETY: `err` is the caller's.
-                unsafe { api_err_invalid(err, c"mods.split".as_ptr(), c"".as_ptr(), 0, true) };
+                err_invalid(err, c"mods.split", c"");
                 return false;
             }
         }
@@ -735,15 +700,7 @@ unsafe fn apply_mods(
     if cmdinfo.cmdmod.cmod_flags & CMOD_SANDBOX as c_int != 0
         && ea.argt & EX_SBOXOK as uint32_t == 0
     {
-        // SAFETY: `err` is the caller's.
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"%s".as_ptr(),
-                c"Command cannot be run in sandbox".as_ptr(),
-            )
-        };
+        err_validation(err, c"Command cannot be run in sandbox");
         return false;
     }
 
@@ -752,48 +709,26 @@ unsafe fn apply_mods(
 
 /// `Some(Some(bit))` for a known split direction, `Some(None)` for the empty
 /// string, `None` for a name that is neither.
-///
-/// # Safety
-/// `name` must be NUL-terminated.
-unsafe fn split_direction(name: *const c_char) -> Option<Option<c_int>> {
-    unsafe {
-        if *name as c_int == NUL {
-            return Some(None);
-        }
-        let is = |lit: *const c_char| strcmp(name, lit) == 0;
-        let bit = if is(c"aboveleft".as_ptr()) || is(c"leftabove".as_ptr()) {
-            WSP_ABOVE
-        } else if is(c"belowright".as_ptr()) || is(c"rightbelow".as_ptr()) {
-            WSP_BELOW
-        } else if is(c"topleft".as_ptr()) {
-            WSP_TOP
-        } else if is(c"botright".as_ptr()) {
-            WSP_BOT
-        } else {
-            return None;
-        };
-        Some(Some(bit as c_int))
+fn split_direction(name: &CStr) -> Option<Option<c_int>> {
+    if name.is_empty() {
+        return Some(None);
     }
+    let bit = match name.to_bytes() {
+        b"aboveleft" | b"leftabove" => WSP_ABOVE,
+        b"belowright" | b"rightbelow" => WSP_BELOW,
+        b"topleft" => WSP_TOP,
+        b"botright" => WSP_BOT,
+        _ => return None,
+    };
+    Some(Some(bit as c_int))
 }
 
 /// Unpack `mods.filter` and compile its pattern.
-unsafe fn apply_filter_mod(
-    mods: &KeyDict_cmd_mods,
-    cmdinfo: &mut CmdParseInfo,
-    err: *mut Error,
-) -> bool {
-    // SAFETY: as in `apply_magic`.
-    let mut filter: KeyDict_cmd_mods_filter = unsafe { ::core::mem::zeroed() };
-    if !unsafe {
-        api_dict_to_keydict(
-            (&raw mut filter).cast(),
-            Some(KeyDict_cmd_mods_filter_get_field as _),
-            mods.filter,
-            err,
-        )
-    } {
+fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo, err: &mut Error) -> bool {
+    let get_field = Some(KeyDict_cmd_mods_filter_get_field as _);
+    let Some(filter) = sub_keyset::<KeyDict_cmd_mods_filter>(mods.filter, get_field, err) else {
         return false;
-    }
+    };
     if !has_key(
         filter.is_set__cmd_mods_filter_,
         KEYSET_OPTIDX_cmd_mods_filter__pattern,
@@ -817,22 +752,28 @@ unsafe fn apply_filter_mod(
 }
 
 /// Consume any leading `++opt` arguments off the rendered command line.
-unsafe fn apply_argopt(ea: &mut exarg_T, err: *mut Error) -> bool {
+///
+/// # Safety
+/// `ea.arg` must point into a live NUL-terminated command line.
+unsafe fn apply_argopt(ea: &mut exarg_T, err: &mut Error) -> bool {
     if ea.argt & EX_ARGOPT as uint32_t == 0 {
         return true;
     }
-    // SAFETY: `ea.arg` points into the NUL-terminated command line
-    // `build_cmdline_str` rendered, and `getargopt` only advances it.
-    unsafe {
-        while *ea.arg as c_int == '+' as c_int && *ea.arg.add(1) as c_int == '+' as c_int {
-            let orig_arg = ea.arg;
-            if getargopt(ea) == 0 && !is_cmd_ni(ea.cmdidx) {
-                api_err_invalid(err, c"argument ".as_ptr(), orig_arg, 0, true);
-                return false;
-            }
+    loop {
+        // SAFETY: caller contract; `getargopt` only ever advances `ea.arg`
+        // within the same line, so the two bytes stay readable.
+        let opt =
+            unsafe { *ea.arg as c_int == '+' as c_int && *ea.arg.add(1) as c_int == '+' as c_int };
+        if !opt {
+            return true;
+        }
+        let orig_arg = ea.arg;
+        // SAFETY: as above.
+        if unsafe { getargopt(ea) == 0 && !is_cmd_ni(ea.cmdidx) } {
+            err_invalid_ptr(err, c"argument ", orig_arg);
+            return false;
         }
     }
-    true
 }
 
 /// Run the prepared command, capturing its messages when asked.
@@ -842,7 +783,7 @@ unsafe fn run_cmd(
     cmdinfo: &mut CmdParseInfo,
     capture: bool,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> String_0 {
     let mut capture_local = garray_T {
         ga_len: 0,
@@ -892,26 +833,22 @@ unsafe fn run_cmd(
         redir_off.set(save_redir_off);
         msg_col.set(save_msg_col);
     }
-    // SAFETY: paired with the `try_enter` above; `err` is the caller's.
+    // SAFETY: paired with the `try_enter` above.
     unsafe { try_leave(&raw mut tstate, err) };
 
     let mut retv = EMPTY_STRING;
-    // SAFETY: `err` is the caller's.
-    let failed = unsafe { (*err).type_0 as c_int != kErrorTypeNone as c_int };
+    let failed = err.type_0 as c_int != kErrorTypeNone as c_int;
     if !failed && capture && capture_local.ga_len > 1 {
-        // SAFETY: the garray holds `ga_len` bytes of message text.
-        retv = unsafe {
-            arena_string(
-                arena,
-                String_0 {
-                    data: capture_local.ga_data.cast(),
-                    size: capture_local.ga_len as size_t,
-                },
-            )
+        let captured = String_0 {
+            data: capture_local.ga_data.cast(),
+            size: capture_local.ga_len as size_t,
         };
+        // SAFETY: the garray holds `ga_len` bytes of message text.
+        retv = unsafe { arena_string(arena, captured) };
         // Messages open with a newline the caller did not ask for.
         // SAFETY: the arena copy is non-empty and NUL-terminated.
         if unsafe { *retv.data } as c_int == '\n' as c_int {
+            // SAFETY: the copy is longer than the byte just skipped.
             retv.data = unsafe { retv.data.add(1) };
             retv.size -= 1;
         }
