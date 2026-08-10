@@ -13,6 +13,13 @@
 //! in for the read-merge. Strings crossing that boundary are C allocations
 //! (the Rust global allocator is malloc-backed, so either side may free).
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
+mod ring;
+
+use ring::{EMPTY_RING, to_cstring};
+pub use ring::{HistEntry, Ring};
+
 use crate::src::nvim::charset::vim_strsize;
 use crate::src::nvim::eval::typval::{
     tv_get_number, tv_get_number_chk, tv_get_string_buf, tv_get_string_chk,
@@ -35,7 +42,6 @@ use crate::src::nvim::types::{
     VAR_STRING, VAR_UNKNOWN, exarg_T, expand_T, regmatch_T, size_t, typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
-use std::ffi::CString;
 
 pub const HIST_DEFAULT: HistoryType = -2;
 pub const HIST_INVALID: HistoryType = -1;
@@ -76,348 +82,6 @@ impl Drop for ExtraData {
         // SAFETY: the pointer is either null or a live malloc-family
         // allocation this entry owns.
         unsafe { xfree(self.0.cast::<c_void>()) };
-    }
-}
-
-/// One history entry.
-pub struct HistEntry {
-    number: c_int,
-    text: CString,
-    sep: u8,
-    timestamp: Timestamp,
-    extra: ExtraData,
-}
-
-impl HistEntry {
-    /// Sequence number shown by `:history` and returned by `histnr()`.
-    pub fn number(&self) -> c_int {
-        self.number
-    }
-
-    /// Entry text without terminator.
-    pub fn text(&self) -> &[u8] {
-        self.text.as_bytes()
-    }
-
-    /// Separator character (search history only; NUL elsewhere).
-    pub fn sep(&self) -> u8 {
-        self.sep
-    }
-
-    pub fn timestamp(&self) -> Timestamp {
-        self.timestamp
-    }
-
-    fn c_ptr(&self) -> *const c_char {
-        self.text.as_ptr()
-    }
-}
-
-/// Truncate at the first NUL; history entries are C strings and can never
-/// contain one.
-fn to_cstring(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).expect("no interior NUL before `end`")
-}
-
-/// A fixed-capacity history ring. Pure data structure: all editor-state
-/// coupling (the 'history' option, maptick, timestamps) lives in the
-/// module-level functions.
-///
-/// `idx` is the raw slot of the newest entry, `-1` when empty. Entries sit
-/// contiguously behind `idx` (wrapping); vacant slots elsewhere are normal
-/// after resizes and deletions.
-pub struct Ring {
-    entries: Vec<Option<HistEntry>>,
-    idx: c_int,
-    num: c_int,
-}
-
-const EMPTY_RING: Ring = Ring {
-    entries: Vec::new(),
-    idx: -1,
-    num: 0,
-};
-
-impl Ring {
-    pub fn new(len: usize) -> Ring {
-        Ring {
-            entries: (0..len).map(|_| None).collect(),
-            idx: -1,
-            num: 0,
-        }
-    }
-
-    /// Ring capacity (the `hislen` of the C implementation).
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.idx < 0
-    }
-
-    /// Raw slot index of the newest entry, `-1` when empty.
-    pub fn newest_idx(&self) -> c_int {
-        self.idx
-    }
-
-    /// Sequence number of the newest entry; `-1` when the ring is empty,
-    /// `0` when `idx` points at a vacant slot (possible after deleting the
-    /// newest entry — a C quirk `histnr()` exposes).
-    pub fn newest_number(&self) -> c_int {
-        if self.idx < 0 {
-            return -1;
-        }
-        self.number_at(self.idx)
-    }
-
-    /// Entry at raw slot `idx`, if occupied.
-    pub fn get(&self, idx: c_int) -> Option<&HistEntry> {
-        let idx = usize::try_from(idx).ok()?;
-        self.entries.get(idx)?.as_ref()
-    }
-
-    /// Sequence number at a raw slot; vacant slots read as 0, exactly like
-    /// the zero-filled C array.
-    fn number_at(&self, idx: c_int) -> c_int {
-        self.get(idx).map_or(0, |e| e.number)
-    }
-
-    /// Resize to `newlen` slots, keeping the newest entries. Mirrors the C
-    /// `init_history` layout: kept entries are compacted to the front in
-    /// age order (any leading vacancy from a not-full ring included), and
-    /// `idx` lands on `min(newlen, oldlen) - 1`.
-    pub fn resize(&mut self, newlen: usize) {
-        let oldlen = self.entries.len() as c_int;
-        let newlen_i = newlen as c_int;
-        if newlen_i == oldlen {
-            return;
-        }
-        let mut temp: Vec<Option<HistEntry>> = (0..newlen).map(|_| None).collect();
-        let j = self.idx;
-        if j >= 0 {
-            // l1: slots [0..=j] to keep; l2: kept slots wrapped at the end.
-            let l1 = (j + 1).min(newlen_i);
-            let l2 = newlen_i.min(oldlen) - l1;
-            let i1 = j + 1 - l1;
-            let i2 = l1.max(oldlen - newlen_i + l1);
-            for k in 0..l2 {
-                temp[k as usize] = self.entries[(i2 + k) as usize].take();
-            }
-            for k in 0..l1 {
-                temp[(l2 + k) as usize] = self.entries[(i1 + k) as usize].take();
-            }
-        }
-        self.idx = if j < 0 { -1 } else { newlen_i.min(oldlen) - 1 };
-        self.entries = temp;
-    }
-
-    /// Append an entry, overwriting the oldest slot when full.
-    pub fn add(&mut self, text: &[u8], sep: u8, now: Timestamp) {
-        self.idx += 1;
-        if self.idx == self.entries.len() as c_int {
-            self.idx = 0;
-        }
-        self.num += 1;
-        self.entries[self.idx as usize] = Some(HistEntry {
-            number: self.num,
-            text: to_cstring(text),
-            sep,
-            timestamp: now,
-            extra: ExtraData::NONE,
-        });
-    }
-
-    /// If `text` is already in the ring (searching newest to oldest,
-    /// stopping at the first vacant slot), move it to the front with a
-    /// fresh number and timestamp and report `true`. `sep` must also match
-    /// when given (search history distinguishes `/` from `?` entries).
-    pub fn move_to_front(&mut self, text: &[u8], sep: Option<u8>, now: Timestamp) -> bool {
-        if self.idx < 0 {
-            return false;
-        }
-        let hislen = self.entries.len() as c_int;
-        let start = self.idx;
-        let mut i = start;
-        let found = loop {
-            match self.entries[i as usize].as_ref() {
-                None => return false,
-                Some(e) => {
-                    if e.text.as_bytes() == text && sep.map_or(true, |s| s == e.sep) {
-                        break i;
-                    }
-                }
-            }
-            i -= 1;
-            if i < 0 {
-                i = hislen - 1;
-            }
-            if i == start {
-                return false;
-            }
-        };
-        let mut entry = self.entries[found as usize].take().expect("slot occupied");
-        let mut i = found;
-        while i != start {
-            let next = (i + 1) % hislen;
-            self.entries[i as usize] = self.entries[next as usize].take();
-            i = next;
-        }
-        self.num += 1;
-        entry.number = self.num;
-        entry.timestamp = now;
-        entry.extra = ExtraData::NONE;
-        self.entries[start as usize] = Some(entry);
-        true
-    }
-
-    /// Remove the newest entry, stepping `idx` back (used when a search
-    /// from a mapping replaces the previous search from the same mapping).
-    pub fn drop_newest(&mut self) {
-        self.entries[self.idx as usize] = None;
-        self.num -= 1;
-        self.idx -= 1;
-        if self.idx < 0 {
-            self.idx = self.entries.len() as c_int - 1;
-        }
-    }
-
-    /// Map a history number to a raw slot index: positive `num` finds the
-    /// entry with that sequence number, negative counts back from the
-    /// newest (-1 = newest). Returns -1 if there is no such entry.
-    pub fn calc_idx(&self, num: c_int) -> c_int {
-        let hislen = self.entries.len() as c_int;
-        let mut i = self.idx;
-        if hislen == 0 || i < 0 || num == 0 {
-            return -1;
-        }
-        if num > 0 {
-            let mut wrapped = false;
-            while self.number_at(i) > num {
-                i -= 1;
-                if i >= 0 {
-                    continue;
-                }
-                if wrapped {
-                    break;
-                }
-                i += hislen;
-                wrapped = true;
-            }
-            if i >= 0 && self.number_at(i) == num && self.get(i).is_some() {
-                return i;
-            }
-        } else if -i64::from(num) <= i64::from(hislen) {
-            i += num + 1;
-            if i < 0 {
-                i += hislen;
-            }
-            if self.get(i).is_some() {
-                return i;
-            }
-        }
-        -1
-    }
-
-    /// Drop every entry and reset numbering.
-    pub fn clear(&mut self) {
-        for slot in &mut self.entries {
-            *slot = None;
-        }
-        self.idx = -1;
-        self.num = 0;
-    }
-
-    /// Delete every entry `matches` accepts, compacting survivors toward
-    /// the newest slot (entries keep their numbers). Returns whether
-    /// anything matched.
-    pub fn delete_matching(&mut self, mut matches: impl FnMut(&HistEntry) -> bool) -> bool {
-        if self.idx < 0 {
-            return false;
-        }
-        let hislen = self.entries.len() as c_int;
-        let idx = self.idx;
-        let mut found = false;
-        let mut i = idx;
-        let mut last = idx;
-        loop {
-            let matched = match self.entries[i as usize].as_ref() {
-                None => break,
-                Some(e) => matches(e),
-            };
-            if matched {
-                found = true;
-                self.entries[i as usize] = None;
-            } else {
-                if i != last {
-                    self.entries[last as usize] = self.entries[i as usize].take();
-                }
-                last -= 1;
-                if last < 0 {
-                    last += hislen;
-                }
-            }
-            i -= 1;
-            if i < 0 {
-                i += hislen;
-            }
-            if i == idx {
-                break;
-            }
-        }
-        if self.entries[idx as usize].is_none() {
-            self.idx = -1;
-        }
-        found
-    }
-
-    /// Delete the entry at raw slot `i`, shifting newer entries down and
-    /// stepping `idx` back one slot (which may leave it on a vacant slot —
-    /// the C behavior when the newest entry is deleted).
-    pub fn delete_at(&mut self, mut i: c_int) {
-        let hislen = self.entries.len() as c_int;
-        let idx = self.idx;
-        self.entries[i as usize] = None;
-        while i != idx {
-            let j = (i + 1) % hislen;
-            self.entries[i as usize] = self.entries[j as usize].take();
-            i = j;
-        }
-        self.idx = if idx > 0 { idx - 1 } else { idx - 1 + hislen };
-    }
-
-    /// Raw slot indexes of the live entries, oldest first: the first
-    /// occupied slot after `idx`, forward (wrapping) until a vacant slot
-    /// or until `idx` itself has been yielded.
-    fn oldest_first_indices(&self) -> Vec<c_int> {
-        let mut out = Vec::new();
-        if self.idx < 0 {
-            return out;
-        }
-        let hislen = self.entries.len() as c_int;
-        let idx = self.idx;
-        let mut p = idx;
-        loop {
-            p = (p + 1) % hislen;
-            if self.entries[p as usize].is_some() {
-                break;
-            }
-            if p == idx {
-                return out;
-            }
-        }
-        loop {
-            if self.entries[p as usize].is_none() {
-                break;
-            }
-            out.push(p);
-            if p == idx {
-                break;
-            }
-            p = (p + 1) % hislen;
-        }
-        out
     }
 }
 
@@ -599,26 +263,31 @@ fn clr_history(histype: c_int) -> c_int {
 ///
 /// `pat` must be a valid NUL-terminated string.
 unsafe fn del_history_entry(histype: c_int, pat: *const c_char) -> bool {
-    if get_hislen() == 0 || !valid_histype(histype) || *pat == 0 || get_hisidx(histype) < 0 {
+    // SAFETY: caller contract; `pat` points at at least its terminator.
+    let empty = unsafe { *pat } == 0;
+    if get_hislen() == 0 || !valid_histype(histype) || empty || get_hisidx(histype) < 0 {
+        return false;
+    }
+    // SAFETY: caller contract; the compiled program is ours to free below.
+    let regprog = unsafe { vim_regcomp(pat, RE_MAGIC + RE_STRING) };
+    if regprog.is_null() {
         return false;
     }
     let mut regmatch = regmatch_T {
-        regprog: vim_regcomp(pat, RE_MAGIC + RE_STRING),
+        regprog,
         startp: [core::ptr::null_mut(); 10],
         endp: [core::ptr::null_mut(); 10],
         rm_matchcol: 0,
         rm_ic: false,
     };
-    if regmatch.regprog.is_null() {
-        return false;
-    }
     let found = HISTORY.with_mut(|h| {
         h[histype as usize].delete_matching(|e| {
             // SAFETY: entry text is NUL-terminated and outlives the call.
             unsafe { vim_regexec(&raw mut regmatch, e.c_ptr(), 0) }
         })
     });
-    vim_regfree(regmatch.regprog);
+    // SAFETY: the program was compiled above and nothing references it now.
+    unsafe { vim_regfree(regmatch.regprog) };
     found
 }
 
@@ -638,33 +307,58 @@ fn del_history_idx(histype: c_int, num: c_int) -> bool {
     true
 }
 
+/// The history type named by a string argument, [`HIST_INVALID`] when the
+/// typval is not a string (which is where `tv_get_string_chk` reports its
+/// own error).
+///
+/// # Safety
+///
+/// `arg` must be a valid typval.
+unsafe fn arg_histtype(arg: *const typval_T) -> HistoryType {
+    // SAFETY: caller contract; a non-null result is a NUL-terminated string
+    // owned by the typval, which outlives the lookup.
+    unsafe {
+        let name = tv_get_string_chk(arg);
+        if name.is_null() {
+            HIST_INVALID
+        } else {
+            get_histtype(CStr::from_ptr(name).to_bytes(), false)
+        }
+    }
+}
+
 /// "histadd()" function
 pub unsafe extern "C" fn f_histadd(
     argvars: *mut typval_T,
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    (*rettv).vval.v_number = 0;
-    if check_secure() {
+    // SAFETY: eval-function contract; the result starts out 0.
+    unsafe { (*rettv).vval.v_number = 0 };
+    // SAFETY: reads the 'secure'/sandbox globals.
+    if unsafe { check_secure() } {
         return;
     }
-    let name = tv_get_string_chk(argvars);
-    let histype = if name.is_null() {
-        HIST_INVALID
-    } else {
-        get_histtype(CStr::from_ptr(name).to_bytes(), false)
-    };
+    // SAFETY: eval-function contract.
+    let histype = unsafe { arg_histtype(argvars) };
     if histype == HIST_INVALID {
         return;
     }
     let mut buf = [0 as c_char; 65];
-    let entry = tv_get_string_buf(argvars.offset(1), buf.as_mut_ptr());
-    if *entry == 0 {
-        return;
+    // SAFETY: `histadd()` takes two arguments; the entry is NUL-terminated
+    // and lives in the typval or in `buf`, both of which outlive the add.
+    let added = unsafe {
+        let entry = tv_get_string_buf(argvars.offset(1), buf.as_mut_ptr());
+        *entry != 0 && {
+            init_history();
+            add_to_history(histype, CStr::from_ptr(entry).to_bytes(), false, 0);
+            true
+        }
+    };
+    if added {
+        // SAFETY: eval-function contract.
+        unsafe { (*rettv).vval.v_number = 1 };
     }
-    init_history();
-    add_to_history(histype, CStr::from_ptr(entry).to_bytes(), false, 0);
-    (*rettv).vval.v_number = 1;
 }
 
 /// "histdel()" function
@@ -673,25 +367,30 @@ pub unsafe extern "C" fn f_histdel(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    let name = tv_get_string_chk(argvars);
-    let n = if name.is_null() {
-        0
-    } else {
-        let histype = get_histtype(CStr::from_ptr(name).to_bytes(), false);
-        let arg = argvars.offset(1);
-        if (*arg).v_type == VAR_UNKNOWN {
-            // Only one argument: clear the whole history.
-            clr_history(histype)
-        } else if (*arg).v_type == VAR_NUMBER {
-            // Delete by history number.
-            del_history_idx(histype, tv_get_number(arg) as c_int) as c_int
+    // SAFETY: eval-function contract; a non-null name is NUL-terminated, and
+    // the second argument is only read once its type says it is present.
+    let n = unsafe {
+        let name = tv_get_string_chk(argvars);
+        if name.is_null() {
+            0
         } else {
-            // Delete by regex.
-            let mut buf = [0 as c_char; 65];
-            del_history_entry(histype, tv_get_string_buf(arg, buf.as_mut_ptr())) as c_int
+            let histype = get_histtype(CStr::from_ptr(name).to_bytes(), false);
+            let arg = argvars.offset(1);
+            if (*arg).v_type == VAR_UNKNOWN {
+                // Only one argument: clear the whole history.
+                clr_history(histype)
+            } else if (*arg).v_type == VAR_NUMBER {
+                // Delete by history number.
+                del_history_idx(histype, tv_get_number(arg) as c_int) as c_int
+            } else {
+                // Delete by regex.
+                let mut buf = [0 as c_char; 65];
+                del_history_entry(histype, tv_get_string_buf(arg, buf.as_mut_ptr())) as c_int
+            }
         }
     };
-    (*rettv).vval.v_number = varnumber_T::from(n);
+    // SAFETY: eval-function contract.
+    unsafe { (*rettv).vval.v_number = varnumber_T::from(n) };
 }
 
 /// "histget()" function
@@ -700,23 +399,33 @@ pub unsafe extern "C" fn f_histget(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    let name = tv_get_string_chk(argvars);
-    if name.is_null() {
-        (*rettv).vval.v_string = core::ptr::null_mut();
+    // SAFETY: eval-function contract.
+    let name = unsafe { tv_get_string_chk(argvars) };
+    let text = if name.is_null() {
+        core::ptr::null_mut()
     } else {
-        let histype = get_histtype(CStr::from_ptr(name).to_bytes(), false);
-        let num = if (*argvars.offset(1)).v_type == VAR_UNKNOWN {
-            get_history_idx(histype)
-        } else {
-            tv_get_number_chk(argvars.offset(1), core::ptr::null_mut()) as c_int
-        };
-        let idx = calc_hist_idx(histype, num);
-        (*rettv).vval.v_string = match hist_entry_ref(histype, idx) {
-            None => xstrnsave(c"".as_ptr(), 0),
-            Some(e) => xstrnsave(e.text, e.len),
-        };
+        // SAFETY: a non-null name is NUL-terminated; the optional second
+        // argument is only read once its type says it is present, and
+        // `xstrnsave` copies the entry text before returning.
+        unsafe {
+            let histype = get_histtype(CStr::from_ptr(name).to_bytes(), false);
+            let num = if (*argvars.offset(1)).v_type == VAR_UNKNOWN {
+                get_history_idx(histype)
+            } else {
+                tv_get_number_chk(argvars.offset(1), core::ptr::null_mut()) as c_int
+            };
+            let idx = calc_hist_idx(histype, num);
+            match hist_entry_ref(histype, idx) {
+                None => xstrnsave(c"".as_ptr(), 0),
+                Some(e) => xstrnsave(e.text, e.len),
+            }
+        }
+    };
+    // SAFETY: eval-function contract.
+    unsafe {
+        (*rettv).vval.v_string = text;
+        (*rettv).v_type = VAR_STRING;
     }
-    (*rettv).v_type = VAR_STRING;
 }
 
 /// "histnr()" function
@@ -725,132 +434,171 @@ pub unsafe extern "C" fn f_histnr(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    let name = tv_get_string_chk(argvars);
-    let histype = if name.is_null() {
-        HIST_INVALID
-    } else {
-        get_histtype(CStr::from_ptr(name).to_bytes(), false)
-    };
-    (*rettv).vval.v_number = varnumber_T::from(if histype == HIST_INVALID {
+    // SAFETY: eval-function contract.
+    let histype = unsafe { arg_histtype(argvars) };
+    let n = if histype == HIST_INVALID {
         HIST_INVALID
     } else {
         get_history_idx(histype)
-    });
+    };
+    // SAFETY: eval-function contract.
+    unsafe { (*rettv).vval.v_number = varnumber_T::from(n) };
 }
 
 /// ":history" command: list history entries, optionally filtered by
 /// history name ("cmd", ":", "all", ...) and a number range.
 pub unsafe fn ex_history(eap: *mut exarg_T) {
-    let mut histype1 = HIST_CMD;
-    let mut histype2 = HIST_CMD;
-    let mut hisidx1: c_int = 1;
-    let mut hisidx2: c_int = -1;
-    let arg: *mut c_char = (*eap).arg;
-    let mut end: *mut c_char;
-    msg_ext_set_kind(c"list_cmd".as_ptr());
+    // SAFETY: caller contract; the message kind is a static string.
+    let arg = unsafe {
+        msg_ext_set_kind(c"list_cmd".as_ptr());
+        (*eap).arg
+    };
     if get_hislen() == 0 {
-        msg(gettext(c"'history' option is zero".as_ptr()), 0);
+        // SAFETY: a static message string.
+        unsafe { msg(gettext(c"'history' option is zero".as_ptr()), 0) };
         return;
     }
-    let first = *arg as u8;
-    if !(first.is_ascii_digit() || first == b'-' || first == b',') {
-        end = arg;
-        while {
-            let b = *end as u8;
-            b.is_ascii_alphabetic() || SHORT_NAMES.contains(&b)
-        } {
-            end = end.add(1);
+    // SAFETY: an ex-command argument is NUL-terminated.
+    let Some((histypes, first, last)) = (unsafe { parse_history_arg(arg) }) else {
+        return;
+    };
+    for histype in histypes {
+        if got_int.get() {
+            break;
         }
-        let name = core::slice::from_raw_parts(arg as *const u8, end.offset_from(arg) as usize);
-        histype1 = get_histtype(name, false);
-        if histype1 == HIST_INVALID {
-            let all = b"all";
-            if name.len() <= all.len() && all[..name.len()].eq_ignore_ascii_case(name) {
-                histype1 = 0;
-                histype2 = HIST_COUNT as c_int - 1;
-            } else {
-                let arg = CStr::from_ptr(arg).to_string_lossy();
-                crate::semsg!("E488: Trailing characters: {arg}");
-                return;
-            }
-        } else {
-            histype2 = histype1;
-        }
+        list_one_history(histype, first, last);
+    }
+}
+
+/// Parse `:history`'s argument: an optional history name (or an abbreviation
+/// of "all") followed by an optional `[first][,last]` range. Reports its own
+/// errors and answers `None` when it did.
+///
+/// # Safety
+///
+/// `arg` must be a NUL-terminated ex-command argument.
+unsafe fn parse_history_arg(
+    arg: *mut c_char,
+) -> Option<(core::ops::RangeInclusive<HistoryType>, c_int, c_int)> {
+    // SAFETY: caller contract; the argument outlives this call.
+    let bytes = unsafe { CStr::from_ptr(arg).to_bytes() };
+    // A leading digit, '-' or ',' starts the range: the history is the
+    // default one and there is no name to read.
+    let named = !bytes
+        .first()
+        .is_some_and(|&b| b.is_ascii_digit() || b == b'-' || b == b',');
+    let name_len = if named {
+        bytes
+            .iter()
+            .take_while(|&&b| b.is_ascii_alphabetic() || SHORT_NAMES.contains(&b))
+            .count()
     } else {
-        end = arg;
-    }
-    if get_list_range(&raw mut end, &raw mut hisidx1, &raw mut hisidx2) == FAIL || *end != 0 {
-        if *end != 0 {
-            let end = CStr::from_ptr(end).to_string_lossy();
-            crate::semsg!("E488: Trailing characters: {end}");
-        } else {
-            let arg = CStr::from_ptr(arg).to_string_lossy();
-            crate::semsg!("E1510: Value too large: {arg}");
+        0
+    };
+    let histypes = if !named {
+        HIST_CMD..=HIST_CMD
+    } else {
+        let name = &bytes[..name_len];
+        match get_histtype(name, false) {
+            HIST_INVALID => {
+                let all = b"all";
+                if name.len() > all.len() || !all[..name.len()].eq_ignore_ascii_case(name) {
+                    let arg = String::from_utf8_lossy(bytes);
+                    crate::semsg!("E488: Trailing characters: {arg}");
+                    return None;
+                }
+                0..=(HIST_COUNT as HistoryType - 1)
+            }
+            histype => histype..=histype,
         }
+    };
+    let mut end = unsafe { arg.add(name_len) };
+    let mut first: c_int = 1;
+    let mut last: c_int = -1;
+    // SAFETY: `end` points into the argument, and `get_list_range` advances
+    // it over what it parsed, never past the terminator.
+    let (parsed, rest) = unsafe {
+        let parsed = get_list_range(&raw mut end, &raw mut first, &raw mut last);
+        (parsed, CStr::from_ptr(end).to_bytes())
+    };
+    if parsed != FAIL && rest.is_empty() {
+        return Some((histypes, first, last));
+    }
+    if rest.is_empty() {
+        let arg = String::from_utf8_lossy(bytes);
+        crate::semsg!("E1510: Value too large: {arg}");
+    } else {
+        let rest = String::from_utf8_lossy(rest);
+        crate::semsg!("E488: Trailing characters: {rest}");
+    }
+    None
+}
+
+/// Print one history's title, then every entry whose sequence number falls
+/// in `[first, last]` — negative bounds counting back from the newest entry.
+fn list_one_history(histype: HistoryType, first: c_int, last: c_int) {
+    let name = HISTORY_NAMES[histype as usize];
+    let name = String::from_utf8_lossy(&name[..name.len() - 1]);
+    let title = format!("\n      #  {name} history\0");
+    // SAFETY: `title` is NUL-terminated and outlives the call, which copies
+    // what it keeps.
+    unsafe { msg_puts_title(title.as_ptr() as *const c_char) };
+    let hislen = get_hislen();
+    let idx = get_hisidx(histype);
+    let number_at = |i: c_int| HISTORY.with(|h| h[histype as usize].number_at(i));
+    let resolve = |bound: c_int| {
+        if bound >= 0 {
+            bound
+        } else if -i64::from(bound) > i64::from(hislen) {
+            0
+        } else {
+            number_at((hislen + bound + idx + 1) % hislen)
+        }
+    };
+    let (first, last) = (resolve(first), resolve(last));
+    if idx < 0 || first > last {
         return;
     }
-    while !got_int.get() && histype1 <= histype2 {
-        let name = HISTORY_NAMES[histype1 as usize];
-        let name = String::from_utf8_lossy(&name[..name.len() - 1]);
-        let title = format!("\n      #  {name} history\0");
-        msg_puts_title(title.as_ptr() as *const c_char);
-        let hislen = get_hislen();
-        let idx = get_hisidx(histype1);
-        let number_at = |i: c_int| HISTORY.with(|h| h[histype1 as usize].number_at(i));
-        // Negative range bounds count back from the newest entry.
-        let resolve = |bound: c_int| {
-            if bound >= 0 {
-                bound
-            } else if -i64::from(bound) > i64::from(hislen) {
-                0
-            } else {
-                number_at((hislen + bound + idx + 1) % hislen)
-            }
-        };
-        let j = resolve(hisidx1);
-        let k = resolve(hisidx2);
-        if idx >= 0 && j <= k {
-            // List from the oldest slot forward, ending at the newest.
-            let mut i = idx + 1;
-            while !got_int.get() {
-                if i == hislen {
-                    i = 0;
-                }
-                if let Some(entry) = hist_entry_ref(histype1, i) {
-                    let num = number_at(i);
-                    if num >= j && num <= k && !message_filtered(entry.text) {
-                        msg_putchar('\n' as c_int);
-                        let len = snprintf(
-                            IObuff.ptr() as *mut c_char,
-                            IOSIZE as size_t,
-                            c"%c%6d  ".as_ptr(),
-                            if i == idx { '>' as c_int } else { ' ' as c_int },
-                            num,
-                        );
-                        if vim_strsize(entry.text) > Columns.get() - 10 {
-                            trunc_string(
-                                entry.text,
-                                (IObuff.ptr() as *mut c_char).offset(len as isize),
-                                Columns.get() - 10,
-                                IOSIZE - len,
-                            );
-                        } else {
-                            xstrlcpy(
-                                (IObuff.ptr() as *mut c_char).offset(len as isize),
-                                entry.text,
-                                (IOSIZE - len) as size_t,
-                            );
-                        }
-                        msg_outtrans(IObuff.ptr() as *mut c_char, 0, false);
-                    }
-                }
-                if i == idx {
-                    break;
-                }
-                i += 1;
+    // List from the oldest slot forward, ending at the newest.
+    let mut i = idx + 1;
+    while !got_int.get() {
+        if i == hislen {
+            i = 0;
+        }
+        if let Some(entry) = hist_entry_ref(histype, i) {
+            let num = number_at(i);
+            // SAFETY: the entry text is NUL-terminated and stays valid while
+            // it is printed.
+            if num >= first && num <= last && !unsafe { message_filtered(entry.text) } {
+                print_history_entry(entry, num, i == idx);
             }
         }
-        histype1 += 1;
+        if i == idx {
+            break;
+        }
+        i += 1;
+    }
+}
+
+/// One `:history` row: `>` on the newest entry, the sequence number, and the
+/// text truncated to the window width.
+fn print_history_entry(entry: HistEntryRef, num: c_int, newest: bool) {
+    // SAFETY: `entry.text` is NUL-terminated and outlives the call; `IObuff`
+    // is the shared IOSIZE-byte message scratch buffer, and the number
+    // prefix `snprintf` reports is the offset both writers continue from,
+    // each with the remaining room.
+    unsafe {
+        msg_putchar('\n' as c_int);
+        let buf = IObuff.ptr() as *mut c_char;
+        let marker = if newest { '>' } else { ' ' } as c_int;
+        let len = snprintf(buf, IOSIZE as size_t, c"%c%6d  ".as_ptr(), marker, num);
+        let text = buf.offset(len as isize);
+        if vim_strsize(entry.text) > Columns.get() - 10 {
+            trunc_string(entry.text, text, Columns.get() - 10, IOSIZE - len);
+        } else {
+            xstrlcpy(text, entry.text, (IOSIZE - len) as size_t);
+        }
+        msg_outtrans(buf, 0, false);
     }
 }
 
@@ -859,9 +607,13 @@ pub unsafe fn ex_history(eap: *mut exarg_T) {
 pub unsafe extern "C" fn get_history_arg(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     let short_count = SHORT_NAMES.len() as c_int;
     if (0..short_count).contains(&idx) {
-        (*xp).xp_buf[0] = SHORT_NAMES[idx as usize] as c_char;
-        (*xp).xp_buf[1] = 0;
-        return (*xp).xp_buf.as_mut_ptr();
+        // SAFETY: caller contract; `xp_buf` is the completion scratch buffer,
+        // far longer than the character and terminator written here.
+        return unsafe {
+            (*xp).xp_buf[0] = SHORT_NAMES[idx as usize] as c_char;
+            (*xp).xp_buf[1] = 0;
+            (*xp).xp_buf.as_mut_ptr()
+        };
     }
     let i = (idx - short_count) as usize;
     if i < HIST_COUNT {
@@ -965,12 +717,20 @@ pub unsafe fn hist_shada_replace(histype: c_int, entries: Vec<HistShadaEntry>) {
         let mut n: c_int = 0;
         for (k, se) in entries.into_iter().enumerate() {
             if k < skip {
-                xfree(se.text.cast::<c_void>());
-                xfree(se.additional_data.cast::<c_void>());
+                // SAFETY: caller contract; both allocations are owned here.
+                unsafe {
+                    xfree(se.text.cast::<c_void>());
+                    xfree(se.additional_data.cast::<c_void>());
+                }
                 continue;
             }
-            let text = to_cstring(CStr::from_ptr(se.text).to_bytes());
-            xfree(se.text.cast::<c_void>());
+            // SAFETY: caller contract; `text` is a NUL-terminated allocation
+            // owned here, copied out before it is freed.
+            let text = unsafe {
+                let text = to_cstring(CStr::from_ptr(se.text).to_bytes());
+                xfree(se.text.cast::<c_void>());
+                text
+            };
             n += 1;
             ring.entries[(n - 1) as usize] = Some(HistEntry {
                 number: n,
