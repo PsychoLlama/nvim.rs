@@ -54,7 +54,7 @@ use crate::src::nvim::charset::{
 };
 use crate::src::nvim::cmdhist::add_to_history;
 use crate::src::nvim::cursor::{
-    check_cursor, check_cursor_col, check_cursor_lnum, check_pos, coladvance, get_cursor_line_ptr,
+    check_cursor, check_cursor_col, check_cursor_lnum, coladvance, get_cursor_line_ptr,
 };
 use crate::src::nvim::decoration::bufhl_add_hl_pos_offset;
 use crate::src::nvim::diff::{diff_buf_add, diff_invalidate};
@@ -75,12 +75,12 @@ use crate::src::nvim::ex_docmd::{
 };
 use crate::src::nvim::ex_eval::{aborting, should_abort};
 use crate::src::nvim::ex_getln::{curbuf_locked, getcmdline_prompt, gotocmdline, text_locked};
-use crate::src::nvim::extmark::{extmark_move_region, extmark_splice};
+use crate::src::nvim::extmark::extmark_splice;
 use crate::src::nvim::fileio::{
     buf_check_timestamp, readfile, set_file_options, set_forced_fenc, vim_tempname,
     write_lnum_adjust,
 };
-use crate::src::nvim::fold::{foldMoveRange, foldUpdate, foldUpdateAll, hasAnyFolding};
+use crate::src::nvim::fold::{foldUpdate, foldUpdateAll, hasAnyFolding};
 use crate::src::nvim::getchar::{AppendToRedobuff, AppendToRedobuffLit};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::help::prepare_help_buffer;
@@ -89,28 +89,27 @@ use crate::src::nvim::indent::get_indent_lnum;
 use crate::src::nvim::input::prompt_for_input;
 use crate::src::nvim::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::src::nvim::main::{
-    Columns, IObuff, KeyTyped, RedrawingDisabled, Rows, State, VIsual, VIsual_active,
-    au_new_curbuf, autocmd_busy, bangredo, cmdmod, cmdwin_buf, cmdwin_old_curwin, cmdwin_type,
-    cmdwin_win, curbuf, curtab, curwin, did_check_timestamps, disable_fold_update, e_argreq,
-    e_backslash, e_bufloaded, e_cannot_switch_to_a_closing_buffer, e_cant_read_file_str, e_curdir,
-    e_exists, e_interr, e_invarg, e_invarg2, e_invcmd, e_isadir2, e_modifiable, e_nopresub,
-    e_noprev, e_noprevre, e_notmp, e_patnotf2, e_readonly, e_sandbox, e_trailing_arg,
-    e_val_too_large_len, e_zerocount, emsg_silent, ex_no_reprint, ex_normal_busy, exiting,
-    exmode_active, first_tabpage, firstbuf, firstwin, g_do_tagpreview, getout, global_busy,
-    got_int, highlight_match, info_message, keep_help_flag, lastwin, lines_left, msg_buf, msg_col,
-    msg_didout, msg_listdo_overwrite, msg_row, msg_scroll, msg_scrolled, msg_scrolled_ign,
-    msg_silent, need_check_timestamps, need_wait_return, no_u_sync, no_wait_return, p_awa, p_ch,
-    p_confirm, p_cpo, p_cwh, p_dir, p_gd, p_ic, p_icm, p_lz, p_rdt, p_report, p_sh, p_shm, p_shq,
-    p_so, p_sol, p_srr, p_stmp, p_ur, p_verbose, p_wa, p_warn, p_window, p_write, quit_more,
-    redraw_tabline, sandbox, search_match_endcol, search_match_lines, secure, silent_mode,
-    skip_redraw, sub_nlines, sub_nsubs, swap_exists_action, textlock,
+    Columns, IObuff, KeyTyped, RedrawingDisabled, Rows, State, au_new_curbuf, autocmd_busy,
+    bangredo, cmdmod, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf, curtab,
+    curwin, did_check_timestamps, e_argreq, e_backslash, e_bufloaded,
+    e_cannot_switch_to_a_closing_buffer, e_cant_read_file_str, e_curdir, e_exists, e_interr,
+    e_invarg, e_invarg2, e_invcmd, e_isadir2, e_modifiable, e_nopresub, e_noprev, e_noprevre,
+    e_notmp, e_patnotf2, e_readonly, e_sandbox, e_trailing_arg, e_val_too_large_len, e_zerocount,
+    emsg_silent, ex_no_reprint, ex_normal_busy, exiting, exmode_active, first_tabpage, firstbuf,
+    firstwin, g_do_tagpreview, getout, global_busy, got_int, highlight_match, info_message,
+    keep_help_flag, lastwin, lines_left, msg_buf, msg_col, msg_didout, msg_listdo_overwrite,
+    msg_row, msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent, need_check_timestamps,
+    need_wait_return, no_u_sync, no_wait_return, p_awa, p_ch, p_confirm, p_cpo, p_cwh, p_dir, p_gd,
+    p_ic, p_icm, p_lz, p_rdt, p_report, p_sh, p_shm, p_shq, p_so, p_sol, p_srr, p_stmp, p_ur,
+    p_verbose, p_wa, p_warn, p_window, p_write, quit_more, redraw_tabline, sandbox,
+    search_match_endcol, search_match_lines, secure, silent_mode, skip_redraw, sub_nlines,
+    sub_nsubs, swap_exists_action, textlock,
 };
-use crate::src::nvim::mark::{mark_adjust, mark_adjust_nofold, set_last_cursor, setpcmark};
+use crate::src::nvim::mark::{mark_adjust, set_last_cursor, setpcmark};
 use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memline::{
-    makeswapname, ml_append, ml_append_buf, ml_clearmarked, ml_delete, ml_delete_flags,
-    ml_find_line_or_offset, ml_firstmarked, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len,
-    ml_replace, ml_replace_buf, ml_setmarked,
+    makeswapname, ml_append, ml_append_buf, ml_clearmarked, ml_delete, ml_firstmarked, ml_get,
+    ml_get_buf, ml_get_buf_len, ml_get_len, ml_replace, ml_replace_buf, ml_setmarked,
 };
 use crate::src::nvim::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup, xstrlcat, xstrlcpy,

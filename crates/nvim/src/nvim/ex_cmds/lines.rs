@@ -1,292 +1,385 @@
 //! `:move` and `:copy` -- relocating a range of lines within the buffer.
 //!
-//! `do_move` is the harder one: it has to move the lines, then fix up every
+//! [`do_move`] is the harder one: it has to move the lines, then fix up every
 //! mark, extmark and fold that pointed into either the source or the
 //! destination, and it does that by adjusting the ranges rather than replaying
-//! the move.  `ex_copy` is `:copy`/`:t`, which only ever appends.
+//! the move.  [`ex_copy`] is `:copy`/`:t`, which only ever appends.
+//!
+//! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use super::{CMOD_LOCKMARKS, FAIL, ML_DEL_MESSAGE, OK, kExtmarkNOOP, kExtmarkUndo};
+use crate::smsg_c;
+use crate::src::nvim::buffer_updates::buf_updates_send_changes;
+use crate::src::nvim::change::{appended_lines_mark, changed_lines};
+use crate::src::nvim::cursor::check_pos;
+use crate::src::nvim::extmark::extmark_move_region;
+use crate::src::nvim::fold::foldMoveRange;
+use crate::src::nvim::main::{
+    VIsual, VIsual_active, cmdmod, curbuf, curtab, curwin, disable_fold_update, first_tabpage,
+    firstwin, global_busy, p_report,
+};
+use crate::src::nvim::mark::mark_adjust_nofold;
+use crate::src::nvim::memline::{
+    ml_append, ml_delete_flags, ml_find_line_or_offset, ml_get, ml_get_len,
+};
+use crate::src::nvim::memory::xfree;
+use crate::src::nvim::message::{emsg, msgmore};
+use crate::src::nvim::os::libc::{gettext, ngettext};
+use crate::src::nvim::strings::xstrnsave;
+use crate::src::nvim::types::{OptInt, bcount_t, int64_t, linenr_T, size_t, tabpage_T, win_T};
+use crate::src::nvim::undo::u_save;
+use core::ffi::{c_int, c_ulong};
+use core::ptr;
 
-pub unsafe extern "C" fn do_move(
-    mut line1: linenr_T,
-    mut line2: linenr_T,
-    mut dest: linenr_T,
-) -> ::core::ffi::c_int {
-    unsafe {
-        if dest >= line1 && dest < line2 {
+/// `:move` -- move lines `line1`..`line2` to sit after line `dest`.
+///
+/// Returns `FAIL` for failure, `OK` otherwise.
+///
+/// # Safety
+/// The range and the destination must be lines of the current buffer, or one
+/// short of its first line.
+pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int {
+    if dest >= line1 && dest < line2 {
+        // SAFETY: a literal.
+        unsafe {
             emsg(gettext(
                 c"E134: Cannot move a range of lines into itself".as_ptr(),
-            ));
-            return FAIL;
+            ))
+        };
+        return FAIL;
+    }
+
+    // Do nothing if we are not actually moving any lines.  This will prevent
+    // the 'modified' flag from being set without cause.  The cursor still
+    // moves as if the lines had, to stay backwards compatible.
+    if dest == line1 - 1 || dest == line2 {
+        // SAFETY: `curwin` is the live current window.
+        unsafe { (*curwin.get()).w_cursor.lnum = last_moved_line(line1, line2, dest) };
+        return OK;
+    }
+
+    // SAFETY: `curbuf` is live and the three line numbers are inside it.  A
+    // NULL length is upstream's way of asking only for the byte offset.
+    let (start_byte, end_byte, dest_byte) = unsafe {
+        (
+            ml_find_line_or_offset(curbuf.get(), line1, ptr::null_mut(), true) as bcount_t,
+            ml_find_line_or_offset(curbuf.get(), line2 + 1, ptr::null_mut(), true) as bcount_t,
+            ml_find_line_or_offset(curbuf.get(), dest + 1, ptr::null_mut(), true) as bcount_t,
+        )
+    };
+    let extent_byte = end_byte - start_byte;
+    let num_lines = line2 - line1 + 1;
+
+    // First we copy the old text to its new location -- webb
+    // Also copy the flag that ":global" command uses.
+    // SAFETY: `dest` is a line of the current buffer, or zero.
+    if unsafe { u_save(dest, dest + 1) } == FAIL {
+        return FAIL;
+    }
+
+    // How many lines the copies added before `line1`.
+    let mut extra = 0;
+    for l in line1..=line2 {
+        // SAFETY: `l + extra` tracks the source line as the copies push it
+        // down, and `ml_append` takes ownership of nothing.
+        unsafe {
+            let text = xstrnsave(ml_get(l + extra), ml_get_len(l + extra) as size_t);
+            ml_append(dest + l - line1, text, 0, false);
+            xfree(text.cast());
         }
-        if dest == line1 - 1 as linenr_T || dest == line2 {
-            (*curwin.get()).w_cursor.lnum = if dest >= line1 {
-                dest
-            } else {
-                dest + (line2 - line1) + 1 as linenr_T
-            };
-            return OK;
+        if dest < line1 {
+            extra += 1;
         }
-        let mut start_byte: bcount_t = ml_find_line_or_offset(
-            curbuf.get(),
-            line1,
-            ::core::ptr::null_mut::<::core::ffi::c_int>(),
-            true_0 != 0,
-        ) as bcount_t;
-        let mut end_byte: bcount_t = ml_find_line_or_offset(
-            curbuf.get(),
-            line2 + 1 as linenr_T,
-            ::core::ptr::null_mut::<::core::ffi::c_int>(),
-            true_0 != 0,
-        ) as bcount_t;
-        let mut extent_byte: bcount_t = end_byte - start_byte;
-        let mut dest_byte: bcount_t = ml_find_line_or_offset(
-            curbuf.get(),
-            dest + 1 as linenr_T,
-            ::core::ptr::null_mut::<::core::ffi::c_int>(),
-            true_0 != 0,
-        ) as bcount_t;
-        let mut num_lines: linenr_T = line2 - line1 + 1 as linenr_T;
-        if u_save(dest, dest + 1 as linenr_T) == FAIL {
-            return FAIL;
-        }
-        let mut l: linenr_T = 0;
-        let mut extra: linenr_T = 0;
-        extra = 0 as ::core::ffi::c_int as linenr_T;
-        l = line1;
-        while l <= line2 {
-            let mut str: *mut ::core::ffi::c_char =
-                xstrnsave(ml_get(l + extra), ml_get_len(l + extra) as size_t);
-            ml_append(dest + l - line1, str, 0 as colnr_T, false_0 != 0);
-            xfree(str as *mut ::core::ffi::c_void);
-            if dest < line1 {
-                extra += 1;
-            }
-            l += 1;
-        }
-        let mut last_line: linenr_T = (*curbuf.get()).b_ml.ml_line_count;
-        mark_adjust_nofold(line1, line2, last_line - line2, 0 as linenr_T, kExtmarkNOOP);
-        (*disable_fold_update.ptr()) += 1;
-        changed_lines(
-            curbuf.get(),
-            last_line - num_lines + 1 as linenr_T,
-            0 as colnr_T,
-            last_line + 1 as linenr_T,
-            num_lines,
-            false_0 != 0,
-        );
-        (*disable_fold_update.ptr()) -= 1;
-        let mut line_off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut byte_off: bcount_t = 0 as bcount_t;
-        if dest >= line2 {
-            mark_adjust_nofold(
-                line2 + 1 as linenr_T,
-                dest,
-                -num_lines,
-                0 as linenr_T,
-                kExtmarkNOOP,
-            );
-            let mut tab: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-            while !tab.is_null() {
-                let mut win: *mut win_T = if tab == curtab.get() {
-                    firstwin.get()
-                } else {
-                    (*tab).tp_firstwin
-                };
-                while !win.is_null() {
-                    if (*win).w_buffer == curbuf.get() {
-                        foldMoveRange(win, &raw mut (*win).w_folds, line1, line2, dest);
-                    }
-                    win = (*win).w_next;
-                }
-                tab = (*tab).tp_next as *mut tabpage_T;
-            }
-            if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
-                == 0 as ::core::ffi::c_int
-            {
-                (*curbuf.get()).b_op_start.lnum = dest - num_lines + 1 as linenr_T;
-                (*curbuf.get()).b_op_end.lnum = dest;
-            }
-            line_off = -num_lines as ::core::ffi::c_int;
-            byte_off = -extent_byte;
-        } else {
-            mark_adjust_nofold(
-                dest + 1 as linenr_T,
-                line1 - 1 as linenr_T,
+    }
+
+    // Now we must be careful adjusting our marks so that we don't overlap our
+    // mark_adjust() calls.
+    //
+    // We adjust the marks within the old text so that they refer to the
+    // last lines of the file (temporarily), because we know no other marks
+    // will be set there since these line numbers did not exist until we added
+    // our new lines.
+    //
+    // Then we adjust the marks on lines between the old and new text positions
+    // (either forwards or backwards).
+    //
+    // And Finally we adjust the marks we put at the end of the file back to
+    // their final destination at the new text position -- webb
+
+    // The last line in the file now that the copies are in.
+    // SAFETY: `curbuf` is live.
+    let last_line = unsafe { (*curbuf.get()).b_ml.ml_line_count };
+    // SAFETY: as above; the range is the one just copied.
+    unsafe { mark_adjust_nofold(line1, line2, last_line - line2, 0, kExtmarkNOOP) };
+    folds_frozen(|| {
+        // SAFETY: the copies occupy the tail of the buffer.
+        unsafe {
+            changed_lines(
+                curbuf.get(),
+                last_line - num_lines + 1,
+                0,
+                last_line + 1,
                 num_lines,
-                0 as linenr_T,
-                kExtmarkNOOP,
+                false,
             );
-            let mut tab_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-            while !tab_0.is_null() {
-                let mut win_0: *mut win_T = if tab_0 == curtab.get() {
-                    firstwin.get()
-                } else {
-                    (*tab_0).tp_firstwin
-                };
-                while !win_0.is_null() {
-                    if (*win_0).w_buffer == curbuf.get() {
-                        foldMoveRange(
-                            win_0,
-                            &raw mut (*win_0).w_folds,
-                            dest + 1 as linenr_T,
-                            line1 - 1 as linenr_T,
-                            line2,
-                        );
-                    }
-                    win_0 = (*win_0).w_next;
-                }
-                tab_0 = (*tab_0).tp_next as *mut tabpage_T;
-            }
-            if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
-                == 0 as ::core::ffi::c_int
-            {
-                (*curbuf.get()).b_op_start.lnum = dest + 1 as linenr_T;
-                (*curbuf.get()).b_op_end.lnum = dest + num_lines;
-            }
         }
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
-            == 0 as ::core::ffi::c_int
-        {
-            (*curbuf.get()).b_op_end.col = 0 as ::core::ffi::c_int as colnr_T;
-            (*curbuf.get()).b_op_start.col = (*curbuf.get()).b_op_end.col;
+    });
+
+    let (line_off, byte_off) = if dest >= line2 {
+        // SAFETY: the lines the move stepped over are still in the buffer.
+        unsafe {
+            mark_adjust_nofold(line2 + 1, dest, -num_lines, 0, kExtmarkNOOP);
+            fold_move_range(line1, line2, dest);
         }
+        // SAFETY: `curbuf` is live.
+        unsafe { set_op_range(dest - num_lines + 1, dest) };
+        (-num_lines, -extent_byte)
+    } else {
+        // SAFETY: as above.
+        unsafe {
+            mark_adjust_nofold(dest + 1, line1 - 1, num_lines, 0, kExtmarkNOOP);
+            fold_move_range(dest + 1, line1 - 1, line2);
+        }
+        // SAFETY: `curbuf` is live.
+        unsafe { set_op_range(dest + 1, dest + num_lines) };
+        (0, 0)
+    };
+
+    // SAFETY: the tail of the buffer still holds the copies.
+    unsafe {
         mark_adjust_nofold(
-            last_line - num_lines + 1 as linenr_T,
+            last_line - num_lines + 1,
             last_line,
             -(last_line - dest - extra),
-            0 as linenr_T,
+            0,
             kExtmarkNOOP,
         );
-        (*disable_fold_update.ptr()) += 1;
-        changed_lines(
-            curbuf.get(),
-            last_line - num_lines + 1 as linenr_T,
-            0 as colnr_T,
-            last_line + 1 as linenr_T,
-            -extra,
-            false_0 != 0,
-        );
-        (*disable_fold_update.ptr()) -= 1;
-        buf_updates_send_changes(
-            curbuf.get(),
-            dest + 1 as linenr_T,
-            num_lines as int64_t,
-            0 as int64_t,
-        );
-        if u_save(line1 + extra - 1 as linenr_T, line2 + extra + 1 as linenr_T) == FAIL {
-            return FAIL;
+    }
+    folds_frozen(|| {
+        // SAFETY: as above.
+        unsafe {
+            changed_lines(
+                curbuf.get(),
+                last_line - num_lines + 1,
+                0,
+                last_line + 1,
+                -extra,
+                false,
+            );
         }
-        l = line1;
-        while l <= line2 {
-            ml_delete_flags(line1 + extra, ML_DEL_MESSAGE as ::core::ffi::c_int);
-            l += 1;
-        }
-        if global_busy.get() == 0 && num_lines as OptInt > p_report.get() {
+    });
+
+    // Send an update regarding the new lines that were added.
+    // SAFETY: `curbuf` is live.
+    unsafe { buf_updates_send_changes(curbuf.get(), dest + 1, num_lines as int64_t, 0) };
+
+    // Now we delete the original text -- webb
+    // SAFETY: the original range sits at `line1 + extra` now.
+    if unsafe { u_save(line1 + extra - 1, line2 + extra + 1) } == FAIL {
+        return FAIL;
+    }
+    for _ in line1..=line2 {
+        // SAFETY: as above; each delete pulls the next line into place.
+        unsafe { ml_delete_flags(line1 + extra, ML_DEL_MESSAGE as c_int) };
+    }
+
+    if global_busy.get() == 0 && num_lines as OptInt > p_report.get() {
+        // SAFETY: one `%ld` and one `int64_t` for it.
+        unsafe {
             smsg_c!(
-                0 as ::core::ffi::c_int,
+                0,
                 ngettext(
                     c"%ld line moved".as_ptr(),
                     c"%ld lines moved".as_ptr(),
-                    num_lines as ::core::ffi::c_ulong,
+                    num_lines as c_ulong,
                 ),
                 num_lines as int64_t,
             );
         }
+    }
+
+    // SAFETY: `curbuf` is live and the byte extents were measured before the
+    // move; `line_off`/`byte_off` correct the destination for the deletion.
+    unsafe {
         extmark_move_region(
             curbuf.get(),
-            line1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-            0 as colnr_T,
+            line1 - 1,
+            0,
             start_byte,
-            line2 as ::core::ffi::c_int - line1 as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
-            0 as colnr_T,
+            line2 - line1 + 1,
+            0,
             extent_byte,
-            dest as ::core::ffi::c_int + line_off,
-            0 as colnr_T,
+            dest + line_off,
+            0,
             dest_byte + byte_off,
             kExtmarkUndo,
         );
-        if dest >= line1 {
-            (*curwin.get()).w_cursor.lnum = dest;
-        } else {
-            (*curwin.get()).w_cursor.lnum = dest + (line2 - line1) + 1 as linenr_T;
-        }
+    }
+
+    // Leave the cursor on the last of the moved lines.
+    // SAFETY: `curwin` is the live current window.
+    unsafe { (*curwin.get()).w_cursor.lnum = last_moved_line(line1, line2, dest) };
+
+    // SAFETY: `curbuf` is live; the redrawn span reaches from the first line
+    // that moved to the last, whichever direction the move went.
+    unsafe {
         if line1 < dest {
-            dest = (dest as ::core::ffi::c_int + (num_lines + 1 as linenr_T) as ::core::ffi::c_int)
-                as linenr_T;
-            last_line = (*curbuf.get()).b_ml.ml_line_count;
-            dest = if dest < last_line + 1 as linenr_T {
-                dest
-            } else {
-                last_line + 1 as linenr_T
-            };
-            changed_lines(
-                curbuf.get(),
-                line1,
-                0 as colnr_T,
-                dest,
-                0 as linenr_T,
-                false_0 != 0,
-            );
+            let end = (dest + num_lines + 1).min((*curbuf.get()).b_ml.ml_line_count + 1);
+            changed_lines(curbuf.get(), line1, 0, end, 0, false);
         } else {
-            changed_lines(
-                curbuf.get(),
-                dest + 1 as linenr_T,
-                0 as colnr_T,
-                line1 + num_lines,
-                0 as linenr_T,
-                false_0 != 0,
-            );
+            changed_lines(curbuf.get(), dest + 1, 0, line1 + num_lines, 0, false);
         }
-        buf_updates_send_changes(
-            curbuf.get(),
-            line1 + extra,
-            0 as int64_t,
-            num_lines as int64_t,
-        );
-        return OK;
+        // Send nvim_buf_lines_event regarding lines that were deleted.
+        buf_updates_send_changes(curbuf.get(), line1 + extra, 0, num_lines as int64_t);
+    }
+
+    OK
+}
+
+/// Where `:move` leaves the cursor: on the last line it moved.
+fn last_moved_line(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> linenr_T {
+    if dest >= line1 {
+        dest
+    } else {
+        dest + (line2 - line1) + 1
     }
 }
 
-pub unsafe extern "C" fn ex_copy(mut line1: linenr_T, mut line2: linenr_T, mut n: linenr_T) {
-    unsafe {
-        let mut count: linenr_T = line2 - line1 + 1 as linenr_T;
-        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
-            == 0 as ::core::ffi::c_int
-        {
-            (*curbuf.get()).b_op_start.lnum = n + 1 as linenr_T;
-            (*curbuf.get()).b_op_end.lnum = n + count;
-            (*curbuf.get()).b_op_end.col = 0 as ::core::ffi::c_int as colnr_T;
-            (*curbuf.get()).b_op_start.col = (*curbuf.get()).b_op_end.col;
-        }
-        if u_save(n, n + 1 as linenr_T) == FAIL {
-            return;
-        }
-        (*curwin.get()).w_cursor.lnum = n;
-        while line1 <= line2 {
-            let mut p: *mut ::core::ffi::c_char =
-                xstrnsave(ml_get(line1), ml_get_len(line1) as size_t);
-            ml_append((*curwin.get()).w_cursor.lnum, p, 0 as colnr_T, false_0 != 0);
-            xfree(p as *mut ::core::ffi::c_void);
-            if line1 == n {
-                line1 = (*curwin.get()).w_cursor.lnum;
+/// Run `f` with the fold update held off.
+///
+/// `:move` repairs the folds itself with `foldMoveRange`, so the
+/// `changed_lines` calls that only shuffle line numbers past each other must
+/// not have a fold update run over the half-moved buffer.
+fn folds_frozen<R>(f: impl FnOnce() -> R) -> R {
+    disable_fold_update.set(disable_fold_update.get() + 1);
+    let result = f();
+    disable_fold_update.set(disable_fold_update.get() - 1);
+    result
+}
+
+/// Move the folds of `line1`..`line2` to `dest` in every window showing the
+/// current buffer -- a window on another tab page holds folds of its own.
+///
+/// # Safety
+/// The three line numbers must be a `foldMoveRange` range of the current
+/// buffer.
+unsafe fn fold_move_range(line1: linenr_T, line2: linenr_T, dest: linenr_T) {
+    for wp in tab_windows() {
+        // SAFETY: `wp` is a live window.
+        unsafe {
+            if (*wp).w_buffer == curbuf.get() {
+                foldMoveRange(wp, &raw mut (*wp).w_folds, line1, line2, dest);
             }
-            line1 += 1;
-            if (*curwin.get()).w_cursor.lnum < line1 {
-                line1 += 1;
-            }
-            if (*curwin.get()).w_cursor.lnum < line2 {
-                line2 += 1;
-            }
-            (*curwin.get()).w_cursor.lnum += 1;
         }
-        appended_lines_mark(n, count as ::core::ffi::c_int);
-        if VIsual_active.get() {
-            check_pos(curbuf.get(), VIsual.ptr());
-        }
-        msgmore(count as ::core::ffi::c_int);
     }
+}
+
+/// Set the `'[` and `']` marks around what the command touched, unless
+/// `:lockmarks` asked for them to be left alone.
+///
+/// # Safety
+/// The current buffer must be live.
+unsafe fn set_op_range(start: linenr_T, end: linenr_T) {
+    if cmdmod.with(|mods| mods.cmod_flags) & CMOD_LOCKMARKS as c_int != 0 {
+        return;
+    }
+    // SAFETY: caller's contract.  `coladd` is deliberately left alone, as
+    // upstream leaves it.
+    unsafe {
+        (*curbuf.get()).b_op_start.lnum = start;
+        (*curbuf.get()).b_op_start.col = 0;
+        (*curbuf.get()).b_op_end.lnum = end;
+        (*curbuf.get()).b_op_end.col = 0;
+    }
+}
+
+/// Every window of every tab page, in `FOR_ALL_TAB_WINDOWS` order: the current
+/// tab page keeps its window list in `firstwin` rather than in its own struct.
+fn tab_windows() -> impl Iterator<Item = *mut win_T> {
+    let mut tp: *mut tabpage_T = first_tabpage.get();
+    let mut wp: *mut win_T = ptr::null_mut();
+    core::iter::from_fn(move || {
+        loop {
+            if !wp.is_null() {
+                let found = wp;
+                // SAFETY: the window list is the editor's own and is live.
+                wp = unsafe { (*found).w_next };
+                return Some(found);
+            }
+            if tp.is_null() {
+                return None;
+            }
+            wp = if tp == curtab.get() {
+                firstwin.get()
+            } else {
+                // SAFETY: `tp` is a live tab page.
+                unsafe { (*tp).tp_firstwin }
+            };
+            // SAFETY: as above.
+            tp = unsafe { (*tp).tp_next };
+        }
+    })
+}
+
+/// `:copy` and `:t` -- copy lines `line1`..`line2` to below line `n`.
+///
+/// # Safety
+/// The range and the destination must be lines of the current buffer, or one
+/// short of its first line.
+pub unsafe fn ex_copy(mut line1: linenr_T, mut line2: linenr_T, n: linenr_T) {
+    let count = line2 - line1 + 1;
+    // SAFETY: `curbuf` is live.
+    unsafe { set_op_range(n + 1, n + count) };
+
+    // There are three situations:
+    //   1. destination is above line1
+    //   2. destination is between line1 and line2
+    //   3. destination is below line2
+    //
+    // n = destination (when starting)
+    // curwin->w_cursor.lnum = destination (while copying)
+    // line1 = start of source (while copying)
+    // line2 = end of source (while copying)
+    // SAFETY: `n` is a line of the current buffer, or zero.
+    if unsafe { u_save(n, n + 1) } == FAIL {
+        return;
+    }
+
+    // SAFETY: `curwin` is the live current window.
+    unsafe { (*curwin.get()).w_cursor.lnum = n };
+    while line1 <= line2 {
+        // Need to make a copy because the line will be unlocked within
+        // `ml_append`.
+        // SAFETY: `line1` is a line of the current buffer throughout.
+        let cursor = unsafe {
+            let text = xstrnsave(ml_get(line1), ml_get_len(line1) as size_t);
+            ml_append((*curwin.get()).w_cursor.lnum, text, 0, false);
+            xfree(text.cast());
+            &mut (*curwin.get()).w_cursor
+        };
+
+        // Situation 2: skip the lines already copied.
+        if line1 == n {
+            line1 = cursor.lnum;
+        }
+        line1 += 1;
+        if cursor.lnum < line1 {
+            line1 += 1;
+        }
+        if cursor.lnum < line2 {
+            line2 += 1;
+        }
+        cursor.lnum += 1;
+    }
+
+    // SAFETY: `count` lines were appended after `n`.
+    unsafe { appended_lines_mark(n, count) };
+    if VIsual_active.get() {
+        // SAFETY: `curbuf` is live and `VIsual` is a global position.
+        unsafe { check_pos(curbuf.get(), VIsual.ptr()) };
+    }
+    // SAFETY: message state, main thread.
+    unsafe { msgmore(count) };
 }
