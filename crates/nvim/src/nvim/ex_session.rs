@@ -1,1401 +1,665 @@
+//! Writing a Vimscript file that restores the current state: `:mkexrc`,
+//! `:mkvimrc`, `:mkview` and `:mksession`, plus the `:loadview` that reads a
+//! view back.
+//!
+//! **The output is an on-disk format.** What these write is a script that
+//! later gets `:source`d, sometimes by a much older or newer nvim, so every
+//! byte of it is a contract: the window sizes are emitted as arithmetic on
+//! `&lines`/`&columns` so a session restores into a differently-sized
+//! terminal, `badd +N` carries a line number, and `normal! 0N|` carries a
+//! column. A change that keeps the file semantically right but moves a digit
+//! is still a breaking change.
+//!
+//! Four commands, two option sets, one writer:
+//!
+//! - `:mkexrc` and `:mkvimrc` write mappings and options and nothing else.
+//! - `:mkview` writes one window: [`view::put_view`], filtered by
+//!   'viewoptions'.
+//! - `:mksession` writes the whole editor: [`session::makeopens`], filtered
+//!   by 'sessionoptions', which is `put_view` per window plus the buffer
+//!   list, the argument list, the tab pages and the window layout.
+//!
+//! Upstream distinguishes the two option sets by passing `&ssop_flags` or
+//! `&vop_flags` and then comparing the pointer back against one of them --
+//! `flagp == &ssop_flags` reads as "this is a session, not a view".
+//! [`SessionOpts`] names that choice instead, so nothing here needs the
+//! address of an option word.
+//!
+//! [`SessionFile`] is the other half of the same idea. Every function here
+//! writes to one `FILE *` and answers "did the write succeed"; wrapping the
+//! handle once, with the contract stated at [`SessionFile::new`], makes the
+//! hundred-odd `fprintf` sites safe calls. Only the ones that write *bytes
+//! from the editor* -- a file name, a tag, an option value -- stay unsafe
+//! and go through `fputs`, because those are not necessarily UTF-8 and Rust
+//! formatting would replace what is not.
+//!
+//! Original: `src/nvim/ex_session.c`, Vim/Neovim, Vim license.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+mod session;
+mod view;
+
 use crate::semsg_c;
 use crate::src::nvim::arglist::alist_name;
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::{EVENT_SESSIONWRITEPOST, apply_autocmds};
-use crate::src::nvim::buffer::{bt_help, bt_nofilename, bt_normal, bt_terminal, buflist_findnr};
-use crate::src::nvim::eval::typval::tv_get_string;
-use crate::src::nvim::eval::var_flavour;
-use crate::src::nvim::eval::vars::{get_globvar_dict, set_vim_var_string};
+use crate::src::nvim::buffer::{bt_help, bt_nofilename, bt_terminal};
+use crate::src::nvim::eval::vars::set_vim_var_string;
 use crate::src::nvim::ex_docmd::{open_exfile, vim_mkdir_emsg};
 use crate::src::nvim::ex_getln::vim_strsave_fnameescape;
 use crate::src::nvim::file_search::vim_chdirfile;
 use crate::src::nvim::fileio::shorten_fnames;
-use crate::src::nvim::fold::put_folds;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::main::{
-    Columns, Rows, curbuf, curtab, curwin, e_noname, e_notopen, e_prev_dir, e_write, first_tabpage,
-    firstbuf, firstwin, global_alist, globaldir, no_hlsearch, p_acd, p_hls, p_shm, p_stal, p_vdir,
-    p_wh, p_wiw, ssop_flags, topframe, vop_flags,
+    curbuf, curtab, curwin, e_noname, e_notopen, e_prev_dir, e_write, globaldir, no_hlsearch,
+    p_acd, p_hls, p_vdir, ssop_flags, vop_flags,
 };
 use crate::src::nvim::mapping::makemap;
 use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz};
 use crate::src::nvim::message::emsg;
-use crate::src::nvim::option::{makefoldset, makeset};
+use crate::src::nvim::option::makeset;
 use crate::src::nvim::options::{
-    kOptSsopFlagBlank, kOptSsopFlagBuffers, kOptSsopFlagCurdir, kOptSsopFlagCursor,
-    kOptSsopFlagFolds, kOptSsopFlagGlobals, kOptSsopFlagHelp, kOptSsopFlagLocaloptions,
-    kOptSsopFlagOptions, kOptSsopFlagResize, kOptSsopFlagSesdir, kOptSsopFlagSkiprtp,
-    kOptSsopFlagTabpages, kOptSsopFlagTerminal, kOptSsopFlagWinsize,
+    OptSsopFlags, kOptSsopFlagBlank, kOptSsopFlagCurdir, kOptSsopFlagHelp, kOptSsopFlagOptions,
+    kOptSsopFlagSesdir, kOptSsopFlagSkiprtp, kOptSsopFlagTerminal,
 };
 use crate::src::nvim::os::env::home_replace_save;
 use crate::src::nvim::os::fs::{os_chdir, os_dirname, os_isdir};
-use crate::src::nvim::os::libc::{fclose, fprintf, fputs, gettext, putc, strcpy, strlen};
+use crate::src::nvim::os::libc::{fclose, fprintf, fputs, putc, strcpy, strlen};
 use crate::src::nvim::path::{add_pathsep, vim_FullName, vim_ispathsep};
-use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::runtime::do_source;
-use crate::src::nvim::strings::vim_strsave_escaped;
 use crate::src::nvim::types::{
-    CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FILE, OptInt, VAR_FLAVOUR_SESSION, VAR_FLOAT,
-    VAR_NUMBER, VAR_STRING, VV_THIS_SESSION, aentry_T, buf_T, dictitem_T, exarg_T, float_T,
-    frame_T, garray_T, hashitem_T, hashtab_T, int64_t, ptrdiff_t, size_t, tabpage_T, win_T,
+    CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FILE, VV_THIS_SESSION, aentry_T, buf_T,
+    exarg_T, garray_T, size_t, win_T,
 };
-use crate::src::nvim::window::tabpage_index;
-pub const kCdCauseOther: CdCause = -1;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const VSE_NONE: C2Rust_Unnamed_14 = 0;
-pub const DOSO_NONE: C2Rust_Unnamed_17 = 0;
-pub const OPT_LOCAL: C2Rust_Unnamed_15 = 2;
-pub const OPT_GLOBAL: C2Rust_Unnamed_15 = 1;
-pub const OPT_SKIPRTP: C2Rust_Unnamed_15 = 128;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const SESSION_FILE: [::core::ffi::c_char; 12] =
-    unsafe { ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"Session.vim\0") };
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const FR_LEAF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static did_lcd: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-unsafe extern "C" fn put_view_curpos(
-    mut fd: *mut FILE,
-    mut wp: *const win_T,
-    mut spaces: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let mut r: ::core::ffi::c_int = 0;
-    if (*wp).w_curswant == MAXCOL as ::core::ffi::c_int {
-        r = fprintf(fd, c"%snormal! $\n".as_ptr(), spaces);
-    } else {
-        r = fprintf(
-            fd,
-            c"%snormal! 0%d|\n".as_ptr(),
-            spaces,
-            (*wp).w_virtcol as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
-        );
-    }
-    return (r >= 0 as ::core::ffi::c_int) as ::core::ffi::c_int;
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::fmt;
+use core::ptr;
+
+use session::makeopens;
+use view::put_view;
+
+/// Constants the transpiler copied in from the headers this module includes.
+mod flag {
+    use super::{CdCause, c_char, c_int, c_uint};
+
+    /// `vim_chdirfile`'s reason code: not a `:cd`, so no autocommand.
+    pub const kCdCauseOther: CdCause = -1;
+    /// `vim_strsave_fnameescape`: escape for an Ex command line.
+    pub const VSE_NONE: c_int = 0;
+    /// `do_source`: this is not a vimrc.
+    pub const DOSO_NONE: c_int = 0;
+    /// `makeset` scopes.
+    pub const OPT_GLOBAL: c_uint = 1;
+    pub const OPT_LOCAL: c_uint = 2;
+    /// `makeset`: skip 'runtimepath' and 'packpath'.
+    pub const OPT_SKIPRTP: c_uint = 128;
+
+    pub const OK: c_int = 1;
+    pub const FAIL: c_int = 0;
+    pub const NUL: c_char = 0;
+    pub const MAXPATHL: c_int = 4096;
+
+    /// Frame layouts.
+    pub const FR_LEAF: c_char = 0;
+    pub const FR_COL: c_char = 2;
 }
-unsafe extern "C" fn ses_winsizes(
-    mut fd: *mut FILE,
-    mut restore_size: bool,
-    mut tab_firstwin: *mut win_T,
-) -> ::core::ffi::c_int {
-    if restore_size as ::core::ffi::c_int != 0
-        && ssop_flags.get() & kOptSsopFlagWinsize as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-    {
-        let mut n: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut wp: *mut win_T = tab_firstwin;
-        while !wp.is_null() {
-            if ses_do_win(wp) != 0 {
-                n += 1;
-                if (*wp).w_height + (*wp).w_hsep_height + (*wp).w_status_height
-                    < (*topframe.get()).fr_height
-                    && fprintf(
-                        fd,
-                        c"exe '%dresize ' . ((&lines * %ld + %ld) / %ld)\n".as_ptr(),
-                        n,
-                        (*wp).w_height as int64_t,
-                        Rows.get() as int64_t / 2 as int64_t,
-                        Rows.get() as int64_t,
-                    ) < 0 as ::core::ffi::c_int
-                {
-                    return FAIL;
-                }
-                if (*wp).w_width < Columns.get()
-                    && fprintf(
-                        fd,
-                        c"exe 'vert %dresize ' . ((&columns * %ld + %ld) / %ld)\n".as_ptr(),
-                        n,
-                        (*wp).w_width as int64_t,
-                        Columns.get() as int64_t / 2 as int64_t,
-                        Columns.get() as int64_t,
-                    ) < 0 as ::core::ffi::c_int
-                {
-                    return FAIL;
-                }
-            }
-            wp = (*wp).w_next;
-        }
-    } else if FAIL == put_line(fd, c"wincmd =".as_ptr() as *mut ::core::ffi::c_char) {
-        return FAIL;
-    }
-    return OK;
+
+use flag::{DOSO_NONE, FAIL, MAXPATHL, NUL, OK, OPT_GLOBAL, OPT_SKIPRTP, VSE_NONE};
+
+/// The default file name of each command that has one.
+const SESSION_FILE: &CStr = c"Session.vim";
+const VIMRC_FILE: &CStr = c".nvimrc";
+const EXRC_FILE: &CStr = c".exrc";
+
+/// Whether a `:lcd` or `:tcd` has been written for this session. Once one
+/// has, short file names are no longer safe: the script's working directory
+/// at the point a later name is read back is no longer known.
+static did_lcd: GlobalCell<bool> = GlobalCell::new(false);
+
+// -- The two option sets ---------------------------------------------------
+
+/// Which option word filters what gets written.
+///
+/// Upstream threads a `unsigned *` and asks `flagp == &ssop_flags`; this is
+/// the same question with a name. The distinction is not only which flags
+/// apply: a session knows the working directory it will be sourced in and a
+/// view does not, so several decisions turn on the *kind* rather than on any
+/// flag.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SessionOpts {
+    /// 'sessionoptions', for `:mksession` -- and for `:mkvimrc`/`:mkexrc`,
+    /// which never reach the parts that read a flag.
+    Session,
+    /// 'viewoptions', for `:mkview`.
+    View,
 }
-unsafe extern "C" fn ses_win_rec(mut fd: *mut FILE, mut fr: *mut frame_T) -> ::core::ffi::c_int {
-    let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if (*fr).fr_layout as ::core::ffi::c_int == FR_LEAF {
-        return OK;
-    }
-    let mut frc: *mut frame_T = ses_skipframe((*fr).fr_child);
-    if !frc.is_null() {
-        loop {
-            frc = ses_skipframe((*frc).fr_next);
-            if frc.is_null() {
-                break;
-            }
-            if fprintf(
-                fd,
-                c"%s%s".as_ptr(),
-                c"wincmd _ | wincmd |\n".as_ptr(),
-                if (*fr).fr_layout as ::core::ffi::c_int == FR_COL {
-                    c"split\n".as_ptr()
-                } else {
-                    c"vsplit\n".as_ptr()
-                },
-            ) < 0 as ::core::ffi::c_int
-            {
-                return FAIL;
-            }
-            count += 1;
+
+impl SessionOpts {
+    /// The option word's current value.
+    fn flags(self) -> OptSsopFlags {
+        match self {
+            Self::Session => ssop_flags.get(),
+            Self::View => vop_flags.get(),
         }
     }
-    if count > 0 as ::core::ffi::c_int
-        && fprintf(
-            fd,
-            if (*fr).fr_layout as ::core::ffi::c_int == FR_COL {
-                c"%dwincmd k\n".as_ptr()
-            } else {
-                c"%dwincmd h\n".as_ptr()
-            },
-            count,
-        ) < 0 as ::core::ffi::c_int
-    {
+
+    /// Whether every bit of `mask` is set.
+    pub(crate) fn has(self, mask: OptSsopFlags) -> bool {
+        self.flags() & mask != 0
+    }
+
+    /// Whether this is a session rather than a view.
+    pub(crate) fn is_session(self) -> bool {
+        self == Self::Session
+    }
+}
+
+// -- The file being written ------------------------------------------------
+
+/// The session file, and the one place its `FILE *` is dereferenced.
+///
+/// Every method answers `true` when the write succeeded, which is the
+/// `OK`/`FAIL` of the C inverted into the shape `?`-free code wants.
+#[derive(Clone, Copy)]
+pub(crate) struct SessionFile(*mut FILE);
+
+impl SessionFile {
+    /// # Safety
+    /// `fd` must be a stream open for writing that outlives this value.
+    /// Nothing else may write to it meanwhile.
+    pub(crate) unsafe fn new(fd: *mut FILE) -> Self {
+        Self(fd)
+    }
+
+    /// The raw handle, for the writers that live in other modules
+    /// (`makemap`, `makeset`, `put_folds`).
+    pub(crate) fn raw(self) -> *mut FILE {
+        self.0
+    }
+
+    /// Write `s` and a newline: C's `put_line`.
+    pub(crate) fn line(self, s: &CStr) -> bool {
+        self.puts(s) && self.eol()
+    }
+
+    /// Write a newline: C's `put_eol`.
+    pub(crate) fn eol(self) -> bool {
+        // SAFETY: the handle is open for writing, per `new`.
+        unsafe { putc(b'\n' as c_int, self.0) >= 0 }
+    }
+
+    /// Write a literal's bytes.
+    pub(crate) fn puts(self, s: &CStr) -> bool {
+        // SAFETY: as above; `s` is NUL-terminated by construction.
+        unsafe { fputs(s.as_ptr(), self.0) >= 0 }
+    }
+
+    /// Write formatted text. Every call site formats numbers into a literal
+    /// template, so the result is ASCII and holds no interior NUL; anything
+    /// carrying editor bytes uses [`Self::bytes`] instead.
+    pub(crate) fn write(self, args: fmt::Arguments<'_>) -> bool {
+        let mut text = args.to_string();
+        text.push('\0');
+        // SAFETY: as above; `text` is NUL-terminated and outlives the call.
+        unsafe { fputs(text.as_ptr().cast::<c_char>(), self.0) >= 0 }
+    }
+
+    /// Write a C string's bytes verbatim.
+    ///
+    /// # Safety
+    /// `p` must be NUL-terminated.
+    pub(crate) unsafe fn bytes(self, p: *const c_char) -> bool {
+        // SAFETY: as above, plus the caller's contract on `p`.
+        unsafe { fputs(p, self.0) >= 0 }
+    }
+}
+
+/// `put_eol()`, for the option and mapping writers that still take a raw
+/// handle.
+///
+/// # Safety
+/// `fd` is open for writing.
+pub unsafe fn put_eol(fd: *mut FILE) -> c_int {
+    // SAFETY: caller contract.
+    if unsafe { putc(b'\n' as c_int, fd) } < 0 {
         return FAIL;
     }
-    frc = ses_skipframe((*fr).fr_child);
-    while !frc.is_null() {
-        ses_win_rec(fd, frc);
-        frc = ses_skipframe((*frc).fr_next);
-        if !frc.is_null() && put_line(fd, c"wincmd w".as_ptr() as *mut ::core::ffi::c_char) == FAIL
+    OK
+}
+
+/// `put_line()`: `s` followed by a newline.
+///
+/// # Safety
+/// `fd` is open for writing and `s` NUL-terminated.
+pub unsafe fn put_line(fd: *mut FILE, s: *mut c_char) -> c_int {
+    // SAFETY: caller contract.
+    if unsafe { fprintf(fd, c"%s\n".as_ptr(), s) } < 0 {
+        return FAIL;
+    }
+    OK
+}
+
+// -- File names ------------------------------------------------------------
+
+/// The buffer name to write for `buf`.
+///
+/// The short name is only usable when the working directory at the moment
+/// the session is sourced is known -- so not for a view, not under 'acd',
+/// and not once a `:lcd` has been written.
+///
+/// # Safety
+/// `buf` is a live buffer.
+unsafe fn ses_get_fname(buf: *mut buf_T, opts: SessionOpts) -> *mut c_char {
+    // SAFETY: caller contract.
+    unsafe {
+        if !(*buf).b_sfname.is_null()
+            && opts.is_session()
+            && opts.has(kOptSsopFlagCurdir | kOptSsopFlagSesdir)
+            && p_acd.get() == 0
+            && !did_lcd.get()
         {
-            return FAIL;
+            return (*buf).b_sfname;
         }
+        (*buf).b_ffname
     }
-    return OK;
 }
-unsafe extern "C" fn ses_skipframe(mut fr: *mut frame_T) -> *mut frame_T {
-    let mut frc: *mut frame_T = ::core::ptr::null_mut::<frame_T>();
-    frc = fr;
-    while !frc.is_null() {
-        if ses_do_frame(frc) {
-            break;
+
+/// Write `buf`'s name, and a newline when `add_eol`.
+///
+/// # Safety
+/// `buf` is a live buffer.
+unsafe fn ses_fname(out: SessionFile, buf: *mut buf_T, opts: SessionOpts, add_eol: bool) -> bool {
+    // SAFETY: caller contract.
+    unsafe {
+        let name = ses_get_fname(buf, opts);
+        ses_put_fname(out, name) && (!add_eol || out.eol())
+    }
+}
+
+/// `name` with `$HOME` shortened to `~`, backslashes turned into forward
+/// slashes (the legacy `slash` flag is always on) and the characters a
+/// command line would eat escaped. Owned by the caller.
+///
+/// # Safety
+/// `name` is NUL-terminated.
+unsafe fn ses_escape_fname(name: *mut c_char) -> *mut c_char {
+    // SAFETY: caller contract; `home_replace_save` answers an owned,
+    // NUL-terminated copy, and `utfc_ptr2len` advances by a whole character
+    // so the scan never lands inside one.
+    unsafe {
+        let sname = home_replace_save(ptr::null_mut::<buf_T>(), name);
+        let mut p = sname;
+        while *p != NUL {
+            if *p == b'\\' as c_char {
+                *p = b'/' as c_char;
+            }
+            p = p.offset(utfc_ptr2len(p) as isize);
         }
-        frc = (*frc).fr_next;
+        let escaped = vim_strsave_fnameescape(sname, VSE_NONE);
+        xfree(sname.cast::<c_void>());
+        escaped
     }
-    return frc;
 }
-unsafe extern "C" fn ses_do_frame(mut fr: *const frame_T) -> bool {
-    let mut frc: *const frame_T = ::core::ptr::null::<frame_T>();
-    if (*fr).fr_layout as ::core::ffi::c_int == FR_LEAF {
-        return ses_do_win((*fr).fr_win) != 0;
+
+/// Write `name` as an escaped file name.
+///
+/// # Safety
+/// `name` is NUL-terminated.
+unsafe fn ses_put_fname(out: SessionFile, name: *mut c_char) -> bool {
+    // SAFETY: caller contract; the escaped copy is NUL-terminated and freed
+    // here.
+    unsafe {
+        let p = ses_escape_fname(name);
+        let ok = out.bytes(p);
+        xfree(p.cast::<c_void>());
+        ok
     }
-    frc = (*fr).fr_child;
-    while !frc.is_null() {
-        if ses_do_frame(frc) {
-            return true_0 != 0;
-        }
-        frc = (*frc).fr_next;
-    }
-    return false_0 != 0;
 }
-unsafe extern "C" fn ses_do_win(mut wp: *mut win_T) -> ::core::ffi::c_int {
-    if (*wp).w_floating {
-        return false_0;
+
+/// Write an argument list: the `cmd` that selects which one, `%argdel` to
+/// empty it, then one `$argadd` per entry. Entries with no name are skipped
+/// (which only happens out of memory).
+///
+/// # Safety
+/// `gap` is a live `aentry_T` garray.
+unsafe fn ses_arglist(out: SessionFile, cmd: &CStr, gap: *mut garray_T, fullname: bool) -> bool {
+    if !out.puts(cmd) || !out.eol() || !out.line(c"%argdel") {
+        return false;
     }
-    if (*(*wp).w_buffer).b_fname.is_null()
-        || (*(*wp).w_buffer).terminal.is_null()
-            && bt_nofilename((*wp).w_buffer) as ::core::ffi::c_int != 0
-    {
-        return (ssop_flags.get() & kOptSsopFlagBlank as ::core::ffi::c_int as ::core::ffi::c_uint)
-            as ::core::ffi::c_int;
-    }
-    if bt_help((*wp).w_buffer) {
-        return (ssop_flags.get() & kOptSsopFlagHelp as ::core::ffi::c_int as ::core::ffi::c_uint)
-            as ::core::ffi::c_int;
-    }
-    if bt_terminal((*wp).w_buffer) {
-        return (ssop_flags.get()
-            & kOptSsopFlagTerminal as ::core::ffi::c_int as ::core::ffi::c_uint)
-            as ::core::ffi::c_int;
-    }
-    return true_0;
-}
-unsafe extern "C" fn ses_arglist(
-    mut fd: *mut FILE,
-    mut cmd: *mut ::core::ffi::c_char,
-    mut gap: *mut garray_T,
-    mut fullname: bool,
-    mut flagp: *mut ::core::ffi::c_uint,
-) -> ::core::ffi::c_int {
-    let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if fprintf(fd, c"%s\n%s\n".as_ptr(), cmd, c"%argdel".as_ptr()) < 0 as ::core::ffi::c_int {
-        return FAIL;
-    }
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < (*gap).ga_len {
-        let mut s: *mut ::core::ffi::c_char =
-            alist_name(((*gap).ga_data as *mut aentry_T).offset(i as isize));
-        if !s.is_null() {
+    // SAFETY: caller contract; each entry's name is NUL-terminated.
+    unsafe {
+        for i in 0..(*gap).ga_len {
+            let mut name = alist_name(((*gap).ga_data as *mut aentry_T).offset(i as isize));
+            if name.is_null() {
+                continue;
+            }
+            let mut full = ptr::null_mut::<c_char>();
             if fullname {
-                buf = xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
-                vim_FullName(s, buf, MAXPATHL as size_t, false_0 != 0);
-                s = buf;
+                full = xmalloc(MAXPATHL as size_t).cast::<c_char>();
+                vim_FullName(name, full, MAXPATHL as size_t, false);
+                name = full;
             }
-            let mut fname_esc: *mut ::core::ffi::c_char = ses_escape_fname(s, flagp);
-            if fprintf(fd, c"$argadd %s\n".as_ptr(), fname_esc) < 0 as ::core::ffi::c_int {
-                xfree(fname_esc as *mut ::core::ffi::c_void);
-                xfree(buf as *mut ::core::ffi::c_void);
-                return FAIL;
+            let escaped = ses_escape_fname(name);
+            let ok = out.puts(c"$argadd ") && out.bytes(escaped) && out.eol();
+            xfree(escaped.cast::<c_void>());
+            xfree(full.cast::<c_void>());
+            if !ok {
+                return false;
             }
-            xfree(fname_esc as *mut ::core::ffi::c_void);
-            xfree(buf as *mut ::core::ffi::c_void);
         }
-        i += 1;
     }
-    return OK;
+    true
 }
-unsafe extern "C" fn ses_get_fname(
-    mut buf: *mut buf_T,
-    mut flagp: *const ::core::ffi::c_uint,
-) -> *mut ::core::ffi::c_char {
-    if !(*buf).b_sfname.is_null()
-        && flagp == ssop_flags.ptr() as *const ::core::ffi::c_uint
-        && ssop_flags.get()
-            & (kOptSsopFlagCurdir as ::core::ffi::c_int | kOptSsopFlagSesdir as ::core::ffi::c_int)
-                as ::core::ffi::c_uint
-            != 0
-        && p_acd.get() == 0
-        && did_lcd.get() == 0
-    {
-        return (*buf).b_sfname;
+
+/// Whether window `wp` belongs in the session at all. A floating window
+/// never does (#18432); the rest is what 'sessionoptions' says about the
+/// kind of buffer it holds.
+///
+/// # Safety
+/// `wp` is a live window.
+pub(crate) unsafe fn ses_do_win(wp: *mut win_T) -> bool {
+    // SAFETY: caller contract; a window always has a buffer.
+    unsafe {
+        if (*wp).w_floating {
+            return false;
+        }
+        let buf = (*wp).w_buffer;
+        if (*buf).b_fname.is_null()
+            // The contents of a "nofile" buffer cannot be restored.
+            || ((*buf).terminal.is_null() && bt_nofilename(buf))
+        {
+            return ssop_flags.get() & kOptSsopFlagBlank != 0;
+        }
+        if bt_help(buf) {
+            return ssop_flags.get() & kOptSsopFlagHelp != 0;
+        }
+        if bt_terminal(buf) {
+            return ssop_flags.get() & kOptSsopFlagTerminal != 0;
+        }
+        true
     }
-    return (*buf).b_ffname;
 }
-unsafe extern "C" fn ses_fname(
-    mut fd: *mut FILE,
-    mut buf: *mut buf_T,
-    mut flagp: *mut ::core::ffi::c_uint,
-    mut add_eol: bool,
-) -> ::core::ffi::c_int {
-    let mut name: *mut ::core::ffi::c_char = ses_get_fname(buf, flagp);
-    if ses_put_fname(fd, name, flagp) == FAIL
-        || add_eol as ::core::ffi::c_int != 0
-            && fprintf(fd, c"\n".as_ptr()) < 0 as ::core::ffi::c_int
-    {
-        return FAIL;
-    }
-    return OK;
-}
-unsafe extern "C" fn ses_escape_fname(
-    mut name: *mut ::core::ffi::c_char,
-    mut _flagp: *mut ::core::ffi::c_uint,
-) -> *mut ::core::ffi::c_char {
-    let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut sname: *mut ::core::ffi::c_char =
-        home_replace_save(::core::ptr::null_mut::<buf_T>(), name);
-    p = sname;
-    while *p as ::core::ffi::c_int != NUL {
-        if *p as ::core::ffi::c_int == '\\' as ::core::ffi::c_int {
-            *p = '/' as ::core::ffi::c_char;
-        }
-        p = p.offset(utfc_ptr2len(p) as isize);
-    }
-    p = vim_strsave_fnameescape(sname, VSE_NONE as ::core::ffi::c_int);
-    xfree(sname as *mut ::core::ffi::c_void);
-    return p;
-}
-unsafe extern "C" fn ses_put_fname(
-    mut fd: *mut FILE,
-    mut name: *mut ::core::ffi::c_char,
-    mut flagp: *mut ::core::ffi::c_uint,
-) -> ::core::ffi::c_int {
-    let mut p: *mut ::core::ffi::c_char = ses_escape_fname(name, flagp);
-    let mut retval: bool = if fputs(p, fd) < 0 as ::core::ffi::c_int {
-        FAIL
-    } else {
-        OK
-    } != 0;
-    xfree(p as *mut ::core::ffi::c_void);
-    return retval as ::core::ffi::c_int;
-}
-unsafe extern "C" fn put_view(
-    mut fd: *mut FILE,
-    mut wp: *mut win_T,
-    mut tp: *mut tabpage_T,
-    mut add_edit: bool,
-    mut flagp: *mut ::core::ffi::c_uint,
-    mut current_arg_idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut f: ::core::ffi::c_int = 0;
-    let mut did_next: bool = false_0 != 0;
-    let mut do_cursor: bool = flagp == ssop_flags.ptr()
-        || *flagp & kOptSsopFlagCursor as ::core::ffi::c_int as ::core::ffi::c_uint != 0;
-    if (*wp).w_alist == global_alist.ptr() {
-        if FAIL == put_line(fd, c"argglobal".as_ptr() as *mut ::core::ffi::c_char) {
-            return FAIL;
-        }
-    } else if ses_arglist(
-        fd,
-        c"arglocal".as_ptr() as *mut ::core::ffi::c_char,
-        &raw mut (*(*wp).w_alist).al_ga,
-        flagp == vop_flags.ptr()
-            || *flagp & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint == 0
-            || !(*tp).tp_localdir.is_null()
-            || !(*wp).w_localdir.is_null(),
-        flagp,
-    ) == FAIL
-    {
-        return FAIL;
-    }
-    if (*wp).w_arg_idx != current_arg_idx
-        && (*wp).w_arg_idx < (*(*wp).w_alist).al_ga.ga_len
-        && flagp == ssop_flags.ptr()
-    {
-        if fprintf(
-            fd,
-            c"%ldargu\n".as_ptr(),
-            (*wp).w_arg_idx as int64_t + 1 as int64_t,
-        ) < 0 as ::core::ffi::c_int
-        {
-            return FAIL;
-        }
-        did_next = true_0 != 0;
-    }
-    if add_edit as ::core::ffi::c_int != 0 && (!did_next || (*wp).w_arg_idx_invalid != 0) {
-        let mut fname_esc: *mut ::core::ffi::c_char =
-            ses_escape_fname(ses_get_fname((*wp).w_buffer, flagp), flagp);
-        if bt_help((*wp).w_buffer) {
-            let mut curtag: *mut ::core::ffi::c_char = c"".as_ptr() as *mut ::core::ffi::c_char;
-            if (0 as ::core::ffi::c_int) < (*wp).w_tagstackidx
-                && (*wp).w_tagstackidx <= (*wp).w_tagstacklen
-            {
-                curtag = (*wp).w_tagstack[((*wp).w_tagstackidx - 1 as ::core::ffi::c_int) as usize]
-                    .tagname;
-            }
-            if put_line(
-                fd,
-                c"enew | setl bt=help".as_ptr() as *mut ::core::ffi::c_char,
-            ) == FAIL
-                || fprintf(fd, c"help %s".as_ptr(), curtag) < 0 as ::core::ffi::c_int
-                || put_eol(fd) == FAIL
-            {
-                xfree(fname_esc as *mut ::core::ffi::c_void);
-                return FAIL;
-            }
-        } else if !(*(*wp).w_buffer).b_ffname.is_null()
-            && (!bt_nofilename((*wp).w_buffer) || !(*(*wp).w_buffer).terminal.is_null())
-        {
-            if fprintf(
-                fd,
-                c"if bufexists(fnamemodify(\"%s\", \":p\")) | buffer %s | else | edit %s | endif\nif &buftype ==# 'terminal'\n  silent file %s\nendif\n"
-                    .as_ptr(),
-                fname_esc,
-                fname_esc,
-                fname_esc,
-                fname_esc,
-            ) < 0 as ::core::ffi::c_int
-            {
-                xfree(fname_esc as *mut ::core::ffi::c_void);
-                return FAIL;
-            }
-        } else {
-            if FAIL == put_line(fd, c"enew".as_ptr() as *mut ::core::ffi::c_char) {
-                return FAIL;
-            }
-            if !(*(*wp).w_buffer).b_ffname.is_null() {
-                if fprintf(fd, c"file %s\n".as_ptr(), fname_esc) < 0 as ::core::ffi::c_int {
-                    xfree(fname_esc as *mut ::core::ffi::c_void);
-                    return FAIL;
-                }
-            }
-            do_cursor = false_0 != 0;
-        }
-        xfree(fname_esc as *mut ::core::ffi::c_void);
-    }
-    if (*wp).w_alt_fnum != 0 {
-        let alt: *mut buf_T = buflist_findnr((*wp).w_alt_fnum);
-        if flagp == ssop_flags.ptr()
-            && !alt.is_null()
-            && !(*alt).b_fname.is_null()
-            && *(*alt).b_fname as ::core::ffi::c_int != NUL
-            && (*alt).b_p_bl != 0
-            && !(bt_terminal(alt) as ::core::ffi::c_int != 0
-                && ssop_flags.get()
-                    & kOptSsopFlagTerminal as ::core::ffi::c_int as ::core::ffi::c_uint
-                    == 0)
-            && (fputs(c"balt ".as_ptr(), fd) < 0 as ::core::ffi::c_int
-                || ses_fname(fd, alt, flagp, true_0 != 0) == FAIL)
-        {
-            return FAIL;
-        }
-    }
-    if *flagp
-        & (kOptSsopFlagOptions as ::core::ffi::c_int
-            | kOptSsopFlagLocaloptions as ::core::ffi::c_int) as ::core::ffi::c_uint
-        != 0
-        && makemap(fd, (*wp).w_buffer) == FAIL
-    {
-        return FAIL;
-    }
-    let mut save_curwin: *mut win_T = curwin.get();
-    curwin.set(wp);
-    curbuf.set((*curwin.get()).w_buffer);
-    if *flagp
-        & (kOptSsopFlagOptions as ::core::ffi::c_int
-            | kOptSsopFlagLocaloptions as ::core::ffi::c_int) as ::core::ffi::c_uint
-        != 0
-    {
-        f = makeset(
-            fd,
-            OPT_LOCAL as ::core::ffi::c_int,
-            (flagp == vop_flags.ptr()
-                || *flagp & kOptSsopFlagOptions as ::core::ffi::c_int as ::core::ffi::c_uint == 0)
-                as ::core::ffi::c_int,
-        );
-    } else if *flagp & kOptSsopFlagFolds as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
-        f = makefoldset(fd);
-    } else {
-        f = OK;
-    }
-    curwin.set(save_curwin);
-    curbuf.set((*curwin.get()).w_buffer);
-    if f == FAIL {
-        return FAIL;
-    }
-    if *flagp & kOptSsopFlagFolds as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-        && !(*(*wp).w_buffer).b_ffname.is_null()
-        && (bt_normal((*wp).w_buffer) as ::core::ffi::c_int != 0
-            || bt_help((*wp).w_buffer) as ::core::ffi::c_int != 0)
-    {
-        if put_folds(fd, wp) == FAIL {
-            return FAIL;
-        }
-    }
-    if do_cursor {
-        if (*wp).w_view_height <= 0 as ::core::ffi::c_int {
-            if fprintf(fd, c"let s:l = %d\n".as_ptr(), (*wp).w_cursor.lnum)
-                < 0 as ::core::ffi::c_int
-            {
-                return FAIL;
-            }
-        } else if fprintf(
-            fd,
-            c"let s:l = %d - ((%d * winheight(0) + %d) / %d)\n".as_ptr(),
-            (*wp).w_cursor.lnum,
-            (*wp).w_cursor.lnum - (*wp).w_topline,
-            (*wp).w_view_height / 2 as ::core::ffi::c_int,
-            (*wp).w_view_height,
-        ) < 0 as ::core::ffi::c_int
-        {
-            return FAIL;
-        }
-        if fprintf(
-            fd,
-            c"if s:l < 1 | let s:l = 1 | endif\nkeepjumps exe s:l\nnormal! zt\nkeepjumps %d\n"
-                .as_ptr(),
-            (*wp).w_cursor.lnum,
-        ) < 0 as ::core::ffi::c_int
-        {
-            return FAIL;
-        }
-        if (*wp).w_cursor.col == 0 as ::core::ffi::c_int {
-            if FAIL == put_line(fd, c"normal! 0".as_ptr() as *mut ::core::ffi::c_char) {
-                return FAIL;
-            }
-        } else if (*wp).w_onebuf_opt.wo_wrap == 0
-            && (*wp).w_leftcol > 0 as ::core::ffi::c_int
-            && (*wp).w_width > 0 as ::core::ffi::c_int
-        {
-            if fprintf(
-                fd,
-                c"let s:c = %ld - ((%ld * winwidth(0) + %ld) / %ld)\nif s:c > 0\n  exe 'normal! ' . s:c . '|zs' . %ld . '|'\nelse\n"
-                    .as_ptr(),
-                (*wp).w_virtcol as int64_t + 1 as int64_t,
-                ((*wp).w_virtcol - (*wp).w_leftcol) as int64_t,
-                ((*wp).w_width / 2 as ::core::ffi::c_int) as int64_t,
-                (*wp).w_width as int64_t,
-                (*wp).w_virtcol as int64_t + 1 as int64_t,
-            ) < 0 as ::core::ffi::c_int
-                || put_view_curpos(
-                    fd,
-                    wp,
-                    c"  ".as_ptr()
-                        as *mut ::core::ffi::c_char,
-                ) == FAIL
-                || put_line(
-                    fd,
-                    c"endif".as_ptr()
-                        as *mut ::core::ffi::c_char,
-                ) == FAIL
-            {
-                return FAIL;
-            }
-        } else if put_view_curpos(fd, wp, c"".as_ptr() as *mut ::core::ffi::c_char) == FAIL {
-            return FAIL;
-        }
-    }
-    if !(*wp).w_localdir.is_null()
-        && (flagp != vop_flags.ptr()
-            || *flagp & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint != 0)
-    {
-        if fputs(c"lcd ".as_ptr(), fd) < 0 as ::core::ffi::c_int
-            || ses_put_fname(fd, (*wp).w_localdir, flagp) == FAIL
-            || fprintf(fd, c"\n".as_ptr()) < 0 as ::core::ffi::c_int
-        {
-            return FAIL;
-        }
-        did_lcd.set(true_0);
-    }
-    return OK;
-}
-unsafe extern "C" fn store_session_globals(mut fd: *mut FILE) -> ::core::ffi::c_int {
-    let this_varhi_ht_: *mut hashtab_T = &raw mut (*get_globvar_dict()).dv_hashtab;
-    let mut this_varhi_todo_: size_t = (*this_varhi_ht_).ht_used;
-    let mut this_varhi_: *mut hashitem_T = (*this_varhi_ht_).ht_array;
-    while this_varhi_todo_ != 0 {
-        if !((*this_varhi_).hi_key.is_null()
-            || (*this_varhi_).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
-        {
-            this_varhi_todo_ = this_varhi_todo_.wrapping_sub(1);
-            let this_var: *mut dictitem_T = (*this_varhi_)
-                .hi_key
-                .offset(-(17 as ::core::ffi::c_ulong as isize))
-                as *mut dictitem_T;
-            if ((*this_var).di_tv.v_type as ::core::ffi::c_uint
-                == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-                || (*this_var).di_tv.v_type as ::core::ffi::c_uint
-                    == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint)
-                && var_flavour(&raw mut (*this_var).di_key as *mut ::core::ffi::c_char)
-                    as ::core::ffi::c_uint
-                    == VAR_FLAVOUR_SESSION as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                let p: *mut ::core::ffi::c_char = vim_strsave_escaped(
-                    tv_get_string(&raw mut (*this_var).di_tv),
-                    c"\\\"\n\r".as_ptr(),
-                );
-                let mut t: *mut ::core::ffi::c_char = p;
-                while *t as ::core::ffi::c_int != '\0' as ::core::ffi::c_int {
-                    if *t as ::core::ffi::c_int == '\n' as ::core::ffi::c_int {
-                        *t = 'n' as ::core::ffi::c_char;
-                    } else if *t as ::core::ffi::c_int == '\r' as ::core::ffi::c_int {
-                        *t = 'r' as ::core::ffi::c_char;
-                    }
-                    t = t.offset(1);
-                }
-                if fprintf(
-                    fd,
-                    c"let %s = %c%s%c".as_ptr(),
-                    &raw mut (*this_var).di_key as *mut ::core::ffi::c_char,
-                    if (*this_var).di_tv.v_type as ::core::ffi::c_uint
-                        == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        '"' as ::core::ffi::c_int
-                    } else {
-                        ' ' as ::core::ffi::c_int
-                    },
-                    p,
-                    if (*this_var).di_tv.v_type as ::core::ffi::c_uint
-                        == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        '"' as ::core::ffi::c_int
-                    } else {
-                        ' ' as ::core::ffi::c_int
-                    },
-                ) < 0 as ::core::ffi::c_int
-                    || put_eol(fd) == 0 as ::core::ffi::c_int
-                {
-                    xfree(p as *mut ::core::ffi::c_void);
-                    return 0 as ::core::ffi::c_int;
-                }
-                xfree(p as *mut ::core::ffi::c_void);
-            } else if (*this_var).di_tv.v_type as ::core::ffi::c_uint
-                == VAR_FLOAT as ::core::ffi::c_int as ::core::ffi::c_uint
-                && var_flavour(&raw mut (*this_var).di_key as *mut ::core::ffi::c_char)
-                    as ::core::ffi::c_uint
-                    == VAR_FLAVOUR_SESSION as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                let mut f: float_T = (*this_var).di_tv.vval.v_float;
-                let mut sign: ::core::ffi::c_int = ' ' as ::core::ffi::c_int;
-                if f < 0 as ::core::ffi::c_int as float_T {
-                    f = -f;
-                    sign = '-' as ::core::ffi::c_int;
-                }
-                if fprintf(
-                    fd,
-                    c"let %s = %c%f".as_ptr(),
-                    &raw mut (*this_var).di_key as *mut ::core::ffi::c_char,
-                    sign,
-                    f,
-                ) < 0 as ::core::ffi::c_int
-                    || put_eol(fd) == 0 as ::core::ffi::c_int
-                {
-                    return 0 as ::core::ffi::c_int;
-                }
-            }
-        }
-        this_varhi_ = this_varhi_.offset(1);
-    }
-    return OK;
-}
-unsafe extern "C" fn makeopens(
-    mut fd: *mut FILE,
-    mut dirnow: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let mut only_save_windows: bool = true_0 != 0;
-    let mut restore_size: bool = true_0 != 0;
-    let mut edited_win: *mut win_T = ::core::ptr::null_mut::<win_T>();
-    let mut tab_firstwin: *mut win_T = ::core::ptr::null_mut::<win_T>();
-    let mut tab_topframe: *mut frame_T = ::core::ptr::null_mut::<frame_T>();
-    let mut cur_arg_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut next_arg_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if ssop_flags.get() & kOptSsopFlagBuffers as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
-        only_save_windows = false_0 != 0;
-    }
-    if FAIL
-        == put_line(
-            fd,
-            c"let v:this_session=expand(\"<sfile>:p\")".as_ptr() as *mut ::core::ffi::c_char,
-        )
-    {
-        return FAIL;
-    }
-    if FAIL
-        == put_line(
-            fd,
-            c"doautoall SessionLoadPre".as_ptr() as *mut ::core::ffi::c_char,
-        )
-    {
-        return FAIL;
-    }
-    if ssop_flags.get() & kOptSsopFlagGlobals as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
-        if store_session_globals(fd) == FAIL {
-            return FAIL;
-        }
-    }
-    if FAIL == put_line(fd, c"silent only".as_ptr() as *mut ::core::ffi::c_char) {
-        return FAIL;
-    }
-    if ssop_flags.get() & kOptSsopFlagTabpages as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-        && put_line(fd, c"silent tabonly".as_ptr() as *mut ::core::ffi::c_char) == FAIL
-    {
-        return FAIL;
-    }
-    if ssop_flags.get() & kOptSsopFlagSesdir as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
-        if FAIL
-            == put_line(
-                fd,
-                c"exe \"cd \" . escape(expand(\"<sfile>:p:h\"), ' ')".as_ptr()
-                    as *mut ::core::ffi::c_char,
-            )
-        {
-            return FAIL;
-        }
-    } else if ssop_flags.get() & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint
-        != 0
-    {
-        let mut sname: *mut ::core::ffi::c_char = home_replace_save(
-            ::core::ptr::null_mut::<buf_T>(),
-            if !(*globaldir.ptr()).is_null() {
-                globaldir.get()
-            } else {
-                dirnow
-            },
-        );
-        let mut fname_esc: *mut ::core::ffi::c_char = ses_escape_fname(sname, ssop_flags.ptr());
-        if fprintf(fd, c"cd %s\n".as_ptr(), fname_esc) < 0 as ::core::ffi::c_int {
-            xfree(fname_esc as *mut ::core::ffi::c_void);
-            xfree(sname as *mut ::core::ffi::c_void);
-            return FAIL;
-        }
-        xfree(fname_esc as *mut ::core::ffi::c_void);
-        xfree(sname as *mut ::core::ffi::c_void);
-    }
-    if fprintf(
-        fd,
-        c"%s".as_ptr(),
-        c"if expand('%') == '' && !&modified && line('$') <= 1 && getline(1) == ''\n  let s:wipebuf = bufnr('%')\nendif\n"
-            .as_ptr(),
-    ) < 0 as ::core::ffi::c_int
-    {
-        return FAIL;
-    }
-    if ssop_flags.get() & kOptSsopFlagOptions as ::core::ffi::c_int as ::core::ffi::c_uint
-        == 0 as ::core::ffi::c_uint
-    {
-        if FAIL
-            == put_line(
-                fd,
-                c"let s:shortmess_save = &shortmess".as_ptr() as *mut ::core::ffi::c_char,
-            )
-        {
-            return FAIL;
-        }
-    }
-    if FAIL
-        == put_line(
-            fd,
-            c"set shortmess+=aoO".as_ptr() as *mut ::core::ffi::c_char,
-        )
-    {
-        return FAIL;
-    }
-    let mut buf: *mut buf_T = firstbuf.get();
-    while !buf.is_null() {
-        if !(only_save_windows as ::core::ffi::c_int != 0
-            && (*buf).b_nwindows == 0 as ::core::ffi::c_int)
-            && !((*buf).b_help as ::core::ffi::c_int != 0
-                && ssop_flags.get() & kOptSsopFlagHelp as ::core::ffi::c_int as ::core::ffi::c_uint
-                    == 0)
-            && !(bt_terminal(buf) as ::core::ffi::c_int != 0
-                && ssop_flags.get()
-                    & kOptSsopFlagTerminal as ::core::ffi::c_int as ::core::ffi::c_uint
-                    == 0)
-            && !(*buf).b_fname.is_null()
-            && (*buf).b_p_bl != 0
-        {
-            if fprintf(
-                fd,
-                c"badd +%ld ".as_ptr(),
-                if (*buf).b_wininfo.size == 0 as size_t {
-                    1 as int64_t
-                } else {
-                    (**(*buf)
-                        .b_wininfo
-                        .items
-                        .offset(0 as ::core::ffi::c_int as isize))
-                    .wi_mark
-                    .mark
-                    .lnum as int64_t
-                },
-            ) < 0 as ::core::ffi::c_int
-                || ses_fname(fd, buf, ssop_flags.ptr(), true_0 != 0) == FAIL
-            {
-                return FAIL;
-            }
-        }
-        buf = (*buf).b_next;
-    }
-    if ses_arglist(
-        fd,
-        c"argglobal".as_ptr() as *mut ::core::ffi::c_char,
-        &raw mut (*global_alist.ptr()).al_ga,
-        ssop_flags.get() & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint == 0,
-        ssop_flags.ptr(),
-    ) == FAIL
-    {
-        return FAIL;
-    }
-    if ssop_flags.get() & kOptSsopFlagResize as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
-        if fprintf(
-            fd,
-            c"set lines=%ld columns=%ld\n".as_ptr(),
-            Rows.get() as int64_t,
-            Columns.get() as int64_t,
-        ) < 0 as ::core::ffi::c_int
-        {
-            return FAIL;
-        }
-    }
-    let mut restore_stal: bool = false_0 != 0;
-    if p_stal.get() == 1 as OptInt && !(*first_tabpage.get()).tp_next.is_null() {
-        if FAIL == put_line(fd, c"set stal=2".as_ptr() as *mut ::core::ffi::c_char) {
-            return FAIL;
-        }
-        restore_stal = true_0 != 0;
-    }
-    if ssop_flags.get() & kOptSsopFlagTabpages as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
-        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-        while !tp.is_null() {
-            if !(*tp).tp_next.is_null()
-                && put_line(
-                    fd,
-                    c"tabnew +setlocal\\ bufhidden=wipe".as_ptr() as *mut ::core::ffi::c_char,
-                ) == FAIL
-            {
-                return FAIL;
-            }
-            tp = (*tp).tp_next as *mut tabpage_T;
-        }
-        if !(*first_tabpage.get()).tp_next.is_null()
-            && put_line(fd, c"tabrewind".as_ptr() as *mut ::core::ffi::c_char) == FAIL
-        {
-            return FAIL;
-        }
-    }
-    let mut restore_height_width: bool = false_0 != 0;
-    let mut tp_0: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-    while !tp_0.is_null() {
-        let mut need_tabnext: bool = false_0 != 0;
-        let mut cnr: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-        if ssop_flags.get() & kOptSsopFlagTabpages as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-        {
-            if tp_0 == curtab.get() {
-                tab_firstwin = firstwin.get();
-                tab_topframe = topframe.get();
-            } else {
-                tab_firstwin = (*tp_0).tp_firstwin;
-                tab_topframe = (*tp_0).tp_topframe;
-            }
-            if tp_0 != first_tabpage.get() {
-                need_tabnext = true_0 != 0;
-            }
-        } else {
-            tp_0 = curtab.get() as *mut tabpage_T;
-            tab_firstwin = firstwin.get();
-            tab_topframe = topframe.get();
-        }
-        let mut wp: *mut win_T = tab_firstwin;
-        while !wp.is_null() {
-            if ses_do_win(wp) != 0
-                && !(*(*wp).w_buffer).b_ffname.is_null()
-                && !bt_help((*wp).w_buffer)
-                && !bt_nofilename((*wp).w_buffer)
-            {
-                if need_tabnext as ::core::ffi::c_int != 0
-                    && put_line(fd, c"tabnext".as_ptr() as *mut ::core::ffi::c_char) == FAIL
-                {
-                    return FAIL;
-                }
-                need_tabnext = false_0 != 0;
-                if fputs(c"edit ".as_ptr(), fd) < 0 as ::core::ffi::c_int
-                    || ses_fname(fd, (*wp).w_buffer, ssop_flags.ptr(), true_0 != 0) == FAIL
-                {
-                    return FAIL;
-                }
-                if (*wp).w_arg_idx_invalid == 0 {
-                    edited_win = wp;
-                }
-                break;
-            } else {
-                wp = (*wp).w_next;
-            }
-        }
-        if need_tabnext as ::core::ffi::c_int != 0
-            && put_line(fd, c"tabnext".as_ptr() as *mut ::core::ffi::c_char) == FAIL
-        {
-            return FAIL;
-        }
-        if (*tab_topframe).fr_layout as ::core::ffi::c_int != FR_LEAF {
-            if FAIL
-                == put_line(
-                    fd,
-                    c"let s:save_splitbelow = &splitbelow".as_ptr() as *mut ::core::ffi::c_char,
-                )
-            {
-                return FAIL;
-            }
-            if FAIL
-                == put_line(
-                    fd,
-                    c"let s:save_splitright = &splitright".as_ptr() as *mut ::core::ffi::c_char,
-                )
-            {
-                return FAIL;
-            }
-            if FAIL
-                == put_line(
-                    fd,
-                    c"set splitbelow splitright".as_ptr() as *mut ::core::ffi::c_char,
-                )
-            {
-                return FAIL;
-            }
-            if ses_win_rec(fd, tab_topframe) == FAIL {
-                return FAIL;
-            }
-            if FAIL
-                == put_line(
-                    fd,
-                    c"let &splitbelow = s:save_splitbelow".as_ptr() as *mut ::core::ffi::c_char,
-                )
-            {
-                return FAIL;
-            }
-            if FAIL
-                == put_line(
-                    fd,
-                    c"let &splitright = s:save_splitright".as_ptr() as *mut ::core::ffi::c_char,
-                )
-            {
-                return FAIL;
-            }
-        }
-        let mut nr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut wp_0: *mut win_T = tab_firstwin;
-        while !wp_0.is_null() {
-            if ses_do_win(wp_0) != 0 {
-                nr += 1;
-            } else if !(*wp_0).w_floating {
-                restore_size = false_0 != 0;
-            }
-            if curwin.get() == wp_0 {
-                cnr = nr;
-            }
-            wp_0 = (*wp_0).w_next;
-        }
-        if !tab_firstwin.is_null() && !(*tab_firstwin).w_next.is_null() {
-            if FAIL == put_line(fd, c"wincmd t".as_ptr() as *mut ::core::ffi::c_char) {
-                return FAIL;
-            }
-            if !restore_height_width {
-                if FAIL
-                    == put_line(
-                        fd,
-                        c"let s:save_winminheight = &winminheight".as_ptr()
-                            as *mut ::core::ffi::c_char,
-                    )
-                {
-                    return FAIL;
-                }
-                if FAIL
-                    == put_line(
-                        fd,
-                        c"let s:save_winminwidth = &winminwidth".as_ptr()
-                            as *mut ::core::ffi::c_char,
-                    )
-                {
-                    return FAIL;
-                }
-            }
-            if fprintf(
-                fd,
-                c"set winminheight=0\nset winheight=1\nset winminwidth=0\nset winwidth=1\n"
-                    .as_ptr(),
-            ) < 0 as ::core::ffi::c_int
-            {
-                return FAIL;
-            }
-            restore_height_width = true_0 != 0;
-        }
-        if nr > 1 as ::core::ffi::c_int && ses_winsizes(fd, restore_size, tab_firstwin) == FAIL {
-            return FAIL;
-        }
-        if ssop_flags.get() & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-            && !(*tp_0).tp_localdir.is_null()
-        {
-            if fputs(c"tcd ".as_ptr(), fd) < 0 as ::core::ffi::c_int
-                || ses_put_fname(fd, (*tp_0).tp_localdir, ssop_flags.ptr()) == FAIL
-                || put_eol(fd) == FAIL
-            {
-                return FAIL;
-            }
-            did_lcd.set(true_0);
-        }
-        let mut wp_1: *mut win_T = tab_firstwin;
-        while !wp_1.is_null() {
-            if ses_do_win(wp_1) != 0 {
-                if put_view(
-                    fd,
-                    wp_1,
-                    tp_0 as *mut tabpage_T,
-                    wp_1 != edited_win,
-                    ssop_flags.ptr(),
-                    cur_arg_idx,
-                ) == FAIL
-                {
-                    return FAIL;
-                }
-                if nr > 1 as ::core::ffi::c_int
-                    && put_line(fd, c"wincmd w".as_ptr() as *mut ::core::ffi::c_char) == FAIL
-                {
-                    return FAIL;
-                }
-                next_arg_idx = (*wp_1).w_arg_idx;
-            }
-            wp_1 = (*wp_1).w_next;
-        }
-        cur_arg_idx = next_arg_idx;
-        if cnr > 1 as ::core::ffi::c_int
-            && fprintf(fd, c"%dwincmd w\n".as_ptr(), cnr) < 0 as ::core::ffi::c_int
-        {
-            return FAIL;
-        }
-        if nr > 1 as ::core::ffi::c_int && ses_winsizes(fd, restore_size, tab_firstwin) == FAIL {
-            return FAIL;
-        }
-        if ssop_flags.get() & kOptSsopFlagTabpages as ::core::ffi::c_int as ::core::ffi::c_uint == 0
-        {
-            break;
-        }
-        tp_0 = (*tp_0).tp_next as *mut tabpage_T;
-    }
-    if ssop_flags.get() & kOptSsopFlagTabpages as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
-        if fprintf(fd, c"tabnext %d\n".as_ptr(), tabpage_index(curtab.get()))
-            < 0 as ::core::ffi::c_int
-        {
-            return FAIL;
-        }
-    }
-    if restore_stal as ::core::ffi::c_int != 0
-        && put_line(fd, c"set stal=1".as_ptr() as *mut ::core::ffi::c_char) == FAIL
-    {
-        return FAIL;
-    }
-    if fprintf(
-        fd,
-        c"%s".as_ptr(),
-        c"if exists('s:wipebuf') && len(win_findbuf(s:wipebuf)) == 0 && getbufvar(s:wipebuf, '&buftype') isnot# 'terminal'\n  silent exe 'bwipe ' . s:wipebuf\nendif\nunlet! s:wipebuf\n"
-            .as_ptr(),
-    ) < 0 as ::core::ffi::c_int
-    {
-        return FAIL;
-    }
-    if fprintf(
-        fd,
-        c"set winheight=%ld winwidth=%ld\n".as_ptr(),
-        p_wh.get(),
-        p_wiw.get(),
-    ) < 0 as ::core::ffi::c_int
-    {
-        return FAIL;
-    }
-    if ssop_flags.get() & kOptSsopFlagOptions as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
-        if fprintf(fd, c"set shortmess=%s\n".as_ptr(), p_shm.get()) < 0 as ::core::ffi::c_int {
-            return FAIL;
-        }
-    } else if FAIL
-        == put_line(
-            fd,
-            c"let &shortmess = s:shortmess_save".as_ptr() as *mut ::core::ffi::c_char,
-        )
-    {
-        return FAIL;
-    }
-    if restore_height_width {
-        if FAIL
-            == put_line(
-                fd,
-                c"let &winminheight = s:save_winminheight".as_ptr() as *mut ::core::ffi::c_char,
-            )
-        {
-            return FAIL;
-        }
-        if FAIL
-            == put_line(
-                fd,
-                c"let &winminwidth = s:save_winminwidth".as_ptr() as *mut ::core::ffi::c_char,
-            )
-        {
-            return FAIL;
-        }
-    }
-    if fprintf(
-        fd,
-        c"%s".as_ptr(),
-        c"let s:sx = expand(\"<sfile>:p:r\").\"x.vim\"\nif filereadable(s:sx)\n  exe \"source \" . fnameescape(s:sx)\nendif\n"
-            .as_ptr(),
-    ) < 0 as ::core::ffi::c_int
-    {
-        return FAIL;
-    }
-    return OK;
-}
-pub unsafe fn ex_loadview(mut eap: *mut exarg_T) {
-    let mut fname: *mut ::core::ffi::c_char = get_view_file(*(*eap).arg);
-    if fname.is_null() {
-        return;
-    }
-    if do_source(
-        fname,
-        false_0 != 0,
-        DOSO_NONE as ::core::ffi::c_int,
-        ::core::ptr::null_mut::<::core::ffi::c_int>(),
-    ) == FAIL
-    {
-        semsg_c!(
-            gettext(&raw const e_notopen as *const ::core::ffi::c_char),
-            fname,
-        );
-    }
-    xfree(fname as *mut ::core::ffi::c_void);
-}
-pub unsafe fn ex_mkrc(mut eap: *mut exarg_T) {
-    let mut view_session: bool = false_0 != 0;
-    let mut using_vdir: ::core::ffi::c_int = false_0;
-    let mut viewFile: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if (*eap).cmdidx as ::core::ffi::c_int == CMD_mksession as ::core::ffi::c_int
-        || (*eap).cmdidx as ::core::ffi::c_int == CMD_mkview as ::core::ffi::c_int
-    {
-        view_session = true_0 != 0;
-    }
-    did_lcd.set(false_0);
-    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if (*eap).cmdidx as ::core::ffi::c_int == CMD_mkview as ::core::ffi::c_int
-        && (*(*eap).arg as ::core::ffi::c_int == NUL
-            || ascii_isdigit(*(*eap).arg as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-                && *(*eap).arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == NUL)
-    {
-        (*eap).forceit = true_0;
-        fname = get_view_file(*(*eap).arg);
+
+// -- `:loadview` -----------------------------------------------------------
+
+/// `:loadview [nr]`.
+///
+/// # Safety
+/// `eap` is the current Ex command.
+pub unsafe fn ex_loadview(eap: *mut exarg_T) {
+    // SAFETY: caller contract; `fname` is owned and NUL-terminated.
+    unsafe {
+        let fname = get_view_file(*(*eap).arg);
         if fname.is_null() {
             return;
         }
-        viewFile = fname;
-        using_vdir = true_0;
-    } else if *(*eap).arg as ::core::ffi::c_int != NUL {
-        fname = (*eap).arg;
-    } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_mkvimrc as ::core::ffi::c_int {
-        fname = VIMRC_FILE.as_ptr() as *mut ::core::ffi::c_char;
-    } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_mksession as ::core::ffi::c_int {
-        fname = SESSION_FILE.as_ptr() as *mut ::core::ffi::c_char;
-    } else {
-        fname = EXRC_FILE.as_ptr() as *mut ::core::ffi::c_char;
+        if do_source(fname, false, DOSO_NONE, ptr::null_mut()) == FAIL {
+            semsg_c!(e_notopen.ptr().cast::<c_char>(), fname);
+        }
+        xfree(fname.cast::<c_void>());
     }
-    if using_vdir != 0 && !os_isdir(p_vdir.get()) {
-        vim_mkdir_emsg(p_vdir.get(), 0o755 as ::core::ffi::c_int);
-    }
-    let mut fd: *mut FILE = open_exfile(
-        fname,
-        (*eap).forceit,
-        WRITEBIN.as_ptr() as *mut ::core::ffi::c_char,
-    );
-    if !fd.is_null() {
-        let mut failed: bool = false_0 != 0;
-        let mut flagp: *mut ::core::ffi::c_uint = ::core::ptr::null_mut::<::core::ffi::c_uint>();
-        if (*eap).cmdidx as ::core::ffi::c_int == CMD_mkview as ::core::ffi::c_int {
-            flagp = vop_flags.ptr();
-        } else {
-            flagp = ssop_flags.ptr();
+}
+
+/// The name of the view file for the current buffer, in 'viewdir'.
+///
+/// The buffer's path is flattened into a single name, since no directory is
+/// created for it: a path separator becomes `=+`, an `=` becomes `==`. The
+/// digit `c` (or NUL for `:mkview` with no argument) and `.vim` follow.
+///
+/// **`.vim` lands past the terminator when `c` is NUL**, so the name on disk
+/// ends in `=`. Upstream does exactly this and `:loadview` calls the same
+/// function, so views round-trip; do not "fix" it, every existing 'viewdir'
+/// depends on it.
+///
+/// # Safety
+/// Main thread; `curbuf` is live.
+unsafe fn get_view_file(c: c_char) -> *mut c_char {
+    // SAFETY: `curbuf` is live, 'viewdir' is a NUL-terminated option string,
+    // and `retval` is sized below for every byte written into it.
+    unsafe {
+        if (*curbuf.get()).b_ffname.is_null() {
+            emsg(e_noname.ptr().cast::<c_char>());
+            return ptr::null_mut();
         }
-        if (*eap).cmdidx as ::core::ffi::c_int == CMD_mkvimrc as ::core::ffi::c_int {
-            put_line(fd, c"version 6.0".as_ptr() as *mut ::core::ffi::c_char);
-        }
-        if (*eap).cmdidx as ::core::ffi::c_int == CMD_mksession as ::core::ffi::c_int {
-            if put_line(
-                fd,
-                c"let SessionLoad = 1".as_ptr() as *mut ::core::ffi::c_char,
-            ) == FAIL
-            {
-                failed = true_0 != 0;
+        let sname = home_replace_save(ptr::null_mut::<buf_T>(), (*curbuf.get()).b_ffname);
+
+        // One extra byte for each character that doubles.
+        let mut extra = 0usize;
+        let mut p = sname;
+        while *p != NUL {
+            if *p == b'=' as c_char || vim_ispathsep(*p as c_int) {
+                extra += 1;
             }
+            p = p.offset(1);
         }
-        if !view_session
-            || (*eap).cmdidx as ::core::ffi::c_int == CMD_mksession as ::core::ffi::c_int
-                && *flagp & kOptSsopFlagOptions as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-        {
-            let mut flags: ::core::ffi::c_int = OPT_GLOBAL as ::core::ffi::c_int;
-            if (*eap).cmdidx as ::core::ffi::c_int == CMD_mksession as ::core::ffi::c_int
-                && *flagp & kOptSsopFlagSkiprtp as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-            {
-                flags |= OPT_SKIPRTP as ::core::ffi::c_int;
-            }
-            failed = failed as ::core::ffi::c_int
-                | (makemap(fd, ::core::ptr::null_mut::<buf_T>()) == FAIL
-                    || makeset(fd, flags, false_0) == FAIL) as ::core::ffi::c_int
-                != 0;
-        }
-        if !failed && view_session as ::core::ffi::c_int != 0 {
-            if put_line(
-                fd,
-                c"let s:so_save = &g:so | let s:siso_save = &g:siso | setg so=0 siso=0 | setl so=-1 siso=-1"
-                    .as_ptr() as *mut ::core::ffi::c_char,
-            ) == FAIL
-            {
-                failed = true_0 != 0;
-            }
-            if (*eap).cmdidx as ::core::ffi::c_int == CMD_mksession as ::core::ffi::c_int {
-                let mut dirnow: *mut ::core::ffi::c_char =
-                    ::core::ptr::null_mut::<::core::ffi::c_char>();
-                dirnow = xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
-                if os_dirname(dirnow, MAXPATHL as size_t) == FAIL
-                    || os_chdir(dirnow) != 0 as ::core::ffi::c_int
-                {
-                    *dirnow = NUL as ::core::ffi::c_char;
-                }
-                if *dirnow as ::core::ffi::c_int != NUL
-                    && ssop_flags.get()
-                        & kOptSsopFlagSesdir as ::core::ffi::c_int as ::core::ffi::c_uint
-                        != 0
-                {
-                    if vim_chdirfile(fname, kCdCauseOther) == OK {
-                        shorten_fnames(true_0);
-                    }
-                } else if *dirnow as ::core::ffi::c_int != NUL
-                    && ssop_flags.get()
-                        & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint
-                        != 0
-                    && !(*globaldir.ptr()).is_null()
-                {
-                    if os_chdir(globaldir.get()) == 0 as ::core::ffi::c_int {
-                        shorten_fnames(true_0);
-                    }
-                }
-                failed = failed as ::core::ffi::c_int
-                    | (makeopens(fd, dirnow) == FAIL) as ::core::ffi::c_int
-                    != 0;
-                if *dirnow as ::core::ffi::c_int != NUL
-                    && (ssop_flags.get()
-                        & kOptSsopFlagSesdir as ::core::ffi::c_int as ::core::ffi::c_uint
-                        != 0
-                        || ssop_flags.get()
-                            & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint
-                            != 0
-                            && !(*globaldir.ptr()).is_null())
-                {
-                    if os_chdir(dirnow) != 0 as ::core::ffi::c_int {
-                        emsg(gettext(&raw const e_prev_dir as *const ::core::ffi::c_char));
-                    }
-                    shorten_fnames(true_0);
-                }
-                xfree(dirnow as *mut ::core::ffi::c_void);
+
+        let retval = xmalloc(strlen(sname) + extra + strlen(p_vdir.get()) + 9).cast::<c_char>();
+        strcpy(retval, p_vdir.get());
+        add_pathsep(retval);
+        let mut s = retval.add(strlen(retval));
+        p = sname;
+        while *p != NUL {
+            if *p == b'=' as c_char {
+                *s = b'=' as c_char;
+                *s.offset(1) = b'=' as c_char;
+                s = s.offset(2);
+            } else if vim_ispathsep(*p as c_int) {
+                *s = b'=' as c_char;
+                *s.offset(1) = b'+' as c_char;
+                s = s.offset(2);
             } else {
-                failed = failed as ::core::ffi::c_int
-                    | (put_view(
-                        fd,
-                        curwin.get(),
-                        curtab.get(),
-                        using_vdir == 0,
-                        flagp,
-                        -1 as ::core::ffi::c_int,
-                    ) == FAIL) as ::core::ffi::c_int
-                    != 0;
+                *s = *p;
+                s = s.offset(1);
             }
-            if fprintf(
-                fd,
-                c"%s".as_ptr(),
-                c"let &g:so = s:so_save | let &g:siso = s:siso_save\n".as_ptr(),
-            ) < 0 as ::core::ffi::c_int
-            {
-                failed = true_0 != 0;
-            }
-            if p_hls.get() != 0
-                && fprintf(fd, c"%s".as_ptr(), c"set hlsearch\n".as_ptr()) < 0 as ::core::ffi::c_int
-            {
-                failed = true_0 != 0;
-            }
-            if no_hlsearch.get() as ::core::ffi::c_int != 0
-                && fprintf(fd, c"%s".as_ptr(), c"nohlsearch\n".as_ptr()) < 0 as ::core::ffi::c_int
-            {
-                failed = true_0 != 0;
-            }
-            if fprintf(fd, c"%s".as_ptr(), c"doautoall SessionLoadPost\n".as_ptr())
-                < 0 as ::core::ffi::c_int
-            {
-                failed = true_0 != 0;
-            }
-            if (*eap).cmdidx as ::core::ffi::c_int == CMD_mksession as ::core::ffi::c_int {
-                if fprintf(fd, c"unlet SessionLoad\n".as_ptr()) < 0 as ::core::ffi::c_int {
-                    failed = true_0 != 0;
-                }
-            }
+            p = p.offset(1);
         }
-        if put_line(
-            fd,
-            c"\" vim: set ft=vim :".as_ptr() as *mut ::core::ffi::c_char,
-        ) == FAIL
-        {
-            failed = true_0 != 0;
-        }
-        failed = failed as ::core::ffi::c_int | fclose(fd) != 0;
-        if failed {
-            emsg(gettext(&raw const e_write as *const ::core::ffi::c_char));
-        } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_mksession as ::core::ffi::c_int {
-            let tbuf: *mut ::core::ffi::c_char =
-                xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
-            if vim_FullName(fname, tbuf, MAXPATHL as size_t, false_0 != 0) == OK {
-                set_vim_var_string(VV_THIS_SESSION, tbuf, -1 as ptrdiff_t);
-            }
-            xfree(tbuf as *mut ::core::ffi::c_void);
-        }
+        *s = b'=' as c_char;
+        *s.offset(1) = c;
+        s = s.offset(2);
+        xmemcpyz(s.cast::<c_void>(), c".vim".as_ptr().cast::<c_void>(), 4);
+
+        xfree(sname.cast::<c_void>());
+        retval
     }
-    xfree(viewFile as *mut ::core::ffi::c_void);
-    apply_autocmds(
-        EVENT_SESSIONWRITEPOST,
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        false_0 != 0,
-        curbuf.get(),
-    );
 }
-unsafe extern "C" fn get_view_file(mut c: ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    if (*curbuf.get()).b_ffname.is_null() {
-        emsg(gettext(&raw const e_noname as *const ::core::ffi::c_char));
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
-    }
-    let mut sname: *mut ::core::ffi::c_char =
-        home_replace_save(::core::ptr::null_mut::<buf_T>(), (*curbuf.get()).b_ffname);
-    let mut len: size_t = 0 as size_t;
-    let mut p: *mut ::core::ffi::c_char = sname;
-    while *p != 0 {
-        if *p as ::core::ffi::c_int == '=' as ::core::ffi::c_int
-            || vim_ispathsep(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
+
+// -- `:mkexrc`, `:mkvimrc`, `:mkview`, `:mksession` ------------------------
+
+/// The four `:mk*` commands.
+///
+/// Two legacy 'sessionoptions'/'viewoptions' flags are always on: line
+/// endings are LF, and file names are written with `/`.
+///
+/// # Safety
+/// `eap` is the current Ex command with a NUL-terminated argument.
+pub unsafe fn ex_mkrc(eap: *mut exarg_T) {
+    // SAFETY: caller contract.
+    let cmdidx = unsafe { (*eap).cmdidx };
+    // `:mkview` and `:mksession` write a *state*; the other two write only
+    // mappings and options.
+    let view_session = cmdidx == CMD_mksession || cmdidx == CMD_mkview;
+
+    // Short file names are usable until a ":lcd" is written. They are also
+    // not used when 'acd' is set, which is checked separately.
+    did_lcd.set(false);
+
+    // ":mkview" or ":mkview 9": the name comes from 'viewdir'.
+    let mut view_file = ptr::null_mut::<c_char>();
+    // SAFETY: caller contract; `eap.arg` is NUL-terminated.
+    let fname = unsafe {
+        let arg = (*eap).arg;
+        if cmdidx == CMD_mkview
+            && (*arg == NUL || (ascii_isdigit(*arg as c_int) && *arg.offset(1) == NUL))
         {
-            len = len.wrapping_add(1);
-        }
-        p = p.offset(1);
-    }
-    let mut retval: *mut ::core::ffi::c_char = xmalloc(
-        strlen(sname)
-            .wrapping_add(len)
-            .wrapping_add(strlen(p_vdir.get()))
-            .wrapping_add(9 as size_t),
-    ) as *mut ::core::ffi::c_char;
-    strcpy(retval, p_vdir.get());
-    add_pathsep(retval);
-    let mut s: *mut ::core::ffi::c_char = retval.add(strlen(retval));
-    let mut p_0: *mut ::core::ffi::c_char = sname;
-    while *p_0 != 0 {
-        if *p_0 as ::core::ffi::c_int == '=' as ::core::ffi::c_int {
-            let c2rust_fresh0 = s;
-            s = s.offset(1);
-            *c2rust_fresh0 = '=' as ::core::ffi::c_char;
-            let c2rust_fresh1 = s;
-            s = s.offset(1);
-            *c2rust_fresh1 = '=' as ::core::ffi::c_char;
-        } else if vim_ispathsep(*p_0 as ::core::ffi::c_int) {
-            let c2rust_fresh2 = s;
-            s = s.offset(1);
-            *c2rust_fresh2 = '=' as ::core::ffi::c_char;
-            let c2rust_fresh3 = s;
-            s = s.offset(1);
-            *c2rust_fresh3 = '+' as ::core::ffi::c_char;
+            (*eap).forceit = 1;
+            view_file = get_view_file(*arg);
+            if view_file.is_null() {
+                return;
+            }
+            // The 'viewdir' may still need creating.
+            if !os_isdir(p_vdir.get()) {
+                vim_mkdir_emsg(p_vdir.get(), 0o755);
+            }
+            view_file
+        } else if *arg != NUL {
+            arg
+        } else if cmdidx == CMD_mkvimrc {
+            VIMRC_FILE.as_ptr().cast_mut()
+        } else if cmdidx == CMD_mksession {
+            SESSION_FILE.as_ptr().cast_mut()
         } else {
-            let c2rust_fresh4 = s;
-            s = s.offset(1);
-            *c2rust_fresh4 = *p_0;
+            EXRC_FILE.as_ptr().cast_mut()
         }
-        p_0 = p_0.offset(1);
+    };
+    let using_vdir = !view_file.is_null();
+
+    // SAFETY: `fname` is NUL-terminated, and `fd` is used only while open.
+    unsafe {
+        let fd = open_exfile(fname, (*eap).forceit, c"wb".as_ptr().cast_mut());
+        if !fd.is_null() {
+            let out = SessionFile::new(fd);
+            let failed = write_rc(out, eap, fname, view_session, using_vdir);
+            // `fclose` answers nonzero on a write error the buffering hid,
+            // and must run whether or not anything failed above.
+            let close_failed = fclose(fd) != 0;
+            if failed || close_failed {
+                emsg(e_write.ptr().cast::<c_char>());
+            } else if cmdidx == CMD_mksession {
+                // A successful session write sets v:this_session.
+                let full = xmalloc(MAXPATHL as size_t).cast::<c_char>();
+                if vim_FullName(fname, full, MAXPATHL as size_t, false) == OK {
+                    set_vim_var_string(VV_THIS_SESSION, full, -1);
+                }
+                xfree(full.cast::<c_void>());
+            }
+        }
+        xfree(view_file.cast::<c_void>());
+        apply_autocmds(
+            EVENT_SESSIONWRITEPOST,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            false,
+            curbuf.get(),
+        );
     }
-    let c2rust_fresh5 = s;
-    s = s.offset(1);
-    *c2rust_fresh5 = '=' as ::core::ffi::c_char;
-    let c2rust_fresh6 = s;
-    s = s.offset(1);
-    *c2rust_fresh6 = c;
-    xmemcpyz(
-        s as *mut ::core::ffi::c_void,
-        c".vim".as_ptr() as *const ::core::ffi::c_void,
-        ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-    );
-    xfree(sname as *mut ::core::ffi::c_void);
-    return retval;
 }
-pub unsafe extern "C" fn put_eol(mut fd: *mut FILE) -> ::core::ffi::c_int {
-    if putc('\n' as ::core::ffi::c_int, fd) < 0 as ::core::ffi::c_int {
-        return FAIL;
+
+/// The body of [`ex_mkrc`] once the file is open: answers whether anything
+/// failed. The trailing modeline is written either way, as upstream does.
+///
+/// # Safety
+/// `eap` is the current Ex command and `fname` the name `out` was opened
+/// under.
+unsafe fn write_rc(
+    out: SessionFile,
+    eap: *mut exarg_T,
+    fname: *mut c_char,
+    view_session: bool,
+    using_vdir: bool,
+) -> bool {
+    // SAFETY: caller contract.
+    let cmdidx = unsafe { (*eap).cmdidx };
+    let opts = if cmdidx == CMD_mkview {
+        SessionOpts::View
+    } else {
+        SessionOpts::Session
+    };
+    let mut failed = false;
+
+    if cmdidx == CMD_mkvimrc {
+        // Upstream ignores this one write's result.
+        let _ = out.line(c"version 6.0");
     }
-    return OK;
-}
-pub unsafe extern "C" fn put_line(
-    mut fd: *mut FILE,
-    mut s: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    if fprintf(fd, c"%s\n".as_ptr(), s) < 0 as ::core::ffi::c_int {
-        return FAIL;
+    if cmdidx == CMD_mksession && !out.line(c"let SessionLoad = 1") {
+        failed = true;
     }
-    return OK;
+
+    // Mappings and options: everything for the two rc commands, and for
+    // `:mksession` only when "options" is in 'sessionoptions'.
+    if !view_session || (cmdidx == CMD_mksession && opts.has(kOptSsopFlagOptions)) {
+        let mut flags = OPT_GLOBAL;
+        if cmdidx == CMD_mksession && opts.has(kOptSsopFlagSkiprtp) {
+            flags |= OPT_SKIPRTP;
+        }
+        // SAFETY: both writers take the open handle and nothing else.
+        failed |= unsafe {
+            makemap(out.raw(), ptr::null_mut()) == FAIL
+                || makeset(out.raw(), flags as c_int, 0) == FAIL
+        };
+    }
+
+    if !failed && view_session {
+        if !out.line(
+            c"let s:so_save = &g:so | let s:siso_save = &g:siso | setg so=0 siso=0 | setl so=-1 siso=-1",
+        ) {
+            failed = true;
+        }
+        if cmdidx == CMD_mksession {
+            // SAFETY: `fname` is NUL-terminated.
+            failed |= unsafe { !write_session(out, fname) };
+        } else {
+            // SAFETY: `curwin`/`curtab` are live.
+            failed |= unsafe { !put_view(out, curwin.get(), curtab.get(), !using_vdir, opts, -1) };
+        }
+        if !out.line(c"let &g:so = s:so_save | let &g:siso = s:siso_save") {
+            failed = true;
+        }
+        if p_hls.get() != 0 && !out.line(c"set hlsearch") {
+            failed = true;
+        }
+        if no_hlsearch.get() && !out.line(c"nohlsearch") {
+            failed = true;
+        }
+        if !out.line(c"doautoall SessionLoadPost") {
+            failed = true;
+        }
+        if cmdidx == CMD_mksession && !out.line(c"unlet SessionLoad") {
+            failed = true;
+        }
+    }
+    if !out.line(c"\" vim: set ft=vim :") {
+        failed = true;
+    }
+    failed
 }
-pub const EXRC_FILE: [::core::ffi::c_char; 6] =
-    unsafe { ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b".exrc\0") };
-pub const VIMRC_FILE: [::core::ffi::c_char; 8] =
-    unsafe { ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b".nvimrc\0") };
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const WRITEBIN: [::core::ffi::c_char; 3] =
-    unsafe { ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"wb\0") };
+
+/// `:mksession`'s body: change to whatever directory the file names should
+/// be relative to, write the session, and change back.
+///
+/// # Safety
+/// `fname` is the NUL-terminated name of the session file.
+unsafe fn write_session(out: SessionFile, fname: *mut c_char) -> bool {
+    // SAFETY: `dirnow` is our own MAXPATHL buffer, and `fname` is the
+    // caller's.
+    unsafe {
+        let dirnow = xmalloc(MAXPATHL as size_t).cast::<c_char>();
+        if os_dirname(dirnow, MAXPATHL as size_t) == FAIL || os_chdir(dirnow) != 0 {
+            *dirnow = NUL;
+        }
+        let known = *dirnow != NUL;
+        let to_sesdir = known && ssop_flags.get() & kOptSsopFlagSesdir != 0;
+        let to_globaldir =
+            known && ssop_flags.get() & kOptSsopFlagCurdir != 0 && !globaldir.get().is_null();
+        if to_sesdir {
+            if vim_chdirfile(fname, flag::kCdCauseOther) == OK {
+                shorten_fnames(1);
+            }
+        } else if to_globaldir && os_chdir(globaldir.get()) == 0 {
+            shorten_fnames(1);
+        }
+
+        let ok = makeopens(out, dirnow);
+
+        // Restore the original directory.
+        if to_sesdir || to_globaldir {
+            if os_chdir(dirnow) != 0 {
+                emsg(e_prev_dir.ptr().cast::<c_char>());
+            }
+            shorten_fnames(1);
+        }
+        xfree(dirnow.cast::<c_void>());
+        ok
+    }
+}
