@@ -34,12 +34,12 @@ use crate::src::nvim::types::{
     CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, CMOD_NOAUTOCMD, CMOD_NOSWAPFILE, CMOD_SANDBOX, CMOD_SILENT,
     CMOD_UNSILENT, CmdParseInfo, Dict, Direction, Error, Integer, KeyDict_cmd, KeyDict_cmd_magic,
     KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty,
-    KeyDict_get_commands, KeyDict_user_command, KeySetLink, KeyValuePair, LuaRef, Object,
-    OptionalKeys, String_0, StringBuilder, TryState, buf_T, cmd_addr_T, cmdmod_T, exarg_T,
-    except_T, expand_T, garray_T, int64_t, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeInteger,
-    kObjectTypeLuaRef, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, linenr_T,
-    msglist_T, sctx_T, size_t, ucmd_T, uint8_t, uint32_t, uint64_t,
+    KeyDict_get_commands, KeyDict_user_command, KeyValuePair, LuaRef, Object, String_0,
+    StringBuilder, TryState, buf_T, cmd_addr_T, cmdmod_T, exarg_T, expand_T, garray_T, int64_t,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeBoolean,
+    kObjectTypeBuffer, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeString,
+    kObjectTypeTabpage, kObjectTypeWindow, linenr_T, sctx_T, size_t, ucmd_T, uint8_t, uint32_t,
+    uint64_t,
 };
 use crate::src::nvim::usercmd::{
     commands_array, free_ucmd, get_user_command_name, parse_addr_type_arg, parse_compl_arg,
