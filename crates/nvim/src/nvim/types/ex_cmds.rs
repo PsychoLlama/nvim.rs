@@ -16,14 +16,18 @@ pub struct CmdParseInfo_magic {
     pub file: bool,
     pub bar: bool,
 }
-pub type LineGetter = Option<
-    unsafe extern "C" fn(
-        ::core::ffi::c_int,
-        *mut ::core::ffi::c_void,
-        ::core::ffi::c_int,
-        bool,
-    ) -> *mut ::core::ffi::c_char,
->;
+/// A reader `do_cmdline` pulls its lines from, given a `(c, cookie, indent,
+/// do_concat)` and returning allocated memory or null at the end of input.
+///
+/// Spelled separately from [`LineGetter`] so a caller can name the bare
+/// function type -- comparing two readers means `ptr::fn_addr_eq` on it.
+pub type LineGetterFn = unsafe extern "C" fn(
+    ::core::ffi::c_int,
+    *mut ::core::ffi::c_void,
+    ::core::ffi::c_int,
+    bool,
+) -> *mut ::core::ffi::c_char;
+pub type LineGetter = Option<LineGetterFn>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct SubReplacementString {

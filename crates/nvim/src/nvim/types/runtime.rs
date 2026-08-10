@@ -4,14 +4,18 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-pub type DoInRuntimepathCB = Option<
-    unsafe extern "C" fn(
-        ::core::ffi::c_int,
-        *mut *mut ::core::ffi::c_char,
-        bool,
-        *mut ::core::ffi::c_void,
-    ) -> bool,
->;
+/// What `do_in_runtimepath` calls for each match: `(num_files, files, all,
+/// cookie)`, returning whether the walk should stop.
+///
+/// Spelled separately from [`DoInRuntimepathCB`] so a caller can name the bare
+/// function type when it hands one over.
+pub type DoInRuntimepathCBFn = unsafe extern "C" fn(
+    ::core::ffi::c_int,
+    *mut *mut ::core::ffi::c_char,
+    bool,
+    *mut ::core::ffi::c_void,
+) -> bool;
+pub type DoInRuntimepathCB = Option<DoInRuntimepathCBFn>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct estack_T {

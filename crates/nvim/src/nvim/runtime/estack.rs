@@ -1,335 +1,397 @@
 //! The execution stack -- what `<sfile>`, `<stack>` and every error message's
 //! "line N of ..." prefix are read from.
 //!
-//! `exestack` is a stack of `estack_T` entries, one per nested thing being
-//! executed: a sourced script, a user function, an autocommand.  `estack_push`
-//! and `estack_pop` bracket each of them, and `estack_sfile` renders the stack
-//! the three ways vimscript can ask for it -- `<sfile>` (the innermost name),
-//! `<slnum>`-carrying `<stack>` (the whole chain, `..`-joined), and the
-//! `ESTACK_SCRIPT` form that stops at the innermost *script*.  `stacktrace_*`
-//! and `f_getstacktrace()` are the same data as a list of dicts.
+//! `exestack` is a stack of [`estack_T`] entries, one per nested thing being
+//! executed: a sourced script, a user function, an autocommand.  [`estack_push`]
+//! and [`estack_pop`] bracket each of them, and [`estack_sfile`] renders the
+//! stack the three ways vimscript can ask for it -- `<sfile>` (the innermost
+//! name), `<stack>` (the whole chain, `..`-joined and carrying line numbers),
+//! and the `ESTACK_SCRIPT` form that answers "which script *defined* the frame
+//! I am in".  [`stacktrace_create`] and [`f_getstacktrace`] are the same data
+//! as a list of dicts.
+//!
+//! The stack lives in a `garray_T`, so [`entries`] hands the rest of the file a
+//! plain slice and every walk below is checked code; only the pushes, the FFI
+//! calls and the `es_info` union reach for a pointer.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
 
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
+use core::slice;
+
+/// Slack [`estack_sfile`] reserves per entry on top of the name and its type
+/// prefix: enough for the `[%d]` line number and the `..` separator.
+const SFILE_ENTRY_SLACK: size_t = 26;
+
+/// The execution stack, outermost frame first.
+///
+/// # Safety
+///
+/// The slice borrows `exestack`'s buffer, which [`estack_push`] reallocates.
+/// No caller may hold it across a push.
+unsafe fn entries<'a>() -> &'a [estack_T] {
+    let ga = exestack.get();
+    if ga.ga_data.is_null() {
+        return &[];
+    }
+    // SAFETY: `exestack` is a garray of `estack_T` whose first `ga_len`
+    // elements are live entries, and the caller promises not to hold the
+    // borrow across a push.
+    unsafe { slice::from_raw_parts(ga.ga_data.cast::<estack_T>(), ga.ga_len as usize) }
+}
+
+/// A stack entry with no `es_info` payload yet; the pushers that have one fill
+/// it in through the returned pointer.
+fn entry_for(es_type: etype_T, name: *mut c_char, lnum: linenr_T) -> estack_T {
+    estack_T {
+        es_lnum: lnum,
+        es_name: name,
+        es_type,
+        es_info: estack_T_es_info {
+            ufunc: ptr::null_mut(),
+        },
+    }
+}
+
+/// Append `entry` to the execution stack and hand back the slot it landed in.
+fn push_entry(entry: estack_T) -> *mut estack_T {
+    let ga = exestack.ptr();
+    // SAFETY: `exestack` is this family's own garray of `estack_T`; `ga_grow`
+    // makes room for one more element and leaves `ga_data` non-null, so the
+    // slot at `ga_len` is ours to write.
+    unsafe {
+        ga_grow(ga, 1);
+        let slot = (*ga).ga_data.cast::<estack_T>().add((*ga).ga_len as usize);
+        slot.write(entry);
+        (*ga).ga_len += 1;
+        slot
+    }
+}
+
+/// Push the bottom frame, the one that stands for "not executing anything".
 pub unsafe extern "C" fn estack_init() {
-    unsafe {
-        ga_grow(exestack.ptr(), 10 as ::core::ffi::c_int);
-        let mut entry: *mut estack_T =
-            ((*exestack.ptr()).ga_data as *mut estack_T).offset((*exestack.ptr()).ga_len as isize);
-        (*entry).es_type = ETYPE_TOP;
-        (*entry).es_name = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        (*entry).es_lnum = 0 as ::core::ffi::c_int as linenr_T;
-        (*entry).es_info.ufunc = ::core::ptr::null_mut::<ufunc_T>();
-        (*exestack.ptr()).ga_len += 1;
-    }
+    // SAFETY: the pre-grow is upstream's hint that ten frames of nesting are
+    // the common case; `exestack` is empty at this point.
+    unsafe { ga_grow(exestack.ptr(), 10) };
+    push_entry(entry_for(ETYPE_TOP, ptr::null_mut(), 0));
 }
 
+/// Add an item to the execution stack.
+///
+/// Returns the new entry, so the caller can fill in its `es_info`.
 pub unsafe extern "C" fn estack_push(
-    mut type_0: etype_T,
-    mut name: *mut ::core::ffi::c_char,
-    mut lnum: linenr_T,
+    es_type: etype_T,
+    name: *mut c_char,
+    lnum: linenr_T,
 ) -> *mut estack_T {
-    unsafe {
-        ga_grow(exestack.ptr(), 1 as ::core::ffi::c_int);
-        let mut entry: *mut estack_T =
-            ((*exestack.ptr()).ga_data as *mut estack_T).offset((*exestack.ptr()).ga_len as isize);
-        (*entry).es_type = type_0;
-        (*entry).es_name = name;
-        (*entry).es_lnum = lnum;
-        (*entry).es_info.ufunc = ::core::ptr::null_mut::<ufunc_T>();
-        (*exestack.ptr()).ga_len += 1;
-        return entry;
-    }
+    push_entry(entry_for(es_type, name, lnum))
 }
 
-pub unsafe extern "C" fn estack_push_ufunc(mut ufunc: *mut ufunc_T, mut lnum: linenr_T) {
-    unsafe {
-        let mut entry: *mut estack_T = estack_push(
-            ETYPE_UFUNC,
-            if !(*ufunc).uf_name_exp.is_null() {
-                (*ufunc).uf_name_exp
-            } else {
-                &raw mut (*ufunc).uf_name as *mut ::core::ffi::c_char
-            },
-            lnum,
-        );
-        if !entry.is_null() {
-            (*entry).es_info.ufunc = ufunc;
+/// Add a user function to the execution stack.
+pub unsafe extern "C" fn estack_push_ufunc(ufunc: *mut ufunc_T, lnum: linenr_T) {
+    // SAFETY: `ufunc` is a live user function. `uf_name_exp` is the
+    // `<SNR>`-expanded name when one was built; otherwise the name is the
+    // struct's trailing inline buffer.
+    let name = unsafe {
+        if (*ufunc).uf_name_exp.is_null() {
+            &raw mut (*ufunc).uf_name as *mut c_char
+        } else {
+            (*ufunc).uf_name_exp
         }
-    }
+    };
+    let entry = push_entry(entry_for(ETYPE_UFUNC, name, lnum));
+    // SAFETY: the slot `push_entry` just wrote to. (Upstream guards this with
+    // a null check, but `ga_grow` aborts rather than returning short.)
+    unsafe { (*entry).es_info.ufunc = ufunc };
 }
 
+/// Take an item off of the execution stack. The bottom frame stays.
 pub unsafe extern "C" fn estack_pop() {
-    unsafe {
-        if (*exestack.ptr()).ga_len > 1 as ::core::ffi::c_int {
-            (*exestack.ptr()).ga_len -= 1;
+    exestack.with_mut(|ga| {
+        if ga.ga_len > 1 {
+            ga.ga_len -= 1;
         }
+    });
+}
+
+/// The line number the innermost frame is on -- upstream's `SOURCING_LNUM`.
+///
+/// Zero when nothing is executing, which upstream cannot express: it indexes
+/// the stack unconditionally and relies on [`estack_init`] having run.
+pub(crate) fn sourcing_lnum() -> linenr_T {
+    // SAFETY: the borrow ends with this expression.
+    unsafe { entries() }.last().map_or(0, |entry| entry.es_lnum)
+}
+
+/// Move the innermost frame to `lnum`.
+pub(crate) fn set_sourcing_lnum(lnum: linenr_T) {
+    let ga = exestack.get();
+    if ga.ga_len > 0 {
+        // SAFETY: the top entry of a non-empty `exestack`.
+        unsafe { (*ga.ga_data.cast::<estack_T>().add(ga.ga_len as usize - 1)).es_lnum = lnum };
     }
 }
 
-pub unsafe extern "C" fn estack_sfile(mut which: estack_arg_T) -> *mut ::core::ffi::c_char {
-    unsafe {
-        let mut entry: *const estack_T = ((*exestack.ptr()).ga_data as *mut estack_T)
-            .offset((*exestack.ptr()).ga_len as isize)
-            .offset(-(1 as ::core::ffi::c_int as isize));
-        if which as ::core::ffi::c_uint == ESTACK_SFILE as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*entry).es_type as ::core::ffi::c_uint
-                != ETYPE_UFUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            return if !(*entry).es_name.is_null() {
-                xstrdup((*entry).es_name)
-            } else {
-                ::core::ptr::null_mut::<::core::ffi::c_char>()
+/// The current value for `<sfile>`, `<stack>` or `<script>`, in allocated
+/// memory.
+///
+/// `which` is `ESTACK_SFILE` for `<sfile>`, `ESTACK_STACK` for `<stack>` or
+/// `ESTACK_SCRIPT` for `<script>`.
+pub unsafe extern "C" fn estack_sfile(which: estack_arg_T) -> *mut c_char {
+    // SAFETY: nothing reached from here pushes onto the stack, so the borrow
+    // outlives every use below.
+    let stack = unsafe { entries() };
+    let Some(innermost) = stack.last() else {
+        return ptr::null_mut();
+    };
+
+    if which == ESTACK_SFILE && innermost.es_type != ETYPE_UFUNC {
+        if innermost.es_name.is_null() {
+            return ptr::null_mut();
+        }
+        // SAFETY: a non-null `es_name` is the frame's NUL-terminated name.
+        return unsafe { xstrdup(innermost.es_name) };
+    }
+
+    // Evaluated in a function or an autocommand: report the script that
+    // *defined* it. At script level the current script's path is the answer.
+    if which == ESTACK_SCRIPT {
+        // SAFETY: same borrow; `defining_script` allocates but never pushes.
+        return unsafe { defining_script(stack) };
+    }
+
+    // SAFETY: same borrow, same reason.
+    unsafe { render_stack(stack, which) }
+}
+
+/// Walk out from the innermost frame until something says which script we are
+/// running under, and return a copy of that script's path.
+///
+/// # Safety
+///
+/// `stack` must be a live borrow of `exestack`.
+unsafe fn defining_script(stack: &[estack_T]) -> *mut c_char {
+    for entry in stack.iter().rev() {
+        match entry.es_type {
+            ETYPE_UFUNC | ETYPE_AUCMD => {
+                // SAFETY: `es_info`'s live union member is keyed by `es_type`,
+                // and both payloads outlive the frame that names them.
+                let def_ctx = unsafe {
+                    if entry.es_type == ETYPE_UFUNC {
+                        (*entry.es_info.ufunc).uf_script_ctx
+                    } else {
+                        (*entry.es_info.aucmd).script_ctx
+                    }
+                };
+                if def_ctx.sc_sid <= 0 {
+                    return ptr::null_mut();
+                }
+                // SAFETY: a positive `sc_sid` is an index into `script_items`.
+                return unsafe { xstrdup((*script_item(def_ctx.sc_sid)).sn_name) };
+            }
+            // SAFETY: a script frame's `es_name` is its path.
+            ETYPE_SCRIPT => return unsafe { xstrdup(entry.es_name) },
+            _ => {}
+        }
+    }
+    ptr::null_mut()
+}
+
+/// Compose the whole stack up to the root, the way it has always been spelled:
+/// `"function One[123]..Two[456]..Three"`.
+///
+/// Returns allocated memory, or null when no frame had a name.
+///
+/// # Safety
+///
+/// `stack` must be a live borrow of `exestack`.
+unsafe fn render_stack(stack: &[estack_T], which: estack_arg_T) -> *mut c_char {
+    let mut ga = GA_EMPTY_INIT_VALUE;
+    // SAFETY: `ga` is a local garray; `ga_init` only fills in its fields.
+    unsafe { ga_init(&raw mut ga, size_of::<c_char>() as c_int, 100) };
+
+    let innermost = stack.len() - 1;
+    let mut last_type: etype_T = ETYPE_SCRIPT;
+    for (idx, entry) in stack.iter().enumerate() {
+        if entry.es_name.is_null() {
+            continue;
+        }
+        let mut type_name: &CStr = c"";
+        if entry.es_type != last_type {
+            type_name = match entry.es_type {
+                ETYPE_SCRIPT => c"script ",
+                ETYPE_UFUNC => c"function ",
+                _ => c"",
             };
+            last_type = entry.es_type;
         }
-        if which as ::core::ffi::c_uint
-            == ESTACK_SCRIPT as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut idx: ::core::ffi::c_int = (*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int;
-            while idx >= 0 as ::core::ffi::c_int {
-                if (*entry).es_type as ::core::ffi::c_uint
-                    == ETYPE_UFUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-                    || (*entry).es_type as ::core::ffi::c_uint
-                        == ETYPE_AUCMD as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    let def_ctx: *const sctx_T = if (*entry).es_type as ::core::ffi::c_uint
-                        == ETYPE_UFUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        &raw mut (*(*entry).es_info.ufunc).uf_script_ctx
-                    } else {
-                        &raw mut (*(*entry).es_info.aucmd).script_ctx
-                    };
-                    return if (*def_ctx).sc_sid > 0 as ::core::ffi::c_int {
-                        xstrdup(
-                            (**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T).offset(
-                                ((*def_ctx).sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                                    as isize,
-                            ))
-                            .sn_name,
-                        )
-                    } else {
-                        ::core::ptr::null_mut::<::core::ffi::c_char>()
-                    };
-                } else if (*entry).es_type as ::core::ffi::c_uint
-                    == ETYPE_SCRIPT as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    return xstrdup((*entry).es_name);
-                }
-                idx -= 1;
-                entry = entry.offset(-1);
-            }
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
-        }
-        let mut ga: garray_T = garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+        // The bottom entry of `<sfile>` leaves its line number out -- that is
+        // what `<slnum>` is for. So does any entry whose number is unset.
+        let lnum = if idx == innermost && which != ESTACK_STACK {
+            0
+        } else {
+            entry.es_lnum
         };
-        ga_init(
-            &raw mut ga,
-            ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int,
-            100 as ::core::ffi::c_int,
-        );
-        let mut last_type: etype_T = ETYPE_SCRIPT;
-        let mut idx_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while idx_0 < (*exestack.ptr()).ga_len {
-            entry = ((*exestack.ptr()).ga_data as *mut estack_T).offset(idx_0 as isize);
-            if !(*entry).es_name.is_null() {
-                let mut type_name: String_0 = String_0 {
-                    data: c"".as_ptr() as *mut ::core::ffi::c_char,
-                    size: ::core::mem::size_of::<[::core::ffi::c_char; 1]>()
-                        .wrapping_sub(1 as size_t),
-                };
-                let mut es_name: String_0 = cstr_as_string((*entry).es_name);
-                if (*entry).es_type as ::core::ffi::c_uint != last_type as ::core::ffi::c_uint {
-                    match (*entry).es_type as ::core::ffi::c_uint {
-                        1 => {
-                            type_name = String_0 {
-                                data: c"script ".as_ptr() as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                                    .wrapping_sub(1 as size_t),
-                            };
-                        }
-                        2 => {
-                            type_name = String_0 {
-                                data: c"function ".as_ptr() as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                                    .wrapping_sub(1 as size_t),
-                            };
-                        }
-                        _ => {}
-                    }
-                    last_type = (*entry).es_type;
-                }
-                let mut lnum: linenr_T = if idx_0
-                    == (*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int
-                {
-                    if which as ::core::ffi::c_uint
-                        == ESTACK_STACK as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        (*((*exestack.ptr()).ga_data as *mut estack_T)
-                            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                        .es_lnum
-                    } else {
-                        0 as linenr_T
-                    }
-                } else {
-                    (*entry).es_lnum
-                };
-                let mut len: size_t = es_name
-                    .size
-                    .wrapping_add(type_name.size)
-                    .wrapping_add(26 as size_t);
-                ga_grow(&raw mut ga, len as ::core::ffi::c_int);
-                ga_concat_len(&raw mut ga, type_name.data, type_name.size);
-                ga_concat_len(&raw mut ga, es_name.data, es_name.size);
-                if lnum != 0 as linenr_T {
-                    ga.ga_len += vim_snprintf_safelen(
-                        (ga.ga_data as *mut ::core::ffi::c_char).offset(ga.ga_len as isize),
-                        (ga.ga_maxlen - ga.ga_len) as size_t,
-                        c"[%d]".as_ptr(),
-                        lnum,
-                    ) as ::core::ffi::c_int;
-                }
-                if idx_0 != (*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int {
-                    ga_concat_len(
-                        &raw mut ga,
-                        c"..".as_ptr(),
-                        ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                            .wrapping_sub(1 as size_t),
-                    );
-                }
-            }
-            idx_0 += 1;
+
+        // SAFETY: `es_name` is NUL-terminated, and the grow reserves room for
+        // both concatenations plus the `[%d]` and `..` that may follow.
+        let name_len = unsafe { strlen(entry.es_name) };
+        unsafe {
+            ga_grow(
+                &raw mut ga,
+                (name_len + type_name.count_bytes() + SFILE_ENTRY_SLACK) as c_int,
+            );
+            ga_concat_len(&raw mut ga, type_name.as_ptr(), type_name.count_bytes());
+            ga_concat_len(&raw mut ga, entry.es_name, name_len);
         }
-        if !ga.ga_data.is_null() {
-            ga_append(&raw mut ga, NUL as uint8_t);
+        if lnum != 0 {
+            // SAFETY: the grow above left `ga_maxlen - ga_len` writable bytes.
+            ga.ga_len += unsafe {
+                vim_snprintf_safelen(
+                    ga.ga_data.cast::<c_char>().add(ga.ga_len as usize),
+                    (ga.ga_maxlen - ga.ga_len) as size_t,
+                    c"[%d]".as_ptr(),
+                    lnum,
+                )
+            } as c_int;
         }
-        return ga.ga_data as *mut ::core::ffi::c_char;
+        if idx != innermost {
+            // SAFETY: as above.
+            unsafe { ga_concat_len(&raw mut ga, c"..".as_ptr(), 2) };
+        }
     }
+
+    // Only NUL-terminate when not returning null.
+    if !ga.ga_data.is_null() {
+        // SAFETY: `ga` holds the string built above.
+        unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
+    }
+    ga.ga_data.cast::<c_char>()
 }
 
-unsafe extern "C" fn stacktrace_push_item(
+/// `tv_dict_add_*` take the key and its length separately; upstream spells that
+/// pair `S_LEN(key)`.
+unsafe fn dict_add_str(d: *mut dict_T, key: &CStr, val: *const c_char) {
+    unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
+}
+
+unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: varnumber_T) {
+    unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
+}
+
+/// Append one `getstacktrace()` frame to `l`.
+///
+/// Exactly one of `fp` (a user function) and `event` (an autocommand event
+/// name) is set; a script frame has neither.
+unsafe fn stacktrace_push_item(
     l: *mut list_T,
     fp: *mut ufunc_T,
-    event: *const ::core::ffi::c_char,
+    event: *const c_char,
     lnum: linenr_T,
-    filepath: *mut ::core::ffi::c_char,
+    filepath: *mut c_char,
 ) {
+    // SAFETY: `l` is the caller's list, and the dict below is freshly
+    // allocated, so every `tv_dict_add_*` writes into memory we own until the
+    // final append hands the dict to the list.
     unsafe {
-        let d: *mut dict_T = tv_dict_alloc_lock(VAR_FIXED);
-        let mut tv: typval_T = typval_T {
+        let d = tv_dict_alloc_lock(VAR_FIXED);
+        let mut tv = typval_T {
             v_type: VAR_DICT,
             v_lock: VAR_LOCKED,
             vval: typval_vval_union { v_dict: d },
         };
         if !fp.is_null() {
-            tv_dict_add_func(
-                d,
-                c"funcref".as_ptr(),
-                ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-                fp,
-            );
+            tv_dict_add_func(d, c"funcref".as_ptr(), c"funcref".count_bytes(), fp);
         }
         if !event.is_null() {
-            tv_dict_add_str(
-                d,
-                c"event".as_ptr(),
-                ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-                event,
-            );
+            dict_add_str(d, c"event", event);
         }
-        tv_dict_add_nr(
-            d,
-            c"lnum".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-            lnum as varnumber_T,
-        );
-        tv_dict_add_str(
-            d,
-            c"filepath".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
-            filepath,
-        );
+        dict_add_nr(d, c"lnum", lnum as varnumber_T);
+        dict_add_str(d, c"filepath", filepath);
         tv_list_append_tv(l, &raw mut tv);
     }
 }
 
+/// The execution stack as `getstacktrace()` reports it: one dict per frame,
+/// outermost first.
 pub unsafe extern "C" fn stacktrace_create() -> *mut list_T {
-    unsafe {
-        let l: *mut list_T = tv_list_alloc((*exestack.ptr()).ga_len as ptrdiff_t);
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < (*exestack.ptr()).ga_len {
-            let entry: *mut estack_T =
-                ((*exestack.ptr()).ga_data as *mut estack_T).offset(i as isize);
-            let mut lnum: linenr_T = (*entry).es_lnum;
-            if (*entry).es_type as ::core::ffi::c_uint
-                == ETYPE_SCRIPT as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
+    // SAFETY: nothing below pushes onto the execution stack.
+    let stack = unsafe { entries() };
+    // SAFETY: a fresh list sized for the frames about to go into it.
+    let l = unsafe { tv_list_alloc(stack.len() as ptrdiff_t) };
+
+    for entry in stack {
+        match entry.es_type {
+            // SAFETY: a script frame's `es_name` is its path.
+            ETYPE_SCRIPT => unsafe {
                 stacktrace_push_item(
                     l,
-                    ::core::ptr::null_mut::<ufunc_T>(),
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                    lnum,
-                    (*entry).es_name,
+                    ptr::null_mut(),
+                    ptr::null(),
+                    entry.es_lnum,
+                    entry.es_name,
                 );
-            } else if (*entry).es_type as ::core::ffi::c_uint
-                == ETYPE_UFUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                let fp: *mut ufunc_T = (*entry).es_info.ufunc;
-                let sctx: sctx_T = (*fp).uf_script_ctx;
-                let mut filepath: *mut ::core::ffi::c_char =
-                    (if sctx.sc_sid > 0 as ::core::ffi::c_int {
-                        get_scriptname(sctx, ::core::ptr::null_mut::<bool>())
-                            as *const ::core::ffi::c_char
-                    } else {
-                        c"".as_ptr()
-                    }) as *mut ::core::ffi::c_char;
-                lnum += sctx.sc_lnum;
-                stacktrace_push_item(
-                    l,
-                    fp,
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                    lnum,
-                    filepath,
-                );
-            } else if (*entry).es_type as ::core::ffi::c_uint
-                == ETYPE_AUCMD as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                let sctx_0: sctx_T = (*(*entry).es_info.aucmd).script_ctx;
-                let mut filepath_0: *mut ::core::ffi::c_char =
-                    (if sctx_0.sc_sid > 0 as ::core::ffi::c_int {
-                        get_scriptname(sctx_0, ::core::ptr::null_mut::<bool>())
-                            as *const ::core::ffi::c_char
-                    } else {
-                        c"".as_ptr()
-                    }) as *mut ::core::ffi::c_char;
-                lnum += sctx_0.sc_lnum;
-                stacktrace_push_item(
-                    l,
-                    ::core::ptr::null_mut::<ufunc_T>(),
-                    (*entry).es_name,
-                    lnum,
-                    filepath_0,
-                );
+            },
+            ETYPE_UFUNC => {
+                let fp = unsafe { entry.es_info.ufunc };
+                // SAFETY: the frame's function outlives the frame.
+                let sctx = unsafe { (*fp).uf_script_ctx };
+                // SAFETY: `l` and the path below are ours.
+                unsafe {
+                    stacktrace_push_item(
+                        l,
+                        fp,
+                        ptr::null(),
+                        entry.es_lnum + sctx.sc_lnum,
+                        script_path(sctx),
+                    );
+                }
             }
-            i += 1;
+            ETYPE_AUCMD => {
+                // SAFETY: the frame's `AutoPatCmd` outlives the frame.
+                let sctx = unsafe { (*entry.es_info.aucmd).script_ctx };
+                // SAFETY: `l` and the path below are ours.
+                unsafe {
+                    stacktrace_push_item(
+                        l,
+                        ptr::null_mut(),
+                        entry.es_name,
+                        entry.es_lnum + sctx.sc_lnum,
+                        script_path(sctx),
+                    );
+                }
+            }
+            _ => {}
         }
-        return l;
     }
+    l
 }
 
-pub unsafe extern "C" fn f_getstacktrace(
-    mut _argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        tv_list_set_ret(rettv, stacktrace_create());
+/// The path a frame's defining script was read from, or `""` when it has none
+/// (a `-c` argument, a modeline, Lua, ...).
+///
+/// # Safety
+///
+/// `sctx` must name a live script context.
+unsafe fn script_path(sctx: sctx_T) -> *mut c_char {
+    if sctx.sc_sid <= 0 {
+        return c"".as_ptr().cast_mut();
     }
+    // SAFETY: a positive `sc_sid` indexes `script_items`; passing null for
+    // `should_free` asks for the borrowed name.
+    unsafe { get_scriptname(sctx, ptr::null_mut()) }
+}
+
+/// `getstacktrace()` function
+pub unsafe extern "C" fn f_getstacktrace(
+    _argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    // SAFETY: `rettv` is the caller's return slot.
+    unsafe { tv_list_set_ret(rettv, stacktrace_create()) };
 }

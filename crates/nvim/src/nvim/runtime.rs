@@ -41,7 +41,7 @@ use crate::src::nvim::eval::typval::tv_list_set_ret;
 use crate::src::nvim::eval::typval::{
     tv_check_for_opt_dict_arg, tv_dict_add_bool, tv_dict_add_dict, tv_dict_add_func,
     tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_alloc_lock,
-    tv_dict_copy, tv_dict_find, tv_dict_get_string, tv_get_number_chk, tv_get_string,
+    tv_dict_copy, tv_dict_find, tv_dict_get_string, tv_get_number_chk, tv_get_string, tv_ht_iter,
     tv_list_alloc, tv_list_alloc_ret, tv_list_append_dict, tv_list_append_string,
     tv_list_append_tv,
 };
@@ -59,16 +59,15 @@ use crate::src::nvim::garray::{
 };
 use crate::src::nvim::getchar::openscript;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::keycodes::Ctrl_V;
 use crate::src::nvim::lua::executor::{
     nlua_exec, nlua_exec_file, nlua_exec_ga, nlua_is_deferred_safe,
 };
 use crate::src::nvim::main::{
-    IObuff, NameBuff, cmdmod, curbuf, current_sctx, debug_break_level, debug_tick,
-    did_source_packages, do_profiling, e_argreq, e_dirnotf, e_interr, e_invarg, e_invargNval,
-    e_norange, e_notopen, ex_nesting_level, global_busy, got_int, listcmd_busy, msg_col, p_cpo,
-    p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose, time_fd,
+    GA_EMPTY_INIT_VALUE, IObuff, NameBuff, cmdmod, curbuf, current_sctx, debug_break_level,
+    debug_tick, did_source_packages, do_profiling, e_argreq, e_dirnotf, e_interr, e_invarg,
+    e_invargNval, e_norange, e_notopen, ex_nesting_level, global_busy, got_int, listcmd_busy,
+    msg_col, p_cpo, p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose, time_fd,
 };
 use crate::src::nvim::map::{
     map_put_ref_String_int, map_ref_String_int, mh_get_String, mh_put_String,
@@ -94,8 +93,8 @@ use crate::src::nvim::os::env::{
 use crate::src::nvim::os::fs::{os_file_is_readable, os_isdir, os_open, os_set_cloexec};
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    __errno_location, fclose, fdopen, fgets, gettext, memchr, memcpy, memmove, memset, snprintf,
-    strcasecmp, strcat, strcmp, strcpy, strlen, strncasecmp, strncmp, strstr,
+    __errno_location, fclose, fdopen, fgets, gettext, memmove, memset, snprintf, strcasecmp,
+    strcat, strcmp, strcpy, strlen, strncasecmp, strncmp, strstr,
 };
 use crate::src::nvim::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::src::nvim::path::{
@@ -111,17 +110,17 @@ use crate::src::nvim::profile::{
 use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::{
-    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, Arena, Array, CONV_NONE, Dict,
-    DoInRuntimepathCB, Error, EvalFuncData, FILE, Integer, LineGetter, LuaRetMode, MHPutStatus,
-    Map_String_int, MapHash, Object, OptInt, OptVal, OptValData, OptValType, Set_String, String_0,
-    TriState, VAR_DICT, VAR_FIXED, VAR_LOCKED, XDGVarType, buf_T, cmd_addr_T, colnr_T, dict_T,
-    dictitem_T, estack_T, estack_arg_T, etype_T, exarg_T, expand_T, funccal_entry_T, garray_T,
-    handle_T, hashitem_T, hashtab_T, int64_t, kBoolVarFalse, kErrorTypeNone, kFalse, kNone,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
-    kTrue, key_value_pair, linenr_T, list_T, object, object_data, optset_T, proftime_T,
-    pthread_mutex_t, ptrdiff_t, regmatch_T, regprog_T, scid_T, scriptitem_T, sctx_T, size_t,
-    ssize_t, typval_T, typval_vval_union, ufunc_T, uint8_t, uint32_t, uv_mutex_t, varnumber_T,
-    vimconv_T, win_T,
+    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, Arena, Array, BoolVarValue,
+    CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, Error, EvalFuncData, FILE, Integer,
+    LineGetter, LineGetterFn, LuaRetMode, MHPutStatus, Map_String_int, MapHash, Object, OptInt,
+    OptVal, OptValData, OptValType, Set_String, String_0, TriState, VAR_DICT, VAR_FIXED,
+    VAR_LOCKED, XDGVarType, buf_T, cmd_addr_T, dict_T, estack_T, estack_T_es_info, estack_arg_T,
+    etype_T, exarg_T, expand_T, funccal_entry_T, garray_T, handle_T, int64_t, kBoolVarFalse,
+    kErrorTypeNone, kFalse, kNone, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
+    kObjectTypeNil, kObjectTypeString, kTrue, key_value_pair, linenr_T, list_T, object,
+    object_data, optset_T, proftime_T, pthread_mutex_t, ptrdiff_t, regmatch_T, scid_T,
+    scriptitem_T, sctx_T, size_t, ssize_t, typval_T, typval_vval_union, ufunc_T, uint8_t, uint32_t,
+    uv_mutex_t, varnumber_T, vimconv_T,
 };
 use crate::src::nvim::usercmd::add_win_cmd_modifiers;
 use crate::{semsg_c, smsg_c};
