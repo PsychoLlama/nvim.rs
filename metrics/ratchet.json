@@ -1,7 +1,7 @@
 {
   "internal_exports": 27,
-  "files_without_forbid_unsafe": 951,
-  "files_without_deny_unsafe_op": 127,
+  "files_without_forbid_unsafe": 952,
+  "files_without_deny_unsafe_op": 126,
   "files": {
     "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe_lines": 54},
     "crates/nvim/src/cjson/lua_cjson/decode.rs": {"unsafe_lines": 175},
@@ -150,7 +150,8 @@
     "crates/nvim/src/nvim/context.rs": {"unsafe_lines": 186},
     "crates/nvim/src/nvim/cursor.rs": {"cell_ptr": 1, "unsafe_lines": 373},
     "crates/nvim/src/nvim/cursor_shape.rs": {"cell_ptr": 39, "unsafe_lines": 490},
-    "crates/nvim/src/nvim/debugger.rs": {"cell_ptr": 50, "unsafe_lines": 895},
+    "crates/nvim/src/nvim/debugger.rs": {"cell_ptr": 1, "unsafe_lines": 261},
+    "crates/nvim/src/nvim/debugger/mode.rs": {"unsafe_lines": 107},
     "crates/nvim/src/nvim/decoration.rs": {"cell_ptr": 4, "unsafe_lines": 214},
     "crates/nvim/src/nvim/decoration/dict.rs": {"unsafe_lines": 202},
     "crates/nvim/src/nvim/decoration/query.rs": {"cell_ptr": 2, "unsafe_lines": 145},
