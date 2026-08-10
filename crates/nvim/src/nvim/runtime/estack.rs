@@ -118,13 +118,24 @@ pub unsafe extern "C" fn estack_pop() {
     });
 }
 
-/// The line number the innermost frame is on -- upstream's `SOURCING_LNUM`.
+/// The frame being executed, or `None` when nothing is.
 ///
-/// Zero when nothing is executing, which upstream cannot express: it indexes
-/// the stack unconditionally and relies on [`estack_init`] having run.
-pub(crate) fn sourcing_lnum() -> linenr_T {
+/// Upstream cannot express the `None`: `SOURCING_NAME`/`SOURCING_LNUM` index
+/// the stack unconditionally and rely on [`estack_init`] having run.
+fn innermost() -> Option<estack_T> {
     // SAFETY: the borrow ends with this expression.
-    unsafe { entries() }.last().map_or(0, |entry| entry.es_lnum)
+    unsafe { entries() }.last().copied()
+}
+
+/// The line number the innermost frame is on -- upstream's `SOURCING_LNUM`.
+pub(crate) fn sourcing_lnum() -> linenr_T {
+    innermost().map_or(0, |entry| entry.es_lnum)
+}
+
+/// The name of the innermost frame -- upstream's `SOURCING_NAME`. Null when
+/// nothing is executing, which is also what the bottom frame holds.
+pub(crate) fn sourcing_name() -> *mut c_char {
+    innermost().map_or(ptr::null_mut(), |entry| entry.es_name)
 }
 
 /// Move the innermost frame to `lnum`.

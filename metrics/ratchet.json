@@ -756,7 +756,7 @@
     "crates/nvim/src/nvim/runtime/rtp.rs": {"unsafe_lines": 55},
     "crates/nvim/src/nvim/runtime/script.rs": {"cell_ptr": 5, "unsafe_lines": 204},
     "crates/nvim/src/nvim/runtime/search.rs": {"unsafe_lines": 264},
-    "crates/nvim/src/nvim/runtime/source.rs": {"cell_ptr": 24, "unsafe_lines": 552},
+    "crates/nvim/src/nvim/runtime/source.rs": {"cell_ptr": 2, "unsafe_lines": 317},
     "crates/nvim/src/nvim/search/charsearch.rs": {"cell_ptr": 5, "unsafe_lines": 89},
     "crates/nvim/src/nvim/search/command.rs": {"cell_ptr": 5, "unsafe_lines": 480},
     "crates/nvim/src/nvim/search/comment.rs": {"unsafe_lines": 90},

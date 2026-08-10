@@ -1,12 +1,12 @@
 //! Sourcing a script -- `:source`, `:runtime`'s callback, and `nvim_exec2`.
 //!
-//! `do_source_ext` is the whole of it: open the file (or take the buffer or
-//! string the API handed over), find or create the script's `scriptitem_T`
-//! and its script-local scope, push it on the execution stack, install the
-//! line reader that handles `\`-continuations and 'scriptencoding'
-//! conversion, run `do_cmdline` over it, and unwind all of that whatever
-//! happens.  Everything else here is one of the entry points into it, or one
-//! of the accessors `do_cmdline` calls back through to ask about the source
+//! `do_source_ext` is the whole of it, and it reads its lines from one of
+//! three places (see [`Origin`]): a file, the current buffer, or a string the
+//! API handed over.  Whichever it is, the shape is the same -- resolve a name,
+//! find or create the `scriptitem_T`, push it on the execution stack, run it,
+//! and unwind all of that whatever happens -- so [`source_bracket`] reads as
+//! that sequence of named stages.  Everything else here is an entry point into
+//! it, or an accessor `do_cmdline` calls back through to ask about the source
 //! it is reading from.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -14,839 +14,961 @@
 #[allow(unused_imports)]
 use super::*;
 
-unsafe extern "C" fn cmd_source(mut fname: *mut ::core::ffi::c_char, mut eap: *mut exarg_T) {
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::{mem, ptr, slice};
+
+/// `:source` with `fname`, or without it when `fname` is empty.
+///
+/// # Safety
+/// `fname` is NUL-terminated; `eap` is null or the running command.
+unsafe fn cmd_source(fname: *mut c_char, eap: *mut exarg_T) {
+    // SAFETY: the caller's contract on both arguments.
+    let (named, addr_count, forceit) = unsafe {
+        (
+            *fname as c_int != NUL,
+            (!eap.is_null()).then(|| (*eap).addr_count).unwrap_or(0),
+            !eap.is_null() && (*eap).forceit != 0,
+        )
+    };
+    if named && !eap.is_null() && addr_count > 0 {
+        // A range only makes sense when the lines come from a buffer.
+        // SAFETY: a static message.
+        unsafe { emsg(gettext(&raw const e_norange as *const c_char)) };
+        return;
+    }
+    // SAFETY: as above; every callee below takes the command or the name.
     unsafe {
-        if *fname as ::core::ffi::c_int != NUL
-            && !eap.is_null()
-            && (*eap).addr_count > 0 as ::core::ffi::c_int
-        {
-            emsg(gettext(&raw const e_norange as *const ::core::ffi::c_char));
-            return;
-        }
-        if !eap.is_null() && *fname as ::core::ffi::c_int == NUL {
-            if (*eap).forceit != 0 {
-                emsg(gettext(&raw const e_argreq as *const ::core::ffi::c_char));
+        if !eap.is_null() && !named {
+            if forceit {
+                emsg(gettext(&raw const e_argreq as *const c_char));
             } else {
-                cmd_source_buffer(eap, false_0 != 0);
+                cmd_source_buffer(eap, false);
             }
-        } else if !eap.is_null() && (*eap).forceit != 0 {
-            openscript(
-                fname,
-                global_busy.get() != 0
-                    || listcmd_busy.get() as ::core::ffi::c_int != 0
-                    || !(*eap).nextcmd.is_null()
-                    || (*(*eap).cstack).cs_idx >= 0 as ::core::ffi::c_int,
-            );
-        } else if do_source(
-            fname,
-            false_0 != 0,
-            DOSO_NONE,
-            ::core::ptr::null_mut::<::core::ffi::c_int>(),
-        ) == FAIL
-        {
-            semsg_c!(
-                gettext(&raw const e_notopen as *const ::core::ffi::c_char),
-                fname,
-            );
+        } else if !eap.is_null() && forceit {
+            // `:source!` feeds the file to the editor as typed keys.
+            let busy = global_busy.get() != 0
+                || listcmd_busy.get()
+                || !(*eap).nextcmd.is_null()
+                || (*(*eap).cstack).cs_idx >= 0;
+            openscript(fname, busy);
+        } else if do_source(fname, false, DOSO_NONE, ptr::null_mut()) == FAIL {
+            semsg_c!(gettext(&raw const e_notopen as *const c_char), fname);
         }
     }
 }
 
-pub unsafe fn ex_source(mut eap: *mut exarg_T) {
+/// `:source`.
+///
+/// # Safety
+/// `eap` is the running command.
+pub unsafe fn ex_source(eap: *mut exarg_T) {
+    // SAFETY: the caller's contract.
+    unsafe { cmd_source((*eap).arg, eap) };
+}
+
+/// `:options`, which is `:source` of the option window script with the
+/// command modifiers passed along in the environment.
+///
+/// # Safety
+/// Called as an Ex command implementation; `eap` is unused.
+pub unsafe fn ex_options(_eap: *mut exarg_T) {
+    let mut buf = [0 as c_char; 500];
+    let mut multi_mods = false;
+    // SAFETY: `buf` is the scratch the modifiers are rendered into, and
+    // `SYS_OPTWIN_FILE` is a NUL-terminated constant.
     unsafe {
-        cmd_source((*eap).arg, eap);
+        add_win_cmd_modifiers(buf.as_mut_ptr(), cmdmod.ptr(), &raw mut multi_mods);
+        os_setenv(c"OPTWIN_CMD".as_ptr(), buf.as_ptr(), 1);
+        cmd_source(SYS_OPTWIN_FILE.as_ptr().cast_mut(), ptr::null_mut());
     }
 }
 
-pub unsafe fn ex_options(mut _eap: *mut exarg_T) {
-    unsafe {
-        let mut buf: [::core::ffi::c_char; 500] = [0; 500];
-        let mut multi_mods: bool = false;
-        buf[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-        add_win_cmd_modifiers(
-            &raw mut buf as *mut ::core::ffi::c_char,
-            cmdmod.ptr(),
-            &raw mut multi_mods,
-        );
-        os_setenv(
-            c"OPTWIN_CMD".as_ptr(),
-            &raw mut buf as *mut ::core::ffi::c_char,
-            1 as ::core::ffi::c_int,
-        );
-        cmd_source(
-            SYS_OPTWIN_FILE.as_ptr() as *mut ::core::ffi::c_char,
-            ::core::ptr::null_mut::<exarg_T>(),
-        );
-    }
+/// The breakpoint line of the script `cookie` is reading, for the debugger.
+///
+/// # Safety
+/// `cookie` is a live [`source_cookie_T`].
+pub unsafe extern "C" fn source_breakpoint(cookie: *mut c_void) -> *mut linenr_T {
+    // SAFETY: the caller's contract.
+    unsafe { &raw mut (*cookie.cast::<source_cookie_T>()).breakpoint }
 }
 
-pub unsafe extern "C" fn source_breakpoint(mut cookie: *mut ::core::ffi::c_void) -> *mut linenr_T {
-    unsafe {
-        return &raw mut (*(cookie as *mut source_cookie_T)).breakpoint;
-    }
+/// The `debug_tick` the script `cookie` is reading last saw.
+///
+/// # Safety
+/// `cookie` is a live [`source_cookie_T`].
+pub unsafe extern "C" fn source_dbg_tick(cookie: *mut c_void) -> *mut c_int {
+    // SAFETY: the caller's contract.
+    unsafe { &raw mut (*cookie.cast::<source_cookie_T>()).dbg_tick }
 }
 
-pub unsafe extern "C" fn source_dbg_tick(
-    mut cookie: *mut ::core::ffi::c_void,
-) -> *mut ::core::ffi::c_int {
-    unsafe {
-        return &raw mut (*(cookie as *mut source_cookie_T)).dbg_tick;
-    }
+/// The `:if`/`:while` nesting level the script `cookie` is reading started at.
+///
+/// # Safety
+/// `cookie` is a live [`source_cookie_T`].
+pub unsafe extern "C" fn source_level(cookie: *mut c_void) -> c_int {
+    // SAFETY: the caller's contract.
+    unsafe { (*cookie.cast::<source_cookie_T>()).level }
 }
 
-pub unsafe extern "C" fn source_level(mut cookie: *mut ::core::ffi::c_void) -> ::core::ffi::c_int {
+/// `fopen` for reading, with the descriptor kept out of child processes.
+///
+/// # Safety
+/// `filename` is NUL-terminated.
+unsafe fn fopen_noinh_readbin(filename: *mut c_char) -> *mut FILE {
+    // SAFETY: the caller's contract; the descriptor is handed to `fdopen`,
+    // which takes it over.
     unsafe {
-        return (*(cookie as *mut source_cookie_T)).level;
-    }
-}
-
-unsafe extern "C" fn fopen_noinh_readbin(mut filename: *mut ::core::ffi::c_char) -> *mut FILE {
-    unsafe {
-        let mut fd_tmp: ::core::ffi::c_int = os_open(filename, O_RDONLY, 0 as ::core::ffi::c_int);
-        if fd_tmp < 0 as ::core::ffi::c_int {
-            return ::core::ptr::null_mut::<FILE>();
+        let fd = os_open(filename, O_RDONLY, 0);
+        if fd < 0 {
+            return ptr::null_mut();
         }
-        os_set_cloexec(fd_tmp);
-        return fdopen(fd_tmp, READBIN.as_ptr());
+        os_set_cloexec(fd);
+        fdopen(fd, READBIN.as_ptr())
     }
 }
 
+/// Append the continuation `p` to `ga`, answering whether the line was one.
+///
+/// A `"\ ` comment line is *not* a continuation but does not end one either,
+/// so it answers true having appended nothing.
+///
+/// # Safety
+/// `ga` is a garray the caller is collecting a script line in, and `p` names
+/// `len` readable bytes.
 pub(crate) unsafe extern "C" fn concat_continued_line(
     ga: *mut garray_T,
-    init_growsize: ::core::ffi::c_int,
-    p: *const ::core::ffi::c_char,
-    mut len: size_t,
+    init_growsize: c_int,
+    p: *const c_char,
+    len: size_t,
 ) -> bool {
+    // SAFETY: the caller's contract; `skipwhite_len` stays within `len`.
     unsafe {
-        let line: *const ::core::ffi::c_char = skipwhite_len(p, len);
-        len = len.wrapping_sub(line.offset_from(p) as size_t);
-        if len >= 3 as size_t
-            && strncmp(line, c"\"\\ ".as_ptr(), 3 as size_t) == 0 as ::core::ffi::c_int
-        {
-            return true_0 != 0;
-        } else if len == 0 as size_t
-            || *line.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                != '\\' as ::core::ffi::c_int
-        {
-            return false_0 != 0;
+        let line = skipwhite_len(p, len);
+        let len = len - line.offset_from(p) as size_t;
+        if len >= 3 && strncmp(line, c"\"\\ ".as_ptr(), 3) == 0 {
+            return true;
         }
+        if len == 0 || *line as c_int != '\\' as c_int {
+            return false;
+        }
+        // Grow by what has been collected so far (capped), so a line with
+        // many continuations does not reallocate once per continuation.
         if (*ga).ga_len > init_growsize {
-            ga_set_growsize(
-                ga,
-                if (*ga).ga_len < 8000 as ::core::ffi::c_int {
-                    (*ga).ga_len
-                } else {
-                    8000 as ::core::ffi::c_int
-                },
-            );
+            ga_set_growsize(ga, (*ga).ga_len.min(8000));
         }
-        ga_concat_len(
-            ga,
-            line.offset(1 as ::core::ffi::c_int as isize),
-            len.wrapping_sub(1 as size_t),
-        );
-        return true_0 != 0;
+        ga_concat_len(ga, line.add(1), len - 1);
+        true
     }
 }
 
+/// Allocate the next script ID and its `scriptitem_T`, taking ownership of
+/// `name`.  IDs are never reused, so the registry is grown to cover every ID
+/// up to the new one; the intervening items exist and are empty.
+///
+/// # Safety
+/// `name` is owned memory or null; `sid_out` is null or writable.
 pub unsafe extern "C" fn new_script_item(
-    name: *mut ::core::ffi::c_char,
+    name: *mut c_char,
     sid_out: *mut scid_T,
 ) -> *mut scriptitem_T {
+    /// The highest script ID handed out so far.
+    static last_current_SID: GlobalCell<scid_T> = GlobalCell::new(0);
+
+    let sid = last_current_SID.get() + 1;
+    last_current_SID.set(sid);
+    if !sid_out.is_null() {
+        // SAFETY: the caller's out-parameter.
+        unsafe { *sid_out = sid };
+    }
+    let ga = script_items.ptr();
+    // SAFETY: `script_items` is this family's own garray of `scriptitem_T *`;
+    // `ga_grow` makes room for every slot written below, and `xcalloc` zeroes
+    // the item -- which is what upstream's `sn_name = NULL` and
+    // `sn_prof_on = false` amount to.
     unsafe {
-        static last_current_SID: GlobalCell<scid_T> = GlobalCell::new(0 as scid_T);
-        (*last_current_SID.ptr()) += 1;
-        let sid: scid_T = last_current_SID.get();
-        if !sid_out.is_null() {
-            *sid_out = sid;
+        ga_grow(ga, sid - (*ga).ga_len);
+        while (*ga).ga_len < sid {
+            let slot = (*ga)
+                .ga_data
+                .cast::<*mut scriptitem_T>()
+                .add((*ga).ga_len as usize);
+            slot.write(xcalloc(1, size_of::<scriptitem_T>()).cast());
+            (*ga).ga_len += 1;
+            new_script_vars((*ga).ga_len as scid_T);
         }
-        ga_grow(
-            script_items.ptr(),
-            sid as ::core::ffi::c_int - (*script_items.ptr()).ga_len,
-        );
-        while (*script_items.ptr()).ga_len < sid {
-            let mut si: *mut scriptitem_T =
-                xcalloc(1 as size_t, ::core::mem::size_of::<scriptitem_T>()) as *mut scriptitem_T;
-            (*script_items.ptr()).ga_len += 1;
-            *((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)
-                .offset(((*script_items.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize) = si;
-            (*si).sn_name = ::core::ptr::null_mut::<::core::ffi::c_char>();
-            new_script_vars((*script_items.ptr()).ga_len as scid_T);
-            (*si).sn_prof_on = false_0 != 0;
-        }
-        (**((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)
-            .offset((sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize))
-        .sn_name = name;
-        return *((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)
-            .offset((sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize);
+        let si = script_item(sid);
+        (*si).sn_name = name;
+        si
     }
 }
 
-unsafe extern "C" fn do_source_buffer_init(
-    mut sp: *mut source_cookie_T,
-    mut eap: *const exarg_T,
-    mut ex_lua: bool,
-) -> *mut ::core::ffi::c_char {
+/// Append an owned string to a garray of `char *`.
+///
+/// # Safety
+/// `ga` holds `char *` items and `s` is owned memory.
+unsafe fn ga_push_string(ga: *mut garray_T, s: *mut c_char) {
+    // SAFETY: `ga_grow` leaves room for one more item at `ga_len`.
     unsafe {
-        if (*curbuf.ptr()).is_null() {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
-        }
-        let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if !(*curbuf.get()).b_ffname.is_null() {
-            fname = xstrdup((*curbuf.get()).b_ffname);
-        } else {
-            if ex_lua {
-                snprintf(
-                    IObuff.ptr() as *mut ::core::ffi::c_char,
-                    IOSIZE as size_t,
-                    c":{range}lua buffer=%d".as_ptr(),
-                    (*curbuf.get()).handle,
-                );
-            } else {
-                snprintf(
-                    IObuff.ptr() as *mut ::core::ffi::c_char,
-                    IOSIZE as size_t,
-                    c":source buffer=%d".as_ptr(),
-                    (*curbuf.get()).handle,
-                );
-            }
-            fname = xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char);
-        }
-        ga_init(
-            &raw mut (*sp).buflines,
-            ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-            100 as ::core::ffi::c_int,
-        );
-        let mut curr_lnum: linenr_T = (*eap).line1;
-        while curr_lnum <= (*eap).line2 {
-            ga_grow(&raw mut (*sp).buflines, 1 as ::core::ffi::c_int);
-            *((*sp).buflines.ga_data as *mut *mut ::core::ffi::c_char)
-                .offset((*sp).buflines.ga_len as isize) = xstrdup(ml_get(curr_lnum));
-            (*sp).buflines.ga_len += 1;
-            curr_lnum += 1;
-        }
-        (*sp).buf_lnum = 0 as ::core::ffi::c_int;
-        (*sp).source_from_buf_or_str = true_0 != 0;
-        (*sp).sourcing_lnum = (*eap).line1 - 1 as linenr_T;
-        return fname;
+        ga_grow(ga, 1);
+        (*ga)
+            .ga_data
+            .cast::<*mut c_char>()
+            .add((*ga).ga_len as usize)
+            .write(s);
+        (*ga).ga_len += 1;
     }
 }
 
-unsafe extern "C" fn do_source_str_init(
-    mut sp: *mut source_cookie_T,
-    mut str: *const ::core::ffi::c_char,
-) {
-    unsafe {
-        ga_init(
-            &raw mut (*sp).buflines,
-            ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-            100 as ::core::ffi::c_int,
-        );
-        while *str as ::core::ffi::c_int != NUL {
-            let mut eol: *const ::core::ffi::c_char = skip_to_newline(str);
-            ga_grow(&raw mut (*sp).buflines, 1 as ::core::ffi::c_int);
-            *((*sp).buflines.ga_data as *mut *mut ::core::ffi::c_char)
-                .offset((*sp).buflines.ga_len as isize) = xmemdupz(
-                str as *const ::core::ffi::c_void,
-                eol.offset_from(str) as size_t,
-            ) as *mut ::core::ffi::c_char;
-            (*sp).buflines.ga_len += 1;
-            str = eol.offset((*eol as ::core::ffi::c_int != NUL) as ::core::ffi::c_int as isize);
-        }
-        (*sp).buf_lnum = 0 as ::core::ffi::c_int;
-        (*sp).source_from_buf_or_str = true_0 != 0;
-    }
-}
-
-pub unsafe extern "C" fn cmd_source_buffer(eap: *const exarg_T, mut ex_lua: bool) {
-    unsafe {
-        do_source_ext(
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            false_0 != 0,
-            DOSO_NONE,
-            ::core::ptr::null_mut::<::core::ffi::c_int>(),
-            eap,
-            ex_lua,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-        );
-    }
-}
-
-pub unsafe extern "C" fn do_source_str(
-    mut str: *const ::core::ffi::c_char,
-    mut traceback_name: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let sourcing_name: *mut ::core::ffi::c_char = (*((*exestack.ptr()).ga_data
-            as *mut estack_T)
-            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-        .es_name;
-        let sourcing_lnum: linenr_T = (*((*exestack.ptr()).ga_data as *mut estack_T)
-            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-        .es_lnum;
-        let mut sname_buf: [::core::ffi::c_char; 256] = [0; 256];
-        if !sourcing_name.is_null() {
-            snprintf(
-                &raw mut sname_buf as *mut ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 256]>(),
-                c"%s called at %s:%d".as_ptr(),
-                traceback_name,
-                sourcing_name,
-                sourcing_lnum,
-            );
-            traceback_name = &raw mut sname_buf as *mut ::core::ffi::c_char;
-        }
-        return do_source_ext(
-            traceback_name,
-            false_0 != 0,
-            DOSO_NONE,
-            ::core::ptr::null_mut::<::core::ffi::c_int>(),
-            ::core::ptr::null::<exarg_T>(),
-            false_0 != 0,
-            str,
-        );
-    }
-}
-
-unsafe extern "C" fn do_source_ext(
-    fname: *mut ::core::ffi::c_char,
-    check_other: bool,
-    is_vimrc: ::core::ffi::c_int,
-    ret_sid: *mut ::core::ffi::c_int,
+/// Collect `eap`'s range of the current buffer into `sp`, and answer the name
+/// to show for those lines: the buffer's own file name, or a synthetic
+/// `:source buffer=N` when it has none.
+///
+/// # Safety
+/// `sp` is a cookie under construction and `eap` carries the range.
+unsafe fn do_source_buffer_init(
+    sp: &mut source_cookie_T,
     eap: *const exarg_T,
     ex_lua: bool,
-    str: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut sid: ::core::ffi::c_int = 0;
-        let mut rel_time: proftime_T = 0;
-        let mut start_time: proftime_T = 0;
-        let mut l_time_fd: *mut FILE = ::core::ptr::null_mut::<FILE>();
-        let mut l_do_profiling: ::core::ffi::c_int = 0;
-        let mut funccalp_entry: funccal_entry_T = funccal_entry_T {
-            top_funccal: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            next: ::core::ptr::null_mut::<funccal_entry_T>(),
+) -> *mut c_char {
+    let buf = curbuf.get();
+    if buf.is_null() {
+        return ptr::null_mut();
+    }
+    // SAFETY: `buf` is the current buffer and `eap` the caller's command.
+    let (ffname, handle, line1, line2) =
+        unsafe { ((*buf).b_ffname, (*buf).handle, (*eap).line1, (*eap).line2) };
+    let fname = if ffname.is_null() {
+        let mut name = [0 as c_char; IOSIZE as usize];
+        let fmt = if ex_lua {
+            c":{range}lua buffer=%d"
+        } else {
+            c":source buffer=%d"
         };
-        let mut save_current_sctx: sctx_T = sctx_T {
-            sc_sid: 0,
-            sc_seq: 0,
-            sc_lnum: 0,
-            sc_chan: 0,
-        };
-        let mut ts_lua: bool = false;
-        let mut cookie: source_cookie_T = source_cookie_T {
-            fp: ::core::ptr::null_mut::<FILE>(),
-            nextline: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            sourcing_lnum: 0,
-            finished: false,
-            source_from_buf_or_str: false,
-            buf_lnum: 0,
-            buflines: garray_T {
-                ga_len: 0,
-                ga_maxlen: 0,
-                ga_itemsize: 0,
-                ga_growsize: 0,
-                ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            },
-            breakpoint: 0,
-            fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            dbg_tick: 0,
-            level: 0,
-            conv: vimconv_T {
-                vc_type: 0,
-                vc_factor: 0,
-                vc_fd: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                vc_fail: false,
-            },
-        };
-        let mut firstline: *mut uint8_t = ::core::ptr::null_mut::<uint8_t>();
-        let mut retval: ::core::ffi::c_int = FAIL;
-        let mut save_debug_break_level: ::core::ffi::c_int = debug_break_level.get();
-        let mut si: *mut scriptitem_T = ::core::ptr::null_mut::<scriptitem_T>();
-        let mut wait_start: proftime_T = 0;
-        let mut trigger_source_post: bool = false_0 != 0;
-        memset(
-            &raw mut cookie as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            ::core::mem::size_of::<source_cookie_T>(),
-        );
-        let mut fname_exp: *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<::core::ffi::c_char>();
-        '_theend: {
-            if fname.is_null() {
-                debug_assert!(str.is_null(), "str == NULL");
-                fname_exp = do_source_buffer_init(&raw mut cookie, eap, ex_lua);
-                if fname_exp.is_null() {
-                    return FAIL;
-                }
-            } else if !str.is_null() {
-                do_source_str_init(&raw mut cookie, str);
-                fname_exp = xstrdup(fname);
-            } else {
-                let mut p: *mut ::core::ffi::c_char = expand_env_save(fname);
-                if p.is_null() {
-                    return retval;
-                }
-                fname_exp = fix_fname(p);
-                xfree(p as *mut ::core::ffi::c_void);
-                if fname_exp.is_null() {
-                    return retval;
-                }
-                if os_isdir(fname_exp) {
-                    smsg_c!(
-                        0 as ::core::ffi::c_int,
-                        gettext(c"Cannot source a directory: \"%s\"".as_ptr()),
-                        fname,
-                    );
-                    break '_theend;
-                }
-            }
-            sid = if !str.is_null() {
-                SID_STR
-            } else {
-                find_script_by_name(fname_exp)
-            };
-            if sid > 0 as ::core::ffi::c_int && !ret_sid.is_null() {
-                *ret_sid = sid;
-                retval = OK;
-            } else {
-                if str.is_null() {
-                    if has_autocmd(EVENT_SOURCECMD, fname_exp, ::core::ptr::null_mut::<buf_T>())
-                        as ::core::ffi::c_int
-                        != 0
-                        && apply_autocmds(
-                            EVENT_SOURCECMD,
-                            fname_exp,
-                            fname_exp,
-                            false_0 != 0,
-                            curbuf.get(),
-                        ) as ::core::ffi::c_int
-                            != 0
-                    {
-                        retval = if aborting() as ::core::ffi::c_int != 0 {
-                            FAIL
-                        } else {
-                            OK
-                        };
-                        if retval == OK {
-                            apply_autocmds(
-                                EVENT_SOURCEPOST,
-                                fname_exp,
-                                fname_exp,
-                                false_0 != 0,
-                                curbuf.get(),
-                            );
-                        }
-                        break '_theend;
-                    } else {
-                        apply_autocmds(
-                            EVENT_SOURCEPRE,
-                            fname_exp,
-                            fname_exp,
-                            false_0 != 0,
-                            curbuf.get(),
-                        );
-                    }
-                }
-                if !cookie.source_from_buf_or_str {
-                    cookie.fp = fopen_noinh_readbin(fname_exp);
-                }
-                if cookie.fp.is_null() && check_other as ::core::ffi::c_int != 0 {
-                    let mut p_0: *mut ::core::ffi::c_char = path_tail(fname_exp);
-                    if (*p_0 as ::core::ffi::c_int == '.' as ::core::ffi::c_int
-                        || *p_0 as ::core::ffi::c_int == '_' as ::core::ffi::c_int)
-                        && (strcasecmp(
-                            p_0.offset(1 as ::core::ffi::c_int as isize),
-                            c"nvimrc".as_ptr() as *mut ::core::ffi::c_char,
-                        ) == 0 as ::core::ffi::c_int
-                            || strcasecmp(
-                                p_0.offset(1 as ::core::ffi::c_int as isize),
-                                c"exrc".as_ptr() as *mut ::core::ffi::c_char,
-                            ) == 0 as ::core::ffi::c_int)
-                    {
-                        *p_0 = (if *p_0 as ::core::ffi::c_int == '_' as ::core::ffi::c_int {
-                            '.' as ::core::ffi::c_int
-                        } else {
-                            '_' as ::core::ffi::c_int
-                        }) as ::core::ffi::c_char;
-                        cookie.fp = fopen_noinh_readbin(fname_exp);
-                    }
-                }
-                if cookie.fp.is_null() && !cookie.source_from_buf_or_str {
-                    if p_verbose.get() > 1 as OptInt {
-                        verbose_enter();
-                        if (*((*exestack.ptr()).ga_data as *mut estack_T)
-                            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                        .es_name
-                        .is_null()
-                        {
-                            smsg_c!(
-                                0 as ::core::ffi::c_int,
-                                gettext(c"could not source \"%s\"".as_ptr()),
-                                fname,
-                            );
-                        } else {
-                            smsg_c!(
-                                0 as ::core::ffi::c_int,
-                                gettext(c"line %ld: could not source \"%s\"".as_ptr()),
-                                (*((*exestack.ptr()).ga_data as *mut estack_T).offset(
-                                    ((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize,
-                                ))
-                                .es_lnum as int64_t,
-                                fname,
-                            );
-                        }
-                        verbose_leave();
-                    }
-                } else {
-                    if p_verbose.get() > 1 as OptInt {
-                        verbose_enter();
-                        if (*((*exestack.ptr()).ga_data as *mut estack_T)
-                            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                        .es_name
-                        .is_null()
-                        {
-                            smsg_c!(
-                                0 as ::core::ffi::c_int,
-                                gettext(c"sourcing \"%s\"".as_ptr()),
-                                fname,
-                            );
-                        } else {
-                            smsg_c!(
-                                0 as ::core::ffi::c_int,
-                                gettext(c"line %ld: sourcing \"%s\"".as_ptr()),
-                                (*((*exestack.ptr()).ga_data as *mut estack_T).offset(
-                                    ((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize,
-                                ))
-                                .es_lnum as int64_t,
-                                fname,
-                            );
-                        }
-                        verbose_leave();
-                    }
-                    if is_vimrc == DOSO_VIMRC {
-                        vimrc_found(fname_exp, c"MYVIMRC".as_ptr() as *mut ::core::ffi::c_char);
-                    }
-                    cookie.breakpoint = dbg_find_breakpoint(true_0 != 0, fname_exp, 0 as linenr_T);
-                    cookie.fname = fname_exp;
-                    cookie.dbg_tick = debug_tick.get();
-                    cookie.level = ex_nesting_level.get();
-                    rel_time = 0;
-                    start_time = 0;
-                    l_time_fd = time_fd.get();
-                    if !l_time_fd.is_null() {
-                        (rel_time, start_time) = time_push();
-                    }
-                    l_do_profiling = do_profiling.get();
-                    if l_do_profiling == PROF_YES {
-                        wait_start = prof_child_enter();
-                    }
-                    funccalp_entry = funccal_entry_T {
-                        top_funccal: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                        next: ::core::ptr::null_mut::<funccal_entry_T>(),
-                    };
-                    save_funccal(&raw mut funccalp_entry);
-                    save_current_sctx = current_sctx.get();
-                    (*last_current_SID_seq.ptr()) += 1;
-                    (*current_sctx.ptr()).sc_seq = last_current_SID_seq.get();
-                    if sid > 0 as ::core::ffi::c_int {
-                        si = *((*script_items.ptr()).ga_data as *mut *mut scriptitem_T)
-                            .offset((sid - 1 as ::core::ffi::c_int) as isize);
-                    } else if str.is_null() {
-                        si = new_script_item(fname_exp, &raw mut sid);
-                        (*si).sn_lua = path_with_extension(fname_exp, c"lua".as_ptr());
-                        fname_exp = xstrdup((*si).sn_name);
-                        if !ret_sid.is_null() {
-                            *ret_sid = sid;
-                        }
-                    }
-                    debug_assert!(
-                        !si.is_null() as ::core::ffi::c_int == str.is_null() as ::core::ffi::c_int,
-                        "(si != NULL) == (str == NULL)"
-                    );
-                    if str.is_null() || !script_is_lua((*current_sctx.ptr()).sc_sid) {
-                        (*current_sctx.ptr()).sc_sid = sid as scid_T;
-                        (*current_sctx.ptr()).sc_lnum = 0 as ::core::ffi::c_int as linenr_T;
-                    }
-                    estack_push(
-                        ETYPE_SCRIPT,
-                        if !si.is_null() {
-                            (*si).sn_name
-                        } else {
-                            fname_exp
-                        },
-                        0 as linenr_T,
-                    );
-                    if l_do_profiling == PROF_YES && !si.is_null() {
-                        let mut forceit: bool = false_0 != 0;
-                        if !(*si).sn_prof_on
-                            && has_profiling(true_0 != 0, (*si).sn_name, &raw mut forceit)
-                                as ::core::ffi::c_int
-                                != 0
-                        {
-                            profile_init(si);
-                            (*si).sn_pr_force = forceit;
-                        }
-                        if (*si).sn_prof_on {
-                            (*si).sn_pr_count += 1;
-                            (*si).sn_pr_start = profile_start();
-                            (*si).sn_pr_children = profile_zero();
-                        }
-                    }
-                    cookie.conv.vc_type = CONV_NONE;
-                    ts_lua = false_0 != 0;
-                    if fname.is_null()
-                        && !eap.is_null()
-                        && !ex_lua
-                        && !strequal((*curbuf.get()).b_p_ft, c"lua".as_ptr())
-                        && !(!(*curbuf.get()).b_fname.is_null()
-                            && path_with_extension((*curbuf.get()).b_fname, c"lua".as_ptr())
-                                as ::core::ffi::c_int
-                                != 0)
-                    {
-                        let mut args: Array = ARRAY_DICT_INIT;
-                        let mut args__items: [Object; 3] = [Object {
-                            type_0: kObjectTypeNil,
-                            data: object_data { boolean: false },
-                        }; 3];
-                        args.capacity = 3 as size_t;
-                        args.items = &raw mut args__items as *mut Object;
-                        let c2rust_fresh0 = args.size;
-                        args.size = args.size.wrapping_add(1);
-                        *args.items.add(c2rust_fresh0) = object {
-                            type_0: kObjectTypeInteger,
-                            data: object_data {
-                                integer: (*curbuf.get()).handle as Integer,
-                            },
-                        };
-                        let c2rust_fresh1 = args.size;
-                        args.size = args.size.wrapping_add(1);
-                        *args.items.add(c2rust_fresh1) = object {
-                            type_0: kObjectTypeInteger,
-                            data: object_data {
-                                integer: (*eap).line1 as Integer,
-                            },
-                        };
-                        let c2rust_fresh2 = args.size;
-                        args.size = args.size.wrapping_add(1);
-                        *args.items.add(c2rust_fresh2) = object {
-                            type_0: kObjectTypeInteger,
-                            data: object_data {
-                                integer: (*eap).line2 as Integer,
-                            },
-                        };
-                        let mut err: Error = Error {
-                            type_0: kErrorTypeNone,
-                            msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        };
-                        let mut result: Object = nlua_exec(
-                            String_0 {
-                                data: c"return require('vim._core.util').source_is_lua(...)"
-                                    .as_ptr()
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 52]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            ::core::ptr::null::<::core::ffi::c_char>(),
-                            args,
-                            kRetNilBool,
-                            ::core::ptr::null_mut::<Arena>(),
-                            &raw mut err,
-                        );
-                        if !(err.type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int)
-                            && (result.type_0 as ::core::ffi::c_uint
-                                == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
-                                && result.data.boolean as ::core::ffi::c_int == true_0)
-                        {
-                            ts_lua = true_0 != 0;
-                        }
-                        api_clear_error(&raw mut err);
-                    }
-                    if fname.is_null()
-                        && (ex_lua as ::core::ffi::c_int != 0
-                            || ts_lua as ::core::ffi::c_int != 0
-                            || strequal((*curbuf.get()).b_p_ft, c"lua".as_ptr())
-                                as ::core::ffi::c_int
-                                != 0
-                            || !(*curbuf.get()).b_fname.is_null()
-                                && path_with_extension((*curbuf.get()).b_fname, c"lua".as_ptr())
-                                    as ::core::ffi::c_int
-                                    != 0)
-                    {
-                        nlua_exec_ga(&raw mut cookie.buflines, fname_exp);
-                    } else if !si.is_null() && (*si).sn_lua as ::core::ffi::c_int != 0 {
-                        nlua_exec_file(fname_exp);
-                    } else {
-                        firstline = getsourceline(
-                            0 as ::core::ffi::c_int,
-                            &raw mut cookie as *mut ::core::ffi::c_void,
-                            0 as ::core::ffi::c_int,
-                            true_0 != 0,
-                        ) as *mut uint8_t;
-                        if !firstline.is_null()
-                            && strlen(firstline as *mut ::core::ffi::c_char) >= 3 as size_t
-                            && *firstline.offset(0 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int
-                                == 0xef as ::core::ffi::c_int
-                            && *firstline.offset(1 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int
-                                == 0xbb as ::core::ffi::c_int
-                            && *firstline.offset(2 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int
-                                == 0xbf as ::core::ffi::c_int
-                        {
-                            convert_setup(
-                                &raw mut cookie.conv,
-                                c"utf-8".as_ptr() as *mut ::core::ffi::c_char,
-                                p_enc.get(),
-                            );
-                            let mut p_1: *mut ::core::ffi::c_char = string_convert(
-                                &raw mut cookie.conv,
-                                (firstline as *mut ::core::ffi::c_char)
-                                    .offset(3 as ::core::ffi::c_int as isize),
-                                ::core::ptr::null_mut::<size_t>(),
-                            );
-                            if p_1.is_null() {
-                                p_1 = xstrdup(
-                                    (firstline as *mut ::core::ffi::c_char)
-                                        .offset(3 as ::core::ffi::c_int as isize),
-                                );
-                            }
-                            xfree(firstline as *mut ::core::ffi::c_void);
-                            firstline = p_1 as *mut uint8_t;
-                        }
-                        do_cmdline(
-                            firstline as *mut ::core::ffi::c_char,
-                            Some(
-                                getsourceline
-                                    as unsafe extern "C" fn(
-                                        ::core::ffi::c_int,
-                                        *mut ::core::ffi::c_void,
-                                        ::core::ffi::c_int,
-                                        bool,
-                                    )
-                                        -> *mut ::core::ffi::c_char,
-                            ),
-                            &raw mut cookie as *mut ::core::ffi::c_void,
-                            DOCMD_VERBOSE | DOCMD_NOWAIT | DOCMD_REPEAT,
-                        );
-                    }
-                    retval = OK;
-                    if l_do_profiling == PROF_YES && !si.is_null() {
-                        si = *((*script_items.ptr()).ga_data as *mut *mut scriptitem_T).offset(
-                            ((*current_sctx.ptr()).sc_sid as ::core::ffi::c_int
-                                - 1 as ::core::ffi::c_int) as isize,
-                        );
-                        if (*si).sn_prof_on {
-                            (*si).sn_pr_start = profile_end((*si).sn_pr_start);
-                            (*si).sn_pr_start = profile_sub_wait(wait_start, (*si).sn_pr_start);
-                            (*si).sn_pr_total = profile_add((*si).sn_pr_total, (*si).sn_pr_start);
-                            (*si).sn_pr_self = profile_self(
-                                (*si).sn_pr_self,
-                                (*si).sn_pr_start,
-                                (*si).sn_pr_children,
-                            );
-                        }
-                    }
-                    if got_int.get() {
-                        emsg(gettext(&raw const e_interr as *const ::core::ffi::c_char));
-                    }
-                    estack_pop();
-                    if p_verbose.get() > 1 as OptInt {
-                        verbose_enter();
-                        smsg_c!(
-                            0 as ::core::ffi::c_int,
-                            gettext(c"finished sourcing %s".as_ptr()),
-                            fname,
-                        );
-                        if !(*((*exestack.ptr()).ga_data as *mut estack_T)
-                            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
-                        .es_name
-                        .is_null()
-                        {
-                            smsg_c!(
-                                0 as ::core::ffi::c_int,
-                                gettext(c"continuing in %s".as_ptr()),
-                                (*((*exestack.ptr()).ga_data as *mut estack_T).offset(
-                                    ((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize,
-                                ))
-                                .es_name,
-                            );
-                        }
-                        verbose_leave();
-                    }
-                    if !l_time_fd.is_null() {
-                        vim_snprintf(
-                            IObuff.ptr() as *mut ::core::ffi::c_char,
-                            IOSIZE as size_t,
-                            c"sourcing %s".as_ptr(),
-                            fname,
-                        );
-                        time_msg(
-                            IObuff.ptr() as *mut ::core::ffi::c_char,
-                            &raw mut start_time,
-                        );
-                        time_pop(rel_time);
-                    }
-                    if !got_int.get() {
-                        trigger_source_post = true_0 != 0;
-                    }
-                    if save_debug_break_level > ex_nesting_level.get()
-                        && debug_break_level.get() == ex_nesting_level.get()
-                    {
-                        (*debug_break_level.ptr()) += 1;
-                    }
-                    current_sctx.set(save_current_sctx);
-                    restore_funccal();
-                    if l_do_profiling == PROF_YES {
-                        prof_child_exit(wait_start);
-                    }
-                    if !cookie.fp.is_null() {
-                        fclose(cookie.fp);
-                    }
-                    if cookie.source_from_buf_or_str {
-                        ga_clear_strings(&raw mut cookie.buflines);
-                    }
-                    xfree(cookie.nextline as *mut ::core::ffi::c_void);
-                    xfree(firstline as *mut ::core::ffi::c_void);
-                    convert_setup(
-                        &raw mut cookie.conv,
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    );
-                    if str.is_null() && trigger_source_post as ::core::ffi::c_int != 0 {
-                        apply_autocmds(
-                            EVENT_SOURCEPOST,
-                            fname_exp,
-                            fname_exp,
-                            false_0 != 0,
-                            curbuf.get(),
-                        );
-                    }
-                }
-            }
+        // SAFETY: `snprintf` NUL-terminates within `name`.
+        unsafe {
+            snprintf(name.as_mut_ptr(), IOSIZE as size_t, fmt.as_ptr(), handle);
+            xstrdup(name.as_ptr())
         }
-        xfree(fname_exp as *mut ::core::ffi::c_void);
-        return retval;
+    } else {
+        // SAFETY: the buffer's own file name.
+        unsafe { xstrdup(ffname) }
+    };
+    let lines = &raw mut sp.buflines;
+    // SAFETY: the cookie's own garray, and every line of the range is
+    // readable through `ml_get`.
+    unsafe {
+        ga_init(lines, size_of::<*mut c_char>() as c_int, 100);
+        for lnum in line1..=line2 {
+            ga_push_string(lines, xstrdup(ml_get(lnum)));
+        }
+    }
+    sp.buf_lnum = 0;
+    sp.source_from_buf_or_str = true;
+    // The first line the reader hands out is `line1`, so the counter starts
+    // one below it.
+    sp.sourcing_lnum = line1 - 1;
+    fname
+}
+
+/// Split `str` into lines and collect them into `sp`.
+///
+/// # Safety
+/// `sp` is a cookie under construction and `str` is NUL-terminated.
+unsafe fn do_source_str_init(sp: &mut source_cookie_T, mut str: *const c_char) {
+    let lines = &raw mut sp.buflines;
+    // SAFETY: the cookie's own garray; `skip_to_newline` stops at the
+    // terminator, so every span copied is within the string.
+    unsafe {
+        ga_init(lines, size_of::<*mut c_char>() as c_int, 100);
+        while *str as c_int != NUL {
+            let eol = skip_to_newline(str);
+            let line = xmemdupz(str.cast(), eol.offset_from(str) as size_t);
+            ga_push_string(lines, line.cast());
+            // Step over the newline, unless this was the last line -- which
+            // ends at the terminator instead.
+            str = eol.add((*eol as c_int != NUL) as usize);
+        }
+    }
+    sp.buf_lnum = 0;
+    sp.source_from_buf_or_str = true;
+}
+
+/// Source the current buffer's lines, as Vimscript or (with `ex_lua`) as Lua.
+///
+/// # Safety
+/// `eap` carries the range to run.
+pub unsafe extern "C" fn cmd_source_buffer(eap: *const exarg_T, ex_lua: bool) {
+    let req = SourceRequest::new(ptr::null_mut(), ptr::null(), eap, ex_lua);
+    // SAFETY: the caller's contract.
+    unsafe { do_source_ext(&req) };
+}
+
+/// Source `str` as Vimscript, under `traceback_name`.
+///
+/// The name is decorated with where the call came from, so an `nvim_exec2()`
+/// nested inside a script says so.
+///
+/// # Safety
+/// `str` is NUL-terminated and `traceback_name` names the caller.
+pub unsafe extern "C" fn do_source_str(
+    str: *const c_char,
+    mut traceback_name: *mut c_char,
+) -> c_int {
+    let mut sname_buf = [0 as c_char; 256];
+    let (name, lnum) = (estack::sourcing_name(), estack::sourcing_lnum());
+    if !name.is_null() {
+        let fmt = c"%s called at %s:%d".as_ptr();
+        // SAFETY: `traceback_name` and `name` are NUL-terminated, and
+        // `sname_buf` outlives the call below.
+        unsafe {
+            snprintf(
+                sname_buf.as_mut_ptr(),
+                sname_buf.len(),
+                fmt,
+                traceback_name,
+                name,
+                lnum,
+            )
+        };
+        traceback_name = sname_buf.as_mut_ptr();
+    }
+    let req = SourceRequest::new(traceback_name, str, ptr::null(), false);
+    // SAFETY: the caller's contract.
+    unsafe { do_source_ext(&req) }
+}
+
+/// Where a `do_source_ext` call reads its lines from.
+///
+/// The C asks this with two null checks in seven separate places; naming it
+/// is what makes the stages below readable.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Origin {
+    /// The current buffer, over `eap`'s range.
+    Buffer,
+    /// A string handed in by the API. `fname` is only a traceback name, and
+    /// no `scriptitem_T` is allocated.
+    Str,
+    /// A file on disk named by `fname`.
+    File,
+}
+
+/// One call into [`do_source_ext`], minus the cookie it fills in.
+struct SourceRequest {
+    origin: Origin,
+    /// The name as the caller spelled it -- messages only; the resolved name
+    /// is the cookie's.
+    fname: *mut c_char,
+    /// The script text, for [`Origin::Str`].
+    str: *const c_char,
+    /// Try the other spelling of the init file's name as well.
+    check_other: bool,
+    /// A `DOSO_` value: whether this is the user's init file.
+    is_vimrc: c_int,
+    /// Where to report the script ID, if the caller wants it.
+    ret_sid: *mut c_int,
+    /// The command that asked, for [`Origin::Buffer`]'s range.
+    eap: *const exarg_T,
+    /// Source a buffer as Lua regardless of what it looks like.
+    ex_lua: bool,
+}
+
+impl SourceRequest {
+    /// The request `fname`/`str` describe, with the init-file fields at their
+    /// defaults; [`do_source`] is the only caller that sets those.
+    fn new(fname: *mut c_char, str: *const c_char, eap: *const exarg_T, ex_lua: bool) -> Self {
+        let origin = if fname.is_null() {
+            debug_assert!(str.is_null(), "str == NULL");
+            Origin::Buffer
+        } else if str.is_null() {
+            Origin::File
+        } else {
+            Origin::Str
+        };
+        SourceRequest {
+            origin,
+            fname,
+            str,
+            check_other: false,
+            is_vimrc: DOSO_NONE,
+            ret_sid: ptr::null_mut(),
+            eap,
+            ex_lua,
+        }
+    }
+
+    fn is(&self, origin: Origin) -> bool {
+        self.origin == origin
     }
 }
 
-pub unsafe extern "C" fn do_source(
-    mut fname: *mut ::core::ffi::c_char,
-    mut check_other: bool,
-    mut is_vimrc: ::core::ffi::c_int,
-    mut ret_sid: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    unsafe {
-        return do_source_ext(
-            fname,
-            check_other,
-            is_vimrc,
-            ret_sid,
-            ::core::ptr::null::<exarg_T>(),
-            false_0 != 0,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-        );
+/// Fill `cookie` from the buffer or the string, and answer the name this
+/// source will be known by -- owned memory the caller frees.  `Err` is
+/// `do_source_ext`'s whole return value: an empty buffer, a name that would
+/// not expand, or a directory (the one case that reports itself).
+///
+/// # Safety
+/// `cookie` is zeroed and the request's pointers are live.
+unsafe fn source_name(
+    req: &SourceRequest,
+    cookie: &mut source_cookie_T,
+) -> Result<*mut c_char, c_int> {
+    match req.origin {
+        Origin::Buffer => {
+            // SAFETY: the caller's contract.
+            let name = unsafe { do_source_buffer_init(cookie, req.eap, req.ex_lua) };
+            if name.is_null() { Err(FAIL) } else { Ok(name) }
+        }
+        // SAFETY: the caller's contract.
+        Origin::Str => unsafe {
+            do_source_str_init(cookie, req.str);
+            Ok(xstrdup(req.fname))
+        },
+        // SAFETY: the caller's contract; `expand_env_save` and `fix_fname`
+        // answer owned memory or null.
+        Origin::File => unsafe {
+            let expanded = expand_env_save(req.fname);
+            if expanded.is_null() {
+                return Err(FAIL);
+            }
+            let name = fix_fname(expanded);
+            xfree(expanded.cast());
+            if name.is_null() {
+                return Err(FAIL);
+            }
+            if !os_isdir(name) {
+                return Ok(name);
+            }
+            let fmt = gettext(c"Cannot source a directory: \"%s\"".as_ptr());
+            smsg_c!(0, fmt, req.fname);
+            xfree(name.cast());
+            Err(FAIL)
+        },
     }
+}
+
+/// Run the `SourceCmd` and `SourcePre` autocommands.
+///
+/// `Some` when a `SourceCmd` handler took the file over, in which case
+/// nothing else happens: the handler *is* the sourcing.
+///
+/// # Safety
+/// `fname_exp` is the resolved name.
+unsafe fn source_autocmds(fname_exp: *mut c_char) -> Option<c_int> {
+    let buf = curbuf.get();
+    // SAFETY: the caller's contract; the handlers may run arbitrary script,
+    // which is why nothing is borrowed across them.
+    unsafe {
+        if has_autocmd(EVENT_SOURCECMD, fname_exp, ptr::null_mut())
+            && apply_autocmds(EVENT_SOURCECMD, fname_exp, fname_exp, false, buf)
+        {
+            let retval = if aborting() { FAIL } else { OK };
+            if retval == OK {
+                apply_autocmds(EVENT_SOURCEPOST, fname_exp, fname_exp, false, curbuf.get());
+            }
+            return Some(retval);
+        }
+        apply_autocmds(EVENT_SOURCEPRE, fname_exp, fname_exp, false, curbuf.get());
+    }
+    None
+}
+
+/// Open the script file.
+///
+/// With `check_other` -- which only the init-file search sets -- a miss is
+/// retried under the other spelling of the leading character, so `.nvimrc`
+/// finds `_nvimrc` and `.exrc` finds `_exrc`.  The retry rewrites the name in
+/// place, so later messages name the file that was actually opened.
+///
+/// # Safety
+/// `fname_exp` is the resolved name, writable when `check_other` is set.
+unsafe fn open_script(cookie: &mut source_cookie_T, fname_exp: *mut c_char, check_other: bool) {
+    if !cookie.source_from_buf_or_str {
+        // SAFETY: the caller's contract.
+        cookie.fp = unsafe { fopen_noinh_readbin(fname_exp) };
+    }
+    if !cookie.fp.is_null() || !check_other {
+        return;
+    }
+    // SAFETY: as above; `path_tail` answers a pointer inside `fname_exp`.
+    unsafe {
+        let tail = path_tail(fname_exp);
+        let leader = *tail as c_int;
+        if (leader == '.' as c_int || leader == '_' as c_int)
+            && (strcasecmp(tail.add(1), c"nvimrc".as_ptr()) == 0
+                || strcasecmp(tail.add(1), c"exrc".as_ptr()) == 0)
+        {
+            *tail = if leader == '_' as c_int { b'.' } else { b'_' } as c_char;
+            cookie.fp = fopen_noinh_readbin(fname_exp);
+        }
+    }
+}
+
+/// One of the four `'verbose' > 1` sourcing traces.
+///
+/// `plain` is used at the top level and `numbered` -- which takes the line
+/// number first -- when something else is already executing.
+///
+/// # Safety
+/// Both formats take a `%s` for `fname`, and `numbered` a leading `%ld`.
+unsafe fn verbose_source_msg(plain: &CStr, numbered: &CStr, fname: *const c_char) {
+    let name = estack::sourcing_name();
+    let lnum = estack::sourcing_lnum() as int64_t;
+    // SAFETY: the caller's contract on the two formats.
+    unsafe {
+        verbose_enter();
+        if name.is_null() {
+            smsg_c!(0, gettext(plain.as_ptr()), fname);
+        } else {
+            smsg_c!(0, gettext(numbered.as_ptr()), lnum, fname);
+        }
+        verbose_leave();
+    }
+}
+
+/// Find or create the `scriptitem_T` this source runs under.  A brand-new
+/// item takes ownership of `*fname_exp` and the caller gets a copy back,
+/// because the `SourcePost` autocommand at the end still needs a name to fire
+/// with.  Sourcing a string allocates no item at all.
+///
+/// # Safety
+/// `sid` and `fname_exp` are the caller's locals.
+unsafe fn register_script(
+    req: &SourceRequest,
+    sid: &mut c_int,
+    fname_exp: &mut *mut c_char,
+) -> *mut scriptitem_T {
+    if *sid > 0 {
+        // Loading the same script again.
+        // SAFETY: a positive `sid` names a registered script.
+        return unsafe { script_item(*sid) };
+    }
+    if req.is(Origin::Str) {
+        return ptr::null_mut();
+    }
+    // SAFETY: `new_script_item` takes ownership of the name and answers a
+    // live item; the copy replaces it for the caller.
+    unsafe {
+        let si = new_script_item(*fname_exp, sid);
+        (*si).sn_lua = path_with_extension(*fname_exp, c"lua".as_ptr());
+        *fname_exp = xstrdup((*si).sn_name);
+        if !req.ret_sid.is_null() {
+            *req.ret_sid = *sid;
+        }
+        si
+    }
+}
+
+/// Arm and start this script's profile timer.
+///
+/// # Safety
+/// `si` is the script's live registry item.
+unsafe fn profile_script_start(si: *mut scriptitem_T) {
+    let mut forceit = false;
+    // SAFETY: the caller's contract.
+    unsafe {
+        if !(*si).sn_prof_on && has_profiling(true, (*si).sn_name, &raw mut forceit) {
+            profile_init(si);
+            (*si).sn_pr_force = forceit;
+        }
+        if (*si).sn_prof_on {
+            (*si).sn_pr_count += 1;
+            (*si).sn_pr_start = profile_start();
+            (*si).sn_pr_children = profile_zero();
+        }
+    }
+}
+
+/// Fold the elapsed time into the script's profile totals.
+///
+/// The item is looked up again rather than carried across the run: sourcing
+/// can register more scripts, which reallocates the registry.
+///
+/// # Safety
+/// A script is on the execution stack and `current_sctx` still names it.
+unsafe fn profile_script_stop(wait_start: proftime_T) {
+    // SAFETY: the caller's contract.
+    unsafe {
+        let si = script_item(current_sctx.get().sc_sid);
+        if (*si).sn_prof_on {
+            (*si).sn_pr_start = profile_end((*si).sn_pr_start);
+            (*si).sn_pr_start = profile_sub_wait(wait_start, (*si).sn_pr_start);
+            (*si).sn_pr_total = profile_add((*si).sn_pr_total, (*si).sn_pr_start);
+            let children = (*si).sn_pr_children;
+            (*si).sn_pr_self = profile_self((*si).sn_pr_self, (*si).sn_pr_start, children);
+        }
+    }
+}
+
+/// Whether the current buffer is Lua by 'filetype' or by file name.
+///
+/// # Safety
+/// There is a current buffer.
+unsafe fn curbuf_is_lua() -> bool {
+    let buf = curbuf.get();
+    // SAFETY: the caller's contract.
+    unsafe {
+        strequal((*buf).b_p_ft, c"lua".as_ptr())
+            || (!(*buf).b_fname.is_null() && path_with_extension((*buf).b_fname, c"lua".as_ptr()))
+    }
+}
+
+/// Whether treesitter parses `eap`'s range of the current buffer as Lua --
+/// which is what makes a fenced Lua block inside a help file `:source`able.
+///
+/// # Safety
+/// `eap` is null or the running command.
+unsafe fn range_is_lua(eap: *const exarg_T) -> bool {
+    if eap.is_null() {
+        return false;
+    }
+    // SAFETY: the caller's command, and the current buffer.
+    let (handle, line1, line2) = unsafe { ((*curbuf.get()).handle, (*eap).line1, (*eap).line2) };
+    let mut items = [
+        integer_obj(handle as Integer),
+        integer_obj(line1 as Integer),
+        integer_obj(line2 as Integer),
+    ];
+    let args = Array {
+        size: items.len(),
+        capacity: items.len(),
+        items: items.as_mut_ptr(),
+    };
+    let mut err = Error {
+        type_0: kErrorTypeNone,
+        msg: ptr::null_mut(),
+    };
+    let src = c"return require('vim._core.util').source_is_lua(...)";
+    let script = String_0 {
+        data: src.as_ptr().cast_mut(),
+        size: src.count_bytes(),
+    };
+    // SAFETY: `items` and `err` live on this frame and outlive the call,
+    // which retains neither; the result's union is read under its own tag.
+    unsafe {
+        let nil = ptr::null_mut();
+        let result = nlua_exec(script, ptr::null(), args, kRetNilBool, nil, &raw mut err);
+        let is_lua = err.type_0 == kErrorTypeNone
+            && result.type_0 == kObjectTypeBoolean as ObjectType
+            && result.data.boolean;
+        api_clear_error(&raw mut err);
+        is_lua
+    }
+}
+
+/// Strip a UTF-8 BOM off the first line, setting up the conversion it implies.
+///
+/// # Safety
+/// `conv` is the cookie's converter and `firstline` is null or owned memory.
+unsafe fn strip_bom(conv: *mut vimconv_T, firstline: *mut c_char) -> *mut c_char {
+    // SAFETY: the caller's contract; the length check is what makes the
+    // three-byte read in bounds.
+    unsafe {
+        if firstline.is_null() || strlen(firstline) < 3 {
+            return firstline;
+        }
+        if slice::from_raw_parts(firstline.cast::<u8>(), 3) != b"\xef\xbb\xbf" {
+            return firstline;
+        }
+        convert_setup(conv, c"utf-8".as_ptr().cast_mut(), p_enc.get());
+        let rest = firstline.add(3);
+        let mut recoded = string_convert(conv, rest, ptr::null_mut());
+        if recoded.is_null() {
+            recoded = xstrdup(rest);
+        }
+        xfree(firstline.cast());
+        recoded
+    }
+}
+
+/// Run the script's lines, in whichever language they turn out to be.  Answers
+/// the first line when it was read here -- the Vimscript path reads it up
+/// front so the BOM can be sniffed off it -- for the caller to free.
+///
+/// # Safety
+/// The cookie is loaded, `si` is this script's item or null, and `fname_exp`
+/// is the resolved name.
+unsafe fn execute_source(
+    req: &SourceRequest,
+    cookie: &mut source_cookie_T,
+    si: *mut scriptitem_T,
+    fname_exp: *mut c_char,
+) -> *mut c_char {
+    // SAFETY: the caller's contract; both executors read the cookie's lines
+    // or the file, not the cookie itself.
+    unsafe {
+        if req.is(Origin::Buffer) && (req.ex_lua || curbuf_is_lua() || range_is_lua(req.eap)) {
+            nlua_exec_ga(&raw mut cookie.buflines, fname_exp);
+            return ptr::null_mut();
+        }
+        if !si.is_null() && (*si).sn_lua {
+            nlua_exec_file(fname_exp);
+            return ptr::null_mut();
+        }
+    }
+    // SAFETY: `getsourceline` reads the cookie back through the pointer it is
+    // handed, which is derived afresh from the borrow for each call and stays
+    // valid for its duration.
+    unsafe {
+        let first = getsourceline(0, ptr::from_mut(cookie).cast(), 0, true);
+        let firstline = strip_bom(&raw mut cookie.conv, first);
+        let flags = DOCMD_VERBOSE | DOCMD_NOWAIT | DOCMD_REPEAT;
+        let reader = Some(getsourceline as LineGetterFn);
+        do_cmdline(firstline, reader, ptr::from_mut(cookie).cast(), flags);
+        firstline
+    }
+}
+
+/// Release everything the cookie owns.
+///
+/// # Safety
+/// The cookie is done being read from, and `firstline` is null or owned.
+unsafe fn finish_source(cookie: &mut source_cookie_T, firstline: *mut c_char) {
+    // SAFETY: the caller's contract.
+    unsafe {
+        if !cookie.fp.is_null() {
+            fclose(cookie.fp);
+        }
+        if cookie.source_from_buf_or_str {
+            ga_clear_strings(&raw mut cookie.buflines);
+        }
+        xfree(cookie.nextline.cast());
+        xfree(firstline.cast());
+        convert_setup(&raw mut cookie.conv, ptr::null_mut(), ptr::null_mut());
+    }
+}
+
+/// Everything from opening the script to closing it, in the order it has to
+/// come back down: the profile timers, the funccal stack, `current_sctx` and
+/// the execution stack all outlive the run and are restored here.
+///
+/// # Safety
+/// The cookie is loaded, `fname_exp` names the resolved script (the callee
+/// may replace it with a copy it also owns), and `save_debug_break_level` was
+/// read before any of this ran.
+unsafe fn source_bracket(
+    req: &SourceRequest,
+    cookie: &mut source_cookie_T,
+    fname_exp: &mut *mut c_char,
+    save_debug_break_level: c_int,
+) -> c_int {
+    let mut sid = if req.is(Origin::Str) {
+        SID_STR
+    } else {
+        // SAFETY: the resolved name.
+        unsafe { find_script_by_name(*fname_exp) }
+    };
+    if sid > 0 && !req.ret_sid.is_null() {
+        // Already loaded, and the caller only wanted the ID.
+        // SAFETY: the caller's out-parameter.
+        unsafe { *req.ret_sid = sid };
+        return OK;
+    }
+    if !req.is(Origin::Str) {
+        // SAFETY: the resolved name.
+        if let Some(retval) = unsafe { source_autocmds(*fname_exp) } {
+            return retval;
+        }
+    }
+
+    // SAFETY: as above.
+    unsafe { open_script(cookie, *fname_exp, req.check_other) };
+    if cookie.fp.is_null() && !cookie.source_from_buf_or_str {
+        if p_verbose.get() > 1 {
+            let numbered = c"line %ld: could not source \"%s\"";
+            // SAFETY: both formats take the name, `numbered` after the line.
+            unsafe { verbose_source_msg(c"could not source \"%s\"", numbered, req.fname) };
+        }
+        return FAIL;
+    }
+
+    // The file exists.  Everything set up from here has to come back down
+    // before this function returns.
+    if p_verbose.get() > 1 {
+        let numbered = c"line %ld: sourcing \"%s\"";
+        // SAFETY: as above.
+        unsafe { verbose_source_msg(c"sourcing \"%s\"", numbered, req.fname) };
+    }
+    if req.is_vimrc == DOSO_VIMRC {
+        // SAFETY: the resolved name.
+        unsafe { vimrc_found(*fname_exp, c"MYVIMRC".as_ptr().cast_mut()) };
+    }
+
+    // SAFETY: as above.
+    cookie.breakpoint = unsafe { dbg_find_breakpoint(true, *fname_exp, 0) };
+    cookie.fname = *fname_exp;
+    cookie.dbg_tick = debug_tick.get();
+    cookie.level = ex_nesting_level.get();
+
+    // Start measuring load time, if --startuptime opened the log.
+    let time_log = time_fd.get();
+    let (rel_time, mut start_time) = if time_log.is_null() {
+        (0, 0)
+    } else {
+        time_push()
+    };
+    let profiling = do_profiling.get() == PROF_YES;
+    // SAFETY: paired with the `prof_child_exit` below.
+    let wait_start = if profiling {
+        unsafe { prof_child_enter() }
+    } else {
+        0
+    };
+
+    // Don't use the calling function's local variables.
+    let mut funccalp_entry = funccal_entry_T {
+        top_funccal: ptr::null_mut(),
+        next: ptr::null_mut(),
+    };
+    // SAFETY: the entry lives on this frame until `restore_funccal` below.
+    unsafe { save_funccal(&raw mut funccalp_entry) };
+    let save_current_sctx = current_sctx.get();
+
+    // Always use a new sequence number.
+    let seq = last_current_SID_seq.get() + 1;
+    last_current_SID_seq.set(seq);
+    current_sctx.with_mut(|sctx| sctx.sc_seq = seq);
+
+    // SAFETY: the resolved name, which a new item takes over.
+    let si = unsafe { register_script(req, &mut sid, fname_exp) };
+    debug_assert!(
+        si.is_null() == req.is(Origin::Str),
+        "(si != NULL) == (str == NULL)"
+    );
+
+    // Sourcing a string from a Lua script keeps the Lua script's SID, so
+    // `:verbose` still names something useful.
+    // SAFETY: `script_is_lua` only reads the registry.
+    if !req.is(Origin::Str) || !unsafe { script_is_lua(current_sctx.get().sc_sid) } {
+        current_sctx.with_mut(|sctx| {
+            sctx.sc_sid = sid;
+            sctx.sc_lnum = 0;
+        });
+    }
+
+    // Keep the sourcing name and line number, for recursive calls.
+    // SAFETY: `si` is this script's item, and the name outlives the frame it
+    // is pushed onto.
+    unsafe {
+        let name = if si.is_null() {
+            *fname_exp
+        } else {
+            (*si).sn_name
+        };
+        estack_push(ETYPE_SCRIPT, name, 0);
+        if profiling && !si.is_null() {
+            profile_script_start(si);
+        }
+    }
+    cookie.conv.vc_type = CONV_NONE;
+
+    // SAFETY: the loaded cookie and this script's item.
+    let firstline = unsafe { execute_source(req, cookie, si, *fname_exp) };
+
+    // SAFETY: `si` is still this script's, though the registry may have moved.
+    unsafe {
+        if profiling && !si.is_null() {
+            profile_script_stop(wait_start);
+        }
+        if got_int.get() {
+            emsg(gettext(&raw const e_interr as *const c_char));
+        }
+        estack_pop();
+    }
+    if p_verbose.get() > 1 {
+        let resumed = estack::sourcing_name();
+        // SAFETY: both messages take a NUL-terminated name.
+        unsafe {
+            verbose_enter();
+            smsg_c!(0, gettext(c"finished sourcing %s".as_ptr()), req.fname);
+            if !resumed.is_null() {
+                smsg_c!(0, gettext(c"continuing in %s".as_ptr()), resumed);
+            }
+            verbose_leave();
+        }
+    }
+    if !time_log.is_null() {
+        let mut label = [0 as c_char; IOSIZE as usize];
+        let buf = label.as_mut_ptr();
+        // SAFETY: `label` outlives all three calls.
+        unsafe {
+            vim_snprintf(buf, IOSIZE as size_t, c"sourcing %s".as_ptr(), req.fname);
+            time_msg(buf, &raw mut start_time);
+            time_pop(rel_time);
+        }
+    }
+    let trigger_source_post = !got_int.get();
+
+    // After a `:finish` in debug mode, break at the first command of the next
+    // sourced file.
+    if save_debug_break_level > ex_nesting_level.get()
+        && debug_break_level.get() == ex_nesting_level.get()
+    {
+        debug_break_level.set(debug_break_level.get() + 1);
+    }
+    current_sctx.set(save_current_sctx);
+
+    // SAFETY: paired with the `save_funccal`/`prof_child_enter` above; the
+    // cookie is done being read from.
+    unsafe {
+        restore_funccal();
+        if profiling {
+            prof_child_exit(wait_start);
+        }
+        finish_source(cookie, firstline);
+    }
+    if !req.is(Origin::Str) && trigger_source_post {
+        let (name, buf) = (*fname_exp, curbuf.get());
+        // SAFETY: the resolved name, still owned by this frame.
+        unsafe { apply_autocmds(EVENT_SOURCEPOST, name, name, false, buf) };
+    }
+    OK
+}
+
+/// Read a script and run it.
+///
+/// Answers FAIL when the file could not be opened, OK otherwise.  When a
+/// `scriptitem_T` was found or created, `ret_sid` -- if given -- gets its ID,
+/// and a script that has one already is *not* run again.
+///
+/// # Safety
+/// The request's pointers are live for the call.
+unsafe fn do_source_ext(req: &SourceRequest) -> c_int {
+    let save_debug_break_level = debug_break_level.get();
+    // SAFETY: every field of the cookie is a pointer, an integer or a bool,
+    // for all of which all-zero is the value C's `CLEAR_FIELD` leaves behind.
+    let mut cookie: source_cookie_T = unsafe { mem::zeroed() };
+    // SAFETY: the caller's contract.
+    let mut fname_exp = match unsafe { source_name(req, &mut cookie) } {
+        Ok(name) => name,
+        Err(retval) => return retval,
+    };
+    // SAFETY: the cookie is loaded and `fname_exp` is owned by this frame.
+    let retval = unsafe {
+        let retval = source_bracket(req, &mut cookie, &mut fname_exp, save_debug_break_level);
+        xfree(fname_exp.cast());
+        retval
+    };
+    retval
+}
+
+/// [`do_source_ext`] for a file: the spelling every caller outside this module
+/// uses.  `check_other` also tries the other init-file name; `is_vimrc` is a
+/// `DOSO_` value.
+///
+/// # Safety
+/// `fname` is NUL-terminated and `ret_sid` is null or writable.
+pub unsafe extern "C" fn do_source(
+    fname: *mut c_char,
+    check_other: bool,
+    is_vimrc: c_int,
+    ret_sid: *mut c_int,
+) -> c_int {
+    let req = SourceRequest {
+        check_other,
+        is_vimrc,
+        ret_sid,
+        ..SourceRequest::new(fname, ptr::null(), ptr::null(), false)
+    };
+    // SAFETY: the caller's contract.
+    unsafe { do_source_ext(&req) }
 }

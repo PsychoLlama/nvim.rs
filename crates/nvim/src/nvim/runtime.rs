@@ -93,8 +93,8 @@ use crate::src::nvim::os::env::{
 use crate::src::nvim::os::fs::{os_file_is_readable, os_isdir, os_open, os_set_cloexec};
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    __errno_location, fclose, fdopen, fgets, gettext, memmove, memset, snprintf, strcasecmp,
-    strcat, strcmp, strcpy, strlen, strncasecmp, strncmp, strstr,
+    __errno_location, fclose, fdopen, fgets, gettext, memmove, snprintf, strcasecmp, strcat,
+    strcmp, strcpy, strlen, strncasecmp, strncmp, strstr,
 };
 use crate::src::nvim::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::src::nvim::path::{
@@ -113,14 +113,13 @@ use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, Arena, Array, BoolVarValue,
     CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, Error, EvalFuncData, FILE, Integer,
     LineGetter, LineGetterFn, LuaRetMode, MHPutStatus, Map_String_int, MapHash, Object, ObjectType,
-    OptInt, OptVal, OptValData, OptValType, Set_String, String_0, TriState, VAR_DICT, VAR_FIXED,
-    VAR_LOCKED, XDGVarType, buf_T, cmd_addr_T, dict_T, estack_T, estack_T_es_info, estack_arg_T,
-    etype_T, exarg_T, expand_T, funccal_entry_T, garray_T, handle_T, int64_t, kBoolVarFalse,
-    kErrorTypeNone, kFalse, kNone, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, kTrue, linenr_T, list_T, object, object_data, optset_T,
-    proftime_T, pthread_mutex_t, ptrdiff_t, regmatch_T, scid_T, scriptitem_T, sctx_T, size_t,
-    ssize_t, typval_T, typval_vval_union, ufunc_T, uint8_t, uint32_t, uv_mutex_t, varnumber_T,
-    vimconv_T,
+    OptVal, OptValData, OptValType, Set_String, String_0, TriState, VAR_DICT, VAR_FIXED,
+    VAR_LOCKED, XDGVarType, cmd_addr_T, dict_T, estack_T, estack_T_es_info, estack_arg_T, etype_T,
+    exarg_T, expand_T, funccal_entry_T, garray_T, handle_T, int64_t, kBoolVarFalse, kErrorTypeNone,
+    kFalse, kNone, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
+    kTrue, linenr_T, list_T, object_data, optset_T, proftime_T, pthread_mutex_t, ptrdiff_t,
+    regmatch_T, scid_T, scriptitem_T, sctx_T, size_t, ssize_t, typval_T, typval_vval_union,
+    ufunc_T, uint8_t, uint32_t, uv_mutex_t, varnumber_T, vimconv_T,
 };
 use crate::src::nvim::usercmd::add_win_cmd_modifiers;
 use crate::{semsg_c, smsg_c};

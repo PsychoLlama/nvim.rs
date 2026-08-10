@@ -475,7 +475,7 @@ fn boolean_obj(value: bool) -> Object {
     }
 }
 
-fn integer_obj(value: Integer) -> Object {
+pub(crate) fn integer_obj(value: Integer) -> Object {
     Object {
         type_0: kObjectTypeInteger,
         data: object_data { integer: value },
