@@ -39,6 +39,22 @@ and this project adheres to [CalVer](https://calver.org/).
   profiling, the clipboard provider and the `input()`/`confirm()`
   prompts, the context stack behind `ctxget()`/`ctxset()`, and the
   remaining transpiled file-system and indent code.
+- Rewrote the Ex command layer — everything an `:` command does once it has
+  been parsed. That covers `:substitute` and `:global` including the `c`
+  confirm prompt, `\=` replacements and `'inccommand'` preview;
+  `:sort`/`:uniq`, `:move`/`:copy`, `:append`/`:insert`/`:change`/`:z`,
+  `:left`/`:right`/`:center`, `:read`/`:write`/`:wall`, `:edit` and the
+  buffer swap behind it, and `:!`/`:filter` and the shell they run;
+  `:try`/`:catch`/`:finally`/`:throw` and the exception state they share
+  with `:while` and `:function`; user-defined commands, their attributes
+  and their completion; `:mksession`/`:mkview`/`:mkvimrc`; the help system
+  and `:helptags`; the `:debug` prompt, breakpoints and profiling ranges;
+  the argument list and `:argdo`/`:bufdo`/`:windo`/`:tabdo`; digraphs;
+  command-line history; and the `nvim_cmd`/`nvim_parse_cmd` API pair.
+- The table of Ex command names, flags and address types — and the two
+  first-byte lookup indexes into it — is generated from `ex_cmds.lua`
+  now, as the original generated the same table at build time. The
+  emitted table is byte-identical to the one it replaces.
 
 ### Fixed
 
