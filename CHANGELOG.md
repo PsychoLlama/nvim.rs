@@ -22,8 +22,29 @@ and this project adheres to [CalVer](https://calver.org/).
   longer abort a release build: 237 of them across the tree are debug-only
   now, as they are in the original, where a release build compiles them
   out. A release `nvim` carries on past the cases it used to die on.
+- Swept the transpiler's C idioms out of the whole tree: NUL-terminated
+  byte strings became C string literals, pointer arithmetic became the
+  unsigned form, the `logmsg` C variadic became a macro, and the casts
+  those changes made redundant are gone. 2,032 lint warnings down to 75
+  across ~2,000 sites; nothing observable changed.
+- Rewrote the runtime layer, covering how `'runtimepath'` and
+  `'packpath'` are built from `$XDG_*`, `$NVIM_APPNAME` and `--clean`,
+  the search behind `:runtime`, `require()` and runtime-file completion,
+  `:packadd`/`:packloadall` and the `after/` ordering they splice in,
+  `:source` of a file, a buffer or a range in either language, and the
+  script registry `:scriptnames`, `getscriptinfo()`, `<sfile>` and
+  `getstacktrace()` read.
+- Rewrote the channel layer behind jobs, RPC clients and `:terminal`, the
+  `assert_*()` family and `v:errors`, logging and `--startuptime`
+  profiling, the clipboard provider and the `input()`/`confirm()`
+  prompts, the context stack behind `ctxget()`/`ctxset()`, and the
+  remaining transpiled file-system and indent code.
 
 ### Fixed
+
+- `require()` from inside a `vim.uv` thread no longer aborts. Any module
+  loaded off the main thread went through the runtime search path, which
+  a debug build refused to touch there.
 
 - A number too large for the option it appears in no longer kills the
   editor. `'cinoptions'`, `'breakindentopt'`, `'comments'`, `'spellsuggest'`,
