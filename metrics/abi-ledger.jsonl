@@ -26,7 +26,7 @@
 {"symbol":"curs_columns","kind":"fn","file":"crates/nvim/src/nvim/move.rs","class":"internal","refs":[]}
 {"symbol":"curwin","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs","functional-specs"]}
 {"symbol":"display_tick","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["functional-specs"]}
-{"symbol":"do_ecmd","kind":"fn","file":"crates/nvim/src/nvim/ex_cmds.rs","class":"internal","refs":[]}
+{"symbol":"do_ecmd","kind":"fn","file":"crates/nvim/src/nvim/ex_cmds/ecmd.rs","class":"internal","refs":[]}
 {"symbol":"early_init","kind":"fn","file":"crates/nvim/src/nvim/main/entry.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"east_node_type_tab","kind":"static","file":"crates/nvim/src/nvim/viml/parser/expressions/ast.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"eltkn_cmp_type_tab","kind":"static","file":"crates/nvim/src/nvim/viml/parser/expressions/ast.rs","class":"test","refs":["unit-specs"]}
