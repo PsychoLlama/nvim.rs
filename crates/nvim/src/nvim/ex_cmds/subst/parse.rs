@@ -1,246 +1,324 @@
 //! Reading a `:s` command line, and remembering it for the next one.
 //!
-//! `skip_substitute` walks the pattern/replacement/flags off the command line
-//! without interpreting them (`:s` is its own little language, and the
-//! delimiter may be almost any character -- `check_regexp_delim` rejects the
-//! ones that would be ambiguous), `sub_parse_flags` turns the trailing letters
-//! into `subflags_T`, and `old_sub` is the `~` replacement text carried from
-//! the last `:s`.  `sub_joining_lines` is the `\n`-in-the-replacement case,
-//! which joins rather than substitutes, and `sub_grow_buf` is the output
-//! buffer's growth policy.
+//! [`skip_substitute`] walks the pattern/replacement/flags off the command
+//! line without interpreting them (`:s` is its own little language, and the
+//! delimiter may be almost any character -- [`check_regexp_delim`] rejects the
+//! ones that would be ambiguous), [`sub_parse_flags`] turns the trailing
+//! letters into `subflags_T`, and [`old_sub`] is the `~` replacement text
+//! carried from the last `:s`.  [`sub_joining_lines`] is the `\n`-in-the-
+//! pattern case, which joins rather than substitutes, and [`sub_grow_buf`] is
+//! the output buffer's growth policy.
+//!
+//! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::super::*;
-#[allow(unused_imports)]
-use super::*;
+use super::super::{
+    _ISalpha, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, FAIL, HIST_SEARCH, NUL, OK, kSubHonorOptions,
+    kSubIgnoreCase, kSubMatchCase, subflags_T,
+};
+use super::do_sub_msg;
+use crate::src::nvim::cmdhist::add_to_history;
+use crate::src::nvim::ex_docmd::ex_may_print;
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{curbuf, curwin, p_gd, sub_nlines, sub_nsubs};
+use crate::src::nvim::mbyte::utfc_ptr2len;
+use crate::src::nvim::memory::{xcalloc, xfree, xrealloc};
+use crate::src::nvim::message::emsg;
+use crate::src::nvim::ops::do_join;
+use crate::src::nvim::option::magic_isset;
+use crate::src::nvim::os::libc::{__ctype_b_loc, gettext, memset, strlen};
+use crate::src::nvim::regexp::{RE_LAST, RE_SUBST};
+use crate::src::nvim::search::save_re_pat;
+use crate::src::nvim::types::{SubReplacementString, Timestamp, exarg_T, linenr_T, size_t};
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::{ptr, slice};
 
+/// The previous `:s` replacement string, which a bare `:s` and a `~` in a
+/// replacement both reach for.  Its two pointers are `xmalloc`ed and owned
+/// here; shada reads and writes it through [`sub_get_replacement`] and
+/// [`sub_set_replacement`].
 pub(crate) static old_sub: GlobalCell<SubReplacementString> =
     GlobalCell::new(SubReplacementString {
-        sub: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        sub: ptr::null_mut(),
         timestamp: 0 as Timestamp,
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
+        additional_data: ptr::null_mut(),
     });
 
 /// Set by `do_sub` when a `:global` is running, so that `global_exe` puts the
 /// cursor on the first non-blank once the whole command is done.
 pub(crate) static global_need_beginline: GlobalCell<bool> = GlobalCell::new(false);
 
-pub unsafe extern "C" fn sub_get_replacement(ret_sub: *mut SubReplacementString) {
-    unsafe {
-        *ret_sub = old_sub.get();
-    }
+/// Copy the old substitute replacement string out.
+///
+/// # Safety
+/// `ret_sub` must be writable.
+pub unsafe fn sub_get_replacement(ret_sub: *mut SubReplacementString) {
+    // SAFETY: caller's contract.
+    unsafe { *ret_sub = old_sub.get() };
 }
 
-pub unsafe extern "C" fn sub_set_replacement(mut sub: SubReplacementString) {
+/// Set the substitute string and its timestamp.
+///
+/// `sub` must already be in allocated memory: it is taken, not copied.
+///
+/// # Safety
+/// Main thread; `sub`'s two pointers must be `xmalloc`ed or null, and no
+/// other owner may hold what this displaces.
+pub unsafe fn sub_set_replacement(sub: SubReplacementString) {
+    let old = old_sub.get();
+    // SAFETY: both pointers were this module's own allocations.
     unsafe {
-        xfree((*old_sub.ptr()).sub as *mut ::core::ffi::c_void);
-        if sub.additional_data != (*old_sub.ptr()).additional_data {
-            xfree((*old_sub.ptr()).additional_data as *mut ::core::ffi::c_void);
+        xfree(old.sub as *mut c_void);
+        if sub.additional_data != old.additional_data {
+            xfree(old.additional_data as *mut c_void);
         }
-        old_sub.set(sub);
     }
+    old_sub.set(sub);
 }
 
-pub(crate) unsafe extern "C" fn sub_joining_lines(
-    mut eap: *mut exarg_T,
-    mut pat: *mut ::core::ffi::c_char,
-    mut patlen: size_t,
-    mut sub: *const ::core::ffi::c_char,
-    mut cmd: *const ::core::ffi::c_char,
-    mut save: bool,
-    mut keeppatterns: bool,
+/// Recognise `:%s/\n//` and turn it into a join command, which is much more
+/// efficient.
+///
+/// The pattern must be exactly `\n`, the replacement empty, and the flags
+/// either absent or one of `g`, `l`, `p`, `#` -- anything else is a real
+/// substitution.  `save` says whether to remember the pattern (a preview
+/// must not).
+///
+/// Returns true when `:substitute` was handled as a join, including under
+/// `eap->skip`, where nothing is done at all.
+///
+/// # Safety
+/// Main thread; `eap`, `sub` and `cmd` must be live and `pat` live or null.
+pub(crate) unsafe fn sub_joining_lines(
+    eap: *mut exarg_T,
+    pat: *mut c_char,
+    patlen: size_t,
+    sub: *const c_char,
+    cmd: *const c_char,
+    save: bool,
+    keeppatterns: bool,
 ) -> bool {
-    unsafe {
-        if !pat.is_null()
-            && strcmp(pat, c"\\n".as_ptr()) == 0 as ::core::ffi::c_int
-            && *sub as ::core::ffi::c_int == NUL
-            && (*cmd as ::core::ffi::c_int == NUL
-                || *cmd.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-                    && (*cmd as ::core::ffi::c_int == 'g' as ::core::ffi::c_int
-                        || *cmd as ::core::ffi::c_int == 'l' as ::core::ffi::c_int
-                        || *cmd as ::core::ffi::c_int == 'p' as ::core::ffi::c_int
-                        || *cmd as ::core::ffi::c_int == '#' as ::core::ffi::c_int))
-        {
-            if (*eap).skip != 0 {
-                return true_0 != 0;
-            }
-            (*curwin.get()).w_cursor.lnum = (*eap).line1;
-            if *cmd as ::core::ffi::c_int == 'l' as ::core::ffi::c_int {
-                (*eap).flags = EXFLAG_LIST;
-            } else if *cmd as ::core::ffi::c_int == '#' as ::core::ffi::c_int {
-                (*eap).flags = EXFLAG_NR;
-            } else if *cmd as ::core::ffi::c_int == 'p' as ::core::ffi::c_int {
-                (*eap).flags = EXFLAG_PRINT;
-            }
-            let mut joined_lines_count: linenr_T = (*eap).line2 - (*eap).line1
-                + 1 as linenr_T
-                + (if (*eap).line2 < (*curbuf.get()).b_ml.ml_line_count {
-                    1 as linenr_T
-                } else {
-                    0 as linenr_T
-                });
-            if joined_lines_count > 1 as linenr_T {
-                do_join(
-                    joined_lines_count as size_t,
-                    false_0 != 0,
-                    true_0 != 0,
-                    false_0 != 0,
-                    true_0 != 0,
-                );
-                sub_nsubs.set((joined_lines_count - 1 as linenr_T) as ::core::ffi::c_int);
-                sub_nlines.set(1 as ::core::ffi::c_int as linenr_T);
-                do_sub_msg(false_0 != 0);
-                ex_may_print(eap);
-            }
-            if save {
-                if !keeppatterns {
-                    save_re_pat(RE_SUBST as ::core::ffi::c_int, pat, patlen, magic_isset());
-                }
-                add_to_history(
-                    HIST_SEARCH as ::core::ffi::c_int,
-                    ::core::slice::from_raw_parts(pat as *const u8, patlen),
-                    true_0 != 0,
-                    NUL as u8,
-                );
-            }
-            return true_0 != 0;
-        }
-        return false_0 != 0;
+    // SAFETY: caller's contract -- three NUL-terminated strings.
+    let joins = unsafe {
+        !pat.is_null()
+            && CStr::from_ptr(pat).to_bytes() == b"\\n"
+            && *sub as c_int == NUL
+            && matches!(
+                CStr::from_ptr(cmd).to_bytes(),
+                [] | [b'g' | b'l' | b'p' | b'#']
+            )
+    };
+    if !joins {
+        return false;
     }
+    // SAFETY: caller's contract.
+    if unsafe { (*eap).skip } != 0 {
+        return true;
+    }
+
+    // SAFETY: caller's contract; the current window and buffer are live.
+    let joined_lines_count = unsafe {
+        (*curwin.get()).w_cursor.lnum = (*eap).line1;
+        (*eap).flags = match *cmd as u8 {
+            b'l' => EXFLAG_LIST,
+            b'#' => EXFLAG_NR,
+            b'p' => EXFLAG_PRINT,
+            _ => (*eap).flags,
+        };
+        // The number of lines joined is the number of lines in the range,
+        // plus one more if this is not the end of the file.
+        (*eap).line2 - (*eap).line1
+            + 1 as linenr_T
+            + linenr_T::from((*eap).line2 < (*curbuf.get()).b_ml.ml_line_count)
+    };
+    if joined_lines_count > 1 as linenr_T {
+        // SAFETY: the range is inside the buffer; message state is ready.
+        unsafe {
+            do_join(joined_lines_count as size_t, false, true, false, true);
+            sub_nsubs.set(joined_lines_count - 1 as linenr_T);
+            sub_nlines.set(1 as linenr_T);
+            do_sub_msg(false);
+            ex_may_print(eap);
+        }
+    }
+
+    if save {
+        // SAFETY: `pat` is `patlen` bytes long, by the caller's contract.
+        unsafe {
+            if !keeppatterns {
+                save_re_pat(RE_SUBST as c_int, pat, patlen, magic_isset());
+            }
+            // Put the pattern in the search history.
+            add_to_history(
+                HIST_SEARCH as c_int,
+                slice::from_raw_parts(pat as *const u8, patlen),
+                true,
+                NUL as u8,
+            );
+        }
+    }
+    true
 }
 
-pub(crate) unsafe extern "C" fn sub_grow_buf(
-    mut new_start: *mut *mut ::core::ffi::c_char,
-    mut new_start_len: *mut ::core::ffi::c_int,
-    mut needed_len: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        let mut new_end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if (*new_start).is_null() {
-            *new_start_len = needed_len + 50 as ::core::ffi::c_int;
-            *new_start = xcalloc(1 as size_t, *new_start_len as size_t) as *mut ::core::ffi::c_char;
-            **new_start = NUL as ::core::ffi::c_char;
-            new_end = *new_start;
-        } else {
-            let mut len: size_t = strlen(*new_start);
-            needed_len += len as ::core::ffi::c_int;
-            if needed_len > *new_start_len {
-                let mut prev_new_start_len: size_t = *new_start_len as size_t;
-                *new_start_len = needed_len + 50 as ::core::ffi::c_int;
-                let mut added_len: size_t =
-                    (*new_start_len as size_t).wrapping_sub(prev_new_start_len);
-                *new_start = xrealloc(
-                    *new_start as *mut ::core::ffi::c_void,
-                    *new_start_len as size_t,
-                ) as *mut ::core::ffi::c_char;
-                memset(
-                    (*new_start).add(prev_new_start_len) as *mut ::core::ffi::c_void,
-                    0 as ::core::ffi::c_int,
-                    added_len,
-                );
-            }
-            new_end = (*new_start).add(len);
+/// Make room for `needed_len` more bytes of replacement text, answering where
+/// to write them.
+///
+/// A little more than is strictly necessary is allocated, to keep the
+/// reallocation out of the inner loop.  `new_start` is null on the first
+/// call and owns the buffer afterwards.
+///
+/// # Safety
+/// `*new_start` must be null or an `xmalloc`ed NUL-terminated buffer of
+/// `*new_start_len` bytes.
+pub(crate) unsafe fn sub_grow_buf(
+    new_start: &mut *mut c_char,
+    new_start_len: &mut c_int,
+    mut needed_len: c_int,
+) -> *mut c_char {
+    if new_start.is_null() {
+        // Get space for a temporary buffer to substitute into, with extra to
+        // avoid too many calls to xmalloc()/free().
+        *new_start_len = needed_len + 50 as c_int;
+        // SAFETY: a fresh zeroed allocation of the size just chosen.
+        unsafe {
+            *new_start = xcalloc(1 as size_t, *new_start_len as size_t) as *mut c_char;
+            **new_start = NUL as c_char;
         }
-        return new_end;
+        return *new_start;
     }
+
+    // Check whether the temporary buffer is long enough to substitute into.
+    // If not, make it larger (again with a bit extra).
+    // SAFETY: caller's contract -- a NUL-terminated buffer.
+    let len = unsafe { strlen(*new_start) };
+    needed_len += len as c_int;
+    if needed_len > *new_start_len {
+        let prev_new_start_len = *new_start_len as size_t;
+        *new_start_len = needed_len + 50 as c_int;
+        let added_len = (*new_start_len as size_t).wrapping_sub(prev_new_start_len);
+        // SAFETY: the buffer is ours to grow, and the tail past the old
+        // length is what `memset` clears.
+        unsafe {
+            *new_start =
+                xrealloc(*new_start as *mut c_void, *new_start_len as size_t) as *mut c_char;
+            memset(
+                (*new_start).add(prev_new_start_len) as *mut c_void,
+                0 as c_int,
+                added_len,
+            );
+        }
+    }
+    // SAFETY: `len` is the buffer's own string length.
+    unsafe { (*new_start).add(len) }
 }
 
-pub(crate) unsafe extern "C" fn sub_parse_flags(
-    mut cmd: *mut ::core::ffi::c_char,
-    mut subflags: *mut subflags_T,
-    mut which_pat: *mut ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        if *cmd as ::core::ffi::c_int == '&' as ::core::ffi::c_int {
-            cmd = cmd.offset(1);
-        } else {
-            (*subflags).do_all = p_gd.get() != 0;
-            (*subflags).do_ask = false_0 != 0;
-            (*subflags).do_error = true_0 != 0;
-            (*subflags).do_print = false_0 != 0;
-            (*subflags).do_list = false_0 != 0;
-            (*subflags).do_count = false_0 != 0;
-            (*subflags).do_number = false_0 != 0;
-            (*subflags).do_ic = kSubHonorOptions;
-        }
-        while *cmd != 0 {
-            if *cmd as ::core::ffi::c_int == 'g' as ::core::ffi::c_int {
-                (*subflags).do_all = !(*subflags).do_all;
-            } else if *cmd as ::core::ffi::c_int == 'c' as ::core::ffi::c_int {
-                (*subflags).do_ask = !(*subflags).do_ask;
-            } else if *cmd as ::core::ffi::c_int == 'n' as ::core::ffi::c_int {
-                (*subflags).do_count = true_0 != 0;
-            } else if *cmd as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
-                (*subflags).do_error = !(*subflags).do_error;
-            } else if *cmd as ::core::ffi::c_int == 'r' as ::core::ffi::c_int {
-                *which_pat = RE_LAST as ::core::ffi::c_int;
-            } else if *cmd as ::core::ffi::c_int == 'p' as ::core::ffi::c_int {
-                (*subflags).do_print = true_0 != 0;
-            } else if *cmd as ::core::ffi::c_int == '#' as ::core::ffi::c_int {
-                (*subflags).do_print = true_0 != 0;
-                (*subflags).do_number = true_0 != 0;
-            } else if *cmd as ::core::ffi::c_int == 'l' as ::core::ffi::c_int {
-                (*subflags).do_print = true_0 != 0;
-                (*subflags).do_list = true_0 != 0;
-            } else if *cmd as ::core::ffi::c_int == 'i' as ::core::ffi::c_int {
-                (*subflags).do_ic = kSubIgnoreCase;
-            } else {
-                if *cmd as ::core::ffi::c_int != 'I' as ::core::ffi::c_int {
-                    break;
-                }
-                (*subflags).do_ic = kSubMatchCase;
-            }
-            cmd = cmd.offset(1);
-        }
-        if (*subflags).do_count {
-            (*subflags).do_ask = false_0 != 0;
-        }
-        return cmd;
+/// Read `:substitute`'s trailing `{flags}` into `subflags`, answering where
+/// the flags stopped.
+///
+/// A leading `&` keeps the previous flags; otherwise they are reset from
+/// 'gdefault' and the defaults first.  `g` and `c` toggle, `r` is never a
+/// toggle but redirects `which_pat`, and the first unknown letter ends the
+/// run.
+///
+/// # Safety
+/// Main thread; `cmd` must be a live NUL-terminated string.
+pub(crate) unsafe fn sub_parse_flags(
+    cmd: *mut c_char,
+    subflags: &mut subflags_T,
+    which_pat: &mut c_int,
+) -> *mut c_char {
+    // SAFETY: caller's contract.
+    let bytes = unsafe { CStr::from_ptr(cmd) }.to_bytes();
+
+    // Find the trailing options.  When '&' is used, keep the old ones.
+    let mut i = 0;
+    if bytes.first() == Some(&b'&') {
+        i = 1;
+    } else {
+        subflags.do_all = p_gd.get() != 0;
+        subflags.do_ask = false;
+        subflags.do_error = true;
+        subflags.do_print = false;
+        subflags.do_list = false;
+        subflags.do_count = false;
+        subflags.do_number = false;
+        subflags.do_ic = kSubHonorOptions;
     }
+    while i < bytes.len() {
+        // Note that 'g' and 'c' are always inverted, and 'r' never is.
+        match bytes[i] {
+            b'g' => subflags.do_all = !subflags.do_all,
+            b'c' => subflags.do_ask = !subflags.do_ask,
+            b'n' => subflags.do_count = true,
+            b'e' => subflags.do_error = !subflags.do_error,
+            b'r' => *which_pat = RE_LAST as c_int, // use last used regexp
+            b'p' => subflags.do_print = true,
+            b'#' => {
+                subflags.do_print = true;
+                subflags.do_number = true;
+            }
+            b'l' => {
+                subflags.do_print = true;
+                subflags.do_list = true;
+            }
+            b'i' => subflags.do_ic = kSubIgnoreCase, // ignore case
+            b'I' => subflags.do_ic = kSubMatchCase,  // don't ignore case
+            _ => break,
+        }
+        i += 1;
+    }
+    if subflags.do_count {
+        subflags.do_ask = false;
+    }
+    cmd.wrapping_add(i)
 }
 
-pub(crate) unsafe extern "C" fn skip_substitute(
-    mut start: *mut ::core::ffi::c_char,
-    mut delimiter: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        let mut p: *mut ::core::ffi::c_char = start;
-        while *p.offset(0 as ::core::ffi::c_int as isize) != 0 {
-            if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == delimiter {
-                let c2rust_fresh12 = p;
-                p = p.offset(1);
-                *c2rust_fresh12 = NUL as ::core::ffi::c_char;
-                break;
-            } else {
-                if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '\\' as ::core::ffi::c_int
-                    && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        != 0 as ::core::ffi::c_int
-                {
-                    p = p.offset(1);
-                }
-                p = p.offset(utfc_ptr2len(p) as isize);
-            }
+/// Skip the `sub` part of `:s/pat/sub/`, where `delimiter` separates the
+/// parts.
+///
+/// The closing delimiter is replaced by a NUL in place, so the replacement
+/// ends where it should; an unterminated one simply runs to the end.
+///
+/// # Safety
+/// `start` must be a live, writable, NUL-terminated string.
+pub(crate) unsafe fn skip_substitute(start: *mut c_char, delimiter: c_int) -> *mut c_char {
+    // SAFETY: caller's contract.
+    let bytes = unsafe { CStr::from_ptr(start) }.to_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] as c_int == delimiter {
+            // End delimiter found: replace it with a NUL.
+            // SAFETY: `i` indexes the string the caller may write.
+            unsafe { *start.add(i) = NUL as c_char };
+            return start.wrapping_add(i + 1);
         }
-        return p;
+        if bytes[i] == b'\\' && i + 1 < bytes.len() {
+            i += 1; // skip escaped characters
+        }
+        // SAFETY: `start + i` is a non-NUL byte of the string, so the
+        // character length is at least one and stops at the terminator.
+        i += unsafe { utfc_ptr2len(start.add(i)) } as usize;
     }
+    start.wrapping_add(bytes.len())
 }
 
-pub(crate) unsafe extern "C" fn check_regexp_delim(
-    mut c: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    unsafe {
-        if *(*__ctype_b_loc()).offset(c as isize) as ::core::ffi::c_int
-            & _ISalpha as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-            != 0
-        {
+/// Reject a delimiter that would make the command ambiguous.
+///
+/// # Safety
+/// Message state.  `c` must be a `char` value (`-128..=255`), which is what
+/// the ctype table is indexed by.
+pub(crate) unsafe fn check_regexp_delim(c: c_int) -> c_int {
+    // SAFETY: caller's contract -- the ctype table covers `-128..=255`.
+    let isalpha = unsafe { *(*__ctype_b_loc()).offset(c as isize) } as c_int & _ISalpha as c_int;
+    if isalpha != 0 {
+        // SAFETY: a live message string.
+        unsafe {
             emsg(gettext(
                 c"E146: Regular expressions can't be delimited by letters".as_ptr(),
-            ));
-            return FAIL;
-        }
-        return OK;
+            ))
+        };
+        return FAIL;
     }
+    OK
 }

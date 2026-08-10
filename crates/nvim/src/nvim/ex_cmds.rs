@@ -28,16 +28,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
-use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::apply_autocmds;
-use crate::src::nvim::buffer::{buf_ensure_loaded, buflist_findnr};
 use crate::src::nvim::buffer_updates::buf_updates_send_changes;
 use crate::src::nvim::change::{appended_lines, changed_bytes, changed_lines, deleted_lines};
 use crate::src::nvim::charset::{getdigits_int, skiptowhite, skipwhite, vim_isIDc};
-use crate::src::nvim::cmdhist::add_to_history;
 use crate::src::nvim::cursor::coladvance;
-use crate::src::nvim::decoration::bufhl_add_hl_pos_offset;
 use crate::src::nvim::drawscreen::{
     UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
 };
@@ -45,7 +41,7 @@ use crate::src::nvim::edit::beginline;
 use crate::src::nvim::eval::typval::{kCallbackNone, tv_list_len};
 use crate::src::nvim::eval::typval::{tv_get_string, tv_list_find_str};
 use crate::src::nvim::eval::vars::get_vim_var_list;
-use crate::src::nvim::ex_docmd::{check_nextcmd, do_exedit, ex_may_print};
+use crate::src::nvim::ex_docmd::{check_nextcmd, do_exedit};
 use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::ex_getln::{getcmdline_prompt, gotocmdline};
 use crate::src::nvim::extmark::extmark_splice;
@@ -55,55 +51,47 @@ use crate::src::nvim::highlight_group::{HLF_R, syn_check_group};
 use crate::src::nvim::input::prompt_for_input;
 use crate::src::nvim::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::src::nvim::main::{
-    IObuff, KeyTyped, RedrawingDisabled, State, cmdmod, curbuf, curtab, curwin, e_backslash,
-    e_curdir, e_interr, e_invarg, e_invarg2, e_invcmd, e_modifiable, e_nopresub, e_noprevre,
-    e_patnotf2, e_sandbox, e_trailing_arg, e_val_too_large_len, e_zerocount, ex_normal_busy,
-    exmode_active, firstwin, g_do_tagpreview, global_busy, got_int, highlight_match, msg_buf,
-    msg_didout, msg_scroll, need_wait_return, no_u_sync, p_ch, p_cpo, p_cwh, p_gd, p_icm, p_lz,
-    p_rdt, p_report, p_shm, quit_more, sandbox, search_match_endcol, search_match_lines, secure,
-    sub_nlines, sub_nsubs, textlock,
+    IObuff, RedrawingDisabled, State, cmdmod, curbuf, curtab, curwin, e_backslash, e_curdir,
+    e_interr, e_invarg, e_invarg2, e_invcmd, e_modifiable, e_nopresub, e_noprevre, e_patnotf2,
+    e_sandbox, e_trailing_arg, e_val_too_large_len, e_zerocount, ex_normal_busy, exmode_active,
+    firstwin, g_do_tagpreview, global_busy, got_int, highlight_match, msg_didout, msg_scroll,
+    need_wait_return, no_u_sync, p_ch, p_cpo, p_cwh, p_icm, p_lz, quit_more, sandbox,
+    search_match_endcol, search_match_lines, secure, sub_nlines, sub_nsubs, textlock,
 };
 use crate::src::nvim::mark::{mark_adjust, setpcmark};
 use crate::src::nvim::mbyte::utfc_ptr2len;
-use crate::src::nvim::memline::{
-    ml_append, ml_append_buf, ml_delete, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len,
-    ml_replace, ml_replace_buf,
-};
-use crate::src::nvim::memory::{xcalloc, xfree, xmallocz, xrealloc, xstrdup};
+use crate::src::nvim::memline::{ml_append, ml_delete, ml_get, ml_get_len, ml_replace};
+use crate::src::nvim::memory::{xfree, xmallocz, xrealloc, xstrdup};
 use crate::src::nvim::message::{
-    emsg, message_filtered, messaging, msg, msg_clr_eos, msg_outnum, msg_outtrans, msg_putchar,
-    msg_puts, msg_start, msg_starthere, set_keep_msg,
+    emsg, message_filtered, msg, msg_clr_eos, msg_outnum, msg_outtrans, msg_putchar, msg_puts,
+    msg_start, msg_starthere,
 };
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::r#move::{
     changed_window_setting, do_check_cursorbind, scrolldown_clamp, scrollup_clamp, update_topline,
     validate_cursor,
 };
-use crate::src::nvim::ops::do_join;
 use crate::src::nvim::option::{magic_isset, set_option_direct};
-use crate::src::nvim::options::{kOptFoldcolumn, kOptInccommand, kOptShortmess};
+use crate::src::nvim::options::{kOptFoldcolumn, kOptInccommand};
 use crate::src::nvim::os::env::expand_env_save;
 use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
-use crate::src::nvim::os::libc::{
-    __ctype_b_loc, gettext, log10, memmove, memset, ngettext, snprintf, strcat, strcmp, strcpy,
-    strlen,
-};
+use crate::src::nvim::os::libc::{gettext, memmove, memset, snprintf, strcat, strlen};
 use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::plines::getvcol;
 use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
-use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit, profile_zero};
+use crate::src::nvim::profile::profile_passed_limit;
 use crate::src::nvim::regexp::{
     RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST, vim_regexec_multi, vim_regfree,
 };
 use crate::src::nvim::regexp::{regtilde, skip_regexp, skip_regexp_ex, vim_regsub_multi};
-use crate::src::nvim::search::{SEARCH_HIS, get_search_pat, save_re_pat, search_regcomp};
-use crate::src::nvim::strings::{concat_str, vim_snprintf_add, vim_strchr, xstrnsave};
+use crate::src::nvim::search::{SEARCH_HIS, get_search_pat, search_regcomp};
+use crate::src::nvim::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::src::nvim::types::event_T;
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     AdditionalData, CMD_append, CMD_center, CMD_change, CMD_edit, CMD_left, CMD_right, CMD_tilde,
     CMOD_BROWSE, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, Callback, Callback_data as C2Rust_Unnamed_5,
-    ExtmarkOp, OptInt, OptVal, OptValData, OptValType, String_0, SubReplacementString, Timestamp,
+    ExtmarkOp, OptInt, OptVal, OptValData, OptValType, String_0, SubReplacementString,
     UndoObjectType, VV_OLDFILES, bcount_t, bfa_values, bln_values, buf_T, colnr_T,
     dobuf_action_values, exarg_T, getf_retvalues, handle_T, int64_t, linenr_T, list_T, listitem_T,
     lpos_T, magic_T, pos_T, proftime_T, regmmatch_T, regprog_T, size_t, uint8_t, win_T,
@@ -215,17 +203,12 @@ pub struct SubResult {
     pub end: lpos_T,
     pub pre_match: linenr_T,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_33 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut SubResult,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
+/// The matches an `'inccommand'` preview has to show, and how many lines they
+/// need on screen -- which is what caps the scan when the preview window is
+/// smaller than the range.
+#[derive(Default)]
 pub struct PreviewLines {
-    pub subresults: C2Rust_Unnamed_33,
+    pub subresults: Vec<SubResult>,
     pub lines_needed: linenr_T,
 }
 #[derive(Copy, Clone)]

@@ -15,6 +15,20 @@ use super::super::*;
 #[allow(unused_imports)]
 use super::*;
 
+/// Record a match for the `'inccommand'` preview, and how many lines it adds
+/// to what the preview window will have to show.
+fn push_preview(preview_lines: &mut PreviewLines, current_match: SubResult) {
+    let match_lines = current_match.end.lnum - current_match.start.lnum + 1 as linenr_T;
+    let continues =
+        preview_lines.subresults.last().map(|last| last.end.lnum) == Some(current_match.start.lnum);
+    preview_lines.lines_needed += if continues {
+        match_lines - 1 as linenr_T
+    } else {
+        match_lines
+    };
+    preview_lines.subresults.push(current_match);
+}
+
 pub(crate) unsafe extern "C" fn do_sub(
     mut eap: *mut exarg_T,
     timeout: proftime_T,
@@ -59,14 +73,7 @@ pub(crate) unsafe extern "C" fn do_sub(
         let mut endcolumn: bool = false_0 != 0;
         let keeppatterns: bool =
             (*cmdmod.ptr()).cmod_flags & CMOD_KEEPPATTERNS as ::core::ffi::c_int != 0;
-        let mut preview_lines: PreviewLines = PreviewLines {
-            subresults: C2Rust_Unnamed_33 {
-                size: 0 as size_t,
-                capacity: 0 as size_t,
-                items: ::core::ptr::null_mut::<SubResult>(),
-            },
-            lines_needed: 0 as linenr_T,
-        };
+        let mut preview_lines = PreviewLines::default();
         static pre_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
         let mut old_cursor: pos_T = (*curwin.get()).w_cursor;
         let mut start_nsubs: ::core::ffi::c_int = 0;
@@ -145,13 +152,13 @@ pub(crate) unsafe extern "C" fn do_sub(
                 });
             }
         } else if (*eap).skip == 0 {
-            if (*old_sub.ptr()).sub.is_null() {
+            if old_sub.get().sub.is_null() {
                 emsg(gettext(&raw const e_nopresub as *const ::core::ffi::c_char));
                 return 0 as ::core::ffi::c_int;
             }
             pat = ::core::ptr::null_mut::<::core::ffi::c_char>();
             patlen = 0 as size_t;
-            sub = xstrdup((*old_sub.ptr()).sub);
+            sub = xstrdup(old_sub.get().sub);
             endcolumn = (*curwin.get()).w_curswant == MAXCOL as ::core::ffi::c_int;
         }
         if !sub.is_null()
@@ -169,7 +176,7 @@ pub(crate) unsafe extern "C" fn do_sub(
             xfree(sub as *mut ::core::ffi::c_void);
             return 0 as ::core::ffi::c_int;
         }
-        cmd = sub_parse_flags(cmd, subflags.ptr(), &raw mut which_pat);
+        cmd = subflags.with_mut(|flags| sub_parse_flags(cmd, flags, &mut which_pat));
         let mut save_do_all: bool = (*subflags.ptr()).do_all;
         let mut save_do_ask: bool = (*subflags.ptr()).do_ask;
         cmd = skipwhite(cmd);
@@ -719,8 +726,8 @@ pub(crate) unsafe extern "C" fn do_sub(
                                             as ::core::ffi::c_int
                                             - copycol as ::core::ffi::c_int;
                                     new_end = sub_grow_buf(
-                                        &raw mut new_start,
-                                        &raw mut new_start_len,
+                                        &mut new_start,
+                                        &mut new_start_len,
                                         strlen(p1) as ::core::ffi::c_int
                                             - regmatch.endpos[0 as ::core::ffi::c_int as usize].col
                                                 as ::core::ffi::c_int
@@ -1032,99 +1039,13 @@ pub(crate) unsafe extern "C" fn do_sub(
                                 lnum -= regmatch.startpos[0 as ::core::ffi::c_int as usize].lnum;
                             }
                             if cmdpreview_ns > 0 as ::core::ffi::c_int {
-                                let mut match_lines: linenr_T = current_match.end.lnum
-                                    - current_match.start.lnum
-                                    + 1 as linenr_T;
-                                if preview_lines.subresults.size > 0 as size_t {
-                                    let mut last: linenr_T = (*preview_lines.subresults.items.add(
-                                        preview_lines
-                                            .subresults
-                                            .size
-                                            .wrapping_sub(0 as size_t)
-                                            .wrapping_sub(1 as size_t),
-                                    ))
-                                    .end
-                                    .lnum;
-                                    if last == current_match.start.lnum {
-                                        preview_lines.lines_needed = (preview_lines.lines_needed
-                                            as ::core::ffi::c_int
-                                            + (match_lines - 1 as linenr_T) as ::core::ffi::c_int)
-                                            as linenr_T;
-                                    } else {
-                                        preview_lines.lines_needed += match_lines;
-                                    }
-                                } else {
-                                    preview_lines.lines_needed += match_lines;
-                                }
-                                if preview_lines.subresults.size
-                                    == preview_lines.subresults.capacity
-                                {
-                                    preview_lines.subresults.capacity =
-                                        if preview_lines.subresults.capacity != 0 {
-                                            preview_lines.subresults.capacity
-                                                << 1 as ::core::ffi::c_int
-                                        } else {
-                                            8 as size_t
-                                        };
-                                    preview_lines.subresults.items = xrealloc(
-                                        preview_lines.subresults.items as *mut ::core::ffi::c_void,
-                                        ::core::mem::size_of::<SubResult>()
-                                            .wrapping_mul(preview_lines.subresults.capacity),
-                                    )
-                                        as *mut SubResult;
-                                } else {
-                                };
-                                let c2rust_fresh10 = preview_lines.subresults.size;
-                                preview_lines.subresults.size =
-                                    preview_lines.subresults.size.wrapping_add(1);
-                                *preview_lines.subresults.items.add(c2rust_fresh10) = current_match;
+                                push_preview(&mut preview_lines, current_match);
                             }
                             break;
                         }
                     }
                     if cmdpreview_ns > 0 as ::core::ffi::c_int {
-                        let mut match_lines_0: linenr_T =
-                            current_match.end.lnum - current_match.start.lnum + 1 as linenr_T;
-                        if preview_lines.subresults.size > 0 as size_t {
-                            let mut last_0: linenr_T = (*preview_lines.subresults.items.add(
-                                preview_lines
-                                    .subresults
-                                    .size
-                                    .wrapping_sub(0 as size_t)
-                                    .wrapping_sub(1 as size_t),
-                            ))
-                            .end
-                            .lnum;
-                            if last_0 == current_match.start.lnum {
-                                preview_lines.lines_needed = (preview_lines.lines_needed
-                                    as ::core::ffi::c_int
-                                    + (match_lines_0 - 1 as linenr_T) as ::core::ffi::c_int)
-                                    as linenr_T;
-                            } else {
-                                preview_lines.lines_needed += match_lines_0;
-                            }
-                        } else {
-                            preview_lines.lines_needed += match_lines_0;
-                        }
-                        if preview_lines.subresults.size == preview_lines.subresults.capacity {
-                            preview_lines.subresults.capacity =
-                                if preview_lines.subresults.capacity != 0 {
-                                    preview_lines.subresults.capacity << 1 as ::core::ffi::c_int
-                                } else {
-                                    8 as size_t
-                                };
-                            preview_lines.subresults.items = xrealloc(
-                                preview_lines.subresults.items as *mut ::core::ffi::c_void,
-                                ::core::mem::size_of::<SubResult>()
-                                    .wrapping_mul(preview_lines.subresults.capacity),
-                            )
-                                as *mut SubResult;
-                        } else {
-                        };
-                        let c2rust_fresh11 = preview_lines.subresults.size;
-                        preview_lines.subresults.size =
-                            preview_lines.subresults.size.wrapping_add(1);
-                        *preview_lines.subresults.items.add(c2rust_fresh11) = current_match;
+                        push_preview(&mut preview_lines, current_match);
                     }
                     line_breakcheck();
                 }
@@ -1254,17 +1175,13 @@ pub(crate) unsafe extern "C" fn do_sub(
                 retv = show_sub(
                     eap,
                     old_cursor,
-                    &raw mut preview_lines,
+                    &preview_lines,
                     pre_hl_id.get(),
                     cmdpreview_ns,
                     cmdpreview_bufnr,
                 );
             }
         }
-        xfree(preview_lines.subresults.items as *mut ::core::ffi::c_void);
-        preview_lines.subresults.capacity = 0 as size_t;
-        preview_lines.subresults.size = preview_lines.subresults.capacity;
-        preview_lines.subresults.items = ::core::ptr::null_mut::<SubResult>();
         return retv;
     }
 }
