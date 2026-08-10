@@ -23,7 +23,9 @@ pub(crate) static old_sub: GlobalCell<SubReplacementString> =
         additional_data: ::core::ptr::null_mut::<AdditionalData>(),
     });
 
-pub(crate) static global_need_beginline: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+/// Set by `do_sub` when a `:global` is running, so that `global_exe` puts the
+/// cursor on the first non-blank once the whole command is done.
+pub(crate) static global_need_beginline: GlobalCell<bool> = GlobalCell::new(false);
 
 pub unsafe extern "C" fn sub_get_replacement(ret_sub: *mut SubReplacementString) {
     unsafe {

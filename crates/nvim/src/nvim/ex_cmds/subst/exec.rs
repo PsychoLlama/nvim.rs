@@ -1192,7 +1192,7 @@ pub(crate) unsafe extern "C" fn do_sub(
                     msg(c"".as_ptr(), 0 as ::core::ffi::c_int);
                 }
             } else {
-                global_need_beginline.set(true_0);
+                global_need_beginline.set(true);
             }
             if (*subflags.ptr()).do_print {
                 print_line(
