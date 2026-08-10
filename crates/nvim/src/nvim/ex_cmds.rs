@@ -28,118 +28,88 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::api::private::helpers::cstr_as_string;
-use crate::src::nvim::arglist::check_arg_idx;
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::src::nvim::autocmd::{
-    EVENT_BUFENTER, EVENT_BUFLEAVE, EVENT_BUFWINENTER, apply_autocmds, apply_autocmds_retval,
-};
-use crate::src::nvim::buffer::{
-    buf_clear_file, buf_ensure_loaded, buf_freeall, buf_valid, buflist_altfpos, buflist_findfmark,
-    buflist_findnr, buflist_new, bufref_valid, close_buffer, do_autochdir, do_modelines, fileinfo,
-    get_winopts, handle_swap_exists, maketitle, open_buffer, otherfile, set_buflisted, set_bufref,
-    setaltfname,
-};
+use crate::src::nvim::autocmd::apply_autocmds;
+use crate::src::nvim::buffer::{buf_ensure_loaded, buflist_findnr};
 use crate::src::nvim::buffer_updates::buf_updates_send_changes;
 use crate::src::nvim::change::{appended_lines, changed_bytes, changed_lines, deleted_lines};
 use crate::src::nvim::charset::{getdigits_int, skiptowhite, skipwhite, vim_isIDc};
 use crate::src::nvim::cmdhist::add_to_history;
-use crate::src::nvim::cursor::{
-    check_cursor, check_cursor_col, check_cursor_lnum, coladvance, get_cursor_line_ptr,
-};
+use crate::src::nvim::cursor::{check_cursor, coladvance};
 use crate::src::nvim::decoration::bufhl_add_hl_pos_offset;
-use crate::src::nvim::diff::{diff_buf_add, diff_invalidate};
-use crate::src::nvim::digraph::keymap_init;
 use crate::src::nvim::drawscreen::{
-    UPD_NOT_VALID, UPD_SOME_VALID, number_width, redraw_curbuf_later, redraw_later,
-    show_cursor_info_later, update_screen,
+    UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
 };
 use crate::src::nvim::edit::beginline;
 use crate::src::nvim::eval::typval::{kCallbackNone, tv_list_len};
 use crate::src::nvim::eval::typval::{tv_get_string, tv_list_find_str};
-use crate::src::nvim::eval::vars::{get_vim_var_list, get_vim_var_str, set_vim_var_string};
-use crate::src::nvim::ex_cmds2::{check_changed, check_fname};
+use crate::src::nvim::eval::vars::get_vim_var_list;
 use crate::src::nvim::ex_docmd::{check_nextcmd, do_cmdline, do_exedit, ex_may_print};
-use crate::src::nvim::ex_eval::{aborting, should_abort};
+use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::ex_getln::{getcmdline_prompt, gotocmdline};
 use crate::src::nvim::extmark::extmark_splice;
-use crate::src::nvim::fileio::{buf_check_timestamp, set_file_options, set_forced_fenc};
-use crate::src::nvim::fold::{foldUpdateAll, hasAnyFolding};
+use crate::src::nvim::fold::hasAnyFolding;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::help::prepare_help_buffer;
 use crate::src::nvim::highlight_group::{HLF_R, syn_check_group};
 use crate::src::nvim::input::prompt_for_input;
 use crate::src::nvim::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::src::nvim::main::{
-    IObuff, KeyTyped, RedrawingDisabled, State, au_new_curbuf, cmdmod, cmdwin_buf,
-    cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf, curtab, curwin, e_backslash,
-    e_cannot_switch_to_a_closing_buffer, e_curdir, e_interr, e_invarg, e_invarg2, e_invcmd,
-    e_modifiable, e_nopresub, e_noprevre, e_patnotf2, e_sandbox, e_trailing_arg,
-    e_val_too_large_len, e_zerocount, ex_normal_busy, exiting, exmode_active, first_tabpage,
-    firstwin, g_do_tagpreview, global_busy, got_int, highlight_match, keep_help_flag, msg_buf,
-    msg_col, msg_didout, msg_listdo_overwrite, msg_scroll, msg_scrolled, msg_scrolled_ign,
-    need_wait_return, no_u_sync, p_awa, p_ch, p_cpo, p_cwh, p_gd, p_icm, p_lz, p_rdt, p_report,
-    p_shm, p_so, p_sol, p_ur, p_verbose, quit_more, sandbox, search_match_endcol,
-    search_match_lines, secure, skip_redraw, sub_nlines, sub_nsubs, swap_exists_action, textlock,
+    IObuff, KeyTyped, RedrawingDisabled, State, cmdmod, curbuf, curtab, curwin, e_backslash,
+    e_curdir, e_interr, e_invarg, e_invarg2, e_invcmd, e_modifiable, e_nopresub, e_noprevre,
+    e_patnotf2, e_sandbox, e_trailing_arg, e_val_too_large_len, e_zerocount, ex_normal_busy,
+    exmode_active, firstwin, g_do_tagpreview, global_busy, got_int, highlight_match, msg_buf,
+    msg_col, msg_didout, msg_scroll, msg_scrolled, need_wait_return, no_u_sync, p_ch, p_cpo, p_cwh,
+    p_gd, p_icm, p_lz, p_rdt, p_report, p_shm, quit_more, sandbox, search_match_endcol,
+    search_match_lines, secure, sub_nlines, sub_nsubs, textlock,
 };
-use crate::src::nvim::mark::{mark_adjust, set_last_cursor, setpcmark};
+use crate::src::nvim::mark::{mark_adjust, setpcmark};
 use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memline::{
     ml_append, ml_append_buf, ml_clearmarked, ml_delete, ml_firstmarked, ml_get, ml_get_buf,
     ml_get_buf_len, ml_get_len, ml_replace, ml_replace_buf, ml_setmarked,
 };
-use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmallocz, xrealloc, xstrdup};
+use crate::src::nvim::memory::{xcalloc, xfree, xmallocz, xrealloc, xstrdup};
 use crate::src::nvim::message::{
-    emsg, message_filtered, messaging, msg, msg_check_for_delay, msg_clr_eos, msg_outnum,
-    msg_outtrans, msg_putchar, msg_puts, msg_start, msg_starthere, msgmore, set_keep_msg,
+    emsg, message_filtered, messaging, msg, msg_clr_eos, msg_outnum, msg_outtrans, msg_putchar,
+    msg_puts, msg_start, msg_starthere, msgmore, set_keep_msg,
 };
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::r#move::{
     changed_line_abv_curs, changed_window_setting, do_check_cursorbind, scrolldown_clamp,
     scrollup_clamp, update_topline, validate_cursor,
 };
-use crate::src::nvim::normal::reset_VIsual;
 use crate::src::nvim::ops::do_join;
-use crate::src::nvim::option::{buf_copy_options, magic_isset, set_option_direct, shortmess};
+use crate::src::nvim::option::{magic_isset, set_option_direct};
 use crate::src::nvim::options::{kOptFoldcolumn, kOptInccommand, kOptShortmess};
 use crate::src::nvim::os::env::expand_env_save;
 use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
-    __ctype_b_loc, atol, gettext, log10, memmove, memset, ngettext, snprintf, strcat, strcmp,
-    strcpy, strlen, time,
+    __ctype_b_loc, gettext, log10, memmove, memset, ngettext, snprintf, strcat, strcmp, strcpy,
+    strlen,
 };
 use crate::src::nvim::os::time::os_time;
-use crate::src::nvim::path::fix_fname;
-use crate::src::nvim::plines::{getvcol, plines_m_win_fill};
-use crate::src::nvim::pos::{MAXCOL, MAXLNUM, equalpos};
+use crate::src::nvim::plines::getvcol;
+use crate::src::nvim::pos::{MAXCOL, MAXLNUM};
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit, profile_zero};
 use crate::src::nvim::regexp::{
     RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST, vim_regexec_multi, vim_regfree,
 };
 use crate::src::nvim::regexp::{regtilde, skip_regexp, skip_regexp_ex, vim_regsub_multi};
 use crate::src::nvim::search::{SEARCH_HIS, get_search_pat, save_re_pat, search_regcomp};
-use crate::src::nvim::spell::parse_spelllang;
-use crate::src::nvim::strings::{
-    concat_str, vim_snprintf_add, vim_snprintf_safelen, vim_strchr, xstrnsave,
-};
-use crate::src::nvim::terminal::{terminal_check_size, terminal_running};
+use crate::src::nvim::strings::{concat_str, vim_snprintf_add, vim_strchr, xstrnsave};
 use crate::src::nvim::types::event_T;
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     AdditionalData, CMD_append, CMD_center, CMD_change, CMD_edit, CMD_left, CMD_right, CMD_tilde,
-    CMOD_BROWSE, CMOD_KEEPALT, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, Callback,
-    Callback_data as C2Rust_Unnamed_5, ExtmarkOp, OptInt, OptVal, OptValData, OptValType, String_0,
-    SubReplacementString, Timestamp, UndoObjectType, VV_OLDFILES, VV_SWAPCOMMAND, bcount_t,
-    bfa_values, bln_values, buf_T, bufref_T, colnr_T, dobuf_action_values, exarg_T, fmark_T,
-    getf_retvalues, handle_T, int64_t, linenr_T, list_T, listitem_T, lpos_T, magic_T, pos_T,
-    proftime_T, ptrdiff_t, regmmatch_T, regprog_T, size_t, tabpage_T, time_t, uint8_t, win_T,
+    CMOD_BROWSE, CMOD_KEEPPATTERNS, CMOD_LOCKMARKS, Callback, Callback_data as C2Rust_Unnamed_5,
+    ExtmarkOp, OptInt, OptVal, OptValData, OptValType, String_0, SubReplacementString, Timestamp,
+    UndoObjectType, VV_OLDFILES, bcount_t, bfa_values, bln_values, buf_T, colnr_T,
+    dobuf_action_values, exarg_T, getf_retvalues, handle_T, int64_t, linenr_T, list_T, listitem_T,
+    lpos_T, magic_T, pos_T, proftime_T, regmmatch_T, regprog_T, size_t, uint8_t, win_T,
 };
 use crate::src::nvim::ui::ui_has;
-use crate::src::nvim::undo::{
-    u_inssub, u_save_cursor, u_savecommon, u_savedel, u_savesub, u_sync, u_unchanged,
-};
-use crate::src::nvim::window::{
-    check_lnums, curwin_init, win_enter, win_split, win_valid, win_valid_any_tab,
-};
+use crate::src::nvim::undo::{u_inssub, u_save_cursor, u_savedel, u_savesub};
+use crate::src::nvim::window::{win_enter, win_split};
 use crate::{semsg_c, smsg_c};
 use core::ptr;
 

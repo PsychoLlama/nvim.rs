@@ -1,6 +1,6 @@
 {
-  "internal_exports": 26,
-  "files_without_forbid_unsafe": 962,
+  "internal_exports": 25,
+  "files_without_forbid_unsafe": 963,
   "files_without_deny_unsafe_op": 121,
   "files": {
     "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe_lines": 54},
@@ -325,7 +325,8 @@
     "crates/nvim/src/nvim/event/wstream.rs": {"unsafe_lines": 94},
     "crates/nvim/src/nvim/ex_cmds.rs": {"cell_ptr": 2, "unsafe_lines": 155},
     "crates/nvim/src/nvim/ex_cmds/append.rs": {"unsafe_lines": 136},
-    "crates/nvim/src/nvim/ex_cmds/ecmd.rs": {"cell_ptr": 11, "no_mangle": 1, "unsafe_lines": 630},
+    "crates/nvim/src/nvim/ex_cmds/ecmd.rs": {"cell_ptr": 1, "unsafe_lines": 279},
+    "crates/nvim/src/nvim/ex_cmds/ecmd/switch.rs": {"unsafe_lines": 154},
     "crates/nvim/src/nvim/ex_cmds/filter.rs": {"cell_ptr": 1, "unsafe_lines": 260},
     "crates/nvim/src/nvim/ex_cmds/global.rs": {"unsafe_lines": 211},
     "crates/nvim/src/nvim/ex_cmds/lines.rs": {"cell_ptr": 1, "unsafe_lines": 125},

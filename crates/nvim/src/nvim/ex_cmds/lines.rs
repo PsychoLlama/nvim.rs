@@ -297,7 +297,7 @@ pub(super) unsafe fn set_op_range(start: linenr_T, end: linenr_T) {
 
 /// Every window of every tab page, in `FOR_ALL_TAB_WINDOWS` order: the current
 /// tab page keeps its window list in `firstwin` rather than in its own struct.
-fn tab_windows() -> impl Iterator<Item = *mut win_T> {
+pub(super) fn tab_windows() -> impl Iterator<Item = *mut win_T> {
     let mut tp: *mut tabpage_T = first_tabpage.get();
     let mut wp: *mut win_T = ptr::null_mut();
     core::iter::from_fn(move || {
