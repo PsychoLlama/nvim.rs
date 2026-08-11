@@ -348,155 +348,148 @@ static HIGHLIGHT_INIT_DARK: [&CStr; 70] = [
 ];
 
 /// The `Nvim*` groups the command-line highlighter uses.
-///
-/// Still a NUL-terminated array of raw pointers, and still exported: it is
-/// the only one of the four with a reader outside this crate —
-/// `test/unit/viml/expressions/parser_spec.lua` walks it over the FFI to
-/// learn which groups the parser may name.
-#[unsafe(no_mangle)]
-pub static highlight_init_cmdline: GlobalCell<[*const c_char; 141]> = GlobalCell::new([
-    c"NvimInternalError ctermfg=Red ctermbg=Red guifg=Red guibg=Red".as_ptr(),
-    c"default link NvimAssignment Operator".as_ptr(),
-    c"default link NvimPlainAssignment NvimAssignment".as_ptr(),
-    c"default link NvimAugmentedAssignment NvimAssignment".as_ptr(),
-    c"default link NvimAssignmentWithAddition NvimAugmentedAssignment".as_ptr(),
-    c"default link NvimAssignmentWithSubtraction NvimAugmentedAssignment".as_ptr(),
-    c"default link NvimAssignmentWithConcatenation NvimAugmentedAssignment".as_ptr(),
-    c"default link NvimOperator Operator".as_ptr(),
-    c"default link NvimUnaryOperator NvimOperator".as_ptr(),
-    c"default link NvimUnaryPlus NvimUnaryOperator".as_ptr(),
-    c"default link NvimUnaryMinus NvimUnaryOperator".as_ptr(),
-    c"default link NvimNot NvimUnaryOperator".as_ptr(),
-    c"default link NvimBinaryOperator NvimOperator".as_ptr(),
-    c"default link NvimComparison NvimBinaryOperator".as_ptr(),
-    c"default link NvimComparisonModifier NvimComparison".as_ptr(),
-    c"default link NvimBinaryPlus NvimBinaryOperator".as_ptr(),
-    c"default link NvimBinaryMinus NvimBinaryOperator".as_ptr(),
-    c"default link NvimConcat NvimBinaryOperator".as_ptr(),
-    c"default link NvimConcatOrSubscript NvimConcat".as_ptr(),
-    c"default link NvimOr NvimBinaryOperator".as_ptr(),
-    c"default link NvimAnd NvimBinaryOperator".as_ptr(),
-    c"default link NvimMultiplication NvimBinaryOperator".as_ptr(),
-    c"default link NvimDivision NvimBinaryOperator".as_ptr(),
-    c"default link NvimMod NvimBinaryOperator".as_ptr(),
-    c"default link NvimTernary NvimOperator".as_ptr(),
-    c"default link NvimTernaryColon NvimTernary".as_ptr(),
-    c"default link NvimParenthesis Delimiter".as_ptr(),
-    c"default link NvimLambda NvimParenthesis".as_ptr(),
-    c"default link NvimNestingParenthesis NvimParenthesis".as_ptr(),
-    c"default link NvimCallingParenthesis NvimParenthesis".as_ptr(),
-    c"default link NvimSubscript NvimParenthesis".as_ptr(),
-    c"default link NvimSubscriptBracket NvimSubscript".as_ptr(),
-    c"default link NvimSubscriptColon NvimSubscript".as_ptr(),
-    c"default link NvimCurly NvimSubscript".as_ptr(),
-    c"default link NvimContainer NvimParenthesis".as_ptr(),
-    c"default link NvimDict NvimContainer".as_ptr(),
-    c"default link NvimList NvimContainer".as_ptr(),
-    c"default link NvimIdentifier Identifier".as_ptr(),
-    c"default link NvimIdentifierScope NvimIdentifier".as_ptr(),
-    c"default link NvimIdentifierScopeDelimiter NvimIdentifier".as_ptr(),
-    c"default link NvimIdentifierName NvimIdentifier".as_ptr(),
-    c"default link NvimIdentifierKey NvimIdentifier".as_ptr(),
-    c"default link NvimColon Delimiter".as_ptr(),
-    c"default link NvimComma Delimiter".as_ptr(),
-    c"default link NvimArrow Delimiter".as_ptr(),
-    c"default link NvimRegister SpecialChar".as_ptr(),
-    c"default link NvimNumber Number".as_ptr(),
-    c"default link NvimFloat NvimNumber".as_ptr(),
-    c"default link NvimNumberPrefix Type".as_ptr(),
-    c"default link NvimOptionSigil Type".as_ptr(),
-    c"default link NvimOptionName NvimIdentifier".as_ptr(),
-    c"default link NvimOptionScope NvimIdentifierScope".as_ptr(),
-    c"default link NvimOptionScopeDelimiter NvimIdentifierScopeDelimiter".as_ptr(),
-    c"default link NvimEnvironmentSigil NvimOptionSigil".as_ptr(),
-    c"default link NvimEnvironmentName NvimIdentifier".as_ptr(),
-    c"default link NvimString String".as_ptr(),
-    c"default link NvimStringBody NvimString".as_ptr(),
-    c"default link NvimStringQuote NvimString".as_ptr(),
-    c"default link NvimStringSpecial SpecialChar".as_ptr(),
-    c"default link NvimSingleQuote NvimStringQuote".as_ptr(),
-    c"default link NvimSingleQuotedBody NvimStringBody".as_ptr(),
-    c"default link NvimSingleQuotedQuote NvimStringSpecial".as_ptr(),
-    c"default link NvimDoubleQuote NvimStringQuote".as_ptr(),
-    c"default link NvimDoubleQuotedBody NvimStringBody".as_ptr(),
-    c"default link NvimDoubleQuotedEscape NvimStringSpecial".as_ptr(),
-    c"default link NvimFigureBrace NvimInternalError".as_ptr(),
-    c"default link NvimSingleQuotedUnknownEscape NvimInternalError".as_ptr(),
-    c"default link NvimSpacing Normal".as_ptr(),
-    c"default link NvimInvalidSingleQuotedUnknownEscape NvimInternalError".as_ptr(),
-    c"default link NvimInvalid Error".as_ptr(),
-    c"default link NvimInvalidAssignment NvimInvalid".as_ptr(),
-    c"default link NvimInvalidPlainAssignment NvimInvalidAssignment".as_ptr(),
-    c"default link NvimInvalidAugmentedAssignment NvimInvalidAssignment".as_ptr(),
-    c"default link NvimInvalidAssignmentWithAddition NvimInvalidAugmentedAssignment".as_ptr(),
-    c"default link NvimInvalidAssignmentWithSubtraction NvimInvalidAugmentedAssignment".as_ptr(),
-    c"default link NvimInvalidAssignmentWithConcatenation NvimInvalidAugmentedAssignment".as_ptr(),
-    c"default link NvimInvalidOperator NvimInvalid".as_ptr(),
-    c"default link NvimInvalidUnaryOperator NvimInvalidOperator".as_ptr(),
-    c"default link NvimInvalidUnaryPlus NvimInvalidUnaryOperator".as_ptr(),
-    c"default link NvimInvalidUnaryMinus NvimInvalidUnaryOperator".as_ptr(),
-    c"default link NvimInvalidNot NvimInvalidUnaryOperator".as_ptr(),
-    c"default link NvimInvalidBinaryOperator NvimInvalidOperator".as_ptr(),
-    c"default link NvimInvalidComparison NvimInvalidBinaryOperator".as_ptr(),
-    c"default link NvimInvalidComparisonModifier NvimInvalidComparison".as_ptr(),
-    c"default link NvimInvalidBinaryPlus NvimInvalidBinaryOperator".as_ptr(),
-    c"default link NvimInvalidBinaryMinus NvimInvalidBinaryOperator".as_ptr(),
-    c"default link NvimInvalidConcat NvimInvalidBinaryOperator".as_ptr(),
-    c"default link NvimInvalidConcatOrSubscript NvimInvalidConcat".as_ptr(),
-    c"default link NvimInvalidOr NvimInvalidBinaryOperator".as_ptr(),
-    c"default link NvimInvalidAnd NvimInvalidBinaryOperator".as_ptr(),
-    c"default link NvimInvalidMultiplication NvimInvalidBinaryOperator".as_ptr(),
-    c"default link NvimInvalidDivision NvimInvalidBinaryOperator".as_ptr(),
-    c"default link NvimInvalidMod NvimInvalidBinaryOperator".as_ptr(),
-    c"default link NvimInvalidTernary NvimInvalidOperator".as_ptr(),
-    c"default link NvimInvalidTernaryColon NvimInvalidTernary".as_ptr(),
-    c"default link NvimInvalidDelimiter NvimInvalid".as_ptr(),
-    c"default link NvimInvalidParenthesis NvimInvalidDelimiter".as_ptr(),
-    c"default link NvimInvalidLambda NvimInvalidParenthesis".as_ptr(),
-    c"default link NvimInvalidNestingParenthesis NvimInvalidParenthesis".as_ptr(),
-    c"default link NvimInvalidCallingParenthesis NvimInvalidParenthesis".as_ptr(),
-    c"default link NvimInvalidSubscript NvimInvalidParenthesis".as_ptr(),
-    c"default link NvimInvalidSubscriptBracket NvimInvalidSubscript".as_ptr(),
-    c"default link NvimInvalidSubscriptColon NvimInvalidSubscript".as_ptr(),
-    c"default link NvimInvalidCurly NvimInvalidSubscript".as_ptr(),
-    c"default link NvimInvalidContainer NvimInvalidParenthesis".as_ptr(),
-    c"default link NvimInvalidDict NvimInvalidContainer".as_ptr(),
-    c"default link NvimInvalidList NvimInvalidContainer".as_ptr(),
-    c"default link NvimInvalidValue NvimInvalid".as_ptr(),
-    c"default link NvimInvalidIdentifier NvimInvalidValue".as_ptr(),
-    c"default link NvimInvalidIdentifierScope NvimInvalidIdentifier".as_ptr(),
-    c"default link NvimInvalidIdentifierScopeDelimiter NvimInvalidIdentifier".as_ptr(),
-    c"default link NvimInvalidIdentifierName NvimInvalidIdentifier".as_ptr(),
-    c"default link NvimInvalidIdentifierKey NvimInvalidIdentifier".as_ptr(),
-    c"default link NvimInvalidColon NvimInvalidDelimiter".as_ptr(),
-    c"default link NvimInvalidComma NvimInvalidDelimiter".as_ptr(),
-    c"default link NvimInvalidArrow NvimInvalidDelimiter".as_ptr(),
-    c"default link NvimInvalidRegister NvimInvalidValue".as_ptr(),
-    c"default link NvimInvalidNumber NvimInvalidValue".as_ptr(),
-    c"default link NvimInvalidFloat NvimInvalidNumber".as_ptr(),
-    c"default link NvimInvalidNumberPrefix NvimInvalidNumber".as_ptr(),
-    c"default link NvimInvalidOptionSigil NvimInvalidIdentifier".as_ptr(),
-    c"default link NvimInvalidOptionName NvimInvalidIdentifier".as_ptr(),
-    c"default link NvimInvalidOptionScope NvimInvalidIdentifierScope".as_ptr(),
-    c"default link NvimInvalidOptionScopeDelimiter NvimInvalidIdentifierScopeDelimiter".as_ptr(),
-    c"default link NvimInvalidEnvironmentSigil NvimInvalidOptionSigil".as_ptr(),
-    c"default link NvimInvalidEnvironmentName NvimInvalidIdentifier".as_ptr(),
-    c"default link NvimInvalidString NvimInvalidValue".as_ptr(),
-    c"default link NvimInvalidStringBody NvimStringBody".as_ptr(),
-    c"default link NvimInvalidStringQuote NvimInvalidString".as_ptr(),
-    c"default link NvimInvalidStringSpecial NvimStringSpecial".as_ptr(),
-    c"default link NvimInvalidSingleQuote NvimInvalidStringQuote".as_ptr(),
-    c"default link NvimInvalidSingleQuotedBody NvimInvalidStringBody".as_ptr(),
-    c"default link NvimInvalidSingleQuotedQuote NvimInvalidStringSpecial".as_ptr(),
-    c"default link NvimInvalidDoubleQuote NvimInvalidStringQuote".as_ptr(),
-    c"default link NvimInvalidDoubleQuotedBody NvimInvalidStringBody".as_ptr(),
-    c"default link NvimInvalidDoubleQuotedEscape NvimInvalidStringSpecial".as_ptr(),
-    c"default link NvimInvalidDoubleQuotedUnknownEscape NvimInvalidValue".as_ptr(),
-    c"default link NvimInvalidFigureBrace NvimInvalidDelimiter".as_ptr(),
-    c"default link NvimInvalidSpacing ErrorMsg".as_ptr(),
-    c"default link NvimDoubleQuotedUnknownEscape NvimInvalidValue".as_ptr(),
-    ::core::ptr::null(),
-]);
+static HIGHLIGHT_INIT_CMDLINE: [&CStr; 140] = [
+    c"NvimInternalError ctermfg=Red ctermbg=Red guifg=Red guibg=Red",
+    c"default link NvimAssignment Operator",
+    c"default link NvimPlainAssignment NvimAssignment",
+    c"default link NvimAugmentedAssignment NvimAssignment",
+    c"default link NvimAssignmentWithAddition NvimAugmentedAssignment",
+    c"default link NvimAssignmentWithSubtraction NvimAugmentedAssignment",
+    c"default link NvimAssignmentWithConcatenation NvimAugmentedAssignment",
+    c"default link NvimOperator Operator",
+    c"default link NvimUnaryOperator NvimOperator",
+    c"default link NvimUnaryPlus NvimUnaryOperator",
+    c"default link NvimUnaryMinus NvimUnaryOperator",
+    c"default link NvimNot NvimUnaryOperator",
+    c"default link NvimBinaryOperator NvimOperator",
+    c"default link NvimComparison NvimBinaryOperator",
+    c"default link NvimComparisonModifier NvimComparison",
+    c"default link NvimBinaryPlus NvimBinaryOperator",
+    c"default link NvimBinaryMinus NvimBinaryOperator",
+    c"default link NvimConcat NvimBinaryOperator",
+    c"default link NvimConcatOrSubscript NvimConcat",
+    c"default link NvimOr NvimBinaryOperator",
+    c"default link NvimAnd NvimBinaryOperator",
+    c"default link NvimMultiplication NvimBinaryOperator",
+    c"default link NvimDivision NvimBinaryOperator",
+    c"default link NvimMod NvimBinaryOperator",
+    c"default link NvimTernary NvimOperator",
+    c"default link NvimTernaryColon NvimTernary",
+    c"default link NvimParenthesis Delimiter",
+    c"default link NvimLambda NvimParenthesis",
+    c"default link NvimNestingParenthesis NvimParenthesis",
+    c"default link NvimCallingParenthesis NvimParenthesis",
+    c"default link NvimSubscript NvimParenthesis",
+    c"default link NvimSubscriptBracket NvimSubscript",
+    c"default link NvimSubscriptColon NvimSubscript",
+    c"default link NvimCurly NvimSubscript",
+    c"default link NvimContainer NvimParenthesis",
+    c"default link NvimDict NvimContainer",
+    c"default link NvimList NvimContainer",
+    c"default link NvimIdentifier Identifier",
+    c"default link NvimIdentifierScope NvimIdentifier",
+    c"default link NvimIdentifierScopeDelimiter NvimIdentifier",
+    c"default link NvimIdentifierName NvimIdentifier",
+    c"default link NvimIdentifierKey NvimIdentifier",
+    c"default link NvimColon Delimiter",
+    c"default link NvimComma Delimiter",
+    c"default link NvimArrow Delimiter",
+    c"default link NvimRegister SpecialChar",
+    c"default link NvimNumber Number",
+    c"default link NvimFloat NvimNumber",
+    c"default link NvimNumberPrefix Type",
+    c"default link NvimOptionSigil Type",
+    c"default link NvimOptionName NvimIdentifier",
+    c"default link NvimOptionScope NvimIdentifierScope",
+    c"default link NvimOptionScopeDelimiter NvimIdentifierScopeDelimiter",
+    c"default link NvimEnvironmentSigil NvimOptionSigil",
+    c"default link NvimEnvironmentName NvimIdentifier",
+    c"default link NvimString String",
+    c"default link NvimStringBody NvimString",
+    c"default link NvimStringQuote NvimString",
+    c"default link NvimStringSpecial SpecialChar",
+    c"default link NvimSingleQuote NvimStringQuote",
+    c"default link NvimSingleQuotedBody NvimStringBody",
+    c"default link NvimSingleQuotedQuote NvimStringSpecial",
+    c"default link NvimDoubleQuote NvimStringQuote",
+    c"default link NvimDoubleQuotedBody NvimStringBody",
+    c"default link NvimDoubleQuotedEscape NvimStringSpecial",
+    c"default link NvimFigureBrace NvimInternalError",
+    c"default link NvimSingleQuotedUnknownEscape NvimInternalError",
+    c"default link NvimSpacing Normal",
+    c"default link NvimInvalidSingleQuotedUnknownEscape NvimInternalError",
+    c"default link NvimInvalid Error",
+    c"default link NvimInvalidAssignment NvimInvalid",
+    c"default link NvimInvalidPlainAssignment NvimInvalidAssignment",
+    c"default link NvimInvalidAugmentedAssignment NvimInvalidAssignment",
+    c"default link NvimInvalidAssignmentWithAddition NvimInvalidAugmentedAssignment",
+    c"default link NvimInvalidAssignmentWithSubtraction NvimInvalidAugmentedAssignment",
+    c"default link NvimInvalidAssignmentWithConcatenation NvimInvalidAugmentedAssignment",
+    c"default link NvimInvalidOperator NvimInvalid",
+    c"default link NvimInvalidUnaryOperator NvimInvalidOperator",
+    c"default link NvimInvalidUnaryPlus NvimInvalidUnaryOperator",
+    c"default link NvimInvalidUnaryMinus NvimInvalidUnaryOperator",
+    c"default link NvimInvalidNot NvimInvalidUnaryOperator",
+    c"default link NvimInvalidBinaryOperator NvimInvalidOperator",
+    c"default link NvimInvalidComparison NvimInvalidBinaryOperator",
+    c"default link NvimInvalidComparisonModifier NvimInvalidComparison",
+    c"default link NvimInvalidBinaryPlus NvimInvalidBinaryOperator",
+    c"default link NvimInvalidBinaryMinus NvimInvalidBinaryOperator",
+    c"default link NvimInvalidConcat NvimInvalidBinaryOperator",
+    c"default link NvimInvalidConcatOrSubscript NvimInvalidConcat",
+    c"default link NvimInvalidOr NvimInvalidBinaryOperator",
+    c"default link NvimInvalidAnd NvimInvalidBinaryOperator",
+    c"default link NvimInvalidMultiplication NvimInvalidBinaryOperator",
+    c"default link NvimInvalidDivision NvimInvalidBinaryOperator",
+    c"default link NvimInvalidMod NvimInvalidBinaryOperator",
+    c"default link NvimInvalidTernary NvimInvalidOperator",
+    c"default link NvimInvalidTernaryColon NvimInvalidTernary",
+    c"default link NvimInvalidDelimiter NvimInvalid",
+    c"default link NvimInvalidParenthesis NvimInvalidDelimiter",
+    c"default link NvimInvalidLambda NvimInvalidParenthesis",
+    c"default link NvimInvalidNestingParenthesis NvimInvalidParenthesis",
+    c"default link NvimInvalidCallingParenthesis NvimInvalidParenthesis",
+    c"default link NvimInvalidSubscript NvimInvalidParenthesis",
+    c"default link NvimInvalidSubscriptBracket NvimInvalidSubscript",
+    c"default link NvimInvalidSubscriptColon NvimInvalidSubscript",
+    c"default link NvimInvalidCurly NvimInvalidSubscript",
+    c"default link NvimInvalidContainer NvimInvalidParenthesis",
+    c"default link NvimInvalidDict NvimInvalidContainer",
+    c"default link NvimInvalidList NvimInvalidContainer",
+    c"default link NvimInvalidValue NvimInvalid",
+    c"default link NvimInvalidIdentifier NvimInvalidValue",
+    c"default link NvimInvalidIdentifierScope NvimInvalidIdentifier",
+    c"default link NvimInvalidIdentifierScopeDelimiter NvimInvalidIdentifier",
+    c"default link NvimInvalidIdentifierName NvimInvalidIdentifier",
+    c"default link NvimInvalidIdentifierKey NvimInvalidIdentifier",
+    c"default link NvimInvalidColon NvimInvalidDelimiter",
+    c"default link NvimInvalidComma NvimInvalidDelimiter",
+    c"default link NvimInvalidArrow NvimInvalidDelimiter",
+    c"default link NvimInvalidRegister NvimInvalidValue",
+    c"default link NvimInvalidNumber NvimInvalidValue",
+    c"default link NvimInvalidFloat NvimInvalidNumber",
+    c"default link NvimInvalidNumberPrefix NvimInvalidNumber",
+    c"default link NvimInvalidOptionSigil NvimInvalidIdentifier",
+    c"default link NvimInvalidOptionName NvimInvalidIdentifier",
+    c"default link NvimInvalidOptionScope NvimInvalidIdentifierScope",
+    c"default link NvimInvalidOptionScopeDelimiter NvimInvalidIdentifierScopeDelimiter",
+    c"default link NvimInvalidEnvironmentSigil NvimInvalidOptionSigil",
+    c"default link NvimInvalidEnvironmentName NvimInvalidIdentifier",
+    c"default link NvimInvalidString NvimInvalidValue",
+    c"default link NvimInvalidStringBody NvimStringBody",
+    c"default link NvimInvalidStringQuote NvimInvalidString",
+    c"default link NvimInvalidStringSpecial NvimStringSpecial",
+    c"default link NvimInvalidSingleQuote NvimInvalidStringQuote",
+    c"default link NvimInvalidSingleQuotedBody NvimInvalidStringBody",
+    c"default link NvimInvalidSingleQuotedQuote NvimInvalidStringSpecial",
+    c"default link NvimInvalidDoubleQuote NvimInvalidStringQuote",
+    c"default link NvimInvalidDoubleQuotedBody NvimInvalidStringBody",
+    c"default link NvimInvalidDoubleQuotedEscape NvimInvalidStringSpecial",
+    c"default link NvimInvalidDoubleQuotedUnknownEscape NvimInvalidValue",
+    c"default link NvimInvalidFigureBrace NvimInvalidDelimiter",
+    c"default link NvimInvalidSpacing ErrorMsg",
+    c"default link NvimDoubleQuotedUnknownEscape NvimInvalidValue",
+];
 
 /// Defines the `Nvim*` command-line groups. `reset`/`init` mean what they do
 /// for [`do_highlight`].
@@ -504,12 +497,9 @@ pub static highlight_init_cmdline: GlobalCell<[*const c_char; 141]> = GlobalCell
 /// # Safety
 /// Runs `:highlight` commands, which redraw; main thread only.
 pub unsafe fn syn_init_cmdline_highlight(reset: bool, init: bool) {
-    // SAFETY: the table is NUL-terminated and its strings are static.
-    unsafe {
-        let table = *highlight_init_cmdline.ptr();
-        for line in table.iter().take_while(|p| !p.is_null()) {
-            do_highlight(*line, reset, init);
-        }
+    for line in &HIGHLIGHT_INIT_CMDLINE {
+        // SAFETY: the caller's obligation; the strings are static.
+        unsafe { do_highlight(line.as_ptr(), reset, init) };
     }
 }
 
@@ -615,4 +605,78 @@ pub fn restore_cterm_colors() {
     normal_sp.set(-1 as RgbValue);
     cterm_normal_fg_color.set(0);
     cterm_normal_bg_color.set(0);
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::*;
+
+    /// The group a `:highlight` argument line defines: the new name of a
+    /// `default link`, or the first word of a definition.
+    fn defines(line: &CStr) -> &str {
+        let text = line.to_str().expect("highlight lines are ASCII");
+        text.strip_prefix("default link ")
+            .unwrap_or(text)
+            .split_whitespace()
+            .next()
+            .expect("a highlight line names a group")
+    }
+
+    /// `:highlight default link A B` **creates** `B` as a cleared group when
+    /// `B` does not exist yet, which would silently un-highlight everything
+    /// linked to it later. So the cmdline table has to be self-consistent in
+    /// the order it is applied: every line names a group nothing has defined
+    /// before, and every link points at one that is already there — either
+    /// from the `'background'` tables above or from an earlier line here.
+    ///
+    /// This is the check `test/unit/viml/expressions/parser_spec.lua` ran
+    /// over the FFI, and the reason `highlight_init_cmdline` was exported.
+    /// It compares against the real tables rather than the spec's
+    /// hand-maintained list of predefined groups.
+    #[test]
+    fn every_cmdline_group_is_defined_before_it_is_linked_to() {
+        let mut defined: HashSet<&str> = HIGHLIGHT_INIT_BOTH
+            .iter()
+            .chain(&HIGHLIGHT_INIT_LIGHT)
+            .chain(&HIGHLIGHT_INIT_DARK)
+            .map(|line| defines(line))
+            .collect();
+
+        for (i, line) in HIGHLIGHT_INIT_CMDLINE.iter().enumerate() {
+            let text = line.to_str().expect("highlight lines are ASCII");
+            let mut words = text.split(' ');
+            let group = match text.strip_prefix("default link ") {
+                Some(_) => {
+                    let (_, _, group, target) = (
+                        words.next(),
+                        words.next(),
+                        words.next().expect("a link names a group"),
+                        words.next().expect("a link names a target"),
+                    );
+                    assert_eq!(words.next(), None, "entry {i} ({text:?}) has extra words");
+                    assert!(
+                        defined.contains(target),
+                        "entry {i} links {group} to {target}, which nothing has \
+                         defined yet — the link would create it cleared"
+                    );
+                    group
+                }
+                None => {
+                    let group = words.next().expect("a definition names a group");
+                    assert!(
+                        words.next().is_some(),
+                        "entry {i} ({text:?}) defines {group} with no arguments"
+                    );
+                    group
+                }
+            };
+            assert!(
+                group.starts_with("Nvim"),
+                "entry {i} defines {group}, which is not one of the parser's own groups"
+            );
+            assert!(defined.insert(group), "entry {i} redefines {group}");
+        }
+    }
 }

@@ -820,7 +820,6 @@ impl ExprParser {
 }
 
 /// Parse one Vimscript expression.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn viml_pexpr_parse(pstate: *mut ParserState, flags: c_int) -> ExprAST {
     let mut ast = ExprAST {
         err: ExprASTError {

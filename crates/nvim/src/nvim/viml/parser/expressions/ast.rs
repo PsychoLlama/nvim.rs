@@ -148,7 +148,6 @@ pub(super) fn ast_has_error(ast: *const ExprAST) -> bool {
     unsafe { !(*ast).err.msg.is_null() }
 }
 
-#[unsafe(no_mangle)]
 pub static eltkn_cmp_type_tab: GlobalCell<[*const ::core::ffi::c_char; 5]> = GlobalCell::new([
     c"Equal".as_ptr(),
     c"Matches".as_ptr(),
@@ -156,14 +155,12 @@ pub static eltkn_cmp_type_tab: GlobalCell<[*const ::core::ffi::c_char; 5]> = Glo
     c"GreaterOrEqual".as_ptr(),
     c"Identical".as_ptr(),
 ]);
-#[unsafe(no_mangle)]
 pub static expr_asgn_type_tab: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
     c"Plain".as_ptr(),
     c"Add".as_ptr(),
     c"Subtract".as_ptr(),
     c"Concat".as_ptr(),
 ]);
-#[unsafe(no_mangle)]
 pub static ccs_tab: GlobalCell<[*const ::core::ffi::c_char; 64]> = GlobalCell::new([
     c"UseOption".as_ptr(),
     ::core::ptr::null::<::core::ffi::c_char>(),
@@ -230,7 +227,6 @@ pub static ccs_tab: GlobalCell<[*const ::core::ffi::c_char; 64]> = GlobalCell::n
     ::core::ptr::null::<::core::ffi::c_char>(),
     c"IgnoreCase".as_ptr(),
 ]);
-#[unsafe(no_mangle)]
 pub static east_node_type_tab: GlobalCell<[*const ::core::ffi::c_char; 39]> = GlobalCell::new([
     c"Missing".as_ptr(),
     c"OpMissing".as_ptr(),
@@ -372,7 +368,6 @@ fn assert_children_fit(node: *mut ExprASTNode) {
 ///
 /// # Safety
 /// `ast` must be an AST [`viml_pexpr_parse`] built and nobody else has freed.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
     let mut stack = TeardownStack::default();
     stack.push(&raw mut ast.root, ast.root);
