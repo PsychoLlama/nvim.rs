@@ -238,7 +238,7 @@
     "crates/nvim/src/nvim/eval/fs/find.rs": {"unsafe_lines": 25},
     "crates/nvim/src/nvim/eval/fs/name.rs": {"unsafe_lines": 39},
     "crates/nvim/src/nvim/eval/fs/path.rs": {"unsafe_lines": 20},
-    "crates/nvim/src/nvim/eval/fs/read.rs": {"unsafe_lines": 365},
+    "crates/nvim/src/nvim/eval/fs/read.rs": {"unsafe_lines": 37},
     "crates/nvim/src/nvim/eval/fs/write.rs": {"cell_ptr": 1, "unsafe_lines": 288},
     "crates/nvim/src/nvim/eval/funcs.rs": {"unsafe_lines": 13},
     "crates/nvim/src/nvim/eval/funcs/args.rs": {"unsafe_lines": 9},
