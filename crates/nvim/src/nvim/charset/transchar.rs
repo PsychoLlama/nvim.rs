@@ -35,6 +35,24 @@ impl Rendered {
         self.bytes[self.len] = byte;
         self.len += 1;
     }
+
+    /// A character that displays as itself.
+    pub fn literal(byte: u8) -> Rendered {
+        let mut out = Rendered::new();
+        out.push(byte);
+        out
+    }
+
+    /// This rendering behind the two-byte escape prefix.
+    pub fn behind(&self, prefix: &[u8; 2]) -> Rendered {
+        let mut out = Rendered::new();
+        out.push(prefix[0]);
+        out.push(prefix[1]);
+        for &byte in &self.bytes[..self.len] {
+            out.push(byte);
+        }
+        out
+    }
 }
 
 /// The low nibble of `n` as a lowercase hex digit.
@@ -123,6 +141,16 @@ mod tests {
         assert_eq!(text(control_form(0x09)), "^I");
         assert_eq!(text(control_form(0x1b)), "^[");
         assert_eq!(text(control_form(0x7f)), "^?");
+    }
+
+    #[test]
+    fn a_prefix_carries_the_rendering_along() {
+        assert_eq!(text(control_form(0x1b).behind(b"~@")), "~@^[");
+        assert_eq!(text(hex_form(0xff).behind(b"~@")), "~@<ff>");
+        assert_eq!(text(Rendered::literal(b'x')), "x");
+        // The longest prefixed form still terminates inside the buffer.
+        let longest = hex_form(0xff).behind(b"~@");
+        assert_eq!(longest.bytes[longest.len], 0);
     }
 
     #[test]
