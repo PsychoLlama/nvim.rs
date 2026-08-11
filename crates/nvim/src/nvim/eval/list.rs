@@ -59,7 +59,7 @@ use crate::src::nvim::main::{c_bytes, e_listdictblobarg};
 use crate::src::nvim::mbyte::{mb_strnicmp, utfc_ptr2len};
 use crate::src::nvim::memory::xmemdupz;
 use crate::src::nvim::message::emsg;
-use crate::src::nvim::os::libc::strlen;
+use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::strings::reverse_text;
 use crate::src::nvim::types::{
     EvalFuncData, VAR_BLOB, VAR_DICT, VAR_FIXED, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
@@ -776,26 +776,27 @@ pub(crate) fn check_fixed(flags: c_int, what: &CStr) -> bool {
     unsafe { var_check_fixed(flags, what.as_ptr(), TV_TRANSLATE) }
 }
 
-/// Report `msg`, one of `main.rs`'s shared error texts.
+/// Report `msg`, one of `main.rs`'s shared error texts, translated.
 #[inline(always)]
 pub(crate) fn err(msg: &[c_char]) {
     // SAFETY: every `e_*` text is NUL-terminated.
-    unsafe { emsg(msg.as_ptr() as *mut c_char) };
+    unsafe { emsg(gettext(msg.as_ptr())) };
 }
 
 /// Report `msg` -- a shared error text with one `%s` -- naming `what`.
 #[inline(always)]
 pub(crate) fn err_str(msg: &[c_char], what: &CStr) {
     // SAFETY: `msg` is a NUL-terminated single-`%s` format and `what` a
-    // NUL-terminated string, which is what vim's printf reads.
-    let _: bool = unsafe { semsg_c!(msg.as_ptr() as *mut c_char, what.as_ptr()) };
+    // NUL-terminated string, which is what vim's printf reads.  The format
+    // is translated, the name is not -- upstream's `semsg(_(msg), what)`.
+    let _: bool = unsafe { semsg_c!(gettext(msg.as_ptr()), what.as_ptr()) };
 }
 
 /// Report `msg` -- a shared error text with one `%ld` -- naming `n`.
 #[inline(always)]
 pub(crate) fn err_nr(msg: &[c_char], n: int64_t) {
     // SAFETY: as `err_str`, with a `%ld` and a 64-bit integer.
-    let _: bool = unsafe { semsg_c!(msg.as_ptr() as *mut c_char, n) };
+    let _: bool = unsafe { semsg_c!(gettext(msg.as_ptr()), n) };
 }
 
 /// `E1250`: what `filter()`/`map()`/`mapnew()`/`foreach()` say about an
