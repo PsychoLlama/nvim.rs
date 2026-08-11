@@ -421,6 +421,7 @@ static transchar_charbuf: GlobalCell<[uint8_t; render::MAX_LEN]> =
     GlobalCell::new([0; render::MAX_LEN]);
 
 /// Park a rendering in the shared buffer and answer a pointer to it.
+#[inline(always)]
 fn share(rendered: &render::Rendered) -> *mut c_char {
     let charbuf = transchar_charbuf.ptr() as *mut c_char;
     // SAFETY: the cell holds a live `MAX_LEN`-byte array, and a rendering
@@ -433,6 +434,7 @@ fn share(rendered: &render::Rendered) -> *mut c_char {
 ///
 /// # Safety
 /// `dst` must have room for `rendered.len + 1` bytes.
+#[inline(always)]
 unsafe fn write_rendered(dst: *mut c_char, rendered: &render::Rendered) {
     // SAFETY: the caller guarantees the room.
     unsafe {
@@ -448,6 +450,7 @@ unsafe fn write_rendered(dst: *mut c_char, rendered: &render::Rendered) {
 ///
 /// # Safety
 /// `buf` may be null; otherwise it must be a valid buffer.
+#[inline(always)]
 unsafe fn render_nonprint(buf: *const buf_T, c: c_int) -> render::Rendered {
     let c = if c == NL {
         // A NUL is stored as a newline internally.
@@ -471,6 +474,7 @@ unsafe fn render_nonprint(buf: *const buf_T, c: c_int) -> render::Rendered {
 ///
 /// # Safety
 /// `buf` may be null; otherwise it must be a valid buffer.
+#[inline(always)]
 unsafe fn render_char(buf: *const buf_T, c: c_int) -> render::Rendered {
     // A negative code is one of the key-translation escapes; it renders as
     // its byte behind a `~@`.
@@ -503,6 +507,7 @@ unsafe fn render_char(buf: *const buf_T, c: c_int) -> render::Rendered {
 ///
 /// # Safety
 /// `buf` may be null; otherwise it must be a valid buffer.
+#[inline(always)]
 unsafe fn render_byte(buf: *const buf_T, c: c_int) -> render::Rendered {
     if c >= 0x80 {
         // SAFETY: forwarded to this function's contract.

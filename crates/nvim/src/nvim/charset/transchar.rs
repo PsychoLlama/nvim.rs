@@ -24,6 +24,7 @@ pub struct Rendered {
 }
 
 impl Rendered {
+    #[inline(always)]
     fn new() -> Self {
         Rendered {
             bytes: [0; MAX_LEN],
@@ -31,12 +32,14 @@ impl Rendered {
         }
     }
 
+    #[inline(always)]
     fn push(&mut self, byte: u8) {
         self.bytes[self.len] = byte;
         self.len += 1;
     }
 
     /// A character that displays as itself.
+    #[inline(always)]
     pub fn literal(byte: u8) -> Rendered {
         let mut out = Rendered::new();
         out.push(byte);
@@ -44,6 +47,7 @@ impl Rendered {
     }
 
     /// This rendering behind the two-byte escape prefix.
+    #[inline(always)]
     pub fn behind(&self, prefix: &[u8; 2]) -> Rendered {
         let mut out = Rendered::new();
         out.push(prefix[0]);
@@ -56,6 +60,7 @@ impl Rendered {
 }
 
 /// The low nibble of `n` as a lowercase hex digit.
+#[inline(always)]
 fn hex_digit(n: c_int) -> u8 {
     let n = (n & 0xf) as u8;
     if n <= 9 { b'0' + n } else { b'a' + n - 10 }
@@ -64,6 +69,7 @@ fn hex_digit(n: c_int) -> u8 {
 /// `<xx>`, widening to four or six digits for larger codepoints. The number
 /// of bytes written excludes the terminating NUL, matching what the C
 /// returned.
+#[inline(always)]
 pub fn hex_form(c: c_int) -> Rendered {
     let mut out = Rendered::new();
     out.push(b'<');
@@ -82,6 +88,7 @@ pub fn hex_form(c: c_int) -> Rendered {
 }
 
 /// `^X` for a C0 control character, or DEL as `^?`.
+#[inline(always)]
 pub fn control_form(c: c_int) -> Rendered {
     let mut out = Rendered::new();
     out.push(b'^');
@@ -95,6 +102,7 @@ pub fn control_form(c: c_int) -> Rendered {
 /// Upstream also maps `K_SPECIAL` to `KS_SPECIAL` and NUL to `KS_ZERO`
 /// here, but both arms are dead: every caller reaches this only for `c < 0`,
 /// and neither 0x80 nor 0 is negative. Kept, and pinned, as it stands.
+#[inline(always)]
 pub fn negative_form(c: c_int) -> (&'static [u8; 2], c_int) {
     const K_SPECIAL: c_int = 0x80;
     const KS_SPECIAL: c_int = 254;
