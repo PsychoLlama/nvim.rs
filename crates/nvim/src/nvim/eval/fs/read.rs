@@ -112,14 +112,22 @@ impl Blob {
     }
 
     /// Grow to `len` bytes and fill them from `fd`; false on a short read.
+    ///
+    /// The read is asked for the count *as the garray holds it*: upstream
+    /// stores the length in `ga_len`, an `int`, and then reads it back, so a
+    /// size that does not fit in one asks `fread` for a nonsense count
+    /// against a buffer `ga_grow` never allocated -- an inherited overrun,
+    /// reproduced rather than fixed, which is what the round trip through
+    /// `c_int` below is.
     fn fill(self, fd: &File, len: usize) -> bool {
+        let want = len as c_int as size_t;
         // SAFETY: a live blob; `ga_grow` makes room for `len` items past the
-        // `ga_len` of zero a fresh blob has, so `ga_data` is then writable
-        // for the `len` bytes the read asks for.
+        // `ga_len` of zero a fresh blob has, so `ga_data` is writable for as
+        // many bytes as `want` asks for -- whenever `len` fits in an `int`.
         unsafe {
             ga_grow(&raw mut (*self.0).bv_ga, len as c_int);
             (*self.0).bv_ga.ga_len = len as c_int;
-            fd.read_into((*self.0).bv_ga.ga_data, len)
+            fd.read_into((*self.0).bv_ga.ga_data, want)
         }
     }
 
