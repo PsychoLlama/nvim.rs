@@ -512,36 +512,39 @@ const E474_SURROGATE: &CStr =
 /// The hexadecimal digits a `\uNNNN` escape is spelled with.
 const XDIGITS: &[u8; 16] = b"0123456789ABCDEF";
 
+/// Upstream's `escapes[]`: the two-character escape for every character that
+/// has one, indexed by the character itself.  A zero first byte means none.
+static JSON_ESCAPES: [[u8; 2]; 0x5d] = {
+    let mut table = [[0u8; 2]; 0x5d];
+    table[8] = *b"\\b";
+    table[9] = *b"\\t";
+    table[10] = *b"\\n";
+    table[12] = *b"\\f";
+    table[13] = *b"\\r";
+    table[b'"' as usize] = *b"\\\"";
+    table[b'\\' as usize] = *b"\\\\";
+    table
+};
+
 /// The two-character escape JSON spells `ch` with, if it has one.
+#[inline(always)]
 fn json_escape_of(ch: c_int) -> Option<&'static [u8; 2]> {
-    const BS: c_int = 8;
-    const TAB: c_int = 9;
-    const NL: c_int = 10;
-    const FF: c_int = 12;
-    const CAR: c_int = 13;
-    const DQUOTE: c_int = b'"' as c_int;
-    const BACKSLASH: c_int = b'\\' as c_int;
-    Some(match ch {
-        BS => b"\\b",
-        TAB => b"\\t",
-        NL => b"\\n",
-        FF => b"\\f",
-        CAR => b"\\r",
-        DQUOTE => b"\\\"",
-        BACKSLASH => b"\\\\",
-        _ => return None,
-    })
+    // A negative `ch` wraps to a huge index and misses, as it should.
+    let escape = JSON_ESCAPES.get(ch as usize)?;
+    (escape[0] != 0).then_some(escape)
 }
 
 /// Upstream's `ENCODE_RAW`: may `ch` go into the output as itself?
 ///
 /// Everything else becomes `\uNNNN`, so that a JSON value stays displayable
 /// outside Neovim.  0x7F is caught by `utf_printable`, not by the range.
+#[inline(always)]
 fn json_encode_raw(ch: c_int) -> bool {
     ch >= 0x20 && utf_printable(ch)
 }
 
 /// `\uNNNN` for a code unit.
+#[inline(always)]
 fn json_unicode_escape(unit: c_int) -> [u8; 6] {
     let digit = |shift: u32| XDIGITS[((unit >> (4 * shift)) & 0xf) as usize];
     [b'\\', b'u', digit(3), digit(2), digit(1), digit(0)]
@@ -555,6 +558,7 @@ fn json_unicode_escape(unit: c_int) -> [u8; 6] {
 /// reaching it needs a character above the BMP that `utf_printable` refuses,
 /// and its table stops at `U+FFFF`.  Should that table ever grow, this is
 /// where to look.
+#[inline(always)]
 fn json_surrogate_pair(ch: c_int) -> (c_int, c_int) {
     let tmp = ch - SURROGATE_FIRST_CHAR;
     (
@@ -634,6 +638,7 @@ impl Utf8 {
 ///
 /// # Safety
 /// As [`Utf8`].
+#[inline(always)]
 unsafe fn json_escaped_len(text: &Utf8) -> Option<usize> {
     let mut str_len = 0;
     let mut i = 0;
