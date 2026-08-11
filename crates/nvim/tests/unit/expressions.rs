@@ -577,3 +577,911 @@ fn an_invalid_token_is_dispatched_as_what_it_meant_to_be() {
         Some("E15: Environment variable name missing")
     );
 }
+
+/// `viml_pexpr_next_token`, one token at a time — the port of
+/// `test/unit/viml/expressions/lexer_spec.lua`.
+///
+/// Every case builds a parser over a single line, reads one token, and
+/// compares all of it: the type, the span, the bytes that span covers *read
+/// back out of the parser's own line* (so a length running past the line is
+/// caught rather than believed), the per-type payload, and where the cursor
+/// was left. The six `#[test]`s at the bottom are the spec's six flag
+/// spellings; they share one body because the token stream is
+/// flag-independent except where each of them says otherwise.
+///
+/// The enum constants keep the C's spelling, and matching on one is what
+/// makes a forgotten import a compile error (an unimported name would bind
+/// instead, and every arm after it become unreachable) — so the casing lint
+/// is off here rather than the constants renamed.
+#[allow(non_upper_case_globals)]
+mod lexer {
+    use std::ffi::{CStr, c_char, c_int, c_void};
+    use std::{fmt, ptr, slice};
+
+    use c2rust_neovim::src::nvim::types::{
+        ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ParserLine,
+        ParserPosition, ParserState,
+    };
+    use c2rust_neovim::src::nvim::viml::parser::expressions::{
+        LexExprToken, LexExprTokenType, ccs_tab, eltkn_cmp_type_tab, expr_asgn_type_tab,
+        kELFlagAllowFloat, kELFlagForbidEOC, kELFlagForbidScope, kELFlagIsNotCmp, kELFlagPeek,
+        kExprLexAnd, kExprLexArrow, kExprLexAssignment, kExprLexBracket, kExprLexColon,
+        kExprLexComma, kExprLexComparison, kExprLexDot, kExprLexDoubleQuotedString, kExprLexEOC,
+        kExprLexEnv, kExprLexFigureBrace, kExprLexInvalid, kExprLexMinus, kExprLexMissing,
+        kExprLexMulDiv, kExprLexMulMod, kExprLexMulMul, kExprLexMultiplication, kExprLexNot,
+        kExprLexNumber, kExprLexOption, kExprLexOr, kExprLexParenthesis, kExprLexPlainIdentifier,
+        kExprLexPlus, kExprLexQuestion, kExprLexRegister, kExprLexSingleQuotedString,
+        kExprLexSpacing, kExprOptScopeGlobal, kExprOptScopeLocal, kExprOptScopeUnspecified,
+        viml_pexpr_next_token,
+    };
+    use c2rust_neovim::src::nvim::viml::parser::parser::{
+        PARSER_STATE_INIT, parser_simple_get_line, reader_line, viml_parser_destroy,
+        viml_parser_init,
+    };
+
+    use super::EMPTY_LINE;
+
+    // -- the input ---------------------------------------------------------
+
+    /// One line of input: the bytes the reader hands out, and the size it
+    /// claims for them. The two differ where the spec truncates a line
+    /// mid-token (`{ data = '009', size = 2 }`), which is how a scanner that
+    /// reads past the end it was given gets caught: the bytes are there.
+    #[derive(Clone)]
+    struct Src {
+        bytes: Vec<u8>,
+        size: usize,
+        present: bool,
+    }
+
+    /// A line the reader hands out whole.
+    fn src(bytes: &[u8]) -> Src {
+        Src {
+            size: bytes.len(),
+            bytes: bytes.to_vec(),
+            present: true,
+        }
+    }
+
+    /// A line whose claimed size is shorter than the bytes behind it.
+    fn cut(bytes: &[u8], size: usize) -> Src {
+        Src {
+            bytes: bytes.to_vec(),
+            size,
+            present: true,
+        }
+    }
+
+    /// "No line at all": a null `data`, which is not the same as an empty
+    /// line — the reader stops on the former and scans the latter.
+    fn absent() -> Src {
+        Src {
+            bytes: Vec::new(),
+            size: 0,
+            present: false,
+        }
+    }
+
+    // -- the token, in the shape the spec compared -------------------------
+
+    /// A byte string that stays readable when a comparison fails.
+    #[derive(Clone, PartialEq)]
+    struct Bytes(Vec<u8>);
+
+    impl fmt::Debug for Bytes {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("\"")?;
+            for &b in &self.0 {
+                match b {
+                    b'"' => f.write_str("\\\"")?,
+                    b'\\' => f.write_str("\\\\")?,
+                    0x20..=0x7e => write!(f, "{}", b as char)?,
+                    _ => write!(f, "\\x{b:02x}")?,
+                }
+            }
+            f.write_str("\"")
+        }
+    }
+
+    /// `intchar2lua`: a character where one is printable, the raw number
+    /// otherwise. Keeping the two apart is the point — a register named `\r`
+    /// (13) and "no register name" (-1) must not compare equal to anything.
+    #[derive(Clone, PartialEq, Debug)]
+    enum Chr {
+        Ch(char),
+        Num(c_int),
+    }
+
+    fn intchar(ch: c_int) -> Chr {
+        if (20..127).contains(&ch) {
+            Chr::Ch(ch as u8 as char)
+        } else {
+            Chr::Num(ch)
+        }
+    }
+
+    fn ch(c: char) -> Chr {
+        Chr::Ch(c)
+    }
+
+    fn num(n: c_int) -> Chr {
+        Chr::Num(n)
+    }
+
+    /// The token's per-type payload — the union member its type selects.
+    #[derive(Clone, PartialEq, Debug)]
+    enum Tkd {
+        /// The types that carry nothing.
+        None,
+        Cmp {
+            kind: String,
+            ccs: String,
+            inv: bool,
+        },
+        Mul(&'static str),
+        Brc {
+            closing: bool,
+        },
+        Reg {
+            name: Chr,
+        },
+        Str {
+            closed: bool,
+        },
+        Opt {
+            scope: &'static str,
+            name: Bytes,
+        },
+        Var {
+            scope: Chr,
+            autoload: bool,
+        },
+        Int {
+            base: u8,
+            val: u64,
+        },
+        Flt {
+            base: u8,
+            val: f64,
+        },
+        Asgn(String),
+        Err(String),
+    }
+
+    fn cmp_data(kind: &str, inv: bool, ccs: &str) -> Tkd {
+        Tkd::Cmp {
+            kind: kind.to_owned(),
+            ccs: ccs.to_owned(),
+            inv,
+        }
+    }
+
+    fn int(base: u8, val: u64) -> Tkd {
+        Tkd::Int { base, val }
+    }
+
+    fn flt(base: u8, val: f64) -> Tkd {
+        Tkd::Flt { base, val }
+    }
+
+    fn opt(scope: &'static str, name: &str) -> Tkd {
+        Tkd::Opt {
+            scope,
+            name: Bytes(name.as_bytes().to_vec()),
+        }
+    }
+
+    fn var(scope: Chr, autoload: bool) -> Tkd {
+        Tkd::Var { scope, autoload }
+    }
+
+    fn reg(name: Chr) -> Tkd {
+        Tkd::Reg { name }
+    }
+
+    fn quoted(closed: bool) -> Tkd {
+        Tkd::Str { closed }
+    }
+
+    fn brc(closing: bool) -> Tkd {
+        Tkd::Brc { closing }
+    }
+
+    fn asgn(kind: &str) -> Tkd {
+        Tkd::Asgn(kind.to_owned())
+    }
+
+    fn err(msg: &str) -> Tkd {
+        Tkd::Err(msg.to_owned())
+    }
+
+    #[derive(Clone, PartialEq, Debug)]
+    struct Tok {
+        kind: &'static str,
+        start: (usize, usize),
+        len: usize,
+        text: Option<Bytes>,
+        error: Option<String>,
+        data: Tkd,
+    }
+
+    // -- reading the token back --------------------------------------------
+
+    /// One of the parser's own `Nvim*` name tables, which is where the token
+    /// types' spellings come from — the same tables `nvim_parse_expression`
+    /// reports through.
+    fn tab_name(entry: *const c_char) -> String {
+        assert!(!entry.is_null(), "the name table has no entry for that");
+        // SAFETY: a non-null entry of a table of static C strings.
+        unsafe { CStr::from_ptr(entry) }
+            .to_str()
+            .expect("names are ASCII")
+            .to_owned()
+    }
+
+    fn cmp_name(kind: ExprComparisonType) -> String {
+        tab_name(eltkn_cmp_type_tab.with(|tab| tab[kind as usize]))
+    }
+
+    fn ccs_name(ccs: ExprCaseCompareStrategy) -> String {
+        tab_name(ccs_tab.with(|tab| tab[ccs as usize]))
+    }
+
+    fn asgn_name(kind: ExprAssignmentType) -> String {
+        tab_name(expr_asgn_type_tab.with(|tab| tab[kind as usize]))
+    }
+
+    fn kind_name(kind: LexExprTokenType) -> &'static str {
+        match kind {
+            kExprLexInvalid => "Invalid",
+            kExprLexMissing => "Missing",
+            kExprLexSpacing => "Spacing",
+            kExprLexEOC => "EOC",
+            kExprLexQuestion => "Question",
+            kExprLexColon => "Colon",
+            kExprLexOr => "Or",
+            kExprLexAnd => "And",
+            kExprLexComparison => "Comparison",
+            kExprLexPlus => "Plus",
+            kExprLexMinus => "Minus",
+            kExprLexDot => "Dot",
+            kExprLexMultiplication => "Multiplication",
+            kExprLexNot => "Not",
+            kExprLexNumber => "Number",
+            kExprLexSingleQuotedString => "SingleQuotedString",
+            kExprLexDoubleQuotedString => "DoubleQuotedString",
+            kExprLexOption => "Option",
+            kExprLexRegister => "Register",
+            kExprLexEnv => "Env",
+            kExprLexPlainIdentifier => "PlainIdentifier",
+            kExprLexBracket => "Bracket",
+            kExprLexFigureBrace => "FigureBrace",
+            kExprLexParenthesis => "Parenthesis",
+            kExprLexComma => "Comma",
+            kExprLexArrow => "Arrow",
+            kExprLexAssignment => "Assignment",
+            other => panic!("unknown token type {other}"),
+        }
+    }
+
+    /// `pstate_str`: the bytes the token's span covers, read back out of the
+    /// line the parser kept rather than out of the token — which is what
+    /// makes a `len` that overruns the line visible.
+    ///
+    /// # Safety
+    /// `state` must point at a parser that has read at least one line.
+    unsafe fn span(
+        state: *mut ParserState,
+        start: ParserPosition,
+        len: usize,
+    ) -> (Option<Bytes>, Option<String>) {
+        // SAFETY: the caller's obligation. The reborrow is of the reader
+        // alone, which is what `reader_line` reads.
+        let reader = unsafe { &(*state).reader };
+        if start.line >= reader.lines.size {
+            return (
+                None,
+                Some("start.line >= pstate.reader.lines.size".to_owned()),
+            );
+        }
+        let pline = reader_line(reader, start.line);
+        let line: &[u8] = if pline.data.is_null() {
+            &[]
+        } else {
+            // SAFETY: a `ParserLine` describes `size` readable bytes.
+            unsafe { slice::from_raw_parts(pline.data.cast::<u8>(), pline.size) }
+        };
+        if start.col >= line.len() {
+            return (None, Some("start.col >= #pstr".to_owned()));
+        }
+        let end = line.len().min(start.col + len);
+        (Some(Bytes(line[start.col..end].to_vec())), None)
+    }
+
+    /// `eltkn2lua`'s payload half: the union member the token's type selects.
+    ///
+    /// # Safety
+    /// `tkn` must be a token the lexer answered, still describing a live line.
+    unsafe fn payload(kind: &str, tkn: &LexExprToken) -> Tkd {
+        // SAFETY: the caller's obligation; each arm reads only the member its
+        // own type selects, which is the invariant the lexer maintains.
+        unsafe {
+            match kind {
+                "Comparison" => Tkd::Cmp {
+                    kind: cmp_name(tkn.data.cmp.type_0),
+                    ccs: ccs_name(tkn.data.cmp.ccs),
+                    inv: tkn.data.cmp.inv,
+                },
+                "Multiplication" => Tkd::Mul(match tkn.data.mul.type_0 {
+                    kExprLexMulMul => "Mul",
+                    kExprLexMulDiv => "Div",
+                    kExprLexMulMod => "Mod",
+                    other => panic!("unknown multiplication type {other}"),
+                }),
+                "Bracket" | "FigureBrace" | "Parenthesis" => Tkd::Brc {
+                    closing: tkn.data.brc.closing,
+                },
+                "Register" => Tkd::Reg {
+                    name: intchar(tkn.data.reg.name),
+                },
+                "SingleQuotedString" | "DoubleQuotedString" => Tkd::Str {
+                    closed: tkn.data.str.closed,
+                },
+                "Option" => Tkd::Opt {
+                    scope: match tkn.data.opt.scope {
+                        kExprOptScopeUnspecified => "Unspecified",
+                        kExprOptScopeGlobal => "Global",
+                        kExprOptScopeLocal => "Local",
+                        other => panic!("unknown option scope {other}"),
+                    },
+                    name: Bytes(
+                        slice::from_raw_parts(tkn.data.opt.name.cast::<u8>(), tkn.data.opt.len)
+                            .to_vec(),
+                    ),
+                },
+                "PlainIdentifier" => Tkd::Var {
+                    scope: intchar(tkn.data.var.scope as c_int),
+                    autoload: tkn.data.var.autoload,
+                },
+                "Number" => {
+                    let base = tkn.data.num.base;
+                    if tkn.data.num.is_float {
+                        Tkd::Flt {
+                            base,
+                            val: tkn.data.num.val.floating,
+                        }
+                    } else {
+                        Tkd::Int {
+                            base,
+                            val: tkn.data.num.val.integer,
+                        }
+                    }
+                }
+                "Assignment" => Tkd::Asgn(asgn_name(tkn.data.ass.type_0)),
+                "Invalid" => Tkd::Err(
+                    CStr::from_ptr(tkn.data.err.msg)
+                        .to_str()
+                        .expect("error messages are ASCII")
+                        .to_owned(),
+                ),
+                _ => Tkd::None,
+            }
+        }
+    }
+
+    /// Read one token out of `lines`, starting at column `col`. Answers the
+    /// token as the spec compared it, where the cursor was left, and the size
+    /// of the first line — which is what decides whether the cursor wrapped.
+    fn lex(lines: &[Src], col: usize, flags: c_int) -> (Tok, ParserPosition, usize) {
+        let mut plines: Vec<ParserLine> = lines
+            .iter()
+            .map(|line| ParserLine {
+                data: if line.present {
+                    line.bytes.as_ptr().cast()
+                } else {
+                    ptr::null()
+                },
+                size: line.size,
+                allocated: false,
+            })
+            .collect();
+        plines.push(EMPTY_LINE);
+        let mut cursor = plines.as_mut_ptr();
+        let mut pstate = PARSER_STATE_INIT;
+        let state = &raw mut pstate;
+        // SAFETY: the state stays put for the whole call, the getter walks a
+        // null-terminated array, and every line outlives the token read out
+        // of it.
+        unsafe {
+            viml_parser_init(
+                state,
+                Some(parser_simple_get_line),
+                &raw mut cursor as *mut c_void,
+                ptr::null_mut(),
+            );
+            (*state).pos.col = col;
+            let tkn = viml_pexpr_next_token(state, flags);
+            let kind = kind_name(tkn.type_0);
+            let (text, mut error) = span(state, tkn.start, tkn.len);
+            if error.is_none() && text.as_ref().is_some_and(|got| got.0.len() != tkn.len) {
+                error = Some("#str /= len".to_owned());
+            }
+            let tok = Tok {
+                kind,
+                start: (tkn.start.line, tkn.start.col),
+                len: tkn.len,
+                text,
+                error,
+                data: payload(kind, &tkn),
+            };
+            let pos = (*state).pos;
+            let first = reader_line(&(*state).reader, 0).size;
+            viml_parser_destroy(&mut *state);
+            (tok, pos, first)
+        }
+    }
+
+    // -- the spec's three case shapes --------------------------------------
+
+    /// `singl_eltkn_test`: the same token read three ways — alone, with a
+    /// space after it, and one byte into a longer line — each time checking
+    /// where the cursor ended up.
+    fn single(flags: c_int, advance: bool, kind: &'static str, text: &str, data: Tkd) {
+        let bytes = text.as_bytes().to_vec();
+        let want = |col: usize| Tok {
+            kind,
+            start: (0, col),
+            len: bytes.len(),
+            text: Some(Bytes(bytes.clone())),
+            error: None,
+            data: data.clone(),
+        };
+
+        one(flags, advance, &[src(&bytes)], 0, want(0), text);
+
+        // A trailing space does not change where the token ends — except
+        // where it would join the token (spacing), complete it (a bare `@`)
+        // or be swallowed by it (an unterminated string).
+        let absorbs_the_space = kind == "Spacing"
+            || (kind == "Register" && text == "@")
+            || (matches!(kind, "SingleQuotedString" | "DoubleQuotedString")
+                && matches!(data, Tkd::Str { closed: false }));
+        if !absorbs_the_space {
+            let mut padded = bytes.clone();
+            padded.push(b' ');
+            one(flags, advance, &[src(&padded)], 0, want(0), text);
+        }
+
+        // And again one byte in, where nothing about the token may depend on
+        // its being at the start of the line.
+        let mut shifted = vec![b'x'];
+        shifted.extend_from_slice(&bytes);
+        one(flags, advance, &[src(&shifted)], 1, want(1), text);
+    }
+
+    /// One reading, plus `check_advance`: the cursor lands past the token,
+    /// or at the start of the next line when the token ended this one, or
+    /// exactly where it started when the caller only peeked.
+    fn one(flags: c_int, advance: bool, lines: &[Src], col: usize, want: Tok, label: &str) {
+        let (got, pos, first) = lex(lines, col, flags);
+        assert_eq!(got, want, "{label:?} at column {col}, flags {flags}");
+        let target = col + want.len;
+        let expected = if !advance {
+            (0, col)
+        } else if first == target {
+            (1, 0)
+        } else {
+            (0, target)
+        };
+        assert_eq!(
+            (pos.line, pos.col),
+            expected,
+            "cursor after {label:?} at column {col}, flags {flags}"
+        );
+    }
+
+    /// `simple_test`: one token out of a line the caller shapes, with no
+    /// claim about the cursor.
+    fn simple(flags: c_int, lines: &[Src], kind: &'static str, len: usize, text: &str, data: Tkd) {
+        let (got, _, _) = lex(lines, 0, flags);
+        assert_eq!(
+            got,
+            Tok {
+                kind,
+                start: (0, 0),
+                len,
+                text: Some(Bytes(text.as_bytes().to_vec())),
+                error: None,
+                data,
+            },
+            "{text:?}, flags {flags}"
+        );
+    }
+
+    /// A line with nothing on it is end-of-command, and there is no text to
+    /// read back for the empty span it answers.
+    fn empty_is_eoc(flags: c_int, lines: &[Src]) {
+        let (got, _, _) = lex(lines, 0, flags);
+        assert_eq!(
+            got,
+            Tok {
+                kind: "EOC",
+                start: (0, 0),
+                len: 0,
+                text: None,
+                error: Some("start.col >= #pstr".to_owned()),
+                data: Tkd::None,
+            },
+            "an empty line, flags {flags}"
+        );
+    }
+
+    /// `comparison_test`: an operator, its negation, and both under each of
+    /// the two case-sensitivity suffixes.
+    fn comparison(flags: c_int, advance: bool, op: &str, inv_op: &str, kind: &str) {
+        for (text, inv, ccs) in [
+            (op.to_owned(), false, "UseOption"),
+            (inv_op.to_owned(), true, "UseOption"),
+            (format!("{op}#"), false, "MatchCase"),
+            (format!("{inv_op}#"), true, "MatchCase"),
+            (format!("{op}?"), false, "IgnoreCase"),
+            (format!("{inv_op}?"), true, "IgnoreCase"),
+        ] {
+            single(
+                flags,
+                advance,
+                "Comparison",
+                &text,
+                cmp_data(kind, inv, ccs),
+            );
+        }
+    }
+
+    // -- the groups --------------------------------------------------------
+
+    /// Everything the lexer reads the same way whatever the flags say.
+    fn stable(flags: c_int, advance: bool) {
+        let s = |kind, text, data| single(flags, advance, kind, text, data);
+        s("Parenthesis", "(", brc(false));
+        s("Parenthesis", ")", brc(true));
+        s("Bracket", "[", brc(false));
+        s("Bracket", "]", brc(true));
+        s("FigureBrace", "{", brc(false));
+        s("FigureBrace", "}", brc(true));
+        s("Question", "?", Tkd::None);
+        s("Colon", ":", Tkd::None);
+        s("Dot", ".", Tkd::None);
+        s("Assignment", ".=", asgn("Concat"));
+        s("Plus", "+", Tkd::None);
+        s("Assignment", "+=", asgn("Add"));
+        s("Comma", ",", Tkd::None);
+        s("Multiplication", "*", Tkd::Mul("Mul"));
+        s("Multiplication", "/", Tkd::Mul("Div"));
+        s("Multiplication", "%", Tkd::Mul("Mod"));
+        s("Spacing", "  \t\t  \t\t", Tkd::None);
+        s("Spacing", " ", Tkd::None);
+        s("Spacing", "\t", Tkd::None);
+        s(
+            "Invalid",
+            "\x01\x02\x03",
+            err("E15: Invalid control character present in input: %.*s"),
+        );
+        s("Number", "0123", int(8, 83));
+        s("Number", "01234567", int(8, 342391));
+        s("Number", "012345678", int(10, 12345678));
+        s("Number", "0x123", int(16, 291));
+        s("Number", "0x56FF", int(16, 22271));
+        s("Number", "0xabcdef", int(16, 11259375));
+        s("Number", "0xABCDEF", int(16, 11259375));
+        s("Number", "0x0", int(16, 0));
+        s("Number", "00", int(8, 0));
+        s("Number", "0b0", int(2, 0));
+        s("Number", "0b010111", int(2, 23));
+        s("Number", "0b100111", int(2, 39));
+        s("Number", "0", int(10, 0));
+        s("Number", "9", int(10, 9));
+        s("Env", "$abc", Tkd::None);
+        s("Env", "$", Tkd::None);
+        s("PlainIdentifier", "test", var(num(0), false));
+        s("PlainIdentifier", "_test", var(num(0), false));
+        s("PlainIdentifier", "_test_foo", var(num(0), false));
+        s("PlainIdentifier", "t", var(num(0), false));
+        s("PlainIdentifier", "test5", var(num(0), false));
+        s("PlainIdentifier", "t0", var(num(0), false));
+        s("PlainIdentifier", "test#var", var(num(0), true));
+        s("PlainIdentifier", "test#var#val###", var(num(0), true));
+        s("PlainIdentifier", "t#####", var(num(0), true));
+        s("And", "&&", Tkd::None);
+        s("Or", "||", Tkd::None);
+        s("Invalid", "&", err("E112: Option name missing: %.*s"));
+        s("Option", "&opt", opt("Unspecified", "opt"));
+        s("Option", "&t_xx", opt("Unspecified", "t_xx"));
+        s("Option", "&t_\r\r", opt("Unspecified", "t_\r\r"));
+        s("Option", "&t_\t\t", opt("Unspecified", "t_\t\t"));
+        s("Option", "&t_  ", opt("Unspecified", "t_  "));
+        s("Option", "&g:opt", opt("Global", "opt"));
+        s("Option", "&l:opt", opt("Local", "opt"));
+        s("Invalid", "&l:", err("E112: Option name missing: %.*s"));
+        s("Invalid", "&g:", err("E112: Option name missing: %.*s"));
+        s("Register", "@", reg(num(-1)));
+        s("Register", "@a", reg(ch('a')));
+        s("Register", "@\r", reg(num(13)));
+        s("Register", "@ ", reg(ch(' ')));
+        s("Register", "@\t", reg(num(9)));
+        s("SingleQuotedString", "'test", quoted(false));
+        s("SingleQuotedString", "'test'", quoted(true));
+        s("SingleQuotedString", "''''", quoted(true));
+        s("SingleQuotedString", "'x'''", quoted(true));
+        s("SingleQuotedString", "'''x'", quoted(true));
+        s("SingleQuotedString", "'''", quoted(false));
+        s("SingleQuotedString", "'x''", quoted(false));
+        s("SingleQuotedString", "'''x", quoted(false));
+        s("DoubleQuotedString", "\"test", quoted(false));
+        s("DoubleQuotedString", "\"test\"", quoted(true));
+        s("DoubleQuotedString", r#""\"""#, quoted(true));
+        s("DoubleQuotedString", r#""x\"""#, quoted(true));
+        s("DoubleQuotedString", r#""\"x""#, quoted(true));
+        s("DoubleQuotedString", r#""\""#, quoted(false));
+        s("DoubleQuotedString", r#""x\""#, quoted(false));
+        s("DoubleQuotedString", r#""\"x"#, quoted(false));
+        s("Not", "!", Tkd::None);
+        s("Assignment", "=", asgn("Plain"));
+        comparison(flags, advance, "==", "!=", "Equal");
+        comparison(flags, advance, "=~", "!~", "Matches");
+        comparison(flags, advance, ">", "<=", "Greater");
+        comparison(flags, advance, ">=", "<", "GreaterOrEqual");
+        s("Minus", "-", Tkd::None);
+        s("Assignment", "-=", asgn("Subtract"));
+        s("Arrow", "->", Tkd::None);
+        s("Invalid", "~", err("E15: Unidentified character: %.*s"));
+
+        empty_is_eoc(flags, &[absent()]);
+        empty_is_eoc(flags, &[src(b"")]);
+
+        // A float needs `kELFlagAllowFloat`; without it the scan stops at the
+        // dot, whatever follows it.
+        for text in [
+            "2.", "2e5", "2.x", "2.2.", "2.0x", "2.0e", "2.0e+", "2.0e-", "2.0e+x", "2.0e-x",
+            "2.0e+1a", "2.0e-1a",
+        ] {
+            simple(flags, &[src(text.as_bytes())], "Number", 1, "2", int(10, 2));
+        }
+        simple(flags, &[src(b"0b102")], "Number", 4, "0b10", int(2, 2));
+        simple(flags, &[src(b"10F")], "Number", 2, "10", int(10, 10));
+        simple(
+            flags,
+            &[src(b"0x0123456789ABCDEFG")],
+            "Number",
+            18,
+            "0x0123456789ABCDEF",
+            int(16, 81985529216486895),
+        );
+        // A line the reader cut short: the digits past `size` are readable,
+        // and must still not be read.
+        simple(flags, &[cut(b"00", 2)], "Number", 2, "00", int(8, 0));
+        simple(flags, &[cut(b"009", 2)], "Number", 2, "00", int(8, 0));
+        simple(flags, &[cut(b"01", 1)], "Number", 1, "0", int(10, 0));
+    }
+
+    /// A leading `x:` is a scope, and a `#` anywhere after it makes the name
+    /// an autoload one.
+    fn scopes(flags: c_int, advance: bool) {
+        for scope in ['s', 'g', 'v', 'b', 'w', 't', 'l', 'a'] {
+            single(
+                flags,
+                advance,
+                "PlainIdentifier",
+                &format!("{scope}:test#var"),
+                var(ch(scope), true),
+            );
+            single(
+                flags,
+                advance,
+                "PlainIdentifier",
+                &format!("{scope}:"),
+                var(ch(scope), false),
+            );
+        }
+        simple(
+            flags,
+            &[src(b"g:")],
+            "PlainIdentifier",
+            2,
+            "g:",
+            var(ch('g'), false),
+        );
+        simple(
+            flags,
+            &[src(b"g:is#foo")],
+            "PlainIdentifier",
+            8,
+            "g:is#foo",
+            var(ch('g'), true),
+        );
+        simple(
+            flags,
+            &[src(b"g:isnot#foo")],
+            "PlainIdentifier",
+            11,
+            "g:isnot#foo",
+            var(ch('g'), true),
+        );
+    }
+
+    /// `is` and `isnot` are comparison operators, and the suffix that follows
+    /// them is part of the operator rather than the start of a name.
+    fn is_comparison(flags: c_int, advance: bool) {
+        comparison(flags, advance, "is", "isnot", "Identical");
+        for (text, len, kept, inv, ccs) in [
+            ("is", 2, "is", false, "UseOption"),
+            ("isnot", 5, "isnot", true, "UseOption"),
+            ("is?", 3, "is?", false, "IgnoreCase"),
+            ("isnot?", 6, "isnot?", true, "IgnoreCase"),
+            ("is#", 3, "is#", false, "MatchCase"),
+            ("isnot#", 6, "isnot#", true, "MatchCase"),
+            ("is#foo", 3, "is#", false, "MatchCase"),
+            ("isnot#foo", 6, "isnot#", true, "MatchCase"),
+        ] {
+            simple(
+                flags,
+                &[src(text.as_bytes())],
+                "Comparison",
+                len,
+                kept,
+                cmp_data("Identical", inv, ccs),
+            );
+        }
+    }
+
+    /// Without `kELFlagAllowFloat` a fractional part is not part of the
+    /// number at all.
+    fn numbers(flags: c_int) {
+        for text in ["2.0", "2.0e5", "2.0e+5", "2.0e-5"] {
+            simple(flags, &[src(text.as_bytes())], "Number", 1, "2", int(10, 2));
+        }
+    }
+
+    /// The three characters that end a command.
+    fn eoc(flags: c_int, advance: bool) {
+        for text in ["|", "\0", "\n"] {
+            single(flags, advance, "EOC", text, Tkd::None);
+        }
+    }
+
+    // -- the six flag spellings --------------------------------------------
+
+    #[test]
+    fn scans_one_token_at_a_time() {
+        let flags = 0;
+        stable(flags, true);
+        eoc(flags, true);
+        scopes(flags, true);
+        is_comparison(flags, true);
+        numbers(flags);
+    }
+
+    #[test]
+    fn peeking_reads_the_same_token_without_moving_the_cursor() {
+        let flags = kELFlagPeek as c_int;
+        stable(flags, false);
+        eoc(flags, false);
+        scopes(flags, false);
+        is_comparison(flags, false);
+        numbers(flags);
+    }
+
+    #[test]
+    fn forbidding_scope_stops_the_name_before_the_colon() {
+        let flags = kELFlagForbidScope as c_int;
+        stable(flags, true);
+        eoc(flags, true);
+        is_comparison(flags, true);
+        numbers(flags);
+
+        simple(
+            flags,
+            &[src(b"g:")],
+            "PlainIdentifier",
+            1,
+            "g",
+            var(num(0), false),
+        );
+    }
+
+    #[test]
+    fn allowing_floats_takes_the_fractional_part() {
+        let flags = kELFlagAllowFloat as c_int;
+        stable(flags, true);
+        eoc(flags, true);
+        scopes(flags, true);
+        is_comparison(flags, true);
+
+        for (text, len, val) in [
+            ("2.2", 3, 2.2),
+            ("2.0e5", 5, 2e5),
+            ("2.0e+5", 6, 2e5),
+            ("2.0e-5", 6, 2e-5),
+            ("2.500000e-5", 11, 2.5e-5),
+            ("2.5555e2", 8, 2.5555e2),
+            ("2.5555e+2", 9, 2.5555e2),
+            ("2.5555e-2", 9, 2.5555e-2),
+        ] {
+            simple(
+                flags,
+                &[src(text.as_bytes())],
+                "Number",
+                len,
+                text,
+                flt(10, val),
+            );
+        }
+        // Where the reader cut the line short, the exponent that is not on it
+        // is not part of the number — and a cut that lands between `e` and its
+        // digits leaves no float at all.
+        simple(
+            flags,
+            &[cut(b"2.5e-5", 3)],
+            "Number",
+            3,
+            "2.5",
+            flt(10, 2.5),
+        );
+        simple(flags, &[cut(b"2.5e5", 4)], "Number", 1, "2", int(10, 2));
+        simple(
+            flags,
+            &[cut(b"2.5e-50", 6)],
+            "Number",
+            6,
+            "2.5e-5",
+            flt(10, 2.5e-5),
+        );
+    }
+
+    #[test]
+    fn is_can_be_read_as_an_identifier_instead() {
+        let flags = kELFlagIsNotCmp as c_int;
+        stable(flags, true);
+        eoc(flags, true);
+        scopes(flags, true);
+        numbers(flags);
+
+        for (text, len, kept, autoload) in [
+            ("is", 2, "is", false),
+            ("isnot", 5, "isnot", false),
+            ("is?", 2, "is", false),
+            ("isnot?", 5, "isnot", false),
+            ("is#", 3, "is#", true),
+            ("isnot#", 6, "isnot#", true),
+            ("is#foo", 6, "is#foo", true),
+            ("isnot#foo", 9, "isnot#foo", true),
+        ] {
+            simple(
+                flags,
+                &[src(text.as_bytes())],
+                "PlainIdentifier",
+                len,
+                kept,
+                var(num(0), autoload),
+            );
+        }
+    }
+
+    #[test]
+    fn forbidding_eoc_makes_the_three_end_characters_invalid() {
+        let flags = kELFlagForbidEOC as c_int;
+        stable(flags, true);
+        scopes(flags, true);
+        is_comparison(flags, true);
+        numbers(flags);
+
+        for text in ["|", "\0", "\n"] {
+            single(
+                flags,
+                true,
+                "Invalid",
+                text,
+                err("E15: Unexpected EOC character: %.*s"),
+            );
+        }
+    }
+}
