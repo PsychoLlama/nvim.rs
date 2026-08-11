@@ -33,13 +33,13 @@ use strings::{parse_quoted_string, shifted_pos};
 use crate::src::nvim::charset::{hex2nr, vim_str2nr};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::keycodes::trans_special;
-use crate::src::nvim::mbyte::{mb_copy_char, utf_char2bytes, utf_char2len, utfc_ptr2len_len};
+use crate::src::nvim::mbyte::{utf_char2bytes, utf_char2len, utfc_ptr2len_len};
 use crate::src::nvim::memory::{xfree, xmalloc, xmallocz};
-use crate::src::nvim::os::libc::{abort, gettext, memchr, memcmp, memcpy, strchr};
+use crate::src::nvim::os::libc::{abort, gettext};
 use crate::src::nvim::types::{
     ExprAST, ExprASTError, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, ExprVarScope,
-    ParserLine, ParserPosition, ParserState, float_T, size_t, uint8_t, uvarnumber_T, varnumber_T,
+    ParserLine, ParserPosition, ParserState, float_T, size_t, uint8_t, uvarnumber_T,
 };
 use crate::src::nvim::viml::parser::parser::{
     highlight_vec, viml_parser_advance, viml_parser_get_remaining_line, viml_parser_highlight,
