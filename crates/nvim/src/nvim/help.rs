@@ -45,7 +45,7 @@ use crate::src::nvim::option::set_option_direct;
 use crate::src::nvim::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
 use crate::src::nvim::optionstr::check_buf_options;
 use crate::src::nvim::os::fs::os_fopen;
-use crate::src::nvim::os::libc::{fclose, qsort, strcasecmp, strcmp, strlen, strncmp};
+use crate::src::nvim::os::libc::{fclose, gettext, qsort, strcasecmp, strcmp, strlen, strncmp};
 use crate::src::nvim::path::FreeWild;
 use crate::src::nvim::pos::MAXCOL;
 use crate::src::nvim::tag::{do_tag, find_tags};
@@ -185,7 +185,7 @@ pub unsafe fn ex_help(eap: *mut exarg_T) {
         allocated_arg = unsafe { resolve_tag_at_cursor() };
         if allocated_arg.is_null() {
             // SAFETY: a NUL-terminated message constant.
-            unsafe { emsg(e_noident.as_ptr()) };
+            unsafe { emsg(gettext(e_noident.as_ptr())) };
             return;
         }
         arg = allocated_arg;
@@ -225,9 +225,9 @@ pub unsafe fn ex_help(eap: *mut exarg_T) {
         // they go through vim's own printf rather than `format_args!`.
         unsafe {
             if lang.is_null() {
-                semsg_c!(c"E149: No help for %s".as_ptr(), arg);
+                semsg_c!(gettext(c"E149: No help for %s".as_ptr()), arg);
             } else {
-                semsg_c!(c"E661: No '%s' help for %s".as_ptr(), lang, arg);
+                semsg_c!(gettext(c"E661: No '%s' help for %s".as_ptr()), lang, arg);
             }
             if n != FAIL {
                 FreeWild(num_matches, matches);

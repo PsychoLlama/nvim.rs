@@ -33,19 +33,28 @@ use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::fs::{os_fopen, os_isdir};
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    fclose, fprintf, fputs, memcpy, putc, snprintf, strcasecmp, strchr, strcmp, strlen, strncmp,
+    fclose, fprintf, fputs, gettext, memcpy, putc, snprintf, strcasecmp, strchr, strcmp, strlen,
+    strncmp,
 };
 use crate::src::nvim::path::{FreeWild, add_pathsep, gen_expand_wildcards, path_full_compare};
 use crate::src::nvim::runtime::{DIP_ALL, DIP_DIR, do_in_path};
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{FILE, exarg_T, expand_T, size_t, uint8_t};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use super::flag::{
     EW_FILE, EW_SILENT, EXPAND_DIRECTORIES, FAIL, IOSIZE, MAXPATHL, NUL, WILD_EXPAND_FREE,
     WILD_LIST_NOTFOUND, WILD_SILENT, kEqualFiles,
 };
+
+/// `msg`, translated.  A helper rather than `gettext(..).as_ptr()` spelled
+/// out at each site: written that way, the five calls below each wrap onto
+/// four lines.
+fn translated(msg: &CStr) -> *const c_char {
+    // SAFETY: `msg` is a NUL-terminated literal.
+    unsafe { gettext(msg.as_ptr()) }
+}
 
 /// `:helptags [++t] {dir}`, or `:helptags ALL` for every `doc` directory in
 /// 'runtimepath'.
@@ -86,7 +95,7 @@ pub unsafe fn ex_helptags(eap: *mut exarg_T) {
             WILD_EXPAND_FREE as c_int,
         );
         if dirname.is_null() || !os_isdir(dirname) {
-            semsg_c!(c"E150: Not a directory: %s".as_ptr(), (*eap).arg);
+            semsg_c!(translated(c"E150: Not a directory: %s"), (*eap).arg);
         } else {
             do_helptags(dirname, add_help_tags, false);
         }
@@ -133,13 +142,13 @@ unsafe fn do_helptags(dirname: *mut c_char, add_help_tags: bool, ignore_writeerr
         if !add_pathsep(namebuff)
             || xstrlcat(namebuff, c"**".as_ptr(), MAXPATHL as usize) >= MAXPATHL as usize
         {
-            emsg(e_fnametoolong.as_ptr());
+            emsg(gettext(e_fnametoolong.as_ptr()));
             return;
         }
         match expand_help_files(namebuff) {
             Some(files) => files,
             None => {
-                semsg_c!(c"E151: No match: %s".as_ptr(), namebuff);
+                semsg_c!(translated(c"E151: No match: %s"), namebuff);
                 return;
             }
         }
@@ -292,14 +301,14 @@ unsafe fn helptags_one(
             || xstrlcat(namebuff, c"/**/*".as_ptr(), MAXPATHL as usize) >= MAXPATHL as usize
             || xstrlcat(namebuff, ext, MAXPATHL as usize) >= MAXPATHL as usize
         {
-            emsg(e_fnametoolong.as_ptr());
+            emsg(gettext(e_fnametoolong.as_ptr()));
             return;
         }
         match expand_help_files(namebuff) {
             Some(files) => (dirlen, files),
             None => {
                 if !got_int.get() {
-                    semsg_c!(c"E151: No match: %s".as_ptr(), namebuff);
+                    semsg_c!(translated(c"E151: No match: %s"), namebuff);
                 }
                 return;
             }
@@ -308,24 +317,21 @@ unsafe fn helptags_one(
 
     // Open the tags file for writing before scanning, so that a directory
     // we cannot write to costs nothing.
+    let (into, from, n) = (namebuff.cast::<c_void>(), dir.cast(), dirlen as size_t + 1);
     // SAFETY: `dir` is `dirlen` bytes plus its NUL, so the copy fits.
     let fd_tags = unsafe {
-        memcpy(
-            namebuff.cast::<c_void>(),
-            dir.cast::<c_void>(),
-            dirlen as size_t + 1,
-        );
+        memcpy(into, from, n);
         if !add_pathsep(namebuff)
             || xstrlcat(namebuff, tagfname, MAXPATHL as usize) >= MAXPATHL as usize
         {
-            emsg(e_fnametoolong.as_ptr());
+            emsg(gettext(e_fnametoolong.as_ptr()));
             // Upstream leaks `files` here; the `Wildcards` drop frees it.
             return;
         }
         let fd_tags = os_fopen(namebuff, c"w".as_ptr());
         if fd_tags.is_null() {
             if !ignore_writeerr {
-                semsg_c!(c"E152: Cannot open %s for writing".as_ptr(), namebuff);
+                semsg_c!(translated(c"E152: Cannot open %s for writing"), namebuff);
             }
             return;
         }
@@ -356,7 +362,7 @@ unsafe fn helptags_one(
             let path = *files.names.offset(fi as isize);
             let fd = os_fopen(path, c"r".as_ptr());
             if fd.is_null() {
-                semsg_c!(c"E153: Unable to open %s for reading".as_ptr(), path);
+                semsg_c!(translated(c"E153: Unable to open %s for reading"), path);
                 continue;
             }
             scan_help_file(fd, path.add(dirlen).offset(1), &mut tags);

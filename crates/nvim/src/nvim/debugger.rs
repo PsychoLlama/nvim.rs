@@ -48,7 +48,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
 use crate::src::nvim::message::{msg, msg_starthere};
 use crate::src::nvim::os::env::{expand_env_save, home_replace};
-use crate::src::nvim::os::libc::{atoi, memmove, strcmp, strcpy, strlen, strncmp, strstr};
+use crate::src::nvim::os::libc::{atoi, gettext, memmove, strcmp, strcpy, strlen, strncmp, strstr};
 use crate::src::nvim::path::fix_fname;
 use crate::src::nvim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_prog, vim_regfree};
 use crate::src::nvim::runtime::{estack_sfile, sourcing_lnum};
@@ -350,7 +350,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> c_int {
         } else if debugger && strncmp(arg, c"expr".as_ptr(), 4) == 0 {
             (DBG_EXPR, false)
         } else {
-            semsg_c!(c"E475: Invalid argument: %s".as_ptr(), arg);
+            semsg_c!(gettext(c"E475: Invalid argument: %s".as_ptr()), arg);
             return FAIL;
         }
     };
@@ -387,7 +387,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> c_int {
     };
     if malformed {
         // SAFETY: caller contract.
-        unsafe { semsg_c!(c"E475: Invalid argument: %s".as_ptr(), arg) };
+        unsafe { semsg_c!(gettext(c"E475: Invalid argument: %s".as_ptr()), arg) };
         return FAIL;
     }
 
@@ -575,7 +575,7 @@ pub unsafe fn ex_breakdel(eap: *mut exarg_T) {
 
     let Some(todel) = todel else {
         // SAFETY: `arg` is NUL-terminated.
-        unsafe { semsg_c!(c"E161: Breakpoint not found: %s".as_ptr(), arg) };
+        unsafe { semsg_c!(gettext(c"E161: Breakpoint not found: %s".as_ptr()), arg) };
         return;
     };
 

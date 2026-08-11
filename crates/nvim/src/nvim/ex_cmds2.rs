@@ -74,7 +74,7 @@ use crate::src::nvim::message::{
     VIM_ALL, VIM_DISCARDALL, VIM_NO, VIM_YES, emsg, msg, msg_source, vim_dialog_yesnoallcancel,
     vim_dialog_yesnocancel, wait_return,
 };
-use crate::src::nvim::os::libc::strlen;
+use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::path::vim_FullName;
 use crate::src::nvim::runtime::{DIP_ALL, source_runtime_vim_lua};
 use crate::src::nvim::types::{
@@ -717,7 +717,7 @@ pub unsafe fn check_fname() -> c_int {
     // SAFETY: module contract.
     unsafe {
         if (*curbuf.get()).b_ffname.is_null() {
-            emsg(c"E32: No file name".as_ptr());
+            emsg(gettext(c"E32: No file name".as_ptr()));
             return FAIL;
         }
     }
@@ -798,23 +798,21 @@ pub unsafe fn ex_compiler(eap: *mut exarg_T) {
             }
             do_cmdline_cmd(c"command -nargs=* -keepscript CompilerSet setlocal <args>".as_ptr());
         }
-        do_unlet(
-            CURRENT_COMPILER.as_ptr(),
-            CURRENT_COMPILER.count_bytes(),
-            true,
-        );
-        do_unlet(
+        let (name, len) = (CURRENT_COMPILER.as_ptr(), CURRENT_COMPILER.count_bytes());
+        do_unlet(name, len, true);
+        let (name, len) = (
             B_CURRENT_COMPILER.as_ptr(),
             B_CURRENT_COMPILER.count_bytes(),
-            true,
         );
+        do_unlet(name, len, true);
 
         let mut pattern = Vec::with_capacity(strlen((*eap).arg) + 12);
         pattern.extend_from_slice(b"compiler/");
         pattern.extend_from_slice(CStr::from_ptr((*eap).arg).to_bytes());
         pattern.extend_from_slice(b".*\0");
         if source_runtime_vim_lua(pattern.as_mut_ptr().cast(), DIP_ALL as c_int) == FAIL {
-            semsg_c!(c"E666: Compiler not supported: %s".as_ptr(), (*eap).arg);
+            let unsupported = gettext(c"E666: Compiler not supported: %s".as_ptr());
+            semsg_c!(unsupported, (*eap).arg);
         }
 
         do_cmdline_cmd(c":delcommand CompilerSet".as_ptr());
