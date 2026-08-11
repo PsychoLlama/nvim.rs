@@ -13,6 +13,8 @@
 //! reports as soon as the parser is driven end to end. Reborrows here are
 //! narrowed to the one collection being touched.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use core::ffi::{c_char, c_void};
 use core::ptr;
 
@@ -109,13 +111,18 @@ pub fn highlight_vec(colors: &mut ParserHighlight) -> InitVec<'_, ParserHighligh
 
 /// Start a parser over the lines `get_line` yields. `colors` may be null when
 /// the caller does not want highlighting.
+///
+/// # Safety
+/// `pstate` must point at writable, suitably aligned storage for a
+/// `ParserState`, which must then stay put: both collections end up holding
+/// the state's own address.
 pub unsafe fn viml_parser_init(
     pstate: *mut ParserState,
     get_line: ParserLineGetter,
     cookie: *mut c_void,
     colors: *mut ParserHighlight,
 ) {
-    *pstate = ParserState {
+    let init = ParserState {
         reader: ParserInputReader {
             get_line,
             cookie,
@@ -124,50 +131,49 @@ pub unsafe fn viml_parser_init(
         colors,
         ..PARSER_STATE_INIT
     };
-    let lines = &raw mut (*pstate).reader.lines;
-    (*lines).capacity = (*lines).init_array.len();
-    (*lines).items = (&raw mut (*lines).init_array).cast::<ParserLine>();
-    let stack = &raw mut (*pstate).stack;
-    (*stack).capacity = (*stack).init_array.len();
-    (*stack).items = (&raw mut (*stack).init_array).cast::<ParserStateItem>();
+    // SAFETY: the caller's obligation. `kvi_init`'s two self-pointers are
+    // written through `pstate` itself rather than through `InitVec::init`:
+    // `items` outlives every borrow the parser goes on to take, so it must
+    // carry the provenance of the raw pointer the caller owns and not of a
+    // `&mut` that dies at the end of this call.
+    unsafe {
+        pstate.write(init);
+        let lines = &raw mut (*pstate).reader.lines;
+        (*lines).capacity = (*lines).init_array.len();
+        (*lines).items = (&raw mut (*lines).init_array).cast::<ParserLine>();
+        let stack = &raw mut (*pstate).stack;
+        (*stack).capacity = (*stack).init_array.len();
+        (*stack).items = (&raw mut (*stack).init_array).cast::<ParserStateItem>();
+    }
 }
 
 /// The rest of the current line, from the cursor on, reading one more line
 /// from the input if the cursor just walked off the end of the last one.
 /// `None` at end of input.
+///
+/// # Safety
+/// `pstate` must point at a parser initialised by [`viml_parser_init`].
 pub unsafe fn viml_parser_get_remaining_line(pstate: *mut ParserState) -> Option<ParserLine> {
-    let pos = (*pstate).pos;
-    let reader = &raw mut (*pstate).reader;
-    let mut pline = if pos.line == (*reader).lines.size {
-        // Pull the next line from the getter, converting it if the reader
-        // carries a conversion, and remember it: every line the parser has
-        // seen stays in `lines` for the duration, because tokens point into
-        // them.
-        let mut fresh = EMPTY_LINE;
-        let get_line = (*reader).get_line.expect("parser has no line getter");
-        get_line((*reader).cookie, &raw mut fresh);
-        if (*reader).conv.vc_type != CONV_NONE && fresh.size != 0 {
-            let mut converted = ParserLine {
-                data: ptr::null(),
-                size: fresh.size,
-                allocated: true,
-            };
-            converted.data = string_convert(
-                &raw mut (*reader).conv,
-                fresh.data as *mut c_char,
-                &raw mut converted.size,
-            );
-            if fresh.allocated {
-                xfree(fresh.data as *mut c_void);
-            }
-            fresh = converted;
-        }
-        lines_vec(&mut (*reader).lines).push(fresh);
+    // SAFETY: the caller's obligation. `pos` is copied out and the reader is
+    // reborrowed on its own, so the reborrow does not reach the stack the
+    // caller may be pushing onto.
+    let (pos, reader) = unsafe { ((*pstate).pos, &mut (*pstate).reader) };
+    remaining_line(pos, reader)
+}
+
+/// [`viml_parser_get_remaining_line`] over the two parts of the state it
+/// actually touches.
+fn remaining_line(pos: ParserPosition, reader: &mut ParserInputReader) -> Option<ParserLine> {
+    let mut pline = if pos.line == reader.lines.size {
+        // Every line the parser has seen stays in `lines` for the duration,
+        // because tokens point into them.
+        let fresh = read_line(reader);
+        lines_vec(&mut reader.lines).push(fresh);
         fresh
     } else {
-        lines_vec(&mut (*reader).lines).last()
+        lines_vec(&mut reader.lines).last()
     };
-    debug_assert!(pos.line == (*reader).lines.size - 1);
+    debug_assert!(pos.line == reader.lines.size - 1);
     if pline.data.is_null() {
         return None;
     }
@@ -176,6 +182,34 @@ pub unsafe fn viml_parser_get_remaining_line(pstate: *mut ParserState) -> Option
     pline.data = pline.data.wrapping_add(pos.col);
     pline.size = pline.size.wrapping_sub(pos.col);
     Some(pline)
+}
+
+/// `viml_preader_get_line`: pull the next line out of the getter, converting
+/// it if the reader carries a conversion.
+fn read_line(reader: &mut ParserInputReader) -> ParserLine {
+    let mut pline = EMPTY_LINE;
+    let get_line = reader.get_line.expect("parser has no line getter");
+    // SAFETY: the getter is the caller's own, registered at `viml_parser_init`,
+    // and writes one `ParserLine` through the pointer it is handed.
+    unsafe { get_line(reader.cookie, &raw mut pline) };
+    if reader.conv.vc_type == CONV_NONE || pline.size == 0 {
+        return pline;
+    }
+    let mut size = pline.size;
+    // SAFETY: `string_convert` reads `size` bytes from the getter's line and
+    // answers a fresh allocation, writing the converted length back.
+    let data =
+        unsafe { string_convert(&raw mut reader.conv, pline.data as *mut c_char, &mut size) };
+    if pline.allocated {
+        // SAFETY: the getter said the line is on the heap, and it has just
+        // been copied out of.
+        unsafe { xfree(pline.data as *mut c_void) };
+    }
+    ParserLine {
+        data,
+        size,
+        allocated: true,
+    }
 }
 
 /// Advance the cursor by `len` bytes, at most to the start of the next line.
@@ -196,17 +230,25 @@ pub fn viml_parser_advance(pos: &mut ParserPosition, reader: &mut ParserInputRea
 /// Record the highlighting of `len` bytes at `start`. A no-op when the caller
 /// asked for no highlighting. Chunks must arrive in order and must not
 /// overlap.
+///
+/// # Safety
+/// `pstate` must point at a parser initialised by [`viml_parser_init`], and
+/// `group` must outlive the highlight log.
 pub unsafe fn viml_parser_highlight(
     pstate: *mut ParserState,
     start: ParserPosition,
     len: usize,
     group: *const c_char,
 ) {
-    if (*pstate).colors.is_null() || len == 0 {
+    // SAFETY: the caller's obligation.
+    let colors = unsafe { (*pstate).colors };
+    if colors.is_null() || len == 0 {
         return;
     }
-    // `colors` is the caller's own collection, not one embedded in the state.
-    let mut colors = highlight_vec(&mut *(*pstate).colors);
+    // `colors` is the caller's own collection, not one embedded in the state,
+    // so reborrowing it does not reach anything else the parser holds.
+    // SAFETY: non-null, and the caller owns it for the whole parse.
+    let mut colors = highlight_vec(unsafe { &mut *colors });
     debug_assert!(
         colors.is_empty() || {
             let last = colors.last();
@@ -225,23 +267,36 @@ pub unsafe fn viml_parser_highlight(
 /// two collections' heap buffers. The un-converted lines belong to whoever
 /// supplied the getter.
 pub fn viml_parser_destroy(pstate: &mut ParserState) {
-    unsafe {
-        for pline in lines_vec(&mut pstate.reader.lines).as_slice() {
-            if pline.allocated {
-                xfree(pline.data as *mut c_void);
-            }
+    for pline in lines_vec(&mut pstate.reader.lines).as_slice() {
+        if pline.allocated {
+            // SAFETY: a converted line was allocated by `read_line` and is
+            // reachable only from here.
+            unsafe { xfree(pline.data as *mut c_void) };
         }
-        xfree(lines_vec(&mut pstate.reader.lines).take_heap());
-        xfree(stack_vec(&mut pstate.stack).take_heap());
+    }
+    let lines = lines_vec(&mut pstate.reader.lines).take_heap();
+    let stack = stack_vec(&mut pstate.stack).take_heap();
+    // SAFETY: each buffer left the inline array through `InitVec`, so it is a
+    // live allocation or null.
+    unsafe {
+        xfree(lines);
+        xfree(stack);
     }
 }
 
 /// A `ParserLineGetter` over a null-terminated array of ready-made lines; the
 /// cookie is a cursor into it and is advanced past each line handed out.
+///
+/// # Safety
+/// `cookie` must point at a `*mut ParserLine` cursor into an array whose last
+/// entry has a null `data`, and `ret_pline` at writable storage for one line.
 pub unsafe extern "C" fn parser_simple_get_line(cookie: *mut c_void, ret_pline: *mut ParserLine) {
     let plines = cookie as *mut *mut ParserLine;
-    *ret_pline = **plines;
-    *plines = (*plines).add(1);
+    // SAFETY: the caller's obligation; the cursor stops at the null line.
+    unsafe {
+        *ret_pline = **plines;
+        *plines = (*plines).add(1);
+    }
 }
 
 #[cfg(test)]
