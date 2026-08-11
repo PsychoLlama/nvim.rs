@@ -8,6 +8,7 @@ mod support;
 mod arglist;
 mod charset;
 mod cmdhist;
+mod cursor;
 mod digraph;
 mod expressions;
 mod fold;
