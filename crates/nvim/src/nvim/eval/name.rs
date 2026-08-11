@@ -145,7 +145,7 @@ pub unsafe fn get_name_len(
 
         len += get_id_len(arg);
         if len == 0 && verbose && **arg as c_int != NUL {
-            semsg_c!(gettext(e_invexpr2.ptr().cast()), *arg);
+            semsg_c!(gettext(e_invexpr2.as_ptr()), *arg);
         }
         len
     }

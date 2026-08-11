@@ -414,7 +414,7 @@ unsafe fn apply_mapping(mp: *mut mapblock_T, keylen: c_int, mapdepth: *mut c_int
         // The depth check catches `:map x y` plus `:map y x`.
         *mapdepth += 1;
         if *mapdepth >= p_mmd.get() as c_int {
-            emsg(gettext(e_recursive_mapping.ptr().cast()));
+            emsg(gettext(e_recursive_mapping.as_ptr()));
             if State.get() & MODE_CMDLINE != 0 {
                 redrawcmdline();
             } else {

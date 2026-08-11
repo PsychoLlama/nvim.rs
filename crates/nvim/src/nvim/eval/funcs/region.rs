@@ -187,7 +187,7 @@ unsafe fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
             curbuf.get()
         };
         if findbuf.is_null() || (*findbuf).b_ml.ml_mfp.is_null() {
-            emsg(gettext(e_buffer_is_not_loaded.ptr() as *const c_char));
+            emsg(gettext(e_buffer_is_not_loaded.as_ptr()));
             return None;
         }
         check_corner(findbuf, &mut p1)?;
@@ -247,11 +247,7 @@ unsafe fn parse_type(spec: *const c_char) -> Option<(MotionType, c_int)> {
     // whole width.
     unsafe {
         let bad = || {
-            semsg_c!(
-                gettext(e_invargNval.ptr() as *const c_char),
-                c"type".as_ptr(),
-                spec,
-            );
+            semsg_c!(gettext(e_invargNval.as_ptr()), c"type".as_ptr(), spec,);
             None
         };
         match CStr::from_ptr(spec).to_bytes() {
@@ -285,20 +281,14 @@ unsafe fn check_corner(buf: *mut buf_T, p: &mut pos_T) -> Option<()> {
     // the line number has been checked.
     unsafe {
         if p.lnum < 1 || p.lnum > (*buf).b_ml.ml_line_count {
-            semsg_c!(
-                gettext(e_invalid_line_number_nr.ptr() as *const c_char),
-                p.lnum,
-            );
+            semsg_c!(gettext(e_invalid_line_number_nr.as_ptr()), p.lnum,);
             return None;
         }
         let len = ml_get_buf_len(buf, p.lnum);
         if p.col == MAXCOL as colnr_T {
             p.col = len + 1;
         } else if p.col < 1 || p.col > len + 1 {
-            semsg_c!(
-                gettext(e_invalid_column_number_nr.ptr() as *const c_char),
-                p.col,
-            );
+            semsg_c!(gettext(e_invalid_column_number_nr.as_ptr()), p.col,);
             return None;
         }
         Some(())

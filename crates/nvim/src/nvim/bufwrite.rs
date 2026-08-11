@@ -322,14 +322,14 @@ pub unsafe fn buf_write(
         }
         if (*buf).b_ml.ml_mfp.is_null() {
             // Can happen during startup, from a stray "w" in the vimrc.
-            emsg(gettext(e_empty_buffer.ptr().cast()));
+            emsg(gettext(e_empty_buffer.as_ptr()));
             return FAIL;
         }
         if check_secure() {
             return FAIL; // writing is disallowed in secure mode
         }
         if strlen(fname) >= MAXPATHL as size_t {
-            emsg(gettext(e_longname.ptr().cast())); // avoid a crash for a long name
+            emsg(gettext(e_longname.as_ptr())); // avoid a crash for a long name
             return FAIL;
         }
 
@@ -543,7 +543,7 @@ pub unsafe fn buf_write(
                         };
                         ml_preserve(buf, false, fsync != 0);
                         if got_int.get() {
-                            err = Some(WriteError::shared(e_interr.ptr().cast(), 0));
+                            err = Some(WriteError::shared(e_interr.as_ptr(), 0));
                             break 'restore_backup;
                         }
                     }
@@ -734,7 +734,7 @@ pub unsafe fn buf_write(
                             err = Some(if writer.conv_error {
                                 conversion_failed(writer.conv_error_lnum)
                             } else if got_int.get() {
-                                WriteError::shared(e_interr.ptr().cast(), 0)
+                                WriteError::shared(e_interr.as_ptr(), 0)
                             } else {
                                 WriteError::plain(c"E514: Write error (file system full?)")
                             });

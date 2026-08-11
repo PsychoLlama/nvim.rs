@@ -818,9 +818,7 @@ pub unsafe fn set_map_str(lp: *mut slang_T, map: *const c_char) {
             {
                 hash_add_item(&raw mut (*lp).sl_map_hash, hi, b, hash);
             } else {
-                emsg(gettext(
-                    e_duplicate_char_in_map_entry.ptr().cast::<c_char>(),
-                ));
+                emsg(gettext(e_duplicate_char_in_map_entry.as_ptr()));
                 xfree(b.cast());
             }
         }

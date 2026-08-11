@@ -123,7 +123,7 @@ pub unsafe fn callback_call(
 ) -> bool {
     unsafe {
         if callback_depth.get() as OptInt > p_mfd.get() {
-            emsg(gettext(e_command_too_recursive.ptr().cast()));
+            emsg(gettext(e_command_too_recursive.as_ptr()));
             return false;
         }
 

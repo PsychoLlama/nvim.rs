@@ -420,7 +420,7 @@ pub fn syn_id2name(id: c_int) -> *mut c_char {
 pub unsafe fn syn_check_group(name: *const c_char, len: size_t) -> c_int {
     if len > MAX_SYN_NAME as size_t {
         // SAFETY: main-thread message call.
-        unsafe { emsg(gettext(e_highlight_group_name_too_long.ptr().cast())) };
+        unsafe { emsg(gettext(e_highlight_group_name_too_long.as_ptr())) };
         return 0;
     }
     // SAFETY: the caller's buffer, `len` bytes of it.
@@ -453,7 +453,7 @@ fn syn_add_group(name: &[u8]) -> c_int {
                 && !matches!(byte, b'_' | b'.' | b'@' | b'-')
             {
                 msg_source(HLF_W);
-                emsg(gettext(e_highlight_group_name_invalid_char.ptr().cast()));
+                emsg(gettext(e_highlight_group_name_invalid_char.as_ptr()));
                 return 0;
             }
         }

@@ -123,7 +123,7 @@ unsafe fn search_direction(varp: *mut typval_T, flags: &mut c_int) -> c_int {
                         // The message quotes the rest of the flag string
                         // from the offending letter on, not just the
                         // letter, and those are arbitrary user bytes.
-                        semsg_c!(gettext(e_invarg2.ptr() as *const c_char), p);
+                        semsg_c!(gettext(e_invarg2.as_ptr()), p);
                         dir = 0;
                     }
                 },
@@ -195,10 +195,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
         if flags & (SP_REPEAT | SP_RETCOUNT) != 0
             || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
         {
-            semsg_c!(
-                gettext(e_invarg2.ptr() as *const c_char),
-                tv_get_string(args.ptr(1)),
-            );
+            semsg_c!(gettext(e_invarg2.as_ptr()), tv_get_string(args.ptr(1)),);
             return 0;
         }
 
@@ -404,10 +401,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
         if flags & (SP_END | SP_SUBPAT) != 0
             || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
         {
-            semsg_c!(
-                gettext(e_invarg2.ptr() as *const c_char),
-                tv_get_string(args.ptr(3)),
-            );
+            semsg_c!(gettext(e_invarg2.as_ptr()), tv_get_string(args.ptr(3)),);
             return 0;
         }
 
@@ -425,19 +419,13 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
             if args.has(5) {
                 lnum_stop = tv_get_number_chk(args.ptr(5), ptr::null_mut()) as linenr_T;
                 if lnum_stop < 0 {
-                    semsg_c!(
-                        gettext(e_invarg2.ptr() as *const c_char),
-                        tv_get_string(args.ptr(5)),
-                    );
+                    semsg_c!(gettext(e_invarg2.as_ptr()), tv_get_string(args.ptr(5)),);
                     return 0;
                 }
                 if args.has(6) {
                     time_limit = tv_get_number_chk(args.ptr(6), ptr::null_mut()) as int64_t;
                     if time_limit < 0 {
-                        semsg_c!(
-                            gettext(e_invarg2.ptr() as *const c_char),
-                            tv_get_string(args.ptr(6)),
-                        );
+                        semsg_c!(gettext(e_invarg2.as_ptr()), tv_get_string(args.ptr(6)),);
                         return 0;
                     }
                 }

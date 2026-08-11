@@ -19,7 +19,6 @@ use crate::src::nvim::fileio::{
     delete_recursive, file_pat_to_reg_pat, readdir_core, vim_copyfile, vim_rename, vim_tempname,
 };
 use crate::src::nvim::garray::{ga_clear_strings, ga_concat_strings, ga_grow, ga_init};
-use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     c_bytes, curbuf, current_sctx, curtab, curwin, e_cant_read_file_str, e_invarg, e_invarg2,
     e_invargNval, e_invexpr2, e_isadir2, e_mkdir, e_notopen, globaldir, p_fs, p_path, p_wic,
@@ -93,8 +92,8 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static e_error_while_writing_str: GlobalCell<[::core::ffi::c_char; 29]> =
-    GlobalCell::new(c_bytes(b"E80: Error while writing: %s\0"));
+static e_error_while_writing_str: [::core::ffi::c_char; 29] =
+    c_bytes(b"E80: Error while writing: %s\0");
 pub unsafe extern "C" fn modify_fname(
     mut src: *mut ::core::ffi::c_char,
     mut tilde_file: bool,
@@ -2307,7 +2306,7 @@ unsafe extern "C" fn write_list(
         }
     }
     semsg_c!(
-        gettext((e_error_while_writing_str.ptr() as *const _) as *const ::core::ffi::c_char),
+        gettext(e_error_while_writing_str.as_ptr()),
         uv_strerror(error),
     );
     return false_0 != 0;
@@ -2332,7 +2331,7 @@ unsafe extern "C" fn write_data(
         }
     }
     semsg_c!(
-        gettext((e_error_while_writing_str.ptr() as *const _) as *const ::core::ffi::c_char),
+        gettext(e_error_while_writing_str.as_ptr()),
         uv_strerror(error),
     );
     return false_0 != 0;

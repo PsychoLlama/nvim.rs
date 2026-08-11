@@ -130,9 +130,9 @@ pub unsafe fn find_job(id: uint64_t, show_error: bool) -> *mut Channel {
         if show_error {
             // A channel that exists but is not a job gets its own message.
             if !data.is_null() && (*data).streamtype != kChannelStreamProc {
-                emsg(gettext(e_invchanjob.ptr().cast()));
+                emsg(gettext(e_invchanjob.as_ptr()));
             } else {
-                emsg(gettext(e_invchan.ptr().cast()));
+                emsg(gettext(e_invchan.as_ptr()));
             }
         }
         null_mut()
@@ -149,7 +149,7 @@ pub unsafe fn script_host_eval(name: *mut c_char, argvars: *mut typval_T, rettv:
             return;
         }
         if (*argvars).v_type != VAR_STRING {
-            emsg(gettext(e_invarg.ptr().cast()));
+            emsg(gettext(e_invarg.as_ptr()));
             return;
         }
         let args: *mut list_T = tv_list_alloc(1 as ptrdiff_t);
@@ -275,10 +275,7 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
             return false;
         }
         if throw_if_fast && !nlua_is_deferred_safe() {
-            semsg_c!(
-                e_fast_api_disabled.ptr().cast(),
-                c"Vimscript function".as_ptr(),
-            );
+            semsg_c!(e_fast_api_disabled.as_ptr(), c"Vimscript function".as_ptr(),);
             return false;
         }
 

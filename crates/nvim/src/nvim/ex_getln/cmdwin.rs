@@ -37,9 +37,9 @@ pub unsafe fn text_locked_msg() {
 /// The message [`text_locked_msg`] gives: which of the two locks is on.
 pub fn get_text_locked_msg() -> *const ::core::ffi::c_char {
     if cmdwin_type.get() != 0 {
-        e_cmdwin.ptr() as *const ::core::ffi::c_char
+        e_cmdwin.as_ptr()
     } else {
-        e_textlock.ptr() as *const ::core::ffi::c_char
+        e_textlock.as_ptr()
     }
 }
 
@@ -59,9 +59,7 @@ pub unsafe fn text_or_buf_locked() -> bool {
 pub unsafe fn curbuf_locked() -> bool {
     unsafe {
         if (*curbuf.get()).b_ro_locked > 0 {
-            emsg(gettext(
-                e_cannot_edit_other_buf.ptr() as *const ::core::ffi::c_char
-            ));
+            emsg(gettext(e_cannot_edit_other_buf.as_ptr()));
             return true;
         }
         allbuf_locked()
@@ -94,7 +92,7 @@ pub unsafe extern "C" fn did_set_cedit(_args: *mut optset_T) -> *const ::core::f
         } else {
             let n = string_to_key(p_cedit.get());
             if n == 0 || vim_isprintc(n) {
-                return e_invarg.ptr() as *const ::core::ffi::c_char;
+                return e_invarg.as_ptr();
             }
             cedit_key.set(n);
         }
@@ -340,7 +338,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         {
             cmdwin_result.set(Ctrl_C);
             emsg(gettext(
-                e_active_window_or_buffer_changed_or_deleted.ptr() as *const ::core::ffi::c_char
+                e_active_window_or_buffer_changed_or_deleted.as_ptr(),
             ));
         } else {
             // Autocmds may abort script processing.

@@ -138,16 +138,14 @@ fn main_events() -> *mut MultiQueue {
 
 /// The address of one of the shared `e_*` message strings.
 ///
-/// They are `GlobalCell`s only because the transpiler made every C global one;
-/// nothing ever writes them, so a shared pointer is all a caller wants and
-/// `ptr()`'s exclusive-access contract does not apply. `GlobalCell` is
-/// `repr(transparent)` over its contents, so this is the array's address.
-fn message<const N: usize>(msg: &'static GlobalCell<[c_char; N]>) -> *const c_char {
-    ptr::from_ref(msg).cast()
+/// They are plain `static`s -- `const char e_x[]` upstream, never written --
+/// so a shared pointer is all any caller wants.
+fn message<const N: usize>(msg: &'static [c_char; N]) -> *const c_char {
+    msg.as_ptr()
 }
 
 /// The translated text of one of them.
-pub(super) fn translated<const N: usize>(msg: &'static GlobalCell<[c_char; N]>) -> *const c_char {
+pub(super) fn translated<const N: usize>(msg: &'static [c_char; N]) -> *const c_char {
     // SAFETY: gettext answers either its argument or a pointer into the loaded
     // message catalog; both outlive the call.
     unsafe { gettext(message(msg)) }

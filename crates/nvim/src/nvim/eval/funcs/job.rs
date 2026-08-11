@@ -82,7 +82,7 @@ const NO_CALLBACK: Callback = Callback {
 unsafe fn job_id(arg: &typval_T) -> Option<uint64_t> {
     if arg.v_type != VAR_NUMBER {
         // SAFETY: `e_invarg` is a live NUL-terminated buffer.
-        unsafe { emsg(gettext(e_invarg.ptr() as *const c_char)) };
+        unsafe { emsg(gettext(e_invarg.as_ptr())) };
         return None;
     }
     // SAFETY: the type tag names the union member.
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn f_jobresize(
         // All three arguments are checked together, so a bad width reports
         // the same message a bad job id does.
         if args.ty(0) != VAR_NUMBER || args.ty(1) != VAR_NUMBER || args.ty(2) != VAR_NUMBER {
-            emsg(gettext(e_invarg.ptr() as *const c_char));
+            emsg(gettext(e_invarg.as_ptr()));
             return;
         }
         let data = find_job(args.get(0).vval.v_number as uint64_t, true);
@@ -141,7 +141,7 @@ pub unsafe extern "C" fn f_jobresize(
             return;
         }
         if (*channel_proc(data)).type_0 != kProcTypePty {
-            emsg(gettext(e_channotpty.ptr() as *const c_char));
+            emsg(gettext(e_channotpty.as_ptr()));
             return;
         }
         pty_proc_resize(
@@ -205,7 +205,7 @@ pub unsafe extern "C" fn f_jobwait(
             return;
         }
         if args.ty(0) != VAR_LIST || (args.ty(1) != VAR_NUMBER && args.has(1)) {
-            emsg(gettext(e_invarg.ptr() as *const c_char));
+            emsg(gettext(e_invarg.as_ptr()));
             return;
         }
 
@@ -453,10 +453,7 @@ pub unsafe extern "C" fn f_jobstart(
         }
 
         if args.ty(1) != VAR_DICT && args.has(1) {
-            semsg_c!(
-                gettext(e_invarg2.ptr() as *const c_char),
-                c"expected dictionary".as_ptr(),
-            );
+            semsg_c!(gettext(e_invarg2.as_ptr()), c"expected dictionary".as_ptr(),);
             bail!();
         }
 
@@ -489,11 +486,7 @@ pub unsafe extern "C" fn f_jobstart(
                 if strncmp(s, c"null".as_ptr(), NUMBUFLEN as usize) == 0 {
                     stdin_mode = kChannelStdinNull;
                 } else if strncmp(s, c"pipe".as_ptr(), NUMBUFLEN as usize) != 0 {
-                    semsg_c!(
-                        gettext(e_invargNval.ptr() as *const c_char),
-                        c"stdin".as_ptr(),
-                        s,
-                    );
+                    semsg_c!(gettext(e_invargNval.as_ptr()), c"stdin".as_ptr(), s,);
                 }
             }
 
@@ -502,14 +495,14 @@ pub unsafe extern "C" fn f_jobstart(
             let job_term = tv_dict_find(job_opts, c"term".as_ptr(), 4);
             if !job_term.is_null() && (*job_term).di_tv.v_type != VAR_BOOL {
                 semsg_c!(
-                    gettext(e_invarg2.ptr() as *const c_char),
+                    gettext(e_invarg2.as_ptr()),
                     c"'term' must be Boolean".as_ptr(),
                 );
                 bail!();
             }
             if pty && rpc {
                 semsg_c!(
-                    gettext(e_invarg2.ptr() as *const c_char),
+                    gettext(e_invarg2.as_ptr()),
                     c"job cannot have both 'pty' and 'rpc' options set".as_ptr(),
                 );
                 bail!();
@@ -520,7 +513,7 @@ pub unsafe extern "C" fn f_jobstart(
                 cwd = new_cwd;
                 if !os_isdir(cwd) {
                     semsg_c!(
-                        gettext(e_invarg2.ptr() as *const c_char),
+                        gettext(e_invarg2.as_ptr()),
                         c"expected valid directory".as_ptr(),
                     );
                     bail!();
@@ -529,7 +522,7 @@ pub unsafe extern "C" fn f_jobstart(
 
             job_env = tv_dict_find(job_opts, c"env".as_ptr(), 3);
             if !job_env.is_null() && (*job_env).di_tv.v_type != VAR_DICT {
-                semsg_c!(gettext(e_invarg2.ptr() as *const c_char), c"env".as_ptr());
+                semsg_c!(gettext(e_invarg2.as_ptr()), c"env".as_ptr());
                 bail!();
             }
 

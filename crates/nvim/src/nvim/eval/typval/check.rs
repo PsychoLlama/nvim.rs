@@ -95,7 +95,7 @@ pub unsafe extern "C" fn tv_check_for_string_arg(
         let arg = &*args.offset(idx as isize);
         arg_check(
             arg.v_type == VAR_STRING,
-            e_string_required_for_argument_nr.ptr().cast(),
+            e_string_required_for_argument_nr.as_ptr(),
             idx,
         )
     }
@@ -113,7 +113,7 @@ pub unsafe extern "C" fn tv_check_for_nonempty_string_arg(
         let s = (*args.offset(idx as isize)).vval.v_string;
         arg_check(
             !s.is_null() && *s as ::core::ffi::c_int != NUL,
-            e_non_empty_string_required_for_argument_nr.ptr().cast(),
+            e_non_empty_string_required_for_argument_nr.as_ptr(),
             idx,
         )
     }
@@ -141,7 +141,7 @@ pub unsafe extern "C" fn tv_check_for_number_arg(
         let arg = &*args.offset(idx as isize);
         arg_check(
             arg.v_type == VAR_NUMBER,
-            e_number_required_for_argument_nr.ptr().cast(),
+            e_number_required_for_argument_nr.as_ptr(),
             idx,
         )
     }
@@ -169,7 +169,7 @@ pub unsafe extern "C" fn tv_check_for_float_or_nr_arg(
         let arg = &*args.offset(idx as isize);
         arg_check(
             arg.v_type == VAR_FLOAT || arg.v_type == VAR_NUMBER,
-            e_float_or_number_required_for_argument_nr.ptr().cast(),
+            e_float_or_number_required_for_argument_nr.as_ptr(),
             idx,
         )
     }
@@ -186,7 +186,7 @@ pub unsafe extern "C" fn tv_check_for_bool_arg(
             arg.v_type == VAR_NUMBER && (arg.vval.v_number == 0 || arg.vval.v_number == 1);
         arg_check(
             arg.v_type == VAR_BOOL || numeric_bool,
-            e_bool_required_for_argument_nr.ptr().cast(),
+            e_bool_required_for_argument_nr.as_ptr(),
             idx,
         )
     }
@@ -214,7 +214,7 @@ pub unsafe extern "C" fn tv_check_for_blob_arg(
         let arg = &*args.offset(idx as isize);
         arg_check(
             arg.v_type == VAR_BLOB,
-            e_blob_required_for_argument_nr.ptr().cast(),
+            e_blob_required_for_argument_nr.as_ptr(),
             idx,
         )
     }
@@ -229,7 +229,7 @@ pub unsafe extern "C" fn tv_check_for_list_arg(
         let arg = &*args.offset(idx as isize);
         arg_check(
             arg.v_type == VAR_LIST,
-            e_list_required_for_argument_nr.ptr().cast(),
+            e_list_required_for_argument_nr.as_ptr(),
             idx,
         )
     }
@@ -244,7 +244,7 @@ pub unsafe extern "C" fn tv_check_for_dict_arg(
         let arg = &*args.offset(idx as isize);
         arg_check(
             arg.v_type == VAR_DICT,
-            e_dict_required_for_argument_nr.ptr().cast(),
+            e_dict_required_for_argument_nr.as_ptr(),
             idx,
         )
     }
@@ -261,7 +261,7 @@ pub unsafe extern "C" fn tv_check_for_nonnull_dict_arg(
         }
         arg_check(
             !(*args.offset(idx as isize)).vval.v_dict.is_null(),
-            e_non_null_dict_required_for_argument_nr.ptr().cast(),
+            e_non_null_dict_required_for_argument_nr.as_ptr(),
             idx,
         )
     }
@@ -289,7 +289,7 @@ pub unsafe extern "C" fn tv_check_for_string_or_number_arg(
         let arg = &*args.offset(idx as isize);
         arg_check(
             arg.v_type == VAR_STRING || arg.v_type == VAR_NUMBER,
-            e_string_or_number_required_for_argument_nr.ptr().cast(),
+            e_string_or_number_required_for_argument_nr.as_ptr(),
             idx,
         )
     }
@@ -320,7 +320,7 @@ pub unsafe extern "C" fn tv_check_for_string_or_list_arg(
         let arg = &*args.offset(idx as isize);
         arg_check(
             arg.v_type == VAR_STRING || arg.v_type == VAR_LIST,
-            e_string_or_list_required_for_argument_nr.ptr().cast(),
+            e_string_or_list_required_for_argument_nr.as_ptr(),
             idx,
         )
     }
@@ -335,7 +335,7 @@ pub unsafe extern "C" fn tv_check_for_string_or_list_or_blob_arg(
         let arg = &*args.offset(idx as isize);
         arg_check(
             arg.v_type == VAR_STRING || arg.v_type == VAR_LIST || arg.v_type == VAR_BLOB,
-            e_string_list_or_blob_required_for_argument_nr.ptr().cast(),
+            e_string_list_or_blob_required_for_argument_nr.as_ptr(),
             idx,
         )
     }
@@ -363,7 +363,7 @@ pub unsafe extern "C" fn tv_check_for_string_or_func_arg(
         let arg = &*args.offset(idx as isize);
         arg_check(
             arg.v_type == VAR_PARTIAL || arg.v_type == VAR_FUNC || arg.v_type == VAR_STRING,
-            e_string_or_function_required_for_argument_nr.ptr().cast(),
+            e_string_or_function_required_for_argument_nr.as_ptr(),
             idx,
         )
     }
@@ -378,7 +378,7 @@ pub unsafe extern "C" fn tv_check_for_list_or_blob_arg(
         let arg = &*args.offset(idx as isize);
         arg_check(
             arg.v_type == VAR_LIST || arg.v_type == VAR_BLOB,
-            e_list_or_blob_required_for_argument_nr.ptr().cast(),
+            e_list_or_blob_required_for_argument_nr.as_ptr(),
             idx,
         )
     }

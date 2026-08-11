@@ -378,7 +378,7 @@ pub unsafe fn no_spell_checking(wp: *mut win_T) -> bool {
             || *(*(*wp).w_s).b_p_spl == 0
             || (*(*wp).w_s).b_langp.ga_len <= 0
         {
-            emsg(gettext(e_no_spell.ptr() as *const c_char));
+            emsg(gettext(e_no_spell.as_ptr()));
             return true;
         }
         false

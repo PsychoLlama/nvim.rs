@@ -206,7 +206,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: *mut CmdlineInfo) -> bool {
         };
         let mut can_free_cb = false;
         let mut err: Error = ERROR_INIT;
-        let mut err_errmsg = e_intern2.ptr() as *const ::core::ffi::c_char;
+        let mut err_errmsg = e_intern2.as_ptr();
         let mut dgc_ret = true;
 
         // The C's two labels: `Ok` leaves at `color_cmdline_end`, `Err` at

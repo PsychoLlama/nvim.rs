@@ -429,7 +429,7 @@ impl KeyLoop {
                     match line.bytes[arg_at..].iter().position(|&b| b == b'\'') {
                         Some(at) => arg_at + at,
                         None => {
-                            semsg_c!(gettext(e_invarg2.as_raw().cast()), line.ptr(key_at));
+                            semsg_c!(gettext(e_invarg2.as_ptr()), line.ptr(key_at));
                             break;
                         }
                     }

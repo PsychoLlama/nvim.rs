@@ -144,7 +144,7 @@ unsafe fn validate_opt_idx(
     errmsg: &mut *const c_char,
 ) -> c_int {
     if prefix != Prefix::None && !option_has_type(opt_idx, kOptValTypeBoolean) {
-        *errmsg = e_invarg.ptr().cast::<c_char>();
+        *errmsg = e_invarg.as_ptr();
         return FAIL;
     }
     // A `:set` sweeping over windows or buffers only wants its own kind.
@@ -172,7 +172,7 @@ unsafe fn validate_opt_idx(
         }
     }
     if sandbox.get() != 0 && flags & kOptFlagSecure as uint32_t != 0 {
-        *errmsg = e_sandbox.ptr().cast::<c_char>();
+        *errmsg = e_sandbox.as_ptr();
         return FAIL;
     }
     OK
@@ -397,7 +397,7 @@ unsafe fn take_number(
         if is_key_option && looks_like_key {
             let key = string_to_key(arg) as OptInt;
             if key == 0 {
-                *errmsg = e_invarg.ptr().cast::<c_char>();
+                *errmsg = e_invarg.as_ptr();
                 return None;
             }
             return Some(key);
@@ -501,7 +501,7 @@ unsafe fn do_one_set_option(
                 && *argp.add(1) != NUL as c_char
                 && !ascii_iswhite(*argp.add(1) as c_int)
             {
-                *errmsg = e_trailing.ptr().cast::<c_char>();
+                *errmsg = e_trailing.as_ptr();
                 return;
             }
         }
@@ -518,7 +518,7 @@ unsafe fn do_one_set_option(
                 && nextchar != NUL as c_int
                 && !ascii_iswhite(afterchar as c_int)
             {
-                *errmsg = e_trailing.ptr().cast::<c_char>();
+                *errmsg = e_trailing.as_ptr();
             }
             return;
         }
@@ -526,18 +526,18 @@ unsafe fn do_one_set_option(
         if option_has_type(opt_idx, kOptValTypeBoolean) {
             // A boolean takes no value, and nothing may follow it.
             if !vim_strchr(c"=:".as_ptr(), nextchar).is_null() {
-                *errmsg = e_invarg.ptr().cast::<c_char>();
+                *errmsg = e_invarg.as_ptr();
                 return;
             }
             if vim_strchr(c"!&<".as_ptr(), nextchar).is_null()
                 && nextchar != NUL as c_int
                 && !ascii_iswhite(afterchar as c_int)
             {
-                *errmsg = e_trailing.ptr().cast::<c_char>();
+                *errmsg = e_trailing.as_ptr();
                 return;
             }
         } else if vim_strchr(c"=:&<".as_ptr(), nextchar).is_null() {
-            *errmsg = e_invarg.ptr().cast::<c_char>();
+            *errmsg = e_invarg.as_ptr();
             return;
         }
 

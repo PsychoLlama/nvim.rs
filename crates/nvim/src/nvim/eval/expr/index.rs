@@ -164,7 +164,7 @@ pub(crate) unsafe fn eval_index(
 pub(crate) unsafe fn check_can_index(rettv: *mut typval_T, evaluate: bool, verbose: bool) -> c_int {
     let message = match unsafe { (*rettv).v_type } {
         VAR_FUNC | VAR_PARTIAL => e_cannot_index_a_funcref.as_ptr(),
-        VAR_FLOAT => e_using_float_as_string.ptr().cast::<c_char>(),
+        VAR_FLOAT => e_using_float_as_string.as_ptr(),
         VAR_BOOL | VAR_SPECIAL => e_cannot_index_special_variable.as_ptr(),
         // Not evaluating: the subscript is only being skipped over, and an
         // unset value is what an unevaluated operand looks like.
@@ -327,9 +327,9 @@ pub(crate) unsafe fn eval_index_inner(
                 let item: *mut dictitem_T = tv_dict_find((*rettv).vval.v_dict, key, keylen);
                 if item.is_null() && verbose {
                     if keylen > 0 {
-                        semsg_c!(gettext(e_dictkey_len.ptr().cast()), keylen, key);
+                        semsg_c!(gettext(e_dictkey_len.as_ptr()), keylen, key);
                     } else {
-                        semsg_c!(gettext(e_dictkey.ptr().cast()), key);
+                        semsg_c!(gettext(e_dictkey.as_ptr()), key);
                     }
                 }
                 if item.is_null() || tv_is_luafunc(&raw mut (*item).di_tv) {

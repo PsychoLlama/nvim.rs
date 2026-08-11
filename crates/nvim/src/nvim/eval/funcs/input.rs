@@ -133,7 +133,7 @@ pub unsafe extern "C" fn f_debugbreak(
     unsafe {
         let pid = tv_get_number(args.ptr(0)) as c_int;
         if pid == 0 {
-            emsg(gettext(e_invarg.ptr() as *const c_char));
+            emsg(gettext(e_invarg.as_ptr()));
             return;
         }
         uv_kill(pid, SIGINT);
@@ -217,10 +217,7 @@ pub unsafe extern "C" fn f_inputlist(
     // whole call.
     unsafe {
         if args.ty(0) != VAR_LIST {
-            semsg_c!(
-                gettext(e_listarg.ptr() as *const c_char),
-                c"inputlist()".as_ptr(),
-            );
+            semsg_c!(gettext(e_listarg.as_ptr()), c"inputlist()".as_ptr(),);
             return;
         }
         // Start at the bottom of the screen so the whole list is visible.

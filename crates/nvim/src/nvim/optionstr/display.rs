@@ -249,7 +249,7 @@ pub unsafe extern "C" fn did_set_guicursor(_args: *mut optset_T) -> *const c_cha
 pub unsafe extern "C" fn did_set_highlight(args: *mut optset_T) -> *const c_char {
     // SAFETY: both are C strings.
     if unsafe { strcmp(*varp(args), HIGHLIGHT_INIT.as_ptr()) } != 0 {
-        return e_unsupportedoption.ptr().cast::<c_char>();
+        return e_unsupportedoption.as_ptr();
     }
     ptr::null()
 }

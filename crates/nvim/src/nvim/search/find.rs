@@ -648,10 +648,10 @@ pub unsafe extern "C" fn searchit(
 
         if found == 0 {
             if got_int.get() {
-                emsg(gettext(e_interr.ptr().cast()));
+                emsg(gettext(e_interr.as_ptr()));
             } else if options & SEARCH_MSG == SEARCH_MSG {
                 let msg = if p_ws.get() != 0 {
-                    gettext(e_patnotf2.ptr().cast())
+                    gettext(e_patnotf2.as_ptr())
                 } else if lnum == 0 {
                     gettext(c"E384: Search hit TOP without match for: %s".as_ptr())
                 } else {

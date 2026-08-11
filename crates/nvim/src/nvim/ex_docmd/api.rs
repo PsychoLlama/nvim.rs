@@ -98,9 +98,7 @@ pub unsafe fn parse_cmdline(
             // The command name says what kind of address the range counts in.
             let mut p = find_excmd_after_range(eap);
             if p.is_null() {
-                *errormsg = gettext(
-                    (e_ambiguous_use_of_user_defined_command.ptr() as *const _) as *const c_char,
-                );
+                *errormsg = gettext(e_ambiguous_use_of_user_defined_command.as_ptr());
                 break 'end;
             }
 
@@ -135,7 +133,7 @@ pub unsafe fn parse_cmdline(
             if ea.cmdidx as c_int == CMD_SIZE as c_int {
                 xstrlcpy(
                     IObuff.ptr() as *mut c_char,
-                    gettext((e_not_an_editor_command.ptr() as *const _) as *const c_char),
+                    gettext(e_not_an_editor_command.as_ptr()),
                     IOSIZE as size_t,
                 );
                 // The modifiers parsed, so the error is in what follows them.

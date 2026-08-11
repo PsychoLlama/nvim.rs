@@ -146,10 +146,7 @@ pub unsafe extern "C" fn tv_item_lock(
         static recurse: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
         if recurse.get() >= DICT_MAXNEST {
-            emsg(gettext(
-                (e_variable_nested_too_deep_for_unlock.ptr() as *const _)
-                    as *const ::core::ffi::c_char,
-            ));
+            emsg(gettext(e_variable_nested_too_deep_for_unlock.as_ptr()));
             return;
         }
         if deep == 0 {

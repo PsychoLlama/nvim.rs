@@ -148,7 +148,7 @@ pub(crate) unsafe fn eval_lambda(
                 if *skipwhite(*arg) == b'(' as c_char {
                     emsg(gettext(e_nowhitespace.as_ptr()));
                 } else {
-                    semsg_c!(gettext(e_missingparen.ptr().cast()), c"lambda".as_ptr());
+                    semsg_c!(gettext(e_missingparen.as_ptr()), c"lambda".as_ptr());
                 }
             }
             tv_clear(rettv);
@@ -212,7 +212,7 @@ pub(crate) unsafe fn eval_method(
                 if lua_funcname.is_null() {
                     emsg(gettext(c"E260: Missing name after ->".as_ptr()));
                 } else {
-                    semsg_c!(gettext(e_invexpr2.ptr().cast()), name);
+                    semsg_c!(gettext(e_invexpr2.as_ptr()), name);
                 }
             }
             ret = FAIL;
@@ -237,7 +237,7 @@ pub(crate) unsafe fn eval_method(
                     ret = FAIL;
                 } else if *skipwhite(*arg) as c_int != NUL {
                     if verbose {
-                        semsg_c!(gettext(e_trailing_arg.ptr().cast()), *arg);
+                        semsg_c!(gettext(e_trailing_arg.as_ptr()), *arg);
                     }
                     ret = FAIL;
                 } else if callee.v_type == VAR_FUNC && !callee.vval.v_string.is_null() {
@@ -269,7 +269,7 @@ pub(crate) unsafe fn eval_method(
                     }
                 } else {
                     if verbose {
-                        semsg_c!(gettext(e_not_callable_type_str.ptr().cast()), name);
+                        semsg_c!(gettext(e_not_callable_type_str.as_ptr()), name);
                     }
                     ret = FAIL;
                 }
@@ -280,7 +280,7 @@ pub(crate) unsafe fn eval_method(
             if ret == OK {
                 if **arg != b'(' as c_char {
                     if verbose {
-                        semsg_c!(gettext(e_missingparen.ptr().cast()), name);
+                        semsg_c!(gettext(e_missingparen.as_ptr()), name);
                     }
                     ret = FAIL;
                 } else if ascii_iswhite(*(*arg).offset(-1) as c_int) {

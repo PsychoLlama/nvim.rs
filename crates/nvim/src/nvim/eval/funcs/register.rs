@@ -315,10 +315,7 @@ pub unsafe extern "C" fn f_setreg(
                 if get_yank_type(&mut p, &mut yank_type, &mut block_len) == FAIL
                     || *p.add(1) != NUL as c_char
                 {
-                    semsg_c!(
-                        gettext(e_invargval.ptr() as *const c_char),
-                        c"value".as_ptr(),
-                    );
+                    semsg_c!(gettext(e_invargval.as_ptr()), c"value".as_ptr(),);
                     return;
                 }
             }
@@ -341,10 +338,7 @@ pub unsafe extern "C" fn f_setreg(
             // A dict value already carried the type; a third argument on
             // top of it is one argument too many.
             if yank_type != kMTUnknown {
-                semsg_c!(
-                    gettext(e_toomanyarg.ptr() as *const c_char),
-                    c"setreg".as_ptr(),
-                );
+                semsg_c!(gettext(e_toomanyarg.as_ptr()), c"setreg".as_ptr(),);
                 return;
             }
             let opts = tv_get_string_chk(args.ptr(2));

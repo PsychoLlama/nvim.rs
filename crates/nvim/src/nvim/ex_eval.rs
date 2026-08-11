@@ -164,8 +164,8 @@ static cause_abort: GlobalCell<bool> = GlobalCell::new(false);
 /// The address of a message constant, for `eap->errmsg` (which stores the
 /// pointer) and for the identity test in
 /// [`cause_errthrow`](exception::cause_errthrow).
-fn message<const N: usize>(cell: &'static GlobalCell<[c_char; N]>) -> *mut c_char {
-    cell.ptr().cast::<c_char>()
+fn message<const N: usize>(msg: &'static [c_char; N]) -> *mut c_char {
+    msg.as_ptr().cast_mut()
 }
 
 /// The shared scratch buffer the exception reports format through.

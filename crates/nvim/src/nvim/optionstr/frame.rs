@@ -18,7 +18,7 @@ use crate::src::nvim::types::{optset_T, win_T};
 /// "E474: Invalid argument", the message almost every string option's check
 /// reports when it has nothing more specific to say.
 pub(crate) fn invalid() -> *const c_char {
-    e_invarg.ptr().cast::<c_char>()
+    e_invarg.as_ptr()
 }
 
 /// The option's value variable — a `char **`, since every option here is a

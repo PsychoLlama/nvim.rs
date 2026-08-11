@@ -371,7 +371,7 @@ pub unsafe extern "C" fn did_set_encoding(args: *mut optset_T) -> *const c_char 
         // SAFETY: the frame's buffer and C string value.
         unsafe {
             if (*buf).b_p_ma == 0 && opt_flags != OPT_GLOBAL as c_int {
-                return e_modifiable.ptr().cast::<c_char>();
+                return e_modifiable.as_ptr();
             }
             // 'fileencoding' is one encoding, not a list.
             if !vim_strchr(*varp, c_int::from(b',')).is_null() {
@@ -390,7 +390,7 @@ pub unsafe extern "C" fn did_set_encoding(args: *mut optset_T) -> *const c_char 
         *varp = canonical;
         if varp == p_enc.ptr() {
             if strcmp(p_enc.get(), c"utf-8".as_ptr()) != 0 {
-                return e_unsupportedoption.ptr().cast::<c_char>();
+                return e_unsupportedoption.as_ptr();
             }
             spell_reload();
         }
@@ -415,7 +415,7 @@ pub unsafe extern "C" fn did_set_fileformat(args: *mut optset_T) -> *const c_cha
     let (buf, opt_flags) = unsafe { ((*args).os_buf.cast::<buf_T>(), (*args).os_flags) };
     // Changing a buffer's line endings changes its text.
     if unsafe { (*buf).b_p_ma } == 0 && opt_flags & OPT_GLOBAL as c_int == 0 {
-        return e_modifiable.ptr().cast::<c_char>();
+        return e_modifiable.as_ptr();
     }
     let errmsg = unsafe { did_set_str_generic(args) };
     if !errmsg.is_null() {

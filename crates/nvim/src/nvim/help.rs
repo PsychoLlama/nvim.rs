@@ -185,7 +185,7 @@ pub unsafe fn ex_help(eap: *mut exarg_T) {
         allocated_arg = unsafe { resolve_tag_at_cursor() };
         if allocated_arg.is_null() {
             // SAFETY: a NUL-terminated message constant.
-            unsafe { emsg(e_noident.ptr().cast::<c_char>()) };
+            unsafe { emsg(e_noident.as_ptr()) };
             return;
         }
         arg = allocated_arg;

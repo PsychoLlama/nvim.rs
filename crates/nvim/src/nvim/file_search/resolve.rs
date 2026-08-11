@@ -333,12 +333,12 @@ unsafe fn find_along_option(
 unsafe fn report_missing(first: bool, find_what: c_int, file_to_find: *const c_char) {
     unsafe {
         let message = match (first, find_what == FINDFILE_DIR as c_int) {
-            (true, true) => e_cant_find_directory_str_in_cdpath.ptr().cast::<c_char>(),
-            (true, false) => e_cant_find_file_str_in_path.ptr().cast::<c_char>(),
+            (true, true) => e_cant_find_directory_str_in_cdpath.as_ptr(),
+            (true, false) => e_cant_find_file_str_in_path.as_ptr(),
             (false, true) => e_no_more_directory_str_found_in_cdpath
-                .ptr()
+                .as_ptr()
                 .cast::<c_char>(),
-            (false, false) => e_no_more_file_str_found_in_path.ptr().cast::<c_char>(),
+            (false, false) => e_no_more_file_str_found_in_path.as_ptr(),
         };
         semsg_c!(gettext(message), file_to_find);
     }

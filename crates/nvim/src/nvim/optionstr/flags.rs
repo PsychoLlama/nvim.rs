@@ -129,7 +129,7 @@ pub(crate) unsafe fn did_set_opt_flags(
     list: bool,
 ) -> *const c_char {
     if unsafe { opt_strings_flags(val, values, flagp, list) } != OK {
-        e_invarg.ptr().cast::<c_char>()
+        e_invarg.as_ptr()
     } else {
         ptr::null()
     }
@@ -143,7 +143,7 @@ pub(crate) unsafe fn did_set_opt_flags(
 pub unsafe extern "C" fn did_set_str_generic(args: *mut optset_T) -> *const c_char {
     let (idx, varp) = unsafe { ((*args).os_idx, (*args).os_varp.cast::<*mut c_char>()) };
     if unsafe { check_str_opt(idx, varp) } != OK {
-        e_invarg.ptr().cast::<c_char>()
+        e_invarg.as_ptr()
     } else {
         ptr::null()
     }

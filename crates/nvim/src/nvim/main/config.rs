@@ -225,11 +225,7 @@ unsafe fn source_init_pair(
         {
             // Both present: the Lua one won, and the user should know.
             if os_path_exists(init_vim) {
-                semsg_c!(
-                    (e_conflicting_configs.ptr() as *const _) as *const c_char,
-                    init_lua,
-                    init_vim,
-                );
+                semsg_c!(e_conflicting_configs.as_ptr(), init_lua, init_vim,);
             }
             return Some(p_exrc.get() != 0);
         }
@@ -337,7 +333,7 @@ pub(crate) unsafe fn source_startup_scripts(parmp: *const mparm_T) {
                 ) != OK
             {
                 semsg_c!(
-                    gettext((e_cannot_read_from_str_2.ptr() as *const _) as *const c_char),
+                    gettext(e_cannot_read_from_str_2.as_ptr()),
                     (*parmp).use_vimrc,
                 );
             }

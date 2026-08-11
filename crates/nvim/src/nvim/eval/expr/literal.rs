@@ -215,7 +215,7 @@ pub(crate) unsafe fn eval_number(
             );
             if len == 0 {
                 if evaluate {
-                    semsg_c!(gettext(e_invexpr2.ptr().cast()), *arg);
+                    semsg_c!(gettext(e_invexpr2.as_ptr()), *arg);
                 }
                 return FAIL;
             }
@@ -286,7 +286,7 @@ pub(crate) unsafe fn eval_string(
                 }
                 p = p.add(1);
                 if *p.sub(1) == b'}' as c_char && *p != b'}' as c_char {
-                    semsg_c!(gettext(e_stray_closing_curly_str.ptr().cast()), *arg);
+                    semsg_c!(gettext(e_stray_closing_curly_str.as_ptr()), *arg);
                     return FAIL;
                 }
                 extra -= 1; // `{{` becomes `{`, `}}` becomes `}`
@@ -482,7 +482,7 @@ pub(crate) unsafe fn eval_lit_string(
                 } else if *p == b'}' as c_char {
                     p = p.add(1);
                     if *p != b'}' as c_char {
-                        semsg_c!(gettext(e_stray_closing_curly_str.ptr().cast()), *arg);
+                        semsg_c!(gettext(e_stray_closing_curly_str.as_ptr()), *arg);
                         return FAIL;
                     }
                     reduce += 1;

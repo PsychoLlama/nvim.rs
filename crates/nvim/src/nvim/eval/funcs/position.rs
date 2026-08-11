@@ -478,7 +478,7 @@ unsafe fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
                 charcol,
             ) == FAIL
             {
-                emsg(gettext(e_invarg.ptr() as *const c_char));
+                emsg(gettext(e_invarg.as_ptr()));
                 return;
             }
             if curswant >= 0 {
@@ -494,10 +494,7 @@ unsafe fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
                 // Kept on the variadic message call: the argument is
                 // arbitrary user bytes. Note that this reports and then
                 // carries on to the range check below.
-                semsg_c!(
-                    gettext(e_invarg2.ptr() as *const c_char),
-                    tv_get_string(args.ptr(0)),
-                );
+                semsg_c!(gettext(e_invarg2.as_ptr()), tv_get_string(args.ptr(0)),);
             } else if lnum == 0 {
                 lnum = (*curwin.get()).w_cursor.lnum;
             }
@@ -512,7 +509,7 @@ unsafe fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
             };
             (lnum, col, coladd)
         } else {
-            emsg(gettext(e_invarg.ptr() as *const c_char));
+            emsg(gettext(e_invarg.as_ptr()));
             return;
         };
 
@@ -602,7 +599,7 @@ unsafe fn set_position(args: Args<'_>, rettv: &mut typval_T, charpos: bool) {
                 }
             }
             _ => {
-                emsg(gettext(e_invarg.ptr() as *const c_char));
+                emsg(gettext(e_invarg.as_ptr()));
             }
         }
     }

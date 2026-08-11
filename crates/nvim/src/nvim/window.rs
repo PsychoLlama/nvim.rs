@@ -303,12 +303,10 @@ pub const TAB: ::core::ffi::c_int = 9;
 pub const CAR: ::core::ffi::c_int = 13;
 pub const SID_WINLAYOUT: ::core::ffi::c_int = -7 as ::core::ffi::c_int;
 pub const NOWIN: *mut win_T = -1 as ::core::ffi::c_int as *mut win_T;
-static e_cannot_close_last_window: GlobalCell<[::core::ffi::c_char; 31]> =
-    GlobalCell::new(c_bytes(b"E444: Cannot close last window\0"));
-static e_cannot_split_window_when_closing_buffer: GlobalCell<[::core::ffi::c_char; 53]> =
-    GlobalCell::new(c_bytes(
-        b"E1159: Cannot split a window when closing the buffer\0",
-    ));
+static e_cannot_close_last_window: [::core::ffi::c_char; 31] =
+    c_bytes(b"E444: Cannot close last window\0");
+static e_cannot_split_window_when_closing_buffer: [::core::ffi::c_char; 53] =
+    c_bytes(b"E1159: Cannot split a window when closing the buffer\0");
 static m_onlyone: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(c"Already only one window".as_ptr() as *mut ::core::ffi::c_char);
 static split_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
@@ -348,8 +346,7 @@ pub unsafe extern "C" fn window_layout_locked_err(mut cmd: cmdidx_T, mut err: *m
                 err,
                 kErrorTypeException,
                 c"%s".as_ptr(),
-                (e_cannot_split_window_when_closing_buffer.ptr() as *const _)
-                    as *const ::core::ffi::c_char,
+                e_cannot_split_window_when_closing_buffer.as_ptr(),
             );
         } else {
             api_set_error(
@@ -1719,8 +1716,7 @@ pub unsafe extern "C" fn check_split_disallowed_err(
             err,
             kErrorTypeException,
             c"%s".as_ptr(),
-            (e_cannot_split_window_when_closing_buffer.ptr() as *const _)
-                as *const ::core::ffi::c_char,
+            e_cannot_split_window_when_closing_buffer.as_ptr(),
         );
         return false_0 != 0;
     }
@@ -3454,9 +3450,7 @@ pub unsafe extern "C" fn win_close(
     };
     let had_diffmode: bool = (*win).w_onebuf_opt.wo_diff != 0;
     if last_window(win) {
-        emsg(gettext(
-            (e_cannot_close_last_window.ptr() as *const _) as *const ::core::ffi::c_char,
-        ));
+        emsg(gettext(e_cannot_close_last_window.as_ptr()));
         return FAIL;
     }
     if !(*win).w_floating && window_layout_locked(CMD_close) as ::core::ffi::c_int != 0 {
@@ -3501,9 +3495,7 @@ pub unsafe extern "C" fn win_close(
                 return FAIL;
             }
             if last_window(win) {
-                emsg(gettext(
-                    (e_cannot_close_last_window.ptr() as *const _) as *const ::core::ffi::c_char,
-                ));
+                emsg(gettext(e_cannot_close_last_window.as_ptr()));
                 return FAIL;
             }
         } else {

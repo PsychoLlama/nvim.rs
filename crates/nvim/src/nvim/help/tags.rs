@@ -133,7 +133,7 @@ unsafe fn do_helptags(dirname: *mut c_char, add_help_tags: bool, ignore_writeerr
         if !add_pathsep(namebuff)
             || xstrlcat(namebuff, c"**".as_ptr(), MAXPATHL as usize) >= MAXPATHL as usize
         {
-            emsg(e_fnametoolong.ptr().cast::<c_char>());
+            emsg(e_fnametoolong.as_ptr());
             return;
         }
         match expand_help_files(namebuff) {
@@ -292,7 +292,7 @@ unsafe fn helptags_one(
             || xstrlcat(namebuff, c"/**/*".as_ptr(), MAXPATHL as usize) >= MAXPATHL as usize
             || xstrlcat(namebuff, ext, MAXPATHL as usize) >= MAXPATHL as usize
         {
-            emsg(e_fnametoolong.ptr().cast::<c_char>());
+            emsg(e_fnametoolong.as_ptr());
             return;
         }
         match expand_help_files(namebuff) {
@@ -318,7 +318,7 @@ unsafe fn helptags_one(
         if !add_pathsep(namebuff)
             || xstrlcat(namebuff, tagfname, MAXPATHL as usize) >= MAXPATHL as usize
         {
-            emsg(e_fnametoolong.ptr().cast::<c_char>());
+            emsg(e_fnametoolong.as_ptr());
             // Upstream leaks `files` here; the `Wildcards` drop frees it.
             return;
         }

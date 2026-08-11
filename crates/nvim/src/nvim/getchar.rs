@@ -240,14 +240,11 @@ static noremapbuf_init: GlobalCell<[uint8_t; 265]> = GlobalCell::new([0; 265]);
 /// nothing is trimmed, which is what upstream does. `test_registers`'
 /// Test_recording_with_select_mode reaches it.
 static last_recorded_len: GlobalCell<size_t> = GlobalCell::new(0);
-static e_recursive_mapping: GlobalCell<[::core::ffi::c_char; 24]> =
-    GlobalCell::new(c_bytes(b"E223: Recursive mapping\0"));
-static e_cmd_mapping_must_end_with_cr: GlobalCell<[::core::ffi::c_char; 40]> =
-    GlobalCell::new(c_bytes(b"E1255: <Cmd> mapping must end with <CR>\0"));
-static e_cmd_mapping_must_end_with_cr_before_second_cmd: GlobalCell<[::core::ffi::c_char; 60]> =
-    GlobalCell::new(c_bytes(
-        b"E1136: <Cmd> mapping must end with <CR> before second <Cmd>\0",
-    ));
+static e_recursive_mapping: [::core::ffi::c_char; 24] = c_bytes(b"E223: Recursive mapping\0");
+static e_cmd_mapping_must_end_with_cr: [::core::ffi::c_char; 40] =
+    c_bytes(b"E1255: <Cmd> mapping must end with <CR>\0");
+static e_cmd_mapping_must_end_with_cr_before_second_cmd: [::core::ffi::c_char; 60] =
+    c_bytes(b"E1136: <Cmd> mapping must end with <CR> before second <Cmd>\0");
 /// The typeahead each `:source!` displaced, put back by `closescript`.
 static saved_typebuf: GlobalCell<[typebuf_T; NSCRIPT as usize]> = GlobalCell::new(
     [typebuf_T {

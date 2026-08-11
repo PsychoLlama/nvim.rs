@@ -407,13 +407,13 @@ pub unsafe extern "C" fn f_searchcount(
             let di = tv_dict_find(dict, c"pos".as_ptr(), -1 as ptrdiff_t);
             if !di.is_null() {
                 if (*di).di_tv.v_type != VAR_LIST {
-                    semsg_c!(gettext(e_invarg2.ptr().cast()), c"pos".as_ptr());
+                    semsg_c!(gettext(e_invarg2.as_ptr()), c"pos".as_ptr());
                     return;
                 }
                 let list = (*di).di_tv.vval.v_list;
                 if tv_list_len(list) != 3 {
                     semsg_c!(
-                        gettext(e_invarg2.ptr().cast()),
+                        gettext(e_invarg2.as_ptr()),
                         c"List format should be [lnum, col, off]".as_ptr(),
                     );
                     return;

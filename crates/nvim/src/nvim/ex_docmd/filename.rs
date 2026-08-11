@@ -538,20 +538,16 @@ pub unsafe fn eval_vars(
                     }
                     result = autocmd_fname.get();
                     if result.is_null() {
-                        *errormsg = gettext(
-                            (e_no_autocommand_file_name_to_substitute_for_afile.ptr() as *const _)
-                                as *const c_char,
-                        );
+                        *errormsg =
+                            gettext(e_no_autocommand_file_name_to_substitute_for_afile.as_ptr());
                         return ptr::null_mut();
                     }
                     result = path_try_shorten_fname(result);
                 }
                 SPEC_ABUF => {
                     if autocmd_bufnr.get() <= 0 {
-                        *errormsg = gettext(
-                            (e_no_autocommand_buffer_number_to_substitute_for_abuf.ptr()
-                                as *const _) as *const c_char,
-                        );
+                        *errormsg =
+                            gettext(e_no_autocommand_buffer_number_to_substitute_for_abuf.as_ptr());
                         return ptr::null_mut();
                     }
                     snprintf(
@@ -565,10 +561,8 @@ pub unsafe fn eval_vars(
                 SPEC_AMATCH => {
                     result = autocmd_match.get();
                     if result.is_null() {
-                        *errormsg = gettext(
-                            (e_no_autocommand_match_name_to_substitute_for_amatch.ptr() as *const _)
-                                as *const c_char,
-                        );
+                        *errormsg =
+                            gettext(e_no_autocommand_match_name_to_substitute_for_amatch.as_ptr());
                         return ptr::null_mut();
                     }
                 }
@@ -576,15 +570,15 @@ pub unsafe fn eval_vars(
                     let (which, msg) = match spec_idx {
                         SPEC_SFILE => (
                             ESTACK_SFILE,
-                            e_no_source_file_name_to_substitute_for_sfile.ptr() as *const _,
+                            e_no_source_file_name_to_substitute_for_sfile.as_ptr(),
                         ),
                         SPEC_STACK => (
                             ESTACK_STACK,
-                            e_no_call_stack_to_substitute_for_stack.ptr() as *const _,
+                            e_no_call_stack_to_substitute_for_stack.as_ptr(),
                         ),
                         _ => (
                             ESTACK_SCRIPT,
-                            e_no_script_file_name_to_substitute_for_script.ptr() as *const _,
+                            e_no_script_file_name_to_substitute_for_script.as_ptr(),
                         ),
                     };
                     result = estack_sfile(which);
@@ -597,9 +591,7 @@ pub unsafe fn eval_vars(
                 SPEC_SLNUM => {
                     let entry = &*sourcing_entry();
                     if entry.es_name.is_null() || entry.es_lnum == 0 {
-                        *errormsg = gettext(
-                            (e_no_line_number_to_use_for_slnum.ptr() as *const _) as *const c_char,
-                        );
+                        *errormsg = gettext(e_no_line_number_to_use_for_slnum.as_ptr());
                         return ptr::null_mut();
                     }
                     snprintf(
@@ -615,9 +607,7 @@ pub unsafe fn eval_vars(
                     // offset plus the line inside it.
                     let lnum = (*current_sctx.ptr()).sc_lnum + (*sourcing_entry()).es_lnum;
                     if lnum == 0 {
-                        *errormsg = gettext(
-                            (e_no_line_number_to_use_for_sflnum.ptr() as *const _) as *const c_char,
-                        );
+                        *errormsg = gettext(e_no_line_number_to_use_for_sflnum.as_ptr());
                         return ptr::null_mut();
                     }
                     snprintf(

@@ -114,7 +114,7 @@ pub unsafe extern "C" fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _f
                 ptr::null_mut::<*mut partial_T>(),
             ));
             if tofree.0.is_null() {
-                emsg_funcname(e_unknown_function_str.ptr() as *const c_char, func);
+                emsg_funcname(e_unknown_function_str.as_ptr(), func);
                 return;
             }
             func = tofree.0;
@@ -157,13 +157,13 @@ pub unsafe extern "C" fn f_eval(argvars: *mut typval_T, rettv: *mut typval_T, _f
             ) == FAIL
         {
             if !expr_start.is_null() && !aborting() {
-                semsg_c!(gettext(e_invexpr2.ptr() as *const c_char), expr_start);
+                semsg_c!(gettext(e_invexpr2.as_ptr()), expr_start);
             }
             need_clr_eos.set(false);
             rettv.v_type = VAR_NUMBER;
             rettv.vval.v_number = 0;
         } else if *s as c_int != NUL {
-            semsg_c!(gettext(e_trailing_arg.ptr() as *const c_char), s);
+            semsg_c!(gettext(e_trailing_arg.as_ptr()), s);
         }
     }
 }
@@ -428,7 +428,7 @@ unsafe fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
             || (is_funcref && trans_name.0.is_null())
         {
             semsg_c!(
-                gettext(e_invarg2.ptr() as *const c_char),
+                gettext(e_invarg2.as_ptr()),
                 if use_string {
                     tv_get_string(args.ptr(0))
                 } else {
@@ -493,7 +493,7 @@ unsafe fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
                 if tv_list_len(list) == 0 {
                     arg_idx = 0;
                 } else if tv_list_len(list) > MAX_FUNC_ARGS as c_int {
-                    emsg_funcname(e_toomanyarg.ptr() as *const c_char, s);
+                    emsg_funcname(e_toomanyarg.as_ptr(), s);
                     xfree(name as *mut c_void);
                     return;
                 }
@@ -657,7 +657,7 @@ unsafe fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
         };
         match result {
             None => {
-                semsg_c!(gettext(e_libcall.ptr() as *const c_char), funcname);
+                semsg_c!(gettext(e_libcall.as_ptr()), funcname);
             }
             Some(LibcallResult::Str(s)) => {
                 rettv.vval.v_string = s.map_or(ptr::null_mut(), CString::into_raw);

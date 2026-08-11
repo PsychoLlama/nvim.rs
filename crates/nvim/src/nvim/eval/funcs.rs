@@ -234,10 +234,10 @@ pub const CONTEXT_INIT: Context = Context {
     gvars: STRING_INIT,
     funcs: ARRAY_DICT_INIT,
 };
-static e_string_list_or_blob_required: GlobalCell<[::core::ffi::c_char; 37]> =
-    GlobalCell::new(c_bytes(b"E1098: String, List or Blob required\0"));
-static e_missing_function_argument: GlobalCell<[::core::ffi::c_char; 33]> =
-    GlobalCell::new(c_bytes(b"E1132: Missing function argument\0"));
+static e_string_list_or_blob_required: [::core::ffi::c_char; 37] =
+    c_bytes(b"E1098: String, List or Blob required\0");
+static e_missing_function_argument: [::core::ffi::c_char; 33] =
+    c_bytes(b"E1132: Missing function argument\0");
 static dummy_ap: GlobalCell<::core::ffi::VaList<'static>> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], ::core::ffi::VaList<'static>>([0u8; 24])
 });

@@ -53,7 +53,7 @@ pub unsafe extern "C" fn getcmdkeycmd(
             if vgetorpeek(false) == NUL {
                 // An incomplete <Cmd> is an error: there is not much the user
                 // could do from this state.
-                emsg(gettext(e_cmd_mapping_must_end_with_cr.ptr().cast()));
+                emsg(gettext(e_cmd_mapping_must_end_with_cr.as_ptr()));
                 aborted = true;
                 break;
             }
@@ -80,7 +80,7 @@ pub unsafe extern "C" fn getcmdkeycmd(
                 // A nicer error message for this special case.
                 emsg(gettext(
                     e_cmd_mapping_must_end_with_cr_before_second_cmd
-                        .ptr()
+                        .as_ptr()
                         .cast(),
                 ));
                 aborted = true;

@@ -18,7 +18,6 @@ use crate::src::nvim::eval::vars::{
 use crate::src::nvim::eval::{eval_expr_typval, get_copyID};
 use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::garray::{ga_append, ga_concat, ga_grow, ga_init};
-use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::hashtab::{hash_lock, hash_unlock};
 use crate::src::nvim::main::{
@@ -43,17 +42,10 @@ pub const FILTERMAP_MAP: filtermap_T = 1;
 pub const FILTERMAP_FILTER: filtermap_T = 0;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-static e_argument_of_str_must_be_list_string_or_dictionary: GlobalCell<[::core::ffi::c_char; 58]> =
-    GlobalCell::new(c_bytes(
-        b"E706: Argument of %s must be a List, String or Dictionary\0",
-    ));
-static e_argument_of_str_must_be_list_string_dictionary_or_blob: GlobalCell<
-    [::core::ffi::c_char; 65],
-> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 65], [::core::ffi::c_char; 65]>(
-        *b"E1250: Argument of %s must be a List, String, Dictionary or Blob\0",
-    )
-});
+static e_argument_of_str_must_be_list_string_or_dictionary: [::core::ffi::c_char; 58] =
+    c_bytes(b"E706: Argument of %s must be a List, String or Dictionary\0");
+static e_argument_of_str_must_be_list_string_dictionary_or_blob: [::core::ffi::c_char; 65] =
+    c_bytes(b"E1250: Argument of %s must be a List, String, Dictionary or Blob\0");
 unsafe extern "C" fn filter_map_one(
     mut tv: *mut typval_T,
     mut expr: *mut typval_T,
@@ -566,8 +558,8 @@ unsafe extern "C" fn filter_map(
             != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         semsg_c!(
-            (e_argument_of_str_must_be_list_string_dictionary_or_blob.ptr() as *const _)
-                as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            e_argument_of_str_must_be_list_string_dictionary_or_blob.as_ptr()
+                as *mut ::core::ffi::c_char,
             func_name,
         );
         return;
@@ -889,8 +881,8 @@ pub unsafe extern "C" fn f_count(
         }
     } else if !error {
         semsg_c!(
-            (e_argument_of_str_must_be_list_string_or_dictionary.ptr() as *const _)
-                as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            e_argument_of_str_must_be_list_string_or_dictionary.as_ptr()
+                as *mut ::core::ffi::c_char,
             c"count()".as_ptr(),
         );
     }

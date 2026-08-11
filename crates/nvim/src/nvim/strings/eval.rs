@@ -73,7 +73,7 @@ pub unsafe extern "C" fn f_str2nr(
         if given(&*argvars.add(1)) {
             base = tv_get_number(argvars.add(1)) as c_int;
             if !matches!(base, 2 | 8 | 10 | 16) {
-                emsg(gettext(e_invarg.ptr().cast::<c_char>()));
+                emsg(gettext(e_invarg.as_ptr()));
                 return;
             }
             if given(&*argvars.add(2)) && tv_get_bool(argvars.add(2)) != 0 {
@@ -439,7 +439,7 @@ pub unsafe extern "C" fn f_tr(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
             (*rettv).vval.v_string = ga.ga_data as *mut c_char;
             return;
         }
-        semsg_c!(gettext(e_invarg2.ptr().cast::<c_char>()), fromstr);
+        semsg_c!(gettext(e_invarg2.as_ptr()), fromstr);
         ga_clear(&raw mut ga);
     }
 }
@@ -476,10 +476,7 @@ pub unsafe extern "C" fn f_trim(argvars: *mut typval_T, rettv: *mut typval_T, _f
                     return;
                 }
                 if !(0..=2).contains(&dir) {
-                    semsg_c!(
-                        gettext(e_invarg2.ptr().cast::<c_char>()),
-                        tv_get_string(argvars.add(2)),
-                    );
+                    semsg_c!(gettext(e_invarg2.as_ptr()), tv_get_string(argvars.add(2)),);
                     return;
                 }
             }

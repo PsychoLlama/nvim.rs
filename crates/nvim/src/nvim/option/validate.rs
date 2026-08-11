@@ -47,12 +47,12 @@ const B_IMODE_LAST: c_int = 1;
 
 /// "E487: Argument must be positive", for a value below its floor.
 fn too_small() -> *const c_char {
-    e_positive.ptr().cast::<c_char>()
+    e_positive.as_ptr()
 }
 
 /// "E474: Invalid argument", for a value the option cannot hold at all.
 fn invalid() -> *const c_char {
-    e_invarg.ptr().cast::<c_char>()
+    e_invarg.as_ptr()
 }
 
 /// The bound test almost every numeric option shares. `low` and `high` are
@@ -124,7 +124,7 @@ pub(crate) unsafe fn check_num_option_bounds(
             kOptPumblend => *newval = (*newval).clamp(0, 100),
             kOptScrolljump => {
                 if (*newval < -100 || *newval >= Rows.get() as OptInt) && full_screen.get() {
-                    errmsg = e_scroll.ptr().cast::<c_char>();
+                    errmsg = e_scroll.as_ptr();
                     *newval = 1;
                 }
             }
@@ -135,7 +135,7 @@ pub(crate) unsafe fn check_num_option_bounds(
                     // Zero is how `:set scroll=0` asks for the default, so
                     // it is corrected without a message.
                     if *newval != 0 {
-                        errmsg = e_scroll.ptr().cast::<c_char>();
+                        errmsg = e_scroll.as_ptr();
                     }
                     *newval = win_default_scroll(curwin.get());
                 }
@@ -170,24 +170,12 @@ pub(crate) unsafe fn validate_num_option(
         | kOptTimeoutlen | kOptCmdheight => bounded(value, 0, too_small(), OptInt::MAX, invalid()),
         kOptCmdwinheight => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
         // The four window-size options each cross-check their partner.
-        kOptWinheight if value >= 1 && p_wmh.get() > value => e_winheight.ptr().cast::<c_char>(),
+        kOptWinheight if value >= 1 && p_wmh.get() > value => e_winheight.as_ptr(),
         kOptWinheight => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
-        kOptWinminheight => bounded(
-            value,
-            0,
-            too_small(),
-            p_wh.get(),
-            e_winheight.ptr().cast::<c_char>(),
-        ),
-        kOptWinwidth if value >= 1 && p_wmw.get() > value => e_winwidth.ptr().cast::<c_char>(),
+        kOptWinminheight => bounded(value, 0, too_small(), p_wh.get(), e_winheight.as_ptr()),
+        kOptWinwidth if value >= 1 && p_wmw.get() > value => e_winwidth.as_ptr(),
         kOptWinwidth => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
-        kOptWinminwidth => bounded(
-            value,
-            0,
-            too_small(),
-            p_wiw.get(),
-            e_winwidth.ptr().cast::<c_char>(),
-        ),
+        kOptWinminwidth => bounded(value, 0, too_small(), p_wiw.get(), e_winwidth.as_ptr()),
         // 'maxcombine' is fixed: whatever is asked for, this is the answer.
         kOptMaxcombine => {
             *newval = MAX_MCO as OptInt;

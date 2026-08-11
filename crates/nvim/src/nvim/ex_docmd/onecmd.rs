@@ -303,10 +303,7 @@ pub(crate) unsafe fn do_one_cmd(
 
             if p.is_null() {
                 if ea.skip == 0 {
-                    errormsg = gettext(
-                        (e_ambiguous_use_of_user_defined_command.ptr() as *const _)
-                            as *const c_char,
-                    );
+                    errormsg = gettext(e_ambiguous_use_of_user_defined_command.as_ptr());
                 }
                 break 'doend;
             }
@@ -315,7 +312,7 @@ pub(crate) unsafe fn do_one_cmd(
                 if ea.skip == 0 {
                     xstrlcpy(
                         IObuff.ptr() as *mut c_char,
-                        gettext((e_not_an_editor_command.ptr() as *const _) as *const c_char),
+                        gettext(e_not_an_editor_command.as_ptr()),
                         IOSIZE as size_t,
                     );
                     // The modifiers parsed, so the error is in what follows

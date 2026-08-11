@@ -400,7 +400,7 @@ pub unsafe extern "C" fn set_chars_option(
                 .iter()
                 .position(|field| field_opens_at(bytes, p, field.name))
             else {
-                return e_invarg.ptr().cast::<c_char>();
+                return e_invarg.as_ptr();
             };
             let field = &tab[i];
             let mut s = p + field.name.to_bytes().len() + 1;
@@ -535,7 +535,7 @@ pub unsafe extern "C" fn set_chars_option(
         }
 
         if listchars && has_leadtab && !has_tab {
-            return e_leadtab_requires_tab.ptr().cast::<c_char>();
+            return e_leadtab_requires_tab.as_ptr();
         }
     }
 

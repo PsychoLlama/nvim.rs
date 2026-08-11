@@ -254,10 +254,10 @@ pub const SNF_REQUIRED: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const COMPOUND_MAX_LEN: ::core::ffi::c_int = 100000 as ::core::ffi::c_int;
 static e_spell_trunc: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(c"E758: Truncated spell file".as_ptr());
-static e_error_while_reading_sug_file_str: GlobalCell<[::core::ffi::c_char; 40]> =
-    GlobalCell::new(c_bytes(b"E782: Error while reading .sug file: %s\0"));
-static e_duplicate_char_in_map_entry: GlobalCell<[::core::ffi::c_char; 34]> =
-    GlobalCell::new(c_bytes(b"E783: Duplicate char in MAP entry\0"));
+static e_error_while_reading_sug_file_str: [::core::ffi::c_char; 40] =
+    c_bytes(b"E782: Error while reading .sug file: %s\0");
+static e_duplicate_char_in_map_entry: [::core::ffi::c_char; 34] =
+    c_bytes(b"E783: Duplicate char in MAP entry\0");
 static e_illegal_character_in_word: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(c"E1280: Illegal character in word".as_ptr());
 static e_afftrailing: GlobalCell<*const ::core::ffi::c_char> =

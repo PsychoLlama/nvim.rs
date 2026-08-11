@@ -360,10 +360,7 @@ pub unsafe extern "C" fn f_items(
             VAR_DICT => tv_dict2items(argvars, rettv),
             _ => {
                 semsg_c!(
-                    gettext(
-                        (e_list_dict_blob_or_string_required_for_argument_nr.ptr() as *const _)
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(e_list_dict_blob_or_string_required_for_argument_nr.as_ptr(),),
                     1 as ::core::ffi::c_int,
                 );
             }

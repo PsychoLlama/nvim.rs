@@ -137,10 +137,7 @@ unsafe fn flatten_common(args: Args<'_>, rettv: &mut typval_T, make_copy: bool) 
     // SAFETY: the caller's obligation.
     unsafe {
         if args.ty(0) != VAR_LIST {
-            semsg_c!(
-                gettext(e_listarg.ptr() as *const c_char),
-                c"flatten()".as_ptr(),
-            );
+            semsg_c!(gettext(e_listarg.as_ptr()), c"flatten()".as_ptr(),);
             return;
         }
         let maxdepth = if !args.has(1) {
@@ -211,10 +208,7 @@ pub unsafe extern "C" fn f_get(argvars: *mut typval_T, rettv: *mut typval_T, _fp
                 ptr::null_mut()
             }
             _ => {
-                semsg_c!(
-                    gettext(e_listdictblobarg.ptr() as *const c_char),
-                    c"get()".as_ptr(),
-                );
+                semsg_c!(gettext(e_listdictblobarg.as_ptr()), c"get()".as_ptr(),);
                 ptr::null_mut()
             }
         };
@@ -358,7 +352,7 @@ unsafe fn get_from_func(args: Args<'_>, rettv: &mut typval_T) -> bool {
             _ => {
                 // Kept on the variadic message call: `what` is arbitrary
                 // user bytes and a Rust format string can only carry UTF-8.
-                semsg_c!(gettext(e_invarg2.ptr() as *const c_char), what);
+                semsg_c!(gettext(e_invarg2.as_ptr()), what);
             }
         }
         false
@@ -413,7 +407,7 @@ pub unsafe extern "C" fn f_index(
             VAR_BLOB => index_blob(args, rettv),
             VAR_LIST => index_list(args, rettv),
             _ => {
-                emsg(gettext(e_listblobreq.ptr() as *const c_char));
+                emsg(gettext(e_listblobreq.as_ptr()));
             }
         }
     }

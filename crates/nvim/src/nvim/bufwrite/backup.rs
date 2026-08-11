@@ -560,7 +560,7 @@ pub(crate) unsafe fn recover_from_backup(backup: &Backup, fname: *mut c_char) ->
         // Copying may take a while; if we were interrupted, let the user
         // know the message arrived.
         if got_int.get() {
-            msg(gettext(e_interr.ptr().cast()), 0);
+            msg(gettext(e_interr.as_ptr()), 0);
             ui_flush();
         }
         os_copy(backup.path, fname, UV_FS_COPYFILE_FICLONE) == 0
@@ -726,7 +726,7 @@ pub(crate) unsafe fn finish_write(
             let error = os_fsync(fd);
             // UV_ENOTSUP is "this storage does not do fsync".
             if error != 0 && error != UV_ENOTSUP && !target.device {
-                err = Some(WriteError::shared(e_fsync.ptr().cast(), error));
+                err = Some(WriteError::shared(e_fsync.as_ptr(), error));
             }
         }
 

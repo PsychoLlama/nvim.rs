@@ -100,7 +100,7 @@ pub unsafe fn ex_echo(eap: *mut exarg_T) {
                     && did_emsg.get() == did_emsg_before
                     && called_emsg.get() == called_emsg_before
                 {
-                    semsg_c!(gettext(e_invexpr2.ptr().cast()), start);
+                    semsg_c!(gettext(e_invexpr2.as_ptr()), start);
                 }
                 need_clr_eos.set(false);
                 break;

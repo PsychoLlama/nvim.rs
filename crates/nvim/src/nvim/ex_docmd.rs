@@ -351,35 +351,25 @@ pub const CPO_ALTREAD: c_int = 'a' as c_int;
 pub const CPO_BAR: c_int = 'b' as c_int;
 pub const CPO_EXECBUF: c_int = 'e' as c_int;
 pub const CPO_NOSYMLINKS: c_int = '~' as c_int;
-static e_ambiguous_use_of_user_defined_command: GlobalCell<[c_char; 44]> =
-    GlobalCell::new(c_bytes(b"E464: Ambiguous use of user-defined command\0"));
-static e_no_call_stack_to_substitute_for_stack: GlobalCell<[c_char; 48]> = GlobalCell::new(
-    c_bytes(b"E489: No call stack to substitute for \"<stack>\"\0"),
-);
-static e_not_an_editor_command: GlobalCell<[c_char; 28]> =
-    GlobalCell::new(c_bytes(b"E492: Not an editor command\0"));
-static e_no_autocommand_file_name_to_substitute_for_afile: GlobalCell<[c_char; 59]> =
-    GlobalCell::new(c_bytes(
-        b"E495: No autocommand file name to substitute for \"<afile>\"\0",
-    ));
-static e_no_autocommand_buffer_number_to_substitute_for_abuf: GlobalCell<[c_char; 62]> =
-    GlobalCell::new(c_bytes(
-        b"E496: No autocommand buffer number to substitute for \"<abuf>\"\0",
-    ));
-static e_no_autocommand_match_name_to_substitute_for_amatch: GlobalCell<[c_char; 61]> =
-    GlobalCell::new(c_bytes(
-        b"E497: No autocommand match name to substitute for \"<amatch>\"\0",
-    ));
-static e_no_source_file_name_to_substitute_for_sfile: GlobalCell<[c_char; 55]> = GlobalCell::new(
-    c_bytes(b"E498: No :source file name to substitute for \"<sfile>\"\0"),
-);
-static e_no_line_number_to_use_for_slnum: GlobalCell<[c_char; 42]> =
-    GlobalCell::new(c_bytes(b"E842: No line number to use for \"<slnum>\"\0"));
-static e_no_line_number_to_use_for_sflnum: GlobalCell<[c_char; 43]> =
-    GlobalCell::new(c_bytes(b"E961: No line number to use for \"<sflnum>\"\0"));
-static e_no_script_file_name_to_substitute_for_script: GlobalCell<[c_char; 56]> = GlobalCell::new(
-    c_bytes(b"E1274: No script file name to substitute for \"<script>\"\0"),
-);
+static e_ambiguous_use_of_user_defined_command: [c_char; 44] =
+    c_bytes(b"E464: Ambiguous use of user-defined command\0");
+static e_no_call_stack_to_substitute_for_stack: [c_char; 48] =
+    c_bytes(b"E489: No call stack to substitute for \"<stack>\"\0");
+static e_not_an_editor_command: [c_char; 28] = c_bytes(b"E492: Not an editor command\0");
+static e_no_autocommand_file_name_to_substitute_for_afile: [c_char; 59] =
+    c_bytes(b"E495: No autocommand file name to substitute for \"<afile>\"\0");
+static e_no_autocommand_buffer_number_to_substitute_for_abuf: [c_char; 62] =
+    c_bytes(b"E496: No autocommand buffer number to substitute for \"<abuf>\"\0");
+static e_no_autocommand_match_name_to_substitute_for_amatch: [c_char; 61] =
+    c_bytes(b"E497: No autocommand match name to substitute for \"<amatch>\"\0");
+static e_no_source_file_name_to_substitute_for_sfile: [c_char; 55] =
+    c_bytes(b"E498: No :source file name to substitute for \"<sfile>\"\0");
+static e_no_line_number_to_use_for_slnum: [c_char; 42] =
+    c_bytes(b"E842: No line number to use for \"<slnum>\"\0");
+static e_no_line_number_to_use_for_sflnum: [c_char; 43] =
+    c_bytes(b"E961: No line number to use for \"<sflnum>\"\0");
+static e_no_script_file_name_to_substitute_for_script: [c_char; 56] =
+    c_bytes(b"E1274: No script file name to substitute for \"<script>\"\0");
 static quitmore: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 static ex_pressedreturn: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static dollar_command: GlobalCell<[c_char; 2]> = GlobalCell::new(['$' as c_char, 0 as c_char]);

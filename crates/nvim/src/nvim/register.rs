@@ -68,10 +68,11 @@ use crate::src::nvim::keycodes::{
     vim_unescape_ks,
 };
 use crate::src::nvim::main::{
-    Columns, State, VIsual_active, VIsual_mode, cmdmod, curbuf, curwin, e_nobufnr, e_noinstext,
-    e_nolastcmd, e_noprevre, e_resulting_text_too_long, got_int, last_cmdline, msg_ext_skip_flush,
-    must_redraw, new_last_cmdline, p_ch, p_cpo, p_report, p_sel, pending_end_reg_executing,
-    redir_reg, reg_executing, reg_recorded, reg_recording, restart_edit, textlock,
+    Columns, State, VIsual_active, VIsual_mode, c_bytes, cmdmod, curbuf, curwin, e_nobufnr,
+    e_noinstext, e_nolastcmd, e_noprevre, e_resulting_text_too_long, got_int, last_cmdline,
+    msg_ext_skip_flush, must_redraw, new_last_cmdline, p_ch, p_cpo, p_report, p_sel,
+    pending_end_reg_executing, redir_reg, reg_executing, reg_recorded, reg_recording, restart_edit,
+    textlock,
 };
 use crate::src::nvim::mark::mark_adjust;
 use crate::src::nvim::mbyte::{
@@ -214,13 +215,9 @@ const EMPTY_YANKREG: yankreg_T = yankreg_T {
 static y_regs: GlobalCell<[yankreg_T; 39]> = GlobalCell::new([EMPTY_YANKREG; 39]);
 static y_previous: GlobalCell<*mut yankreg_T> =
     GlobalCell::new(::core::ptr::null_mut::<yankreg_T>());
-static e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines: GlobalCell<
-    [::core::ffi::c_char; 79],
-> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 79], [::core::ffi::c_char; 79]>(
-        *b"E883: Search pattern and expression register may not contain two or more lines\0",
-    )
-});
+static e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines:
+    [::core::ffi::c_char; 79] =
+    c_bytes(b"E883: Search pattern and expression register may not contain two or more lines\0");
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;

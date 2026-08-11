@@ -114,10 +114,9 @@ static menu_mode_chars: GlobalCell<[*mut ::core::ffi::c_char; 8]> = GlobalCell::
     c"tl".as_ptr() as *mut ::core::ffi::c_char,
     c"t".as_ptr() as *mut ::core::ffi::c_char,
 ]);
-static e_notsubmenu: GlobalCell<[::core::ffi::c_char; 45]> =
-    GlobalCell::new(c_bytes(b"E327: Part of menu-item path is not sub-menu\0"));
-static e_nomenu: GlobalCell<[::core::ffi::c_char; 19]> =
-    GlobalCell::new(c_bytes(b"E329: No menu \"%s\"\0"));
+static e_notsubmenu: [::core::ffi::c_char; 45] =
+    c_bytes(b"E327: Part of menu-item path is not sub-menu\0");
+static e_nomenu: [::core::ffi::c_char; 19] = c_bytes(b"E329: No menu \"%s\"\0");
 unsafe extern "C" fn menu_is_winbar(name: *const ::core::ffi::c_char) -> bool {
     return strncmp(name, c"WinBar".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int;
 }
@@ -445,9 +444,7 @@ unsafe extern "C" fn add_menu_path(
                                 break;
                             }
                             if !sys_menu.get() {
-                                emsg(gettext(
-                                    (e_notsubmenu.ptr() as *const _) as *const ::core::ffi::c_char,
-                                ));
+                                emsg(gettext(e_notsubmenu.as_ptr()));
                             }
                             break '_erret;
                         }
@@ -635,9 +632,7 @@ unsafe extern "C" fn menu_enable_recurse(
         {
             if *p as ::core::ffi::c_int != NUL {
                 if (*menu).children.is_null() {
-                    emsg(gettext(
-                        (e_notsubmenu.ptr() as *const _) as *const ::core::ffi::c_char,
-                    ));
+                    emsg(gettext(e_notsubmenu.as_ptr()));
                     return FAIL;
                 }
                 if menu_enable_recurse((*menu).children, p, modes, enable) == FAIL {
@@ -660,10 +655,7 @@ unsafe extern "C" fn menu_enable_recurse(
         && *name as ::core::ffi::c_int != '*' as ::core::ffi::c_int
         && menu.is_null()
     {
-        semsg_c!(
-            gettext((e_nomenu.ptr() as *const _) as *const ::core::ffi::c_char),
-            name,
-        );
+        semsg_c!(gettext(e_nomenu.as_ptr()), name,);
         return FAIL;
     }
     return OK;
@@ -689,9 +681,7 @@ unsafe extern "C" fn remove_menu(
         {
             if *p as ::core::ffi::c_int != NUL && (*menu).children.is_null() {
                 if !silent {
-                    emsg(gettext(
-                        (e_notsubmenu.ptr() as *const _) as *const ::core::ffi::c_char,
-                    ));
+                    emsg(gettext(e_notsubmenu.as_ptr()));
                 }
                 return FAIL;
             }
@@ -726,10 +716,7 @@ unsafe extern "C" fn remove_menu(
     if *name as ::core::ffi::c_int != NUL {
         if menu.is_null() {
             if !silent {
-                semsg_c!(
-                    gettext((e_nomenu.ptr() as *const _) as *const ::core::ffi::c_char),
-                    name,
-                );
+                semsg_c!(gettext(e_nomenu.as_ptr()), name,);
             }
             return FAIL;
         }
@@ -952,9 +939,7 @@ unsafe extern "C" fn find_menu(
         while !menu.is_null() {
             if menu_name_equal(name, menu) {
                 if *p as ::core::ffi::c_int != NUL && (*menu).children.is_null() {
-                    emsg(gettext(
-                        (e_notsubmenu.ptr() as *const _) as *const ::core::ffi::c_char,
-                    ));
+                    emsg(gettext(e_notsubmenu.as_ptr()));
                     menu = ::core::ptr::null_mut::<vimmenu_T>();
                     break '_theend;
                 } else if (*menu).modes & modes == 0 as ::core::ffi::c_int {
@@ -973,10 +958,7 @@ unsafe extern "C" fn find_menu(
             }
         }
         if menu.is_null() {
-            semsg_c!(
-                gettext((e_nomenu.ptr() as *const _) as *const ::core::ffi::c_char),
-                name,
-            );
+            semsg_c!(gettext(e_nomenu.as_ptr()), name,);
             break;
         } else {
             name = p;
@@ -1864,9 +1846,7 @@ unsafe extern "C" fn menu_getbyname(mut name_arg: *mut ::core::ffi::c_char) -> *
                     gave_emsg = true_0 != 0;
                     menu = ::core::ptr::null_mut::<vimmenu_T>();
                 } else if *p as ::core::ffi::c_int != NUL && (*menu).children.is_null() {
-                    emsg(gettext(
-                        (e_notsubmenu.ptr() as *const _) as *const ::core::ffi::c_char,
-                    ));
+                    emsg(gettext(e_notsubmenu.as_ptr()));
                     menu = ::core::ptr::null_mut::<vimmenu_T>();
                 }
                 break;
@@ -1948,9 +1928,7 @@ pub unsafe extern "C" fn menu_find(mut path_name: *const ::core::ffi::c_char) ->
                         if *p as ::core::ffi::c_int == NUL {
                             emsg(gettext(c"E336: Menu path must lead to a sub-menu".as_ptr()));
                         } else {
-                            emsg(gettext(
-                                (e_notsubmenu.ptr() as *const _) as *const ::core::ffi::c_char,
-                            ));
+                            emsg(gettext(e_notsubmenu.as_ptr()));
                         }
                         menu = ::core::ptr::null_mut::<vimmenu_T>();
                         break '_theend;

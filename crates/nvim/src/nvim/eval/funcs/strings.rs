@@ -422,7 +422,7 @@ unsafe fn with_spell(body: impl FnOnce()) {
             (*win).w_onebuf_opt.wo_spell = 1;
         }
         if *(*(*win).w_s).b_p_spl == NUL as c_char {
-            emsg(gettext(e_no_spell.ptr() as *const c_char));
+            emsg(gettext(e_no_spell.as_ptr()));
         } else {
             body();
         }

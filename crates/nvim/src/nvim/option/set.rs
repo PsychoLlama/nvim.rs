@@ -460,15 +460,15 @@ pub(crate) unsafe fn did_set_option(
         if direct {
             // Nothing to vet: the caller is putting a value back.
         } else if (*opt).immutable && !optval_equal(old_value, new_value) {
-            errmsg = e_unsupportedoption.ptr().cast::<c_char>();
+            errmsg = e_unsupportedoption.as_ptr();
         } else if (secure.get() != 0 || sandbox.get() != 0)
             && (*opt).flags & kOptFlagSecure as uint32_t != 0
         {
-            errmsg = e_secure.ptr().cast::<c_char>();
+            errmsg = e_secure.as_ptr();
         } else if new_value.type_0 == kOptValTypeString
             && check_illegal_path_names(*varp.cast::<*mut c_char>(), (*opt).flags)
         {
-            errmsg = e_invarg.ptr().cast::<c_char>();
+            errmsg = e_invarg.as_ptr();
         } else if let Some(did_set_cb) = (*opt).opt_did_set_cb {
             errmsg = did_set_cb(&raw mut args);
             // 'filetype' and 'syntax' report whether the value really moved;
@@ -756,7 +756,7 @@ pub fn set_option_value(opt_idx: OptIndex, value: OptVal, opt_flags: c_int) -> *
     // writable bytes.
     unsafe {
         if sandbox.get() > 0 && (*options.ptr())[opt_idx as usize].flags & kOptFlagSecure != 0 {
-            return gettext(e_sandbox.ptr().cast::<c_char>());
+            return gettext(e_sandbox.as_ptr());
         }
         set_option(
             opt_idx,
@@ -802,7 +802,7 @@ pub unsafe fn set_option_value_handle_tty(
         snprintf(
             ERRBUF.ptr().cast::<c_char>(),
             IOSIZE as size_t,
-            gettext(e_unknown_option2.ptr().cast::<c_char>()),
+            gettext(e_unknown_option2.as_ptr()),
             name,
         );
     }

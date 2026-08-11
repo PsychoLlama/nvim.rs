@@ -113,10 +113,7 @@ pub unsafe extern "C" fn f_msgpackdump(
     // result List and freed.
     unsafe {
         if args.ty(0) != VAR_LIST {
-            semsg_c!(
-                gettext(e_listarg.ptr() as *const c_char),
-                c"msgpackdump()".as_ptr(),
-            );
+            semsg_c!(gettext(e_listarg.as_ptr()), c"msgpackdump()".as_ptr(),);
             return;
         }
         let mut packer = packer_string_buffer();
@@ -272,10 +269,7 @@ pub unsafe extern "C" fn f_msgpackparse(
     // live for the call.
     unsafe {
         if args.ty(0) != VAR_LIST && args.ty(0) != VAR_BLOB {
-            semsg_c!(
-                gettext(e_listblobarg.ptr() as *const c_char),
-                c"msgpackparse()".as_ptr(),
-            );
+            semsg_c!(gettext(e_listblobarg.as_ptr()), c"msgpackparse()".as_ptr(),);
             return;
         }
         let ret_list = tv_list_alloc_ret(rettv, kListLenMayKnow as isize);

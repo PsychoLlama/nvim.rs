@@ -359,7 +359,7 @@ pub unsafe fn mf_close(mfp: *mut memfile_T, del_file: bool) {
     }
     unsafe {
         if (*mfp).mf_fd >= 0 && close((*mfp).mf_fd) < 0 {
-            emsg(gettext(e_swapclose.ptr().cast::<c_char>()));
+            emsg(gettext(e_swapclose.as_ptr()));
         }
         if del_file && !mf_fname(mfp).is_null() {
             os_remove(mf_fname(mfp));
@@ -389,7 +389,7 @@ pub unsafe fn mf_close_file(buf: *mut buf_T, getlines: bool) {
         }
 
         if close((*mfp).mf_fd) < 0 {
-            emsg(gettext(e_swapclose.ptr().cast::<c_char>()));
+            emsg(gettext(e_swapclose.as_ptr()));
         }
         (*mfp).mf_fd = -1;
 

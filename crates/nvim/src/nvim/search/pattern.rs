@@ -162,9 +162,9 @@ pub unsafe extern "C" fn search_regcomp(
             if remembered.pat.is_null() {
                 // Never defined.
                 let msg = if pat_use == RE_SUBST {
-                    e_nopresub.ptr().cast::<c_char>()
+                    e_nopresub.as_ptr()
                 } else {
-                    e_noprevre.ptr().cast::<c_char>()
+                    e_noprevre.as_ptr()
                 };
                 emsg(gettext(msg));
                 rc_did_emsg.set(true);

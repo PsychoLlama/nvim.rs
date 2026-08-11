@@ -145,9 +145,9 @@ pub unsafe extern "C" fn f_islocked(
                 // Both texts interpolate the unconsumed remainder of the
                 // caller's expression, so they keep the variadic call.
                 let fmt = if lv.ll_name_len == 0 {
-                    e_invarg2.ptr() as *const c_char
+                    e_invarg2.as_ptr()
                 } else {
-                    e_trailing_arg.ptr() as *const c_char
+                    e_trailing_arg.as_ptr()
                 };
                 semsg_c!(gettext(fmt), end);
             } else if lv.ll_tv.is_null() {
@@ -160,7 +160,7 @@ pub unsafe extern "C" fn f_islocked(
             } else if lv.ll_range {
                 semsg!("E786: Range not allowed");
             } else if !lv.ll_newkey.is_null() {
-                semsg_c!(gettext(e_dictkey.ptr() as *const c_char), lv.ll_newkey);
+                semsg_c!(gettext(e_dictkey.as_ptr()), lv.ll_newkey);
             } else if !lv.ll_list.is_null() {
                 rettv.vval.v_number = tv_islocked(&raw mut (*lv.ll_li).li_tv) as varnumber_T;
             } else {

@@ -281,10 +281,8 @@ pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub unsafe fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
 }
-static e_attempt_to_delete_buffer_that_is_in_use_str: GlobalCell<[::core::ffi::c_char; 52]> =
-    GlobalCell::new(c_bytes(
-        b"E937: Attempt to delete a buffer that is in use: %s\0",
-    ));
+static e_attempt_to_delete_buffer_that_is_in_use_str: [::core::ffi::c_char; 52] =
+    c_bytes(b"E937: Attempt to delete a buffer that is in use: %s\0");
 static buf_free_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static top_file_num: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
 unsafe extern "C" fn trigger_undo_ftplugin(mut buf: *mut buf_T, mut win: *mut win_T) {
@@ -620,10 +618,7 @@ unsafe extern "C" fn can_unload_buffer(mut buf: *mut buf_T) -> bool {
             (*buf).b_ffname
         };
         semsg_c!(
-            gettext(
-                (e_attempt_to_delete_buffer_that_is_in_use_str.ptr() as *const _)
-                    as *const ::core::ffi::c_char,
-            ),
+            gettext(e_attempt_to_delete_buffer_that_is_in_use_str.as_ptr(),),
             if !fname.is_null() {
                 fname as *const ::core::ffi::c_char
             } else {

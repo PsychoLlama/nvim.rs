@@ -88,9 +88,9 @@ pub unsafe extern "C" fn check_internal_func(fdef: *const EvalFuncDef, argcount:
             return (*fdef).base_arg as c_int;
         };
         let message = if too_many {
-            e_toomanyarg.ptr() as *const c_char
+            e_toomanyarg.as_ptr()
         } else {
-            e_toofewarg.ptr() as *const c_char
+            e_toofewarg.as_ptr()
         };
         semsg_c!(gettext(message), (*fdef).name);
         -1
@@ -376,11 +376,7 @@ pub unsafe extern "C" fn api_wrapper(
             &raw mut err,
         );
         if err.type_0 != kErrorTypeNone {
-            semsg_multiline_c!(
-                c"emsg".as_ptr(),
-                e_api_error.ptr() as *const c_char,
-                err.msg,
-            );
+            semsg_multiline_c!(c"emsg".as_ptr(), e_api_error.as_ptr(), err.msg,);
         } else {
             object_to_vim_take_luaref(&raw mut result, rettv, true, &raw mut err);
         }
@@ -494,7 +490,7 @@ pub unsafe extern "C" fn get_optional_window(argvars: *mut typval_T, idx: c_int)
         }
         let win = find_win_by_nr_or_id(argvars.add(idx as usize));
         if win.is_null() {
-            emsg(gettext(e_invalwindow.ptr() as *const c_char));
+            emsg(gettext(e_invalwindow.as_ptr()));
         }
         win
     }

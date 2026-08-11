@@ -173,7 +173,7 @@ pub(crate) unsafe fn get_lval_dict_item(
             && len == -1
             && rettv.is_null()
         {
-            semsg_c!(e_illvar.ptr().cast(), c"v:['lua']".as_ptr());
+            semsg_c!(e_illvar.as_ptr(), c"v:['lua']".as_ptr());
             return GLV_FAIL;
         }
 
@@ -182,14 +182,14 @@ pub(crate) unsafe fn get_lval_dict_item(
             if (*lp).ll_dict == get_vimvar_dict()
                 || &raw mut (*(*lp).ll_dict).dv_hashtab == get_funccal_args_ht()
             {
-                semsg_c!(gettext(e_illvar.ptr().cast()), name);
+                semsg_c!(gettext(e_illvar.as_ptr()), name);
                 return GLV_FAIL;
             }
             // The key does not exist. It may be added — unless something
             // follows it to subscript, or this is an `:unlet`.
             if *p == b'[' as c_char || *p == b'.' as c_char || unlet {
                 if !quiet {
-                    semsg_c!(gettext(e_dictkey.ptr().cast()), key);
+                    semsg_c!(gettext(e_dictkey.as_ptr()), key);
                 }
                 return GLV_FAIL;
             }
@@ -542,7 +542,7 @@ pub unsafe fn get_lval(
                 && *p != b'[' as c_char
                 && *p != b'.' as c_char
             {
-                semsg_c!(gettext(e_trailing_arg.ptr().cast()), p);
+                semsg_c!(gettext(e_trailing_arg.as_ptr()), p);
                 return null_mut();
             }
             (*lp).ll_exp_name = make_expanded_name(name, expr_start, expr_end, p);
@@ -550,7 +550,7 @@ pub unsafe fn get_lval(
             if (*lp).ll_exp_name.is_null() {
                 if !aborting() && !quiet {
                     emsg_severe.set(true);
-                    semsg_c!(gettext(e_invarg2.ptr().cast()), name);
+                    semsg_c!(gettext(e_invarg2.as_ptr()), name);
                     return null_mut();
                 }
                 (*lp).ll_name_len = 0 as size_t;
@@ -660,7 +660,7 @@ pub unsafe fn set_var_lval(
             // `blob_T` as a `list_T`. `let l = [1,2] | let l[0:] = 0z11`
             // is enough. Report what the assignment actually needs.
             if (*rettv).v_type != VAR_LIST {
-                emsg(gettext(e_listreq.ptr().cast()));
+                emsg(gettext(e_listreq.as_ptr()));
                 return;
             }
             tv_list_assign_range(
@@ -703,7 +703,7 @@ pub unsafe fn set_var_lval(
             if !(*lp).ll_newkey.is_null() {
                 // The key has to be added to the Dictionary first.
                 if !op.is_null() && *op != b'=' as c_char {
-                    semsg_c!(gettext(e_dictkey.ptr().cast()), (*lp).ll_newkey);
+                    semsg_c!(gettext(e_dictkey.as_ptr()), (*lp).ll_newkey);
                     return;
                 }
                 if tv_dict_wrong_func_name((*(*lp).ll_tv).vval.v_dict, rettv, (*lp).ll_newkey) != 0
@@ -789,7 +789,7 @@ unsafe fn set_whole_var(
         } else if !op.is_null() && *op != b'=' as c_char {
             // `+=`, `-=`, `*=`, `/=`, `%=` and `..=`.
             if is_const {
-                emsg(gettext(e_cannot_mod.ptr().cast()));
+                emsg(gettext(e_cannot_mod.as_ptr()));
                 *endp = cc;
                 return;
             }
@@ -837,7 +837,7 @@ unsafe fn set_whole_var(
 unsafe fn set_blob_var(lp: *mut lval_T, rettv: *mut typval_T, op: *const c_char) -> bool {
     unsafe {
         if !op.is_null() && *op != b'=' as c_char {
-            semsg_c!(gettext(e_letwrong.ptr().cast()), op);
+            semsg_c!(gettext(e_letwrong.as_ptr()), op);
             return false;
         }
         if value_check_lock(
@@ -868,7 +868,7 @@ unsafe fn set_blob_var(lp: *mut lval_T, rettv: *mut typval_T, op: *const c_char)
         let val = tv_get_number_chk(rettv, &raw mut error);
         if !error {
             if !(0..=255).contains(&val) {
-                semsg_c!(gettext(e_invalid_value_for_blob_nr.ptr().cast()), val);
+                semsg_c!(gettext(e_invalid_value_for_blob_nr.as_ptr()), val);
             } else {
                 tv_blob_set_append((*lp).ll_blob, (*lp).ll_n1, val as uint8_t);
             }

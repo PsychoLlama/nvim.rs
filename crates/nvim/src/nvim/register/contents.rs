@@ -423,8 +423,8 @@ pub unsafe fn write_reg_contents_lst(
                 c"".as_ptr().cast_mut()
             } else if !(*strings.add(1)).is_null() {
                 emsg(gettext(
-                    e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines.ptr()
-                        as *const c_char,
+                    e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines
+                        .as_ptr(),
                 ));
                 return;
             } else {

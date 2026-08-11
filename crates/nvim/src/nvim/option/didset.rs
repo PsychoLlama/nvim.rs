@@ -734,7 +734,7 @@ pub unsafe extern "C" fn did_set_wildchar(args: *mut optset_T) -> *const c_char 
         || c == '\r' as OptInt
         || c == K_KENTER as OptInt
     {
-        return e_invarg.ptr().cast::<c_char>();
+        return e_invarg.as_ptr();
     }
     ptr::null()
 }

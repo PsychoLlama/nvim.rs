@@ -53,10 +53,7 @@ pub(crate) unsafe fn strict_bool_arg(tv: *mut typval_T) -> Option<bool> {
             return None;
         }
         if !(0..=1).contains(&value) {
-            semsg_c!(
-                gettext(e_using_number_as_bool_nr.ptr().cast::<c_char>()),
-                value,
-            );
+            semsg_c!(gettext(e_using_number_as_bool_nr.as_ptr()), value,);
             return None;
         }
         Some(value != 0)

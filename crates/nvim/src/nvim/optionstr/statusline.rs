@@ -279,7 +279,7 @@ pub unsafe extern "C" fn did_set_shellpipe_redir(args: *mut optset_T) -> *const 
     // SAFETY: the frame's new value is a C string.
     let value = unsafe { CStr::from_ptr((*args).os_newval.string.data) }.to_bytes();
     let bad = e_invalid_format_string_single_percent_s
-        .ptr()
+        .as_ptr()
         .cast::<c_char>();
     let mut seen = false;
     let mut at = 0;

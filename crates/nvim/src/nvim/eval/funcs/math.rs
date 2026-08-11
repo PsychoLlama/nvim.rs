@@ -257,12 +257,7 @@ pub unsafe extern "C" fn f_rand(argvars: *mut typval_T, rettv: *mut typval_T, _f
             // format string can only carry UTF-8.
             // SAFETY: `args.ptr(0)` is a live typval, and `tv_get_string`
             // hands back a NUL-terminated buffer that outlives the call.
-            unsafe {
-                semsg_c!(
-                    gettext(e_invarg2.ptr() as *const c_char),
-                    tv_get_string(args.ptr(0)),
-                )
-            };
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), tv_get_string(args.ptr(0)),) };
             rettv.v_type = VAR_NUMBER;
             rettv.vval.v_number = -1;
             return;

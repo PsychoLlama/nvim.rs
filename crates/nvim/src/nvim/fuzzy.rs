@@ -40,7 +40,6 @@ use crate::src::nvim::eval::typval::{
     tv_list_append_tv, tv_list_find,
 };
 use crate::src::nvim::garray::{ga_grow, ga_init};
-use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::insexpand::{
     ctrl_x_mode_whole_line, find_line_end, find_word_end, find_word_start,
 };
@@ -859,10 +858,10 @@ unsafe fn fuzzy_match_in_list(list: *mut list_T, request: &Request, fmatchlist: 
 }
 
 /// The translated text of one of the shared `e_*` message strings.
-fn message<const N: usize>(msg: &'static GlobalCell<[c_char; N]>) -> *const c_char {
+fn message<const N: usize>(msg: &'static [c_char; N]) -> *const c_char {
     // SAFETY: gettext answers either its argument or a pointer into the
     // loaded message catalog; both outlive the call.
-    unsafe { gettext(msg.ptr().cast()) }
+    unsafe { gettext(msg.as_ptr()) }
 }
 
 /// The body of `matchfuzzy()` and, with `retmatchpos`, `matchfuzzypos()`.

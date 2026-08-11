@@ -302,7 +302,7 @@ pub unsafe extern "C" fn f_setcmdline(
                 return;
             }
             if pos < 0 {
-                emsg(gettext(e_positive.ptr() as *const ::core::ffi::c_char));
+                emsg(gettext(e_positive.as_ptr()));
                 return;
             }
         }

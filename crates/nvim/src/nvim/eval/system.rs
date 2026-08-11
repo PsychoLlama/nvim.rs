@@ -65,7 +65,7 @@ pub unsafe fn tv_to_argv(
         }
         if (*cmd_tv).v_type != VAR_LIST {
             semsg_c!(
-                gettext(e_invarg2.ptr().cast()),
+                gettext(e_invarg2.as_ptr()),
                 c"expected String or List".as_ptr(),
             );
             return null_mut();
@@ -74,7 +74,7 @@ pub unsafe fn tv_to_argv(
         let argl: *mut list_T = (*cmd_tv).vval.v_list;
         let argc = tv_list_len(argl);
         if argc == 0 {
-            emsg(gettext(e_invarg.ptr().cast()));
+            emsg(gettext(e_invarg.as_ptr()));
             return null_mut();
         }
 
@@ -92,7 +92,7 @@ pub unsafe fn tv_to_argv(
                     arg0,
                 );
                 semsg_c!(
-                    gettext(e_invargNval.ptr().cast()),
+                    gettext(e_invargNval.as_ptr()),
                     c"cmd".as_ptr(),
                     buf.as_mut_ptr(),
                 );
@@ -309,7 +309,7 @@ unsafe fn buffer_as_string(tv: *mut typval_T, len: *mut ptrdiff_t) -> *mut c_cha
     unsafe {
         let buf: *mut buf_T = buflist_findnr((*tv).vval.v_number as c_int);
         if buf.is_null() {
-            semsg_c!(gettext(e_nobufnr.ptr().cast()), (*tv).vval.v_number);
+            semsg_c!(gettext(e_nobufnr.as_ptr()), (*tv).vval.v_number);
             *len = -1;
             return null_mut();
         }

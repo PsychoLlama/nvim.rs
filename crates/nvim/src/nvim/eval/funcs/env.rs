@@ -290,7 +290,7 @@ pub unsafe extern "C" fn f_setfperm(
             return;
         }
         if strlen(mode_str) != 9 {
-            semsg_c!(gettext(e_invarg2.ptr() as *const c_char), mode_str);
+            semsg_c!(gettext(e_invarg2.as_ptr()), mode_str);
             return;
         }
         let mut mode: c_int = 0;

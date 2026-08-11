@@ -821,10 +821,8 @@ static getln_interrupted_highlight: GlobalCell<bool> = GlobalCell::new(false_0 !
 static cedit_key: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 static cmdpreview_bufnr: GlobalCell<handle_T> = GlobalCell::new(0 as handle_T);
 static cmdpreview_ns: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static e_active_window_or_buffer_changed_or_deleted: GlobalCell<[::core::ffi::c_char; 49]> =
-    GlobalCell::new(c_bytes(
-        b"E199: Active window or buffer changed or deleted\0",
-    ));
+static e_active_window_or_buffer_changed_or_deleted: [::core::ffi::c_char; 49] =
+    c_bytes(b"E199: Active window or buffer changed or deleted\0");
 pub const PATH_ESC_CHARS: [::core::ffi::c_char; 18] = unsafe {
     ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b" \t\n*?[{`$\\%#'\"|!<\0")
 };

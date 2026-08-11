@@ -38,8 +38,7 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const SHAPE_MOUSE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SHAPE_CURSOR: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static e_digit_expected: GlobalCell<[::core::ffi::c_char; 21]> =
-    GlobalCell::new(c_bytes(b"E548: Digit expected\0"));
+static e_digit_expected: [::core::ffi::c_char; 21] = c_bytes(b"E548: Digit expected\0");
 pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
     cursorentry_T {
         full_name: c"normal".as_ptr() as *mut ::core::ffi::c_char,
@@ -594,8 +593,7 @@ pub unsafe extern "C" fn parse_shape_opt(
                     if len != 0 as ::core::ffi::c_int {
                         p = p.offset(len as isize);
                         if !ascii_isdigit(*p as ::core::ffi::c_int) {
-                            return (e_digit_expected.ptr() as *const _)
-                                as *const ::core::ffi::c_char;
+                            return e_digit_expected.as_ptr();
                         }
                         let mut n: ::core::ffi::c_int =
                             getdigits_int(&raw mut p, false_0 != 0, 0 as ::core::ffi::c_int);

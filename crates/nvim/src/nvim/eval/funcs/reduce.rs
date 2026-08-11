@@ -120,7 +120,7 @@ unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
             }
             _ => {
                 semsg_c!(
-                    gettext(e_listdictarg.ptr() as *const c_char),
+                    gettext(e_listdictarg.as_ptr()),
                     if domax {
                         c"max()".as_ptr()
                     } else {
@@ -231,7 +231,7 @@ unsafe fn reduce_list(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
         } else {
             if tv_list_len(l) == 0 {
                 semsg_c!(
-                    gettext(e_reduce_of_an_empty_str_with_no_initial_value.ptr() as *const c_char),
+                    gettext(e_reduce_of_an_empty_str_with_no_initial_value.as_ptr()),
                     c"List".as_ptr(),
                 );
                 return;
@@ -270,7 +270,7 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_
         if !args.has(2) {
             if *p as c_int == NUL {
                 semsg_c!(
-                    gettext(e_reduce_of_an_empty_str_with_no_initial_value.ptr() as *const c_char),
+                    gettext(e_reduce_of_an_empty_str_with_no_initial_value.as_ptr()),
                     c"String".as_ptr(),
                 );
                 return;
@@ -318,7 +318,7 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
         } else {
             if tv_blob_len(b) == 0 {
                 semsg_c!(
-                    gettext(e_reduce_of_an_empty_str_with_no_initial_value.ptr() as *const c_char),
+                    gettext(e_reduce_of_an_empty_str_with_no_initial_value.as_ptr()),
                     c"Blob".as_ptr(),
                 );
                 return;
@@ -352,9 +352,7 @@ pub unsafe extern "C" fn f_reduce(
     unsafe {
         let ty = args.ty(0);
         if ty != VAR_STRING && ty != VAR_LIST && ty != VAR_BLOB {
-            emsg(gettext(
-                e_string_list_or_blob_required.ptr() as *const c_char
-            ));
+            emsg(gettext(e_string_list_or_blob_required.as_ptr()));
             return;
         }
         // The callable is checked for emptiness here rather than by
@@ -366,7 +364,7 @@ pub unsafe extern "C" fn f_reduce(
             _ => tv_get_string(args.ptr(1)),
         };
         if func_name.is_null() || *func_name as c_int == NUL {
-            emsg(gettext(e_missing_function_argument.ptr() as *const c_char));
+            emsg(gettext(e_missing_function_argument.as_ptr()));
             return;
         }
         let expr = args.ptr(1);

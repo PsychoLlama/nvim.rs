@@ -120,7 +120,7 @@ pub unsafe extern "C" fn f_chanclose(
             return;
         }
         if args.ty(0) != VAR_NUMBER || (args.ty(1) != VAR_STRING && args.has(1)) {
-            emsg(gettext(e_invarg.ptr() as *const c_char));
+            emsg(gettext(e_invarg.as_ptr()));
             return;
         }
 
@@ -165,7 +165,7 @@ pub unsafe extern "C" fn f_chansend(
             return;
         }
         if args.ty(0) != VAR_NUMBER || !args.has(1) {
-            emsg(gettext(e_invarg.ptr() as *const c_char));
+            emsg(gettext(e_invarg.as_ptr()));
             return;
         }
 
@@ -222,14 +222,14 @@ pub unsafe extern "C" fn f_rpcnotify(
         // `rpcrequest()` insists on a real one.
         if args.ty(0) != VAR_NUMBER || args.get(0).vval.v_number < 0 {
             semsg_c!(
-                gettext(e_invarg2.ptr() as *const c_char),
+                gettext(e_invarg2.as_ptr()),
                 c"Channel id must be a positive integer".as_ptr(),
             );
             return;
         }
         if args.ty(1) != VAR_STRING {
             semsg_c!(
-                gettext(e_invarg2.ptr() as *const c_char),
+                gettext(e_invarg2.as_ptr()),
                 c"Event type must be a string".as_ptr(),
             );
             return;
@@ -246,7 +246,7 @@ pub unsafe extern "C" fn f_rpcnotify(
         arena_mem_free(arena_finish(&raw mut arena));
         if !ok {
             semsg_c!(
-                gettext(e_invarg2.ptr() as *const c_char),
+                gettext(e_invarg2.as_ptr()),
                 c"Channel doesn't exist".as_ptr(),
             );
             return;
@@ -345,14 +345,14 @@ pub unsafe extern "C" fn f_rpcrequest(
         }
         if args.ty(0) != VAR_NUMBER || args.get(0).vval.v_number <= 0 {
             semsg_c!(
-                gettext(e_invarg2.ptr() as *const c_char),
+                gettext(e_invarg2.as_ptr()),
                 c"Channel id must be a positive integer".as_ptr(),
             );
             return;
         }
         if args.ty(1) != VAR_STRING {
             semsg_c!(
-                gettext(e_invarg2.ptr() as *const c_char),
+                gettext(e_invarg2.as_ptr()),
                 c"Method name must be a string".as_ptr(),
             );
             return;
@@ -512,7 +512,7 @@ pub unsafe extern "C" fn f_serverstart(
         let address = if !args.has(0) {
             server_address_new(ptr::null())
         } else if args.ty(0) != VAR_STRING {
-            emsg(gettext(e_invarg.ptr() as *const c_char));
+            emsg(gettext(e_invarg.as_ptr()));
             return;
         } else {
             xstrdup(tv_get_string(args.ptr(0)))
@@ -557,7 +557,7 @@ pub unsafe extern "C" fn f_serverstop(
             return;
         }
         if args.ty(0) != VAR_STRING {
-            emsg(gettext(e_invarg.ptr() as *const c_char));
+            emsg(gettext(e_invarg.as_ptr()));
             return;
         }
         // Note the order: the return value is only cleared *after* the type
@@ -583,14 +583,11 @@ pub unsafe extern "C" fn f_sockconnect(
     // which adopts its callback.
     unsafe {
         if args.ty(0) != VAR_STRING || args.ty(1) != VAR_STRING {
-            emsg(gettext(e_invarg.ptr() as *const c_char));
+            emsg(gettext(e_invarg.as_ptr()));
             return;
         }
         if args.ty(2) != VAR_DICT && args.has(2) {
-            semsg_c!(
-                gettext(e_invarg2.ptr() as *const c_char),
-                c"expected dictionary".as_ptr(),
-            );
+            semsg_c!(gettext(e_invarg2.as_ptr()), c"expected dictionary".as_ptr(),);
             return;
         }
 
@@ -601,10 +598,7 @@ pub unsafe extern "C" fn f_sockconnect(
         } else if strcmp(mode, c"pipe".as_ptr()) == 0 {
             false
         } else {
-            semsg_c!(
-                gettext(e_invarg2.ptr() as *const c_char),
-                c"invalid mode".as_ptr(),
-            );
+            semsg_c!(gettext(e_invarg2.as_ptr()), c"invalid mode".as_ptr(),);
             return;
         };
 
@@ -646,7 +640,7 @@ pub unsafe extern "C" fn f_stdioopen(
     // `channel_from_stdio`, which adopts its callback.
     unsafe {
         if args.ty(0) != VAR_DICT {
-            emsg(gettext(e_invarg.ptr() as *const c_char));
+            emsg(gettext(e_invarg.as_ptr()));
             return;
         }
         let opts = args.get(0).vval.v_dict;
@@ -667,7 +661,7 @@ pub unsafe extern "C" fn f_stdioopen(
         let mut error = ptr::null::<c_char>();
         let id = channel_from_stdio(rpc, on_stdin, &raw mut error);
         if id == 0 {
-            semsg_c!(e_stdiochan2.ptr() as *const c_char, error);
+            semsg_c!(e_stdiochan2.as_ptr(), error);
         }
         rettv.vval.v_number = id as varnumber_T;
         rettv.v_type = VAR_NUMBER;

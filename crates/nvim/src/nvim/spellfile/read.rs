@@ -549,7 +549,7 @@ unsafe fn load_sug(fd: *mut FILE, slang: *mut slang_T) {
         semsg_c!(
             gettext(
                 super::e_error_while_reading_sug_file_str
-                    .ptr()
+                    .as_ptr()
                     .cast::<c_char>(),
             ),
             (*slang).sl_fname,

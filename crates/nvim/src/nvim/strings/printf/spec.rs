@@ -218,7 +218,7 @@ pub(crate) unsafe fn format_overflow_error(pstart: *const c_char) {
             p = p.add(1);
         }
         semsg_c!(
-            gettext(e_val_too_large_len.ptr().cast::<c_char>()),
+            gettext(e_val_too_large_len.as_ptr()),
             p.offset_from(pstart) as c_int,
             pstart,
         );

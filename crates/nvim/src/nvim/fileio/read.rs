@@ -825,7 +825,7 @@ pub unsafe extern "C" fn readfile(
 
                 if got_int.get() {
                     if !how.dummy {
-                        filemess(curbuf.get(), sfname, gettext(e_interr.as_raw().cast()));
+                        filemess(curbuf.get(), sfname, gettext(e_interr.as_ptr()));
                         if how.newfile {
                             (*curbuf.get()).b_p_ro = true as c_int; // must use "w!" now
                         }

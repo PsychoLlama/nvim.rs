@@ -422,14 +422,14 @@ pub unsafe extern "C" fn f_matchbufline(
             // Only report the name when `tv_get_buf` was silent about it.
             if did_emsg.get() == prev_did_emsg {
                 semsg_c!(
-                    gettext(e_invalid_buffer_name_str.ptr() as *const c_char),
+                    gettext(e_invalid_buffer_name_str.as_ptr()),
                     tv_get_string(args.ptr(0)),
                 );
             }
             return;
         }
         if (*buf).b_ml.ml_mfp.is_null() {
-            emsg(gettext(e_buffer_is_not_loaded.ptr() as *const c_char));
+            emsg(gettext(e_buffer_is_not_loaded.as_ptr()));
             return;
         }
         let mut patbuf: [c_char; 65] = [0; 65];
@@ -441,10 +441,7 @@ pub unsafe extern "C" fn f_matchbufline(
             return;
         }
         if slnum < 1 {
-            semsg_c!(
-                gettext(e_invargval.ptr() as *const c_char),
-                c"lnum".as_ptr(),
-            );
+            semsg_c!(gettext(e_invargval.as_ptr()), c"lnum".as_ptr(),);
             return;
         }
         let mut elnum: linenr_T = tv_get_lnum_buf(args.ptr(3), buf);
@@ -452,10 +449,7 @@ pub unsafe extern "C" fn f_matchbufline(
             return;
         }
         if elnum < 1 || elnum < slnum {
-            semsg_c!(
-                gettext(e_invargval.ptr() as *const c_char),
-                c"end_lnum".as_ptr(),
-            );
+            semsg_c!(gettext(e_invargval.as_ptr()), c"end_lnum".as_ptr(),);
             return;
         }
         elnum = elnum.min((*buf).b_ml.ml_line_count);
@@ -498,10 +492,7 @@ unsafe fn want_submatches(args: Args<'_>, i: usize) -> Option<bool> {
             return Some(false);
         }
         if (*di).di_tv.v_type != VAR_BOOL {
-            semsg_c!(
-                gettext(e_invargval.ptr() as *const c_char),
-                c"submatches".as_ptr(),
-            );
+            semsg_c!(gettext(e_invargval.as_ptr()), c"submatches".as_ptr(),);
             return None;
         }
         Some(tv_get_bool(&raw mut (*di).di_tv) != 0)

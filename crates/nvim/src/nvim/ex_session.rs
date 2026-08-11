@@ -396,7 +396,7 @@ pub unsafe fn ex_loadview(eap: *mut exarg_T) {
             return;
         }
         if do_source(fname, false, DOSO_NONE, ptr::null_mut()) == FAIL {
-            semsg_c!(e_notopen.ptr().cast::<c_char>(), fname);
+            semsg_c!(e_notopen.as_ptr(), fname);
         }
         xfree(fname.cast::<c_void>());
     }
@@ -420,7 +420,7 @@ unsafe fn get_view_file(c: c_char) -> *mut c_char {
     // and `retval` is sized below for every byte written into it.
     unsafe {
         if (*curbuf.get()).b_ffname.is_null() {
-            emsg(e_noname.ptr().cast::<c_char>());
+            emsg(e_noname.as_ptr());
             return ptr::null_mut();
         }
         let sname = home_replace_save(ptr::null_mut::<buf_T>(), (*curbuf.get()).b_ffname);
@@ -525,7 +525,7 @@ pub unsafe fn ex_mkrc(eap: *mut exarg_T) {
             // and must run whether or not anything failed above.
             let close_failed = fclose(fd) != 0;
             if failed || close_failed {
-                emsg(e_write.ptr().cast::<c_char>());
+                emsg(e_write.as_ptr());
             } else if cmdidx == CMD_mksession {
                 // A successful session write sets v:this_session.
                 let full = xmalloc(MAXPATHL as size_t).cast::<c_char>();
@@ -655,7 +655,7 @@ unsafe fn write_session(out: SessionFile, fname: *mut c_char) -> bool {
         // Restore the original directory.
         if to_sesdir || to_globaldir {
             if os_chdir(dirnow) != 0 {
-                emsg(e_prev_dir.ptr().cast::<c_char>());
+                emsg(e_prev_dir.as_ptr());
             }
             shorten_fnames(1);
         }

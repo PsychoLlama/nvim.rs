@@ -746,7 +746,7 @@ pub unsafe fn compile_cap_prog(synblock: *mut synblock_T) -> *const c_char {
             xfree(re as *mut c_void);
             if (*synblock).b_cap_prog.is_null() {
                 (*synblock).b_cap_prog = rp; // keep the previous program
-                return e_invarg.ptr() as *const c_char;
+                return e_invarg.as_ptr();
             }
         }
 
