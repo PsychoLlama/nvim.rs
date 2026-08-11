@@ -11,22 +11,18 @@ and this project adheres to [CalVer](https://calver.org/).
 
 - Replaced the eight `printf`-style message wrappers (`semsg` and its
   siblings) with macros across all 724 of their call sites, leaving
-  vimscript's own `printf()` as the only format machinery that is still a C
-  variadic. No message text changes.
+  vimscript's own `printf()` as the only format machinery that is still a
+  C variadic. No message text changes.
 - Rewrote version reporting, covering `:version`, `nvim -v`, the intro
   screen and the `has("nvim-…")`/`has("patch-…")` predicates. `:version`
   now names the port and the version it was built from, and reports the
   real build profile and compiler instead of the CMake-era text the
   transpiler baked in; `Build type:` and `Compilation:` are gone.
-- Internal consistency checks that came from the original's `assert()` no
-  longer abort a release build: 237 of them across the tree are debug-only
-  now, as they are in the original, where a release build compiles them
-  out. A release `nvim` carries on past the cases it used to die on.
 - Swept the transpiler's C idioms out of the whole tree: NUL-terminated
   byte strings became C string literals, pointer arithmetic became the
   unsigned form, the `logmsg` C variadic became a macro, and the casts
-  those changes made redundant are gone. 2,032 lint warnings down to 75
-  across ~2,000 sites; nothing observable changed.
+  those changes made redundant are gone. ~2,000 sites; nothing observable
+  changed.
 - Rewrote the runtime layer, covering how `'runtimepath'` and
   `'packpath'` are built from `$XDG_*`, `$NVIM_APPNAME` and `--clean`,
   the search behind `:runtime`, `require()` and runtime-file completion,
@@ -39,7 +35,7 @@ and this project adheres to [CalVer](https://calver.org/).
   profiling, the clipboard provider and the `input()`/`confirm()`
   prompts, the context stack behind `ctxget()`/`ctxset()`, and the
   remaining transpiled file-system and indent code.
-- Rewrote the Ex command layer — everything an `:` command does once it has
+- Rewrote the Ex command layer, everything an `:` command does once it has
   been parsed. That covers `:substitute` and `:global` including the `c`
   confirm prompt, `\=` replacements and `'inccommand'` preview;
   `:sort`/`:uniq`, `:move`/`:copy`, `:append`/`:insert`/`:change`/`:z`,
@@ -51,23 +47,29 @@ and this project adheres to [CalVer](https://calver.org/).
   and `:helptags`; the `:debug` prompt, breakpoints and profiling ranges;
   the argument list and `:argdo`/`:bufdo`/`:windo`/`:tabdo`; digraphs;
   command-line history; and the `nvim_cmd`/`nvim_parse_cmd` API pair.
-- The table of Ex command names, flags and address types — and the two
-  first-byte lookup indexes into it — is generated from `ex_cmds.lua`
-  now, as the original generated the same table at build time. The
-  emitted table is byte-identical to the one it replaces.
+- The table that decides which `:` commands exist and how each one's range
+  and arguments are parsed is generated from `ex_cmds.lua` now, as the
+  original generated it at build time. The emitted table is byte-identical
+  to the one it replaces.
 
 ### Fixed
 
+- Internal consistency checks that came from the original's `assert()` no
+  longer abort a release build. 237 of them across the tree are debug-only
+  now, as they are in the original, and a release `nvim` carries on past
+  the cases it used to die on.
 - `require()` from inside a `vim.uv` thread no longer aborts. Any module
   loaded off the main thread went through the runtime search path, which
   a debug build refused to touch there.
-
 - A number too large for the option it appears in no longer kills the
   editor. `'cinoptions'`, `'breakindentopt'`, `'comments'`, `'spellsuggest'`,
   `'rulerformat'`, `:sign place`, `:breakadd` and the `:syntax` offsets all
   read their numeric fields the same way, and anything outside the
-  representable range aborted the process -- from a modeline, in a release
-  build. Such a number is clamped now.
+  representable range aborted the process, even from a modeline in a
+  release build. Such a number is clamped now.
+- A count too large for the command it appears in no longer ends the
+  editor. `:digraph a: 4294967296`, `:2147483647verbose set` and the
+  `verbose` and `tab` modifiers of `nvim_cmd()` saturate now.
 
 ## [2026.08.08-0be4297933]
 
