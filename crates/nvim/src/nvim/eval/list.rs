@@ -98,37 +98,9 @@ pub(crate) const UNKNOWN_TV: typval_T = typval_T {
 // The argument vector, and a value held as a pointer
 // ---------------------------------------------------------------------
 
-/// A builtin's argument vector: the arguments the evaluator evaluated,
-/// followed by the `VAR_UNKNOWN` that ends them.
-///
-/// The slots past that terminator are the caller's uninitialised stack, so
-/// [`Args::at`] may only be asked for a slot the arity guarantees: one below
-/// the declared minimum, or one past a slot that did not read `VAR_UNKNOWN`.
-#[derive(Clone, Copy)]
-pub(crate) struct Args(*mut typval_T);
-
-impl Args {
-    /// # Safety
-    /// `argvars` must be a builtin's own argument vector.
-    #[inline(always)]
-    pub(crate) unsafe fn new(argvars: *mut typval_T) -> Self {
-        Self(argvars)
-    }
-
-    /// Argument `i`; see the type's own doc for which `i` is legal.
-    #[inline(always)]
-    pub(crate) fn at<'a>(self, i: usize) -> &'a mut typval_T {
-        // SAFETY: the vector is the evaluator's, and the caller's arity makes
-        // slot `i` one it initialised.
-        unsafe { &mut *self.0.add(i) }
-    }
-
-    /// Whether argument `i` was passed at all.
-    #[inline(always)]
-    pub(crate) fn has(self, i: usize) -> bool {
-        self.at(i).v_type != VAR_UNKNOWN
-    }
-}
+/// A builtin's argument vector is the tree's own [`Args`], shared with every
+/// other `f_*` family, and [`frame`] is how a builtin opens onto it.
+pub(crate) use crate::src::nvim::eval::funcs::args::{Args, frame};
 
 /// A live `typval_T` held as a pointer rather than a borrow.
 ///
@@ -938,8 +910,8 @@ pub unsafe extern "C" fn f_remove(
 ) {
     let arg_errmsg = c"remove() argument".as_ptr();
     // SAFETY: the caller's contract.
-    let args = unsafe { Args::new(argvars) };
-    match Container::of(args.at(0)) {
+    let mut args = unsafe { Args::new(argvars) };
+    match Container::of(args.get_mut(0)) {
         // SAFETY: as above -- these three take the vector itself, and each is
         // reached only for the type it handles.
         Container::Dict(_) => unsafe { tv_dict_remove(argvars, rettv, arg_errmsg) },
@@ -968,8 +940,8 @@ pub unsafe extern "C" fn f_reverse(
         return;
     }
     // SAFETY: the caller's contract.
-    let (args, rettv) = unsafe { (Args::new(argvars), &mut *rettv) };
-    match Container::of(args.at(0)) {
+    let (mut args, rettv) = frame!(argvars, rettv);
+    match Container::of(args.get_mut(0)) {
         Container::Blob(b) => {
             let len = b.len();
             for i in 0..len / 2 {

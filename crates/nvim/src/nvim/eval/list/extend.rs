@@ -14,7 +14,7 @@
 use core::ffi::{CStr, c_int};
 
 use super::{
-    Args, Container, check_lock, copy_tv, cstr_of, cstr_of_chk, err_nr, err_str, number_of,
+    Args, Container, check_lock, copy_tv, cstr_of, cstr_of_chk, err_nr, err_str, frame, number_of,
 };
 use crate::src::nvim::main::{
     e_invarg2, e_list_index_out_of_range_nr, e_listblobarg, e_listdictarg,
@@ -26,8 +26,8 @@ use crate::src::nvim::types::{
 
 /// `extend()`/`extendnew()` over two Dicts: merge `argvars[1]`'s keys into
 /// `argvars[0]` (or into a copy of it) under the policy `argvars[2]` names.
-fn extend_dict(args: Args, arg_errmsg: &CStr, is_new: bool, rettv: &mut typval_T) {
-    let Container::Dict(mut d1) = Container::of(args.at(0)) else {
+fn extend_dict(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut typval_T) {
+    let Container::Dict(mut d1) = Container::of(args.get_mut(0)) else {
         unreachable!("dispatched on VAR_DICT")
     };
     if d1.is_null() {
@@ -36,12 +36,12 @@ fn extend_dict(args: Args, arg_errmsg: &CStr, is_new: bool, rettv: &mut typval_T
         debug_assert!(locked, "locked == true");
         return;
     }
-    let Container::Dict(d2) = Container::of(args.at(1)) else {
+    let Container::Dict(d2) = Container::of(args.get_mut(1)) else {
         unreachable!("dispatched on VAR_DICT")
     };
     if d2.is_null() {
         // Do nothing.
-        copy_tv(args.at(0), rettv);
+        copy_tv(args.get_mut(0), rettv);
         return;
     }
 
@@ -58,7 +58,7 @@ fn extend_dict(args: Args, arg_errmsg: &CStr, is_new: bool, rettv: &mut typval_T
     // Check the third argument.
     let mut action = c"force";
     if args.has(2) {
-        let Some(name) = cstr_of_chk(args.at(2)) else {
+        let Some(name) = cstr_of_chk(args.get_mut(2)) else {
             // Type error; error message already given.
             if is_new {
                 d1.unref();
@@ -84,18 +84,18 @@ fn extend_dict(args: Args, arg_errmsg: &CStr, is_new: bool, rettv: &mut typval_T
             vval: typval_vval_union { v_dict: d1.raw() },
         };
     } else {
-        copy_tv(args.at(0), rettv);
+        copy_tv(args.get_mut(0), rettv);
     }
 }
 
 /// `extend()`/`extendnew()` over two Lists: splice `argvars[1]` into
 /// `argvars[0]` (or into a copy of it) before index `argvars[2]`.
-fn extend_list(args: Args, arg_errmsg: &CStr, is_new: bool, rettv: &mut typval_T) {
+fn extend_list(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut typval_T) {
     let mut error = false;
-    let Container::List(mut l1) = Container::of(args.at(0)) else {
+    let Container::List(mut l1) = Container::of(args.get_mut(0)) else {
         unreachable!("dispatched on VAR_LIST")
     };
-    let Container::List(l2) = Container::of(args.at(1)) else {
+    let Container::List(l2) = Container::of(args.get_mut(1)) else {
         unreachable!("dispatched on VAR_LIST")
     };
 
@@ -115,7 +115,7 @@ fn extend_list(args: Args, arg_errmsg: &CStr, is_new: bool, rettv: &mut typval_T
         if !args.has(2) {
             break 'find None;
         }
-        let idx = number_of(args.at(2), &mut error) as c_int;
+        let idx = number_of(args.get_mut(2), &mut error) as c_int;
         if !error {
             if idx == l1.len() {
                 break 'find None;
@@ -140,14 +140,17 @@ fn extend_list(args: Args, arg_errmsg: &CStr, is_new: bool, rettv: &mut typval_T
             vval: typval_vval_union { v_list: l1.raw() },
         };
     } else {
-        copy_tv(args.at(0), rettv);
+        copy_tv(args.get_mut(0), rettv);
     }
 }
 
 /// The shared body of `extend()` and `extendnew()`: two Lists or two Dicts,
 /// nothing else.
-fn extend(args: Args, rettv: &mut typval_T, arg_errmsg: &CStr, is_new: bool) {
-    match (Container::of(args.at(0)), Container::of(args.at(1))) {
+fn extend(mut args: Args<'_>, rettv: &mut typval_T, arg_errmsg: &CStr, is_new: bool) {
+    match (
+        Container::of(args.get_mut(0)),
+        Container::of(args.get_mut(1)),
+    ) {
         (Container::List(_), Container::List(_)) => extend_list(args, arg_errmsg, is_new, rettv),
         (Container::Dict(_), Container::Dict(_)) => extend_dict(args, arg_errmsg, is_new, rettv),
         _ => err_str(
@@ -169,7 +172,7 @@ pub unsafe extern "C" fn f_extend(
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the caller's contract.
-    let (args, rettv) = unsafe { (Args::new(argvars), &mut *rettv) };
+    let (mut args, rettv) = frame!(argvars, rettv);
     extend(args, rettv, c"extend() argument", false);
 }
 
@@ -184,7 +187,7 @@ pub unsafe extern "C" fn f_extendnew(
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the caller's contract.
-    let (args, rettv) = unsafe { (Args::new(argvars), &mut *rettv) };
+    let (mut args, rettv) = frame!(argvars, rettv);
     extend(args, rettv, c"extendnew() argument", true);
 }
 
@@ -200,9 +203,9 @@ pub unsafe extern "C" fn f_insert(
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the caller's contract.
-    let (args, rettv) = unsafe { (Args::new(argvars), &mut *rettv) };
+    let (mut args, rettv) = frame!(argvars, rettv);
     let mut error = false;
-    match Container::of(args.at(0)) {
+    match Container::of(args.get_mut(0)) {
         Container::Blob(b) => {
             if b.is_null() || check_lock(b.lock(), c"insert() argument") {
                 return;
@@ -210,26 +213,26 @@ pub unsafe extern "C" fn f_insert(
             let len = b.len();
             let mut before = 0;
             if args.has(2) {
-                before = number_of(args.at(2), &mut error) as c_int;
+                before = number_of(args.get_mut(2), &mut error) as c_int;
                 if error {
                     // Type error; errmsg already given.
                     return;
                 }
                 if before < 0 || before > len {
-                    err_str(&e_invarg2, cstr_of(args.at(2)));
+                    err_str(&e_invarg2, cstr_of(args.get_mut(2)));
                     return;
                 }
             }
-            let val = number_of(args.at(1), &mut error) as c_int;
+            let val = number_of(args.get_mut(1), &mut error) as c_int;
             if error {
                 return;
             }
             if !(0..=255).contains(&val) {
-                err_str(&e_invarg2, cstr_of(args.at(1)));
+                err_str(&e_invarg2, cstr_of(args.get_mut(1)));
                 return;
             }
             b.insert_byte(before, val as uint8_t);
-            copy_tv(args.at(0), rettv);
+            copy_tv(args.get_mut(0), rettv);
         }
         Container::List(l) => {
             if check_lock(l.locked(), c"insert() argument") {
@@ -237,7 +240,7 @@ pub unsafe extern "C" fn f_insert(
             }
             let mut before: int64_t = 0;
             if args.has(2) {
-                before = number_of(args.at(2), &mut error);
+                before = number_of(args.get_mut(2), &mut error);
             }
             if error {
                 // Type error; errmsg already given.
@@ -251,8 +254,8 @@ pub unsafe extern "C" fn f_insert(
                     return;
                 }
             }
-            l.insert_tv(args.at(1), item);
-            copy_tv(args.at(0), rettv);
+            l.insert_tv(args.get_mut(1), item);
+            copy_tv(args.get_mut(0), rettv);
         }
         _ => err_str(&e_listblobarg, c"insert()"),
     }

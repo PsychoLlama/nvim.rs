@@ -25,8 +25,8 @@
 use core::ffi::CStr;
 
 use super::{
-    Args, Container, TvRef, UNKNOWN_TV, clear_tv, clear_vim_var, copy_tv, err_not_container,
-    eval_expr, number_of, restore_vim_var, run_cmd, save_vim_var, set_vim_var_tv, string_bytes,
+    Container, TvRef, UNKNOWN_TV, clear_tv, clear_vim_var, copy_tv, err_not_container, eval_expr,
+    frame, number_of, restore_vim_var, run_cmd, save_vim_var, set_vim_var_tv, string_bytes,
     vim_var_value,
 };
 use crate::src::nvim::main::did_emsg;
@@ -127,9 +127,8 @@ pub(crate) fn filter_map_one(
 /// The shared body of the four builtins: check the argument, save `v:key`
 /// and `v:val`, dispatch on the container, and put everything back.
 fn filter_map(argvars: *mut typval_T, rettv: &mut typval_T, filtermap: FilterMap) {
-    // SAFETY: the builtins below pass their own argument vector, arity 2.
-    let args = unsafe { Args::new(argvars) };
-    let arg = args.at(0);
+    let (mut args, _) = frame!(argvars, rettv);
+    let arg = args.get_mut(0);
     let container = Container::of(arg);
 
     // map(), filter(), foreach() return the first argument, also on failure.
@@ -144,7 +143,7 @@ fn filter_map(argvars: *mut typval_T, rettv: &mut typval_T, filtermap: FilterMap
     // On type errors the preceding call has already displayed an error
     // message.  Avoid a misleading one for an empty string that was not
     // passed as an argument.
-    let expr = args.at(1);
+    let expr = args.get_mut(1);
     if expr.v_type == VAR_UNKNOWN {
         return;
     }
@@ -161,7 +160,9 @@ fn filter_map(argvars: *mut typval_T, rettv: &mut typval_T, filtermap: FilterMap
     match container {
         Container::Dict(d) => filter_map_dict(d, filtermap, arg_errmsg, expr, rettv),
         Container::Blob(b) => filter_map_blob(b, filtermap, arg_errmsg, expr, rettv),
-        Container::Str(_) => filter_map_string(string_bytes(args.at(0)), filtermap, expr, rettv),
+        Container::Str(_) => {
+            filter_map_string(string_bytes(args.get_mut(0)), filtermap, expr, rettv)
+        }
         Container::List(l) => filter_map_list(l, filtermap, arg_errmsg, expr, rettv),
         Container::Other => unreachable!("reported above"),
     }

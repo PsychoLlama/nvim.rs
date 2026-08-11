@@ -14,8 +14,8 @@
 use core::ffi::c_int;
 
 use super::{
-    Args, Container, Dict, List, char_len, check_lock, copy_tv, cstr_of_chk, err,
-    err_not_countable, err_nr, number_of, starts_with_ic, string_bytes,
+    Container, Dict, List, char_len, check_lock, copy_tv, cstr_of_chk, err, err_not_countable,
+    err_nr, frame, number_of, starts_with_ic, string_bytes,
 };
 use crate::src::nvim::main::{e_invarg, e_list_index_out_of_range_nr, e_listblobreq};
 use crate::src::nvim::types::{EvalFuncData, int64_t, typval_T, uint8_t, varnumber_T};
@@ -27,23 +27,23 @@ use crate::src::nvim::types::{EvalFuncData, int64_t, typval_T, uint8_t, varnumbe
 /// cleared result.
 pub unsafe extern "C" fn f_add(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    let (args, rettv) = unsafe { (Args::new(argvars), &mut *rettv) };
+    let (mut args, rettv) = frame!(argvars, rettv);
     // Default: failed.
     rettv.vval.v_number = 1;
-    match Container::of(args.at(0)) {
+    match Container::of(args.get_mut(0)) {
         Container::List(l) => {
             if !check_lock(l.locked(), c"add() argument") {
-                l.append_tv(args.at(1));
-                copy_tv(args.at(0), rettv);
+                l.append_tv(args.get_mut(1));
+                copy_tv(args.get_mut(0), rettv);
             }
         }
         Container::Blob(b) => {
             if !b.is_null() && !check_lock(b.lock(), c"add() argument") {
                 let mut error = false;
-                let n = number_of(args.at(1), &mut error);
+                let n = number_of(args.get_mut(1), &mut error);
                 if !error {
                     b.push(n as uint8_t);
-                    copy_tv(args.at(0), rettv);
+                    copy_tv(args.get_mut(0), rettv);
                 }
             }
         }
@@ -140,35 +140,35 @@ pub unsafe extern "C" fn f_count(
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the caller's contract.
-    let (args, rettv) = unsafe { (Args::new(argvars), &mut *rettv) };
+    let (mut args, rettv) = frame!(argvars, rettv);
     let mut error = false;
-    let ic = args.has(2) && number_of(args.at(2), &mut error) != 0;
+    let ic = args.has(2) && number_of(args.get_mut(2), &mut error) != 0;
 
     let mut n = 0;
     if !error {
-        match Container::of(args.at(0)) {
+        match Container::of(args.get_mut(0)) {
             Container::Str(_) => {
-                let hay = string_bytes(args.at(0));
-                if let Some(needle) = cstr_of_chk(args.at(1)) {
+                let hay = string_bytes(args.get_mut(0));
+                if let Some(needle) = cstr_of_chk(args.get_mut(1)) {
                     n = count_string(hay, needle.to_bytes(), ic);
                 }
             }
             Container::List(l) => {
                 // `start` is only looked at when `ic` was passed too.
                 let idx = if args.has(2) && args.has(3) {
-                    number_of(args.at(3), &mut error)
+                    number_of(args.get_mut(3), &mut error)
                 } else {
                     0
                 };
                 if !error {
-                    n = count_list(l, args.at(1), idx, ic);
+                    n = count_list(l, args.get_mut(1), idx, ic);
                 }
             }
             Container::Dict(d) if !d.is_null() => {
                 if args.has(2) && args.has(3) {
                     err(&e_invarg);
                 } else {
-                    n = count_dict(d, args.at(1), ic);
+                    n = count_dict(d, args.get_mut(1), ic);
                 }
             }
             // A NULL Dict answers zero without looking at the arguments.
