@@ -21,8 +21,8 @@ use crate::src::nvim::fileio::{
 use crate::src::nvim::garray::{ga_clear_strings, ga_concat_strings, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
-    curbuf, current_sctx, curtab, curwin, e_cant_read_file_str, e_invarg, e_invarg2, e_invargNval,
-    e_invexpr2, e_isadir2, e_mkdir, e_notopen, globaldir, p_fs, p_path, p_wic,
+    c_bytes, curbuf, current_sctx, curtab, curwin, e_cant_read_file_str, e_invarg, e_invarg2,
+    e_invargNval, e_invexpr2, e_isadir2, e_mkdir, e_notopen, globaldir, p_fs, p_path, p_wic,
 };
 use crate::src::nvim::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::src::nvim::memory::{
@@ -93,11 +93,8 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static e_error_while_writing_str: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
-        *b"E80: Error while writing: %s\0",
-    )
-});
+static e_error_while_writing_str: GlobalCell<[::core::ffi::c_char; 29]> =
+    GlobalCell::new(c_bytes(b"E80: Error while writing: %s\0"));
 pub unsafe extern "C" fn modify_fname(
     mut src: *mut ::core::ffi::c_char,
     mut tilde_file: bool,

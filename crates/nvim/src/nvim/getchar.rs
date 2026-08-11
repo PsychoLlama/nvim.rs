@@ -34,17 +34,18 @@ use crate::src::nvim::keycodes::{
 use crate::src::nvim::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::src::nvim::main::{
     KeyStuffed, KeyTyped, NameBuff, State, VIsual, VIsual_active, VIsual_reselect, VIsual_select,
-    allow_keys, arrow_used, called_emsg, cmd_silent, cmdline_row, cmdline_star, cmdwin_type,
-    ctrl_c_interrupts, curbuf, curwin, debug_did_msg, did_ai, did_emsg, did_outofmem_msg,
-    did_swapwrite_msg, e_invarg2, e_invargNval, e_nesting, e_notopen_2, e_toocompl, emsg_silent,
-    ex_normal_busy, exmode_active, finish_op, firstwin, got_int, ignore_script, langmap_mapchar,
-    main_loop, mapped_ctrl_c, maptick, may_garbage_collect, mod_mask, mode_displayed, mouse_col,
-    mouse_grid, mouse_row, msg_col, msg_didout, msg_row, msg_scroll, msg_silent, must_redraw,
-    need_wait_return, no_mapping, no_zero_mapping, p_fs, p_langmap, p_lrm, p_lz, p_mmd, p_paste,
-    p_sc, p_smd, p_timeout, p_tm, p_ttimeout, p_ttm, p_uc, pending_end_reg_executing,
-    pending_exmode_active, redo_VIsual_busy, redraw_cmdline, reg_executing, reg_recording,
-    repeat_luaref, restart_edit, scriptout, test_disable_char_avail, typebuf, typebuf_was_empty,
-    typebuf_was_filled, vgetc_busy, vgetc_char, vgetc_mod_mask, want_garbage_collect,
+    allow_keys, arrow_used, c_bytes, called_emsg, cmd_silent, cmdline_row, cmdline_star,
+    cmdwin_type, ctrl_c_interrupts, curbuf, curwin, debug_did_msg, did_ai, did_emsg,
+    did_outofmem_msg, did_swapwrite_msg, e_invarg2, e_invargNval, e_nesting, e_notopen_2,
+    e_toocompl, emsg_silent, ex_normal_busy, exmode_active, finish_op, firstwin, got_int,
+    ignore_script, langmap_mapchar, main_loop, mapped_ctrl_c, maptick, may_garbage_collect,
+    mod_mask, mode_displayed, mouse_col, mouse_grid, mouse_row, msg_col, msg_didout, msg_row,
+    msg_scroll, msg_silent, must_redraw, need_wait_return, no_mapping, no_zero_mapping, p_fs,
+    p_langmap, p_lrm, p_lz, p_mmd, p_paste, p_sc, p_smd, p_timeout, p_tm, p_ttimeout, p_ttm, p_uc,
+    pending_end_reg_executing, pending_exmode_active, redo_VIsual_busy, redraw_cmdline,
+    reg_executing, reg_recording, repeat_luaref, restart_edit, scriptout, test_disable_char_avail,
+    typebuf, typebuf_was_empty, typebuf_was_filled, vgetc_busy, vgetc_char, vgetc_mod_mask,
+    want_garbage_collect,
 };
 use crate::src::nvim::mapping::{
     eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb,
@@ -239,21 +240,14 @@ static noremapbuf_init: GlobalCell<[uint8_t; 265]> = GlobalCell::new([0; 265]);
 /// nothing is trimmed, which is what upstream does. `test_registers`'
 /// Test_recording_with_select_mode reaches it.
 static last_recorded_len: GlobalCell<size_t> = GlobalCell::new(0);
-static e_recursive_mapping: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E223: Recursive mapping\0")
-});
+static e_recursive_mapping: GlobalCell<[::core::ffi::c_char; 24]> =
+    GlobalCell::new(c_bytes(b"E223: Recursive mapping\0"));
 static e_cmd_mapping_must_end_with_cr: GlobalCell<[::core::ffi::c_char; 40]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
-            *b"E1255: <Cmd> mapping must end with <CR>\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E1255: <Cmd> mapping must end with <CR>\0"));
 static e_cmd_mapping_must_end_with_cr_before_second_cmd: GlobalCell<[::core::ffi::c_char; 60]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 60], [::core::ffi::c_char; 60]>(
-            *b"E1136: <Cmd> mapping must end with <CR> before second <Cmd>\0",
-        )
-    });
+    GlobalCell::new(c_bytes(
+        b"E1136: <Cmd> mapping must end with <CR> before second <Cmd>\0",
+    ));
 /// The typeahead each `:source!` displaced, put back by `closescript`.
 static saved_typebuf: GlobalCell<[typebuf_T; NSCRIPT as usize]> = GlobalCell::new(
     [typebuf_T {

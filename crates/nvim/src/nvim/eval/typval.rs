@@ -23,9 +23,10 @@ use crate::src::nvim::hashtab::{
 };
 use crate::src::nvim::lua::executor::{api_free_luaref, api_new_luaref, nlua_funcref_str};
 use crate::src::nvim::main::{
-    curwin, did_emsg, e_blobidx, e_cannot_change_value, e_cannot_change_value_of_str, e_dictkey,
-    e_intern2, e_invalid_value_for_blob_nr, e_invarg, e_invrange, e_list_index_out_of_range_nr,
-    e_listarg, e_listreq, e_toomanyarg, e_value_is_locked, e_value_is_locked_str, got_int,
+    c_bytes, curwin, did_emsg, e_blobidx, e_cannot_change_value, e_cannot_change_value_of_str,
+    e_dictkey, e_intern2, e_invalid_value_for_blob_nr, e_invarg, e_invrange,
+    e_list_index_out_of_range_nr, e_listarg, e_listreq, e_toomanyarg, e_value_is_locked,
+    e_value_is_locked_str, got_int,
 };
 use crate::src::nvim::mbyte::{mb_strcmp_ic, string_convert, utf_char2bytes, utfc_ptr2len};
 use crate::src::nvim::memory::{
@@ -147,107 +148,53 @@ pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
 pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX.wrapping_sub(1 as ::core::ffi::c_ulong);
 static e_variable_nested_too_deep_for_unlock: GlobalCell<[::core::ffi::c_char; 44]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
-            *b"E743: Variable nested too deep for (un)lock\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E743: Variable nested too deep for (un)lock\0"));
 static e_using_invalid_value_as_string: GlobalCell<[::core::ffi::c_char; 41]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
-            *b"E908: Using an invalid value as a String\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E908: Using an invalid value as a String\0"));
 static e_string_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 39]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
-            *b"E1174: String required for argument %d\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E1174: String required for argument %d\0"));
 static e_non_empty_string_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 49]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-            *b"E1175: Non-empty string required for argument %d\0",
-        )
-    });
+    GlobalCell::new(c_bytes(
+        b"E1175: Non-empty string required for argument %d\0",
+    ));
 static e_dict_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 43]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
-            *b"E1206: Dictionary required for argument %d\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E1206: Dictionary required for argument %d\0"));
 static e_number_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 39]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
-            *b"E1210: Number required for argument %d\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E1210: Number required for argument %d\0"));
 static e_list_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 37]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
-            *b"E1211: List required for argument %d\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E1211: List required for argument %d\0"));
 static e_bool_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 37]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
-            *b"E1212: Bool required for argument %d\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E1212: Bool required for argument %d\0"));
 static e_float_or_number_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 48]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
-            *b"E1219: Float or Number required for argument %d\0",
-        )
-    });
+    GlobalCell::new(c_bytes(
+        b"E1219: Float or Number required for argument %d\0",
+    ));
 static e_string_or_number_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 49]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-            *b"E1220: String or Number required for argument %d\0",
-        )
-    });
+    GlobalCell::new(c_bytes(
+        b"E1220: String or Number required for argument %d\0",
+    ));
 static e_string_or_list_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 47]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
-            *b"E1222: String or List required for argument %d\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E1222: String or List required for argument %d\0"));
 static e_list_dict_blob_or_string_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 65]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 65], [::core::ffi::c_char; 65]>(
-            *b"E1225: List, Dictionary, Blob or String required for argument %d\0",
-        )
-    });
+    GlobalCell::new(c_bytes(
+        b"E1225: List, Dictionary, Blob or String required for argument %d\0",
+    ));
 static e_list_or_blob_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 45]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
-            *b"E1226: List or Blob required for argument %d\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E1226: List or Blob required for argument %d\0"));
 static e_blob_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 37]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
-            *b"E1238: Blob required for argument %d\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E1238: Blob required for argument %d\0"));
 static e_string_list_or_blob_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 53]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 53], [::core::ffi::c_char; 53]>(
-            *b"E1252: String, List or Blob required for argument %d\0",
-        )
-    });
+    GlobalCell::new(c_bytes(
+        b"E1252: String, List or Blob required for argument %d\0",
+    ));
 static e_string_or_function_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 51]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 51], [::core::ffi::c_char; 51]>(
-            *b"E1256: String or function required for argument %d\0",
-        )
-    });
+    GlobalCell::new(c_bytes(
+        b"E1256: String or function required for argument %d\0",
+    ));
 static e_non_null_dict_required_for_argument_nr: GlobalCell<[::core::ffi::c_char; 52]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(
-            *b"E1297: Non-NULL Dictionary required for argument %d\0",
-        )
-    });
+    GlobalCell::new(c_bytes(
+        b"E1297: Non-NULL Dictionary required for argument %d\0",
+    ));
 /// A zeroed `sortinfo_T`, which is what a bare `sortinfo_T info;` declaration
 /// is before `parse_sort_uniq_args` fills it in.
 pub const SORTINFO_INIT: sortinfo_T = sortinfo_T {

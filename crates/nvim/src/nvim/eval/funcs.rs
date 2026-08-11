@@ -1,6 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::c_bytes;
 use crate::src::nvim::memory::ARENA_EMPTY;
 use crate::src::nvim::types::{
     Array, Callback_data as C2Rust_Unnamed_22, ChannelPart, ChannelStreamType, Context, GRegFlags,
@@ -234,17 +235,9 @@ pub const CONTEXT_INIT: Context = Context {
     funcs: ARRAY_DICT_INIT,
 };
 static e_string_list_or_blob_required: GlobalCell<[::core::ffi::c_char; 37]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
-            *b"E1098: String, List or Blob required\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E1098: String, List or Blob required\0"));
 static e_missing_function_argument: GlobalCell<[::core::ffi::c_char; 33]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
-            *b"E1132: Missing function argument\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E1132: Missing function argument\0"));
 static dummy_ap: GlobalCell<::core::ffi::VaList<'static>> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], ::core::ffi::VaList<'static>>([0u8; 24])
 });

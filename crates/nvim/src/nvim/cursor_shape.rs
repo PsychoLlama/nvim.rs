@@ -5,7 +5,7 @@ use crate::src::nvim::ex_getln::{cmdline_at_end, cmdline_overstrike};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::{syn_check_group, syn_id2attr};
 
-use crate::src::nvim::main::{State, VIsual_active, finish_op, p_guicursor, p_sel};
+use crate::src::nvim::main::{State, VIsual_active, c_bytes, finish_op, p_guicursor, p_sel};
 use crate::src::nvim::os::libc::{strlen, strncasecmp};
 use crate::src::nvim::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_SHOWMATCH, MODE_TERMINAL, REPLACE_FLAG, VREPLACE_FLAG,
@@ -38,9 +38,8 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const SHAPE_MOUSE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SHAPE_CURSOR: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static e_digit_expected: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E548: Digit expected\0")
-});
+static e_digit_expected: GlobalCell<[::core::ffi::c_char; 21]> =
+    GlobalCell::new(c_bytes(b"E548: Digit expected\0"));
 pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
     cursorentry_T {
         full_name: c"normal".as_ptr() as *mut ::core::ffi::c_char,

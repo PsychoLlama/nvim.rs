@@ -58,7 +58,7 @@ use crate::src::nvim::keycodes::{
 use crate::src::nvim::main::aucmd_win_vec;
 use crate::src::nvim::main::{
     Columns, KeyStuffed, KeyTyped, RedrawingDisabled, Rows, State, VIsual_active, allow_keys,
-    au_pending_free_win, autocmd_busy, clear_cmdline, cmdline_row, cmdline_win, cmdmod,
+    au_pending_free_win, autocmd_busy, c_bytes, clear_cmdline, cmdline_row, cmdline_win, cmdmod,
     cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, curbuf, curtab, curwin,
     default_grid, default_gridview, diff_need_scrollbind, e_autocmd_close, e_buffer_nr_not_found,
     e_cmdwin, e_floatexchange, e_floatonly, e_invarg, e_noalt, e_noroom,
@@ -304,17 +304,11 @@ pub const CAR: ::core::ffi::c_int = 13;
 pub const SID_WINLAYOUT: ::core::ffi::c_int = -7 as ::core::ffi::c_int;
 pub const NOWIN: *mut win_T = -1 as ::core::ffi::c_int as *mut win_T;
 static e_cannot_close_last_window: GlobalCell<[::core::ffi::c_char; 31]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
-            *b"E444: Cannot close last window\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E444: Cannot close last window\0"));
 static e_cannot_split_window_when_closing_buffer: GlobalCell<[::core::ffi::c_char; 53]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 53], [::core::ffi::c_char; 53]>(
-            *b"E1159: Cannot split a window when closing the buffer\0",
-        )
-    });
+    GlobalCell::new(c_bytes(
+        b"E1159: Cannot split a window when closing the buffer\0",
+    ));
 static m_onlyone: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(c"Already only one window".as_ptr() as *mut ::core::ffi::c_char);
 static split_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);

@@ -19,7 +19,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::{HLF_8, HLF_D};
 use crate::src::nvim::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_G, Ctrl_O, Ctrl_V, replace_termcodes};
 use crate::src::nvim::main::{
-    State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect, VIsual_select, curbuf,
+    State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect, VIsual_select, c_bytes, curbuf,
     current_sctx, curwin, e_cannot_change_menus_while_listing, e_invarg, e_invarg2,
     e_menu_only_exists_in_another_mode, e_trailing_arg, ex_normal_busy, finish_op, got_int, p_cpo,
     p_sel, restart_edit, root_menu, sys_menu,
@@ -114,14 +114,10 @@ static menu_mode_chars: GlobalCell<[*mut ::core::ffi::c_char; 8]> = GlobalCell::
     c"tl".as_ptr() as *mut ::core::ffi::c_char,
     c"t".as_ptr() as *mut ::core::ffi::c_char,
 ]);
-static e_notsubmenu: GlobalCell<[::core::ffi::c_char; 45]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
-        *b"E327: Part of menu-item path is not sub-menu\0",
-    )
-});
-static e_nomenu: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E329: No menu \"%s\"\0")
-});
+static e_notsubmenu: GlobalCell<[::core::ffi::c_char; 45]> =
+    GlobalCell::new(c_bytes(b"E327: Part of menu-item path is not sub-menu\0"));
+static e_nomenu: GlobalCell<[::core::ffi::c_char; 19]> =
+    GlobalCell::new(c_bytes(b"E329: No menu \"%s\"\0"));
 unsafe extern "C" fn menu_is_winbar(name: *const ::core::ffi::c_char) -> bool {
     return strncmp(name, c"WinBar".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int;
 }

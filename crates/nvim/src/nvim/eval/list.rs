@@ -22,8 +22,8 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::hashtab::{hash_lock, hash_unlock};
 use crate::src::nvim::main::{
-    did_emsg, e_invalblob, e_invarg, e_invarg2, e_list_index_out_of_range_nr, e_listblobarg,
-    e_listblobreq, e_listdictarg, e_listdictblobarg, e_string_required,
+    c_bytes, did_emsg, e_invalblob, e_invarg, e_invarg2, e_list_index_out_of_range_nr,
+    e_listblobarg, e_listblobreq, e_listdictarg, e_listdictblobarg, e_string_required,
 };
 use crate::src::nvim::mbyte::{mb_strnicmp, utfc_ptr2len};
 use crate::src::nvim::memory::xmemdupz;
@@ -44,11 +44,9 @@ pub const FILTERMAP_FILTER: filtermap_T = 0;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 static e_argument_of_str_must_be_list_string_or_dictionary: GlobalCell<[::core::ffi::c_char; 58]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 58], [::core::ffi::c_char; 58]>(
-            *b"E706: Argument of %s must be a List, String or Dictionary\0",
-        )
-    });
+    GlobalCell::new(c_bytes(
+        b"E706: Argument of %s must be a List, String or Dictionary\0",
+    ));
 static e_argument_of_str_must_be_list_string_dictionary_or_blob: GlobalCell<
     [::core::ffi::c_char; 65],
 > = GlobalCell::new(unsafe {

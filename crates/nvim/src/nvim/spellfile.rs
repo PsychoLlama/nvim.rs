@@ -5,7 +5,9 @@ use crate::src::nvim::charset::{getdigits_int, skipwhite};
 use crate::src::nvim::garray::{ga_clear, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::{hash_clear_all, hash_init};
-use crate::src::nvim::main::{IObuff, e_exists, e_invarg, e_isadir2, got_int, p_msm, p_verbose};
+use crate::src::nvim::main::{
+    IObuff, c_bytes, e_exists, e_invarg, e_isadir2, got_int, p_msm, p_verbose,
+};
 use crate::src::nvim::mbyte::convert_setup;
 use crate::src::nvim::memory::{xfree, xmalloc, xstrlcpy};
 use crate::src::nvim::message::{emsg, msg, verbose_enter, verbose_leave};
@@ -253,17 +255,9 @@ pub const COMPOUND_MAX_LEN: ::core::ffi::c_int = 100000 as ::core::ffi::c_int;
 static e_spell_trunc: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(c"E758: Truncated spell file".as_ptr());
 static e_error_while_reading_sug_file_str: GlobalCell<[::core::ffi::c_char; 40]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
-            *b"E782: Error while reading .sug file: %s\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E782: Error while reading .sug file: %s\0"));
 static e_duplicate_char_in_map_entry: GlobalCell<[::core::ffi::c_char; 34]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
-            *b"E783: Duplicate char in MAP entry\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E783: Duplicate char in MAP entry\0"));
 static e_illegal_character_in_word: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(c"E1280: Illegal character in word".as_ptr());
 static e_afftrailing: GlobalCell<*const ::core::ffi::c_char> =

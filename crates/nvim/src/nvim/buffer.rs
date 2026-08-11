@@ -49,7 +49,7 @@ use crate::src::nvim::insexpand::clear_cpt_callbacks;
 use crate::src::nvim::main::{
     Columns, IObuff, NameBuff, RedrawingDisabled, Rows, State, VIsual_active, VIsual_reselect,
     au_new_curbuf, au_pending_free_buf, autocmd_busy, autocmd_no_enter, autocmd_no_leave,
-    buffer_handles, cmdline_row, cmdmod, cmdwin_buf, curbuf, current_sctx, curtab, curwin,
+    buffer_handles, c_bytes, cmdline_row, cmdmod, cmdwin_buf, curbuf, current_sctx, curtab, curwin,
     e_auabort, e_buffer_nr_not_found, e_cannot_switch_to_a_closing_buffer, e_job_still_running,
     e_job_still_running_add_bang_to_end_the_job, e_no_write_since_last_change,
     e_no_write_since_last_change_add_bang_to_override,
@@ -282,11 +282,9 @@ pub unsafe fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
 }
 static e_attempt_to_delete_buffer_that_is_in_use_str: GlobalCell<[::core::ffi::c_char; 52]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(
-            *b"E937: Attempt to delete a buffer that is in use: %s\0",
-        )
-    });
+    GlobalCell::new(c_bytes(
+        b"E937: Attempt to delete a buffer that is in use: %s\0",
+    ));
 static buf_free_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static top_file_num: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
 unsafe extern "C" fn trigger_undo_ftplugin(mut buf: *mut buf_T, mut win: *mut win_T) {

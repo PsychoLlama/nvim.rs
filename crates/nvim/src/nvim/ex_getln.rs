@@ -74,8 +74,8 @@ use crate::src::nvim::keycodes::{
 };
 use crate::src::nvim::main::{
     Columns, IObuff, KeyStuffed, KeyTyped, RedrawingDisabled, Rows, State, allbuf_lock, allow_keys,
-    cmd_silent, cmdline_row, cmdline_star, cmdline_was_last_drawn, cmdline_win, cmdmod, cmdmsg_rl,
-    cmdpreview, cmdwin_buf, cmdwin_level, cmdwin_old_curwin, cmdwin_result, cmdwin_type,
+    c_bytes, cmd_silent, cmdline_row, cmdline_star, cmdline_was_last_drawn, cmdline_win, cmdmod,
+    cmdmsg_rl, cmdpreview, cmdwin_buf, cmdwin_level, cmdwin_old_curwin, cmdwin_result, cmdwin_type,
     cmdwin_win, curbuf, current_sctx, curwin, did_emsg, e_cannot_edit_other_buf, e_cmdwin,
     e_command_too_recursive, e_intern2, e_invarg, e_positive, e_textlock, emsg_off,
     emsg_on_display, emsg_silent, ex_normal_busy, exec_from_reg, exmode_active, firstwin,
@@ -822,11 +822,9 @@ static cedit_key: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core:
 static cmdpreview_bufnr: GlobalCell<handle_T> = GlobalCell::new(0 as handle_T);
 static cmdpreview_ns: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static e_active_window_or_buffer_changed_or_deleted: GlobalCell<[::core::ffi::c_char; 49]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-            *b"E199: Active window or buffer changed or deleted\0",
-        )
-    });
+    GlobalCell::new(c_bytes(
+        b"E199: Active window or buffer changed or deleted\0",
+    ));
 pub const PATH_ESC_CHARS: [::core::ffi::c_char; 18] = unsafe {
     ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b" \t\n*?[{`$\\%#'\"|!<\0")
 };
