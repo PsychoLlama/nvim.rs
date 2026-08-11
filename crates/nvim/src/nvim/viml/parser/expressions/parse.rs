@@ -590,7 +590,15 @@ impl ExprParser {
 
     /// The stack invariants the C checked under `#ifndef NDEBUG`: item 0 is
     /// the root slot, and item i + 1 points at item i's *last* child.
+    ///
+    /// Debug-only, as upstream's is. The walk is linear in the depth of the
+    /// stack and runs once per token, so leaving it on makes every parse
+    /// quadratic in its nesting: at 8,000 nested parentheses it is **98% of
+    /// the run** — 1,630 ms of 1,658.
     fn check_stack_invariants(&self) {
+        if !cfg!(debug_assertions) {
+            return;
+        }
         let want_value = self.want_node == kENodeValue;
         debug_assert!(
             want_value == slot_node(self.top_node_p).is_null(),
@@ -604,7 +612,7 @@ impl ExprParser {
         for (i, (&slot, &next)) in self.ast_stack.iter().zip(&self.ast_stack[1..]).enumerate() {
             let item_null = want_value && i + 1 == last;
             let node = slot_node(slot);
-            assert!(
+            debug_assert!(
                 children_slot(node) == next
                     && (if item_null {
                         node_children(node).is_null()
