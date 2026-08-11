@@ -1,3 +1,35 @@
+//! `eval/encode.c`: the shared half of the typval encoders.
+//!
+//! The four sinks upstream instantiates out of `typval_encode.c.h` live in the
+//! three children beside this file — [`json`], [`msgpack`] and [`text`]
+//! (`string()` and `:echo` are one `impl` there).  What stays here is what
+//! they share, plus what belongs to no sink at all:
+//!
+//! - [`conv_error`], the failure path all three report through, which renders
+//!   the walk's stack as `key foo, index 2, key bar`;
+//! - [`convert_to_json_string`], JSON's string escaping — the one hook whose
+//!   body is byte arithmetic rather than punctuation;
+//! - [`encode_check_json_key`], the special-dictionary key test;
+//! - the three `encode_tv2*` entry points; and
+//! - the `readfile()`-style list codec ([`encode_list_write`],
+//!   [`encode_read_from_list`], [`encode_vim_list_to_buf`]) that msgpack
+//!   channels, `msgpackdump()` and `system()` read and write through.  Its
+//!   one convention: a list item is a line, and a NUL inside a line is stored
+//!   as a newline, because a Vimscript string cannot hold a newline.
+//!
+//! # Safety
+//!
+//! Every `unsafe fn` here forwards its caller's obligations; the `# Safety`
+//! sections say which.  The recurring ones are that a `*mut typval_T` /
+//! `*mut list_T` / `*const listitem_T` is live for the call and that nothing
+//! removes an item from a list while one of these walks it — the encoders run
+//! with no user code interleaved, which is what makes that hold.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::slice;
+
 use crate::semsg_c;
 use crate::src::nvim::eval::typval::{GARRAY_EMPTY, tv_list_first, tv_list_last, tv_list_len};
 use crate::src::nvim::eval::typval::{
@@ -5,41 +37,17 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::typval_encode::{ConvPath, Flow, Frame, PartialStage};
 use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
-use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_grow, ga_init};
+use crate::src::nvim::garray::{Gap, ga_clear, ga_concat, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::IObuff;
 use crate::src::nvim::mbyte::{utf_char2len, utf_printable, utf_ptr2char, utf_ptr2len};
-use crate::src::nvim::memory::{memchrsub, xfree, xmalloc, xmemdupz, xmemscan, xrealloc};
-use crate::src::nvim::os::libc::{abort, gettext, memcpy, strlen};
+use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xrealloc};
+use crate::src::nvim::os::libc::{abort, gettext, strlen};
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
-    ListReaderState, MPConvPartialStage, MPConvStackValType, MessagePackType, VAR_DICT, VAR_FUNC,
-    VAR_LIST, VAR_STRING, VAR_UNLOCKED, dict_T, dictitem_T, garray_T, list_T, listitem_T,
-    ptrdiff_t, size_t, typval_T, typval_vval_union, uint8_t,
+    ListReaderState, MessagePackType, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING, VAR_UNLOCKED,
+    garray_T, list_T, listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
 };
-use core::ffi::c_char;
-pub const kMPString: MessagePackType = 4;
-pub const kMPConvPartialEnd: MPConvPartialStage = 2;
-pub const kMPConvPartialSelf: MPConvPartialStage = 1;
-pub const kMPConvPartialArgs: MPConvPartialStage = 0;
-pub const kMPConvPartialList: MPConvStackValType = 4;
-pub const kMPConvPartial: MPConvStackValType = 3;
-pub const kMPConvPairs: MPConvStackValType = 2;
-pub const kMPConvList: MPConvStackValType = 1;
-pub const kMPConvDict: MPConvStackValType = 0;
-pub const INT8_MIN: ::core::ffi::c_int = -128 as ::core::ffi::c_int;
-pub const INT8_MAX: ::core::ffi::c_int = 127 as ::core::ffi::c_int;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const BS: ::core::ffi::c_int = 8;
-pub const TAB: ::core::ffi::c_int = 9;
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const FF: ::core::ffi::c_int = 12;
-pub const CAR: ::core::ffi::c_int = 13;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 
 // The sinks carved out of this module's `typval_encode.c.h` instantiations.
 mod json;
@@ -48,91 +56,179 @@ mod msgpack;
 pub use self::msgpack::*;
 mod text;
 use self::text::{encode_vim_to_echo, encode_vim_to_string};
-pub const SURROGATE_HI_START: ::core::ffi::c_int = 0xd800 as ::core::ffi::c_int;
-pub const SURROGATE_HI_END: ::core::ffi::c_int = 0xdbff as ::core::ffi::c_int;
-pub const SURROGATE_LO_START: ::core::ffi::c_int = 0xdc00 as ::core::ffi::c_int;
-pub const SURROGATE_LO_END: ::core::ffi::c_int = 0xdfff as ::core::ffi::c_int;
-pub const SURROGATE_FIRST_CHAR: ::core::ffi::c_int = 0x10000 as ::core::ffi::c_int;
-pub static encode_bool_var_names: GlobalCell<[*const ::core::ffi::c_char; 2]> =
+
+pub const kMPString: MessagePackType = 4;
+pub const OK: c_int = 1;
+pub const FAIL: c_int = 0;
+pub const NOTDONE: c_int = 2;
+pub const IOSIZE: c_int = 1024 + 1;
+
+/// The UTF-16 surrogate range, which a JSON `\u` escape has to spell a
+/// character above the BMP with — and which a *string* may not contain.
+pub const SURROGATE_HI_START: c_int = 0xd800;
+pub const SURROGATE_HI_END: c_int = 0xdbff;
+pub const SURROGATE_LO_START: c_int = 0xdc00;
+pub const SURROGATE_LO_END: c_int = 0xdfff;
+pub const SURROGATE_FIRST_CHAR: c_int = 0x10000;
+
+pub static encode_bool_var_names: GlobalCell<[*const c_char; 2]> =
     GlobalCell::new([c"v:false".as_ptr(), c"v:true".as_ptr()]);
-pub static encode_special_var_names: GlobalCell<[*const ::core::ffi::c_char; 1]> =
+pub static encode_special_var_names: GlobalCell<[*const c_char; 1]> =
     GlobalCell::new([c"v:null".as_ptr()]);
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn encode_list_write(
-    data: *mut ::core::ffi::c_void,
-    buf: *const ::core::ffi::c_char,
-    len: size_t,
-) {
-    if len == 0 as size_t {
-        return;
-    }
-    let list: *mut list_T = data as *mut list_T;
-    let end: *const ::core::ffi::c_char = buf.add(len);
-    let mut line_end: *const ::core::ffi::c_char = buf;
-    let mut li: *mut listitem_T = tv_list_last(list);
-    if !li.is_null() {
-        line_end = xmemscan(
-            buf as *const ::core::ffi::c_void,
-            NL as ::core::ffi::c_char,
-            len,
-        ) as *const ::core::ffi::c_char;
-        if line_end != buf {
-            let line_length: size_t = line_end.offset_from(buf) as size_t;
-            let mut str: *mut ::core::ffi::c_char = (*li).li_tv.vval.v_string;
-            let li_len: size_t = if str.is_null() {
-                0 as size_t
-            } else {
-                strlen(str)
-            };
-            (*li).li_tv.vval.v_string = xrealloc(
-                str as *mut ::core::ffi::c_void,
-                li_len.wrapping_add(line_length).wrapping_add(1 as size_t),
-            ) as *mut ::core::ffi::c_char;
-            str = (*li).li_tv.vval.v_string.add(li_len);
-            memcpy(
-                str as *mut ::core::ffi::c_void,
-                buf as *const ::core::ffi::c_void,
-                line_length,
-            );
-            *str.add(line_length) = 0 as ::core::ffi::c_char;
-            memchrsub(
-                str as *mut ::core::ffi::c_void,
-                NUL as ::core::ffi::c_char,
-                NL as ::core::ffi::c_char,
-                line_length,
-            );
-        }
-        line_end = line_end.offset(1);
-    }
-    while line_end < end {
-        let mut line_start: *const ::core::ffi::c_char = line_end;
-        line_end = xmemscan(
-            line_start as *const ::core::ffi::c_void,
-            NL as ::core::ffi::c_char,
-            end.offset_from(line_start) as size_t,
-        ) as *const ::core::ffi::c_char;
-        let mut str_0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if line_end != line_start {
-            let line_length_0: size_t = line_end.offset_from(line_start) as size_t;
-            str_0 = xmemdupz(line_start as *const ::core::ffi::c_void, line_length_0)
-                as *mut ::core::ffi::c_char;
-            memchrsub(
-                str_0 as *mut ::core::ffi::c_void,
-                NUL as ::core::ffi::c_char,
-                NL as ::core::ffi::c_char,
-                line_length_0,
-            );
-        }
-        tv_list_append_allocated_string(list, str_0);
-        line_end = line_end.offset(1);
-    }
-    if line_end == end {
-        tv_list_append_allocated_string(list, ::core::ptr::null_mut::<::core::ffi::c_char>());
-    }
-}
+
 /// Set once a `string()`/`echo` dump has reported a self-reference, so the
 /// user is told once rather than once per cycle.
 pub(crate) static did_echo_string_emsg: GlobalCell<bool> = GlobalCell::new(false);
+
+/// `_()`: the translation of a message, which is always a literal here.
+#[inline(always)]
+fn tr(msg: &'static CStr) -> *const c_char {
+    // SAFETY: `gettext` only reads the NUL-terminated string it is handed.
+    unsafe { gettext(msg.as_ptr()) }
+}
+
+/// A fresh byte `garray_T` grown 80 at a time: every text encoder's output.
+fn text_garray() -> garray_T {
+    let mut ga = GARRAY_EMPTY;
+    // SAFETY: `ga` is a local array header and `ga_init` only writes it.
+    unsafe { ga_init(&raw mut ga, size_of::<c_char>() as c_int, 80) };
+    ga
+}
+
+/// The string `li` holds; a NULL one is an empty line.
+///
+/// # Safety
+/// `li` must be a live list item whose value is a `VAR_STRING`.
+#[inline(always)]
+unsafe fn item_string(li: *const listitem_T) -> *mut c_char {
+    unsafe { (*li).li_tv.vval.v_string }
+}
+
+/// `strlen` of [`item_string`], with a NULL string reading as zero.
+///
+/// # Safety
+/// As [`item_string`].
+#[inline(always)]
+unsafe fn item_strlen(li: *const listitem_T) -> size_t {
+    let s = unsafe { item_string(li) };
+    if s.is_null() { 0 } else { unsafe { strlen(s) } }
+}
+
+/// The items of `list`, front to back.  A NULL list is an empty one.
+///
+/// # Safety
+/// `list` must be live, and nothing may add to or remove from it while the
+/// iterator is alive.
+unsafe fn items(list: *const list_T) -> impl Iterator<Item = *const listitem_T> {
+    let mut li = if list.is_null() {
+        core::ptr::null()
+    } else {
+        unsafe { (*list).lv_first }
+    };
+    core::iter::from_fn(move || {
+        let cur = li;
+        if cur.is_null() {
+            return None;
+        }
+        li = unsafe { (*cur).li_next };
+        Some(cur)
+    })
+}
+
+/// Store a line the way a `readfile()`-style list does: NUL bytes become
+/// newlines, because a Vimscript string can hold the former and not the
+/// latter.
+fn store_nuls_as_newlines(line: &mut [u8]) {
+    for byte in line {
+        if *byte == 0 {
+            *byte = b'\n';
+        }
+    }
+}
+
+/// Append `line` to the string `li` already holds, which grows in place.
+///
+/// # Safety
+/// `li` must be a live list item whose value is a `VAR_STRING` this may take
+/// ownership of and replace.
+unsafe fn extend_item(li: *mut listitem_T, line: &[u8]) {
+    unsafe {
+        let old_len = item_strlen(li);
+        let grown =
+            xrealloc(item_string(li).cast::<c_void>(), old_len + line.len() + 1).cast::<c_char>();
+        (*li).li_tv.vval.v_string = grown;
+        let tail = slice::from_raw_parts_mut(grown.add(old_len).cast::<u8>(), line.len() + 1);
+        tail[..line.len()].copy_from_slice(line);
+        tail[line.len()] = 0;
+        store_nuls_as_newlines(&mut tail[..line.len()]);
+    }
+}
+
+/// `line` as a fresh NUL-terminated allocation the list takes over.
+fn own_line(line: &[u8]) -> *mut c_char {
+    // SAFETY: `line` is readable for its own length; `xmemdupz` allocates one
+    // byte more and terminates.
+    let owned = unsafe { xmemdupz(line.as_ptr().cast::<c_void>(), line.len()).cast::<c_char>() };
+    // SAFETY: the allocation is `line.len()` bytes plus the terminator.
+    let copied = unsafe { slice::from_raw_parts_mut(owned.cast::<u8>(), line.len()) };
+    store_nuls_as_newlines(copied);
+    owned
+}
+
+/// Msgpack callback for writing to a `readfile()`-style list.
+///
+/// Each newline in `buf` starts a new item; whatever came before the first
+/// one continues the item already there.
+///
+/// # Safety
+/// `data` must be a live `list_T *` and `buf` must be readable for `len`
+/// bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn encode_list_write(data: *mut c_void, buf: *const c_char, len: size_t) {
+    if len == 0 {
+        return;
+    }
+    let list = data.cast::<list_T>();
+    // SAFETY: the caller's promise about `buf` and `len`.
+    let bytes = unsafe { slice::from_raw_parts(buf.cast::<u8>(), len) };
+
+    /// The index just past the next newline, and the line before it.
+    fn split(bytes: &[u8], from: usize) -> (&[u8], usize) {
+        let rest = &bytes[from..];
+        let end = rest.iter().position(|&b| b == b'\n').unwrap_or(rest.len());
+        (&rest[..end], from + end + 1)
+    }
+
+    // SAFETY: `list` is the caller's, and nothing runs between these calls
+    // that could touch it.
+    let last = unsafe { tv_list_last(list) };
+    let mut at = 0;
+    if !last.is_null() {
+        // Continue the last item, unless the write starts with a newline.
+        let (line, next) = split(bytes, 0);
+        if !line.is_empty() {
+            // SAFETY: `last` is this list's own final item.
+            unsafe { extend_item(last, line) };
+        }
+        at = next;
+    }
+    while at < len {
+        let (line, next) = split(bytes, at);
+        let owned = if line.is_empty() {
+            core::ptr::null_mut()
+        } else {
+            own_line(line)
+        };
+        // SAFETY: `list` is live and takes over `owned`.
+        unsafe { tv_list_append_allocated_string(list, owned) };
+        at = next;
+    }
+    if at == len {
+        // The write ended on a newline, so it opened one more empty item.
+        // SAFETY: as above.
+        unsafe { tv_list_append_allocated_string(list, core::ptr::null_mut()) };
+    }
+}
 
 /// Report a failed dump, naming the path down to the value that failed.
 ///
@@ -141,31 +237,43 @@ pub(crate) static did_echo_string_emsg: GlobalCell<bool> = GlobalCell::new(false
 /// Always answers [`Flow::Fail`], because that is all its callers do with it.
 ///
 /// # Safety
-/// `msg` must be a NUL-terminated format string of that shape.
+/// `msg` must be a NUL-terminated format string of that shape, and `path`
+/// must describe a walk that is still in progress.
 pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
-    unsafe {
-        let key_msg = gettext(c"key %s".as_ptr());
-        let key_pair_msg = gettext(c"key %s at index %i from special map".as_ptr());
-        let idx_msg = gettext(c"index %i".as_ptr());
-        let partial_arg_msg = gettext(c"partial".as_ptr());
-        let partial_arg_i_msg = gettext(c"argument %i".as_ptr());
-        let partial_self_msg = gettext(c"partial self dictionary".as_ptr());
+    let idx_msg = tr(c"index %i");
+    let partial_arg_msg = tr(c"partial");
+    let partial_arg_i_msg = tr(c"argument %i");
+    let partial_self_msg = tr(c"partial self dictionary");
 
-        let mut msg_ga = GARRAY_EMPTY;
-        ga_init(
-            &raw mut msg_ga,
-            ::core::mem::size_of::<c_char>() as ::core::ffi::c_int,
-            80,
-        );
-        let iobuff = IObuff.ptr() as *mut c_char;
-        for (i, frame) in path.stack.iter().enumerate() {
-            if i != 0 {
-                ga_concat_len(&raw mut msg_ga, c", ".as_ptr(), 2);
+    let mut msg_ga = text_garray();
+    let iobuff = IObuff.ptr().cast::<c_char>();
+
+    /// Everything the arms below share: format into `IObuff` and append it.
+    ///
+    /// # Safety
+    /// `fmt` must match the arguments, and `msg_ga` must be a byte garray.
+    macro_rules! append_formatted {
+        ($fmt:expr $(, $arg:expr)*) => {
+            // SAFETY: `iobuff` is the shared `IOSIZE`-byte scratch and the
+            // format strings here are this function's own literals.
+            unsafe {
+                vim_snprintf(iobuff, IOSIZE as size_t, $fmt $(, $arg)*);
+                ga_concat(&raw mut msg_ga, iobuff);
             }
-            match frame.frame {
-                Frame::Dict { dict, hi, .. } => {
-                    // The key most recently handed out, which is the slot
-                    // before the one the walk is now standing on.
+        };
+    }
+
+    for (i, frame) in path.stack.iter().enumerate() {
+        if i != 0 {
+            Gap(&mut msg_ga).concat(b", ");
+        }
+        match frame.frame {
+            Frame::Dict { dict, hi, .. } => {
+                // The key most recently handed out, which is the slot before
+                // the one the walk is now standing on.
+                // SAFETY: the frame's dictionary is live and `hi` is either
+                // NULL or one past a slot of its hash table.
+                let key = unsafe {
                     let hi = if hi.is_null() {
                         (*dict).dv_hashtab.ht_array
                     } else {
@@ -178,14 +286,18 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                             v_string: (*hi).hi_key,
                         },
                     };
-                    let key = encode_tv2string(&raw mut key_tv, ::core::ptr::null_mut());
-                    vim_snprintf(iobuff, IOSIZE as size_t, key_msg, key);
-                    xfree(key as *mut ::core::ffi::c_void);
-                    ga_concat(&raw mut msg_ga, iobuff);
-                }
-                Frame::List { list, li } | Frame::Pairs { list, li } => {
-                    // The item most recently handed out: one back from `li`,
-                    // or the last one once the walk has run off the end.
+                    encode_tv2string(&raw mut key_tv, core::ptr::null_mut())
+                };
+                append_formatted!(tr(c"key %s"), key);
+                // SAFETY: `encode_tv2string` hands back an owned buffer.
+                unsafe { xfree(key.cast::<c_void>()) };
+            }
+            Frame::List { list, li } | Frame::Pairs { list, li } => {
+                // The item most recently handed out: one back from `li`, or
+                // the last one once the walk has run off the end.
+                // SAFETY: the frame's list is live and `li` is one of its
+                // items or NULL.
+                let (idx, li) = unsafe {
                     let idx = if li == tv_list_first(list) {
                         0
                     } else if li.is_null() {
@@ -198,610 +310,546 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                     } else {
                         (*li).li_prev
                     };
+                    (idx, li)
+                };
+                // SAFETY: `li` is an item of the frame's list, or NULL.
+                let pair_key = unsafe {
                     let pairs = matches!(frame.frame, Frame::Pairs { .. });
                     if !pairs
                         || li.is_null()
                         || ((*li).li_tv.v_type != VAR_LIST
                             && tv_list_len((*li).li_tv.vval.v_list) <= 0)
                     {
-                        vim_snprintf(iobuff, IOSIZE as size_t, idx_msg, idx);
+                        None
                     } else {
                         // A special map's item is a [key, value] pair, so the
                         // path can name the key rather than the index.
                         let first_item = tv_list_first((*li).li_tv.vval.v_list);
                         let mut key_tv = (*first_item).li_tv;
-                        let key = encode_tv2echo(&raw mut key_tv, ::core::ptr::null_mut());
-                        vim_snprintf(iobuff, IOSIZE as size_t, key_pair_msg, key, idx);
-                        xfree(key as *mut ::core::ffi::c_void);
+                        Some(encode_tv2echo(&raw mut key_tv, core::ptr::null_mut()))
                     }
-                    ga_concat(&raw mut msg_ga, iobuff);
-                }
-                Frame::Partial { stage, .. } => match stage {
-                    // The walk pushes a partial already past its arguments.
-                    PartialStage::Args => abort(),
-                    PartialStage::Self_ => ga_concat(&raw mut msg_ga, partial_arg_msg),
-                    PartialStage::End => ga_concat(&raw mut msg_ga, partial_self_msg),
-                },
-                Frame::PartialArgs { arg, argv, .. } => {
-                    let idx = arg.offset_from(argv) as ::core::ffi::c_int - 1;
-                    vim_snprintf(iobuff, IOSIZE as size_t, partial_arg_i_msg, idx);
-                    ga_concat(&raw mut msg_ga, iobuff);
+                };
+                match pair_key {
+                    None => append_formatted!(idx_msg, idx),
+                    Some(key) => {
+                        append_formatted!(tr(c"key %s at index %i from special map"), key, idx);
+                        // SAFETY: `encode_tv2echo` hands back an owned buffer.
+                        unsafe { xfree(key.cast::<c_void>()) };
+                    }
                 }
             }
+            Frame::Partial { stage, .. } => {
+                let text = match stage {
+                    // The walk pushes a partial already past its arguments.
+                    // SAFETY: unreachable; `abort` returns `!`.
+                    PartialStage::Args => unsafe { abort() },
+                    PartialStage::Self_ => partial_arg_msg,
+                    PartialStage::End => partial_self_msg,
+                };
+                // SAFETY: both texts are NUL-terminated translations.
+                unsafe { ga_concat(&raw mut msg_ga, text) };
+            }
+            Frame::PartialArgs { arg, argv, .. } => {
+                // SAFETY: `arg` and `argv` point into one argument vector.
+                let idx = unsafe { arg.offset_from(argv) } as c_int - 1;
+                append_formatted!(partial_arg_i_msg, idx);
+            }
         }
+    }
+
+    // SAFETY: `msg` is the caller's two-`%s` format; the path is either the
+    // rendered stack or the literal below.
+    unsafe {
         semsg_c!(
             msg,
             gettext(path.objname),
             if path.stack.is_empty() {
-                gettext(c"itself".as_ptr())
+                tr(c"itself")
             } else {
-                msg_ga.ga_data as *mut c_char
+                msg_ga.ga_data.cast::<c_char>()
             },
         );
         ga_clear(&raw mut msg_ga);
-        Flow::Fail
     }
+    Flow::Fail
 }
+
+/// Convert a `readfile()`-style list to a buffer with length.
+///
+/// The buffer is **not** NUL-terminated: it is exactly `*ret_len` bytes, and
+/// the caller frees it.  Answers false — writing neither output — when any
+/// item is not a string.
+///
+/// # Safety
+/// `list` must be live, and `ret_len`/`ret_buf` must be writable.
 pub unsafe extern "C" fn encode_vim_list_to_buf(
     list: *const list_T,
     ret_len: *mut size_t,
-    ret_buf: *mut *mut ::core::ffi::c_char,
+    ret_buf: *mut *mut c_char,
 ) -> bool {
-    let mut len: size_t = 0 as size_t;
-    let l_: *const list_T = list;
-    if !l_.is_null() {
-        let mut li: *const listitem_T = (*l_).lv_first;
-        while !li.is_null() {
-            if (*li).li_tv.v_type as ::core::ffi::c_uint
-                != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                return false;
-            }
-            len = len.wrapping_add(1);
-            if !(*li).li_tv.vval.v_string.is_null() {
-                len = len.wrapping_add(strlen((*li).li_tv.vval.v_string));
-            }
-            li = (*li).li_next;
+    let mut len: size_t = 0;
+    // SAFETY: the caller's promise about `list`.
+    for li in unsafe { items(list) } {
+        // SAFETY: `li` is one of the list's items.
+        if unsafe { (*li).li_tv.v_type } != VAR_STRING {
+            return false;
         }
+        // One separator per item, so the total is one too many.
+        len += 1 + unsafe { item_strlen(li) };
     }
-    if len != 0 {
-        len = len.wrapping_sub(1);
+    len = len.saturating_sub(1);
+    // SAFETY: the caller's promise about the two out parameters.
+    unsafe { *ret_len = len };
+    if len == 0 {
+        // SAFETY: as above.
+        unsafe { *ret_buf = core::ptr::null_mut() };
+        return true;
     }
-    *ret_len = len;
-    if len == 0 as size_t {
-        *ret_buf = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        return true_0 != 0;
-    }
-    let mut lrstate: ListReaderState = encode_init_lrstate(list);
-    let buf: *mut ::core::ffi::c_char = xmalloc(len) as *mut ::core::ffi::c_char;
+    // SAFETY: `list` is live and non-empty, so it has a first item.
+    let mut lrstate = unsafe { encode_init_lrstate(list) };
+    let buf = unsafe { xmalloc(len).cast::<c_char>() };
     let mut read_bytes: size_t = 0;
-    if encode_read_from_list(&raw mut lrstate, buf, len, &raw mut read_bytes) != OK {
-        abort();
+    // SAFETY: `buf` is `len` writable bytes and `lrstate` walks `list`.
+    let ret = unsafe { encode_read_from_list(&raw mut lrstate, buf, len, &raw mut read_bytes) };
+    if ret != OK {
+        // Every item was checked above, so the reader cannot refuse one.
+        // SAFETY: unreachable.
+        unsafe { abort() };
     }
     debug_assert!(len == read_bytes, "len == read_bytes");
-    *ret_buf = buf;
-    return true_0 != 0;
+    // SAFETY: the caller's promise about `ret_buf`.
+    unsafe { *ret_buf = buf };
+    true
 }
+
+/// Read bytes out of a `readfile()`-style list into `buf`.
+///
+/// `state` is advanced to where reading stopped.  Answers [`OK`] when the
+/// list ran out, [`NOTDONE`] when the buffer did, and [`FAIL`] on an item
+/// that is not a string — the stored newlines turning back into NULs on the
+/// way, which is what [`encode_list_write`] wrote them for.
+///
+/// # Safety
+/// `state` must describe a position in a live list, `buf` must be writable
+/// for `nbuf` bytes and `read_bytes` must be writable.
 pub unsafe extern "C" fn encode_read_from_list(
     state: *mut ListReaderState,
-    buf: *mut ::core::ffi::c_char,
+    buf: *mut c_char,
     nbuf: size_t,
     read_bytes: *mut size_t,
-) -> ::core::ffi::c_int {
-    let buf_end: *mut ::core::ffi::c_char = buf.add(nbuf);
-    let mut p: *mut ::core::ffi::c_char = buf;
-    while p < buf_end {
+) -> c_int {
+    // SAFETY: the caller's promises about `buf`/`nbuf` and `state`.
+    let out = unsafe { slice::from_raw_parts_mut(buf.cast::<u8>(), nbuf) };
+    let state = unsafe { &mut *state };
+    let mut p = 0;
+    while p < nbuf {
         debug_assert!(
-            (*state).li_length == 0 as size_t || !(*(*state).li).li_tv.vval.v_string.is_null(),
+            state.li_length == 0 || !unsafe { item_string(state.li) }.is_null(),
             "state->li_length == 0 || TV_LIST_ITEM_TV(state->li)->vval.v_string != NULL"
         );
-        let mut i: size_t = (*state).offset;
-        while i < (*state).li_length && p < buf_end {
-            debug_assert!(
-                !(*(*state).li).li_tv.vval.v_string.is_null(),
-                "TV_LIST_ITEM_TV(state->li)->vval.v_string != NULL"
-            );
-            let c2rust_fresh27 = (*state).offset;
-            (*state).offset = (*state).offset.wrapping_add(1);
-            let ch: ::core::ffi::c_char = *(*(*state).li).li_tv.vval.v_string.add(c2rust_fresh27);
-            let c2rust_fresh28 = p;
-            p = p.offset(1);
-            *c2rust_fresh28 =
-                (if ch as ::core::ffi::c_int == NL as ::core::ffi::c_char as ::core::ffi::c_int {
-                    NUL as ::core::ffi::c_char as ::core::ffi::c_int
-                } else {
-                    ch as ::core::ffi::c_int
-                }) as ::core::ffi::c_char;
-            i = i.wrapping_add(1);
+        // `i` and `state.offset` step together; upstream keeps both because
+        // the loop it wrote reads one and advances the other.
+        let mut i = state.offset;
+        while i < state.li_length && p < nbuf {
+            // SAFETY: the item holds at least `li_length` bytes and `offset`
+            // is below that.
+            let ch = unsafe { *item_string(state.li).add(state.offset) } as u8;
+            state.offset += 1;
+            out[p] = if ch == b'\n' { 0 } else { ch };
+            p += 1;
+            i += 1;
         }
-        if p < buf_end {
-            (*state).li = (*(*state).li).li_next;
-            if (*state).li.is_null() {
-                *read_bytes = p.offset_from(buf) as size_t;
+        if p < nbuf {
+            // SAFETY: `state.li` is a live item of the walked list.
+            state.li = unsafe { (*state.li).li_next };
+            if state.li.is_null() {
+                // SAFETY: the caller's promise about `read_bytes`.
+                unsafe { *read_bytes = p };
                 return OK;
             }
-            let c2rust_fresh29 = p;
-            p = p.offset(1);
-            *c2rust_fresh29 = NL as ::core::ffi::c_char;
-            if (*(*state).li).li_tv.v_type as ::core::ffi::c_uint
-                != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                *read_bytes = p.offset_from(buf) as size_t;
+            out[p] = b'\n';
+            p += 1;
+            // SAFETY: as above.
+            if unsafe { (*state.li).li_tv.v_type } != VAR_STRING {
+                unsafe { *read_bytes = p };
                 return FAIL;
             }
-            (*state).offset = 0 as size_t;
-            (*state).li_length = if (*(*state).li).li_tv.vval.v_string.is_null() {
-                0 as size_t
-            } else {
-                strlen((*(*state).li).li_tv.vval.v_string)
-            };
+            state.offset = 0;
+            // SAFETY: the item was just checked to hold a string.
+            state.li_length = unsafe { item_strlen(state.li) };
         }
     }
-    *read_bytes = nbuf;
-    return if (*state).offset < (*state).li_length || !(*(*state).li).li_next.is_null() {
+    // SAFETY: the caller's promise about `read_bytes`.
+    unsafe { *read_bytes = nbuf };
+    // SAFETY: `state.li` is a live item.
+    if state.offset < state.li_length || !unsafe { (*state.li).li_next }.is_null() {
         NOTDONE
     } else {
         OK
-    };
+    }
 }
-pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = false_0;
-pub const TYPVAL_ENCODE_ALLOW_SPECIALS_1: ::core::ffi::c_int = true_0;
-static escapes: GlobalCell<[[::core::ffi::c_char; 3]; 93]> = GlobalCell::new(unsafe {
-    [
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"\\b\0"),
-        ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"\\t\0"),
-        ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"\\n\0"),
-        [0; 3],
-        ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"\\f\0"),
-        ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"\\r\0"),
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"\\\"\0"),
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        [0; 3],
-        ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"\\\\\0"),
-    ]
-});
-static xdigits: GlobalCell<[::core::ffi::c_char; 17]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 17], [::core::ffi::c_char; 17]>(*b"0123456789ABCDEF\0")
-});
+
+/// Start reading a `readfile()`-style list from its first item.
+///
+/// # Safety
+/// `list` must be live and must have at least one item.
+pub unsafe extern "C" fn encode_init_lrstate(list: *const list_T) -> ListReaderState {
+    // SAFETY: the caller's promise; the first item holds a string or NULL.
+    let li = unsafe { tv_list_first(list) };
+    ListReaderState {
+        list,
+        li,
+        offset: 0,
+        li_length: unsafe { item_strlen(li) },
+    }
+}
+
+const E474_BAD_UTF8: &CStr =
+    c"E474: String \"%.*s\" contains byte that does not start any UTF-8 character";
+const E474_SURROGATE: &CStr =
+    c"E474: UTF-8 string contains code point which belongs to a surrogate pair: %.*s";
+
+/// The hexadecimal digits a `\uNNNN` escape is spelled with.
+const XDIGITS: &[u8; 16] = b"0123456789ABCDEF";
+
+/// The two-character escape JSON spells `ch` with, if it has one.
+fn json_escape_of(ch: c_int) -> Option<&'static [u8; 2]> {
+    const BS: c_int = 8;
+    const TAB: c_int = 9;
+    const NL: c_int = 10;
+    const FF: c_int = 12;
+    const CAR: c_int = 13;
+    const DQUOTE: c_int = b'"' as c_int;
+    const BACKSLASH: c_int = b'\\' as c_int;
+    Some(match ch {
+        BS => b"\\b",
+        TAB => b"\\t",
+        NL => b"\\n",
+        FF => b"\\f",
+        CAR => b"\\r",
+        DQUOTE => b"\\\"",
+        BACKSLASH => b"\\\\",
+        _ => return None,
+    })
+}
+
+/// Upstream's `ENCODE_RAW`: may `ch` go into the output as itself?
+///
+/// Everything else becomes `\uNNNN`, so that a JSON value stays displayable
+/// outside Neovim.  0x7F is caught by `utf_printable`, not by the range.
+fn json_encode_raw(ch: c_int) -> bool {
+    ch >= 0x20 && utf_printable(ch)
+}
+
+/// `\uNNNN` for a code unit.
+fn json_unicode_escape(unit: c_int) -> [u8; 6] {
+    let digit = |shift: u32| XDIGITS[((unit >> (4 * shift)) & 0xf) as usize];
+    [b'\\', b'u', digit(3), digit(2), digit(1), digit(0)]
+}
+
+/// The UTF-16 surrogate pair for a character above the BMP.
+///
+/// The low half is upstream's: it counts up from `SURROGATE_LO_END`, not from
+/// `SURROGATE_LO_START`, so `U+10000` would come out as `𐏿` rather
+/// than `𐀀`.  Kept as it is because the arm is **unreachable**:
+/// reaching it needs a character above the BMP that `utf_printable` refuses,
+/// and its table stops at `U+FFFF`.  Should that table ever grow, this is
+/// where to look.
+fn json_surrogate_pair(ch: c_int) -> (c_int, c_int) {
+    let tmp = ch - SURROGATE_FIRST_CHAR;
+    (
+        SURROGATE_HI_START + ((tmp >> 10) & 0x3ff),
+        SURROGATE_LO_END + (tmp & 0x3ff),
+    )
+}
+
+/// `semsg(_(msg), (int)tail.len(), tail)` — the two `%.*s` refusals below.
+fn err_tail(msg: &'static CStr, tail: &[u8]) {
+    // SAFETY: `%.*s` reads exactly the length it is given, and `tail` is
+    // readable for its own.
+    unsafe { semsg_c!(tr(msg), tail.len() as c_int, tail.as_ptr()) };
+}
+
+/// The bytes being escaped into a JSON string.
+///
+/// Deliberately **not** a slice.  Upstream measures each character with
+/// `utf_ptr2char`/`utf_ptr2len`, which read as many bytes as the lead byte
+/// promises and so read *past* `len` when the last character is a truncated
+/// multi-byte sequence.  For a `VAR_STRING` that byte is the terminating NUL
+/// and nothing comes of it, but a special `{'_TYPE': string}` value arrives
+/// in a buffer [`encode_vim_list_to_buf`] sized exactly, and there the
+/// over-read is real.  It is upstream's behaviour, it is reproduced rather
+/// than fixed, and it is why the three accessors are `unsafe`.
+struct Utf8 {
+    at: *const u8,
+    len: usize,
+}
+
+impl Utf8 {
+    /// The code point at `i`, or the byte's own value where no complete
+    /// sequence starts there.
+    ///
+    /// # Safety
+    /// `i` must be below `len`, and the bytes the lead byte at `i` promises
+    /// must be readable — see the type's own note.
+    #[inline(always)]
+    unsafe fn char_at(&self, i: usize) -> c_int {
+        unsafe { utf_ptr2char(self.at.add(i).cast::<c_char>()) }
+    }
+
+    /// How many bytes the character at `i` occupies.
+    ///
+    /// # Safety
+    /// As [`Self::char_at`].
+    #[inline(always)]
+    unsafe fn len_at(&self, i: usize) -> usize {
+        unsafe { utf_ptr2len(self.at.add(i).cast::<c_char>()) as usize }
+    }
+
+    /// `n` bytes from `i`.
+    ///
+    /// # Safety
+    /// As [`Self::char_at`]: `n` is a measured character length, which may
+    /// reach past `len`.
+    #[inline(always)]
+    unsafe fn run(&self, i: usize, n: usize) -> &[u8] {
+        unsafe { slice::from_raw_parts(self.at.add(i), n) }
+    }
+
+    /// Everything from `i` to the end, for an error message.
+    ///
+    /// # Safety
+    /// `i` must be below `len`.
+    #[inline(always)]
+    unsafe fn tail(&self, i: usize) -> &[u8] {
+        unsafe { slice::from_raw_parts(self.at.add(i), self.len - i) }
+    }
+}
+
+/// How long the escaped form of `text` will be, or `None` once the refusal
+/// has been reported.
+///
+/// This is upstream's first pass: the one that decides whether the string can
+/// be JSON at all.
+///
+/// # Safety
+/// As [`Utf8`].
+unsafe fn json_escaped_len(text: &Utf8) -> Option<usize> {
+    let mut str_len = 0;
+    let mut i = 0;
+    while i < text.len {
+        let ch = unsafe { text.char_at(i) };
+        let shift = if ch == 0 {
+            1
+        } else {
+            unsafe { text.len_at(i) }
+        };
+        debug_assert!(shift > 0, "shift > 0");
+        i += shift;
+        if json_escape_of(ch).is_some() {
+            str_len += 2;
+        } else if ch > 0x7f && shift == 1 {
+            err_tail(E474_BAD_UTF8, unsafe { text.tail(i - shift) });
+            return None;
+        } else if (SURROGATE_HI_START..=SURROGATE_HI_END).contains(&ch)
+            || (SURROGATE_LO_START..=SURROGATE_LO_END).contains(&ch)
+        {
+            err_tail(E474_SURROGATE, unsafe { text.tail(i - shift) });
+            return None;
+        } else if json_encode_raw(ch) {
+            str_len += shift;
+        } else {
+            // Six bytes per `\uNNNN`, and twice that for a surrogate pair.
+            str_len += 6 * (1 + usize::from(ch >= SURROGATE_FIRST_CHAR));
+        }
+    }
+    Some(str_len)
+}
+
+/// Convert a string to a JSON string literal, quotes included.
+///
+/// Two passes, exactly as upstream: the first sizes the result and is where
+/// the refusals happen, the second writes it.  A NULL buffer is `""`.
+///
+/// # Safety
+/// `gap` must be a live byte garray, and `buf` must be NULL or readable for
+/// `len` bytes — with the over-read [`Utf8`] describes.
 #[inline(always)]
-pub(crate) unsafe extern "C" fn convert_to_json_string(
+pub(crate) unsafe fn convert_to_json_string(
     gap: *mut garray_T,
-    buf: *const ::core::ffi::c_char,
+    buf: *const c_char,
     len: size_t,
-) -> ::core::ffi::c_int {
-    let mut utf_buf: *const ::core::ffi::c_char = buf;
-    if utf_buf.is_null() {
-        ga_concat_len(
-            gap,
-            c"\"\"".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
-        );
-    } else {
-        let mut utf_len: size_t = len;
-        let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut str_len: size_t = 0 as size_t;
-        let mut i: size_t = 0 as size_t;
-        while i < utf_len {
-            let ch: ::core::ffi::c_int = utf_ptr2char(utf_buf.add(i));
-            let shift: size_t = if ch == 0 as ::core::ffi::c_int {
-                1 as size_t
-            } else {
-                utf_ptr2len(utf_buf.add(i)) as size_t
-            };
-            debug_assert!(shift > 0 as size_t, "shift > 0");
-            i = i.wrapping_add(shift);
-            match ch {
-                BS | TAB | NL | FF | CAR | 34 | 92 => {
-                    str_len = str_len.wrapping_add(2 as size_t);
-                }
-                _ => {
-                    if ch > 0x7f as ::core::ffi::c_int && shift == 1 as size_t {
-                        semsg_c!(
-                            gettext(
-                                c"E474: String \"%.*s\" contains byte that does not start any UTF-8 character"
-                                    .as_ptr(),
-                            ),
-                            utf_len.wrapping_sub(i.wrapping_sub(shift))
-                                as ::core::ffi::c_int,
-                            utf_buf.add(i).offset(-(shift as isize)),
-                        );
-                        xfree(tofree as *mut ::core::ffi::c_void);
-                        return FAIL;
-                    } else if SURROGATE_HI_START <= ch && ch <= SURROGATE_HI_END
-                        || SURROGATE_LO_START <= ch && ch <= SURROGATE_LO_END
-                    {
-                        semsg_c!(
-                            gettext(
-                                c"E474: UTF-8 string contains code point which belongs to a surrogate pair: %.*s"
-                                    .as_ptr(),
-                            ),
-                            utf_len.wrapping_sub(i.wrapping_sub(shift))
-                                as ::core::ffi::c_int,
-                            utf_buf.add(i).offset(-(shift as isize)),
-                        );
-                        xfree(tofree as *mut ::core::ffi::c_void);
-                        return FAIL;
-                    } else if ch >= 0x20 as ::core::ffi::c_int
-                        && utf_printable(ch) as ::core::ffi::c_int != 0
-                    {
-                        str_len = str_len.wrapping_add(shift);
-                    } else {
-                        str_len = (str_len as ::core::ffi::c_ulong).wrapping_add(
-                            ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-                                .wrapping_sub(1_usize)
-                                .wrapping_mul(
-                                    (1 as ::core::ffi::c_int
-                                        + (ch >= SURROGATE_FIRST_CHAR) as ::core::ffi::c_int)
-                                        as usize,
-                                ) as ::core::ffi::c_ulong,
-                        ) as size_t;
-                    }
-                }
-            }
-        }
-        ga_append(gap, '"' as uint8_t);
-        ga_grow(gap, str_len as ::core::ffi::c_int);
-        let mut i_0: size_t = 0 as size_t;
-        while i_0 < utf_len {
-            let ch_0: ::core::ffi::c_int = utf_ptr2char(utf_buf.add(i_0));
-            let shift_0: size_t = if ch_0 == 0 as ::core::ffi::c_int {
-                1 as size_t
-            } else {
-                utf_char2len(ch_0) as size_t
-            };
-            debug_assert!(shift_0 > 0 as size_t, "shift > 0");
-            debug_assert!(
-                ch_0 == 0 as ::core::ffi::c_int
-                    || shift_0 == utf_ptr2len(utf_buf.add(i_0)) as size_t,
-                "ch == 0 || shift == ((size_t)utf_ptr2len(utf_buf + i))"
-            );
-            match ch_0 {
-                BS | TAB | NL | FF | CAR | 34 | 92 => {
-                    ga_concat_len(
-                        gap,
-                        &raw const *((escapes.ptr() as *const _) as *const [::core::ffi::c_char; 3])
-                            .offset(ch_0 as isize)
-                            as *const ::core::ffi::c_char,
-                        2 as size_t,
-                    );
-                }
-                _ => {
-                    if ch_0 >= 0x20 as ::core::ffi::c_int
-                        && utf_printable(ch_0) as ::core::ffi::c_int != 0
-                    {
-                        ga_concat_len(gap, utf_buf.add(i_0), shift_0);
-                    } else if ch_0 < SURROGATE_FIRST_CHAR {
-                        let c2rust_lvalue: [::core::ffi::c_char; 6] = [
-                            '\\' as ::core::ffi::c_char,
-                            'u' as ::core::ffi::c_char,
-                            (*xdigits.ptr())[(ch_0
-                                >> 4 as ::core::ffi::c_int * 3 as ::core::ffi::c_int
-                                & 0xf as ::core::ffi::c_int)
-                                as usize],
-                            (*xdigits.ptr())[(ch_0
-                                >> 4 as ::core::ffi::c_int * 2 as ::core::ffi::c_int
-                                & 0xf as ::core::ffi::c_int)
-                                as usize],
-                            (*xdigits.ptr())[(ch_0
-                                >> 4 as ::core::ffi::c_int * 1 as ::core::ffi::c_int
-                                & 0xf as ::core::ffi::c_int)
-                                as usize],
-                            (*xdigits.ptr())[(ch_0
-                                >> 4 as ::core::ffi::c_int * 0 as ::core::ffi::c_int
-                                & 0xf as ::core::ffi::c_int)
-                                as usize],
-                        ];
-                        ga_concat_len(
-                            gap,
-                            &raw const c2rust_lvalue as *const ::core::ffi::c_char,
-                            ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-                                .wrapping_sub(1 as size_t),
-                        );
-                    } else {
-                        let tmp: ::core::ffi::c_int = ch_0 - SURROGATE_FIRST_CHAR;
-                        let hi: ::core::ffi::c_int = SURROGATE_HI_START
-                            + (tmp >> 10 as ::core::ffi::c_int
-                                & ((1 as ::core::ffi::c_int) << 10 as ::core::ffi::c_int)
-                                    - 1 as ::core::ffi::c_int);
-                        let lo: ::core::ffi::c_int = SURROGATE_LO_END
-                            + (tmp >> 0 as ::core::ffi::c_int
-                                & ((1 as ::core::ffi::c_int) << 10 as ::core::ffi::c_int)
-                                    - 1 as ::core::ffi::c_int);
-                        let c2rust_lvalue_0: [::core::ffi::c_char; 12] = [
-                            '\\' as ::core::ffi::c_char,
-                            'u' as ::core::ffi::c_char,
-                            (*xdigits.ptr())[(hi
-                                >> 4 as ::core::ffi::c_int * 3 as ::core::ffi::c_int
-                                & 0xf as ::core::ffi::c_int)
-                                as usize],
-                            (*xdigits.ptr())[(hi
-                                >> 4 as ::core::ffi::c_int * 2 as ::core::ffi::c_int
-                                & 0xf as ::core::ffi::c_int)
-                                as usize],
-                            (*xdigits.ptr())[(hi
-                                >> 4 as ::core::ffi::c_int * 1 as ::core::ffi::c_int
-                                & 0xf as ::core::ffi::c_int)
-                                as usize],
-                            (*xdigits.ptr())[(hi
-                                >> 4 as ::core::ffi::c_int * 0 as ::core::ffi::c_int
-                                & 0xf as ::core::ffi::c_int)
-                                as usize],
-                            '\\' as ::core::ffi::c_char,
-                            'u' as ::core::ffi::c_char,
-                            (*xdigits.ptr())[(lo
-                                >> 4 as ::core::ffi::c_int * 3 as ::core::ffi::c_int
-                                & 0xf as ::core::ffi::c_int)
-                                as usize],
-                            (*xdigits.ptr())[(lo
-                                >> 4 as ::core::ffi::c_int * 2 as ::core::ffi::c_int
-                                & 0xf as ::core::ffi::c_int)
-                                as usize],
-                            (*xdigits.ptr())[(lo
-                                >> 4 as ::core::ffi::c_int * 1 as ::core::ffi::c_int
-                                & 0xf as ::core::ffi::c_int)
-                                as usize],
-                            (*xdigits.ptr())[(lo
-                                >> 4 as ::core::ffi::c_int * 0 as ::core::ffi::c_int
-                                & 0xf as ::core::ffi::c_int)
-                                as usize],
-                        ];
-                        ga_concat_len(
-                            gap,
-                            &raw const c2rust_lvalue_0 as *const ::core::ffi::c_char,
-                            ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-                                .wrapping_sub(1 as size_t)
-                                .wrapping_mul(2 as size_t),
-                        );
-                    }
-                }
-            }
-            i_0 = i_0.wrapping_add(shift_0);
-        }
-        ga_append(gap, '"' as uint8_t);
-        xfree(tofree as *mut ::core::ffi::c_void);
+) -> c_int {
+    // SAFETY: the caller's promise about `gap`.
+    let mut gap = Gap(unsafe { &mut *gap });
+    if buf.is_null() {
+        gap.concat(b"\"\"");
+        return OK;
     }
-    return OK;
-}
-pub unsafe extern "C" fn encode_check_json_key(tv: *const typval_T) -> bool {
-    if (*tv).v_type as ::core::ffi::c_uint
-        == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        return true_0 != 0;
-    }
-    if (*tv).v_type as ::core::ffi::c_uint != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        return false_0 != 0;
-    }
-    let spdict: *const dict_T = (*tv).vval.v_dict;
-    if (*spdict).dv_hashtab.ht_used != 2 as size_t {
-        return false_0 != 0;
-    }
-    let mut type_di: *const dictitem_T = ::core::ptr::null::<dictitem_T>();
-    let mut val_di: *const dictitem_T = ::core::ptr::null::<dictitem_T>();
-    type_di = tv_dict_find(
-        spdict,
-        c"_TYPE".as_ptr(),
-        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1_usize) as ptrdiff_t,
-    );
-    if type_di.is_null()
-        || (*type_di).di_tv.v_type as ::core::ffi::c_uint
-            != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*type_di).di_tv.vval.v_list
-            != (*eval_msgpack_type_lists.ptr())[kMPString as ::core::ffi::c_int as usize]
-                as *mut list_T
-        || {
-            val_di = tv_dict_find(
-                spdict,
-                c"_VAL".as_ptr(),
-                ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1_usize)
-                    as ptrdiff_t,
-            );
-            val_di.is_null()
-        }
-        || (*val_di).di_tv.v_type as ::core::ffi::c_uint
-            != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        return false_0 != 0;
-    }
-    if (*val_di).di_tv.vval.v_list.is_null() {
-        return true_0 != 0;
-    }
-    let l_: *const list_T = (*val_di).di_tv.vval.v_list;
-    if !l_.is_null() {
-        let mut li: *const listitem_T = (*l_).lv_first;
-        while !li.is_null() {
-            if (*li).li_tv.v_type as ::core::ffi::c_uint
-                != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                return false;
-            }
-            li = (*li).li_next;
-        }
-    }
-    return true_0 != 0;
-}
-pub unsafe extern "C" fn encode_tv2string(
-    mut tv: *mut typval_T,
-    mut len: *mut size_t,
-) -> *mut ::core::ffi::c_char {
-    let mut ga: garray_T = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+    let text = Utf8 {
+        at: buf.cast::<u8>(),
+        len,
     };
-    ga_init(
-        &raw mut ga,
-        ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int,
-        80 as ::core::ffi::c_int,
-    );
-    let evs_ret = encode_vim_to_string(&raw mut ga, tv, c"encode_tv2string() argument".as_ptr());
+    // SAFETY: forwarded to the caller's promise about `buf`.
+    let Some(str_len) = (unsafe { json_escaped_len(&text) }) else {
+        return FAIL;
+    };
+    gap.append(b'"');
+    gap.grow(str_len as c_int);
+    let mut i = 0;
+    while i < text.len {
+        let ch = unsafe { text.char_at(i) };
+        // The write pass measures the *character*, not the bytes; the two
+        // agree except at a NUL, which is one byte and not one character.
+        let shift = if ch == 0 {
+            1
+        } else {
+            utf_char2len(ch) as usize
+        };
+        debug_assert!(shift > 0, "shift > 0");
+        debug_assert!(
+            ch == 0 || shift == unsafe { text.len_at(i) },
+            "ch == 0 || shift == ((size_t)utf_ptr2len(utf_buf + i))"
+        );
+        if let Some(escape) = json_escape_of(ch) {
+            gap.concat(escape);
+        } else if json_encode_raw(ch) {
+            gap.concat(unsafe { text.run(i, shift) });
+        } else if ch < SURROGATE_FIRST_CHAR {
+            gap.concat(&json_unicode_escape(ch));
+        } else {
+            let (hi, lo) = json_surrogate_pair(ch);
+            gap.concat(&json_unicode_escape(hi));
+            gap.concat(&json_unicode_escape(lo));
+        }
+        i += shift;
+    }
+    gap.append(b'"');
+    OK
+}
+
+/// May `tv` be a key in `json_encode()`'s output?
+///
+/// A plain string may.  So may a `{'_TYPE': v:msgpack_types.string, '_VAL':
+/// [...]}` special dictionary, provided every part of its `_VAL` is a string
+/// — that is how a key holding a NUL is spelled.
+///
+/// # Safety
+/// `tv` must be live, as must anything it points at.
+pub unsafe extern "C" fn encode_check_json_key(tv: *const typval_T) -> bool {
+    // SAFETY: the caller's promise about `tv`.
+    let tv = unsafe { &*tv };
+    if tv.v_type == VAR_STRING {
+        return true;
+    }
+    if tv.v_type != VAR_DICT {
+        return false;
+    }
+    // SAFETY: a `VAR_DICT` holds a live dictionary.
+    let spdict = unsafe { tv.vval.v_dict };
+    if unsafe { (*spdict).dv_hashtab.ht_used } != 2 {
+        return false;
+    }
+    // SAFETY: `spdict` is live and both keys are NUL-terminated literals.
+    let (type_di, val_di) = unsafe {
+        (
+            tv_dict_find(spdict, c"_TYPE".as_ptr(), 5 as ptrdiff_t),
+            tv_dict_find(spdict, c"_VAL".as_ptr(), 4 as ptrdiff_t),
+        )
+    };
+    if type_di.is_null() {
+        return false;
+    }
+    // SAFETY: a non-NULL find answers a live item of `spdict`.
+    let type_tv = unsafe { &(*type_di).di_tv };
+    if type_tv.v_type != VAR_LIST
+        || unsafe { type_tv.vval.v_list }
+            != eval_msgpack_type_lists.get()[kMPString as usize] as *mut list_T
+        || val_di.is_null()
+    {
+        return false;
+    }
+    // SAFETY: as `type_di`.
+    let val_tv = unsafe { &(*val_di).di_tv };
+    if val_tv.v_type != VAR_LIST {
+        return false;
+    }
+    // SAFETY: a `VAR_LIST` holds a live list or NULL, and nothing runs
+    // between the items.
+    for li in unsafe { items(val_tv.vval.v_list) } {
+        if unsafe { (*li).li_tv.v_type } != VAR_STRING {
+            return false;
+        }
+    }
+    true
+}
+
+/// Finish one of the three `encode_tv2*` entry points: report the length if
+/// asked, terminate, and hand the buffer over for the caller to free.
+///
+/// # Safety
+/// `len` must be NULL or writable, and `ga` must be a byte garray.
+unsafe fn finish_tv2(mut ga: garray_T, len: *mut size_t) -> *mut c_char {
+    if !len.is_null() {
+        // SAFETY: the caller's promise about `len`.
+        unsafe { *len = ga.ga_len as size_t };
+    }
+    Gap(&mut ga).append(0);
+    ga.ga_data.cast::<c_char>()
+}
+
+/// The string representation of `tv`, quoted so `eval()` can read it back.
+///
+/// # Safety
+/// `tv` must be live; `len` must be NULL or writable.
+pub unsafe extern "C" fn encode_tv2string(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
+    let mut ga = text_garray();
+    // SAFETY: the caller's promise about `tv`; `string()` never refuses.
+    let evs_ret =
+        unsafe { encode_vim_to_string(&raw mut ga, tv, c"encode_tv2string() argument".as_ptr()) };
     debug_assert!(evs_ret);
     did_echo_string_emsg.set(false);
-    if !len.is_null() {
-        *len = ga.ga_len as size_t;
-    }
-    ga_append(&raw mut ga, NUL as uint8_t);
-    return ga.ga_data as *mut ::core::ffi::c_char;
+    // SAFETY: the caller's promise about `len`.
+    unsafe { finish_tv2(ga, len) }
 }
-pub unsafe extern "C" fn encode_tv2echo(
-    mut tv: *mut typval_T,
-    mut len: *mut size_t,
-) -> *mut ::core::ffi::c_char {
-    let mut ga: garray_T = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-    };
-    ga_init(
-        &raw mut ga,
-        ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int,
-        80 as ::core::ffi::c_int,
-    );
-    if (*tv).v_type as ::core::ffi::c_uint
-        == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*tv).v_type as ::core::ffi::c_uint
-            == VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        if !(*tv).vval.v_string.is_null() {
-            ga_concat(&raw mut ga, (*tv).vval.v_string);
-        }
-    } else {
-        let eve_ret = encode_vim_to_echo(&raw mut ga, tv, c":echo argument".as_ptr());
-        debug_assert!(eve_ret);
-    }
-    if !len.is_null() {
-        *len = ga.ga_len as size_t;
-    }
-    ga_append(&raw mut ga, NUL as uint8_t);
-    return ga.ga_data as *mut ::core::ffi::c_char;
-}
-pub unsafe extern "C" fn encode_tv2json(
-    mut tv: *mut typval_T,
-    mut len: *mut size_t,
-) -> *mut ::core::ffi::c_char {
-    let mut ga: garray_T = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-    };
-    ga_init(
-        &raw mut ga,
-        ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int,
-        80 as ::core::ffi::c_int,
-    );
-    let evj_ret = encode_vim_to_json(&raw mut ga, tv, c"encode_tv2json() argument".as_ptr());
-    if !evj_ret {
-        ga_clear(&raw mut ga);
-    }
-    did_echo_string_emsg.set(false_0 != 0);
-    if !len.is_null() {
-        *len = ga.ga_len as size_t;
-    }
-    ga_append(&raw mut ga, NUL as uint8_t);
-    return ga.ga_data as *mut ::core::ffi::c_char;
-}
-pub const TYPVAL_ENCODE_ALLOW_SPECIALS_0: ::core::ffi::c_int = true_0;
-pub unsafe extern "C" fn encode_init_lrstate(list: *const list_T) -> ListReaderState {
-    return ListReaderState {
-        list: list,
-        li: tv_list_first(list),
-        offset: 0 as size_t,
-        li_length: if (*tv_list_first(list)).li_tv.vval.v_string.is_null() {
-            0 as size_t
+
+/// The string representation of `tv` as `:echo` displays it — no quotes.
+///
+/// # Safety
+/// As [`encode_tv2string`].
+pub unsafe extern "C" fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
+    let mut ga = text_garray();
+    // SAFETY: the caller's promise about `tv`.
+    unsafe {
+        // A string or function reference echoes as its own bytes, which is
+        // the whole difference between `:echo` and `string()` at the top
+        // level; below it, the sink says it again.
+        if (*tv).v_type == VAR_STRING || (*tv).v_type == VAR_FUNC {
+            if !(*tv).vval.v_string.is_null() {
+                ga_concat(&raw mut ga, (*tv).vval.v_string);
+            }
         } else {
-            strlen((*tv_list_first(list)).li_tv.vval.v_string)
-        },
-    };
+            let eve_ret = encode_vim_to_echo(&raw mut ga, tv, c":echo argument".as_ptr());
+            debug_assert!(eve_ret);
+        }
+        finish_tv2(ga, len)
+    }
 }
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
+/// `tv` as JSON, or an empty buffer once the refusal has been reported.
+///
+/// # Safety
+/// As [`encode_tv2string`].
+pub unsafe extern "C" fn encode_tv2json(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
+    let mut ga = text_garray();
+    // SAFETY: the caller's promise about `tv`.
+    let evj_ret =
+        unsafe { encode_vim_to_json(&raw mut ga, tv, c"encode_tv2json() argument".as_ptr()) };
+    if !evj_ret {
+        // SAFETY: `ga` is this function's own array.
+        unsafe { ga_clear(&raw mut ga) };
+    }
+    did_echo_string_emsg.set(false);
+    // SAFETY: the caller's promise about `len`.
+    unsafe { finish_tv2(ga, len) }
+}
