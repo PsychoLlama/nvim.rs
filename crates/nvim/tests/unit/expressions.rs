@@ -21,7 +21,8 @@ use c2rust_neovim::src::nvim::viml::parser::expressions::{
     east_node_type_tab, viml_pexpr_free_ast, viml_pexpr_parse,
 };
 use c2rust_neovim::src::nvim::viml::parser::parser::{
-    PARSER_STATE_INIT, highlight_vec, parser_simple_get_line, viml_parser_destroy, viml_parser_init,
+    PARSER_STATE_INIT, highlight_vec, parser_simple_get_line, reader_line, viml_parser_destroy,
+    viml_parser_init,
 };
 
 const EMPTY_LINE: ParserLine = ParserLine {
@@ -39,19 +40,58 @@ const MULTI: c_int = 1;
 const PARSE_LET: c_int = 4;
 
 fn node_name(node: *const ExprASTNode) -> &'static str {
+    let name = east_node_type_tab.with(|tab| tab[unsafe { (*node).type_0 } as usize]);
+    unsafe { CStr::from_ptr(name) }
+        .to_str()
+        .expect("node type names are ASCII")
+}
+
+/// What a node carries beyond its type, for the two kinds that carry
+/// something `nvim_parse_expression` does not report:
+///
+/// - a figure brace's *remaining guesses* about what it will turn out to be
+///   (`\` lambda, `d` dictionary, `i` curly-braces name), which the parser
+///   narrows as it reads and which decide how the node is finally classified;
+/// - a string literal's decoded value, where an **empty** literal leaves a
+///   null pointer rather than an empty buffer — the API renders both as `""`.
+fn node_detail(node: *const ExprASTNode) -> String {
+    let name = node_name(node);
     unsafe {
-        let name = east_node_type_tab.ptr().cast::<*const i8>();
-        CStr::from_ptr(*name.add((*node).type_0 as usize))
-            .to_str()
-            .expect("node type names are ASCII")
+        match name {
+            "UnknownFigure" | "DictLiteral" | "CurlyBracesIdentifier" | "Lambda" => {
+                let guesses = (*node).data.fig.type_guesses;
+                format!(
+                    "{name}({}{}{})",
+                    if guesses.allow_lambda { "\\" } else { "-" },
+                    if guesses.allow_dict { "d" } else { "-" },
+                    if guesses.allow_ident { "i" } else { "-" },
+                )
+            }
+            "SingleQuotedString" | "DoubleQuotedString" => {
+                let literal = (*node).data.str;
+                if literal.value.is_null() {
+                    format!("{name}(val=NULL)")
+                } else {
+                    let bytes =
+                        std::slice::from_raw_parts(literal.value.cast::<u8>(), literal.size);
+                    format!("{name}(val={:?})", String::from_utf8_lossy(bytes))
+                }
+            }
+            _ => name.to_owned(),
+        }
     }
 }
 
 /// A parenthesised dump of the tree: `Type(child, child)`. This is the same
 /// information `nvim_parse_expression` reports, in the same order, so it
-/// pins the shape without depending on the RPC encoding.
-fn dump(node: *const ExprASTNode, out: &mut String) {
-    out.push_str(node_name(node));
+/// pins the shape without depending on the RPC encoding. `detailed` adds
+/// what the API leaves out — see [`node_detail`].
+fn dump_with(node: *const ExprASTNode, out: &mut String, detailed: bool) {
+    if detailed {
+        out.push_str(&node_detail(node));
+    } else {
+        out.push_str(node_name(node));
+    }
     let mut child = unsafe { (*node).children };
     if child.is_null() {
         return;
@@ -63,7 +103,7 @@ fn dump(node: *const ExprASTNode, out: &mut String) {
             out.push_str(", ");
         }
         first = false;
-        dump(child, out);
+        dump_with(child, out, detailed);
         child = unsafe { (*child).next };
     }
     out.push(')');
@@ -71,18 +111,30 @@ fn dump(node: *const ExprASTNode, out: &mut String) {
 
 struct Parsed {
     tree: String,
+    /// The same tree with each node's payload spelled out.
+    detail: String,
     error: Option<String>,
     groups: Vec<String>,
+    /// How much of the input the parser consumed — `east2lua`'s `len`. The
+    /// whole line where the cursor wrapped onto the next one.
+    len: usize,
 }
 
 /// Parse `expr` and answer its tree dump, its error message and the
 /// highlight groups it logged, then release everything it allocated.
 fn parse_with_flags(expr: &str, flags: c_int) -> Parsed {
+    parse_cut(expr, expr.len(), flags)
+}
+
+/// [`parse_with_flags`] over a line the reader claims is `size` bytes long,
+/// whatever is behind it. The bytes past `size` are readable, which is the
+/// point: the parser must not read them.
+fn parse_cut(expr: &str, size: usize, flags: c_int) -> Parsed {
     let source = format!("{expr}\0");
     let mut input = [
         ParserLine {
             data: source.as_ptr().cast(),
-            size: expr.len(),
+            size,
             allocated: false,
         },
         EMPTY_LINE,
@@ -114,10 +166,13 @@ fn parse_with_flags(expr: &str, flags: c_int) -> Parsed {
         let ast: ExprAST = viml_pexpr_parse(state, flags);
 
         let mut tree = String::new();
+        let mut detail = String::new();
         if ast.root.is_null() {
             tree.push_str("<empty>");
+            detail.push_str("<empty>");
         } else {
-            dump(ast.root, &mut tree);
+            dump_with(ast.root, &mut tree, false);
+            dump_with(ast.root, &mut detail, true);
         }
         let error = if ast.err.msg.is_null() {
             None
@@ -149,6 +204,15 @@ fn parse_with_flags(expr: &str, flags: c_int) -> Parsed {
             );
         }
 
+        // How far the parser got. The cursor wraps onto the next line the
+        // moment it reaches the end of this one, so a parse that consumed
+        // everything reports the line's own size rather than a column.
+        let len = if (*state).pos.line == 0 {
+            (*state).pos.col
+        } else {
+            reader_line(&(*state).reader, 0).size
+        };
+
         viml_pexpr_free_ast(ast);
         viml_parser_destroy(&mut *state);
         // The chunk log belongs to the caller, not to the parser state: a
@@ -156,8 +220,10 @@ fn parse_with_flags(expr: &str, flags: c_int) -> Parsed {
         xfree(highlight_vec(&mut colors).take_heap());
         Parsed {
             tree,
+            detail,
             error,
             groups,
+            len,
         }
     }
 }
@@ -575,6 +641,115 @@ fn an_invalid_token_is_dispatched_as_what_it_meant_to_be() {
     assert_eq!(
         parsed.error.as_deref(),
         Some("E15: Environment variable name missing")
+    );
+}
+
+/// A figure brace could still become a lambda, a dictionary or a
+/// curly-braces name, and the node carries which of the three are left. The
+/// guesses are narrowed as the parser reads and are what finally classify
+/// the node — and they are the one thing `nvim_parse_expression` does *not*
+/// report, so nothing outside this file pins them.
+#[test]
+fn figure_braces_carry_what_they_might_still_be() {
+    // Nothing has ruled anything out yet.
+    assert_eq!(parse("{").detail, r"UnknownFigure(\di)");
+    // A value inside rules out a lambda: its arguments must be plain names.
+    assert_eq!(parse("{@a").detail, "UnknownFigure(-di)(Register)");
+    // A closing brace with nothing open is not any of the three.
+    assert_eq!(parse("}").detail, "UnknownFigure(---)");
+    // The classified nodes keep the guesses they were classified by.
+    assert_eq!(parse("{}").detail, "DictLiteral(-di)");
+    assert_eq!(
+        parse("{a}").detail,
+        "CurlyBracesIdentifier(-di)(PlainIdentifier)"
+    );
+    assert_eq!(
+        parse("{->@a}").detail,
+        r"Lambda(\di)(Arrow(Register))",
+        "an arrow settles it, and the dictionary guess survives in the node"
+    );
+    assert_eq!(
+        parse("{a,b}").detail,
+        "Lambda(-di)(Comma(PlainIdentifier, PlainIdentifier))",
+        "a comma between plain names rules the dictionary out, not the lambda"
+    );
+    // The second of two adjacent names cannot be a dictionary either: it is
+    // already part of a complex identifier.
+    assert_eq!(
+        parse("{@a}{@b}").detail,
+        "ComplexIdentifier(CurlyBracesIdentifier(-di)(Register), \
+         CurlyBracesIdentifier(--i)(Register))"
+    );
+}
+
+/// A string literal's node owns its decoded value — and an *empty* literal
+/// leaves a null pointer rather than an empty buffer, which is a distinction
+/// the API flattens (it reports `""` for both).
+#[test]
+fn string_literals_carry_their_decoded_value() {
+    assert_eq!(parse(r#""abc""#).detail, "DoubleQuotedString(val=\"abc\")");
+    assert_eq!(parse("'abc'").detail, "SingleQuotedString(val=\"abc\")");
+    assert_eq!(
+        parse(r#""a\nb""#).detail,
+        "DoubleQuotedString(val=\"a\\nb\")",
+        "the double-quoted decoder resolves escapes into the value"
+    );
+    assert_eq!(
+        parse("'it''s'").detail,
+        "SingleQuotedString(val=\"it's\")",
+        "a doubled quote is the single-quoted form's only escape"
+    );
+
+    for (expr, name) in [
+        ("''", "SingleQuotedString"),
+        (r#""""#, "DoubleQuotedString"),
+        // Unterminated, and still empty.
+        ("'", "SingleQuotedString"),
+        (r#"""#, "DoubleQuotedString"),
+    ] {
+        assert_eq!(parse(expr).detail, format!("{name}(val=NULL)"), "{expr}");
+    }
+}
+
+/// The reader's claimed line size is what bounds the parse, not the buffer
+/// behind it: the digits past the end are readable and must not be read.
+/// These two cases are the only ones in the shared corpus that the RPC-level
+/// suite cannot run, because `nvim_parse_expression` takes a whole string.
+#[test]
+fn the_readers_line_size_bounds_the_parse() {
+    let parsed = parse_cut("01", 1, 0);
+    assert_eq!(parsed.error, None);
+    assert_eq!(parsed.tree, "Integer");
+    assert_eq!(parsed.len, 1);
+    assert_eq!(parsed.groups, ["NvimNumber"]);
+
+    let parsed = parse_cut("001", 2, 0);
+    assert_eq!(parsed.error, None);
+    assert_eq!(parsed.tree, "Integer");
+    assert_eq!(parsed.len, 2);
+    assert_eq!(
+        parsed.groups,
+        ["NvimNumberPrefix", "NvimNumber"],
+        "the leading zero of an octal literal is coloured as a prefix"
+    );
+}
+
+/// `len` is how much of the input the parser consumed, which is what
+/// `nvim_parse_expression` reports and what the cmdline highlighter uses to
+/// find where the expression ended.
+#[test]
+fn a_parse_reports_how_much_it_consumed() {
+    assert_eq!(parse("1 + 2").len, 5);
+    assert_eq!(
+        parse_with_flags("1 2", MULTI).len,
+        2,
+        "with kExprFlagsMulti the parser stops rather than failing, having \
+         already taken the spacing that followed the value it kept"
+    );
+    assert_eq!(
+        parse("1 |").len,
+        2,
+        "the bar ends the command, and is not consumed"
     );
 }
 
