@@ -55,6 +55,7 @@ use crate::src::nvim::types::{
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
+use core::ptr;
 
 // The carve of the transpiled module; see each child's docs.
 mod dir;
@@ -341,199 +342,287 @@ fn no_fileinfo() -> FileInfo {
     }
 }
 
+// ---------------------------------------------------------------------
+// The predicates
+// ---------------------------------------------------------------------
+//
+// Everything below only *asks* the filesystem a question.  Each one is the
+// builtin's own arithmetic over one of the small wrappers here, so the whole
+// group's unchecked surface is the wrappers.
+
+/// Whether argument `i` is a String, having reported if not.
+fn is_string_arg(args: Args<'_>, i: usize) -> bool {
+    // SAFETY: the argument vector's own base, and `i` an index into it.
+    unsafe { tv_check_for_string_arg(args.ptr(0), i as c_int) != FAIL }
+}
+
+/// Whether argument `i` is a non-empty String, having reported if not.
+fn is_nonempty_string_arg(args: Args<'_>, i: usize) -> bool {
+    // SAFETY: as [`is_string_arg`].
+    unsafe { tv_check_for_nonempty_string_arg(args.ptr(0), i as c_int) != FAIL }
+}
+
+/// Whether `p` names something executable, looking in `$PATH` as well as
+/// directly, so that a directory name answers too.
+fn can_exe(p: &CStr) -> bool {
+    // SAFETY: `p` is NUL-terminated; a null out-parameter asks for no path.
+    unsafe { os_can_exe(p.as_ptr(), ptr::null_mut(), true) }
+}
+
+/// Where `p`'s executable was found, or NULL when it is not one.
+fn exe_path(p: &CStr) -> *mut c_char {
+    let mut path = ptr::null_mut();
+    // SAFETY: `p` is NUL-terminated and `path` is this frame's own; the
+    // answer is a string in nvim's heap, or NULL.
+    unsafe { os_can_exe(p.as_ptr(), &raw mut path, true) };
+    path
+}
+
+fn is_dir(p: &CStr) -> bool {
+    // SAFETY: `p` is NUL-terminated.
+    unsafe { os_isdir(p.as_ptr()) }
+}
+
+fn is_readable(p: &CStr) -> bool {
+    // SAFETY: `p` is NUL-terminated.
+    unsafe { os_file_is_readable(p.as_ptr()) }
+}
+
+/// 0 for not writable, 1 for a writable file, 2 for a directory that can be
+/// written into.
+fn writability(p: &CStr) -> c_int {
+    // SAFETY: `p` is NUL-terminated.
+    unsafe { os_file_is_writable(p.as_ptr()) }
+}
+
+/// The permission bits of `p`, or a negative number when it has none.
+fn getperm(p: &CStr) -> int32_t {
+    // SAFETY: `p` is NUL-terminated.
+    unsafe { os_getperm(p.as_ptr()) }
+}
+
+/// The `stat` of what `p` names, following symlinks.
+fn stat(p: &CStr) -> Option<FileInfo> {
+    let mut info = no_fileinfo();
+    // SAFETY: `p` is NUL-terminated and `info` is this frame's own.
+    let taken = unsafe { os_fileinfo(p.as_ptr(), &raw mut info) };
+    taken.then_some(info)
+}
+
+/// As [`stat`], but of the symlink itself rather than what it points at.
+fn lstat(p: &CStr) -> Option<FileInfo> {
+    let mut info = no_fileinfo();
+    // SAFETY: as [`stat`].
+    let taken = unsafe { os_fileinfo_link(p.as_ptr(), &raw mut info) };
+    taken.then_some(info)
+}
+
+/// The size the `stat` reports, which is not always `st_size`.
+fn size(info: &FileInfo) -> uint64_t {
+    // SAFETY: a `FileInfo` the caller owns.
+    unsafe { os_fileinfo_size(info) }
+}
+
+/// `executable({expr})`: whether the name can be run.
+///
+/// # Safety
+/// `argvars` is the evaluator's own argument vector, arity 1, and `rettv` a
+/// cleared result.
 pub unsafe extern "C" fn f_executable(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        if tv_check_for_string_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
-            return;
-        }
-        (*rettv).vval.v_number = os_can_exe(
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize)),
-            ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-            true_0 != 0,
-        ) as varnumber_T;
+    let (args, rettv) = frame!(argvars, rettv);
+    if !is_string_arg(args, 0) {
+        return;
     }
+    rettv.vval.v_number = can_exe(str_arg(args, 0)) as varnumber_T;
 }
+
+/// `exepath({expr})`: the full path of the executable, or the empty string.
+///
+/// # Safety
+/// As [`f_executable`].
 pub unsafe extern "C" fn f_exepath(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        if tv_check_for_nonempty_string_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
-            return;
-        }
-        let mut path: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        os_can_exe(
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize)),
-            &raw mut path,
-            true_0 != 0,
-        );
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = path;
+    let (args, rettv) = frame!(argvars, rettv);
+    if !is_nonempty_string_arg(args, 0) {
+        return;
     }
+    ret_string(rettv, exe_path(str_arg(args, 0)));
 }
+
+/// `filereadable({file})`: whether the file exists and can be read.
+///
+/// # Safety
+/// As [`f_executable`].
 pub unsafe extern "C" fn f_filereadable(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        let p: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        (*rettv).vval.v_number = (*p as ::core::ffi::c_int != 0
-            && !os_isdir(p)
-            && os_file_is_readable(p) as ::core::ffi::c_int != 0)
-            as ::core::ffi::c_int as varnumber_T;
-    }
+    let (args, rettv) = frame!(argvars, rettv);
+    let p = str_arg(args, 0);
+    let readable = !p.to_bytes().is_empty() && !is_dir(p) && is_readable(p);
+    rettv.vval.v_number = readable as varnumber_T;
 }
+
+/// `filewritable({file})`: 0 for not writable, 1 for a writable file, 2 for
+/// a directory that can be written into.
+///
+/// # Safety
+/// As [`f_executable`].
 pub unsafe extern "C" fn f_filewritable(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        let mut filename: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        (*rettv).vval.v_number = os_file_is_writable(filename) as varnumber_T;
-    }
+    let (args, rettv) = frame!(argvars, rettv);
+    rettv.vval.v_number = writability(str_arg(args, 0)) as varnumber_T;
 }
+
+/// `getfperm({fname})`: the permissions as `rwxrwxrwx`, or the empty string
+/// when the file has none to report.
+///
+/// # Safety
+/// As [`f_executable`].
 pub unsafe extern "C" fn f_getfperm(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        let mut perm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut flags: [::core::ffi::c_char; 4] =
-            ::core::mem::transmute::<[u8; 4], [::core::ffi::c_char; 4]>(*b"rwx\0");
-        let mut filename: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let mut file_perm: int32_t = os_getperm(filename);
-        if file_perm >= 0 as int32_t {
-            perm = xstrdup(c"---------".as_ptr());
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < 9 as ::core::ffi::c_int {
-                if file_perm & ((1 as int32_t) << (8 as ::core::ffi::c_int - i)) != 0 {
-                    *perm.offset(i as isize) = flags[(i % 3 as ::core::ffi::c_int) as usize];
-                }
-                i += 1;
+    let (args, rettv) = frame!(argvars, rettv);
+    let file_perm = getperm(str_arg(args, 0));
+    let mut perm = ptr::null_mut();
+    if file_perm >= 0 {
+        let spelled = Owned::dup(c"---------");
+        for i in 0..9 {
+            if file_perm & (1 << (8 - i)) != 0 {
+                spelled.set(i as usize, b"rwx"[i as usize % 3]);
             }
         }
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = perm;
+        perm = spelled.into_raw();
     }
+    ret_string(rettv, perm);
 }
+
+/// `getfsize({fname})`: the size in bytes, 0 for a directory, -1 when the
+/// file cannot be measured and -2 when it does not fit in a Number.
+///
+/// # Safety
+/// As [`f_executable`].
 pub unsafe extern "C" fn f_getfsize(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        let mut fname: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        (*rettv).v_type = VAR_NUMBER;
-        let mut file_info: FileInfo = no_fileinfo();
-        if os_fileinfo(fname, &raw mut file_info) {
-            let mut filesize: uint64_t = os_fileinfo_size(&raw mut file_info);
-            if os_isdir(fname) {
-                (*rettv).vval.v_number = 0 as varnumber_T;
+    let (args, rettv) = frame!(argvars, rettv);
+    let fname = str_arg(args, 0);
+    rettv.v_type = VAR_NUMBER;
+    rettv.vval.v_number = match stat(fname) {
+        None => -1 as varnumber_T,
+        Some(info) => {
+            let filesize = size(&info);
+            let answer = filesize as varnumber_T;
+            if is_dir(fname) {
+                0 as varnumber_T
+            } else if answer as uint64_t == filesize {
+                answer
             } else {
-                (*rettv).vval.v_number = filesize as varnumber_T;
-                if (*rettv).vval.v_number as uint64_t != filesize {
-                    (*rettv).vval.v_number = -2 as varnumber_T;
-                }
+                // Too big for a Number.
+                -2 as varnumber_T
             }
-        } else {
-            (*rettv).vval.v_number = -1 as varnumber_T;
-        };
-    }
-}
-pub unsafe extern "C" fn f_getftime(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        let mut fname: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let mut file_info: FileInfo = no_fileinfo();
-        if os_fileinfo(fname, &raw mut file_info) {
-            (*rettv).vval.v_number = file_info.stat.st_mtim.tv_sec as varnumber_T;
-        } else {
-            (*rettv).vval.v_number = -1 as varnumber_T;
-        };
-    }
-}
-pub unsafe extern "C" fn f_getftype(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        let mut type_0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut t: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut fname: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        (*rettv).v_type = VAR_STRING;
-        let mut file_info: FileInfo = no_fileinfo();
-        if os_fileinfo_link(fname, &raw mut file_info) {
-            let mut mode: uint64_t = file_info.stat.st_mode;
-            if mode & __S_IFMT as uint64_t == 0o100000 as uint64_t {
-                t = c"file".as_ptr() as *mut ::core::ffi::c_char;
-            } else if mode & __S_IFMT as uint64_t == 0o40000 as uint64_t {
-                t = c"dir".as_ptr() as *mut ::core::ffi::c_char;
-            } else if mode & __S_IFMT as uint64_t == 0o120000 as uint64_t {
-                t = c"link".as_ptr() as *mut ::core::ffi::c_char;
-            } else if mode & __S_IFMT as uint64_t == 0o60000 as uint64_t {
-                t = c"bdev".as_ptr() as *mut ::core::ffi::c_char;
-            } else if mode & __S_IFMT as uint64_t == 0o20000 as uint64_t {
-                t = c"cdev".as_ptr() as *mut ::core::ffi::c_char;
-            } else if mode & __S_IFMT as uint64_t == 0o10000 as uint64_t {
-                t = c"fifo".as_ptr() as *mut ::core::ffi::c_char;
-            } else if mode & __S_IFMT as uint64_t == 0o140000 as uint64_t {
-                t = c"socket".as_ptr() as *mut ::core::ffi::c_char;
-            } else {
-                t = c"other".as_ptr() as *mut ::core::ffi::c_char;
-            }
-            type_0 = xstrdup(t);
         }
-        (*rettv).vval.v_string = type_0;
-    }
+    };
 }
+
+/// `getftime({fname})`: the modification time, or -1.
+///
+/// # Safety
+/// As [`f_executable`].
+pub unsafe extern "C" fn f_getftime(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    let mtime = stat(str_arg(args, 0)).map(|info| info.stat.st_mtim.tv_sec);
+    rettv.vval.v_number = mtime.map_or(-1 as varnumber_T, |t| t as varnumber_T);
+}
+
+/// `getftype({fname})`: what kind of thing the name refers to -- of the
+/// symlink itself, not of what it points at.
+///
+/// # Safety
+/// As [`f_executable`].
+pub unsafe extern "C" fn f_getftype(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    rettv.v_type = VAR_STRING;
+    let named = lstat(str_arg(args, 0)).map(|info| {
+        // The `S_IS*` family, spelled out.
+        match info.stat.st_mode & __S_IFMT as uint64_t {
+            0o100000 => c"file",
+            0o40000 => c"dir",
+            0o120000 => c"link",
+            0o60000 => c"bdev",
+            0o20000 => c"cdev",
+            0o10000 => c"fifo",
+            0o140000 => c"socket",
+            _ => c"other",
+        }
+    });
+    let answer = named.map_or(ptr::null_mut(), |t| Owned::dup(t).into_raw());
+    rettv.vval.v_string = answer;
+}
+
+/// `isdirectory({directory})`: whether the name is a directory.
+///
+/// # Safety
+/// As [`f_executable`].
 pub unsafe extern "C" fn f_isdirectory(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        (*rettv).vval.v_number = os_isdir(tv_get_string(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-        )) as varnumber_T;
-    }
+    let (args, rettv) = frame!(argvars, rettv);
+    rettv.vval.v_number = is_dir(str_arg(args, 0)) as varnumber_T;
 }
+
+/// `browse({save}, {title}, {initdir}, {default})`: a stub -- there is no
+/// file dialog to open.
+///
+/// # Safety
+/// As [`f_executable`], arity 4.
 pub unsafe extern "C" fn f_browse(
-    mut _argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        (*rettv).v_type = VAR_STRING;
-    }
+    let (_, rettv) = frame!(argvars, rettv);
+    ret_string(rettv, ptr::null_mut());
 }
+
+/// `browsedir({title}, {initdir})`: the same stub.
+///
+/// # Safety
+/// As [`f_browse`], arity 2.
 pub unsafe extern "C" fn f_browsedir(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    fptr: EvalFuncData,
 ) {
-    unsafe {
-        f_browse(argvars, rettv, fptr);
-    }
+    // SAFETY: forwarded unchanged to a function with the same contract.
+    unsafe { f_browse(argvars, rettv, fptr) };
 }
+
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
