@@ -12,6 +12,8 @@
 //! - `parse` is the state machine that drives the other three, handing each
 //!   token to a handler in `operators`, `values`, `brackets` or `figure`.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 mod ast;
 mod brackets;
 mod figure;
@@ -27,7 +29,12 @@ pub use ast::{
 pub use lexer::viml_pexpr_next_token;
 pub use parse::viml_pexpr_parse;
 
-use ast::{east_set_error, node_lvl, viml_pexpr_handle_bop, viml_pexpr_new_node};
+use ast::{
+    ast_has_error, ast_root_slot, children_slot, east_set_error, next_slot, node_children,
+    node_fig, node_got_colon, node_lvl, node_next, node_start, node_type, set_node_children,
+    set_node_data, set_node_len, set_node_span, set_node_type, set_slot_node, slot_node, translate,
+    viml_pexpr_handle_bop, viml_pexpr_new_node,
+};
 use strings::{parse_quoted_string, shifted_pos};
 
 use crate::src::nvim::charset::{hex2nr, vim_str2nr};
@@ -39,7 +46,11 @@ use crate::src::nvim::os::libc::{abort, gettext};
 use crate::src::nvim::types::{
     ExprAST, ExprASTError, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, ExprVarScope,
-    ParserLine, ParserPosition, ParserState, float_T, size_t, uint8_t, uvarnumber_T,
+    ParserLine, ParserPosition, ParserState, expr_ast_node_data, expr_ast_node_data_ass,
+    expr_ast_node_data_cmp, expr_ast_node_data_env, expr_ast_node_data_fig,
+    expr_ast_node_data_fig_type_guesses, expr_ast_node_data_flt, expr_ast_node_data_num,
+    expr_ast_node_data_opt, expr_ast_node_data_reg, expr_ast_node_data_ter, expr_ast_node_data_var,
+    float_T, size_t, uint8_t, uvarnumber_T,
 };
 use crate::src::nvim::viml::parser::parser::{
     highlight_vec, viml_parser_advance, viml_parser_get_remaining_line, viml_parser_highlight,
@@ -124,6 +135,7 @@ pub union C2Rust_Unnamed_7 {
     pub num: C2Rust_Unnamed_9,
     pub ass: C2Rust_Unnamed_8,
 }
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_8 {
@@ -285,6 +297,7 @@ pub struct StringShift {
     pub escape_not_known: bool,
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+
 /// The slot `back` places down from the top of the AST stack; `back` of zero
 /// is the top. Panics on an empty stack, where the C read one slot before the
 /// buffer.

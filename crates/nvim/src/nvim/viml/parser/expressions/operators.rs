@@ -1,17 +1,19 @@
 //! Token handlers for the operators: the arithmetic, logical, comparison and
 //! assignment tokens, plus the ternary and the lambda arrow.
 
+#![forbid(unsafe_code)]
+
 use super::parse::{ExprParser, Flow, hl};
 use super::*;
 
 /// `+`: a unary sign where a value is wanted, an addition where an operator
 /// is.
-pub(super) unsafe fn plus(p: &mut ExprParser) -> Flow {
+pub(super) fn plus(p: &mut ExprParser) -> Flow {
     if p.want_node == kENodeValue {
         // Value level: assume unary operator.
         let node = p.new_node(kExprNodeUnaryPlus);
-        *p.top_node_p = node;
-        p.ast_stack.push(&raw mut (*node).children);
+        set_slot_node(p.top_node_p, node);
+        p.ast_stack.push(children_slot(node));
         p.hl_token(hl!(p, UnaryPlus));
     } else {
         let node = p.new_node(kExprNodeBinaryPlus);
@@ -24,12 +26,12 @@ pub(super) unsafe fn plus(p: &mut ExprParser) -> Flow {
 
 /// `-`: a unary sign where a value is wanted, a subtraction where an operator
 /// is.
-pub(super) unsafe fn minus(p: &mut ExprParser) -> Flow {
+pub(super) fn minus(p: &mut ExprParser) -> Flow {
     if p.want_node == kENodeValue {
         // Value level: assume unary operator.
         let node = p.new_node(kExprNodeUnaryMinus);
-        *p.top_node_p = node;
-        p.ast_stack.push(&raw mut (*node).children);
+        set_slot_node(p.top_node_p, node);
+        p.ast_stack.push(children_slot(node));
         p.hl_token(hl!(p, UnaryMinus));
     } else {
         let node = p.new_node(kExprNodeBinaryMinus);
@@ -41,7 +43,7 @@ pub(super) unsafe fn minus(p: &mut ExprParser) -> Flow {
 }
 
 /// `||`.
-pub(super) unsafe fn or(p: &mut ExprParser) -> Flow {
+pub(super) fn or(p: &mut ExprParser) -> Flow {
     p.add_value_if_missing(c"E15: Unexpected or operator: %.*s");
     let node = p.new_node(kExprNodeOr);
     p.hl_token(hl!(p, Or));
@@ -50,7 +52,7 @@ pub(super) unsafe fn or(p: &mut ExprParser) -> Flow {
 }
 
 /// `&&`.
-pub(super) unsafe fn and(p: &mut ExprParser) -> Flow {
+pub(super) fn and(p: &mut ExprParser) -> Flow {
     p.add_value_if_missing(c"E15: Unexpected and operator: %.*s");
     let node = p.new_node(kExprNodeAnd);
     p.hl_token(hl!(p, And));
@@ -59,10 +61,10 @@ pub(super) unsafe fn and(p: &mut ExprParser) -> Flow {
 }
 
 /// `*`, `/` and `%`.
-pub(super) unsafe fn multiplication(p: &mut ExprParser) -> Flow {
+pub(super) fn multiplication(p: &mut ExprParser) -> Flow {
     p.add_value_if_missing(c"E15: Unexpected multiplication-like operator: %.*s");
     let mut node = ::core::ptr::null_mut::<ExprASTNode>();
-    match p.cur_token.data.mul.type_0 {
+    match p.cur_token.multiplication_type() {
         kExprLexMulMul => {
             node = p.new_node(kExprNodeMultiplication);
             p.hl_token(hl!(p, Multiplication));
@@ -82,32 +84,39 @@ pub(super) unsafe fn multiplication(p: &mut ExprParser) -> Flow {
 }
 
 /// `!`.
-pub(super) unsafe fn not(p: &mut ExprParser) -> Flow {
+pub(super) fn not(p: &mut ExprParser) -> Flow {
     if p.want_node == kENodeOperator {
         return p.op_missing();
     }
     let node = p.new_node(kExprNodeNot);
-    *p.top_node_p = node;
-    p.ast_stack.push(&raw mut (*node).children);
+    set_slot_node(p.top_node_p, node);
+    p.ast_stack.push(children_slot(node));
     p.hl_token(hl!(p, Not));
     Flow::NextToken
 }
 
 /// `==`, `<`, `=~` and the rest, with their optional `#`/`?` case modifier.
-pub(super) unsafe fn comparison(p: &mut ExprParser) -> Flow {
+pub(super) fn comparison(p: &mut ExprParser) -> Flow {
     p.add_value_if_missing(c"E15: Expected value, got comparison operator: %.*s");
     let node = p.new_node(kExprNodeComparison);
-    if p.cur_token.type_0 == kExprLexInvalid {
-        (*node).data.cmp.ccs = kCCStrategyUseOption;
-        (*node).data.cmp.type_0 = kExprCmpEqual;
-        (*node).data.cmp.inv = false;
+    let cmp = if p.cur_token.type_0 == kExprLexInvalid {
+        expr_ast_node_data_cmp {
+            type_0: kExprCmpEqual,
+            ccs: kCCStrategyUseOption,
+            inv: false,
+        }
     } else {
-        (*node).data.cmp.ccs = p.cur_token.data.cmp.ccs;
-        (*node).data.cmp.type_0 = p.cur_token.data.cmp.type_0;
-        (*node).data.cmp.inv = p.cur_token.data.cmp.inv;
-    }
+        expr_ast_node_data_cmp {
+            type_0: p.cur_token.comparison().type_0,
+            ccs: p.cur_token.comparison().ccs,
+            inv: p.cur_token.comparison().inv,
+        }
+    };
+    set_node_data(node, expr_ast_node_data { cmp });
     p.add_op_node(node);
-    if p.cur_token.data.cmp.ccs != kCCStrategyUseOption {
+    // Note: the strategy read here is the *token's*, which for an invalid
+    // token is whatever the lexer left in `err`. The C reads the same bytes.
+    if p.cur_token.comparison().ccs != kCCStrategyUseOption {
         p.hl_at(
             p.cur_token.start,
             p.cur_token.len.wrapping_sub(1),
@@ -126,7 +135,7 @@ pub(super) unsafe fn comparison(p: &mut ExprParser) -> Flow {
 }
 
 /// `.`: concatenation, or a subscript when there is no spacing before it.
-pub(super) unsafe fn dot(p: &mut ExprParser) -> Flow {
+pub(super) fn dot(p: &mut ExprParser) -> Flow {
     p.add_value_if_missing(c"E15: Unexpected dot: %.*s");
     let node = if p.prev_token.type_0 == kExprLexSpacing {
         if p.cur_pt == kEPTAssignment {
@@ -146,29 +155,35 @@ pub(super) unsafe fn dot(p: &mut ExprParser) -> Flow {
 
 /// `?`: opens a ternary, whose second operand is a TernaryValue node waiting
 /// for its colon.
-pub(super) unsafe fn question(p: &mut ExprParser) -> Flow {
+pub(super) fn question(p: &mut ExprParser) -> Flow {
     p.add_value_if_missing(c"E15: Expected value, got question mark: %.*s");
     let node = p.new_node(kExprNodeTernary);
     p.add_op_node(node);
     p.hl_token(hl!(p, Ternary));
     let ter_val_node = p.new_node(kExprNodeTernaryValue);
-    (*ter_val_node).data.ter.got_colon = false;
-    debug_assert!(!(*node).children.is_null(), "cur_node->children != NULL");
+    set_node_data(
+        ter_val_node,
+        expr_ast_node_data {
+            ter: expr_ast_node_data_ter { got_colon: false },
+        },
+    );
+    let first = node_children(node);
+    debug_assert!(!first.is_null(), "cur_node->children != NULL");
     debug_assert!(
-        (*(*node).children).next.is_null(),
+        node_next(first).is_null(),
         "cur_node->children->next == NULL"
     );
     debug_assert!(
-        stack_top(&p.ast_stack, 0) == &raw mut (*(*node).children).next,
+        stack_top(&p.ast_stack, 0) == next_slot(first),
         "kv_last(ast_stack) == &cur_node->children->next"
     );
-    *stack_top(&p.ast_stack, 0) = ter_val_node;
-    p.ast_stack.push(&raw mut (*ter_val_node).children);
+    set_slot_node(stack_top(&p.ast_stack, 0), ter_val_node);
+    p.ast_stack.push(children_slot(ter_val_node));
     Flow::NextToken
 }
 
 /// `->`: closes a lambda's argument list, or is reported as misplaced.
-pub(super) unsafe fn arrow(p: &mut ExprParser) -> Flow {
+pub(super) fn arrow(p: &mut ExprParser) -> Flow {
     if p.cur_pt == kEPTLambdaArguments {
         p.pt_stack.truncate(p.pt_stack.len() - 1);
         debug_assert!(!p.pt_stack.is_empty(), "kv_size(pt_stack)");
@@ -178,31 +193,33 @@ pub(super) unsafe fn arrow(p: &mut ExprParser) -> Flow {
             p.ast_stack.truncate(p.ast_stack.len() - 1);
         }
         debug_assert!(!p.ast_stack.is_empty(), "kv_size(ast_stack) >= 1");
-        while (**stack_top(&p.ast_stack, 0)).type_0 != kExprNodeLambda
-            && (**stack_top(&p.ast_stack, 0)).type_0 != kExprNodeUnknownFigure
-        {
+        while !matches!(
+            node_type(slot_node(stack_top(&p.ast_stack, 0))),
+            kExprNodeLambda | kExprNodeUnknownFigure
+        ) {
             p.ast_stack.truncate(p.ast_stack.len() - 1);
         }
         debug_assert!(
-            *stack_top(&p.ast_stack, 0) == p.lambda_node,
+            slot_node(stack_top(&p.ast_stack, 0)) == p.lambda_node,
             "(*kv_last(ast_stack)) == lambda_node"
         );
         let lambda_node = p.lambda_node;
         p.select_figure_brace_type(lambda_node, kExprNodeLambda, hl!(p, Lambda));
         let node = p.new_node(kExprNodeArrow);
-        if (*lambda_node).children.is_null() {
+        let first = node_children(lambda_node);
+        if first.is_null() {
             debug_assert!(p.want_node == kENodeValue, "want_node == kENodeValue");
-            (*lambda_node).children = node;
-            p.ast_stack.push(&raw mut (*lambda_node).children);
+            set_node_children(lambda_node, node);
+            p.ast_stack.push(children_slot(lambda_node));
         } else {
             debug_assert!(
-                (*(*lambda_node).children).next.is_null(),
+                node_next(first).is_null(),
                 "lambda_node->children->next == NULL"
             );
-            (*(*lambda_node).children).next = node;
-            p.ast_stack.push(&raw mut (*(*lambda_node).children).next);
+            set_slot_node(next_slot(first), node);
+            p.ast_stack.push(next_slot(first));
         }
-        p.ast_stack.push(&raw mut (*node).children);
+        p.ast_stack.push(children_slot(node));
         p.lambda_node = ::core::ptr::null_mut::<ExprASTNode>();
     } else {
         // Only the first branch is valid.
@@ -217,7 +234,7 @@ pub(super) unsafe fn arrow(p: &mut ExprParser) -> Flow {
 }
 
 /// `=`, `+=`, `-=` and `.=`: only valid while parsing an assignment lvalue.
-pub(super) unsafe fn assignment(p: &mut ExprParser) -> Flow {
+pub(super) fn assignment(p: &mut ExprParser) -> Flow {
     if p.cur_pt == kEPTAssignment {
         p.pt_stack.truncate(p.pt_stack.len() - 1);
     } else if p.cur_pt == kEPTSingleAssignment {
@@ -230,8 +247,15 @@ pub(super) unsafe fn assignment(p: &mut ExprParser) -> Flow {
     debug_assert!(p.pt_top() == kEPTExpr, "kv_last(pt_stack) == kEPTExpr");
     p.add_value_if_missing(c"E15: Unexpected assignment: %.*s");
     let node = p.new_node(kExprNodeAssignment);
-    (*node).data.ass.type_0 = p.cur_token.data.ass.type_0;
-    match p.cur_token.data.ass.type_0 {
+    set_node_data(
+        node,
+        expr_ast_node_data {
+            ass: expr_ast_node_data_ass {
+                type_0: p.cur_token.assignment_type(),
+            },
+        },
+    );
+    match p.cur_token.assignment_type() {
         kExprAsgnPlain => p.hl_token(hl!(p, PlainAssignment)),
         kExprAsgnAdd => p.hl_token(hl!(p, AssignmentWithAddition)),
         kExprAsgnSubtract => p.hl_token(hl!(p, AssignmentWithSubtraction)),

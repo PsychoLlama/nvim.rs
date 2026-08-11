@@ -5,6 +5,8 @@
 //! position they either report a missing operator or, for a plain identifier
 //! with no scope, join the preceding identifier into a curly-braces name.
 
+#![forbid(unsafe_code)]
+
 use super::parse::{ExprParser, Flow, hl};
 use super::*;
 
@@ -16,50 +18,63 @@ static base_to_prefix_length: [uint8_t; 17] = [
 ];
 
 /// `@a`.
-pub(super) unsafe fn register(p: &mut ExprParser) -> Flow {
+pub(super) fn register(p: &mut ExprParser) -> Flow {
     if p.want_node == kENodeOperator {
         // Register in operator position: e.g. @a @a
         return p.op_missing();
     }
     let node = p.new_node(kExprNodeRegister);
-    (*node).data.reg.name = p.cur_token.data.reg.name;
-    *p.top_node_p = node;
+    set_node_data(
+        node,
+        expr_ast_node_data {
+            reg: expr_ast_node_data_reg {
+                name: p.cur_token.register_name(),
+            },
+        },
+    );
+    set_slot_node(p.top_node_p, node);
     p.want_node = kENodeOperator;
     p.hl_token(hl!(p, Register));
     Flow::NextToken
 }
 
 /// `&opt`, `&g:opt`, `&l:opt`.
-pub(super) unsafe fn option(p: &mut ExprParser) -> Flow {
+pub(super) fn option(p: &mut ExprParser) -> Flow {
     if p.want_node == kENodeOperator {
         return p.op_missing();
     }
     let node = p.new_node(kExprNodeOption);
-    if p.cur_token.type_0 == kExprLexInvalid {
+    let opt = if p.cur_token.type_0 == kExprLexInvalid {
+        // `&`, or `&x:` with an unknown scope letter: there is no name, so the
+        // node points just past the sigil and spans nothing.
+        let at = p.cur_token.start.col;
         assert!(
-            p.cur_token.len == 1
-                || p.cur_token.len == 3
-                    && *p.pline.data.add(p.cur_token.start.col.wrapping_add(2))
-                        as ::core::ffi::c_int
-                        == ':' as ::core::ffi::c_int,
+            p.cur_token.len == 1 || p.cur_token.len == 3 && p.line_byte(at.wrapping_add(2)) == b':',
             "cur_token.len == 1 || (cur_token.len == 3 && pline.data[cur_token.start.col + 2] == ':')"
         );
-        (*node).data.opt.ident = p.pline.data.add(p.cur_token.start.col).add(p.cur_token.len);
-        (*node).data.opt.ident_len = 0;
-        (*node).data.opt.scope = if p.cur_token.len == 3 {
-            *p.pline.data.add(p.cur_token.start.col.wrapping_add(1)) as ExprOptScope
-        } else {
-            kExprOptScopeUnspecified
-        };
+        expr_ast_node_data_opt {
+            ident: p.line_ptr(at.wrapping_add(p.cur_token.len)),
+            ident_len: 0,
+            scope: if p.cur_token.len == 3 {
+                p.line_byte(at.wrapping_add(1)) as ExprOptScope
+            } else {
+                kExprOptScopeUnspecified
+            },
+        }
     } else {
-        (*node).data.opt.ident = p.cur_token.data.opt.name;
-        (*node).data.opt.ident_len = p.cur_token.data.opt.len;
-        (*node).data.opt.scope = p.cur_token.data.opt.scope;
-    }
-    *p.top_node_p = node;
+        expr_ast_node_data_opt {
+            ident: p.cur_token.option().name,
+            ident_len: p.cur_token.option().len,
+            scope: p.cur_token.option().scope,
+        }
+    };
+    set_node_data(node, expr_ast_node_data { opt });
+    set_slot_node(p.top_node_p, node);
     p.want_node = kENodeOperator;
     p.hl_at(p.cur_token.start, 1, hl!(p, OptionSigil));
-    let scope_shift: size_t = if p.cur_token.data.opt.scope == kExprOptScopeUnspecified {
+    // Note: the scope read here is the *token's*, which for an invalid token
+    // is whatever the lexer left in `err`. The C reads the same bytes.
+    let scope_shift: size_t = if p.cur_token.option().scope == kExprOptScopeUnspecified {
         0
     } else {
         2
@@ -81,17 +96,20 @@ pub(super) unsafe fn option(p: &mut ExprParser) -> Flow {
 }
 
 /// `$VAR`.
-pub(super) unsafe fn environment(p: &mut ExprParser) -> Flow {
+pub(super) fn environment(p: &mut ExprParser) -> Flow {
     if p.want_node == kENodeOperator {
         return p.op_missing();
     }
     let node = p.new_node(kExprNodeEnvironment);
-    (*node).data.env.ident = p.pline.data.add(p.cur_token.start.col).offset(1);
-    (*node).data.env.ident_len = p.cur_token.len.wrapping_sub(1);
-    if (*node).data.env.ident_len == 0 {
+    let env = expr_ast_node_data_env {
+        ident: p.line_ptr(p.cur_token.start.col.wrapping_add(1)),
+        ident_len: p.cur_token.len.wrapping_sub(1),
+    };
+    set_node_data(node, expr_ast_node_data { env });
+    if env.ident_len == 0 {
         p.error(c"E15: Environment variable name missing");
     }
-    *p.top_node_p = node;
+    set_slot_node(p.top_node_p, node);
     p.want_node = kENodeOperator;
     p.hl_at(p.cur_token.start, 1, hl!(p, EnvironmentSigil));
     p.hl_at(
@@ -103,25 +121,47 @@ pub(super) unsafe fn environment(p: &mut ExprParser) -> Flow {
 }
 
 /// An integer or float literal — or a dictionary key, when it follows a dot.
-pub(super) unsafe fn number(p: &mut ExprParser) -> Flow {
+pub(super) fn number(p: &mut ExprParser) -> Flow {
     if p.want_node != kENodeValue {
         return p.op_missing();
     }
     let node = if p.node_is_key {
         let node = p.new_node(kExprNodePlainKey);
-        (*node).data.var.ident = p.pline.data.add(p.cur_token.start.col);
-        (*node).data.var.ident_len = p.cur_token.len;
+        set_node_data(
+            node,
+            expr_ast_node_data {
+                var: expr_ast_node_data_var {
+                    scope: kExprVarScopeMissing,
+                    ident: p.line_ptr(p.cur_token.start.col),
+                    ident_len: p.cur_token.len,
+                },
+            },
+        );
         p.hl_token(hl!(p, IdentifierKey));
         node
-    } else if p.cur_token.data.num.is_float {
+    } else if p.cur_token.number().is_float {
         let node = p.new_node(kExprNodeFloat);
-        (*node).data.flt.value = p.cur_token.data.num.val.floating;
+        set_node_data(
+            node,
+            expr_ast_node_data {
+                flt: expr_ast_node_data_flt {
+                    value: p.cur_token.number_float(),
+                },
+            },
+        );
         p.hl_token(hl!(p, Float));
         node
     } else {
         let node = p.new_node(kExprNodeInteger);
-        (*node).data.num.value = p.cur_token.data.num.val.integer;
-        let prefix_length = base_to_prefix_length[p.cur_token.data.num.base as usize] as size_t;
+        set_node_data(
+            node,
+            expr_ast_node_data {
+                num: expr_ast_node_data_num {
+                    value: p.cur_token.number_integer(),
+                },
+            },
+        );
+        let prefix_length = base_to_prefix_length[p.cur_token.number().base as usize] as size_t;
         p.hl_at(p.cur_token.start, prefix_length, hl!(p, NumberPrefix));
         p.hl_at(
             shifted_pos(p.cur_token.start, prefix_length),
@@ -131,16 +171,16 @@ pub(super) unsafe fn number(p: &mut ExprParser) -> Flow {
         node
     };
     p.want_node = kENodeOperator;
-    *p.top_node_p = node;
+    set_slot_node(p.top_node_p, node);
     Flow::NextToken
 }
 
 /// A bare or scoped identifier: `name`, `g:name`, or a dictionary key.
-pub(super) unsafe fn plain_identifier(p: &mut ExprParser) -> Flow {
+pub(super) fn plain_identifier(p: &mut ExprParser) -> Flow {
     let scope: ExprVarScope = if p.cur_token.type_0 == kExprLexInvalid {
         kExprVarScopeMissing
     } else {
-        p.cur_token.data.var.scope
+        p.cur_token.variable().scope
     };
     if p.want_node == kENodeValue {
         p.want_node = kENodeOperator;
@@ -149,11 +189,18 @@ pub(super) unsafe fn plain_identifier(p: &mut ExprParser) -> Flow {
         } else {
             kExprNodePlainIdentifier
         });
-        (*node).data.var.scope = scope;
         let scope_shift: size_t = if scope == kExprVarScopeMissing { 0 } else { 2 };
-        (*node).data.var.ident = p.pline.data.add(p.cur_token.start.col).add(scope_shift);
-        (*node).data.var.ident_len = p.cur_token.len.wrapping_sub(scope_shift);
-        *p.top_node_p = node;
+        set_node_data(
+            node,
+            expr_ast_node_data {
+                var: expr_ast_node_data_var {
+                    scope,
+                    ident: p.line_ptr(p.cur_token.start.col.wrapping_add(scope_shift)),
+                    ident_len: p.cur_token.len.wrapping_sub(scope_shift),
+                },
+            },
+        );
+        set_slot_node(p.top_node_p, node);
         if scope_shift != 0 {
             debug_assert!(!p.node_is_key, "!node_is_key");
             p.hl_at(p.cur_token.start, 1, hl!(p, IdentifierScope));
@@ -183,19 +230,26 @@ pub(super) unsafe fn plain_identifier(p: &mut ExprParser) -> Flow {
         return p.op_missing();
     };
     let node = p.new_node(kExprNodePlainIdentifier);
-    (*node).data.var.scope = scope;
-    (*node).data.var.ident = p.pline.data.add(p.cur_token.start.col);
-    (*node).data.var.ident_len = p.cur_token.len;
+    set_node_data(
+        node,
+        expr_ast_node_data {
+            var: expr_ast_node_data_var {
+                scope,
+                ident: p.line_ptr(p.cur_token.start.col),
+                ident_len: p.cur_token.len,
+            },
+        },
+    );
     p.want_node = kENodeOperator;
-    *slot = node;
+    set_slot_node(slot, node);
     p.hl_token(hl!(p, IdentifierName));
     Flow::NextToken
 }
 
 /// A single- or double-quoted string literal.
-pub(super) unsafe fn quoted_string(p: &mut ExprParser) -> Flow {
+pub(super) fn quoted_string(p: &mut ExprParser) -> Flow {
     let is_double = p.tok_type == kExprLexDoubleQuotedString;
-    if !p.cur_token.data.str.closed {
+    if !p.cur_token.string_is_closed() {
         // It is weird, but Vim has two identical error messages with different
         // error numbers: "E114: Missing quote" and "E115: Missing quote".
         p.error(if is_double {
@@ -212,8 +266,8 @@ pub(super) unsafe fn quoted_string(p: &mut ExprParser) -> Flow {
     } else {
         kExprNodeSingleQuotedString
     });
-    *p.top_node_p = node;
-    parse_quoted_string(p.pstate, node, p.cur_token, p.is_invalid);
+    set_slot_node(p.top_node_p, node);
+    p.decode_quoted_string(node);
     p.want_node = kENodeOperator;
     Flow::NextToken
 }

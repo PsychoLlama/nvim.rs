@@ -109,6 +109,27 @@ pub fn highlight_vec(colors: &mut ParserHighlight) -> InitVec<'_, ParserHighligh
     )
 }
 
+/// The `index`th line the reader has read. Every line the parser has seen
+/// stays in the collection for the duration of the parse, because tokens and
+/// AST nodes point into them.
+///
+/// The read goes through the inline array where the collection has not left
+/// it: `items` then holds the state's own address with whatever provenance
+/// `viml_parser_init` gave it, which nothing on this path can be sure of.
+pub fn reader_line(reader: &ParserInputReader, index: usize) -> ParserLine {
+    let lines = &reader.lines;
+    debug_assert!(
+        index < lines.size,
+        "the parser has not read that many lines"
+    );
+    if lines.items.cast_const() == lines.init_array.as_ptr() {
+        return lines.init_array[index];
+    }
+    // SAFETY: the collection is on the heap, where `items` carries the
+    // allocation's own provenance and addresses `size` lines.
+    unsafe { *lines.items.add(index) }
+}
+
 /// Start a parser over the lines `get_line` yields. `colors` may be null when
 /// the caller does not want highlighting.
 ///
@@ -278,10 +299,7 @@ pub fn viml_parser_destroy(pstate: &mut ParserState) {
     let stack = stack_vec(&mut pstate.stack).take_heap();
     // SAFETY: each buffer left the inline array through `InitVec`, so it is a
     // live allocation or null.
-    unsafe {
-        xfree(lines);
-        xfree(stack);
-    }
+    unsafe { [lines, stack].into_iter().for_each(|buffer| xfree(buffer)) };
 }
 
 /// A `ParserLineGetter` over a null-terminated array of ready-made lines; the

@@ -7,11 +7,43 @@
 //! brace's highlight chunk is rewritten each time the guess narrows, which is
 //! what `opening_hl_idx` is for.
 
+#![forbid(unsafe_code)]
+
 use super::parse::{ExprParser, Flow, hl, pt_is_assignment};
 use super::*;
 
-pub(super) unsafe fn figure_brace(p: &mut ExprParser) -> Flow {
-    if p.cur_token.data.brc.closing {
+/// The payload of a figure brace node whose brace has *not* been highlighted
+/// yet: the guesses still on the table, and the index the brace's highlight
+/// chunk is about to take, so that the guess can be recoloured as it narrows.
+///
+/// Upstream leaves `opening_hl_idx` uninitialised whenever the caller asked
+/// for no highlighting, and in the unexpected-closing-brace arm it leaves it
+/// uninitialised outright. Every read of it is behind the same `colors` check
+/// and the arm that reads it is unreachable for that node, so filling it in
+/// here is unobservable — and it is one read of uninitialised memory fewer.
+fn unhighlighted(
+    p: &ExprParser,
+    guesses: expr_ast_node_data_fig_type_guesses,
+) -> expr_ast_node_data_fig {
+    expr_ast_node_data_fig {
+        type_guesses: guesses,
+        opening_hl_idx: p.highlight_count().unwrap_or(0),
+    }
+}
+
+/// As [`unhighlighted`], for a brace whose chunk has just been recorded.
+fn highlighted(
+    p: &ExprParser,
+    guesses: expr_ast_node_data_fig_type_guesses,
+) -> expr_ast_node_data_fig {
+    expr_ast_node_data_fig {
+        type_guesses: guesses,
+        opening_hl_idx: p.highlight_count().map_or(0, |count| count - 1),
+    }
+}
+
+pub(super) fn figure_brace(p: &mut ExprParser) -> Flow {
+    if p.cur_token.is_closing() {
         return closing_figure_brace(p);
     }
     if p.want_node == kENodeValue {
@@ -22,23 +54,32 @@ pub(super) unsafe fn figure_brace(p: &mut ExprParser) -> Flow {
         let in_assignment = pt_is_assignment(p.cur_pt);
         let node = if in_assignment {
             let node = p.new_node(kExprNodeCurlyBracesIdentifier);
-            (*node).data.fig.type_guesses.allow_lambda = false;
-            (*node).data.fig.type_guesses.allow_dict = false;
-            (*node).data.fig.type_guesses.allow_ident = true;
+            let fig = highlighted(
+                p,
+                expr_ast_node_data_fig_type_guesses {
+                    allow_dict: false,
+                    allow_lambda: false,
+                    allow_ident: true,
+                },
+            );
+            set_node_data(node, expr_ast_node_data { fig });
             p.pt_stack.push(kEPTExpr);
             node
         } else {
             let node = p.new_node(kExprNodeUnknownFigure);
-            (*node).data.fig.type_guesses.allow_lambda = true;
-            (*node).data.fig.type_guesses.allow_dict = true;
-            (*node).data.fig.type_guesses.allow_ident = true;
+            let fig = highlighted(
+                p,
+                expr_ast_node_data_fig_type_guesses {
+                    allow_dict: true,
+                    allow_lambda: true,
+                    allow_ident: true,
+                },
+            );
+            set_node_data(node, expr_ast_node_data { fig });
             node
         };
-        if !(*p.pstate).colors.is_null() {
-            (*node).data.fig.opening_hl_idx = (*(*p.pstate).colors).size.wrapping_sub(1);
-        }
-        *p.top_node_p = node;
-        p.ast_stack.push(&raw mut (*node).children);
+        set_slot_node(p.top_node_p, node);
+        p.ast_stack.push(children_slot(node));
         if !in_assignment {
             // Upstream pushes kEPTLambdaArguments and arms `lambda_node`
             // unconditionally, but the assignment arm above has already decided
@@ -66,18 +107,23 @@ pub(super) unsafe fn figure_brace(p: &mut ExprParser) -> Flow {
             return p.op_missing();
         };
         let node = p.new_node(kExprNodeCurlyBracesIdentifier);
-        if !(*p.pstate).colors.is_null() {
-            (*node).data.fig.opening_hl_idx = (*(*p.pstate).colors).size;
-        }
-        (*node).data.fig.type_guesses.allow_lambda = false;
-        (*node).data.fig.type_guesses.allow_dict = false;
-        (*node).data.fig.type_guesses.allow_ident = true;
-        p.ast_stack.push(&raw mut (*node).children);
+        // The opening brace is highlighted at the end of this arm, so its
+        // chunk is the next one to be recorded.
+        let fig = unhighlighted(
+            p,
+            expr_ast_node_data_fig_type_guesses {
+                allow_dict: false,
+                allow_lambda: false,
+                allow_ident: true,
+            },
+        );
+        set_node_data(node, expr_ast_node_data { fig });
+        p.ast_stack.push(children_slot(node));
         if pt_is_assignment(p.cur_pt) {
             p.pt_stack.push(kEPTExpr);
         }
         p.want_node = kENodeValue;
-        *slot = node;
+        set_slot_node(slot, node);
         p.hl_token(hl!(p, Curly));
     }
     if pt_is_assignment(p.cur_pt) && !pt_is_assignment(p.pt_top()) {
@@ -88,7 +134,7 @@ pub(super) unsafe fn figure_brace(p: &mut ExprParser) -> Flow {
     Flow::NextToken
 }
 
-unsafe fn closing_figure_brace(p: &mut ExprParser) -> Flow {
+fn closing_figure_brace(p: &mut ExprParser) -> Flow {
     // Always drop the topmost value:
     //
     // 1. When want_node != kENodeValue the topmost item is a *finished* left
@@ -99,20 +145,28 @@ unsafe fn closing_figure_brace(p: &mut ExprParser) -> Flow {
     let mut unexpected = false;
     if p.ast_stack.is_empty() {
         let node = p.new_node(kExprNodeUnknownFigure);
-        (*node).data.fig.type_guesses.allow_lambda = false;
-        (*node).data.fig.type_guesses.allow_dict = false;
-        (*node).data.fig.type_guesses.allow_ident = false;
-        (*node).len = 0;
+        let fig = unhighlighted(
+            p,
+            expr_ast_node_data_fig_type_guesses {
+                allow_dict: false,
+                allow_lambda: false,
+                allow_ident: false,
+            },
+        );
+        set_node_data(node, expr_ast_node_data { fig });
+        set_node_len(node, 0);
         if p.want_node != kENodeValue {
-            (*node).children = *p.top_node_p;
+            set_node_children(node, slot_node(p.top_node_p));
         }
-        *p.top_node_p = node;
+        set_slot_node(p.top_node_p, node);
         new_top_node_p = p.top_node_p;
         unexpected = true;
     } else {
         if p.want_node == kENodeValue
-            && (**stack_top(&p.ast_stack, 0)).type_0 != kExprNodeUnknownFigure
-            && (**stack_top(&p.ast_stack, 0)).type_0 != kExprNodeComma
+            && !matches!(
+                node_type(slot_node(stack_top(&p.ast_stack, 0))),
+                kExprNodeUnknownFigure | kExprNodeComma
+            )
         {
             // The top being UnknownFigure may occur for an empty dictionary
             // literal, while Comma is expected in a non-empty one.
@@ -123,29 +177,32 @@ unsafe fn closing_figure_brace(p: &mut ExprParser) -> Flow {
             slot = p.ast_stack.pop().expect("the stack is not empty");
             if !(!p.ast_stack.is_empty()
                 && (slot.is_null()
-                    || (**slot).type_0 != kExprNodeUnknownFigure
-                        && (**slot).type_0 != kExprNodeDictLiteral
-                        && (**slot).type_0 != kExprNodeCurlyBracesIdentifier
-                        && (**slot).type_0 != kExprNodeLambda))
+                    || !matches!(
+                        node_type(slot_node(slot)),
+                        kExprNodeUnknownFigure
+                            | kExprNodeDictLiteral
+                            | kExprNodeCurlyBracesIdentifier
+                            | kExprNodeLambda
+                    )))
             {
                 break;
             }
         }
         new_top_node_p = slot;
-        let new_top_node = *new_top_node_p;
-        match (*new_top_node).type_0 {
+        let new_top_node = slot_node(new_top_node_p);
+        match node_type(new_top_node) {
             kExprNodeUnknownFigure => {
-                if (*new_top_node).children.is_null() {
+                if node_children(new_top_node).is_null() {
                     // No children of a curly braces node indicates an empty
                     // dictionary.
                     debug_assert!(p.want_node == kENodeValue, "want_node == kENodeValue");
                     debug_assert!(
-                        (*new_top_node).data.fig.type_guesses.allow_dict,
+                        node_fig(new_top_node).type_guesses.allow_dict,
                         "new_top_node->data.fig.type_guesses.allow_dict"
                     );
                     p.select_figure_brace_type(new_top_node, kExprNodeDictLiteral, hl!(p, Dict));
                     p.hl_token(hl!(p, Dict));
-                } else if (*new_top_node).data.fig.type_guesses.allow_ident {
+                } else if node_fig(new_top_node).type_guesses.allow_ident {
                     p.select_figure_brace_type(
                         new_top_node,
                         kExprNodeCurlyBracesIdentifier,
@@ -157,15 +214,11 @@ unsafe fn closing_figure_brace(p: &mut ExprParser) -> Flow {
                     // guessed, but it definitely is not a curly braces name,
                     // then it is invalid for sure.
                     p.error_at(
-                        gettext(c"E15: Don't know what figure brace means: %.*s".as_ptr()),
-                        (*new_top_node).start,
+                        translate(c"E15: Don't know what figure brace means: %.*s"),
+                        node_start(new_top_node),
                     );
-                    if !(*p.pstate).colors.is_null() {
-                        // Reset the opening brace to NvimInvalidFigureBrace.
-                        highlight_vec(&mut *(*p.pstate).colors).as_mut_slice()
-                            [(*new_top_node).data.fig.opening_hl_idx]
-                            .group = hl!(p, FigureBrace);
-                    }
+                    // Reset the opening brace to NvimInvalidFigureBrace.
+                    p.recolour(node_fig(new_top_node).opening_hl_idx, hl!(p, FigureBrace));
                     p.hl_token(hl!(p, FigureBrace));
                 }
             }
