@@ -7,6 +7,18 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote what was left of the expression layer: the Vimscript expression
+  lexer, string decoder and parser behind `nvim_parse_expression`, the
+  filesystem builtins from `fnamemodify()` and `glob()` through
+  `readfile()`/`writefile()` and the directory family, the
+  list/dict/blob builtins (`filter()`, `map()`, `count()`, `extend()`,
+  `insert()`, `remove()`, `reverse()` and friends), JSON and msgpack
+  encoding, and the character-class tables and cursor-position
+  arithmetic the editor asks about every character it draws or moves
+  over.
+
 ## [2026.08.11-3d48beea07]
 
 ### Changed
