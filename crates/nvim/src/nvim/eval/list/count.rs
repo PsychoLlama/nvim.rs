@@ -1,272 +1,180 @@
 //! Counting, and the one-item append -- `count()` and `add()`.
 //!
-//! `f_count` dispatches to `count_string`, `count_list` or `count_dict`; the
-//! String form is the interesting one, since it counts *overlapping-free*
-//! occurrences of a substring and honours `ic` with `mb_strnicmp`, so it has to
-//! step by whole characters rather than bytes.  `f_add` is here because it is
-//! the other builtin whose whole job is the container's length.
+//! `f_count` dispatches to [`count_string`], [`count_list`] or
+//! [`count_dict`]; the String form is the interesting one, since it counts
+//! *non-overlapping* occurrences of a substring and honours `ic` with
+//! multibyte-aware folding, so it has to step by whole characters rather
+//! than bytes.  `f_add` is here because it is the other builtin whose whole
+//! job is the container's length.
 //!
 //! Original: `src/nvim/eval/list.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{NUL, TV_TRANSLATE, e_argument_of_str_must_be_list_string_or_dictionary, false_0};
-use crate::semsg_c;
-use crate::src::nvim::eval::typval::{
-    tv_copy, tv_equal, tv_get_number_chk, tv_get_string_chk, tv_list_append_tv, tv_list_find,
-    value_check_lock,
+use core::ffi::c_int;
+
+use super::{
+    Args, Container, Dict, List, char_len, check_lock, copy_tv, cstr_of_chk, err,
+    err_not_countable, err_nr, number_of, starts_with_ic, string_bytes,
 };
-use crate::src::nvim::eval::typval::{tv_list_len, tv_list_locked};
-use crate::src::nvim::garray::ga_append;
-use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::main::{e_invarg, e_list_index_out_of_range_nr, e_listblobreq};
-use crate::src::nvim::mbyte::{mb_strnicmp, utfc_ptr2len};
-use crate::src::nvim::message::emsg;
-use crate::src::nvim::os::libc::{strlen, strstr};
-use crate::src::nvim::types::{
-    EvalFuncData, VAR_BLOB, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, blob_T, dict_T,
-    dictitem_T, hashitem_T, hashtab_T, int64_t, list_T, listitem_T, size_t, typval_T, uint8_t,
-    varnumber_T,
-};
+use crate::src::nvim::types::{EvalFuncData, int64_t, typval_T, uint8_t, varnumber_T};
 
-pub unsafe extern "C" fn f_add(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        (*rettv).vval.v_number = 1 as varnumber_T;
-        if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let l: *mut list_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
-                .vval
-                .v_list;
-            if !value_check_lock(
-                tv_list_locked(l),
-                c"add() argument".as_ptr(),
-                TV_TRANSLATE as size_t,
-            ) {
-                tv_list_append_tv(l, argvars.offset(1 as ::core::ffi::c_int as isize));
-                tv_copy(argvars.offset(0 as ::core::ffi::c_int as isize), rettv);
+/// `add(container, item)`: append one item to a List or one byte to a Blob.
+///
+/// # Safety
+/// `argvars` is the evaluator's own argument vector, arity 2, and `rettv` a
+/// cleared result.
+pub unsafe extern "C" fn f_add(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    // SAFETY: the caller's contract.
+    let (args, rettv) = unsafe { (Args::new(argvars), &mut *rettv) };
+    // Default: failed.
+    rettv.vval.v_number = 1;
+    match Container::of(args.at(0)) {
+        Container::List(l) => {
+            if !check_lock(l.locked(), c"add() argument") {
+                l.append_tv(args.at(1));
+                copy_tv(args.at(0), rettv);
             }
-        } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            == VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let b: *mut blob_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
-                .vval
-                .v_blob;
-            if !b.is_null()
-                && !value_check_lock(
-                    (*b).bv_lock,
-                    c"add() argument".as_ptr(),
-                    TV_TRANSLATE as size_t,
-                )
-            {
-                let mut error: bool = false_0 != 0;
-                let n: varnumber_T = tv_get_number_chk(
-                    argvars.offset(1 as ::core::ffi::c_int as isize),
-                    &raw mut error,
-                );
+        }
+        Container::Blob(b) => {
+            if !b.is_null() && !check_lock(b.lock(), c"add() argument") {
+                let mut error = false;
+                let n = number_of(args.at(1), &mut error);
                 if !error {
-                    ga_append(&raw mut (*b).bv_ga, n as uint8_t);
-                    tv_copy(argvars.offset(0 as ::core::ffi::c_int as isize), rettv);
+                    b.push(n as uint8_t);
+                    copy_tv(args.at(0), rettv);
                 }
             }
-        } else {
-            emsg(
-                &raw const e_listblobreq as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            );
-        };
+        }
+        _ => err(&e_listblobreq),
     }
 }
 
-unsafe extern "C" fn count_string(
-    mut haystack: *const ::core::ffi::c_char,
-    mut needle: *const ::core::ffi::c_char,
-    mut ic: bool,
-) -> varnumber_T {
-    unsafe {
-        let mut n: varnumber_T = 0 as varnumber_T;
-        let mut p: *const ::core::ffi::c_char = haystack;
-        if p.is_null() || needle.is_null() || *needle as ::core::ffi::c_int == NUL {
-            return 0 as varnumber_T;
-        }
-        let mut needlelen: size_t = strlen(needle);
-        if ic {
-            while *p as ::core::ffi::c_int != NUL {
-                if mb_strnicmp(p, needle, needlelen) == 0 as ::core::ffi::c_int {
-                    n += 1;
-                    p = p.add(needlelen);
-                } else {
-                    p = p.offset(utfc_ptr2len(p as *mut ::core::ffi::c_char) as isize);
-                }
-            }
-        } else {
-            let mut next: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-            loop {
-                next = strstr(p, needle);
-                if next.is_null() {
-                    break;
-                }
+/// How many times `needle` occurs in `hay`, counting non-overlapping
+/// matches; `ic` ignores case.
+///
+/// The `ic` walk steps a whole character at a time, because folding is
+/// per character and a byte-wise scan would find matches inside a multibyte
+/// sequence.
+fn count_string(hay: &[u8], needle: &[u8], ic: bool) -> varnumber_T {
+    if needle.is_empty() {
+        return 0;
+    }
+    let mut n = 0;
+    let mut at = 0;
+    if ic {
+        while at < hay.len() {
+            if starts_with_ic(&hay[at..], needle) {
                 n += 1;
-                p = next.add(needlelen);
+                // A case-insensitive match may be *shorter* than the needle
+                // -- two of Unicode's folds change a character's length --
+                // so the skip is clamped to what is left.  Upstream adds the
+                // needle's length unconditionally and reads past the
+                // terminator when the match ended the string.
+                at = (at + needle.len()).min(hay.len());
+            } else {
+                at += char_len(&hay[at..]).min(hay.len() - at);
             }
         }
-        return n;
-    }
-}
-
-unsafe extern "C" fn count_list(
-    mut l: *mut list_T,
-    mut needle: *mut typval_T,
-    mut idx: int64_t,
-    mut ic: bool,
-) -> varnumber_T {
-    unsafe {
-        if tv_list_len(l) == 0 as ::core::ffi::c_int {
-            return 0 as varnumber_T;
-        }
-        let mut li: *mut listitem_T = tv_list_find(l, idx as ::core::ffi::c_int);
-        if li.is_null() {
-            semsg_c!(
-                &raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                idx,
-            );
-            return 0 as varnumber_T;
-        }
-        let mut n: varnumber_T = 0 as varnumber_T;
-        while !li.is_null() {
-            if tv_equal(&raw mut (*li).li_tv, needle, ic) {
+    } else {
+        while at + needle.len() <= hay.len() {
+            if &hay[at..at + needle.len()] == needle {
                 n += 1;
+                at += needle.len();
+            } else {
+                at += 1;
             }
-            li = (*li).li_next;
         }
-        return n;
     }
+    n
 }
 
-unsafe extern "C" fn count_dict(
-    mut d: *mut dict_T,
-    mut needle: *mut typval_T,
-    mut ic: bool,
-) -> varnumber_T {
-    unsafe {
-        if d.is_null() {
-            return 0 as varnumber_T;
-        }
-        let mut n: varnumber_T = 0 as varnumber_T;
-        let dihi_ht_: *mut hashtab_T = &raw mut (*d).dv_hashtab;
-        let mut dihi_todo_: size_t = (*dihi_ht_).ht_used;
-        let mut dihi_: *mut hashitem_T = (*dihi_ht_).ht_array;
-        while dihi_todo_ != 0 {
-            if !((*dihi_).hi_key.is_null()
-                || (*dihi_).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
-            {
-                dihi_todo_ = dihi_todo_.wrapping_sub(1);
-                let di: *mut dictitem_T = (*dihi_)
-                    .hi_key
-                    .offset(-(17 as ::core::ffi::c_ulong as isize))
-                    as *mut dictitem_T;
-                if tv_equal(&raw mut (*di).di_tv, needle, ic) {
-                    n += 1;
-                }
-            }
-            dihi_ = dihi_.offset(1);
-        }
-        return n;
+/// How many items of `l` from index `idx` on equal `needle`.
+fn count_list(l: List, needle: &mut typval_T, idx: int64_t, ic: bool) -> varnumber_T {
+    if l.len() == 0 {
+        return 0;
     }
+    let Some(first) = l.find(idx as c_int) else {
+        err_nr(&e_list_index_out_of_range_nr, idx);
+        return 0;
+    };
+
+    let mut n = 0;
+    let mut cur = Some(first);
+    while let Some(li) = cur {
+        if li.equals(needle, ic) {
+            n += 1;
+        }
+        cur = li.next();
+    }
+    n
 }
 
+/// How many values of `d` equal `needle`.
+fn count_dict(d: Dict, needle: &mut typval_T, ic: bool) -> varnumber_T {
+    if d.is_null() {
+        return 0;
+    }
+    let mut n = 0;
+    for di in d.items() {
+        if di.equals(needle, ic) {
+            n += 1;
+        }
+    }
+    n
+}
+
+/// `count(container, expr [, ic [, start]])`: how many times `expr` occurs.
+///
+/// `start` is a List-only index to begin at, and asking a Dict for one is
+/// `E474` -- which is why the two optional arguments are read in this order
+/// and not as a pair.
+///
+/// # Safety
+/// `argvars` is the evaluator's own argument vector, arity 2..4, and `rettv`
+/// a cleared result.
 pub unsafe extern "C" fn f_count(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        let mut n: varnumber_T = 0 as varnumber_T;
-        let mut ic: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut error: bool = false_0 != 0;
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            ic = tv_get_number_chk(
-                argvars.offset(2 as ::core::ffi::c_int as isize),
-                &raw mut error,
-            ) as ::core::ffi::c_int;
-        }
-        if !error
-            && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            n = count_string(
-                (*argvars.offset(0 as ::core::ffi::c_int as isize))
-                    .vval
-                    .v_string,
-                tv_get_string_chk(argvars.offset(1 as ::core::ffi::c_int as isize)),
-                ic != 0,
-            );
-        } else if !error
-            && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut idx: int64_t = 0 as int64_t;
-            if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                    != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                idx = tv_get_number_chk(
-                    argvars.offset(3 as ::core::ffi::c_int as isize),
-                    &raw mut error,
-                );
-            }
-            if !error {
-                n = count_list(
-                    (*argvars.offset(0 as ::core::ffi::c_int as isize))
-                        .vval
-                        .v_list,
-                    argvars.offset(1 as ::core::ffi::c_int as isize),
-                    idx,
-                    ic != 0,
-                );
-            }
-        } else if !error
-            && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut d: *mut dict_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
-                .vval
-                .v_dict;
-            if !d.is_null() {
-                if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                    != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                    && (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type
-                        as ::core::ffi::c_uint
-                        != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    emsg(
-                        &raw const e_invarg as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
-                    );
-                } else {
-                    n = count_dict(
-                        (*argvars.offset(0 as ::core::ffi::c_int as isize))
-                            .vval
-                            .v_dict,
-                        argvars.offset(1 as ::core::ffi::c_int as isize),
-                        ic != 0,
-                    );
+    // SAFETY: the caller's contract.
+    let (args, rettv) = unsafe { (Args::new(argvars), &mut *rettv) };
+    let mut error = false;
+    let ic = args.has(2) && number_of(args.at(2), &mut error) != 0;
+
+    let mut n = 0;
+    if !error {
+        match Container::of(args.at(0)) {
+            Container::Str(_) => {
+                let hay = string_bytes(args.at(0));
+                if let Some(needle) = cstr_of_chk(args.at(1)) {
+                    n = count_string(hay, needle.to_bytes(), ic);
                 }
             }
-        } else if !error {
-            semsg_c!(
-                e_argument_of_str_must_be_list_string_or_dictionary.as_ptr()
-                    as *mut ::core::ffi::c_char,
-                c"count()".as_ptr(),
-            );
+            Container::List(l) => {
+                // `start` is only looked at when `ic` was passed too.
+                let idx = if args.has(2) && args.has(3) {
+                    number_of(args.at(3), &mut error)
+                } else {
+                    0
+                };
+                if !error {
+                    n = count_list(l, args.at(1), idx, ic);
+                }
+            }
+            Container::Dict(d) if !d.is_null() => {
+                if args.has(2) && args.has(3) {
+                    err(&e_invarg);
+                } else {
+                    n = count_dict(d, args.at(1), ic);
+                }
+            }
+            // A NULL Dict answers zero without looking at the arguments.
+            Container::Dict(_) => {}
+            _ => err_not_countable(c"count()"),
         }
-        (*rettv).vval.v_number = n;
     }
+    rettv.vval.v_number = n;
 }

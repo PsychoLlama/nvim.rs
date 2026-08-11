@@ -1,6 +1,6 @@
 {
   "internal_exports": 25,
-  "files_without_forbid_unsafe": 972,
+  "files_without_forbid_unsafe": 971,
   "files_without_deny_unsafe_op": 104,
   "files": {
     "crates/nvim/src/cjson/lua_cjson.rs": {"unsafe_lines": 54},
@@ -266,11 +266,10 @@
     "crates/nvim/src/nvim/eval/funcs/variables.rs": {"cell_ptr": 2, "unsafe_lines": 120},
     "crates/nvim/src/nvim/eval/funcs/wrappers.rs": {"cell_ptr": 11, "unsafe_lines": 260},
     "crates/nvim/src/nvim/eval/gc.rs": {"no_mangle": 1},
-    "crates/nvim/src/nvim/eval/list.rs": {"unsafe_lines": 74},
-    "crates/nvim/src/nvim/eval/list/count.rs": {"unsafe_lines": 206},
-    "crates/nvim/src/nvim/eval/list/extend.rs": {"unsafe_lines": 305},
-    "crates/nvim/src/nvim/eval/list/filtermap.rs": {"cell_ptr": 1, "unsafe_lines": 191},
-    "crates/nvim/src/nvim/eval/list/filtermap/containers.rs": {"unsafe_lines": 378},
+    "crates/nvim/src/nvim/eval/list.rs": {"unsafe_lines": 73},
+    "crates/nvim/src/nvim/eval/list/count.rs": {"unsafe_lines": 2},
+    "crates/nvim/src/nvim/eval/list/extend.rs": {"unsafe_lines": 3},
+    "crates/nvim/src/nvim/eval/list/filtermap.rs": {"unsafe_lines": 5},
     "crates/nvim/src/nvim/eval/lval.rs": {"cell_ptr": 2, "unsafe_lines": 565},
     "crates/nvim/src/nvim/eval/name.rs": {"unsafe_lines": 232},
     "crates/nvim/src/nvim/eval/pattern.rs": {"cell_ptr": 2, "unsafe_lines": 109},
