@@ -13,8 +13,10 @@ use crate::src::nvim::types::{
 /// lookup over their names. Regenerate with `just apigen`.
 mod table;
 
-/// The call frame a builtin body is handed.
-mod args;
+/// The call frame a builtin body is handed.  Crate-visible because the
+/// builtins are not all under this module: the fs family lives in
+/// `eval::fs`, and there is no reason for it to grow a second `Args`.
+pub(crate) mod args;
 /// The dispatch layer and the wrappers whole groups of rows point at.
 mod wrappers;
 

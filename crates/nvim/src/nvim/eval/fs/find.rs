@@ -9,21 +9,32 @@
 //! optionally filtering each entry through a callback that `readdir_checkitem`
 //! evaluates (so the filter re-enters the evaluator on every name).
 //!
+//! Each of the four answers either one string or a List of them, decided by a
+//! flag argument before anything is expanded -- which is why the List has to
+//! be reachable from `rettv` (as [`RetList`]) rather than held as a local.
+//!
+//! # What holds the results
+//!
+//! [`Expand`] is the wildcard expander and [`StrArray`] the `garray_T` of
+//! owned strings `globpath()` and `readdir_core` fill; both hand out their
+//! names as a slice, and [`StrArray`] frees itself, which is upstream's
+//! `ga_clear_strings` on every path out.  **The order of those names is
+//! behaviour** -- `readdir_core` and `gen_expand_wildcards` sort them
+//! themselves -- so nothing here re-orders anything.
+//!
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    EXPAND_FILES, FAIL, FINDFILE_DIR, FINDFILE_FILE, NUL, OK, WILD_ALL, WILD_ALL_KEEP,
+    Args, EXPAND_FILES, FAIL, FINDFILE_DIR, FINDFILE_FILE, OK, RetList, WILD_ALL, WILD_ALL_KEEP,
     WILD_ALLLINKS, WILD_ICASE, WILD_IGNORE_COMPLETESLASH, WILD_KEEP_ALL, WILD_SILENT, WILD_USE_NL,
-    XP_PREFIX_NONE, false_0, kDirectionNotSet, true_0,
+    XP_PREFIX_NONE, frame, kDirectionNotSet, nr_arg, numbuf, ret_string, str_arg, str_arg_buf,
 };
 use crate::src::nvim::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne, globpath};
 use crate::src::nvim::eval::eval_expr_typval;
-use crate::src::nvim::eval::typval::tv_list_set_ret;
 use crate::src::nvim::eval::typval::{
-    tv_clear, tv_get_number_chk, tv_get_string, tv_get_string_buf_chk, tv_list_alloc_ret,
-    tv_list_append_string,
+    TV_INITIAL_VALUE, tv_clear, tv_get_number_chk, tv_list_set_ret,
 };
 use crate::src::nvim::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
 use crate::src::nvim::file_search::{find_file_in_path_option, vim_findfile_cleanup};
@@ -31,160 +42,31 @@ use crate::src::nvim::fileio::readdir_core;
 use crate::src::nvim::garray::{ga_clear_strings, ga_concat_strings, ga_init};
 use crate::src::nvim::main::{curbuf, p_path, p_wic};
 use crate::src::nvim::memory::xfree;
-use crate::src::nvim::os::libc::strlen;
 use crate::src::nvim::types::{
-    EvalFuncData, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_VAL, expand_T, garray_T,
-    kListLenUnknown, list_T, pos_T, ptrdiff_t, sctx_T, size_t, ssize_t, typval_T,
-    typval_vval_union, varnumber_T,
+    EvalFuncData, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VV_VAL, expand_T, garray_T, kListLenUnknown,
+    pos_T, ptrdiff_t, sctx_T, size_t, typval_T, varnumber_T,
 };
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ptr;
+use core::slice;
 
-unsafe extern "C" fn findfilendir(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut find_what: ::core::ffi::c_int,
-) {
-    unsafe {
-        let mut fresult: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut path: *mut ::core::ffi::c_char =
-            if *(*curbuf.get()).b_p_path as ::core::ffi::c_int == NUL {
-                p_path.get()
-            } else {
-                (*curbuf.get()).b_p_path
-            };
-        let mut count: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-        let mut first: bool = true_0 != 0;
-        let mut error: bool = false_0 != 0;
-        (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        (*rettv).v_type = VAR_STRING;
-        let mut fname: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let mut pathbuf: [::core::ffi::c_char; 65] = [0; 65];
-        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut p: *const ::core::ffi::c_char = tv_get_string_buf_chk(
-                argvars.offset(1 as ::core::ffi::c_int as isize),
-                &raw mut pathbuf as *mut ::core::ffi::c_char,
-            );
-            if p.is_null() {
-                error = true_0 != 0;
-            } else {
-                if *p as ::core::ffi::c_int != NUL {
-                    path = p as *mut ::core::ffi::c_char;
-                }
-                if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                    != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    count = tv_get_number_chk(
-                        argvars.offset(2 as ::core::ffi::c_int as isize),
-                        &raw mut error,
-                    ) as ::core::ffi::c_int;
-                }
-            }
-        }
-        if count < 0 as ::core::ffi::c_int {
-            tv_list_alloc_ret(rettv, kListLenUnknown as ::core::ffi::c_int as ptrdiff_t);
-        }
-        if *fname as ::core::ffi::c_int != NUL && !error {
-            let mut file_to_find: *mut ::core::ffi::c_char =
-                ::core::ptr::null_mut::<::core::ffi::c_char>();
-            let mut search_ctx: *mut ::core::ffi::c_char =
-                ::core::ptr::null_mut::<::core::ffi::c_char>();
-            loop {
-                if (*rettv).v_type as ::core::ffi::c_uint
-                    == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                    || (*rettv).v_type as ::core::ffi::c_uint
-                        == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    xfree(fresult as *mut ::core::ffi::c_void);
-                }
-                fresult = find_file_in_path_option(
-                    if first as ::core::ffi::c_int != 0 {
-                        fname as *mut ::core::ffi::c_char
-                    } else {
-                        ::core::ptr::null_mut::<::core::ffi::c_char>()
-                    },
-                    if first as ::core::ffi::c_int != 0 {
-                        strlen(fname)
-                    } else {
-                        0 as size_t
-                    },
-                    0 as ::core::ffi::c_int,
-                    first,
-                    path,
-                    find_what,
-                    (*curbuf.get()).b_ffname,
-                    (if find_what == FINDFILE_DIR as ::core::ffi::c_int {
-                        c"".as_ptr()
-                    } else {
-                        (*curbuf.get()).b_p_sua as *const ::core::ffi::c_char
-                    }) as *mut ::core::ffi::c_char,
-                    &raw mut file_to_find,
-                    &raw mut search_ctx,
-                );
-                first = false_0 != 0;
-                if !fresult.is_null()
-                    && (*rettv).v_type as ::core::ffi::c_uint
-                        == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    tv_list_append_string((*rettv).vval.v_list, fresult, -1 as ssize_t);
-                }
-                if !(((*rettv).v_type as ::core::ffi::c_uint
-                    == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-                    || {
-                        count -= 1;
-                        count > 0 as ::core::ffi::c_int
-                    })
-                    && !fresult.is_null())
-                {
-                    break;
-                }
-            }
-            xfree(file_to_find as *mut ::core::ffi::c_void);
-            vim_findfile_cleanup(search_ctx as *mut ::core::ffi::c_void);
-        }
-        if (*rettv).v_type as ::core::ffi::c_uint
-            == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            (*rettv).vval.v_string = fresult;
-        }
-    }
-}
+// ---------------------------------------------------------------------
+// The two things that hold the names found
+// ---------------------------------------------------------------------
 
-pub unsafe extern "C" fn f_finddir(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        findfilendir(argvars, rettv, FINDFILE_DIR as ::core::ffi::c_int);
-    }
-}
+/// The wildcard expander, over file names.
+struct Expand(expand_T);
 
-pub unsafe extern "C" fn f_findfile(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        findfilendir(argvars, rettv, FINDFILE_FILE as ::core::ffi::c_int);
-    }
-}
-
-pub unsafe extern "C" fn f_glob(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        let mut options: ::core::ffi::c_int =
-            WILD_SILENT as ::core::ffi::c_int | WILD_USE_NL as ::core::ffi::c_int;
-        let mut xpc: expand_T = expand_T {
-            xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+impl Expand {
+    /// A fresh expander with 'wildignorecase' folded into the caller's
+    /// options, as `glob()` wants it.
+    fn new() -> Self {
+        let mut xpc = expand_T {
+            xp_pattern: ptr::null_mut(),
             xp_context: 0,
             xp_pattern_len: 0,
             xp_prefix: XP_PREFIX_NONE,
-            xp_arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            xp_arg: ptr::null_mut(),
             xp_luaref: 0,
             xp_script_ctx: sctx_T {
                 sc_sid: 0,
@@ -197,9 +79,9 @@ pub unsafe extern "C" fn f_glob(
             xp_numfiles: 0,
             xp_col: 0,
             xp_selected: 0,
-            xp_orig: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            xp_files: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-            xp_line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            xp_orig: ptr::null_mut(),
+            xp_files: ptr::null_mut(),
+            xp_line: ptr::null_mut(),
             xp_buf: [0; 256],
             xp_search_dir: kDirectionNotSet,
             xp_pre_incsearch_pos: pos_T {
@@ -208,266 +90,424 @@ pub unsafe extern "C" fn f_glob(
                 coladd: 0,
             },
         };
-        let mut error: bool = false_0 != 0;
-        (*rettv).v_type = VAR_STRING;
-        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            if tv_get_number_chk(
-                argvars.offset(1 as ::core::ffi::c_int as isize),
-                &raw mut error,
-            ) != 0
-            {
-                options |= WILD_KEEP_ALL as ::core::ffi::c_int;
-            }
-            if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                if tv_get_number_chk(
-                    argvars.offset(2 as ::core::ffi::c_int as isize),
-                    &raw mut error,
-                ) != 0
-                {
-                    tv_list_set_ret(rettv, ::core::ptr::null_mut::<list_T>());
-                }
-                if (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                    != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                    && tv_get_number_chk(
-                        argvars.offset(3 as ::core::ffi::c_int as isize),
-                        &raw mut error,
-                    ) != 0
-                {
-                    options |= WILD_ALLLINKS as ::core::ffi::c_int;
-                }
-            }
+        // SAFETY: a fresh local, which is all `ExpandInit` writes over.
+        unsafe { ExpandInit(&raw mut xpc) };
+        xpc.xp_context = EXPAND_FILES as c_int;
+        Self(xpc)
+    }
+
+    /// Expand `pat`.  `WILD_ALL` answers the matches joined into the string
+    /// this returns; `WILD_ALL_KEEP` leaves them in [`Expand::files`].
+    fn one(&mut self, pat: &CStr, options: c_int, mode: c_int) -> *mut c_char {
+        let (p, orig) = (pat.as_ptr().cast_mut(), ptr::null_mut());
+        // SAFETY: an initialised expander and a NUL-terminated pattern, which
+        // `ExpandOne` only reads; a NULL `orig` asks for no old match.
+        unsafe { ExpandOne(&raw mut self.0, p, orig, options, mode) }
+    }
+
+    /// The names a `WILD_ALL_KEEP` expansion left behind, in the order
+    /// `gen_expand_wildcards` sorted them into.
+    fn files(&self) -> &[*mut c_char] {
+        if self.0.xp_numfiles <= 0 {
+            return &[];
         }
-        if !error {
-            ExpandInit(&raw mut xpc);
-            xpc.xp_context = EXPAND_FILES as ::core::ffi::c_int;
-            if p_wic.get() != 0 {
-                options += WILD_ICASE as ::core::ffi::c_int;
-            }
-            if (*rettv).v_type as ::core::ffi::c_uint
-                == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                (*rettv).vval.v_string = ExpandOne(
-                    &raw mut xpc,
-                    tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize))
-                        as *mut ::core::ffi::c_char,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    options,
-                    WILD_ALL as ::core::ffi::c_int,
-                );
-            } else {
-                ExpandOne(
-                    &raw mut xpc,
-                    tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize))
-                        as *mut ::core::ffi::c_char,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    options,
-                    WILD_ALL_KEEP as ::core::ffi::c_int,
-                );
-                tv_list_alloc_ret(rettv, xpc.xp_numfiles as ptrdiff_t);
-                let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while i < xpc.xp_numfiles {
-                    tv_list_append_string(
-                        (*rettv).vval.v_list,
-                        *xpc.xp_files.offset(i as isize),
-                        -1 as ssize_t,
-                    );
-                    i += 1;
-                }
-                ExpandCleanup(&raw mut xpc);
-            }
-        } else {
-            (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        };
+        // SAFETY: `xp_numfiles` is how many names `xp_files` holds, and it is
+        // positive here.
+        unsafe { slice::from_raw_parts(self.0.xp_files, self.0.xp_numfiles as usize) }
+    }
+
+    /// How many names the last expansion left: -1 until one succeeds, which
+    /// is `kListLenUnknown` and what the List is then allocated with.
+    fn count(&self) -> c_int {
+        self.0.xp_numfiles
+    }
+
+    fn cleanup(&mut self) {
+        // SAFETY: an initialised expander.
+        unsafe { ExpandCleanup(&raw mut self.0) };
     }
 }
 
-pub unsafe extern "C" fn f_globpath(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        let mut flags: ::core::ffi::c_int = WILD_IGNORE_COMPLETESLASH as ::core::ffi::c_int;
-        let mut error: bool = false_0 != 0;
-        (*rettv).v_type = VAR_STRING;
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            if tv_get_number_chk(
-                argvars.offset(2 as ::core::ffi::c_int as isize),
-                &raw mut error,
-            ) != 0
-            {
-                flags |= WILD_KEEP_ALL as ::core::ffi::c_int;
-            }
-            if (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                if tv_get_number_chk(
-                    argvars.offset(3 as ::core::ffi::c_int as isize),
-                    &raw mut error,
-                ) != 0
-                {
-                    tv_list_set_ret(rettv, ::core::ptr::null_mut::<list_T>());
-                }
-                if (*argvars.offset(4 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                    != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                    && tv_get_number_chk(
-                        argvars.offset(4 as ::core::ffi::c_int as isize),
-                        &raw mut error,
-                    ) != 0
-                {
-                    flags |= WILD_ALLLINKS as ::core::ffi::c_int;
-                }
-            }
-        }
-        let mut buf1: [::core::ffi::c_char; 65] = [0; 65];
-        let file: *const ::core::ffi::c_char = tv_get_string_buf_chk(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-            &raw mut buf1 as *mut ::core::ffi::c_char,
-        );
-        if !file.is_null() && !error {
-            let mut ga: garray_T = garray_T {
-                ga_len: 0,
-                ga_maxlen: 0,
-                ga_itemsize: 0,
-                ga_growsize: 0,
-                ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            };
-            ga_init(
-                &raw mut ga,
-                ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-                10 as ::core::ffi::c_int,
-            );
-            globpath(
-                tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize))
-                    as *mut ::core::ffi::c_char,
-                file as *mut ::core::ffi::c_char,
-                &raw mut ga,
-                flags,
-                false_0 != 0,
-            );
-            if (*rettv).v_type as ::core::ffi::c_uint
-                == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                (*rettv).vval.v_string = ga_concat_strings(&raw mut ga, c"\n".as_ptr());
-            } else {
-                tv_list_alloc_ret(rettv, ga.ga_len as ptrdiff_t);
-                let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while i < ga.ga_len {
-                    tv_list_append_string(
-                        (*rettv).vval.v_list,
-                        *(ga.ga_data as *mut *const ::core::ffi::c_char).offset(i as isize),
-                        -1 as ssize_t,
-                    );
-                    i += 1;
-                }
-            }
-            ga_clear_strings(&raw mut ga);
-        } else {
-            (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        };
+/// A `garray_T` of owned strings -- what `globpath()` and `readdir_core`
+/// fill, and what frees them.
+struct StrArray(garray_T);
+
+impl Drop for StrArray {
+    fn drop(&mut self) {
+        // SAFETY: an initialised array whose items are all owned strings.
+        unsafe { ga_clear_strings(&raw mut self.0) };
     }
 }
 
-unsafe extern "C" fn readdir_checkitem(
-    mut context: *mut ::core::ffi::c_void,
-    mut name: *const ::core::ffi::c_char,
-) -> varnumber_T {
-    unsafe {
-        let mut expr: *mut typval_T = context as *mut typval_T;
-        let mut argv: [typval_T; 2] = [typval_T {
-            v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
-            vval: typval_vval_union { v_number: 0 },
-        }; 2];
-        let mut retval: varnumber_T = 0 as varnumber_T;
-        let mut error: bool = false_0 != 0;
-        if (*expr).v_type as ::core::ffi::c_uint
-            == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            return 1 as varnumber_T;
-        }
-        let mut save_val: typval_T = typval_T {
-            v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
-            vval: typval_vval_union { v_number: 0 },
-        };
-        prepare_vimvar(VV_VAL as ::core::ffi::c_int, &raw mut save_val);
-        set_vim_var_string(VV_VAL, name, -1 as ptrdiff_t);
-        argv[0 as ::core::ffi::c_int as usize].v_type = VAR_STRING;
-        argv[0 as ::core::ffi::c_int as usize].vval.v_string = name as *mut ::core::ffi::c_char;
-        let mut rettv: typval_T = typval_T {
-            v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
-            vval: typval_vval_union { v_number: 0 },
-        };
-        if eval_expr_typval(
-            expr,
-            false_0 != 0,
-            &raw mut argv as *mut typval_T,
-            1 as ::core::ffi::c_int,
-            &raw mut rettv,
-        ) != FAIL
-        {
-            retval = tv_get_number_chk(&raw mut rettv, &raw mut error);
-            if error {
-                retval = -1 as varnumber_T;
-            }
-            tv_clear(&raw mut rettv);
-        }
-        set_vim_var_string(
-            VV_VAL,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            0 as ptrdiff_t,
-        );
-        restore_vimvar(VV_VAL as ::core::ffi::c_int, &raw mut save_val);
-        return retval;
-    }
-}
-
-pub unsafe extern "C" fn f_readdir(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    unsafe {
-        tv_list_alloc_ret(rettv, kListLenUnknown as ::core::ffi::c_int as ptrdiff_t);
-        let mut path: *const ::core::ffi::c_char =
-            tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-        let mut expr: *mut typval_T = argvars.offset(1 as ::core::ffi::c_int as isize);
-        let mut ga: garray_T = garray_T {
+impl StrArray {
+    fn new() -> Self {
+        let mut ga = garray_T {
             ga_len: 0,
             ga_maxlen: 0,
             ga_itemsize: 0,
             ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+            ga_data: ptr::null_mut(),
         };
-        let mut ret: ::core::ffi::c_int = readdir_core(
-            &raw mut ga,
-            path,
-            expr as *mut ::core::ffi::c_void,
-            Some(
-                readdir_checkitem
-                    as unsafe extern "C" fn(
-                        *mut ::core::ffi::c_void,
-                        *const ::core::ffi::c_char,
-                    ) -> varnumber_T,
-            ),
-        );
-        if ret == OK && ga.ga_len > 0 as ::core::ffi::c_int {
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < ga.ga_len {
-                let mut p: *const ::core::ffi::c_char =
-                    *(ga.ga_data as *mut *const ::core::ffi::c_char).offset(i as isize);
-                tv_list_append_string((*rettv).vval.v_list, p, -1 as ssize_t);
-                i += 1;
+        // SAFETY: a fresh local.
+        unsafe { ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 10) };
+        Self(ga)
+    }
+
+    fn raw(&mut self) -> *mut garray_T {
+        &raw mut self.0
+    }
+
+    /// The names, in the order they were put in.
+    fn names(&self) -> &[*const c_char] {
+        if self.0.ga_len <= 0 {
+            return &[];
+        }
+        // SAFETY: the array holds `ga_len` items of one pointer each.
+        unsafe { slice::from_raw_parts(self.0.ga_data.cast(), self.0.ga_len as usize) }
+    }
+
+    fn len(&self) -> c_int {
+        self.0.ga_len
+    }
+
+    /// The names joined by `sep`, as one owned string.
+    fn joined(&self, sep: &CStr) -> *mut c_char {
+        // SAFETY: an initialised array of NUL-terminated strings.
+        unsafe { ga_concat_strings(&raw const self.0, sep.as_ptr()) }
+    }
+}
+
+// ---------------------------------------------------------------------
+// Small wrappers over what the four builtins reach for
+// ---------------------------------------------------------------------
+
+/// Answer a List rather than a String.  Which list is decided later, once
+/// the number of matches is known.
+fn ret_list(rettv: &mut typval_T) {
+    // SAFETY: `rettv` is the builtin's own cleared result slot.
+    unsafe { tv_list_set_ret(rettv, ptr::null_mut()) };
+}
+
+fn free(p: *mut c_char) {
+    // SAFETY: `p` is an owned string, or NULL.
+    unsafe { xfree(p.cast::<c_void>()) };
+}
+
+/// The 'path' a search walks: the buffer's own when it set one, else the
+/// global option.
+fn search_path() -> *mut c_char {
+    // SAFETY: `curbuf` names the live current buffer.
+    let local = unsafe { (*curbuf.get()).b_p_path };
+    // SAFETY: an option string is NUL-terminated, so its first byte is there.
+    if unsafe { *local } == 0 {
+        p_path.get()
+    } else {
+        local
+    }
+}
+
+/// The suffixes `findfile()` tries, and none for `finddir()`.
+fn suffixes(find_what: c_int) -> *mut c_char {
+    if find_what == FINDFILE_DIR as c_int {
+        return c"".as_ptr().cast_mut();
+    }
+    // SAFETY: `curbuf` names the live current buffer.
+    unsafe { (*curbuf.get()).b_p_sua }
+}
+
+/// Set `v:val`, or clear it when `name` is NULL.
+fn set_val(name: *const c_char) {
+    let len: ptrdiff_t = if name.is_null() { 0 } else { -1 };
+    // SAFETY: `VV_VAL` names a `v:` variable, and a length of -1 promises a
+    // NUL-terminated string, which every directory entry's name is.
+    unsafe { set_vim_var_string(VV_VAL, name, len) };
+}
+
+// ---------------------------------------------------------------------
+// The builtins
+// ---------------------------------------------------------------------
+
+/// The shared body of `finddir()` and `findfile()`: walk 'path' for `count`
+/// matches of a name, answering the last one -- or, for a negative count,
+/// all of them as a List.
+fn findfilendir(args: Args<'_>, rettv: &mut typval_T, find_what: c_int) {
+    let mut fresult: *mut c_char = ptr::null_mut();
+    let mut path = search_path();
+    let mut count = 1;
+    let mut error = false;
+
+    ret_string(rettv, ptr::null_mut());
+    let fname = str_arg(args, 0);
+
+    let mut pathbuf = numbuf();
+    if args.has(1) {
+        match str_arg_buf(args, 1, &mut pathbuf) {
+            None => error = true,
+            Some(p) => {
+                if !p.to_bytes().is_empty() {
+                    path = p.as_ptr().cast_mut();
+                }
+                if args.has(2) {
+                    count = nr_arg(args, 2, &mut error) as c_int;
+                }
             }
         }
-        ga_clear_strings(&raw mut ga);
+    }
+    if count < 0 {
+        RetList::alloc(rettv, kListLenUnknown as c_int as ptrdiff_t);
+    }
+    if fname.to_bytes().is_empty() || error {
+        return;
+    }
+
+    let (mut to_find, mut ctx): (*mut c_char, *mut c_char) = (ptr::null_mut(), ptr::null_mut());
+    let (name, len) = (fname.as_ptr().cast_mut(), fname.to_bytes().len() as size_t);
+    let (sua, mut first) = (suffixes(find_what), true);
+    loop {
+        // The previous answer, which was either copied into the List or is
+        // about to be replaced.
+        free(fresult);
+        // SAFETY: `curbuf` names the live current buffer.
+        let rel = unsafe { (*curbuf.get()).b_ffname };
+        // Only the first round is given the name; the ones after it continue
+        // the walk the context remembers.
+        let (p, n) = if first {
+            (name, len)
+        } else {
+            (ptr::null_mut(), 0)
+        };
+        let (f2f, c) = (&raw mut to_find, &raw mut ctx);
+        // SAFETY: `p` is NUL-terminated with `n` bytes, or NULL; `path` and
+        // `sua` are option strings; `rel` is the current buffer's own name;
+        // and the two out-parameters carry the walk's state from one round
+        // to the next.
+        fresult =
+            unsafe { find_file_in_path_option(p, n, 0, first, path, find_what, rel, sua, f2f, c) };
+        first = false;
+        if !fresult.is_null() && rettv.v_type == VAR_LIST {
+            RetList::of(rettv).push(fresult);
+        }
+        let more = rettv.v_type == VAR_LIST || {
+            count -= 1;
+            count > 0
+        };
+        if !more || fresult.is_null() {
+            break;
+        }
+    }
+    free(to_find);
+    // SAFETY: the context this call's own loop built, or NULL.
+    unsafe { vim_findfile_cleanup(ctx.cast::<c_void>()) };
+
+    // The List answer appended a copy of each match and only leaves the
+    // loop on a NULL, so there is nothing left to hand back there.
+    if rettv.v_type == VAR_STRING {
+        rettv.vval.v_string = fresult;
+    }
+}
+
+/// `finddir({name} [, {path} [, {count}]])`.
+///
+/// # Safety
+/// `argvars` is the evaluator's own argument vector, arity 1..3, and `rettv`
+/// a cleared result.
+pub unsafe extern "C" fn f_finddir(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    findfilendir(args, rettv, FINDFILE_DIR as c_int);
+}
+
+/// `findfile({name} [, {path} [, {count}]])`.
+///
+/// # Safety
+/// As [`f_finddir`].
+pub unsafe extern "C" fn f_findfile(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    findfilendir(args, rettv, FINDFILE_FILE as c_int);
+}
+
+/// `glob({pattern} [, {nosuf} [, {list} [, {alllinks}]]])`.
+///
+/// A non-zero `{nosuf}` keeps the matches 'wildignore' would drop and leaves
+/// the ones 'suffixes' would push to the end where they are; `{list}` asks
+/// for a List rather than newline-joined text.
+///
+/// # Safety
+/// `argvars` is the evaluator's own argument vector, arity 1..4, and `rettv`
+/// a cleared result.
+pub unsafe extern "C" fn f_glob(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let (args, rettv) = frame!(argvars, rettv);
+    let mut options = (WILD_SILENT | WILD_USE_NL) as c_int;
+    let mut error = false;
+
+    rettv.v_type = VAR_STRING;
+    if args.has(1) {
+        if nr_arg(args, 1, &mut error) != 0 {
+            options |= WILD_KEEP_ALL as c_int;
+        }
+        if args.has(2) {
+            if nr_arg(args, 2, &mut error) != 0 {
+                ret_list(rettv);
+            }
+            if args.has(3) && nr_arg(args, 3, &mut error) != 0 {
+                options |= WILD_ALLLINKS as c_int;
+            }
+        }
+    }
+    if error {
+        rettv.vval.v_string = ptr::null_mut();
+        return;
+    }
+
+    let mut xpc = Expand::new();
+    if p_wic.get() != 0 {
+        options += WILD_ICASE as c_int;
+    }
+    let pat = str_arg(args, 0);
+    if rettv.v_type == VAR_STRING {
+        rettv.vval.v_string = xpc.one(pat, options, WILD_ALL as c_int);
+        return;
+    }
+    xpc.one(pat, options, WILD_ALL_KEEP as c_int);
+    let list = RetList::alloc(rettv, xpc.count() as ptrdiff_t);
+    for &name in xpc.files() {
+        list.push(name);
+    }
+    xpc.cleanup();
+}
+
+/// `globpath({path}, {pattern} [, {nosuf} [, {list} [, {alllinks}]]])`: the
+/// pattern expanded once under every directory in `{path}`.
+///
+/// # Safety
+/// `argvars` is the evaluator's own argument vector, arity 2..5, and `rettv`
+/// a cleared result.
+pub unsafe extern "C" fn f_globpath(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    let mut flags = WILD_IGNORE_COMPLETESLASH as c_int;
+    let mut error = false;
+
+    rettv.v_type = VAR_STRING;
+    if args.has(2) {
+        if nr_arg(args, 2, &mut error) != 0 {
+            flags |= WILD_KEEP_ALL as c_int;
+        }
+        if args.has(3) {
+            if nr_arg(args, 3, &mut error) != 0 {
+                ret_list(rettv);
+            }
+            if args.has(4) && nr_arg(args, 4, &mut error) != 0 {
+                flags |= WILD_ALLLINKS as c_int;
+            }
+        }
+    }
+
+    let mut buf1 = numbuf();
+    let file = str_arg_buf(args, 1, &mut buf1);
+    let (Some(file), false) = (file, error) else {
+        rettv.vval.v_string = ptr::null_mut();
+        return;
+    };
+
+    let mut found = StrArray::new();
+    let path = str_arg(args, 0).as_ptr().cast_mut();
+    // SAFETY: two NUL-terminated strings, which `globpath` only reads, and an
+    // initialised array for it to append the matches to.
+    unsafe { globpath(path, file.as_ptr().cast_mut(), found.raw(), flags, false) };
+
+    if rettv.v_type == VAR_STRING {
+        rettv.vval.v_string = found.joined(c"\n");
+        return;
+    }
+    let list = RetList::alloc(rettv, found.len() as ptrdiff_t);
+    for &name in found.names() {
+        list.push(name);
+    }
+}
+
+/// The per-entry filter `readdir()` hands `readdir_core`: evaluate the
+/// caller's expression with the name as `v:val` and as its one argument.
+///
+/// Answers 1 to keep the entry, 0 to skip it, -1 to stop the walk -- and 1
+/// when there is no expression at all.
+///
+/// # Safety
+/// `context` is the `typval_T` `f_readdir` handed `readdir_core`, and `name`
+/// a NUL-terminated entry name.
+unsafe extern "C" fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> varnumber_T {
+    // SAFETY: the caller's contract.
+    let expr = unsafe { &mut *context.cast::<typval_T>() };
+    if expr.v_type == VAR_UNKNOWN {
+        return 1;
+    }
+
+    let mut save_val = TV_INITIAL_VALUE;
+    // SAFETY: `VV_VAL` names a `v:` variable and `save_val` is a live local.
+    unsafe { prepare_vimvar(VV_VAL as c_int, &raw mut save_val) };
+    set_val(name);
+
+    let mut argv = [TV_INITIAL_VALUE; 2];
+    argv[0].v_type = VAR_STRING;
+    // The callee only reads it; `argv` is never cleared, which is why the
+    // name is not copied.
+    argv[0].vval.v_string = name.cast_mut();
+
+    let mut rettv = TV_INITIAL_VALUE;
+    let mut retval = 0;
+    // SAFETY: three live typvals, and `argv` holds the one argument the count
+    // names.
+    let ran = unsafe { eval_expr_typval(expr, false, argv.as_mut_ptr(), 1, &raw mut rettv) };
+    if ran != FAIL {
+        let mut error = false;
+        // SAFETY: a live typval; the callee reports through `error`.
+        retval = unsafe { tv_get_number_chk(&raw mut rettv, &raw mut error) };
+        if error {
+            retval = -1;
+        }
+        // SAFETY: a live typval this call owns.
+        unsafe { tv_clear(&raw mut rettv) };
+    }
+
+    set_val(ptr::null());
+    // SAFETY: `save_val` came from `prepare_vimvar` for this same variable.
+    unsafe { restore_vimvar(VV_VAL as c_int, &raw mut save_val) };
+    retval
+}
+
+/// `readdir({directory} [, {expr}])`: the entries of one directory, sorted,
+/// with `{expr}` deciding which of them to keep.
+///
+/// # Safety
+/// `argvars` is the evaluator's own argument vector, arity 1..2, and `rettv`
+/// a cleared result.
+pub unsafe extern "C" fn f_readdir(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (mut args, rettv) = frame!(argvars, rettv);
+    let list = RetList::alloc(rettv, kListLenUnknown as c_int as ptrdiff_t);
+    let path = str_arg(args, 0).as_ptr();
+    let expr: *mut typval_T = args.get_mut(1);
+
+    let mut found = StrArray::new();
+    // SAFETY: `path` is NUL-terminated, `expr` is the argument slot the
+    // filter reads back through, and the array is a fresh one to fill.
+    let ret = unsafe { readdir_core(found.raw(), path, expr.cast(), Some(readdir_checkitem)) };
+    if ret == OK {
+        for &name in found.names() {
+            list.push(name);
+        }
     }
 }
