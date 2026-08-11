@@ -184,9 +184,9 @@ fn reserve_for_double(body: &[uint8_t]) -> size_t {
                         }
                     }
                 }
-                // Unicode: `\uF` is one byte, two fewer than the escape;
-                // `￿` three bytes, three fewer; `\U7FFFFFFF` six bytes,
-                // four fewer.
+                // Unicode: a one-digit `\u` escape stands for one byte, two
+                // fewer than it occupies; a four-digit one for three bytes,
+                // three fewer; the widest `\U` for six bytes, four fewer.
                 b'u' | b'U' => {
                     let esc_start = i;
                     let mut digits: size_t = if body[i] == b'u' { 4 } else { 8 };
