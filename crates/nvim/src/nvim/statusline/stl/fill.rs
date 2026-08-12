@@ -12,10 +12,7 @@
 
 use core::ffi::c_int;
 
-use super::{
-    Built, Kind, StlScratch, cells_at, char_len_at, fill_len, free_cstring, put_fill, strsize_at,
-};
-use crate::src::nvim::types::schar_T;
+use super::{Built, Fill, Kind, StlScratch, cells_at, char_len_at, free_cstring, strsize_at};
 
 /// Cut the line down to `maxwidth` cells.
 pub(super) fn truncate(
@@ -24,7 +21,7 @@ pub(super) fn truncate(
     built: &mut Built,
     outputlen: usize,
     maxwidth: c_int,
-    fillchar: schar_T,
+    fill: &Fill,
 ) {
     let last = built.items(s.items.len()).end;
     // Where to cut: the `%<` item if the format has one, the first item
@@ -116,7 +113,7 @@ pub(super) fn truncate(
             if built.width >= maxwidth {
                 break;
             }
-            at = put_fill(out, at, fillchar);
+            at = fill.put(out, at);
         }
     }
     built.width = maxwidth;
@@ -128,7 +125,7 @@ pub(super) fn spread(
     out: &mut [u8],
     built: &mut Built,
     maxwidth: c_int,
-    fillchar: schar_T,
+    fill: &Fill,
 ) {
     let last = built.items(s.items.len()).end;
     let mut count = 0;
@@ -154,7 +151,7 @@ pub(super) fn spread(
         } else {
             standard_spaces
         };
-        let dislocation = cells as usize * fill_len(fillchar);
+        let dislocation = cells as usize * fill.len();
         let start = s.items[s.separators[l]].start;
         let seploc = start + dislocation;
 
@@ -163,7 +160,7 @@ pub(super) fn spread(
         out.copy_within(start..start + len + 1, seploc);
         let mut at = start;
         while at < seploc {
-            at = put_fill(out, at, fillchar);
+            at = fill.put(out, at);
         }
 
         for i in s.separators[l] + 1..last {

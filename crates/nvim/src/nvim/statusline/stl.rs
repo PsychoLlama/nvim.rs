@@ -62,7 +62,7 @@ use crate::src::nvim::drawline::{fill_foldcolumn, use_cursor_line_highlight};
 use crate::src::nvim::drawscreen::compute_foldcolumn;
 use crate::src::nvim::eval::eval_to_string_safe;
 use crate::src::nvim::eval::vars::{do_unlet, get_vim_var_nr, set_internal_string_var, set_var};
-use crate::src::nvim::grid::{schar_get_adv, schar_len};
+use crate::src::nvim::grid::{MAX_SCHAR_SIZE, schar_get_adv};
 use crate::src::nvim::highlight_group::{HLF_CLF, HLF_FC, syn_name2id_len};
 use crate::src::nvim::main::{
     KeyTyped, State, VIsual_active, curbuf, curwin, did_emsg, msg_loclist, msg_qflist, p_sc,
@@ -369,7 +369,7 @@ impl Env {
         let mut buf = [0u8; TMPLEN as usize];
         let mut len = 0usize;
         for &glyph in &glyphs[..fdc as usize] {
-            len = put_fill(&mut buf, len, glyph);
+            len += put_schar(&mut buf, len, glyph);
         }
         text.extend_from_slice(&buf[..len]);
         // SAFETY: a live window and the line the fold describes.
@@ -545,26 +545,61 @@ pub(super) fn char_len_at(out: &[u8], at: usize) -> usize {
     unsafe { utfc_ptr2len(out[at..].as_ptr().cast::<c_char>()) as usize }
 }
 
-/// How many bytes `fillchar` takes.
-pub(super) fn fill_len(fillchar: schar_T) -> usize {
-    // SAFETY: `fillchar` is a glyph this process produced -- it comes from
-    // `'fillchars'` or is the ASCII space this expansion substituted.
-    unsafe { schar_len(fillchar) }
+/// The character an expansion pads with, resolved to bytes once.
+///
+/// Upstream re-derives it from the glyph cache for every cell it writes --
+/// `schar_get_adv` is a cache lookup, a `strlen` and a `memcpy` per cell,
+/// and a padded line is nothing but such cells. Resolving it once turns
+/// padding into a short `copy_from_slice`.
+#[derive(Clone, Copy)]
+pub(super) struct Fill {
+    /// The glyph itself, for the two arms that compare it to `-`.
+    schar: schar_T,
+    bytes: [u8; MAX_SCHAR_SIZE as usize],
+    len: usize,
 }
 
-/// Write `fillchar` at `at`, answering where the next byte goes.
-///
-/// The slice bound is real: upstream guards only that `at` is before the last
-/// byte of the buffer, so a fill character several bytes wide could write
-/// past its end. Here that panics instead.
-pub(super) fn put_fill(out: &mut [u8], at: usize, fillchar: schar_T) -> usize {
-    let len = fill_len(fillchar);
-    let dst = &mut out[at..at + len];
+impl Fill {
+    /// Resolve `schar`, defaulting a zero to the blank upstream uses.
+    fn of(schar: schar_T) -> Self {
+        let schar = if schar == 0 { b' ' as schar_T } else { schar };
+        let mut bytes = [0u8; MAX_SCHAR_SIZE as usize];
+        let mut p = bytes.as_mut_ptr().cast::<c_char>();
+        // SAFETY: `bytes` has room for `MAX_SCHAR_SIZE`, which is what
+        // `schar_get_adv` is allowed; `schar` is a glyph this process
+        // produced, from `'fillchars'` or the blank above.
+        let len = unsafe { schar_get_adv(&raw mut p, schar) } as usize;
+        Fill { schar, bytes, len }
+    }
+
+    /// How many bytes one of it takes.
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Whether it is the `-` that must not be put in front of a digit.
+    pub fn is_dash(&self) -> bool {
+        self.schar == b'-' as schar_T
+    }
+
+    /// Write one at `at`, answering where the next byte goes.
+    ///
+    /// The slice bound is real: upstream guards only that `at` is before the
+    /// last byte of the buffer, so a fill character several bytes wide could
+    /// write past its end. Here that panics instead.
+    pub fn put(&self, out: &mut [u8], at: usize) -> usize {
+        out[at..at + self.len].copy_from_slice(&self.bytes[..self.len]);
+        at + self.len
+    }
+}
+
+/// Write the glyph `sc` into `buf` at `at`, answering its byte length.
+fn put_schar(buf: &mut [u8], at: usize, sc: schar_T) -> usize {
+    // SAFETY: `schar_get_adv` writes at most `MAX_SCHAR_SIZE` bytes and `sc`
+    // is a glyph this process produced; the slice bounds the write.
+    let dst = &mut buf[at..];
     let mut p = dst.as_mut_ptr().cast::<c_char>();
-    // SAFETY: `schar_get_adv` writes exactly `schar_len()` bytes, which is
-    // the slice just bounded.
-    unsafe { schar_get_adv(&raw mut p, fillchar) };
-    at + len
+    unsafe { schar_get_adv(&raw mut p, sc) as usize }
 }
 
 /// Print a number item through `template` at `at`, answering where the next
@@ -676,11 +711,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
         fmt_bytes.to_vec()
     };
 
-    let fillchar = if fillchar == 0 {
-        b' ' as schar_T
-    } else {
-        fillchar
-    };
+    let fill = Fill::of(fillchar);
 
     // The cursor in windows other than the current one is not always
     // up to date, because of autocommands and timers.
@@ -717,7 +748,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
         empty_line,
         byteval,
     };
-    let built = expand(&env, out, usefmt, fillchar, maxwidth, tabtab.is_null());
+    let built = expand(&env, out, usefmt, &fill, maxwidth, tabtab.is_null());
 
     // Hand back the highlight runs and the click records, which are views
     // into two of the arenas.
@@ -763,7 +794,7 @@ fn expand(
     env: &Env,
     out: &mut [u8],
     usefmt: Vec<u8>,
-    fillchar: schar_T,
+    fill: &Fill,
     maxwidth: c_int,
     discard_clicks: bool,
 ) -> Built {
@@ -773,7 +804,7 @@ fn expand(
         s.grow();
         s.curitem
     });
-    let pos = item::run(env, out, usefmt, fillchar, discard_clicks);
+    let pos = item::run(env, out, usefmt, fill, discard_clicks);
     out[pos] = 0;
     // Bytes of `out` used, excluding the NUL. Taken before post-processing
     // moves the text around.
@@ -795,11 +826,11 @@ fn expand(
             && built.width > maxwidth
             && (!env.is_statuscol() || built.width > MAX_STCWIDTH);
         if too_long {
-            fill::truncate(s, out, &mut built, outputlen, maxwidth, fillchar);
+            fill::truncate(s, out, &mut built, outputlen, maxwidth, fill);
         } else if built.width < maxwidth
-            && outputlen + (maxwidth - built.width) as usize * fill_len(fillchar) + 1 < out.len()
+            && outputlen + (maxwidth - built.width) as usize * fill.len() + 1 < out.len()
         {
-            fill::spread(s, out, &mut built, maxwidth, fillchar);
+            fill::spread(s, out, &mut built, maxwidth, fill);
         }
     });
     built

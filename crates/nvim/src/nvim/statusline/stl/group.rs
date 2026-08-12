@@ -13,8 +13,7 @@
 
 use core::ffi::c_int;
 
-use super::{Kind, StlScratch, cells_at, char_len_at, fill_len, put_fill, strsize_at};
-use crate::src::nvim::types::schar_T;
+use super::{Fill, Kind, StlScratch, cells_at, char_len_at, strsize_at};
 
 /// Close the innermost open group, answering where the write cursor ends up.
 ///
@@ -25,7 +24,7 @@ pub(super) fn close(
     pos: usize,
     end: usize,
     groupdepth: &mut c_int,
-    fillchar: schar_T,
+    fill: &Fill,
 ) -> usize {
     *groupdepth -= 1;
     let gi = s.groupitems[*groupdepth as usize];
@@ -49,19 +48,19 @@ pub(super) fn close(
     // Too wide: cut bytes off the front. A `'statuscolumn'` fold item is
     // never cut, so that the mouse click regions stay right.
     if group_len > i64::from(maxwid) && s.items[gi].kind != Kind::HighlightFold {
-        pos = truncate(s, out, pos, gi, start, group_len, minwid, maxwid, fillchar);
+        pos = truncate(s, out, pos, gi, start, group_len, minwid, maxwid, fill);
     } else if i64::from(minwid.abs()) > group_len {
         // Too narrow: pad it, to the right when the group is left-aligned
         // (which is what the negative width means) and to the left otherwise.
         if minwid < 0 {
             minwid = -minwid;
-            let fill = fill_len(fillchar);
-            while group_len < i64::from(minwid) && pos + fill <= end {
+            let width = fill.len();
+            while group_len < i64::from(minwid) && pos + width <= end {
                 group_len += 1;
-                pos = put_fill(out, pos, fillchar);
+                pos = fill.put(out, pos);
             }
         } else {
-            pos = pad_left(s, out, pos, gi, start, group_len, minwid, end, fillchar);
+            pos = pad_left(s, out, pos, gi, start, group_len, minwid, end, fill);
         }
     }
     pos
@@ -128,7 +127,7 @@ fn truncate(
     mut group_len: i64,
     minwid: c_int,
     maxwid: c_int,
-    fillchar: schar_T,
+    fill: &Fill,
 ) -> usize {
     // Find the first character that still fits.
     let mut dropped = 0usize;
@@ -149,7 +148,7 @@ fn truncate(
         if group_len >= i64::from(minwid) {
             break;
         }
-        pos = put_fill(out, pos, fillchar);
+        pos = fill.put(out, pos);
     }
 
     // Shift the items back by what was dropped, less the one byte the `<`
@@ -174,14 +173,14 @@ fn pad_left(
     group_len: i64,
     minwid: c_int,
     end: usize,
-    fillchar: schar_T,
+    fill: &Fill,
 ) -> usize {
-    let fill = fill_len(fillchar);
+    let width = fill.len();
     let mut added_cells = i64::from(minwid) - group_len;
-    let mut added_bytes = added_cells * fill as i64;
+    let mut added_bytes = added_cells * width as i64;
     if pos + added_bytes as usize > end {
-        added_cells = ((end - pos) / fill) as i64;
-        added_bytes = added_cells * fill as i64;
+        added_cells = ((end - pos) / width) as i64;
+        added_bytes = added_cells * width as i64;
     }
     let added_bytes = added_bytes as usize;
 
@@ -192,7 +191,7 @@ fn pad_left(
     }
     let mut at = start;
     for _ in 0..added_cells {
-        at = put_fill(out, at, fillchar);
+        at = fill.put(out, at);
     }
     pos
 }

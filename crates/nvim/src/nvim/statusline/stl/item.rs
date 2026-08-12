@@ -19,16 +19,16 @@ use core::ffi::c_int;
 use core::ptr;
 
 use super::{
-    Env, Kind, MAX_STL_EVAL_DEPTH, ML_EMPTY, NumberBase, STL_BYTEVAL_X, STL_CLICK_FUNC,
+    Env, Fill, Kind, MAX_STL_EVAL_DEPTH, ML_EMPTY, NumberBase, STL_BYTEVAL_X, STL_CLICK_FUNC,
     STL_FILENAME, STL_FOLDCOL, STL_FULLPATH, STL_HELPFLAG_ALT, STL_HIGHLIGHT, STL_HIGHLIGHT_COMB,
     STL_MODIFIED_ALT, STL_OFFSET_X, STL_PREVIEWFLAG_ALT, STL_ROFLAG_ALT, STL_SEPARATE, STL_SIGNCOL,
     STL_TABCLOSENR, STL_TABPAGENR, STL_TRUNCMARK, STL_USER_HL, STL_VIM_EXPR, STL_VIRTCOL_ALT,
     StlItem, StlScratch, TMPLEN, as_number, cells_at, char_len_at, cstr_at, dup_cstring, group,
-    in_insert_mode, kNumBaseDecimal, kNumBaseHexadecimal, parse, put_fill, put_number, strsize_at,
-    syntax_id, tr, upper, vim_var, with_scratch,
+    in_insert_mode, kNumBaseDecimal, kNumBaseHexadecimal, parse, put_number, strsize_at, syntax_id,
+    tr, upper, vim_var, with_scratch,
 };
 use crate::src::nvim::decoration::SCL_NUM;
-use crate::src::nvim::types::{VV_LNUM, VV_RELNUM, VV_VIRTNUM, schar_T};
+use crate::src::nvim::types::{VV_LNUM, VV_RELNUM, VV_VIRTNUM};
 
 /// What carries across items while the format is walked.
 struct State {
@@ -89,7 +89,7 @@ pub(super) fn run(
     env: &Env,
     out: &mut [u8],
     usefmt: Vec<u8>,
-    fillchar: schar_T,
+    fill: &Fill,
     discard_clicks: bool,
 ) -> usize {
     // The last byte of the buffer is reserved for the NUL, so every visible
@@ -112,12 +112,16 @@ pub(super) fn run(
             st.prevchar_isitem = false;
         }
         // Copy the format verbatim until the next item, the end of the
-        // format, or the end of the output buffer.
-        while p < fmt.len() && fmt[p] != b'%' && pos < end {
-            out[pos] = fmt[p];
-            pos += 1;
-            p += 1;
-        }
+        // format, or the end of the output buffer. Upstream steps a byte at
+        // a time; the run is the same either way.
+        let run = fmt[p..]
+            .iter()
+            .position(|&byte| byte == b'%')
+            .unwrap_or(fmt.len() - p)
+            .min(end - pos);
+        out[pos..pos + run].copy_from_slice(&fmt[p..p + run]);
+        pos += run;
+        p += run;
         if p >= fmt.len() || pos >= end {
             break;
         }
@@ -158,7 +162,7 @@ pub(super) fn run(
             if st.groupdepth < 1 {
                 continue;
             }
-            pos = with_scratch(|s| group::close(s, out, pos, end, &mut st.groupdepth, fillchar));
+            pos = with_scratch(|s| group::close(s, out, pos, end, &mut st.groupdepth, fill));
             continue;
         }
 
@@ -349,7 +353,7 @@ pub(super) fn run(
 
         let kept = with_scratch(|s| {
             emit(
-                s, out, &mut pos, end, opt, &spec, &value, &text, &mut st, fillchar,
+                s, out, &mut pos, end, opt, &spec, &value, &text, &mut st, fill,
             )
         });
         if !kept {
@@ -688,7 +692,7 @@ fn emit(
     v: &Value,
     text: &[u8],
     st: &mut State,
-    fillchar: schar_T,
+    fill: &Fill,
 ) -> bool {
     // The item is normal until something below says otherwise, and starts
     // where the write cursor is.
@@ -739,11 +743,11 @@ fn emit(
             // Right-aligned: pad in front.
             while l < minwid && *pos < end {
                 // Never put a `-` in front of a digit.
-                if l + 1 == minwid && fillchar == b'-' as schar_T && text[t].is_ascii_digit() {
+                if l + 1 == minwid && fill.is_dash() && text[t].is_ascii_digit() {
                     out[*pos] = b' ';
                     *pos += 1;
                 } else {
-                    *pos = put_fill(out, *pos, fillchar);
+                    *pos = fill.put(out, *pos);
                 }
                 l += 1;
             }
@@ -765,11 +769,8 @@ fn emit(
         while text[t] != 0 && *pos < end {
             // A blank becomes the fill character, unless the fill is `-` and
             // a digit follows.
-            if v.fillable
-                && text[t] == b' '
-                && (!text[t + 1].is_ascii_digit() || fillchar != b'-' as schar_T)
-            {
-                *pos = put_fill(out, *pos, fillchar);
+            if v.fillable && text[t] == b' ' && (!text[t + 1].is_ascii_digit() || !fill.is_dash()) {
+                *pos = fill.put(out, *pos);
             } else {
                 out[*pos] = text[t];
                 *pos += 1;
@@ -787,7 +788,7 @@ fn emit(
 
         // Left-aligned: pad behind.
         while l < minwid && *pos < end {
-            *pos = put_fill(out, *pos, fillchar);
+            *pos = fill.put(out, *pos);
             l += 1;
         }
     } else if v.num >= 0 {
