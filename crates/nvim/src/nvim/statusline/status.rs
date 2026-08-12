@@ -1,216 +1,165 @@
-//! The plain status line, and the click-definition arenas.
+//! The plain status line, and the buffer name behind it.
 //!
-//! [`win_redr_status`] is the default status line -- the one drawn when
-//! `'statusline'` is empty: the buffer name (shortened to fit by
-//! [`get_trans_bufname`]), the `[+]`/`[RO]`/`[Help]` flags and the ruler.
-//! [`stl_connected`] answers whether a window's status line runs all the way
-//! to the screen edge, which decides its fill character.  The `stl_*_click_defs`
-//! trio owns the per-window arena of `%@Func@` click records: allocate it to
-//! the window's width, fill it from the parsed items, and free the strings
-//! it holds.
+//! [`win_redr_status`] is the entry point the drawing layer calls once per
+//! window: it hands `'statusline'` to [`win_redr_custom`] and then draws the
+//! one cell below the vertical separator itself, which is the only part of a
+//! status line the format language has nothing to say about.
+//! [`stl_connected`] answers whether a window's status line runs on into the
+//! window right of it, which decides whether that cell is a fill character or
+//! a separator. [`get_trans_bufname`] puts a buffer's displayable name in
+//! `NameBuff`, for the tab line and for `:ls`.
 //!
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::c_int;
+use core::ops::Deref;
+
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::buffer::buf_spname;
-use crate::src::nvim::charset::{trans_characters, vim_strnsize};
-use crate::src::nvim::drawscreen::redrawing;
+use crate::src::nvim::charset::trans_characters;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::grid::{grid_line_flush, grid_line_put_schar, grid_line_start};
-use crate::src::nvim::highlight::win_hl_attr;
 use crate::src::nvim::highlight_group::HLF_C;
-use crate::src::nvim::main::{
-    NameBuff, curwin, default_gridview, redraw_cmdline, wild_menu_showing,
-};
-use crate::src::nvim::memory::{xcalloc, xfree, xstrlcpy};
+use crate::src::nvim::main::{default_gridview, redraw_cmdline, wild_menu_showing};
+use crate::src::nvim::memory::xstrlcpy;
 use crate::src::nvim::os::env::home_replace;
-use crate::src::nvim::os::libc::memset;
 use crate::src::nvim::types::ui::kUIWildmenu;
-use crate::src::nvim::types::{
-    StlClickDefinition, StlClickRecord, buf_T, frame_T, hlf_T, schar_T, size_t, win_T,
-};
+use crate::src::nvim::types::{buf_T, frame_T, win_T};
 use crate::src::nvim::ui::ui_has;
-use crate::src::nvim::window::global_stl_height;
 
-pub unsafe extern "C" fn win_redr_status(mut wp: *mut win_T) {
-    unsafe {
-        let mut is_stl_global: bool = global_stl_height() > 0 as ::core::ffi::c_int;
-        static busy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-        if busy.get() as ::core::ffi::c_int != 0
-            || wild_menu_showing.get() != 0 as ::core::ffi::c_int && !ui_has(kUIWildmenu)
-        {
-            return;
-        }
-        busy.set(true_0 != 0);
-        (*wp).w_redr_status = false_0 != 0;
-        if (*wp).w_status_height == 0 as ::core::ffi::c_int
-            && !(is_stl_global as ::core::ffi::c_int != 0 && wp == curwin.get())
-        {
-            redraw_cmdline.set(true_0 != 0);
-        } else if !redrawing() {
-            (*wp).w_redr_status = true_0 != 0;
-        } else if *(*wp).w_onebuf_opt.wo_stl as ::core::ffi::c_int != NUL
-            || !(*wp).w_floating
-            || is_stl_global as ::core::ffi::c_int != 0 && wp == curwin.get()
-        {
-            redraw_custom_statusline(wp);
-        }
-        let mut group: hlf_T = HLF_C;
-        if (*wp).w_vsep_width != 0 as ::core::ffi::c_int
-            && (*wp).w_status_height != 0 as ::core::ffi::c_int
-            && redrawing() as ::core::ffi::c_int != 0
-        {
-            let mut fillchar: schar_T = 0;
-            if stl_connected(wp) {
-                fillchar = fillchar_status(&raw mut group, wp);
-            } else {
-                fillchar = (*wp).w_p_fcs_chars.vert;
-            }
-            let mut attr: ::core::ffi::c_int = win_hl_attr(wp, group as ::core::ffi::c_int);
-            grid_line_start(default_gridview.ptr(), (*wp).w_winrow + (*wp).w_height);
-            grid_line_put_schar((*wp).w_wincol + (*wp).w_width, fillchar, attr);
-            grid_line_flush();
-        }
-        busy.set(false_0 != 0);
+/// Redraw the status line of window `wp`.
+///
+/// # Safety
+/// `wp` must be a live window. Evaluating `'statusline'` re-enters the
+/// editor, so nothing may be held across this.
+pub unsafe extern "C" fn win_redr_status(wp: *mut win_T) {
+    // SAFETY: the caller's promise.
+    let mut win = unsafe { Win::new(wp) };
+    let is_stl_global = stl_is_global();
+
+    static BUSY: GlobalCell<bool> = GlobalCell::new(false);
+    // Reached recursively when 'statusline' (indirectly) invokes
+    // ":redrawstatus"; ignore the call then. Also ignore it while the
+    // wildmenu is showing, which may be drawn over the status line.
+    if BUSY.get() || (wild_menu_showing.get() != 0 && !ui_has(kUIWildmenu)) {
+        return;
     }
-}
+    BUSY.set(true);
 
-pub unsafe extern "C" fn get_trans_bufname(mut buf: *mut buf_T) {
-    unsafe {
-        if !buf_spname(buf).is_null() {
-            xstrlcpy(
-                NameBuff.ptr() as *mut ::core::ffi::c_char,
-                buf_spname(buf),
-                MAXPATHL as size_t,
-            );
+    win.w_redr_status = false;
+    if win.w_status_height == 0 && !(is_stl_global && win.is_current()) {
+        // No status line: either 'laststatus' is 3 or this is the last
+        // window, so the command line is what has to be refreshed.
+        redraw_cmdline.set(true);
+    } else if !is_redrawing() {
+        // Not now -- the popup menu may be drawn over it.
+        win.w_redr_status = true;
+    } else if !opt_is_empty(win.w_onebuf_opt.wo_stl)
+        || !win.w_floating
+        || (is_stl_global && win.is_current())
+    {
+        // SAFETY: a live window; this evaluates the option.
+        unsafe { redraw_custom_statusline(wp) };
+    }
+
+    // May need to draw the character below the vertical separator.
+    if win.w_vsep_width != 0 && win.w_status_height != 0 && is_redrawing() {
+        let mut group = HLF_C;
+        // SAFETY: a live window's frame chain.
+        let fillchar = if unsafe { stl_connected(wp) } {
+            let (g, fillchar) = fillchar_status_of(win);
+            group = g;
+            fillchar
         } else {
-            home_replace(
-                buf,
-                (*buf).b_fname,
-                NameBuff.ptr() as *mut ::core::ffi::c_char,
-                MAXPATHL as size_t,
-                true_0 != 0,
-            );
-        }
-        trans_characters(NameBuff.ptr() as *mut ::core::ffi::c_char, MAXPATHL);
-    }
-}
-
-pub unsafe extern "C" fn stl_connected(mut wp: *mut win_T) -> bool {
-    unsafe {
-        let mut fr: *mut frame_T = (*wp).w_frame;
-        while !(*fr).fr_parent.is_null() {
-            if (*(*fr).fr_parent).fr_layout as ::core::ffi::c_int == FR_COL {
-                if !(*fr).fr_next.is_null() {
-                    break;
-                }
-            } else if !(*fr).fr_next.is_null() {
-                return true_0 != 0;
-            }
-            fr = (*fr).fr_parent;
-        }
-        return false_0 != 0;
-    }
-}
-
-pub unsafe extern "C" fn stl_clear_click_defs(
-    click_defs: *mut StlClickDefinition,
-    click_defs_size: size_t,
-) {
-    unsafe {
-        if !click_defs.is_null() {
-            let mut i: size_t = 0 as size_t;
-            while i < click_defs_size {
-                if i == 0 as size_t
-                    || (*click_defs.add(i)).func
-                        != (*click_defs.add(i.wrapping_sub(1 as size_t))).func
-                {
-                    xfree((*click_defs.add(i)).func as *mut ::core::ffi::c_void);
-                }
-                i = i.wrapping_add(1);
-            }
-            memset(
-                click_defs as *mut ::core::ffi::c_void,
-                0 as ::core::ffi::c_int,
-                click_defs_size.wrapping_mul(::core::mem::size_of::<StlClickDefinition>()),
-            );
-        }
-    }
-}
-
-pub unsafe extern "C" fn stl_alloc_click_defs(
-    mut cdp: *mut StlClickDefinition,
-    mut width: ::core::ffi::c_int,
-    mut size: *mut size_t,
-) -> *mut StlClickDefinition {
-    unsafe {
-        if *size < width as size_t {
-            xfree(cdp as *mut ::core::ffi::c_void);
-            *size = width as size_t;
-            cdp = xcalloc(*size, ::core::mem::size_of::<StlClickDefinition>())
-                as *mut StlClickDefinition;
-        }
-        return cdp;
-    }
-}
-
-pub unsafe extern "C" fn stl_fill_click_defs(
-    mut click_defs: *mut StlClickDefinition,
-    mut click_recs: *mut StlClickRecord,
-    mut buf: *const ::core::ffi::c_char,
-    mut width: ::core::ffi::c_int,
-    mut tabline: bool,
-) {
-    unsafe {
-        if click_defs.is_null() {
-            return;
-        }
-        let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut cur_click_def: StlClickDefinition = StlClickDefinition {
-            type_0: kStlClickDisabled,
-            tabnr: 0,
-            func: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            win.w_p_fcs_chars.vert
         };
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while !(*click_recs.offset(i as isize)).start.is_null() {
-            len += vim_strnsize(
-                buf,
-                (*click_recs.offset(i as isize)).start.offset_from(buf) as ::core::ffi::c_int,
-            );
-            debug_assert!(len <= width, "len <= width");
-            if col < len {
-                while col < len {
-                    let c2rust_fresh5 = col;
-                    col = col + 1;
-                    *click_defs.offset(c2rust_fresh5 as isize) = cur_click_def;
-                }
+        let attr = win_hl(win, group as c_int);
+        // SAFETY: `default_gridview` is live, and the batch is flushed below.
+        unsafe { view_line_start(default_gridview.ptr(), win.w_winrow + win.w_height) };
+        paint_schar(win.w_wincol + win.w_width, fillchar, attr);
+        paint_flush();
+    }
+    BUSY.set(false);
+}
+
+/// A frame of the window layout tree the caller has promised is live.
+#[derive(Clone, Copy)]
+struct Frame(*mut frame_T);
+
+impl Deref for Frame {
+    type Target = frame_T;
+
+    fn deref(&self) -> &frame_T {
+        // SAFETY: the constructor's promise -- a live frame.
+        unsafe { &*self.0 }
+    }
+}
+
+impl Frame {
+    /// # Safety
+    /// `fr` must stay a live frame for as long as the value is used.
+    const unsafe fn new(fr: *mut frame_T) -> Self {
+        Frame(fr)
+    }
+
+    fn parent(self) -> Option<Self> {
+        let parent = self.fr_parent;
+        // SAFETY: a live frame's parent is live or null.
+        (!parent.is_null()).then(|| unsafe { Frame::new(parent) })
+    }
+
+    fn has_next(self) -> bool {
+        !self.fr_next.is_null()
+    }
+}
+
+/// Whether the status line of `wp` is connected to the status line of the
+/// window right of it -- as opposed to meeting a vertical separator there.
+///
+/// Only meaningful when `wp->w_vsep_width != 0`.
+///
+/// # Safety
+/// `wp` must be a live window.
+pub unsafe extern "C" fn stl_connected(wp: *mut win_T) -> bool {
+    // SAFETY: the caller's promise; a live window has a live frame.
+    let mut fr = unsafe { Frame::new(Win::new(wp).w_frame) };
+    while let Some(parent) = fr.parent() {
+        if c_int::from(parent.fr_layout) == FR_COL {
+            // A row below this one ends the run.
+            if fr.has_next() {
+                break;
+            }
+        } else if fr.has_next() {
+            // Another window beside this one, at the same height.
+            return true;
+        }
+        fr = parent;
+    }
+    false
+}
+
+/// Put the displayable name of `buf` in `NameBuff`: its special name if it
+/// has one, else its file name with `$HOME` folded back to `~`, with the
+/// unprintable characters replaced by their display forms.
+///
+/// # Safety
+/// `buf` must be a live buffer.
+pub unsafe extern "C" fn get_trans_bufname(buf: *mut buf_T) {
+    // SAFETY: the caller's promise.
+    let spname = unsafe { buf_spname(buf) };
+    with_name_buff(|name| {
+        let (out, room) = (name.as_mut_ptr(), MAXPATHL as size_t);
+        // SAFETY: the caller's promise, and `name` is `MAXPATHL` bytes,
+        // which each of the three writes below is told.
+        unsafe {
+            if spname.is_null() {
+                home_replace(buf, (*buf).b_fname, out, room, true);
             } else {
-                xfree(cur_click_def.func as *mut ::core::ffi::c_void);
+                xstrlcpy(out, spname, room);
             }
-            buf = (*click_recs.offset(i as isize)).start;
-            cur_click_def = (*click_recs.offset(i as isize)).def;
-            if !tabline
-                && !(cur_click_def.type_0 as ::core::ffi::c_uint
-                    == kStlClickDisabled as ::core::ffi::c_int as ::core::ffi::c_uint
-                    || cur_click_def.type_0 as ::core::ffi::c_uint
-                        == kStlClickFuncRun as ::core::ffi::c_int as ::core::ffi::c_uint)
-            {
-                cur_click_def.type_0 = kStlClickDisabled;
-            }
-            i += 1;
+            trans_characters(out, MAXPATHL);
         }
-        if col < width {
-            while col < width {
-                let c2rust_fresh6 = col;
-                col = col + 1;
-                *click_defs.offset(c2rust_fresh6 as isize) = cur_click_def;
-            }
-        } else {
-            xfree(cur_click_def.func as *mut ::core::ffi::c_void);
-        };
-    }
+    });
 }
