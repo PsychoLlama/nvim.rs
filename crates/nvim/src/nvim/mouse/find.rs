@@ -137,7 +137,7 @@ pub fn find_win_inner(pos: &mut MousePos) -> Option<Win> {
 
 /// [`find_win_inner`], with `pos` left relative to the top-left of the whole
 /// window rather than of its inner area.
-fn find_win_outer(pos: &mut MousePos) -> Option<Win> {
+pub fn find_win_outer(pos: &mut MousePos) -> Option<Win> {
     let win = find_win_inner(pos)?;
     pos.row += win.w_winrow_off;
     pos.col += win.w_wincol_off;

@@ -49,7 +49,7 @@ use crate::src::nvim::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_
 use crate::src::nvim::memory::{
     ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc,
 };
-use crate::src::nvim::menu::{execute_menu, get_menu_mode_flag, menu_find, menu_is_separator};
+use crate::src::nvim::menu::{execute_menu, get_menu_mode_flag, menu_find};
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::mouse::mouse_find_win_outer;
 use crate::src::nvim::r#move::{
