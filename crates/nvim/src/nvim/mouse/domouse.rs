@@ -589,10 +589,12 @@ fn tab_line_click(
         let def = defs.at(mouse_col.get());
         in_tab_line.set(true);
 
+        // The C's `kStlClickTabSwitch` arm falls through to
+        // `kStlClickTabClose` for the middle button, which is what this flag
+        // spells out.
         let mut close = def.type_0 == kStlClickTabClose;
         if def.type_0 == kStlClickTabSwitch {
             if which_button == MOUSE_MIDDLE {
-                // FALLTHROUGH to the close arm.
                 close = true;
             } else if mod_mask.get() & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK {
                 // Double click opens a new page.

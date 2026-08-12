@@ -672,6 +672,8 @@ pub unsafe extern "C" fn f_getmousepos(
     let mut coladd: colnr_T = 0;
 
     if let Some(win) = find_win_inner(&mut pos) {
+        // `w_height` / `w_width` here, where the rest of the family reads
+        // `w_view_height` / `w_view_width`: upstream's own mixture, kept.
         let height = win.w_height + win.w_hsep_height + win.w_status_height;
         // The height is adjusted by 1 when there is a bottom border. This is
         // not necessary for a top border since `row` starts at -1 in that
