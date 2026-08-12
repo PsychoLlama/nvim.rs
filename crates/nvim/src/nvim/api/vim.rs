@@ -49,8 +49,8 @@ use crate::src::nvim::highlight::{
     hl_ns_get_attrs, ns_hl_def, win_check_ns_hl,
 };
 use crate::src::nvim::highlight_group::{
-    COLOR_NAMES, HLF_CLN, HLF_CLS, HLF_LNA, HLF_LNB, HLF_N, HLF_NONE, HLF_SC, name_to_color,
-    ns_get_hl_defs, syn_check_group, syn_id2name,
+    COLOR_NAMES, HLF_CLN, HLF_CLS, HLF_LNA, HLF_LNB, HLF_N, HLF_SC, name_to_color, ns_get_hl_defs,
+    syn_check_group, syn_id2name,
 };
 use crate::src::nvim::insexpand::get_cot_flags;
 use crate::src::nvim::keycodes::{name_to_mod_mask, replace_termcodes, vim_strsave_escape_ks};
@@ -87,7 +87,7 @@ use crate::src::nvim::optionstr::check_stl_option;
 use crate::src::nvim::os::input::{
     input_blocking, input_enqueue, input_enqueue_mouse, input_enqueue_raw,
 };
-use crate::src::nvim::os::libc::{labs, memcmp, memcpy, snprintf, strlen};
+use crate::src::nvim::os::libc::{labs, memcpy, snprintf, strlen};
 use crate::src::nvim::os::proc::os_proc_children;
 use crate::src::nvim::popupmenu::{pum_ext_select_item, pum_set_info};
 use crate::src::nvim::register::{do_put, finish_yankreg_from_object, prepare_yankreg_from_object};
@@ -98,8 +98,7 @@ use crate::src::nvim::runtime::{
 use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::state::get_mode;
 use crate::src::nvim::statusline::{
-    STL_FOLDCOL, STL_SIGNCOL, build_stl_str_hl, draw_tabline, fillchar_status, win_redr_status,
-    win_redr_winbar,
+    STL_FOLDCOL, STL_SIGNCOL, draw_tabline, win_redr_status, win_redr_winbar,
 };
 use crate::src::nvim::terminal::{
     terminal_alloc, terminal_buf, terminal_check_size, terminal_destroy, terminal_open,
@@ -112,19 +111,17 @@ use crate::src::nvim::types::{
     KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap, KeyDict_open_term,
     KeyDict_redraw, KeyDict_runtime, KeyValuePair, LuaRef, LuaRetMode, MessageData, MessageType,
     MotionType, NS, Object, OptScope, OptVal, OptValData, OptValType, RemapValues, ScreenGrid,
-    SignTextAttrs, StlClickRecord, String_0, StringBuilder, Tabpage, TerminalOptions, TryState,
-    VV_LNUM, VV_RELNUM, VV_VIRTNUM, Window, bln_values, buf_T, bufref_T, dictitem_T,
-    dobuf_action_values, dobuf_start_values, except_T, foldinfo_T, handle_T, hlf_T, int64_t,
-    kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kFalse, kNone,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil,
-    kObjectTypeString, kTrue, linenr_T, mpack_token_type_t, msg_data, msglist_T, object,
+    SignTextAttrs, String_0, StringBuilder, Tabpage, TerminalOptions, TryState, VV_LNUM, VV_RELNUM,
+    VV_VIRTNUM, Window, bln_values, buf_T, bufref_T, dictitem_T, dobuf_action_values,
+    dobuf_start_values, except_T, foldinfo_T, handle_T, int64_t, kCdScopeGlobal,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kFalse, kNone, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
+    kTrue, linenr_T, mpack_token_type_t, msg_data, msglist_T, object,
     object_data as C2Rust_Unnamed, pos_T, ptrdiff_t, schar_T, scid_T, sctx_T, size_t, statuscol_T,
-    stl_hlrec_t, tabpage_T, uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
+    tabpage_T, uint8_t, uint16_t, uint64_t, varnumber_T, win_T, xfmark_T, yankreg_T,
 };
 use crate::src::nvim::ui::{ui_array, ui_call_screenshot, ui_flush};
-use crate::src::nvim::window::{
-    global_stl_height, goto_tabpage_tp, goto_tabpage_win, win_find_tabpage,
-};
+use crate::src::nvim::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};
 
 // The carve of the transpiled module; see each child's docs.
 mod client;

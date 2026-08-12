@@ -53,18 +53,34 @@ pub unsafe extern "C" fn did_set_titlestring(args: *mut optset_T) -> *const c_ch
 /// `args` points at the option table's call frame.
 pub(crate) unsafe fn did_set_titleiconstring(args: *mut optset_T, flagval: c_int) -> *const c_char {
     // SAFETY: the frame's value is a C string.
-    unsafe {
-        let value = *varp(args);
-        let formatted =
-            !vim_strchr(value, c_int::from(b'%')).is_null() && check_stl_option(value).is_null();
-        if formatted {
-            *stl_syntax.ptr() |= flagval;
-        } else {
-            *stl_syntax.ptr() &= !flagval;
-        }
-        did_set_title();
-    }
+    let value = unsafe { *varp(args) };
+    // SAFETY: as above; the checker walks it to its terminator.
+    let formatted = unsafe {
+        !vim_strchr(value, c_int::from(b'%')).is_null() && check_stl_option(value).is_null()
+    };
+    let syntax = stl_syntax.get();
+    stl_syntax.set(if formatted {
+        syntax | flagval
+    } else {
+        syntax & !flagval
+    });
+    did_set_title();
     ptr::null()
+}
+
+/// An option's value as bytes.
+///
+/// Safe because every option of string type holds a NUL-terminated string
+/// from the moment the option table is initialised.
+fn opt_bytes<'a>(s: *const c_char) -> &'a [u8] {
+    // SAFETY: the invariant above.
+    unsafe { CStr::from_ptr(s) }.to_bytes()
+}
+
+/// Check `'rulerformat'` as a whole.
+fn check_ruf() -> *const c_char {
+    // SAFETY: the option's own value.
+    unsafe { check_stl_option(p_ruf.get()) }
 }
 
 /// # Safety
@@ -139,30 +155,29 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
     }
 
     let mut errmsg: *const c_char = ptr::null();
-    // SAFETY: `s` is a C string throughout.
-    unsafe {
-        if rulerformat && c_int::from(*s) == c_int::from(b'%') {
-            s = s.add(1);
-            if c_int::from(*s) == c_int::from(b'-') {
-                s = s.add(1);
-            }
-            let wid = getdigits_int(&raw mut s, true, 0);
-            if wid != 0 && c_int::from(*s) == c_int::from(b'(') && {
-                errmsg = check_stl_option(p_ruf.get());
-                errmsg.is_null()
-            } {
-                ru_wid.set(wid);
-            } else if c_int::from(*(*varp).add(1)) != c_int::from(b'!') {
-                // Not a width group and not an expression: check the whole
-                // format after all.
-                errmsg = check_stl_option(p_ruf.get());
-            }
-        } else if rulerformat
-            || c_int::from(*s) != c_int::from(b'%')
-            || c_int::from(*s.add(1)) != c_int::from(b'!')
-        {
-            errmsg = check_stl_option(s);
+    let text = opt_bytes(s);
+    if rulerformat && text.first() == Some(&b'%') {
+        // Step past the `%` and an optional `-`; the width itself is read
+        // with `getdigits_int`, whose overflow behaviour is what decides
+        // that an absurd width is no width at all.
+        let at = 1 + usize::from(text.get(1) == Some(&b'-'));
+        // SAFETY: `at` is at most the terminator's index.
+        let mut p = unsafe { s.add(at) };
+        // SAFETY: `p` is a C string, and the walk stops at its terminator.
+        let wid = unsafe { getdigits_int(&raw mut p, true, 0) };
+        if wid != 0 && opt_bytes(p).first() == Some(&b'(') && {
+            errmsg = check_ruf();
+            errmsg.is_null()
+        } {
+            ru_wid.set(wid);
+        } else if text.get(1) != Some(&b'!') {
+            // Not a width group and not an expression: check the whole
+            // format after all.
+            errmsg = check_ruf();
         }
+    } else if rulerformat || text.first() != Some(&b'%') || text.get(1) != Some(&b'!') {
+        // SAFETY: the frame's own C string value.
+        errmsg = unsafe { check_stl_option(s) };
     }
     if rulerformat && errmsg.is_null() {
         // The ruler's width decides where the last line's columns start.
@@ -190,12 +205,8 @@ pub unsafe extern "C" fn did_set_sessionoptions(args: *mut optset_T) -> *const c
         // SAFETY: the frame's old value is a C string, and the table's own
         // word list and mask.
         unsafe {
-            opt_strings_flags(
-                old_value(args),
-                opt_ssop_values.ptr().cast::<*const c_char>(),
-                ssop_flags.ptr(),
-                true,
-            );
+            let words = opt_ssop_values.ptr().cast::<*const c_char>();
+            opt_strings_flags(old_value(args), words, ssop_flags.ptr(), true);
         }
         return invalid();
     }
@@ -206,66 +217,75 @@ pub unsafe extern "C" fn did_set_sessionoptions(args: *mut optset_T) -> *const c
 /// take a number. The value is walked here rather than by the generic
 /// flag-letter check because each letter decides what may follow it.
 ///
+/// The one-letter items 'shada' may name.
+const SHADA_ITEMS: &[u8] = b"!\"%'/:<@cfhnrs";
+
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe extern "C" fn did_set_shada(args: *mut optset_T) -> *const c_char {
+    // SAFETY: the frame's error buffer and the option's own C string value.
     let (buf, buflen) = unsafe { errbuf(args) };
-    // SAFETY: the option's own C string value, walked to its terminator.
-    unsafe {
-        let mut s = p_shada.get();
-        while *s != 0 {
-            if vim_strchr(c"!\"%'/:<@cfhnrs".as_ptr(), c_int::from(*s as u8)).is_null() {
-                return illegal_char(buf, buflen, c_int::from(*s as u8));
+    // SAFETY: the option's own value, which is NUL-terminated.
+    let value = unsafe { CStr::from_ptr(p_shada.get()) }.to_bytes();
+    // Reading past the end answers the terminator, as walking the C string
+    // does.
+    let at = |i: usize| value.get(i).copied().unwrap_or(0);
+    let mut i = 0;
+    while at(i) != 0 {
+        let item = at(i);
+        if !SHADA_ITEMS.contains(&item) {
+            // SAFETY: the frame's error buffer, with its own length.
+            return unsafe { illegal_char(buf, buflen, c_int::from(item)) };
+        }
+        if item == b'n' {
+            break; // The file name is always last, and takes the rest.
+        } else if item == b'r' {
+            // A removable-media path runs to the next comma.
+            i += 1;
+            while at(i) != 0 && at(i) != b',' {
+                i += 1;
             }
-            if *s == b'n' as c_char {
-                break; // The file name is always last, and takes the rest.
-            } else if *s == b'r' as c_char {
-                // A removable-media path runs to the next comma.
-                while {
-                    s = s.add(1);
-                    *s != 0 && *s != b',' as c_char
-                } {}
-            } else if *s == b'%' as c_char {
-                // The buffer-list count is optional.
-                while {
-                    s = s.add(1);
-                    ascii_isdigit(c_int::from(*s))
-                } {}
-            } else if *s == b'!' as c_char || *s == b'h' as c_char || *s == b'c' as c_char {
-                s = s.add(1); // Takes nothing.
-            } else {
-                // Everything else must have a number.
-                while {
-                    s = s.add(1);
-                    ascii_isdigit(c_int::from(*s))
-                } {}
-                if !ascii_isdigit(c_int::from(*s.sub(1))) {
-                    if buf.is_null() {
-                        return c"".as_ptr();
-                    }
-                    vim_snprintf(
-                        buf,
-                        buflen,
-                        gettext(c"E526: Missing number after <%s>".as_ptr()),
-                        transchar_byte(c_int::from(*s.sub(1) as u8)),
-                    );
-                    return buf;
+        } else if item == b'%' {
+            // The buffer-list count is optional.
+            i += 1;
+            while ascii_isdigit(c_int::from(at(i))) {
+                i += 1;
+            }
+        } else if matches!(item, b'!' | b'h' | b'c') {
+            i += 1; // Takes nothing.
+        } else {
+            // Everything else must have a number.
+            i += 1;
+            while ascii_isdigit(c_int::from(at(i))) {
+                i += 1;
+            }
+            if !ascii_isdigit(c_int::from(at(i - 1))) {
+                if buf.is_null() {
+                    return c"".as_ptr();
                 }
-            }
-            if *s == b',' as c_char {
-                s = s.add(1);
-            } else if *s != 0 {
-                return if buf.is_null() {
-                    c"".as_ptr()
-                } else {
-                    c"E527: Missing comma".as_ptr()
-                };
+                // SAFETY: the frame's error buffer, with its own length,
+                // and a one-string format.
+                unsafe {
+                    let fmt = gettext(c"E526: Missing number after <%s>".as_ptr());
+                    vim_snprintf(buf, buflen, fmt, transchar_byte(c_int::from(at(i - 1))));
+                }
+                return buf;
             }
         }
-        // The ' item, how many files to remember marks for, is required.
-        if *p_shada.get() != 0 && get_shada_parameter(c_int::from(b'\'')) < 0 {
-            return c"E528: Must specify a ' value".as_ptr();
+        if at(i) == b',' {
+            i += 1;
+        } else if at(i) != 0 {
+            return if buf.is_null() {
+                c"".as_ptr()
+            } else {
+                c"E527: Missing comma".as_ptr()
+            };
         }
+    }
+    // The ' item, how many files to remember marks for, is required.
+    // SAFETY: reads the option's own parsed value.
+    if !value.is_empty() && unsafe { get_shada_parameter(c_int::from(b'\'')) } < 0 {
+        return c"E528: Must specify a ' value".as_ptr();
     }
     ptr::null()
 }
