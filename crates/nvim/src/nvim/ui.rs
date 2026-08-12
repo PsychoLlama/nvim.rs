@@ -789,7 +789,7 @@ pub unsafe fn ui_cursor_shape() {
 ///
 /// Reads the current window and the compositor's layout.
 unsafe fn ui_cursor_is_behind_floatwin() -> bool {
-    if State.get() & MODE_CMDLINE != 0 || !unsafe { ui_comp_should_draw() } {
+    if State.get() & MODE_CMDLINE != 0 || !ui_comp_should_draw() {
         return false;
     }
     let win = unsafe { &mut *curwin.get() };

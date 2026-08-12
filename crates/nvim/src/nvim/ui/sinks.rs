@@ -100,9 +100,11 @@ macro_rules! wire {
 
 /// Defines a sink that hands its arguments to each UI's serializer.
 ///
-/// `reach` selects which UIs — see [`Reach`]. `via` names a compositor
-/// entry point to run first, before any UI is touched; it is what makes the
-/// flattened grid exist for the [`Reach::Composed`] UIs to be sent later.
+/// `reach` selects which UIs — see [`Reach`]. `via` is a compositor call to
+/// run first, before any UI is touched; it is what makes the flattened grid
+/// exist for the [`Reach::Composed`] UIs to be sent later. It is taken as a
+/// whole expression, so a compositor entry point that is still `unsafe`
+/// spells its own block.
 ///
 /// The trailing string is the name the debug log shows. It is passed as a
 /// `&'static CStr` per sink, which is what lets [`log_event`] collapse a run
@@ -116,7 +118,7 @@ macro_rules! broadcast {
     )*) => {$(
         $(#[$attr])*
         pub fn $sink($($arg: $ty),*) {
-            $( unsafe { $comp }; )?
+            $( $comp; )?
             broadcast_to(Reach::$reach, $name, |ui| unsafe {
                 $serialize(ui, $($arg),*)
             });
@@ -317,7 +319,9 @@ broadcast! {
         sep_char: String_0,
         zindex: Integer,
         compindex: Integer,
-    ) => remote_ui_msg_set_pos, Uncomposed, c"msg_set_pos", via ui_comp_msg_set_pos(grid, row, scrolled, sep_char, zindex, compindex);
+    ) => remote_ui_msg_set_pos, Uncomposed, c"msg_set_pos",
+        // SAFETY: `sep_char` came off the wire as a valid string.
+        via unsafe { ui_comp_msg_set_pos(grid, row, scrolled, sep_char, zindex, compindex) };
 }
 
 event! {

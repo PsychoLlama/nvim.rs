@@ -1,1117 +1,966 @@
+//! The compositor: flattens the editor's stack of grids into the single
+//! screen a UI without `ext_multigrid` can draw.
+//!
+//! [`LAYERS`] holds every grid the editor has put on screen — `default_grid`
+//! at the bottom, then the floats, the message grid and the popup menu —
+//! sorted by `zindex`, and each grid's `comp_index` is its position in that
+//! stack. Whenever the editor draws a line into any of them,
+//! [`ui_comp_raw_line`] decides whether it can be forwarded untouched or has
+//! to be rebuilt from every layer overlapping it ([`compose_line`]). Both
+//! paths end in `ui_composed_call_*`, which reaches only the UIs this module
+//! draws for.
+//!
+//! Every grid in the stack is owned by something else — a window, the
+//! message area, the popup menu, or the `default_grid` static — so a layer
+//! is a bare pointer in C and a [`Layer`] here: one unsafe constructor
+//! carrying the invariant, safe field access afterwards, which is what lets
+//! the composing itself be safe code. The scratch line and the stack are
+//! reached only through momentary [`GlobalCell`] borrows: composing
+//! re-enters this module, so no borrow may span one.
+//!
+//! Derived from Neovim's `src/nvim/ui_compositor.c`. Copyright Neovim
+//! contributors; licensed under the Apache License, Version 2.0, as recorded
+//! in `LICENSE.txt`.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+mod scratch;
+
+use core::ffi::{CStr, c_char, c_int};
+use core::ops::{Deref, DerefMut};
+use core::{ptr, slice};
+
+use crate::src::nvim::drawscreen::windows_in_curtab;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::grid::{schar_from_buf, schar_from_char};
+use crate::src::nvim::grid::{schar_from_ascii, schar_from_buf};
 use crate::src::nvim::highlight::hl_blend_attrs;
 use crate::src::nvim::highlight_group::{HLF_MSGSEP, syn_check_group, syn_id2attr};
 use crate::src::nvim::log::{LOGLVL_DBG, logmsg_c};
 use crate::src::nvim::main::{
-    Columns, Rows, curtab, curwin, default_grid, firstwin, hl_attr_active, msg_grid, p_wd,
-    rdb_flags,
+    Columns, Rows, curwin, default_grid, hl_attr_active, msg_grid, p_wd, rdb_flags,
 };
-use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
 use crate::src::nvim::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
-use crate::src::nvim::os::libc::{abort, llabs, memcpy};
 use crate::src::nvim::os::time::os_sleep;
 use crate::src::nvim::types::ui::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
 use crate::src::nvim::types::{
-    Boolean, Integer, LineFlags, RemoteUI, ScreenGrid, String_0, handle_T, sattr_T, schar_T,
-    size_t, ssize_t, uint64_t, win_T,
+    Boolean, Integer, LineFlags, RemoteUI, ScreenGrid, String_0, handle_T, sattr_T, schar_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_call_flush, ui_composed_call_grid_cursor_goto, ui_composed_call_grid_resize,
     ui_composed_call_grid_scroll, ui_composed_call_raw_line, ui_has,
 };
+use scratch::{Bufs, NUL, blend, clear_invalid_attrs};
+
+/// One grid in the layer stack.
+///
+/// # Invariant
+///
+/// A `Layer` other than [`Layer::NONE`] addresses a live [`ScreenGrid`] on
+/// the main thread whose `chars`, `attrs` and `line_offset` arrays are
+/// allocated for its own `rows` × `cols`. The editor owns every one of them
+/// and they outlive any `Layer` made here, which is what makes the accessors
+/// below — and with them the composing — safe.
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_15 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut *mut ScreenGrid,
-}
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const KV_INITIAL_VALUE: C2Rust_Unnamed_15 = C2Rust_Unnamed_15 {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<*mut ScreenGrid>(),
-};
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-static composed_uis: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-pub static layers: GlobalCell<C2Rust_Unnamed_15> = GlobalCell::new(KV_INITIAL_VALUE);
-static bufsize: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-static linebuf: GlobalCell<*mut schar_T> = GlobalCell::new(::core::ptr::null_mut::<schar_T>());
-static attrbuf: GlobalCell<*mut sattr_T> = GlobalCell::new(::core::ptr::null_mut::<sattr_T>());
-static chk_height: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static chk_width: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static curgrid: GlobalCell<*mut ScreenGrid> =
-    GlobalCell::new(::core::ptr::null_mut::<ScreenGrid>());
-static valid_screen: GlobalCell<bool> = GlobalCell::new(true_0 != 0);
-static msg_current_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(INT_MAX);
-static msg_was_scrolled: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static msg_sep_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
-static msg_sep_char: GlobalCell<schar_T> = GlobalCell::new(' ' as ::core::ffi::c_int as schar_T);
-static dbghl_normal: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static dbghl_clear: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static dbghl_composed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static dbghl_recompose: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-pub unsafe extern "C" fn ui_comp_init() {
-    if (*layers.ptr()).size == (*layers.ptr()).capacity {
-        (*layers.ptr()).capacity = if (*layers.ptr()).capacity != 0 {
-            (*layers.ptr()).capacity << 1 as ::core::ffi::c_int
-        } else {
-            8 as size_t
-        };
-        (*layers.ptr()).items = xrealloc(
-            (*layers.ptr()).items as *mut ::core::ffi::c_void,
-            ::core::mem::size_of::<*mut ScreenGrid>().wrapping_mul((*layers.ptr()).capacity),
-        ) as *mut *mut ScreenGrid;
-    } else {
-    };
-    let c2rust_fresh0 = (*layers.ptr()).size;
-    (*layers.ptr()).size = (*layers.ptr()).size.wrapping_add(1);
-    let c2rust_lvalue_ptr = &raw mut *(*layers.ptr()).items.add(c2rust_fresh0);
-    *c2rust_lvalue_ptr = default_grid.ptr();
-    curgrid.set(default_grid.ptr());
-}
-pub unsafe extern "C" fn ui_comp_syn_init() {
-    dbghl_normal.set(syn_check_group(
-        c"RedrawDebugNormal".as_ptr(),
-        ::core::mem::size_of::<[::core::ffi::c_char; 18]>().wrapping_sub(1 as size_t),
-    ));
-    dbghl_clear.set(syn_check_group(
-        c"RedrawDebugClear".as_ptr(),
-        ::core::mem::size_of::<[::core::ffi::c_char; 17]>().wrapping_sub(1 as size_t),
-    ));
-    dbghl_composed.set(syn_check_group(
-        c"RedrawDebugComposed".as_ptr(),
-        ::core::mem::size_of::<[::core::ffi::c_char; 20]>().wrapping_sub(1 as size_t),
-    ));
-    dbghl_recompose.set(syn_check_group(
-        c"RedrawDebugRecompose".as_ptr(),
-        ::core::mem::size_of::<[::core::ffi::c_char; 21]>().wrapping_sub(1 as size_t),
-    ));
-}
-pub unsafe extern "C" fn ui_comp_attach(mut ui: *mut RemoteUI) {
-    (*composed_uis.ptr()) += 1;
-    (*ui).composed = true_0 != 0;
-}
-pub unsafe extern "C" fn ui_comp_detach(mut ui: *mut RemoteUI) {
-    (*composed_uis.ptr()) -= 1;
-    if composed_uis.get() == 0 as ::core::ffi::c_int {
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            linebuf.ptr() as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL;
-        let _ = *ptr_;
-        let mut ptr__0: *mut *mut ::core::ffi::c_void =
-            attrbuf.ptr() as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr__0);
-        *ptr__0 = NULL;
-        let _ = *ptr__0;
-        bufsize.set(0 as size_t);
+struct Layer(*mut ScreenGrid);
+
+impl Layer {
+    /// No grid: C's `NULL`, which `curgrid` holds until [`ui_comp_init`].
+    const NONE: Layer = Layer(ptr::null_mut());
+
+    /// # Safety
+    /// `grid` must satisfy the invariant above.
+    const unsafe fn new(grid: *mut ScreenGrid) -> Self {
+        Layer(grid)
     }
-    (*ui).composed = false_0 != 0;
+
+    fn raw(self) -> *mut ScreenGrid {
+        self.0
+    }
+
+    fn is_none(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Whether both name the same grid.
+    fn same(self, other: Layer) -> bool {
+        ptr::eq(self.0, other.0)
+    }
+
+    /// Where `row` of this grid starts in its `chars`/`attrs` arrays.
+    fn row_offset(self, row: usize) -> usize {
+        // SAFETY: the invariant; callers only ask for rows the grid has.
+        unsafe { *self.line_offset.add(row) }
+    }
+
+    /// `n` cells of text and attributes from `off`.
+    fn cells_at(&self, off: usize, n: usize) -> (&[schar_T], &[sattr_T]) {
+        // SAFETY: the invariant; `off + n` stays inside the row the caller
+        // resolved through [`Layer::row_offset`].
+        unsafe {
+            let chars = slice::from_raw_parts(self.chars.add(off), n);
+            (chars, slice::from_raw_parts(self.attrs.add(off), n))
+        }
+    }
+
+    /// One cell of text, possibly one past the run being copied.
+    fn char_at(self, off: usize) -> schar_T {
+        // SAFETY: as [`Layer::cells_at`], for a single cell.
+        unsafe { *self.chars.add(off) }
+    }
+
+    /// One cell's attribute.
+    fn attr_at(self, off: usize) -> sattr_T {
+        // SAFETY: as [`Layer::cells_at`], for a single cell.
+        unsafe { *self.attrs.add(off) }
+    }
+
+    /// Whether (`row`, `col`) of the screen falls inside this layer.
+    fn covers(self, row: c_int, col: c_int) -> bool {
+        row >= self.comp_row
+            && row < self.comp_row + self.rows
+            && col >= self.comp_col
+            && col < self.comp_col + self.cols
+    }
+
+    /// Records this layer's new position in the stack. The flag is what
+    /// makes the next flush re-announce the grid's index.
+    fn set_comp_index(mut self, index: usize) {
+        self.comp_index = index;
+        self.pending_comp_index_update = true;
+    }
 }
-pub unsafe extern "C" fn ui_comp_should_draw() -> bool {
-    return composed_uis.get() != 0 as ::core::ffi::c_int
-        && valid_screen.get() as ::core::ffi::c_int != 0;
+
+impl Deref for Layer {
+    type Target = ScreenGrid;
+
+    fn deref(&self) -> &ScreenGrid {
+        // SAFETY: the invariant; the reference never spans a free.
+        unsafe { &*self.0 }
+    }
 }
-pub unsafe extern "C" fn ui_comp_layers_adjust(mut layer_idx: size_t, mut raise: bool) {
-    let mut size: size_t = (*layers.ptr()).size;
-    let mut layer: *mut ScreenGrid = *(*layers.ptr()).items.add(layer_idx);
+
+impl DerefMut for Layer {
+    fn deref_mut(&mut self) -> &mut ScreenGrid {
+        // SAFETY: as [`Layer::deref`]; each write finishes in its statement.
+        unsafe { &mut *self.0 }
+    }
+}
+
+/// The screen every other layer is composed onto.
+fn default_layer() -> Layer {
+    // SAFETY: a static, whose arrays exist before anything composes.
+    unsafe { Layer::new(default_grid.ptr()) }
+}
+
+/// The message grid, which the `'msgsep'` row is also attributed to.
+fn msg_layer() -> Layer {
+    // SAFETY: as [`default_layer`].
+    unsafe { Layer::new(msg_grid.ptr()) }
+}
+
+/// The window's own grid.
+///
+/// # Safety
+/// `wp` must be a live window.
+unsafe fn win_layer(wp: *mut win_T) -> Layer {
+    // SAFETY: a live window owns its `w_grid_alloc` outright.
+    unsafe { Layer::new(&raw mut (*wp).w_grid_alloc) }
+}
+
+/// How many UIs this module draws for. Zero means nothing is composed.
+static composed_uis: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// The layer stack, bottom first.
+static LAYERS: GlobalCell<Vec<Layer>> = GlobalCell::new(Vec::new());
+
+static BUFS: GlobalCell<Bufs> = GlobalCell::new(Bufs::EMPTY);
+
+/// The grid the last [`ui_comp_set_grid`] selected: every coordinate the
+/// entry points take is relative to it.
+static curgrid: GlobalCell<Layer> = GlobalCell::new(Layer::NONE);
+
+/// The size the default grid was last resized to, for the assertions that
+/// composing stays inside the scratch line. C keeps both under `NDEBUG`.
+static chk_width: GlobalCell<c_int> = GlobalCell::new(0);
+static chk_height: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// False between "the screen is about to be cleared" and the clear, which is
+/// when floats must not be redrawn.
+static valid_screen: GlobalCell<bool> = GlobalCell::new(true);
+
+/// Where the message grid sits and whether it was scrolled into place —
+/// `INT_MAX` until the first `msg_set_pos`.
+static msg_current_row: GlobalCell<c_int> = GlobalCell::new(c_int::MAX);
+static msg_was_scrolled: GlobalCell<bool> = GlobalCell::new(false);
+
+/// The `'msgsep'` row drawn just above the message grid, and its fill
+/// character. `-1` means there is none.
+static msg_sep_row: GlobalCell<c_int> = GlobalCell::new(-1);
+static msg_sep_char: GlobalCell<schar_T> = GlobalCell::new(schar_from_ascii(b' '));
+
+/// Highlight ids for the `'redrawdebug'` overlays: a forwarded line, the
+/// cleared tail, a composed line, and a recomposed area.
+static dbghl_normal: GlobalCell<c_int> = GlobalCell::new(0);
+static dbghl_clear: GlobalCell<c_int> = GlobalCell::new(0);
+static dbghl_composed: GlobalCell<c_int> = GlobalCell::new(0);
+static dbghl_recompose: GlobalCell<c_int> = GlobalCell::new(0);
+
+fn layer_count() -> usize {
+    LAYERS.with(Vec::len)
+}
+
+fn layer_at(index: usize) -> Layer {
+    LAYERS.with(|stack| stack[index])
+}
+
+/// The topmost layer above the default grid covering (`row`, `col`) that
+/// `accept` takes.
+fn topmost_at(row: c_int, col: c_int, accept: impl Fn(Layer) -> bool) -> Option<Layer> {
+    (1..layer_count())
+        .rev()
+        .map(layer_at)
+        .find(|&layer| accept(layer) && layer.covers(row, col))
+}
+
+pub fn ui_comp_init() {
+    LAYERS.with_mut(|stack| stack.push(default_layer()));
+    curgrid.set(default_layer());
+}
+
+/// # Safety
+/// The highlight tables must exist.
+pub unsafe fn ui_comp_syn_init() {
+    dbghl_normal.set(syn_group(c"RedrawDebugNormal"));
+    dbghl_clear.set(syn_group(c"RedrawDebugClear"));
+    dbghl_composed.set(syn_group(c"RedrawDebugComposed"));
+    dbghl_recompose.set(syn_group(c"RedrawDebugRecompose"));
+}
+
+/// The id of a highlight group, defining it if it is new.
+fn syn_group(name: &'static CStr) -> c_int {
+    // SAFETY: a literal name with its own length, C's `S_LEN`.
+    unsafe { syn_check_group(name.as_ptr(), name.count_bytes()) }
+}
+
+/// # Safety
+/// `ui` must be a live UI.
+pub unsafe fn ui_comp_attach(ui: *mut RemoteUI) {
+    composed_uis.set(composed_uis.get() + 1);
+    // SAFETY: the caller's obligation.
+    unsafe { (*ui).composed = true };
+}
+
+/// # Safety
+/// As [`ui_comp_attach`].
+pub unsafe fn ui_comp_detach(ui: *mut RemoteUI) {
+    composed_uis.set(composed_uis.get() - 1);
+    if composed_uis.get() == 0 {
+        BUFS.with_mut(|bufs| *bufs = Bufs::EMPTY);
+    }
+    // SAFETY: the caller's obligation.
+    unsafe { (*ui).composed = false };
+}
+
+pub fn ui_comp_should_draw() -> bool {
+    composed_uis.get() != 0 && valid_screen.get()
+}
+
+/// Raises or lowers the layer at `layer_idx`, bringing `comp_index` back in
+/// line with `zindex`.
+pub fn ui_comp_layers_adjust(mut layer_idx: usize, raise: bool) {
+    let size = layer_count();
+    let layer = layer_at(layer_idx);
     if raise {
-        while layer_idx < size.wrapping_sub(1 as size_t)
-            && (*layer).zindex
-                > (**(*layers.ptr())
-                    .items
-                    .add(layer_idx.wrapping_add(1 as size_t)))
-                .zindex
-        {
-            *(*layers.ptr()).items.add(layer_idx) = *(*layers.ptr())
-                .items
-                .add(layer_idx.wrapping_add(1 as size_t));
-            (**(*layers.ptr()).items.add(layer_idx)).comp_index = layer_idx;
-            (**(*layers.ptr()).items.add(layer_idx)).pending_comp_index_update = true_0 != 0;
-            layer_idx = layer_idx.wrapping_add(1);
+        while layer_idx < size - 1 && layer.zindex > layer_at(layer_idx + 1).zindex {
+            let above = layer_at(layer_idx + 1);
+            LAYERS.with_mut(|stack| stack[layer_idx] = above);
+            above.set_comp_index(layer_idx);
+            layer_idx += 1;
         }
     } else {
-        while layer_idx > 0 as size_t
-            && (*layer).zindex
-                < (**(*layers.ptr())
-                    .items
-                    .add(layer_idx.wrapping_sub(1 as size_t)))
-                .zindex
-        {
-            *(*layers.ptr()).items.add(layer_idx) = *(*layers.ptr())
-                .items
-                .add(layer_idx.wrapping_sub(1 as size_t));
-            (**(*layers.ptr()).items.add(layer_idx)).comp_index = layer_idx;
-            (**(*layers.ptr()).items.add(layer_idx)).pending_comp_index_update = true_0 != 0;
-            layer_idx = layer_idx.wrapping_sub(1);
+        while layer_idx > 0 && layer.zindex < layer_at(layer_idx - 1).zindex {
+            let below = layer_at(layer_idx - 1);
+            LAYERS.with_mut(|stack| stack[layer_idx] = below);
+            below.set_comp_index(layer_idx);
+            layer_idx -= 1;
         }
     }
-    *(*layers.ptr()).items.add(layer_idx) = layer;
-    (*layer).comp_index = layer_idx;
-    (*layer).pending_comp_index_update = true_0 != 0;
+    LAYERS.with_mut(|stack| stack[layer_idx] = layer);
+    layer.set_comp_index(layer_idx);
 }
-pub unsafe extern "C" fn ui_comp_put_grid(
-    mut grid: *mut ScreenGrid,
-    mut row: ::core::ffi::c_int,
-    mut col: ::core::ffi::c_int,
-    mut height: ::core::ffi::c_int,
-    mut width: ::core::ffi::c_int,
-    mut valid: bool,
-    mut on_top: bool,
+
+/// Places `grid` at (`col`, `row`) with a `width` × `height` size, adding it
+/// as a new layer if it is not one already. Answers whether it moved.
+///
+/// # Safety
+/// `grid` must satisfy [`Layer`]'s invariant.
+pub unsafe fn ui_comp_put_grid(
+    grid: *mut ScreenGrid,
+    row: c_int,
+    col: c_int,
+    height: c_int,
+    width: c_int,
+    valid: bool,
+    on_top: bool,
 ) -> bool {
-    let mut moved: bool = false;
-    (*grid).pending_comp_index_update = true_0 != 0;
-    if (*grid).comp_index != 0 as size_t {
-        moved = row != (*grid).comp_row || col != (*grid).comp_col;
+    // SAFETY: the caller's obligation.
+    let mut grid = unsafe { Layer::new(grid) };
+    let moved;
+    grid.pending_comp_index_update = true;
+
+    if grid.comp_index != 0 {
+        moved = row != grid.comp_row || col != grid.comp_col;
         if ui_comp_should_draw() {
-            (*grid).comp_disabled = true_0 != 0;
-            compose_area(
-                (*grid).comp_row as Integer,
-                row as Integer,
-                (*grid).comp_col as Integer,
-                ((*grid).comp_col + (*grid).comp_width) as Integer,
-            );
-            if (*grid).comp_col < col {
-                compose_area(
-                    (if row > (*grid).comp_row {
-                        row
-                    } else {
-                        (*grid).comp_row
-                    }) as Integer,
-                    (if row + height < (*grid).comp_row + (*grid).comp_height {
-                        row + height
-                    } else {
-                        (*grid).comp_row + (*grid).comp_height
-                    }) as Integer,
-                    (*grid).comp_col as Integer,
-                    col as Integer,
-                );
+            // Redraw what the old position covered and the new one does not.
+            // Disabling the grid keeps `compose_area` off it.
+            let (old_row, old_col) = (grid.comp_row, grid.comp_col);
+            let (old_bot, old_right) = (old_row + grid.comp_height, old_col + grid.comp_width);
+            let (top, bot) = (row.max(old_row), (row + height).min(old_bot));
+            grid.comp_disabled = true;
+            compose_area(old_row, row, old_col, old_right);
+            if old_col < col {
+                compose_area(top, bot, old_col, col);
             }
-            if col + width < (*grid).comp_col + (*grid).comp_width {
-                compose_area(
-                    (if row > (*grid).comp_row {
-                        row
-                    } else {
-                        (*grid).comp_row
-                    }) as Integer,
-                    (if row + height < (*grid).comp_row + (*grid).comp_height {
-                        row + height
-                    } else {
-                        (*grid).comp_row + (*grid).comp_height
-                    }) as Integer,
-                    (col + width) as Integer,
-                    ((*grid).comp_col + (*grid).comp_width) as Integer,
-                );
+            if col + width < old_right {
+                compose_area(top, bot, col + width, old_right);
             }
-            compose_area(
-                (row + height) as Integer,
-                ((*grid).comp_row + (*grid).comp_height) as Integer,
-                (*grid).comp_col as Integer,
-                ((*grid).comp_col + (*grid).comp_width) as Integer,
-            );
-            (*grid).comp_disabled = false_0 != 0;
+            compose_area(row + height, old_bot, old_col, old_right);
+            grid.comp_disabled = false;
         }
-        (*grid).comp_row = row;
-        (*grid).comp_col = col;
+        grid.comp_row = row;
+        grid.comp_col = col;
     } else {
-        moved = true_0 != 0;
-        let mut i: size_t = 0 as size_t;
-        while i < (*layers.ptr()).size {
-            if *(*layers.ptr()).items.add(i) == grid {
-                abort();
+        moved = true;
+        // C guards this scan with `#ifndef NDEBUG`, and so does the port: a
+        // grid pushed twice would corrupt the stack silently.
+        debug_assert!(
+            !LAYERS.with(|stack| stack.iter().any(|layer| layer.same(grid))),
+            "grid is not already a layer",
+        );
+
+        let mut insert_at = layer_count();
+        while insert_at > 0 && layer_at(insert_at - 1).zindex > grid.zindex {
+            insert_at -= 1;
+        }
+
+        // A new grid of the current window's own zindex goes *under* that
+        // window unless it asked to be on top. Upstream reads
+        // `layers[insert_at - 1]` without checking `insert_at` first; that
+        // read needs a grid below `default_grid`'s zindex of 0, which
+        // nothing produces.
+        if insert_at > 0 && !curwin.get().is_null() && !on_top {
+            let below = layer_at(insert_at - 1);
+            // SAFETY: `curwin` is a live window whenever it is non-null.
+            let curwin_grid = unsafe { win_layer(curwin.get()) };
+            if below.same(curwin_grid) && below.zindex == grid.zindex {
+                insert_at -= 1;
             }
-            i = i.wrapping_add(1);
         }
-        let mut insert_at: size_t = (*layers.ptr()).size;
-        while insert_at > 0 as size_t
-            && (**(*layers.ptr())
-                .items
-                .add(insert_at.wrapping_sub(1 as size_t)))
-            .zindex
-                > (*grid).zindex
-        {
-            insert_at = insert_at.wrapping_sub(1);
+
+        LAYERS.with_mut(|stack| stack.insert(insert_at, grid));
+        for i in insert_at + 1..layer_count() {
+            layer_at(i).set_comp_index(i);
         }
-        if !(*curwin.ptr()).is_null()
-            && *(*layers.ptr())
-                .items
-                .add(insert_at.wrapping_sub(1 as size_t))
-                == &raw mut (*curwin.get()).w_grid_alloc
-            && (**(*layers.ptr())
-                .items
-                .add(insert_at.wrapping_sub(1 as size_t)))
-            .zindex
-                == (*grid).zindex
-            && !on_top
-        {
-            insert_at = insert_at.wrapping_sub(1);
-        }
-        if (*layers.ptr()).size == (*layers.ptr()).capacity {
-            (*layers.ptr()).capacity = if (*layers.ptr()).capacity != 0 {
-                (*layers.ptr()).capacity << 1 as ::core::ffi::c_int
-            } else {
-                8 as size_t
-            };
-            (*layers.ptr()).items = xrealloc(
-                (*layers.ptr()).items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<*mut ScreenGrid>().wrapping_mul((*layers.ptr()).capacity),
-            ) as *mut *mut ScreenGrid;
-        } else {
-        };
-        (*layers.ptr()).size = (*layers.ptr()).size.wrapping_add(1);
-        let mut i_0: size_t = (*layers.ptr()).size.wrapping_sub(1 as size_t);
-        while i_0 > insert_at {
-            *(*layers.ptr()).items.add(i_0) =
-                *(*layers.ptr()).items.add(i_0.wrapping_sub(1 as size_t));
-            (**(*layers.ptr()).items.add(i_0)).comp_index = i_0;
-            (**(*layers.ptr()).items.add(i_0)).pending_comp_index_update = true_0 != 0;
-            i_0 = i_0.wrapping_sub(1);
-        }
-        *(*layers.ptr()).items.add(insert_at) = grid;
-        (*grid).comp_row = row;
-        (*grid).comp_col = col;
-        (*grid).comp_index = insert_at;
-        (*grid).pending_comp_index_update = true_0 != 0;
+
+        grid.comp_row = row;
+        grid.comp_col = col;
+        grid.comp_index = insert_at;
+        grid.pending_comp_index_update = true;
     }
-    (*grid).comp_height = height;
-    (*grid).comp_width = width;
-    if moved as ::core::ffi::c_int != 0
-        && valid as ::core::ffi::c_int != 0
-        && ui_comp_should_draw() as ::core::ffi::c_int != 0
-    {
-        compose_area(
-            (*grid).comp_row as Integer,
-            ((*grid).comp_row + (*grid).rows) as Integer,
-            (*grid).comp_col as Integer,
-            ((*grid).comp_col + (*grid).cols) as Integer,
-        );
+
+    grid.comp_height = height;
+    grid.comp_width = width;
+    if moved && valid && ui_comp_should_draw() {
+        compose_under(grid);
     }
-    return moved;
+    moved
 }
-pub unsafe extern "C" fn ui_comp_remove_grid(mut grid: *mut ScreenGrid) {
-    debug_assert!(grid != default_grid.ptr(), "grid != &default_grid");
-    if (*grid).comp_index == 0 as size_t {
-        return;
+
+/// # Safety
+/// `grid` must satisfy [`Layer`]'s invariant.
+pub unsafe fn ui_comp_remove_grid(grid: *mut ScreenGrid) {
+    // SAFETY: the caller's obligation.
+    let mut grid = unsafe { Layer::new(grid) };
+    debug_assert!(!grid.same(default_layer()), "grid != &default_grid");
+    if grid.comp_index == 0 {
+        return; // The grid was not a layer.
     }
-    if curgrid.get() == grid {
-        curgrid.set(default_grid.ptr());
+    if curgrid.get().same(grid) {
+        curgrid.set(default_layer());
     }
-    let mut i: size_t = (*grid).comp_index;
-    while i < (*layers.ptr()).size.wrapping_sub(1 as size_t) {
-        *(*layers.ptr()).items.add(i) = *(*layers.ptr()).items.add(i.wrapping_add(1 as size_t));
-        (**(*layers.ptr()).items.add(i)).comp_index = i;
-        (**(*layers.ptr()).items.add(i)).pending_comp_index_update = true_0 != 0;
-        i = i.wrapping_add(1);
+
+    let removed_at = grid.comp_index;
+    LAYERS.with_mut(|stack| {
+        stack.remove(removed_at);
+    });
+    for i in removed_at..layer_count() {
+        layer_at(i).set_comp_index(i);
     }
-    (*layers.ptr()).size = (*layers.ptr()).size.wrapping_sub(1);
-    (*grid).comp_index = 0 as size_t;
-    (*grid).pending_comp_index_update = true_0 != 0;
-    ui_comp_compose_grid(grid);
-}
-pub unsafe extern "C" fn ui_comp_set_grid(mut handle: handle_T) -> bool {
-    if (*curgrid.get()).handle == handle {
-        return true_0 != 0;
-    }
-    let mut grid: *mut ScreenGrid = ::core::ptr::null_mut::<ScreenGrid>();
-    let mut i: size_t = 0 as size_t;
-    while i < (*layers.ptr()).size {
-        if (**(*layers.ptr()).items.add(i)).handle == handle {
-            grid = *(*layers.ptr()).items.add(i);
-            break;
-        } else {
-            i = i.wrapping_add(1);
-        }
-    }
-    if !grid.is_null() {
-        curgrid.set(grid);
-        return true_0 != 0;
-    }
-    return false_0 != 0;
-}
-pub unsafe extern "C" fn ui_comp_raise_grid(mut grid: *mut ScreenGrid, mut new_index: size_t) {
-    let mut old_index: size_t = (*grid).comp_index;
-    let mut i: size_t = old_index;
-    while i < new_index {
-        *(*layers.ptr()).items.add(i) = *(*layers.ptr()).items.add(i.wrapping_add(1 as size_t));
-        (**(*layers.ptr()).items.add(i)).comp_index = i;
-        (**(*layers.ptr()).items.add(i)).pending_comp_index_update = true_0 != 0;
-        i = i.wrapping_add(1);
-    }
-    *(*layers.ptr()).items.add(new_index) = grid;
-    (*grid).comp_index = new_index;
-    (*grid).pending_comp_index_update = true_0 != 0;
-    let mut i_0: size_t = old_index;
-    while i_0 < new_index {
-        let mut grid2: *mut ScreenGrid = *(*layers.ptr()).items.add(i_0);
-        let mut startcol: ::core::ffi::c_int = if (*grid).comp_col > (*grid2).comp_col {
-            (*grid).comp_col
-        } else {
-            (*grid2).comp_col
-        };
-        let mut endcol: ::core::ffi::c_int =
-            if (*grid).comp_col + (*grid).cols < (*grid2).comp_col + (*grid2).cols {
-                (*grid).comp_col + (*grid).cols
-            } else {
-                (*grid2).comp_col + (*grid2).cols
-            };
-        compose_area(
-            (if (*grid).comp_row > (*grid2).comp_row {
-                (*grid).comp_row
-            } else {
-                (*grid2).comp_row
-            }) as Integer,
-            (if (*grid).comp_row + (*grid).rows < (*grid2).comp_row + (*grid2).rows {
-                (*grid).comp_row + (*grid).rows
-            } else {
-                (*grid2).comp_row + (*grid2).rows
-            }) as Integer,
-            startcol as Integer,
-            endcol as Integer,
-        );
-        i_0 = i_0.wrapping_add(1);
+    grid.comp_index = 0;
+    grid.pending_comp_index_update = true;
+
+    // Recompose the area the grid was covering. Inefficient when it was
+    // itself overlapped: only the layers up to `comp_index` needed it.
+    if ui_comp_should_draw() {
+        compose_under(grid);
     }
 }
-pub unsafe extern "C" fn ui_comp_grid_cursor_goto(
-    mut grid_handle: Integer,
-    mut r: Integer,
-    mut c: Integer,
-) {
+
+/// Selects the layer `handle` names as the one coordinates are relative to.
+pub fn ui_comp_set_grid(handle: handle_T) -> bool {
+    if curgrid.get().handle == handle {
+        return true;
+    }
+    let found = LAYERS.with(|stack| stack.iter().find(|layer| layer.handle == handle).copied());
+    found.inspect(|&grid| curgrid.set(grid)).is_some()
+}
+
+/// Moves `grid` up to `new_index`, sliding everything it passes down one,
+/// then recomposes each overlap it uncovered.
+fn raise_grid(grid: Layer, new_index: usize) {
+    let old_index = grid.comp_index;
+    for i in old_index..new_index {
+        let above = layer_at(i + 1);
+        LAYERS.with_mut(|stack| stack[i] = above);
+        above.set_comp_index(i);
+    }
+    LAYERS.with_mut(|stack| stack[new_index] = grid);
+    grid.set_comp_index(new_index);
+
+    for i in old_index..new_index {
+        let other = layer_at(i);
+        let top = grid.comp_row.max(other.comp_row);
+        let bot = (grid.comp_row + grid.rows).min(other.comp_row + other.rows);
+        let left = grid.comp_col.max(other.comp_col);
+        let right = (grid.comp_col + grid.cols).min(other.comp_col + other.cols);
+        compose_area(top, bot, left, right);
+    }
+}
+
+pub fn ui_comp_grid_cursor_goto(grid_handle: Integer, r: Integer, c: Integer) {
     if !ui_comp_set_grid(grid_handle as handle_T) {
         return;
     }
-    let mut cursor_row: ::core::ffi::c_int = (*curgrid.get()).comp_row + r as ::core::ffi::c_int;
-    let mut cursor_col: ::core::ffi::c_int = (*curgrid.get()).comp_col + c as ::core::ffi::c_int;
-    if curgrid.get() != default_grid.ptr() {
-        let mut new_index: size_t = (*layers.ptr()).size.wrapping_sub(1 as size_t);
-        while new_index > 1 as size_t
-            && (**(*layers.ptr()).items.add(new_index)).zindex > (*curgrid.get()).zindex
-        {
-            new_index = new_index.wrapping_sub(1);
+    let cursor_row = curgrid.get().comp_row + r as c_int;
+    let cursor_col = curgrid.get().comp_col + c as c_int;
+
+    // Upstream's TODO: for efficiency all grids should be configured before
+    // `win_update` runs, rather than here.
+    if !curgrid.get().same(default_layer()) {
+        let mut new_index = layer_count() - 1;
+        while new_index > 1 && layer_at(new_index).zindex > curgrid.get().zindex {
+            new_index -= 1;
         }
-        if (*curgrid.get()).comp_index < new_index {
-            ui_comp_raise_grid(curgrid.get(), new_index);
+        if curgrid.get().comp_index < new_index {
+            raise_grid(curgrid.get(), new_index);
         }
     }
-    if cursor_col >= (*default_grid.ptr()).cols || cursor_row >= (*default_grid.ptr()).rows {
-        return;
+
+    let default = default_layer();
+    if cursor_col >= default.cols || cursor_row >= default.rows {
+        return; // Upstream's TODO: this happens with 'writedelay'.
     }
-    ui_composed_call_grid_cursor_goto(1 as Integer, cursor_row as Integer, cursor_col as Integer);
+    ui_composed_call_grid_cursor_goto(1, cursor_row.into(), cursor_col.into());
 }
-pub unsafe extern "C" fn ui_comp_mouse_focus(
-    mut row: ::core::ffi::c_int,
-    mut col: ::core::ffi::c_int,
-) -> *mut ScreenGrid {
-    let mut i: ssize_t = (*layers.ptr()).size as ssize_t - 1 as ssize_t;
-    while i > 0 as ssize_t {
-        let mut grid: *mut ScreenGrid = *(*layers.ptr()).items.offset(i as isize);
-        if (*grid).mouse_enabled as ::core::ffi::c_int != 0
-            && row >= (*grid).comp_row
-            && row < (*grid).comp_row + (*grid).rows
-            && col >= (*grid).comp_col
-            && col < (*grid).comp_col + (*grid).cols
-        {
-            return grid;
-        }
-        i -= 1;
+
+/// The grid that owns screen cell (`row`, `col`) for mouse purposes, or null
+/// if none does.
+///
+/// # Safety
+/// The window list must be live.
+pub unsafe fn ui_comp_mouse_focus(row: c_int, col: c_int) -> *mut ScreenGrid {
+    if let Some(grid) = topmost_at(row, col, |grid| grid.mouse_enabled) {
+        return grid.raw();
     }
     if ui_has(kUIMultigrid) {
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
-        } else {
-            (*curtab.get()).tp_firstwin
-        };
-        while !wp.is_null() {
-            let mut grid_0: *mut ScreenGrid = &raw mut (*wp).w_grid_alloc;
-            if (*grid_0).mouse_enabled as ::core::ffi::c_int != 0
-                && row >= (*wp).w_winrow
-                && row < (*wp).w_winrow + (*grid_0).rows
-                && col >= (*wp).w_wincol
-                && col < (*wp).w_wincol + (*grid_0).cols
+        // With `ext_multigrid` a window's grid is not composed and so has no
+        // `comp_row`/`comp_col`; the window's own position stands in.
+        // SAFETY: the caller's obligation; nothing here restructures the
+        // window list.
+        for wp in unsafe { windows_in_curtab() } {
+            // SAFETY: `wp` came from the live window list.
+            let (grid, winrow, wincol) = unsafe { (win_layer(wp), (*wp).w_winrow, (*wp).w_wincol) };
+            if grid.mouse_enabled
+                && row >= winrow
+                && row < winrow + grid.rows
+                && col >= wincol
+                && col < wincol + grid.cols
             {
-                return grid_0;
+                return grid.raw();
             }
-            wp = (*wp).w_next;
         }
     }
-    return ::core::ptr::null_mut::<ScreenGrid>();
+    ptr::null_mut()
 }
-pub unsafe extern "C" fn ui_comp_get_grid_at_coord(
-    mut row: ::core::ffi::c_int,
-    mut col: ::core::ffi::c_int,
-) -> *mut ScreenGrid {
-    let mut i: ssize_t = (*layers.ptr()).size as ssize_t - 1 as ssize_t;
-    while i > 0 as ssize_t {
-        let mut grid: *mut ScreenGrid = *(*layers.ptr()).items.offset(i as isize);
-        if row >= (*grid).comp_row
-            && row < (*grid).comp_row + (*grid).rows
-            && col >= (*grid).comp_col
-            && col < (*grid).comp_col + (*grid).cols
-        {
-            return grid;
-        }
-        i -= 1;
+
+/// The topmost grid at screen coordinates (`row`, `col`).
+///
+/// # Safety
+/// As [`ui_comp_mouse_focus`].
+pub unsafe fn ui_comp_get_grid_at_coord(row: c_int, col: c_int) -> *mut ScreenGrid {
+    if let Some(grid) = topmost_at(row, col, |_| true) {
+        return grid.raw();
     }
-    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-        firstwin.get()
-    } else {
-        (*curtab.get()).tp_firstwin
-    };
-    while !wp.is_null() {
-        let mut grid_0: *mut ScreenGrid = &raw mut (*wp).w_grid_alloc;
-        if row >= (*grid_0).comp_row
-            && row < (*grid_0).comp_row + (*grid_0).rows
-            && col >= (*grid_0).comp_col
-            && col < (*grid_0).comp_col + (*grid_0).cols
-            && !(*wp).w_config.hide
-        {
-            return grid_0;
+    // SAFETY: the caller's obligation.
+    for wp in unsafe { windows_in_curtab() } {
+        // SAFETY: `wp` came from the live window list.
+        let (grid, hidden) = unsafe { (win_layer(wp), (*wp).w_config.hide) };
+        if grid.covers(row, col) && !hidden {
+            return grid.raw();
         }
-        wp = (*wp).w_next;
     }
-    return default_grid.ptr();
+    default_layer().raw()
 }
-unsafe extern "C" fn compose_line(
-    mut row: Integer,
-    mut startcol: Integer,
-    mut endcol: Integer,
-    mut flags: LineFlags,
-) {
-    startcol = if startcol > 0 as Integer {
-        startcol
-    } else {
-        0 as Integer
-    };
-    let mut skipstart: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut skipend: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if startcol > 0 as Integer
-        && flags as ::core::ffi::c_int & kLineFlagInvalid as ::core::ffi::c_int != 0
-    {
+
+/// Rebuilds `[startcol, endcol)` of `row` from every layer overlapping it,
+/// and sends the result on.
+///
+/// The baseline implementation: always correct, but sometimes more work than
+/// the downstream UI needed — see [`ui_comp_raw_line`], which forwards a line
+/// untouched when nothing covers it.
+fn compose_line(row: Integer, startcol: Integer, endcol: Integer, mut flags: LineFlags) {
+    let default = default_layer();
+    // With 'rightleft' `startcol` can be -1: no layer overlaps that, and the
+    // assertions below would fail on it.
+    let mut startcol = startcol.max(0);
+    let mut endcol = endcol;
+    // We may be starting on the right half of a double-width character, so
+    // take in the left half too — and skip it in the output if it was not.
+    let (mut skipstart, mut skipend) = (0, 0);
+    if startcol > 0 && flags & kLineFlagInvalid != 0 {
         startcol -= 1;
-        skipstart = 1 as ::core::ffi::c_int;
+        skipstart = 1;
     }
-    if endcol < (*default_grid.ptr()).cols as Integer
-        && flags as ::core::ffi::c_int & kLineFlagInvalid as ::core::ffi::c_int != 0
-    {
+    if endcol < Integer::from(default.cols) && flags & kLineFlagInvalid != 0 {
         endcol += 1;
-        skipend = 1 as ::core::ffi::c_int;
+        skipend = 1;
     }
-    let mut col: ::core::ffi::c_int = startcol as ::core::ffi::c_int;
-    let mut grid: *mut ScreenGrid = ::core::ptr::null_mut::<ScreenGrid>();
-    let mut bg_line: *mut schar_T = (*default_grid.ptr()).chars.add(
-        (*(*default_grid.ptr()).line_offset.offset(row as isize)).wrapping_add(startcol as size_t),
-    );
-    let mut bg_attrs: *mut sattr_T = (*default_grid.ptr()).attrs.add(
-        (*(*default_grid.ptr()).line_offset.offset(row as isize)).wrapping_add(startcol as size_t),
-    );
-    while (col as Integer) < endcol {
-        let mut until: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut i: size_t = 0 as size_t;
-        while i < (*layers.ptr()).size {
-            let mut g: *mut ScreenGrid = *(*layers.ptr()).items.add(i);
-            let mut grid_width: ::core::ffi::c_int = if (*g).cols < (*g).comp_width {
-                (*g).cols
-            } else {
-                (*g).comp_width
-            };
-            let mut grid_height: ::core::ffi::c_int = if (*g).rows < (*g).comp_height {
-                (*g).rows
-            } else {
-                (*g).comp_height
-            };
-            if !((*g).comp_row as Integer > row
-                || row >= ((*g).comp_row + grid_height) as Integer
-                || (*g).comp_disabled as ::core::ffi::c_int != 0)
-            {
-                if (*g).comp_col <= col && col < (*g).comp_col + grid_width {
-                    grid = g;
-                    until = (*g).comp_col + grid_width;
-                } else if (*g).comp_col > col {
-                    until = if until < (*g).comp_col {
-                        until
-                    } else {
-                        (*g).comp_col
-                    };
-                }
-            }
-            i = i.wrapping_add(1);
-        }
-        until = if until < endcol as ::core::ffi::c_int {
-            until
-        } else {
-            endcol as ::core::ffi::c_int
-        };
-        debug_assert!(!grid.is_null(), "grid != NULL");
-        debug_assert!(until > col, "until > col");
-        debug_assert!(
-            until <= (*default_grid.ptr()).cols,
-            "until <= default_grid.cols"
-        );
-        let mut n: size_t = (until - col) as size_t;
-        if row == msg_sep_row.get() as Integer && (*grid).comp_index <= (*msg_grid.ptr()).comp_index
-        {
-            grid = msg_grid.ptr();
-            let mut msg_sep_attr: sattr_T =
-                *(*hl_attr_active.ptr()).offset(HLF_MSGSEP as isize) as sattr_T;
-            let mut i_0: ::core::ffi::c_int = col;
-            while i_0 < until {
-                *(*linebuf.ptr()).offset((i_0 as Integer - startcol) as isize) = msg_sep_char.get();
-                *(*attrbuf.ptr()).offset((i_0 as Integer - startcol) as isize) = msg_sep_attr;
-                i_0 += 1;
-            }
-        } else {
-            let mut off: size_t = (*(*grid)
-                .line_offset
-                .offset((row - (*grid).comp_row as Integer) as isize))
-            .wrapping_add((col - (*grid).comp_col) as size_t);
-            memcpy(
-                (*linebuf.ptr()).offset((col as Integer - startcol) as isize)
-                    as *mut ::core::ffi::c_void,
-                (*grid).chars.add(off) as *const ::core::ffi::c_void,
-                n.wrapping_mul(::core::mem::size_of::<schar_T>()),
-            );
-            memcpy(
-                (*attrbuf.ptr()).offset((col as Integer - startcol) as isize)
-                    as *mut ::core::ffi::c_void,
-                (*grid).attrs.add(off) as *const ::core::ffi::c_void,
-                n.wrapping_mul(::core::mem::size_of::<sattr_T>()),
-            );
-            if (*grid).comp_col + (*grid).cols > until
-                && *(*grid).chars.add(off.wrapping_add(n)) == NUL as schar_T
-            {
-                *(*linebuf.ptr())
-                    .offset(((until - 1 as ::core::ffi::c_int) as Integer - startcol) as isize) =
-                    ' ' as ::core::ffi::c_int as schar_T;
-                if col as Integer == startcol && n == 1 as size_t {
-                    skipstart = 0 as ::core::ffi::c_int;
-                }
-            }
-        }
-        if (*grid).blending {
-            let mut width: ::core::ffi::c_int = 0;
-            let mut i_1: ::core::ffi::c_int = col - startcol as ::core::ffi::c_int;
-            while (i_1 as Integer) < until as Integer - startcol {
-                width = 1 as ::core::ffi::c_int;
-                let mut thru: bool = (*(*linebuf.ptr()).offset(i_1 as isize)
-                    == ' ' as ::core::ffi::c_int as schar_T
-                    || *(*linebuf.ptr()).offset(i_1 as isize)
-                        == schar_from_char('⠀' as ::core::ffi::c_int))
-                    && *bg_line.offset(i_1 as isize) != NUL as schar_T;
-                if ((i_1 + 1 as ::core::ffi::c_int) as Integer) < endcol - startcol
-                    && *bg_line.offset((i_1 + 1 as ::core::ffi::c_int) as isize) == NUL as schar_T
+
+    let skips = (skipstart, skipend);
+    let (top, skipstart, skipend) =
+        BUFS.with_mut(|bufs| compose_into(bufs, row, startcol, endcol, skips));
+
+    debug_assert!(endcol <= chk_width.get().into(), "endcol <= chk_width");
+    debug_assert!(row < chk_height.get().into(), "row < chk_height");
+
+    // A line keeps its wrap flag only if it came from a full-width layer.
+    if !(!top.is_none() && (top.same(default) || (top.comp_col == 0 && top.cols == Columns.get())))
+    {
+        flags &= !kLineFlagWrap;
+    }
+
+    let (chars, attrs) = BUFS.with(|bufs| (bufs.chars.as_ptr(), bufs.attrs.as_ptr()));
+    let start = startcol + skipstart as Integer;
+    let end = endcol - skipend as Integer;
+    // SAFETY: `compose_into` filled `endcol - startcol` cells of both
+    // buffers, and both skips are inside that range.
+    unsafe {
+        let (chars, attrs) = (chars.add(skipstart), attrs.add(skipstart));
+        ui_composed_call_raw_line(1, row, start, end, end, 0, flags, chars, attrs);
+    }
+}
+
+/// Flattens `[startcol, endcol)` of `row` into `bufs`, answering the topmost
+/// grid that contributed and the two skip counts as they ended up.
+fn compose_into(
+    bufs: &mut Bufs,
+    row: Integer,
+    startcol: Integer,
+    endcol: Integer,
+    skips: (usize, usize),
+) -> (Layer, usize, usize) {
+    let default = default_layer();
+    let (mut skipstart, mut skipend) = skips;
+    let mut top = Layer::NONE;
+    let width = (endcol - startcol) as usize;
+    let line = &mut bufs.chars[..width];
+    let attrbuf = &mut bufs.attrs[..width];
+    // The backdrop 'winblend' and 'pumblend' blend against.
+    let bg_off = default.row_offset(row as usize) + startcol as usize;
+    let bg = default.cells_at(bg_off, width);
+
+    let mut col = startcol as c_int;
+    while Integer::from(col) < endcol {
+        // How far the topmost layer covering `col` owns.
+        let mut until = 0;
+        LAYERS.with(|stack| {
+            for &g in stack {
+                // Composing can run after a shrink was requested but before
+                // the resize landed, so trust the smaller of the allocated
+                // and the composed size — cells the resize invalidated must
+                // not reach the scratch line.
+                let grid_width = g.cols.min(g.comp_width);
+                let grid_height = g.rows.min(g.comp_height);
+                if Integer::from(g.comp_row) > row
+                    || row >= Integer::from(g.comp_row + grid_height)
+                    || g.comp_disabled
                 {
-                    width = 2 as ::core::ffi::c_int;
-                    thru = thru as ::core::ffi::c_int
-                        & (*(*linebuf.ptr()).offset((i_1 + 1 as ::core::ffi::c_int) as isize)
-                            == ' ' as ::core::ffi::c_int as schar_T
-                            || *(*linebuf.ptr()).offset((i_1 + 1 as ::core::ffi::c_int) as isize)
-                                == schar_from_char('⠀' as ::core::ffi::c_int))
-                            as ::core::ffi::c_int
-                        != 0;
+                    continue;
                 }
-                *(*attrbuf.ptr()).offset(i_1 as isize) = hl_blend_attrs(
-                    *bg_attrs.offset(i_1 as isize) as ::core::ffi::c_int,
-                    *(*attrbuf.ptr()).offset(i_1 as isize) as ::core::ffi::c_int,
-                    &mut thru,
-                ) as sattr_T;
-                if width == 2 as ::core::ffi::c_int {
-                    *(*attrbuf.ptr()).offset((i_1 + 1 as ::core::ffi::c_int) as isize) =
-                        hl_blend_attrs(
-                            *bg_attrs.offset((i_1 + 1 as ::core::ffi::c_int) as isize)
-                                as ::core::ffi::c_int,
-                            *(*attrbuf.ptr()).offset((i_1 + 1 as ::core::ffi::c_int) as isize)
-                                as ::core::ffi::c_int,
-                            &mut thru,
-                        ) as sattr_T;
+                if g.comp_col <= col && col < g.comp_col + grid_width {
+                    top = g;
+                    until = g.comp_col + grid_width;
+                } else if g.comp_col > col {
+                    until = until.min(g.comp_col);
                 }
-                if thru {
-                    memcpy(
-                        (*linebuf.ptr()).offset(i_1 as isize) as *mut ::core::ffi::c_void,
-                        bg_line.offset(i_1 as isize) as *const ::core::ffi::c_void,
-                        (width as size_t).wrapping_mul(::core::mem::size_of::<schar_T>()),
-                    );
+            }
+        });
+        until = until.min(endcol as c_int);
+
+        debug_assert!(!top.is_none(), "grid != NULL");
+        debug_assert!(until > col, "until > col");
+        debug_assert!(until <= default.cols, "until <= default_grid.cols");
+        let at = (Integer::from(col) - startcol) as usize;
+        let n = (until - col) as usize;
+
+        let mut grid = top;
+        if Integer::from(msg_sep_row.get()) == row && grid.comp_index <= msg_layer().comp_index {
+            // Upstream's TODO: once floats have borders, the separator can
+            // just be one around the message grid.
+            grid = msg_layer();
+            // SAFETY: the highlight table is built before anything draws.
+            let sep_attr = unsafe { *hl_attr_active.get().add(HLF_MSGSEP as usize) };
+            line[at..at + n].fill(msg_sep_char.get());
+            attrbuf[at..at + n].fill(sep_attr);
+        } else {
+            let grid_row = (row - Integer::from(grid.comp_row)) as usize;
+            let off = grid.row_offset(grid_row) + (col - grid.comp_col) as usize;
+            let (chars, attrs) = grid.cells_at(off, n);
+            line[at..at + n].copy_from_slice(chars);
+            attrbuf[at..at + n].copy_from_slice(attrs);
+            if grid.comp_col + grid.cols > until && grid.char_at(off + n) == NUL {
+                // The run ends on the left half of a double-width character;
+                // show a space instead.
+                line[at + n - 1] = schar_from_ascii(b' ');
+                if at == 0 && n == 1 {
+                    skipstart = 0;
                 }
-                i_1 += width;
             }
         }
-        if *(*linebuf.ptr()).offset((col as Integer - startcol) as isize) == NUL as schar_T {
-            *(*linebuf.ptr()).offset((col as Integer - startcol) as isize) =
-                ' ' as ::core::ffi::c_int as schar_T;
-            if col as Integer == endcol - 1 as Integer {
-                skipend = 0 as ::core::ffi::c_int;
-            }
-        } else if col as Integer == startcol
-            && n > 1 as size_t
-            && *(*linebuf.ptr()).offset(1 as ::core::ffi::c_int as isize) == NUL as schar_T
-        {
-            skipstart = 0 as ::core::ffi::c_int;
+
+        if grid.blending {
+            blend(line, attrbuf, bg, at..at + n, width, blend_attrs);
         }
+
+        // Tricky: an overlap that cut a double-width character in half must
+        // show a space for the visible half.
+        if line[at] == NUL {
+            line[at] = schar_from_ascii(b' ');
+            if Integer::from(col) == endcol - 1 {
+                skipend = 0;
+            }
+        } else if at == 0 && n > 1 && line[1] == NUL {
+            skipstart = 0;
+        }
+
         col = until;
     }
-    if *(*linebuf.ptr()).offset((endcol - startcol - 1 as Integer) as isize) == NUL as schar_T {
-        skipend = 0 as ::core::ffi::c_int;
+    // A zero-width range leaves both skips at 0 either way, so nothing the
+    // upstream read one cell before the buffer could have changed.
+    if width > 0 && line[width - 1] == NUL {
+        skipend = 0;
     }
-    debug_assert!(endcol <= chk_width.get() as Integer, "endcol <= chk_width");
-    debug_assert!(row < chk_height.get() as Integer, "row < chk_height");
-    if !(!grid.is_null()
-        && (grid == default_grid.ptr()
-            || (*grid).comp_col == 0 as ::core::ffi::c_int && (*grid).cols == Columns.get()))
-    {
-        flags = (flags as ::core::ffi::c_int & !(kLineFlagWrap as ::core::ffi::c_int)) as LineFlags;
-    }
-    let mut i_2: ::core::ffi::c_int = skipstart;
-    while (i_2 as Integer) < endcol - skipend as Integer - startcol {
-        if *(*attrbuf.ptr()).offset(i_2 as isize) < 0 as sattr_T {
-            if rdb_flags.get() & kOptRdbFlagInvalid as ::core::ffi::c_int as ::core::ffi::c_uint
-                != 0
-            {
-                abort();
-            } else {
-                *(*attrbuf.ptr()).offset(i_2 as isize) = 0 as ::core::ffi::c_int as sattr_T;
-            }
-        }
-        i_2 += 1;
-    }
-    ui_composed_call_raw_line(
-        1 as Integer,
-        row,
-        startcol + skipstart as Integer,
-        endcol - skipend as Integer,
-        endcol - skipend as Integer,
-        0 as Integer,
-        flags,
-        (linebuf.get() as *const schar_T).offset(skipstart as isize),
-        (attrbuf.get() as *const sattr_T).offset(skipstart as isize),
-    );
+
+    let fatal = rdb_flags.get() & kOptRdbFlagInvalid != 0;
+    clear_invalid_attrs(attrbuf, skipstart..width - skipend, fatal);
+    (top, skipstart, skipend)
 }
-unsafe extern "C" fn compose_debug(
-    mut startrow: Integer,
-    mut endrow: Integer,
-    mut startcol: Integer,
-    mut endcol: Integer,
-    mut syn_id: ::core::ffi::c_int,
-    mut delay: bool,
-) {
-    if rdb_flags.get() & kOptRdbFlagCompositor as ::core::ffi::c_int as ::core::ffi::c_uint == 0
-        || startcol >= endcol
-    {
+
+/// C's `hl_blend_attrs`, as [`blend`] wants it.
+fn blend_attrs(back: sattr_T, front: sattr_T, thru: &mut bool) -> sattr_T {
+    // SAFETY: the attribute tables are the editor's own.
+    unsafe { hl_blend_attrs(back, front, thru) as sattr_T }
+}
+
+/// Paints an area in one of the `'redrawdebug'` colours, so the work the
+/// compositor did is visible on screen.
+fn compose_debug(rows: (Integer, Integer), cols: (Integer, Integer), syn_id: c_int, delay: bool) {
+    let ((startrow, mut endrow), (startcol, mut endcol)) = (rows, cols);
+    if rdb_flags.get() & kOptRdbFlagCompositor == 0 || startcol >= endcol {
         return;
     }
-    endrow = if endrow < (*default_grid.ptr()).rows as Integer {
-        endrow
-    } else {
-        (*default_grid.ptr()).rows as Integer
-    };
-    endcol = if endcol < (*default_grid.ptr()).cols as Integer {
-        endcol
-    } else {
-        (*default_grid.ptr()).cols as Integer
-    };
-    let mut attr: ::core::ffi::c_int = syn_id2attr(syn_id);
+    let default = default_layer();
+    endrow = endrow.min(default.rows.into());
+    endcol = endcol.min(default.cols.into());
+    // SAFETY: the highlight tables are built before anything draws.
+    let attr = Integer::from(unsafe { syn_id2attr(syn_id) });
+
     if delay {
         debug_delay(endrow - startrow);
     }
-    let mut row: ::core::ffi::c_int = startrow as ::core::ffi::c_int;
-    while (row as Integer) < endrow {
-        ui_composed_call_raw_line(
-            1 as Integer,
-            row as Integer,
-            startcol,
-            startcol,
-            endcol,
-            attr as Integer,
-            false_0,
-            linebuf.get() as *const schar_T,
-            attrbuf.get() as *const sattr_T,
-        );
-        row += 1;
-    }
-    if delay {
-        debug_delay(endrow - startrow);
-    }
-}
-unsafe extern "C" fn debug_delay(mut lines: Integer) {
-    ui_call_flush();
-    let mut wd: uint64_t = llabs(p_wd.get() as ::core::ffi::c_longlong) as uint64_t;
-    let mut factor: uint64_t = (if (if lines < 5 as Integer {
-        lines
-    } else {
-        5 as Integer
-    }) > 1 as Integer
-    {
-        if lines < 5 as Integer {
-            lines
-        } else {
-            5 as Integer
+    let (chars, attrs) = BUFS.with(|bufs| (bufs.chars.as_ptr(), bufs.attrs.as_ptr()));
+    for r in startrow as c_int..endrow as c_int {
+        let row = Integer::from(r);
+        // SAFETY: the chunk is empty on the wire (`startcol` twice), so only
+        // the clear out to `endcol` reaches the UI.
+        unsafe {
+            ui_composed_call_raw_line(1, row, startcol, startcol, endcol, attr, 0, chars, attrs);
         }
-    } else {
-        1 as Integer
-    }) as uint64_t;
-    os_sleep(factor.wrapping_mul(wd));
+    }
+    if delay {
+        debug_delay(endrow - startrow);
+    }
 }
-unsafe extern "C" fn compose_area(
-    mut startrow: Integer,
-    mut endrow: Integer,
-    mut startcol: Integer,
-    mut endcol: Integer,
-) {
-    compose_debug(
-        startrow,
-        endrow,
-        startcol,
-        endcol,
-        dbghl_recompose.get(),
-        true_0 != 0,
-    );
-    endrow = if endrow < (*default_grid.ptr()).rows as Integer {
-        endrow
-    } else {
-        (*default_grid.ptr()).rows as Integer
-    };
-    endcol = if endcol < (*default_grid.ptr()).cols as Integer {
-        endcol
-    } else {
-        (*default_grid.ptr()).cols as Integer
-    };
+
+/// Flushes and sleeps, so `'redrawdebug'`'s overlay is visible before the
+/// real content replaces it. `'writedelay'` is the unit.
+fn debug_delay(lines: Integer) {
+    ui_call_flush();
+    let wd = p_wd.get().unsigned_abs();
+    let factor = lines.clamp(1, 5) as u64;
+    os_sleep(factor * wd);
+}
+
+/// Recomposes every row of an area.
+fn compose_area<T: Into<Integer>>(startrow: T, endrow: T, startcol: T, endcol: T) {
+    let (startrow, startcol) = (startrow.into(), startcol.into());
+    let (endrow, endcol) = (endrow.into(), endcol.into());
+    let recompose = dbghl_recompose.get();
+    compose_debug((startrow, endrow), (startcol, endcol), recompose, true);
+    let default = default_layer();
+    let endrow = endrow.min(default.rows.into());
+    let endcol = endcol.min(default.cols.into());
     if endcol <= startcol {
         return;
     }
-    let mut r: ::core::ffi::c_int = startrow as ::core::ffi::c_int;
-    while (r as Integer) < endrow {
-        compose_line(
-            r as Integer,
-            startcol,
-            endcol,
-            kLineFlagInvalid as ::core::ffi::c_int,
-        );
-        r += 1;
+    for r in startrow as c_int..endrow as c_int {
+        compose_line(r.into(), startcol, endcol, kLineFlagInvalid);
     }
 }
-pub unsafe extern "C" fn ui_comp_compose_grid(mut grid: *mut ScreenGrid) {
+
+/// Recomposes the area under `grid`.
+fn compose_under(grid: Layer) {
+    let bot = grid.comp_row + grid.rows;
+    let right = grid.comp_col + grid.cols;
+    compose_area(grid.comp_row, bot, grid.comp_col, right);
+}
+
+/// Recomposes the area under `grid`, which is what an option affecting
+/// composition — `'pumblend'` for the popup menu, say — needs after a change.
+///
+/// # Safety
+/// `grid` must satisfy [`Layer`]'s invariant.
+pub unsafe fn ui_comp_compose_grid(grid: *mut ScreenGrid) {
     if ui_comp_should_draw() {
-        compose_area(
-            (*grid).comp_row as Integer,
-            ((*grid).comp_row + (*grid).rows) as Integer,
-            (*grid).comp_col as Integer,
-            ((*grid).comp_col + (*grid).cols) as Integer,
-        );
+        // SAFETY: the caller's obligation.
+        compose_under(unsafe { Layer::new(grid) });
     }
 }
-pub unsafe extern "C" fn ui_comp_raw_line(
-    mut grid: Integer,
-    mut row: Integer,
-    mut startcol: Integer,
-    mut endcol: Integer,
-    mut clearcol: Integer,
-    mut clearattr: Integer,
+
+/// C's `DLOG`, for the two geometry complaints below.
+///
+/// # Safety
+/// `fmt` must take two `Integer`s.
+unsafe fn dlog(line: c_int, fmt: *const c_char, value: Integer, grid: Integer) {
+    let here = c"ui_comp_raw_line".as_ptr();
+    // SAFETY: the caller's obligation.
+    unsafe { logmsg_c!(LOGLVL_DBG, ptr::null(), here, line, true, fmt, value, grid) };
+}
+
+/// One drawn line, straight from the grid the editor drew it into: either
+/// forwarded as it is, or recomposed when something covers it.
+///
+/// # Safety
+/// `chunk` and `attrs` must each address `endcol - startcol` readable cells.
+#[expect(clippy::too_many_arguments, reason = "one parameter per wire field")]
+pub unsafe fn ui_comp_raw_line(
+    grid: Integer,
+    row: Integer,
+    startcol: Integer,
+    endcol: Integer,
+    clearcol: Integer,
+    clearattr: Integer,
     mut flags: LineFlags,
-    mut chunk: *const schar_T,
-    mut attrs: *const sattr_T,
+    chunk: *const schar_T,
+    attrs: *const sattr_T,
 ) {
     if !ui_comp_should_draw() || !ui_comp_set_grid(grid as handle_T) {
         return;
     }
-    row += (*curgrid.get()).comp_row as Integer;
-    startcol += (*curgrid.get()).comp_col as Integer;
-    endcol += (*curgrid.get()).comp_col as Integer;
-    clearcol += (*curgrid.get()).comp_col as Integer;
-    if curgrid.get() != default_grid.ptr() {
-        flags = (flags as ::core::ffi::c_int & !(kLineFlagWrap as ::core::ffi::c_int)) as LineFlags;
+    let cur = curgrid.get();
+    let row = row + Integer::from(cur.comp_row);
+    let startcol = startcol + Integer::from(cur.comp_col);
+    let mut endcol = endcol + Integer::from(cur.comp_col);
+    let mut clearcol = clearcol + Integer::from(cur.comp_col);
+    if !cur.same(default_layer()) {
+        flags &= !kLineFlagWrap;
     }
     debug_assert!(endcol <= clearcol, "endcol <= clearcol");
-    if row >= (*default_grid.ptr()).rows as Integer {
-        logmsg_c!(
-            LOGLVL_DBG,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            c"ui_comp_raw_line".as_ptr(),
-            580 as ::core::ffi::c_int,
-            true_0 != 0,
-            c"compositor: invalid row %ld on grid %ld".as_ptr(),
-            row,
-            grid,
-        );
+
+    // Upstream's TODO: this should not be necessary, but on some resize paths
+    // a window is drawn against the older, larger screen size.
+    let default = default_layer();
+    if row >= Integer::from(default.rows) {
+        let fmt = c"compositor: invalid row %ld on grid %ld".as_ptr();
+        // SAFETY: two `Integer`s, as the format asks.
+        unsafe { dlog(580, fmt, row, grid) };
         return;
     }
-    if clearcol > (*default_grid.ptr()).cols as Integer {
-        logmsg_c!(
-            LOGLVL_DBG,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            c"ui_comp_raw_line".as_ptr(),
-            585 as ::core::ffi::c_int,
-            true_0 != 0,
-            c"compositor: invalid last column %ld on grid %ld".as_ptr(),
-            clearcol,
-            grid,
-        );
-        if startcol >= (*default_grid.ptr()).cols as Integer {
+    if clearcol > Integer::from(default.cols) {
+        let fmt = c"compositor: invalid last column %ld on grid %ld".as_ptr();
+        // SAFETY: as above.
+        unsafe { dlog(585, fmt, clearcol, grid) };
+        if startcol >= Integer::from(default.cols) {
             return;
         }
-        clearcol = (*default_grid.ptr()).cols as Integer;
-        endcol = if endcol < clearcol { endcol } else { clearcol };
+        clearcol = default.cols.into();
+        endcol = endcol.min(clearcol);
     }
-    let mut covered: bool = curgrid_covered_above(row as ::core::ffi::c_int);
-    if flags as ::core::ffi::c_int & kLineFlagInvalid as ::core::ffi::c_int != 0
-        || covered as ::core::ffi::c_int != 0
-        || (*curgrid.get()).blending as ::core::ffi::c_int != 0
-    {
-        compose_debug(
-            row,
-            row + 1 as Integer,
-            startcol,
-            clearcol,
-            dbghl_composed.get(),
-            true_0 != 0,
-        );
+
+    let covered = curgrid_covered_above(row as c_int);
+    // Upstream's TODO: `compose_line` should learn to respect clearing, and
+    // be optimized for uncovered lines.
+    if flags & kLineFlagInvalid != 0 || covered || cur.blending {
+        let composed = dbghl_composed.get();
+        compose_debug((row, row + 1), (startcol, clearcol), composed, true);
         compose_line(row, startcol, clearcol, flags);
     } else {
+        let (normal, clear) = (dbghl_normal.get(), dbghl_clear.get());
         compose_debug(
-            row,
-            row + 1 as Integer,
-            startcol,
-            endcol,
-            dbghl_normal.get(),
+            (row, row + 1),
+            (startcol, endcol),
+            normal,
             endcol >= clearcol,
         );
-        compose_debug(
-            row,
-            row + 1 as Integer,
-            endcol,
-            clearcol,
-            dbghl_clear.get(),
-            true_0 != 0,
-        );
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while (i as Integer) < endcol - startcol {
-            debug_assert!(*attrs.offset(i as isize) >= 0 as sattr_T, "attrs[i] >= 0");
-            i += 1;
+        compose_debug((row, row + 1), (endcol, clearcol), clear, true);
+        #[cfg(debug_assertions)]
+        {
+            let n = (endcol - startcol).max(0) as usize;
+            // SAFETY: the caller's obligation on `attrs`.
+            let drawn = unsafe { slice::from_raw_parts(attrs, n) };
+            debug_assert!(drawn.iter().all(|&attr| attr >= 0), "attrs[i] >= 0");
         }
-        ui_composed_call_raw_line(
-            1 as Integer,
-            row,
-            startcol,
-            endcol,
-            clearcol,
-            clearattr,
-            flags,
-            chunk,
-            attrs,
-        );
-    };
+        let (cc, ca) = (clearcol, clearattr);
+        // SAFETY: the caller's obligation on `chunk` and `attrs`.
+        unsafe {
+            ui_composed_call_raw_line(1, row, startcol, endcol, cc, ca, flags, chunk, attrs);
+        }
+    }
 }
-pub unsafe extern "C" fn ui_comp_set_screen_valid(mut valid: bool) -> bool {
-    let mut old_val: bool = valid_screen.get();
+
+/// Marks the screen invalid — it is about to be cleared, and floats must not
+/// be redrawn until it has been. Answers the previous state.
+pub fn ui_comp_set_screen_valid(valid: bool) -> bool {
+    let old_val = valid_screen.get();
     valid_screen.set(valid);
     if !valid {
-        msg_sep_row.set(-1 as ::core::ffi::c_int);
+        msg_sep_row.set(-1);
     }
-    return old_val;
+    old_val
 }
-pub unsafe extern "C" fn ui_comp_msg_set_pos(
-    mut _grid: Integer,
-    mut row: Integer,
-    mut scrolled: Boolean,
-    mut sep_char: String_0,
-    mut _zindex: Integer,
-    mut _compindex: Integer,
+
+/// # Safety
+/// `sep_char` must be a valid string.
+pub unsafe fn ui_comp_msg_set_pos(
+    _grid: Integer,
+    row: Integer,
+    scrolled: Boolean,
+    sep_char: String_0,
+    _zindex: Integer,
+    _compindex: Integer,
 ) {
-    (*msg_grid.ptr()).pending_comp_index_update = true_0 != 0;
-    (*msg_grid.ptr()).comp_row = row as ::core::ffi::c_int;
-    if scrolled as ::core::ffi::c_int != 0 && row > 0 as Integer {
-        msg_sep_row.set(row as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
+    let mut msg = msg_layer();
+    msg.pending_comp_index_update = true;
+    msg.comp_row = row as c_int;
+    if scrolled && row > 0 {
+        msg_sep_row.set(row as c_int - 1);
         if !sep_char.data.is_null() {
-            msg_sep_char.set(schar_from_buf(sep_char.data, sep_char.size));
+            // SAFETY: the caller's obligation.
+            msg_sep_char.set(unsafe { schar_from_buf(sep_char.data, sep_char.size) });
         }
     } else {
-        msg_sep_row.set(-1 as ::core::ffi::c_int);
+        msg_sep_row.set(-1);
     }
-    if row > msg_current_row.get() as Integer && ui_comp_should_draw() as ::core::ffi::c_int != 0 {
-        compose_area(
-            (if msg_current_row.get() - 1 as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
-                msg_current_row.get() - 1 as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            }) as Integer,
-            row,
-            0 as Integer,
-            (*default_grid.ptr()).cols as Integer,
-        );
-    } else if row < msg_current_row.get() as Integer
-        && ui_comp_should_draw() as ::core::ffi::c_int != 0
-        && (msg_current_row.get() < Rows.get()
-            || scrolled as ::core::ffi::c_int != 0 && !msg_was_scrolled.get())
+
+    let was_at = msg_current_row.get();
+    if row > Integer::from(was_at) && ui_comp_should_draw() {
+        let first_row = Integer::from((was_at - 1).max(0));
+        compose_area(first_row, row, 0, default_layer().cols.into());
+    } else if row < Integer::from(was_at)
+        && ui_comp_should_draw()
+        && (was_at < Rows.get() || (scrolled && !msg_was_scrolled.get()))
     {
-        let mut delta: ::core::ffi::c_int = msg_current_row.get() - row as ::core::ffi::c_int;
-        if (*msg_grid.ptr()).blending {
-            let mut first_row: ::core::ffi::c_int = if row as ::core::ffi::c_int
-                - (if scrolled as ::core::ffi::c_int != 0 {
-                    1 as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                })
-                > 0 as ::core::ffi::c_int
-            {
-                row as ::core::ffi::c_int
-                    - (if scrolled as ::core::ffi::c_int != 0 {
-                        1 as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    })
-            } else {
-                0 as ::core::ffi::c_int
-            };
-            compose_area(
-                first_row as Integer,
-                (Rows.get() - delta) as Integer,
-                0 as Integer,
-                Columns.get() as Integer,
-            );
+        let delta = was_at - row as c_int;
+        if msg.blending {
+            let first_row = (row as c_int - c_int::from(scrolled)).max(0);
+            compose_area(first_row, Rows.get() - delta, 0, Columns.get());
         } else {
-            let mut first_row_0: ::core::ffi::c_int = if row as ::core::ffi::c_int
-                - (if msg_was_scrolled.get() as ::core::ffi::c_int != 0 {
-                    1 as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                })
-                > 0 as ::core::ffi::c_int
-            {
-                row as ::core::ffi::c_int
-                    - (if msg_was_scrolled.get() as ::core::ffi::c_int != 0 {
-                        1 as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    })
-            } else {
-                0 as ::core::ffi::c_int
-            };
-            ui_composed_call_grid_scroll(
-                1 as Integer,
-                first_row_0 as Integer,
-                Rows.get() as Integer,
-                0 as Integer,
-                Columns.get() as Integer,
-                delta as Integer,
-                0 as Integer,
-            );
-            if scrolled as ::core::ffi::c_int != 0 && !msg_was_scrolled.get() && row > 0 as Integer
-            {
-                compose_area(
-                    row - 1 as Integer,
-                    row,
-                    0 as Integer,
-                    Columns.get() as Integer,
-                );
+            // Scroll the separator together with the message text.
+            let first_row = (row as c_int - c_int::from(msg_was_scrolled.get())).max(0);
+            let (bot, right) = (Integer::from(Rows.get()), Integer::from(Columns.get()));
+            ui_composed_call_grid_scroll(1, first_row.into(), bot, 0, right, delta.into(), 0);
+            if scrolled && !msg_was_scrolled.get() && row > 0 {
+                compose_area(row - 1, row, 0, Columns.get().into());
             }
         }
     }
-    msg_current_row.set(row as ::core::ffi::c_int);
+
+    msg_current_row.set(row as c_int);
     msg_was_scrolled.set(scrolled);
 }
-unsafe extern "C" fn curgrid_covered_above(mut row: ::core::ffi::c_int) -> bool {
-    let mut above_msg: bool = *(*layers.ptr())
-        .items
-        .add((*layers.ptr()).size.wrapping_sub(1 as size_t))
-        == msg_grid.ptr()
-        && row
-            < msg_current_row.get()
-                - (if msg_was_scrolled.get() as ::core::ffi::c_int != 0 {
-                    1 as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                });
-    return (*layers.ptr()).size.wrapping_sub(
-        (if above_msg as ::core::ffi::c_int != 0 {
-            1 as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        }) as size_t,
-    ) > (*curgrid.get()).comp_index.wrapping_add(1 as size_t);
+
+/// Whether `curgrid` has something over it on `row` or above.
+///
+/// Upstream's TODO: this only handles the message row.
+fn curgrid_covered_above(row: c_int) -> bool {
+    let above_msg = layer_at(layer_count() - 1).same(msg_layer())
+        && row < msg_current_row.get() - c_int::from(msg_was_scrolled.get());
+    layer_count() - usize::from(above_msg) > curgrid.get().comp_index + 1
 }
-pub unsafe extern "C" fn ui_comp_grid_scroll(
-    mut grid: Integer,
-    mut top: Integer,
-    mut bot: Integer,
-    mut left: Integer,
-    mut right: Integer,
-    mut rows: Integer,
-    mut cols: Integer,
+
+pub fn ui_comp_grid_scroll(
+    grid: Integer,
+    top: Integer,
+    bot: Integer,
+    left: Integer,
+    right: Integer,
+    rows: Integer,
+    cols: Integer,
 ) {
     if !ui_comp_should_draw() || !ui_comp_set_grid(grid as handle_T) {
         return;
     }
-    top += (*curgrid.get()).comp_row as Integer;
-    bot += (*curgrid.get()).comp_row as Integer;
-    left += (*curgrid.get()).comp_col as Integer;
-    right += (*curgrid.get()).comp_col as Integer;
-    let mut covered: bool = curgrid_covered_above(
-        (bot - (if rows > 0 as Integer {
-            rows
-        } else {
-            0 as Integer
-        })) as ::core::ffi::c_int,
-    );
-    if covered as ::core::ffi::c_int != 0 || (*curgrid.get()).blending as ::core::ffi::c_int != 0 {
-        compose_debug(top, bot, left, right, dbghl_recompose.get(), true_0 != 0);
-        let mut r: ::core::ffi::c_int = (top
-            + (if -rows > 0 as Integer {
-                -rows
-            } else {
-                0 as Integer
-            })) as ::core::ffi::c_int;
-        while (r as Integer)
-            < bot
-                - (if rows > 0 as Integer {
-                    rows
-                } else {
-                    0 as Integer
-                })
-        {
-            if *(*curgrid.get()).attrs.add(
-                (*(*curgrid.get())
-                    .line_offset
-                    .offset((r - (*curgrid.get()).comp_row) as isize))
-                .wrapping_add(left as size_t)
-                .wrapping_sub((*curgrid.get()).comp_col as size_t),
-            ) >= 0 as sattr_T
-            {
-                compose_line(r as Integer, left, right, 0 as LineFlags);
+    let cur = curgrid.get();
+    let top = top + Integer::from(cur.comp_row);
+    let bot = bot + Integer::from(cur.comp_row);
+    let left = left + Integer::from(cur.comp_col);
+    let right = right + Integer::from(cur.comp_col);
+    let covered = curgrid_covered_above((bot - rows.max(0)) as c_int);
+
+    if covered || cur.blending {
+        // Upstream's TODO: check whether the rectangles overlap at all, and
+        // work out the subareas that could still scroll.
+        let recompose = dbghl_recompose.get();
+        compose_debug((top, bot), (left, right), recompose, true);
+        for r in (top + (-rows).max(0)) as c_int..(bot - rows.max(0)) as c_int {
+            // Upstream's TODO: a workaround for `win_update` scrolling twice
+            // in a row, the second over space the first invalidated.
+            let row_off = cur.row_offset((r - cur.comp_row) as usize);
+            let off = row_off + left as usize - cur.comp_col as usize;
+            if cur.attr_at(off) >= 0 {
+                compose_line(r.into(), left, right, 0);
             }
-            r += 1;
         }
     } else {
-        ui_composed_call_grid_scroll(1 as Integer, top, bot, left, right, rows, cols);
-        if rdb_flags.get() & kOptRdbFlagCompositor as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-        {
-            debug_delay(2 as Integer);
-        }
-    };
-}
-pub unsafe extern "C" fn ui_comp_grid_resize(
-    mut grid: Integer,
-    mut width: Integer,
-    mut height: Integer,
-) {
-    if grid == 1 as Integer {
-        ui_composed_call_grid_resize(1 as Integer, width, height);
-        chk_width.set(width as ::core::ffi::c_int);
-        chk_height.set(height as ::core::ffi::c_int);
-        let mut new_bufsize: size_t = width as size_t;
-        if bufsize.get() != new_bufsize {
-            xfree(linebuf.get() as *mut ::core::ffi::c_void);
-            xfree(attrbuf.get() as *mut ::core::ffi::c_void);
-            linebuf.set(
-                xmalloc(new_bufsize.wrapping_mul(::core::mem::size_of::<schar_T>()))
-                    as *mut schar_T,
-            );
-            attrbuf.set(
-                xmalloc(new_bufsize.wrapping_mul(::core::mem::size_of::<sattr_T>()))
-                    as *mut sattr_T,
-            );
-            bufsize.set(new_bufsize);
+        ui_composed_call_grid_scroll(1, top, bot, left, right, rows, cols);
+        if rdb_flags.get() & kOptRdbFlagCompositor != 0 {
+            debug_delay(2);
         }
     }
 }
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
+
+/// Resizes the composed screen, and with it the scratch line.
+pub fn ui_comp_grid_resize(grid: Integer, width: Integer, height: Integer) {
+    if grid == 1 {
+        ui_composed_call_grid_resize(1, width, height);
+        chk_width.set(width as c_int);
+        chk_height.set(height as c_int);
+        let new_bufsize = width as usize;
+        BUFS.with_mut(|bufs| {
+            if bufs.chars.len() != new_bufsize {
+                bufs.chars = vec![0; new_bufsize];
+                bufs.attrs = vec![0; new_bufsize];
+            }
+        });
+    }
+}
