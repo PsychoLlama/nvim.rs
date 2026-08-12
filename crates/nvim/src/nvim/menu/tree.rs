@@ -226,6 +226,12 @@ fn menu_get_recursive(menu: Menu, modes: c_int) -> *mut dict_T {
                     c"enabled",
                     varnumber_T::from(menu.enabled & (1 << bit) != 0),
                 );
+                // `noremap` holds 0, REMAP_NONE (-1) or REMAP_SCRIPT (-2),
+                // and these two report it as *bit tests* on values that
+                // overlap -- so a `:noremenu` entry answers `sid` 1 as well.
+                // `menu_info()` next door compares for equality and does not
+                // agree; the documented `menu_get()` example carries the bit
+                // tests' answer.
                 dict_add_nr(
                     mapping,
                     c"noremap",
