@@ -680,9 +680,13 @@ pub unsafe extern "C" fn f_getmousepos(
         // case.
         if pos.row < height + win.w_border_adj[2] {
             winid = win.handle as varnumber_T;
-            // Adjust by 1 for a top/left border.
-            winrow = (pos.row + 1 + win.w_winrow_off) as varnumber_T;
-            wincol = (pos.col + 1 + win.w_wincol_off) as varnumber_T;
+            // Adjust by 1 for a top/left border.  Summed in the answer's own
+            // width rather than in the C's `int`: `nvim_input_mouse` accepts
+            // a column up to INT_MAX, and the C's sum then overflows -- which
+            // the C wraps on and a checked build of this port traps on.  Both
+            // fields are `varnumber_T` at the end of it either way.
+            winrow = pos.row as varnumber_T + 1 + win.w_winrow_off as varnumber_T;
+            wincol = pos.col as varnumber_T + 1 + win.w_wincol_off as varnumber_T;
             if pos.row >= 0 && pos.row < win.w_height && pos.col >= 0 && pos.col < win.w_width {
                 (lnum, _) = comp_pos(win, &mut pos.row, &mut pos.col);
                 let col;
