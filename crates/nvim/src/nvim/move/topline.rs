@@ -104,7 +104,9 @@ fn update_topline_win(mut win: Win) {
         return;
     }
 
-    // Dragging with the mouse should not scroll that quickly.
+    // Dragging with the mouse should not scroll that quickly. This writes
+    // the option value itself and restores it on the way out, so a window
+    // reading `&l:scrolloff` from inside a drag sees the slowed-down one.
     if mouse_dragging.get() > 0 {
         so.set((mouse_dragging.get() - 1) as OptInt);
     }
@@ -262,7 +264,9 @@ fn unconcealed_above(win: Win, halfheight: c_int, so: OptInt) -> int64_t {
 }
 
 /// As [`unconcealed_above`], downwards from the cursor to
-/// `w_botline - 'scrolloff'`.
+/// `w_botline - 'scrolloff'`. Upstream stops this one at *more* than the
+/// window height rather than at or above it, so the two walks are not
+/// symmetric; kept.
 fn unconcealed_below(win: Win, so: OptInt) -> int64_t {
     let mut n: int64_t = 0;
     let mut lnum = win.w_cursor.lnum;
@@ -304,6 +308,11 @@ fn enough_below(win: Win, so: OptInt) -> bool {
 
 /// Whether there are fewer than 'scrolloff' visible screen lines above the
 /// cursor.
+///
+/// This asks `get_scrolloff_value()` rather than the [`ScrollOff`] its caller
+/// is holding, so during a mouse drag the question "is the cursor too close to
+/// the top?" uses the real 'scrolloff' while the scroll it triggers uses the
+/// slowed-down one. That is upstream's shape, kept.
 fn check_top_offset(win: Win) -> bool {
     let so = win.scrolloff();
     if (win.w_cursor.lnum as int64_t) < win.w_topline as int64_t + so || win.lines_concealed() {
