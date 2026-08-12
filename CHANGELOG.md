@@ -18,6 +18,17 @@ and this project adheres to [CalVer](https://calver.org/).
   encoding, and the character-class tables and cursor-position
   arithmetic the editor asks about every character it draws or moves
   over.
+- Rewrote movement and the screen shell: the viewport arithmetic behind
+  every cursor move and scroll, from `'scrolloff'`/`'scrolljump'` and
+  horizontal scrolling to `CTRL-D`/`CTRL-U`/`CTRL-F`/`CTRL-B` and
+  `'smoothscroll'`; mouse input, covering the click counter,
+  `'mousemodel'`, drag-resizing a window, the wheel and `getmousepos()`;
+  the menu tree behind `:menu`/`:emenu`/`:popup`, `menu_get()` and
+  `:menutranslate`; the format expander shared by `'statusline'`,
+  `'tabline'`, `'winbar'`, `'statuscolumn'` and `'rulerformat'`, and the
+  `%@Func@` click definitions it records; `'guicursor'`; and the
+  compositor that blends floating windows and the message grid onto the
+  screen.
 
 ## [2026.08.11-3d48beea07]
 
