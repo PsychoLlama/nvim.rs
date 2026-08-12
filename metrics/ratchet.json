@@ -860,7 +860,7 @@
     "crates/nvim/src/nvim/statusline.rs": {"unsafe_lines": 45},
     "crates/nvim/src/nvim/statusline/custom.rs": {"cell_ptr": 3, "unsafe_lines": 48},
     "crates/nvim/src/nvim/statusline/status.rs": {"cell_ptr": 1, "unsafe_lines": 16},
-    "crates/nvim/src/nvim/statusline/stl.rs": {"cell_ptr": 129, "lines": 1891, "no_mangle": 1, "unsafe_lines": 1817},
+    "crates/nvim/src/nvim/statusline/stl.rs": {"no_mangle": 1, "unsafe_lines": 108},
     "crates/nvim/src/nvim/statusline/tabline.rs": {"cell_ptr": 2, "unsafe_lines": 52},
     "crates/nvim/src/nvim/strings.rs": {"no_mangle": 1, "unsafe_lines": 140},
     "crates/nvim/src/nvim/strings/case.rs": {"unsafe_lines": 63},

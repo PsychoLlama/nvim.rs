@@ -29,7 +29,6 @@
     "crates/nvim/src/nvim/sign.rs": 1,
     "crates/nvim/src/nvim/spellsuggest/collect.rs": 2,
     "crates/nvim/src/nvim/state.rs": 1,
-    "crates/nvim/src/nvim/statusline/stl.rs": 1,
     "crates/nvim/src/nvim/terminal.rs": 2,
     "crates/nvim/src/nvim/terminal/input.rs": 2,
     "crates/nvim/src/nvim/tui/cursor.rs": 1,
