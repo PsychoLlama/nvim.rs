@@ -40,7 +40,7 @@ use crate::src::nvim::api::ui::remote_ui_option_set;
 use crate::src::nvim::autocmd::do_autocmd_uienter;
 use crate::src::nvim::buffer::resettitle;
 use crate::src::nvim::cursor_shape::{
-    SHAPE_IDX_N, SHAPE_IDX_R, cursor_get_mode_idx, mode_style_array, shape_table,
+    SHAPE_IDX_N, SHAPE_IDX_R, cursor_get_mode_idx, mode_style_array, shape_entry,
 };
 use crate::src::nvim::drawscreen::{conceal_check_cursor_line, screen_resize};
 use crate::src::nvim::event::libuv::uv_cwd;
@@ -733,7 +733,7 @@ pub unsafe fn ui_flush() {
         } else {
             ui_mode_idx.get()
         };
-        let full_name = unsafe { (*shape_table.ptr())[idx as usize].full_name };
+        let full_name = shape_entry(idx).full_name;
         ui_call_mode_change(unsafe { cstr_as_string(full_name) }, idx as Integer);
         pending_mode_update.set(false);
         cursor_was_obscured.set(cursor_obscured);

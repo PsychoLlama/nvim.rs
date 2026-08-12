@@ -42,7 +42,7 @@ use crate::src::nvim::autocmd::{
     aucmd_restbuf, block_autocmds, is_aucmd_win, is_autocmd_blocked, unblock_autocmds,
 };
 use crate::src::nvim::change::deleted_lines_buf;
-use crate::src::nvim::cursor_shape::{SHAPE_IDX_TERM, shape_table};
+use crate::src::nvim::cursor_shape::{SHAPE_IDX_TERM, shape_entry};
 use crate::src::nvim::drawscreen::redraw_buf_line_later;
 use crate::src::nvim::eval::typval::{tv_dict_add_nr, tv_dict_set_keys_readonly};
 use crate::src::nvim::eval::vars::get_globvar_dict;
@@ -227,9 +227,9 @@ pub unsafe fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *mut Ter
 
         // Start the child off with the cursor the user configured for
         // terminal mode; it is free to change it.
-        let shape = shape_table.ptr();
+        let shape = shape_entry(SHAPE_IDX_TERM);
         let mut cursor_shape = VTermValue { boolean: 0 };
-        cursor_shape.number = match (*shape)[SHAPE_IDX_TERM as usize].shape {
+        cursor_shape.number = match shape.shape {
             0 => VTERM_PROP_CURSORSHAPE_BLOCK,
             1 => VTERM_PROP_CURSORSHAPE_UNDERLINE,
             2 => VTERM_PROP_CURSORSHAPE_BAR_LEFT,
@@ -238,9 +238,7 @@ pub unsafe fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *mut Ter
         };
         vterm_state_set_termprop(state, VTERM_PROP_CURSORSHAPE, &raw mut cursor_shape);
         let mut cursor_blink = VTermValue { boolean: 0 };
-        cursor_blink.boolean = ((*shape)[SHAPE_IDX_TERM as usize].blinkon != 0
-            && (*shape)[SHAPE_IDX_TERM as usize].blinkoff != 0)
-            as c_int;
+        cursor_blink.boolean = (shape.blinkon != 0 && shape.blinkoff != 0) as c_int;
         vterm_state_set_termprop(state, VTERM_PROP_CURSORBLINK, &raw mut cursor_blink);
 
         (*term).invalid_start = 0;

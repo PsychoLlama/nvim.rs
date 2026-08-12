@@ -20,7 +20,7 @@
 use crate::src::nvim::autocmd::{block_autocmds, unblock_autocmds};
 use crate::src::nvim::change::changed_lines;
 use crate::src::nvim::cursor_shape::SHAPE_VER;
-use crate::src::nvim::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_TERM, shape_table};
+use crate::src::nvim::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_TERM, update_shape_entry};
 use crate::src::nvim::event::multiqueue::{
     multiqueue_free, multiqueue_move_events, multiqueue_new_child, multiqueue_process_events,
 };
@@ -334,7 +334,8 @@ pub unsafe fn adjust_topline_cursor(term: *mut Terminal, buf: *mut buf_T, added:
 ///
 /// Only for the terminal the user is typing at — the shape is global.
 pub unsafe fn refresh_cursor(term: *mut Terminal, cursor_visible: &mut bool) {
-    unsafe {
+    // SAFETY: `term` is a live terminal, as everywhere in this module.
+    let (blink, shape) = unsafe {
         if !is_focused(term) {
             return;
         }
@@ -352,14 +353,15 @@ pub unsafe fn refresh_cursor(term: *mut Terminal, cursor_visible: &mut bool) {
             return;
         }
         (*term).pending.cursor = false;
-
-        let entry = &mut (*shape_table.ptr())[SHAPE_IDX_TERM as usize];
         let blink = if (*term).cursor.blink { 500 } else { 0 };
+        (blink, (*term).cursor.shape)
+    };
+    update_shape_entry(SHAPE_IDX_TERM, |entry| {
         entry.blinkon = blink;
         entry.blinkoff = blink;
         // vterm's DECSCUSR shapes, which do not line up with the editor's.
         // An unknown shape leaves the previous one in place.
-        match (*term).cursor.shape {
+        match shape {
             1 => entry.shape = SHAPE_BLOCK,
             2 => {
                 entry.shape = SHAPE_HOR;
@@ -371,6 +373,6 @@ pub unsafe fn refresh_cursor(term: *mut Terminal, cursor_visible: &mut bool) {
             }
             _ => {}
         }
-        ui_mode_info_set();
-    }
+    });
+    ui_mode_info_set();
 }

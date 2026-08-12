@@ -9,7 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::src::nvim::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_VER, shape_table};
+use crate::src::nvim::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_N, SHAPE_VER, shape_entry};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::HL_INVERSE;
 use crate::src::nvim::log::{LOGLVL_WRN, logmsg_c};
@@ -95,7 +95,7 @@ unsafe fn decode_shape(shape_str: *const core::ffi::c_char) -> CursorShape {
 pub unsafe fn decode_cursor_entry(args: Dict) -> cursorentry_T {
     // SAFETY: the caller guarantees the dict and its items are valid.
     unsafe {
-        let mut entry = (*shape_table.ptr())[0];
+        let mut entry = shape_entry(SHAPE_IDX_N);
         for i in 0..args.size {
             let item = &*args.items.add(i);
             let key = if item.key.data.is_null() {
