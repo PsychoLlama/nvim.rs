@@ -12,269 +12,282 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::c_int;
+use core::ptr;
+
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::cursor::check_cursor;
-use crate::src::nvim::decoration::win_lines_concealed;
 use crate::src::nvim::diff::diff_get_corresponding_line;
-use crate::src::nvim::drawscreen::{UPD_VALID, redraw_later};
+use crate::src::nvim::drawscreen::UPD_VALID;
 use crate::src::nvim::edit::{beginline, cursor_down_inner, cursor_up_inner};
-use crate::src::nvim::fold::foldAdjustCursor;
 use crate::src::nvim::getchar::beep_flush;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
-    Rows, VIsual_active, VIsual_select, curbuf, curtab, curwin, firstwin, lastwin, p_sol, p_window,
+    Rows, VIsual_active, VIsual_select, curbuf, curwin, firstwin, lastwin, p_sol, p_window,
     restart_edit,
 };
 use crate::src::nvim::mbyte::mb_adjust_cursor;
 use crate::src::nvim::normal::{nv_g_home_m_cmd, nv_screengo};
-use crate::src::nvim::option::get_scrolloff_value;
-use crate::src::nvim::plines::plines_m_win;
 use crate::src::nvim::pos::equalpos;
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::types::{
-    Direction, OptInt, buf_T, cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, pos_T, win_T,
+    Direction, OptInt, cmdarg_T, colnr_T, linenr_T, oparg_T, pos_T, win_T,
+};
+use crate::src::nvim::winlayer::{Buf, Win};
+
+/// A command with nothing set, as C's `cmdarg_T ca = { 0 }` leaves it.
+const CMDARG_ZERO: cmdarg_T = cmdarg_T {
+    oap: ptr::null_mut(),
+    prechar: 0,
+    cmdchar: 0,
+    nchar: 0,
+    nchar_composing: [0; 32],
+    nchar_len: 0,
+    extra_char: 0,
+    opcount: 0,
+    count0: 0,
+    count1: 0,
+    arg: 0,
+    retval: 0,
+    searchbuf: ptr::null_mut(),
 };
 
-pub unsafe extern "C" fn pagescroll(
-    mut dir: Direction,
-    mut count: ::core::ffi::c_int,
-    mut half: bool,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut did_move: bool = false_0 != 0;
-        let mut buflen: ::core::ffi::c_int =
-            (*curbuf.get()).b_ml.ml_line_count as ::core::ffi::c_int;
-        let mut prev_col: colnr_T = (*curwin.get()).w_cursor.col;
-        let mut prev_curswant: colnr_T = (*curwin.get()).w_curswant;
-        let mut prev_lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
-        let mut oa: oparg_T = oparg_T {
-            op_type: 0 as ::core::ffi::c_int,
-            regname: 0,
-            motion_type: kMTCharWise,
-            motion_force: 0,
-            use_reg_one: false,
-            inclusive: false,
-            end_adjusted: false,
-            start: pos_T {
-                lnum: 0,
-                col: 0,
-                coladd: 0,
-            },
-            end: pos_T {
-                lnum: 0,
-                col: 0,
-                coladd: 0,
-            },
-            cursor_start: pos_T {
-                lnum: 0,
-                col: 0,
-                coladd: 0,
-            },
-            line_count: 0,
-            empty: false,
-            is_VIsual: false,
-            start_vcol: 0,
-            end_vcol: 0,
-            prev_opcount: 0,
-            prev_count0: 0,
-            excl_tr_ws: false,
-        };
-        let mut ca: cmdarg_T = cmdarg_T {
-            oap: ::core::ptr::null_mut::<oparg_T>(),
-            prechar: 0,
-            cmdchar: 0,
-            nchar: 0,
-            nchar_composing: [0; 32],
-            nchar_len: 0,
-            extra_char: 0,
-            opcount: 0,
-            count0: 0,
-            count1: 0,
-            arg: 0,
-            retval: 0,
-            searchbuf: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        };
-        ca.oap = &raw mut oa;
-        if half {
-            if count != 0 {
-                (*curwin.get()).w_onebuf_opt.wo_scr = (if (*curwin.get()).w_view_height < count {
-                    (*curwin.get()).w_view_height
-                } else {
-                    count
-                }) as OptInt;
-            }
-            count = if (*curwin.get()).w_view_height
-                < (*curwin.get()).w_onebuf_opt.wo_scr as ::core::ffi::c_int
-            {
-                (*curwin.get()).w_view_height
-            } else {
-                (*curwin.get()).w_onebuf_opt.wo_scr as ::core::ffi::c_int
-            };
-            let mut curscount: ::core::ffi::c_int = count;
-            if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int
-                && ((*curwin.get()).w_topline
-                    + (*curwin.get()).w_view_height as linenr_T
-                    + count as linenr_T
-                    > buflen as linenr_T
-                    || win_lines_concealed(curwin.get()) as ::core::ffi::c_int != 0)
-            {
-                let mut n: ::core::ffi::c_int = plines_correct_topline(
-                    curwin.get(),
-                    (*curwin.get()).w_topline,
-                    ::core::ptr::null_mut::<linenr_T>(),
-                    false_0 != 0,
-                    ::core::ptr::null_mut::<bool>(),
-                );
-                if n - count < (*curwin.get()).w_view_height
-                    && (*curwin.get()).w_topline < buflen as linenr_T
-                {
-                    n += plines_m_win(
-                        curwin.get(),
-                        (*curwin.get()).w_topline + 1 as linenr_T,
-                        buflen as linenr_T,
-                        (*curwin.get()).w_view_height + count,
-                    );
-                }
-                if n < (*curwin.get()).w_view_height + count {
-                    count = n - (*curwin.get()).w_view_height;
-                }
-            }
-            if count > 0 as ::core::ffi::c_int {
-                did_move = scroll_with_sms(dir, count, &raw mut curscount);
-                (*curwin.get()).w_cursor.lnum = prev_lnum;
-                (*curwin.get()).w_cursor.col = prev_col;
-                (*curwin.get()).w_curswant = prev_curswant;
-            }
-            if (*curwin.get()).w_onebuf_opt.wo_wrap != 0 {
-                nv_screengo(
-                    &raw mut oa,
-                    dir as ::core::ffi::c_int,
-                    curscount,
-                    true_0 != 0,
-                );
-            } else if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int {
-                cursor_down_inner(curwin.get(), curscount, true_0 != 0);
-            } else {
-                cursor_up_inner(curwin.get(), curscount as linenr_T, true_0 != 0);
-            }
-        } else {
-            count *= if firstwin.get() == lastwin.get()
-                && p_window.get() > 0 as OptInt
-                && p_window.get() < (Rows.get() - 1 as ::core::ffi::c_int) as OptInt
-            {
-                if 1 as ::core::ffi::c_int
-                    > p_window.get() as ::core::ffi::c_int - 2 as ::core::ffi::c_int
-                {
-                    1 as ::core::ffi::c_int
-                } else {
-                    p_window.get() as ::core::ffi::c_int - 2 as ::core::ffi::c_int
-                }
-            } else {
-                get_scroll_overlap(dir)
-            };
-            did_move = scroll_with_sms(dir, count, &raw mut count);
-            if did_move {
-                validate_botline_win(curwin.get());
-                let mut lnum: linenr_T =
-                    if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int {
-                        (*curwin.get()).w_topline
-                    } else {
-                        (*curwin.get()).w_botline - 1 as linenr_T
-                    };
-                (*curwin.get()).w_cursor.lnum = if lnum > 1 as linenr_T {
-                    lnum
-                } else {
-                    1 as linenr_T
-                };
-            }
-        }
-        if get_scrolloff_value(curwin.get()) > 0 as int64_t {
-            cursor_correct(curwin.get());
-        }
-        foldAdjustCursor(curwin.get());
-        did_move = did_move as ::core::ffi::c_int != 0
-            || prev_col != (*curwin.get()).w_cursor.col
-            || prev_lnum != (*curwin.get()).w_cursor.lnum;
-        if !did_move {
-            beep_flush();
-        } else if (*curwin.get()).w_onebuf_opt.wo_sms == 0 {
-            beginline(BL_SOL as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
-        } else if p_sol.get() != 0 {
-            nv_g_home_m_cmd(&raw mut ca);
-        }
-        return if did_move as ::core::ffi::c_int != 0 {
-            OK
-        } else {
-            FAIL
-        };
-    }
+/// What `pagescroll` measured before it scrolled: the buffer's length, and
+/// the cursor position a half-page scroll puts back before moving it itself.
+#[derive(Clone, Copy)]
+struct Saved {
+    buflen: linenr_T,
+    cursor: pos_T,
+    curswant: colnr_T,
 }
 
-pub unsafe extern "C" fn do_check_cursorbind() {
-    unsafe {
-        static prev_curwin: GlobalCell<*mut win_T> =
-            GlobalCell::new(::core::ptr::null_mut::<win_T>());
-        static prev_cursor: GlobalCell<pos_T> = GlobalCell::new(pos_T {
-            lnum: 0 as linenr_T,
-            col: 0 as colnr_T,
-            coladd: 0 as colnr_T,
-        });
-        if curwin.get() == prev_curwin.get()
-            && equalpos((*curwin.get()).w_cursor, prev_cursor.get()) as ::core::ffi::c_int != 0
-        {
-            return;
-        }
-        prev_curwin.set(curwin.get());
-        prev_cursor.set((*curwin.get()).w_cursor);
-        let mut line: linenr_T = (*curwin.get()).w_cursor.lnum;
-        let mut col: colnr_T = (*curwin.get()).w_cursor.col;
-        let mut coladd: colnr_T = (*curwin.get()).w_cursor.coladd;
-        let mut curswant: colnr_T = (*curwin.get()).w_curswant;
-        let mut set_curswant: bool = (*curwin.get()).w_set_curswant != 0;
-        let mut old_curwin: *mut win_T = curwin.get();
-        let mut old_curbuf: *mut buf_T = curbuf.get();
-        let mut old_VIsual_select: ::core::ffi::c_int = VIsual_select.get() as ::core::ffi::c_int;
-        let mut old_VIsual_active: ::core::ffi::c_int = VIsual_active.get() as ::core::ffi::c_int;
-        VIsual_active.set(false_0 != 0);
-        VIsual_select.set(VIsual_active.get());
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
-        } else {
-            (*curtab.get()).tp_firstwin
-        };
-        while !wp.is_null() {
-            curwin.set(wp);
-            curbuf.set((*curwin.get()).w_buffer);
-            if curwin.get() != old_curwin && (*curwin.get()).w_onebuf_opt.wo_crb != 0 {
-                if (*curwin.get()).w_onebuf_opt.wo_diff != 0 {
-                    (*curwin.get()).w_cursor.lnum = diff_get_corresponding_line(old_curbuf, line);
-                } else {
-                    (*curwin.get()).w_cursor.lnum = line;
-                }
-                (*curwin.get()).w_cursor.col = col;
-                (*curwin.get()).w_cursor.coladd = coladd;
-                (*curwin.get()).w_curswant = curswant;
-                (*curwin.get()).w_set_curswant = set_curswant as ::core::ffi::c_int;
-                let mut restart_edit_save: ::core::ffi::c_int = restart_edit.get();
-                restart_edit.set(true_0);
-                check_cursor(curwin.get());
-                if (*curwin.get()).w_onebuf_opt.wo_scb == 0 {
-                    validate_cursor(curwin.get());
-                }
-                restart_edit.set(restart_edit_save);
-                mb_adjust_cursor();
-                redraw_later(curwin.get(), UPD_VALID);
-                if (*curwin.get()).w_onebuf_opt.wo_scb == 0 {
-                    update_topline(curwin.get());
-                }
-                (*curwin.get()).w_redr_status = true_0 != 0;
-            }
-            wp = (*wp).w_next;
-        }
-        VIsual_select.set(old_VIsual_select != 0);
-        VIsual_active.set(old_VIsual_active != 0);
-        curwin.set(old_curwin);
-        curbuf.set(old_curbuf);
+/// Move the screen `count` (half) pages backwards (`dir` is `BACKWARD`) or
+/// forwards (`FORWARD`) and update the screen, moving the cursor with it and
+/// -- for the half-page CTRL-D/CTRL-U -- not revealing lines past the end of
+/// the buffer. Answers `FAIL` when neither the viewport nor the cursor moved.
+///
+/// # Safety
+/// The current window must be valid.
+pub unsafe fn pagescroll(dir: Direction, count: c_int, half: bool) -> c_int {
+    // SAFETY: `curwin` is set from startup to exit.
+    let mut win = unsafe { Win::current() };
+    let saved = Saved {
+        buflen: win.buffer().line_count(),
+        cursor: win.w_cursor,
+        curswant: win.w_curswant,
+    };
+    // One operator and one command, shared by both arms as upstream shares
+    // them: `nv_screengo()` fills in the operator that `nv_g_home_m_cmd()`
+    // reads back through `ca`.
+    let mut oa = oparg_T::ZERO;
+    let mut ca = CMDARG_ZERO;
+    ca.oap = &raw mut oa;
+
+    let mut did_move = if half {
+        // SAFETY: the caller's promise; `oa` is an operator of this frame.
+        unsafe { half_page(win, dir, count, saved, &raw mut oa) }
+    } else {
+        whole_page(win, dir, count)
+    };
+
+    if win.scrolloff() > 0 {
+        win.cursor_correct();
     }
+    // Move the cursor to the first line of a closed fold.
+    win.fold_adjust_cursor();
+
+    did_move =
+        did_move || saved.cursor.col != win.w_cursor.col || saved.cursor.lnum != win.w_cursor.lnum;
+
+    // An error when neither the viewport nor the cursor changed.
+    if !did_move {
+        // SAFETY: beeping reads editor state, not a pointer of ours.
+        unsafe { beep_flush() };
+    } else if win.w_onebuf_opt.wo_sms == 0 {
+        // SAFETY: the caller's promise -- this moves `curwin`'s cursor.
+        unsafe { beginline(BL_SOL as c_int | BL_FIX as c_int) };
+    } else if p_sol.get() != 0 {
+        // SAFETY: the caller's promise; `ca` is a command of this frame.
+        unsafe { nv_g_home_m_cmd(&raw mut ca) };
+    }
+
+    if did_move { OK } else { FAIL }
+}
+
+/// CTRL-D/CTRL-U: scroll 'scroll' screen lines without revealing lines past
+/// the end of the buffer, and move the cursor by as many screen lines.
+///
+/// # Safety
+/// `win` must be the current window and `oap` an operator the caller owns.
+unsafe fn half_page(
+    mut win: Win,
+    dir: Direction,
+    count: c_int,
+    saved: Saved,
+    oap: *mut oparg_T,
+) -> bool {
+    // Scroll [count], 'scroll', or the window height in lines.
+    let mut count = count;
+    if count != 0 {
+        win.w_onebuf_opt.wo_scr = win.w_view_height.min(count) as OptInt;
+    }
+    count = win.w_view_height.min(win.w_onebuf_opt.wo_scr as c_int);
+
+    let mut curscount = count;
+    // Adjust the count so as not to reveal lines past the end of the buffer.
+    if dir == FORWARD
+        && (win.w_topline + win.w_view_height as linenr_T + count as linenr_T > saved.buflen
+            || win.lines_concealed())
+    {
+        let mut n = win.corrected_plines(win.w_topline, false).0;
+        if n - count < win.w_view_height && win.w_topline < saved.buflen {
+            n += win.plines_range(win.w_topline + 1, saved.buflen, win.w_view_height + count);
+        }
+        if n < win.w_view_height + count {
+            count = n - win.w_view_height;
+        }
+    }
+
+    // (Try to) scroll the window unless already at the end of the buffer.
+    let mut did_move = false;
+    if count > 0 {
+        did_move = scroll_with_sms(win, dir, count, &mut curscount);
+        win.w_cursor.lnum = saved.cursor.lnum;
+        win.w_cursor.col = saved.cursor.col;
+        win.w_curswant = saved.curswant;
+    }
+
+    // Move the cursor by the same number of screen lines, skipping over
+    // concealed lines as those were not counted in `curscount` either.
+    if win.w_onebuf_opt.wo_wrap != 0 {
+        // SAFETY: the caller's promise.
+        unsafe { nv_screengo(oap, dir, curscount, true) };
+    } else if dir == FORWARD {
+        // SAFETY: a live window.
+        unsafe { cursor_down_inner(win.raw(), curscount, true) };
+    } else {
+        // SAFETY: a live window.
+        unsafe { cursor_up_inner(win.raw(), curscount as linenr_T, true) };
+    }
+    did_move
+}
+
+/// CTRL-F/CTRL-B: scroll `count` times 'window' or the window height in
+/// lines, and put the cursor at the top or bottom of the new view.
+fn whole_page(mut win: Win, dir: Direction, count: c_int) -> bool {
+    // With a single window and a 'window' smaller than the screen, that is
+    // the page; otherwise a page is the window less its overlap.
+    let page = if firstwin.get() == lastwin.get()
+        && p_window.get() > 0
+        && p_window.get() < (Rows.get() - 1) as OptInt
+    {
+        (p_window.get() as c_int - 2).max(1)
+    } else {
+        get_scroll_overlap(win, dir)
+    };
+    // `scroll_with_sms` corrects the count it was given, which upstream
+    // aliases with the count itself here.
+    let mut count = count * page;
+    let did_move = scroll_with_sms(win, dir, count, &mut count);
+
+    if did_move {
+        // Place the cursor at the top or bottom of the window.
+        win.validate_botline();
+        let lnum = if dir == FORWARD {
+            win.w_topline
+        } else {
+            win.w_botline - 1
+        };
+        // In silent Ex mode `w_botline - 1` may be 0, but the cursor's line
+        // number has to be at least 1.
+        win.w_cursor.lnum = lnum.max(1);
+    }
+    did_move
+}
+
+/// Give every 'cursorbind' window in this tab page the current window's cursor
+/// position, adjusted for 'diff' where the two buffers disagree.
+///
+/// # Safety
+/// The editor's window list must be valid.
+pub unsafe fn do_check_cursorbind() {
+    static prev_curwin: GlobalCell<*mut win_T> = GlobalCell::new(ptr::null_mut::<win_T>());
+    static prev_cursor: GlobalCell<pos_T> = GlobalCell::new(pos_T {
+        lnum: 0,
+        col: 0,
+        coladd: 0,
+    });
+
+    // SAFETY: `curwin` is set from startup to exit.
+    let old_curwin = unsafe { Win::current() };
+    if old_curwin.raw() == prev_curwin.get() && equalpos(old_curwin.w_cursor, prev_cursor.get()) {
+        return;
+    }
+    prev_curwin.set(old_curwin.raw());
+    prev_cursor.set(old_curwin.w_cursor);
+
+    let cursor = old_curwin.w_cursor;
+    let curswant = old_curwin.w_curswant;
+    let set_curswant = old_curwin.w_set_curswant != 0;
+    // SAFETY: `curbuf` is set from startup to exit.
+    let old_curbuf = unsafe { Buf::current() };
+    let old_visual_select = VIsual_select.get();
+    let old_visual_active = VIsual_active.get();
+
+    // Loop through the cursorbound windows.
+    VIsual_active.set(false);
+    VIsual_select.set(false);
+    // Upstream asks the tab page for its window list, but the *current* tab
+    // page's windows always hang off `firstwin` -- `tp_firstwin` is only
+    // filled in when a tab page is left.
+    // SAFETY: the editor's window list holds live windows.
+    let mut next = (!firstwin.get().is_null()).then(|| unsafe { Win::new(firstwin.get()) });
+    while let Some(mut win) = next {
+        curwin.set(win.raw());
+        curbuf.set(win.buffer().raw());
+        // Skip the original window, and the ones with 'nocursorbind'.
+        if win != old_curwin && win.w_onebuf_opt.wo_crb != 0 {
+            win.w_cursor.lnum = if win.w_onebuf_opt.wo_diff != 0 {
+                // SAFETY: a live buffer.
+                unsafe { diff_get_corresponding_line(old_curbuf.raw(), cursor.lnum) }
+            } else {
+                cursor.lnum
+            };
+            win.w_cursor.col = cursor.col;
+            win.w_cursor.coladd = cursor.coladd;
+            win.w_curswant = curswant;
+            win.w_set_curswant = set_curswant as c_int;
+
+            // Make sure the cursor is in a valid position. `restart_edit` is
+            // set for the duration so that it may sit beyond the end of line.
+            let restart_edit_save = restart_edit.get();
+            restart_edit.set(true_0);
+            // SAFETY: a live window.
+            unsafe { check_cursor(win.raw()) };
+            // Avoid a scroll here for the cursor position: 'scrollbind' is
+            // more important.
+            if win.w_onebuf_opt.wo_scb == 0 {
+                win.validate_cursor();
+            }
+            restart_edit.set(restart_edit_save);
+
+            // Correct the cursor for a multi-byte character.
+            // SAFETY: `curwin` is the window this loop just switched to.
+            unsafe { mb_adjust_cursor() };
+            win.redraw_later(UPD_VALID);
+
+            // Only scroll when 'scrollbind' has not done it already.
+            if win.w_onebuf_opt.wo_scb == 0 {
+                win.update_topline();
+            }
+            win.w_redr_status = true;
+        }
+        next = win.next();
+    }
+
+    VIsual_select.set(old_visual_select);
+    VIsual_active.set(old_visual_active);
+    curwin.set(old_curwin.raw());
+    curbuf.set(old_curbuf.raw());
 }

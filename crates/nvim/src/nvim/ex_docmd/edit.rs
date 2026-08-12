@@ -140,7 +140,7 @@ pub(crate) unsafe fn ex_syncbind(_eap: *mut exarg_T) {
                 if y > 0 {
                     scrollup(wp, y as linenr_T, true);
                 } else {
-                    scrolldown(wp, -(y as linenr_T), 1);
+                    scrolldown(wp, -(y as linenr_T), true);
                 }
                 (*wp).w_scbind_pos = vtopline as c_int;
                 redraw_later(wp, UPD_VALID);

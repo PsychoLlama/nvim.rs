@@ -666,13 +666,9 @@ unsafe fn scroll_up(wp: *mut win_T, rg: &mut Regions) {
         // Correct the first entry for filler lines at the top when it is not
         // going to be drawn below.
         if win_may_fill(wp) && rg.bot_start > 0 {
-            (*(*wp).w_lines).wl_size = plines_correct_topline(
-                wp,
-                (*wp).w_topline,
-                ::core::ptr::null_mut(),
-                true,
-                ::core::ptr::null_mut(),
-            ) as uint16_t;
+            (*(*wp).w_lines).wl_size =
+                plines_correct_topline(wp, (*wp).w_topline, ::core::ptr::null_mut(), true)
+                    as uint16_t;
         }
     }
 }

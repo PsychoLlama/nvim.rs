@@ -133,10 +133,10 @@ impl Win {
 
     /// Whether this is the window the editor is working in.
     ///
-    /// # Safety
-    /// `curwin` must be set, which it is from startup to exit.
+    /// Safe where [`Win::current`] is not: comparing the two pointers reads
+    /// neither of them.
     #[inline(always)]
-    pub unsafe fn is_current(self) -> bool {
+    pub fn is_current(self) -> bool {
         self.0 == curwin.get()
     }
 

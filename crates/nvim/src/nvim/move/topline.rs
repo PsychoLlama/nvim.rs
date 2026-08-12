@@ -300,8 +300,7 @@ fn enough_below(win: Win, so: OptInt) -> bool {
         if n as OptInt >= so {
             break;
         }
-        // SAFETY: a live window and a `lineoff_T` of this frame.
-        unsafe { botline_forw(win.raw(), &raw mut loff) };
+        botline_forw(win, &mut loff);
     }
     n as OptInt >= so
 }
@@ -324,8 +323,7 @@ fn check_top_offset(win: Win) -> bool {
         // The filler lines above the top line are always context.
         let mut n = win.w_topfill;
         while (n as int64_t) < so {
-            // SAFETY: a live window and a `lineoff_T` of this frame.
-            unsafe { topline_back(win.raw(), &raw mut loff) };
+            topline_back(win, &mut loff);
             // Stop once a line above the window has been counted.
             if loff.lnum < win.w_topline || (loff.lnum == win.w_topline && loff.fill > 0) {
                 break;
@@ -395,8 +393,7 @@ fn check_cursor_moved_win(mut win: Win) {
         win.w_valid &=
             !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CHEIGHT | VALID_CROW | VALID_TOPLINE);
         // Concealed-line visibility toggled.
-        // SAFETY: `curwin` is set from startup to exit.
-        if unsafe { win.is_current() }
+        if win.is_current()
             && win.w_valid_cursor.lnum > 0
             && win.w_onebuf_opt.wo_cole >= 2
             && !win.conceal_cursor_line()

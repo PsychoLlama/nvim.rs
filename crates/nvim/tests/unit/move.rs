@@ -16,9 +16,11 @@
 use std::ffi::c_int;
 
 use c2rust_neovim::src::nvim::r#move::arith::{
-    cursor_screen_col, fit_skipcol_to_window, marker_overlap, recentre_threshold, scrolljump_lines,
-    sidescroll_leftcol, skipcol_for_tall_line, skipcol_from_plines, skipped_plines,
-    wrap_cursor_cell, wrap_rowoff,
+    cursor_screen_col, fit_scrolloff_cols, fit_skipcol_to_window, marker_overlap,
+    recentre_threshold, scrolljump_lines, scrolloff_cols, sidescroll_leftcol,
+    skipcol_for_tall_line, skipcol_from_plines, skipcol_line_back, skipcol_showing_last,
+    skipped_plines, sms_cursor_row, sms_fixup_count_back, sms_fixup_count_forw, top_skipped_plines,
+    visible_sms_col, wrap_cursor_cell, wrap_rowoff,
 };
 use c2rust_neovim::src::nvim::types::colnr_T;
 
@@ -401,4 +403,243 @@ fn a_skipcol_that_shrank_scrolls_the_window_the_other_way() {
     let (skipcol, wrow, scrolled) = fit_skipcol_to_window(10, 40, 4, false, WIDTH, TALL_H);
     assert_eq!((skipcol, wrow), (10, 3));
     assert_eq!(scrolled, 3);
+}
+
+// ---------------------------------------------------------------------------
+// The 'smoothscroll' arithmetic, which works in the two *text* widths rather
+// than in screen lines. `win_col_off2()` is never negative, so a later screen
+// line is never narrower than the first: these use a window whose first line
+// holds 10 cells and whose later ones hold 14, the shape a reused 'number'
+// column gives ('cpoptions' containing "n").
+
+const S1: c_int = 10;
+const S2: c_int = 14;
+
+// ---------------------------------------------------- top_skipped_plines
+//
+// `scroll_cursor_bot()`'s "a similar formula is used in curs_columns()":
+//
+//   if (wp->w_skipcol > width1) skip_lines += (wp->w_skipcol - width1) / width2 + 1;
+//   else if (wp->w_skipcol > 0) skip_lines = 1;
+//
+// The similarity is not equality, which is why this is tested next to
+// `skipped_plines`.
+
+#[test]
+fn any_skipcol_at_all_hides_the_first_screen_line_here() {
+    assert_eq!(top_skipped_plines(0, S1, S2), 0);
+    assert_eq!(top_skipped_plines(1, S1, S2), 1);
+    assert_eq!(top_skipped_plines(S1, S1, S2), 1);
+}
+
+#[test]
+fn the_two_skip_counts_disagree_below_the_first_wrap() {
+    // `curs_columns()` still shows the first screen line, so it counts none;
+    // `scroll_cursor_bot()` has to scroll past the clipped part of it.
+    for skipcol in 1..S1 {
+        assert_eq!(skipped_plines(skipcol, S1, S2), 0, "skipcol={skipcol}");
+        assert_eq!(top_skipped_plines(skipcol, S1, S2), 1, "skipcol={skipcol}");
+    }
+}
+
+#[test]
+fn past_the_first_wrap_the_two_skip_counts_agree() {
+    for skipcol in [S1, S1 + 1, S1 + S2, S1 + 3 * S2, S1 + 3 * S2 + 1] {
+        assert_eq!(
+            top_skipped_plines(skipcol, S1, S2),
+            skipped_plines(skipcol, S1, S2),
+            "skipcol={skipcol}"
+        );
+    }
+}
+
+// -------------------------------------------------------- scrolloff_cols
+//
+// `cursor_correct_sms()` and `adjust_skipcol()`:
+//
+//   int64_t so_cols = so == 0 ? 0 : width1 + (so - 1) * width2;
+
+#[test]
+fn no_scrolloff_asks_for_no_columns() {
+    assert_eq!(scrolloff_cols(0, S1, S2), 0);
+}
+
+#[test]
+fn scrolloff_costs_the_first_screen_line_then_the_rest() {
+    assert_eq!(scrolloff_cols(1, S1, S2), S1 as i64);
+    assert_eq!(scrolloff_cols(2, S1, S2), (S1 + S2) as i64);
+    assert_eq!(scrolloff_cols(4, S1, S2), (S1 + 3 * S2) as i64);
+}
+
+#[test]
+fn a_huge_scrolloff_stays_in_range_of_an_int64() {
+    // 'scrolloff' is an OptInt; the C widens before multiplying and so does
+    // this, which is what keeps `set so=100000000` from overflowing an int.
+    assert_eq!(
+        scrolloff_cols(100_000_000, S1, S2),
+        S1 as i64 + 99_999_999 * S2 as i64
+    );
+}
+
+// ----------------------------------------------------- fit_scrolloff_cols
+//
+//   while (so_cols > size && so_cols - width2 >= width1 && width1 > 0) so_cols -= width2;
+//   if (so_cols >= width1 && so_cols > size) so_cols -= width1;
+
+#[test]
+fn a_line_wide_enough_keeps_all_its_scrolloff_columns() {
+    assert_eq!(fit_scrolloff_cols(26, 100, S1, S2), 26);
+}
+
+#[test]
+fn a_short_line_gives_up_scrolloff_a_screen_line_at_a_time() {
+    // Four screen lines of context against a line only 5 cells wide: the loop
+    // takes width2 off while a whole first line still fits, then the trailing
+    // step takes the first line itself.
+    assert_eq!(fit_scrolloff_cols(52, 5, S1, S2), 0);
+    // A wider line keeps the context that fits in it.
+    assert_eq!(fit_scrolloff_cols(52, 30, S1, S2), 24);
+}
+
+#[test]
+fn a_window_with_no_text_width_cannot_lose_whole_screen_lines() {
+    // `width1 > 0` guards the loop; the trailing `if` still applies, and with
+    // a zero width1 it takes nothing off.
+    assert_eq!(fit_scrolloff_cols(30, 5, 0, S2), 30);
+}
+
+// -------------------------------------------------------- visible_sms_col
+//
+// `cursor_correct_sms()`'s band walk: step the cursor's column by whole
+// screen lines until it lies inside `top..bot`.
+
+#[test]
+fn a_column_inside_the_band_does_not_move() {
+    assert_eq!(visible_sms_col(30, 20, 60, S1, S2), 30);
+}
+
+#[test]
+fn a_column_above_the_band_climbs_by_whole_screen_lines() {
+    // Below width1 it first gains the whole first screen line, then later
+    // ones until it is inside.
+    assert_eq!(visible_sms_col(2, 20, 60, S1, S2), 26);
+    assert_eq!(visible_sms_col(18, 20, 60, S1, S2), 32);
+}
+
+#[test]
+fn a_column_below_the_band_drops_by_whole_screen_lines() {
+    assert_eq!(visible_sms_col(60, 20, 60, S1, S2), 46);
+    assert_eq!(visible_sms_col(75, 20, 60, S1, S2), 47);
+}
+
+#[test]
+fn a_window_with_no_later_width_takes_at_most_the_first_step() {
+    assert_eq!(visible_sms_col(2, 20, 60, S1, 0), 2 + S1);
+    assert_eq!(visible_sms_col(75, 20, 60, S1, 0), 75);
+}
+
+// ------------------------------------------------------ skipcol_line_back
+//
+//   if (skipcol >= width1 + width2) skipcol -= width2; else skipcol -= width1;
+
+#[test]
+fn scrolling_back_past_the_first_wrap_costs_a_later_width() {
+    assert_eq!(skipcol_line_back(S1 + S2, S1, S2), S1);
+    assert_eq!(skipcol_line_back(S1 + 3 * S2, S1, S2), S1 + 2 * S2);
+}
+
+#[test]
+fn scrolling_back_onto_the_first_screen_line_costs_the_first_width() {
+    assert_eq!(skipcol_line_back(S1, S1, S2), 0);
+    assert_eq!(skipcol_line_back(S1 + S2 - 1, S1, S2), S2 - 1);
+}
+
+// ---------------------------------------------------- skipcol_showing_last
+//
+// `scrolldown()`'s 'smoothscroll' arm, which puts the *last* screen line of
+// the new top line at the top of the window.
+
+#[test]
+fn a_line_that_fits_needs_no_skipcol() {
+    assert_eq!(skipcol_showing_last(0, S1, S2), 0);
+    assert_eq!(skipcol_showing_last(S1, S1, S2), 0);
+}
+
+#[test]
+fn a_wrapped_line_skips_all_but_its_last_screen_line() {
+    assert_eq!(skipcol_showing_last(S1 + 1, S1, S2), S1);
+    assert_eq!(skipcol_showing_last(S1 + S2, S1, S2), S1);
+    assert_eq!(skipcol_showing_last(S1 + S2 + 1, S1, S2), S1 + S2);
+    assert_eq!(skipcol_showing_last(S1 + 3 * S2, S1, S2), S1 + 2 * S2);
+}
+
+#[test]
+fn the_skipcol_it_picks_hides_every_screen_line_but_one() {
+    for size in S1 + 1..S1 + 4 * S2 {
+        let skipcol = skipcol_showing_last(size, S1, S2);
+        // `size` cells take this many screen lines; all but the last are hidden.
+        let lines = 1 + (size - S1 + S2 - 1) / S2;
+        assert_eq!(skipped_plines(skipcol, S1, S2), lines - 1, "size={size}");
+    }
+}
+
+// -------------------------------------------------------- sms_cursor_row
+//
+// `adjust_skipcol()`'s row computation.
+
+#[test]
+fn a_cursor_on_the_first_screen_line_is_on_row_zero() {
+    assert_eq!(sms_cursor_row(0, 0, 0, 100, S1, S2), 0);
+    assert_eq!(sms_cursor_row(S1 - 1, 0, 0, 100, S1, S2), 0);
+}
+
+#[test]
+fn each_later_screen_line_is_one_row_further_down() {
+    assert_eq!(sms_cursor_row(S1, 0, 0, 100, S1, S2), 1);
+    assert_eq!(sms_cursor_row(S1 + S2 + 1, 0, 0, 100, S1, S2), 2);
+    assert_eq!(sms_cursor_row(S1 + 3 * S2 + 1, 0, 0, 100, S1, S2), 4);
+}
+
+#[test]
+fn a_column_exactly_on_a_wrap_stays_on_the_row_above_it() {
+    // Upstream's second test is `col > width2`, not `>=`, so a column landing
+    // exactly at a wrap is still booked to the screen line before it. Kept.
+    assert_eq!(sms_cursor_row(S1 + S2, 0, 0, 100, S1, S2), 1);
+    // Only that one wrap: past it the division answers for itself again.
+    assert_eq!(sms_cursor_row(S1 + 2 * S2, 0, 0, 100, S1, S2), 3);
+}
+
+#[test]
+fn the_skipcol_comes_off_the_row() {
+    assert_eq!(sms_cursor_row(S1 + 3 * S2, 0, S1 + S2, 100, S1, S2), 2);
+}
+
+#[test]
+fn scrolloff_columns_are_wound_back_to_the_lines_own_width() {
+    // A 12-cell line rounds up to S1 + S2 cells of screen, so asking for four
+    // screen lines of context cannot push the row past it.
+    assert_eq!(sms_cursor_row(2, (S1 + 3 * S2) as i64, 0, 12, S1, S2), 1);
+}
+
+// ------------------------------------------------------ sms_fixup_count_*
+//
+// `scroll_with_sms()`: how many more screen lines it takes to bring
+// `w_skipcol` back to zero, in each direction.
+
+#[test]
+fn scrolling_back_counts_the_screen_lines_already_skipped() {
+    assert_eq!(sms_fixup_count_back(S1 + 1, S1, S2), 1);
+    assert_eq!(sms_fixup_count_back(S1 + S2, S1, S2), 1);
+    assert_eq!(sms_fixup_count_back(S1 + S2 + 1, S1, S2), 2);
+    assert_eq!(sms_fixup_count_back(S1 + 3 * S2, S1, S2), 3);
+}
+
+#[test]
+fn scrolling_on_counts_the_screen_lines_still_to_come() {
+    // A 40-cell line with the first screen line skipped has two more wraps.
+    assert_eq!(sms_fixup_count_forw(S1, 40, S1, S2), 3);
+    assert_eq!(sms_fixup_count_forw(S1 + S2, 40, S1, S2), 2);
+    // At the very end it still asks for one, which is what makes the caller's
+    // second `scroll_redraw()` clear the last partly visible line.
+    assert_eq!(sms_fixup_count_forw(40, 40, S1, S2), 1);
 }

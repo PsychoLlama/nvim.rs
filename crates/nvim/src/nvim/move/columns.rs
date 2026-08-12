@@ -25,32 +25,12 @@ use crate::src::nvim::main::{dollar_vcol, e_invalid_line_number_nr, p_ss};
 use crate::src::nvim::mbyte::utf_head_off;
 use crate::src::nvim::mouse::vcol2col;
 use crate::src::nvim::os::libc::gettext;
-use crate::src::nvim::plines::{plines_m_win, plines_win, plines_win_nofill};
 use crate::src::nvim::types::{
     EvalFuncData, colnr_T, dict_T, int64_t, linenr_T, pos_T, size_t, typval_T, varnumber_T, win_T,
 };
 use crate::src::nvim::winlayer::{Pos, Win};
 
 impl Win {
-    /// Screen lines line `lnum` takes with 'wrap' and folds accounted for but
-    /// filler lines left out, optionally capped at the window height.
-    fn plines_nofill(self, lnum: linenr_T, limit_winheight: bool) -> c_int {
-        // SAFETY: a live window.
-        unsafe { plines_win_nofill(self.raw(), lnum, limit_winheight) }
-    }
-
-    /// As [`Win::plines_nofill`], filler lines included.
-    fn plines(self, lnum: linenr_T, limit_winheight: bool) -> c_int {
-        // SAFETY: a live window.
-        unsafe { plines_win(self.raw(), lnum, limit_winheight) }
-    }
-
-    /// Screen lines the range `first..=last` takes, capped at `max`.
-    fn plines_range(self, first: linenr_T, last: linenr_T, max: c_int) -> c_int {
-        // SAFETY: a live window.
-        unsafe { plines_m_win(self.raw(), first, last, max) }
-    }
-
     /// Scroll the window's own grid by `lines`, so that a `w_skipcol` change
     /// does not have to redraw everything.
     fn scroll_grid_lines(self, lines: c_int) {

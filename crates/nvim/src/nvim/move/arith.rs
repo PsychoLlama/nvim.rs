@@ -65,6 +65,151 @@ pub fn marker_overlap(extra2: c_int, showbreak: bool, list_precedes: bool) -> c_
     if extra2 > 3 { 0 } else { 3 - extra2 }
 }
 
+/// Screen lines of the top line that `w_skipcol` scrolls out of sight, as
+/// `scroll_cursor_bot()` counts them.
+///
+/// Not [`skipped_plines`]: that one stops answering below `width1`, this one
+/// counts any non-zero `w_skipcol` as a whole screen line. The C calls it "a
+/// similar formula" to `curs_columns()`'s and the difference is deliberate --
+/// here the partly-hidden first screen line still has to be scrolled past.
+pub fn top_skipped_plines(skipcol: colnr_T, width1: c_int, width2: c_int) -> c_int {
+    if skipcol > width1 {
+        (skipcol - width1) / width2 + 1
+    } else {
+        (skipcol > 0) as c_int
+    }
+}
+
+/// The columns of context 'scrolloff' asks for on a `'smoothscroll'` line:
+/// the first screen line plus `so - 1` later ones. From `cursor_correct_sms()`
+/// and `adjust_skipcol()`.
+pub fn scrolloff_cols(so: int64_t, width1: c_int, width2: c_int) -> int64_t {
+    if so == 0 {
+        0
+    } else {
+        width1 as int64_t + (so - 1) * width2 as int64_t
+    }
+}
+
+/// Drop `so_cols` to what a line only `size` cells wide can actually offer.
+/// From `cursor_correct_sms()`.
+pub fn fit_scrolloff_cols(so_cols: int64_t, size: c_int, width1: c_int, width2: c_int) -> int64_t {
+    let mut so_cols = so_cols;
+    // Not enough screen lines in the top line: ignore 'scrolloff'.
+    while so_cols > size as int64_t
+        && so_cols - width2 as int64_t >= width1 as int64_t
+        && width1 > 0
+    {
+        so_cols -= width2 as int64_t;
+    }
+    if so_cols >= width1 as int64_t && so_cols > size as int64_t {
+        so_cols -= width1 as int64_t;
+    }
+    so_cols
+}
+
+/// The virtual column nearest `col` that lies within the `top..bot` band of a
+/// `'smoothscroll'` top line -- where `cursor_correct_sms()` puts the cursor.
+///
+/// Stepping by whole screen lines is what keeps the cursor's column intact.
+pub fn visible_sms_col(
+    col: colnr_T,
+    top: int64_t,
+    bot: int64_t,
+    width1: c_int,
+    width2: c_int,
+) -> colnr_T {
+    let mut col = col;
+    if (col as int64_t) < top {
+        if col < width1 {
+            col += width1;
+        }
+        while width2 > 0 && (col as int64_t) < top {
+            col += width2;
+        }
+    } else {
+        while width2 > 0 && col as int64_t >= bot {
+            col -= width2;
+        }
+    }
+    col
+}
+
+/// The `w_skipcol` one screen line further down from `skipcol` -- the first
+/// screen line is `width1` wide, every later one `width2`. From
+/// `scrolldown()` and `adjust_skipcol()`.
+pub fn skipcol_line_back(skipcol: colnr_T, width1: c_int, width2: c_int) -> colnr_T {
+    if skipcol >= width1 + width2 {
+        skipcol - width2
+    } else {
+        skipcol - width1
+    }
+}
+
+/// The `w_skipcol` that puts the *last* screen line of a `size`-wide line at
+/// the top of the window. From `scrolldown()`'s 'smoothscroll' arm.
+pub fn skipcol_showing_last(size: c_int, width1: c_int, width2: c_int) -> colnr_T {
+    if size <= width1 {
+        return 0;
+    }
+    let mut skipcol = width1;
+    let mut left = size - width1;
+    while left > width2 {
+        skipcol += width2;
+        left -= width2;
+    }
+    skipcol
+}
+
+/// The screen row the cursor sits on once 'scrolloff' has been added to its
+/// virtual column and `w_skipcol` taken off. From `adjust_skipcol()`.
+///
+/// `size` is the line's display width; the 'scrolloff' columns are wound back
+/// to it so a short line does not push the cursor off the bottom.
+pub fn sms_cursor_row(
+    virtcol: colnr_T,
+    scrolloff_cols: int64_t,
+    skipcol: colnr_T,
+    size: c_int,
+    width1: c_int,
+    width2: c_int,
+) -> c_int {
+    let mut row = 0;
+    let mut col = virtcol as int64_t + scrolloff_cols;
+    // Avoid adjusting for 'scrolloff' beyond the text line height.
+    if scrolloff_cols > 0 {
+        // The width of the line rounded up to a whole screen line.
+        let size = width1 + width2 * ((size - width1 + width2 - 1) / width2);
+        while col > size as int64_t {
+            col -= width2 as int64_t;
+        }
+    }
+    col -= skipcol as int64_t;
+    if col >= width1 as int64_t {
+        col -= width1 as int64_t;
+        row += 1;
+    }
+    // Upstream's second test is `>` where the first is `>=`, so a column
+    // landing exactly on `width2` stays on this row.
+    if col > width2 as int64_t {
+        row += (col / width2 as int64_t) as c_int;
+    }
+    row
+}
+
+/// Screen lines `scroll_with_sms()` has to scroll *backwards* to bring
+/// `w_skipcol` back to zero: the screen lines of the top line already
+/// scrolled past.
+pub fn sms_fixup_count_back(skipcol: colnr_T, width1: c_int, width2: c_int) -> c_int {
+    1 + (skipcol - width1 - 1) / width2
+}
+
+/// As [`sms_fixup_count_back`], *forwards*: the screen lines of a
+/// `size`-wide top line still to come.
+pub fn sms_fixup_count_forw(skipcol: colnr_T, size: c_int, width1: c_int, width2: c_int) -> c_int {
+    1 + (size - skipcol - width1 + width2 - 1) / width2
+}
+
 /// Lines a scroll moves at a minimum: 'scrolljump' as a count when positive,
 /// as a percentage of the window height when negative.
 pub fn scrolljump_lines(scrolljump: OptInt, view_height: c_int) -> c_int {

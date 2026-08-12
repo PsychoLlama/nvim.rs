@@ -15,7 +15,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     VIsual_active, VIsual_select, curbuf, curwin, did_syncbind, firstwin, mod_mask, p_sbo,
 };
-use crate::src::nvim::normal::{MOD_MASK_CTRL, checkclearop, checkclearopq, clearopbeep, false_0};
+use crate::src::nvim::normal::{MOD_MASK_CTRL, checkclearop, checkclearopq, clearopbeep};
 use crate::src::nvim::plines::plines_m_win_fill;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{Direction, buf_T, cmdarg_T, colnr_T, linenr_T, win_T};
@@ -133,7 +133,7 @@ pub unsafe fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: c_int) {
                         if y > 0 {
                             scrollup(wp, y as linenr_T, false);
                         } else {
-                            scrolldown(wp, -(y as linenr_T), false_0);
+                            scrolldown(wp, -(y as linenr_T), false);
                         }
                     }
                     redraw_later(wp, UPD_VALID);
