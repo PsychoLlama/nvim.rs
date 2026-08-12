@@ -4,7 +4,7 @@
 //! modifiers, the `80.5.10` priority, the mode prefix, the `\ `-escaped path
 //! and the right-hand side, plus the `:unmenu` and `:menu`-as-a-listing forms.
 //! [`add_menu_path`] then walks the path one component at a time, creating the
-//! `vimmenu_T` nodes that do not exist yet, inserting each at the place its
+//! [`Menu`] nodes that do not exist yet, inserting each at the place its
 //! priority asks for, and finally storing the rhs for every mode the command
 //! named.
 //!
@@ -12,513 +12,504 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
+
 use super::*;
-use crate::semsg_c;
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::src::nvim::charset::{getdigits_int, skipwhite};
+use crate::src::nvim::charset::getdigits_int;
 use crate::src::nvim::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_G, Ctrl_O, replace_termcodes};
 use crate::src::nvim::main::{e_invarg2, e_trailing_arg, p_cpo, sys_menu};
-use crate::src::nvim::mbyte::utfc_ptr2len;
-use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xstrdup};
-use crate::src::nvim::message::emsg;
-use crate::src::nvim::os::libc::{gettext, memmove, strcasecmp, strcmp, strcpy, strlen, strncmp};
-use crate::src::nvim::types::{
-    TriState, exarg_T, kFalse, kNone, kTrue, linenr_T, scid_T, size_t, vimmenu_T,
-};
+use crate::src::nvim::memory::xcalloc;
+use crate::src::nvim::types::{exarg_T, vimmenu_T};
 use crate::src::nvim::ui::ui_call_update_menu;
 
-pub unsafe fn ex_menu(mut eap: *mut exarg_T) {
-    unsafe {
-        let mut map_to: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut noremap: ::core::ffi::c_int = 0;
-        let mut silent: bool = false_0 != 0;
-        let mut unmenu: bool = false;
-        let mut map_buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut i: ::core::ffi::c_int = 0;
-        let mut pri_tab: [::core::ffi::c_int; 11] = [0; 11];
-        let mut enable: TriState = kNone;
-        let mut menuarg: vimmenu_T = vimmenu_T {
-            modes: 0,
-            enabled: 0,
-            name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            dname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            en_name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            en_dname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            mnemonic: 0,
-            actext: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            priority: 0,
-            strings: [::core::ptr::null_mut::<::core::ffi::c_char>(); 8],
-            noremap: [0; 8],
-            silent: [false; 8],
-            children: ::core::ptr::null_mut::<vimmenu_T>(),
-            parent: ::core::ptr::null_mut::<vimmenu_T>(),
-            next: ::core::ptr::null_mut::<vimmenu_T>(),
-        };
-        let mut modes: ::core::ffi::c_int = get_menu_cmd_modes(
-            (*eap).cmd,
-            (*eap).forceit != 0,
-            &raw mut noremap,
-            &raw mut unmenu,
-        );
-        let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
-        loop {
-            if strncmp(arg, c"<script>".as_ptr(), 8 as size_t) == 0 as ::core::ffi::c_int {
-                noremap = REMAP_SCRIPT as ::core::ffi::c_int;
-                arg = skipwhite(arg.offset(8 as ::core::ffi::c_int as isize));
-            } else if strncmp(arg, c"<silent>".as_ptr(), 8 as size_t) == 0 as ::core::ffi::c_int {
-                silent = true_0 != 0;
-                arg = skipwhite(arg.offset(8 as ::core::ffi::c_int as isize));
-            } else {
-                if strncmp(arg, c"<special>".as_ptr(), 9 as size_t) != 0 as ::core::ffi::c_int {
-                    break;
-                }
-                arg = skipwhite(arg.offset(9 as ::core::ffi::c_int as isize));
-            }
-        }
-        if strncmp(arg, c"icon=".as_ptr(), 5 as size_t) == 0 as ::core::ffi::c_int {
-            arg = arg.offset(5 as ::core::ffi::c_int as isize);
-            while *arg as ::core::ffi::c_int != NUL
-                && *arg as ::core::ffi::c_int != ' ' as ::core::ffi::c_int
-            {
-                if *arg as ::core::ffi::c_int == '\\' as ::core::ffi::c_int {
-                    memmove(
-                        arg as *mut ::core::ffi::c_void,
-                        arg.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-                        strlen(arg.offset(1 as ::core::ffi::c_int as isize))
-                            .wrapping_add(1 as size_t),
-                    );
-                }
-                arg = arg.offset(utfc_ptr2len(arg) as isize);
-            }
-            if *arg as ::core::ffi::c_int != NUL {
-                let c2rust_fresh0 = arg;
-                arg = arg.offset(1);
-                *c2rust_fresh0 = NUL as ::core::ffi::c_char;
-                arg = skipwhite(arg);
-            }
-        }
-        p = arg;
-        while *p != 0 {
-            if !ascii_isdigit(*p as ::core::ffi::c_int)
-                && *p as ::core::ffi::c_int != '.' as ::core::ffi::c_int
-            {
-                break;
-            }
-            p = p.offset(1);
-        }
-        if ascii_iswhite(*p as ::core::ffi::c_int) {
-            i = 0 as ::core::ffi::c_int;
-            while i < MENUDEPTH && !ascii_iswhite(*arg as ::core::ffi::c_int) {
-                pri_tab[i as usize] =
-                    getdigits_int(&raw mut arg, false_0 != 0, 0 as ::core::ffi::c_int);
-                if pri_tab[i as usize] == 0 as ::core::ffi::c_int {
-                    pri_tab[i as usize] = 500 as ::core::ffi::c_int;
-                }
-                if *arg as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
-                    arg = arg.offset(1);
-                }
-                i += 1;
-            }
-            arg = skipwhite(arg);
-        } else if (*eap).addr_count != 0 && (*eap).line2 != 0 as linenr_T {
-            pri_tab[0 as ::core::ffi::c_int as usize] = (*eap).line2 as ::core::ffi::c_int;
-            i = 1 as ::core::ffi::c_int;
+/// The default priority: what an unnumbered component gets, and what a
+/// literal `0` becomes.
+const PRIORITY_DEFAULT: c_int = 500;
+
+/// One past the last priority component, so `add_menu_path` knows when to
+/// stop descending the table.
+const PRIORITY_END: c_int = -1;
+
+/// Whether `:menu` was asked to enable, disable, or neither.
+#[derive(Clone, Copy, PartialEq)]
+enum Enable {
+    Unchanged,
+    On,
+    Off,
+}
+
+/// The mode-independent half of a `:menu` definition.
+struct MenuArg {
+    modes: c_int,
+    noremap: c_int,
+    silent: bool,
+}
+
+/// `:menu` and its forty-odd relatives -- every mode prefix, `:noremenu`,
+/// `:unmenu` and `:menu enable`/`disable`.
+///
+/// # Safety
+/// `eap` must name the live `exarg_T` of a menu command, whose `arg` points
+/// into the command line this rewrites in place.
+pub unsafe fn ex_menu(eap: *mut exarg_T) {
+    // SAFETY: the caller's obligation. `cmd` and `arg` name the command line,
+    // which `ex_docmd` lets a command edit.
+    let (cmd, arg, forceit, ranged) = unsafe {
+        let eap = &*eap;
+        (
+            CStr::from_ptr(eap.cmd),
+            CText::new(eap.arg),
+            eap.forceit != 0,
+            (eap.addr_count != 0 && eap.line2 != 0).then_some(eap.line2 as c_int),
+        )
+    };
+    let (modes, noremap, unmenu) = cmd_modes(cmd.to_bytes(), forceit);
+    do_menu(arg, modes, noremap, unmenu, ranged);
+}
+
+/// The body of [`ex_menu`], once the command name has been read.
+fn do_menu(mut arg: CText, modes: c_int, mut noremap: c_int, unmenu: bool, ranged: Option<c_int>) {
+    let mut silent = false;
+    loop {
+        if arg.starts_with(b"<script>") {
+            noremap = REMAP_SCRIPT;
+            arg = skip_white(arg.at(8));
+        } else if arg.starts_with(b"<silent>") {
+            silent = true;
+            arg = skip_white(arg.at(8));
+        } else if arg.starts_with(b"<special>") {
+            // Obsolete, and ignored.
+            arg = skip_white(arg.at(9));
         } else {
-            i = 0 as ::core::ffi::c_int;
+            break;
         }
-        while i < MENUDEPTH {
-            let c2rust_fresh1 = i;
-            i = i + 1;
-            pri_tab[c2rust_fresh1 as usize] = 500 as ::core::ffi::c_int;
-        }
-        pri_tab[MENUDEPTH as usize] = -1 as ::core::ffi::c_int;
-        if strncmp(arg, c"enable".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int
-            && ascii_iswhite(*arg.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                as ::core::ffi::c_int
-                != 0
-        {
-            enable = kTrue;
-            arg = skipwhite(arg.offset(6 as ::core::ffi::c_int as isize));
-        } else if strncmp(arg, c"disable".as_ptr(), 7 as size_t) == 0 as ::core::ffi::c_int
-            && ascii_iswhite(*arg.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                as ::core::ffi::c_int
-                != 0
-        {
-            enable = kFalse;
-            arg = skipwhite(arg.offset(7 as ::core::ffi::c_int as isize));
-        }
-        if *arg as ::core::ffi::c_int == NUL {
-            show_menus(arg, modes);
+    }
+
+    arg = skip_icon(arg);
+    let pri_tab = take_priorities(&mut arg, ranged);
+
+    let mut enable = Enable::Unchanged;
+    if arg.starts_with(b"enable") && white(arg.byte(6)) {
+        enable = Enable::On;
+        arg = skip_white(arg.at(6));
+    } else if arg.starts_with(b"disable") && white(arg.byte(7)) {
+        enable = Enable::Off;
+        arg = skip_white(arg.at(7));
+    }
+
+    // No argument at all: list every menu.
+    if arg.is_empty() {
+        show_menus(c"", modes);
+        return;
+    }
+
+    let menu_path = arg;
+    if menu_path.byte(0) == b'.' {
+        semsg_name(message(&e_invarg2), menu_path.raw());
+        return;
+    }
+
+    // Careful from here on: the name is NUL-terminated in place, and the
+    // three consumers below all edit it further.
+    let map_to = menu_translate_tab_and_shift(arg);
+
+    if map_to.is_empty() && !unmenu && enable == Enable::Unchanged {
+        // Only a menu name: display the menus with that name.
+        show_menus(menu_path.as_cstr(), modes);
+        return;
+    }
+    if !map_to.is_empty() && (unmenu || enable != Enable::Unchanged) {
+        semsg_name(message(&e_trailing_arg), map_to.raw());
+        return;
+    }
+
+    if enable != Enable::Unchanged {
+        change_sensitivity(menu_path, modes, enable == Enable::On);
+    } else if unmenu {
+        if is_menus_locked() {
             return;
         }
-        let mut menu_path: *mut ::core::ffi::c_char = arg;
-        's_573: {
-            if *menu_path as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
-                semsg_c!(
-                    gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                    menu_path,
-                );
-            } else {
-                map_to = menu_translate_tab_and_shift(arg);
-                if *map_to as ::core::ffi::c_int == NUL
-                    && !unmenu
-                    && enable as ::core::ffi::c_int == kNone as ::core::ffi::c_int
-                {
-                    show_menus(menu_path, modes);
-                } else if *map_to as ::core::ffi::c_int != NUL
-                    && (unmenu as ::core::ffi::c_int != 0
-                        || enable as ::core::ffi::c_int != kNone as ::core::ffi::c_int)
-                {
-                    semsg_c!(
-                        gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
-                        map_to,
-                    );
-                } else {
-                    let mut root_menu_ptr: *mut *mut vimmenu_T = get_root_menu(menu_path);
-                    if enable as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
-                        if strcmp(menu_path, c"*".as_ptr()) == 0 as ::core::ffi::c_int {
-                            menu_path = c"".as_ptr() as *mut ::core::ffi::c_char;
-                        }
-                        if menu_is_popup(menu_path) {
-                            i = 0 as ::core::ffi::c_int;
-                            while i < MENU_INDEX_TIP as ::core::ffi::c_int {
-                                if modes & (1 as ::core::ffi::c_int) << i != 0 {
-                                    p = popup_mode_name(menu_path, i);
-                                    menu_enable_recurse(
-                                        *root_menu_ptr,
-                                        p,
-                                        MENU_ALL_MODES as ::core::ffi::c_int,
-                                        enable as ::core::ffi::c_int,
-                                    );
-                                    xfree(p as *mut ::core::ffi::c_void);
-                                }
-                                i += 1;
-                            }
-                        }
-                        menu_enable_recurse(
-                            *root_menu_ptr,
-                            menu_path,
-                            modes,
-                            enable as ::core::ffi::c_int,
-                        );
-                    } else if unmenu {
-                        if is_menus_locked() != 0 {
-                            break 's_573;
-                        } else {
-                            if strcmp(menu_path, c"*".as_ptr()) == 0 as ::core::ffi::c_int {
-                                menu_path = c"".as_ptr() as *mut ::core::ffi::c_char;
-                            }
-                            if menu_is_popup(menu_path) {
-                                i = 0 as ::core::ffi::c_int;
-                                while i < MENU_INDEX_TIP as ::core::ffi::c_int {
-                                    if modes & (1 as ::core::ffi::c_int) << i != 0 {
-                                        p = popup_mode_name(menu_path, i);
-                                        remove_menu(
-                                            root_menu_ptr,
-                                            p,
-                                            MENU_ALL_MODES as ::core::ffi::c_int,
-                                            true_0 != 0,
-                                        );
-                                        xfree(p as *mut ::core::ffi::c_void);
-                                    }
-                                    i += 1;
-                                }
-                            }
-                            remove_menu(root_menu_ptr, menu_path, modes, false_0 != 0);
-                        }
-                    } else if is_menus_locked() != 0 {
-                        break 's_573;
-                    } else {
-                        if strcasecmp(map_to, c"<nop>".as_ptr() as *mut ::core::ffi::c_char)
-                            == 0 as ::core::ffi::c_int
-                        {
-                            map_to = c"".as_ptr() as *mut ::core::ffi::c_char;
-                            map_buf = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                        } else if modes & MENU_TIP_MODE as ::core::ffi::c_int != 0 {
-                            map_buf = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                        } else {
-                            map_buf = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                            map_to = replace_termcodes(
-                                map_to,
-                                strlen(map_to),
-                                &raw mut map_buf,
-                                0 as scid_T,
-                                REPTERM_DO_LT as ::core::ffi::c_int,
-                                ::core::ptr::null_mut::<bool>(),
-                                p_cpo.get(),
-                            );
-                        }
-                        menuarg.modes = modes;
-                        menuarg.noremap[0 as ::core::ffi::c_int as usize] = noremap;
-                        menuarg.silent[0 as ::core::ffi::c_int as usize] = silent;
-                        add_menu_path(
-                            menu_path,
-                            &raw mut menuarg,
-                            &raw mut pri_tab as *mut ::core::ffi::c_int,
-                            map_to,
-                        );
-                        if menu_is_popup(menu_path) {
-                            i = 0 as ::core::ffi::c_int;
-                            while i < MENU_INDEX_TIP as ::core::ffi::c_int {
-                                if modes & (1 as ::core::ffi::c_int) << i != 0 {
-                                    p = popup_mode_name(menu_path, i);
-                                    menuarg.modes = modes;
-                                    add_menu_path(
-                                        p,
-                                        &raw mut menuarg,
-                                        &raw mut pri_tab as *mut ::core::ffi::c_int,
-                                        map_to,
-                                    );
-                                    xfree(p as *mut ::core::ffi::c_void);
-                                }
-                                i += 1;
-                            }
-                        }
-                        xfree(map_buf as *mut ::core::ffi::c_void);
-                    }
-                    ui_call_update_menu();
-                }
+        delete_menus(menu_path, modes);
+    } else {
+        if is_menus_locked() {
+            return;
+        }
+        add_menus(
+            menu_path,
+            map_to,
+            &MenuArg {
+                modes,
+                noremap,
+                silent,
+            },
+            &pri_tab,
+        );
+    }
+
+    ui_call_update_menu();
+}
+
+fn white(byte: u8) -> bool {
+    ascii_iswhite(c_int::from(byte))
+}
+
+/// Step over an optional `icon=filename` argument.
+///
+/// It is parsed and dropped: upstream has never handed it to a UI, and the
+/// `\`-escapes are still squeezed out of the command line on the way past.
+fn skip_icon(arg: CText) -> CText {
+    if !arg.starts_with(b"icon=") {
+        return arg;
+    }
+    let arg = arg.at(5);
+    let mut i = 0;
+    while arg.byte(i) != 0 && arg.byte(i) != b' ' {
+        if arg.byte(i) == b'\\' {
+            arg.squeeze(i, 1);
+        }
+        i += arg.char_len(i);
+    }
+    if arg.byte(i) == 0 {
+        return arg.at(i);
+    }
+    arg.set(i, 0);
+    skip_white(arg.at(i + 1))
+}
+
+/// Read the leading `10.20.30` priority list, if there is one, and advance
+/// `arg` past it.
+///
+/// Every level not named takes [`PRIORITY_DEFAULT`], and so does a level
+/// written as `0` -- or as a number too large for an `int`, since
+/// [`take_digits`] answers 0 for those. A `:123menu` range counts as the
+/// first level.
+fn take_priorities(arg: &mut CText, ranged: Option<c_int>) -> [c_int; MENUDEPTH + 1] {
+    let mut pri_tab = [PRIORITY_DEFAULT; MENUDEPTH + 1];
+    pri_tab[MENUDEPTH] = PRIORITY_END;
+
+    let mut i = 0;
+    while arg.byte(i) != 0 && (ascii_isdigit(c_int::from(arg.byte(i))) || arg.byte(i) == b'.') {
+        i += 1;
+    }
+    if white(arg.byte(i)) {
+        for slot in pri_tab.iter_mut().take(MENUDEPTH) {
+            if white(arg.byte(0)) {
+                break;
             }
-        };
+            *slot = take_digits(arg);
+            if *slot == 0 {
+                *slot = PRIORITY_DEFAULT;
+            }
+            if arg.byte(0) == b'.' {
+                *arg = arg.at(1);
+            }
+        }
+        *arg = skip_white(*arg);
+    } else if let Some(line2) = ranged {
+        pri_tab[0] = line2;
+    }
+    pri_tab
+}
+
+/// `:menu enable`/`:menu disable`. `*` means every menu, and the `PopUp`
+/// menu is flipped one mode at a time because each mode has its own copy.
+fn change_sensitivity(menu_path: CText, modes: c_int, enable: bool) {
+    let menu_path = all_menus_if_star(menu_path);
+    if is_popup(menu_path.as_cstr()) {
+        for i in 0..MENU_INDEX_TIP {
+            if modes & (1 << i) != 0 {
+                let mut buf = scratch(&popup_mode_name(menu_path.as_cstr(), i));
+                menu_enable_recurse(root_first(), text_of(&mut buf), MENU_ALL_MODES, enable);
+            }
+        }
+    }
+    // Careful: menu_enable_recurse() edits menu_path.
+    menu_enable_recurse(root_first(), menu_path, modes, enable);
+}
+
+/// `:unmenu`, in the same shape as [`change_sensitivity`].
+fn delete_menus(menu_path: CText, modes: c_int) {
+    let menu_path = all_menus_if_star(menu_path);
+    if is_popup(menu_path.as_cstr()) {
+        for i in 0..MENU_INDEX_TIP {
+            if modes & (1 << i) != 0 {
+                let mut buf = scratch(&popup_mode_name(menu_path.as_cstr(), i));
+                remove_menu(root_link(), text_of(&mut buf), MENU_ALL_MODES, true);
+            }
+        }
+    }
+    // Careful: remove_menu() edits menu_path.
+    remove_menu(root_link(), menu_path, modes, false);
+}
+
+/// `*` as a menu path means all of them, which the walkers spell as the
+/// empty name. Truncating in place is exactly C's `menu_path = ""`.
+fn all_menus_if_star(menu_path: CText) -> CText {
+    if menu_path.as_cstr() == c"*" {
+        menu_path.set(0, 0);
+    }
+    menu_path
+}
+
+/// `:menu path rhs`, and the per-mode `PopUp` copies of it.
+fn add_menus(menu_path: CText, map_to: CText, arg: &MenuArg, pri_tab: &[c_int; MENUDEPTH + 1]) {
+    // Replace special key codes, unless this is a tooltip (plain text) or
+    // "<Nop>" (which means nothing at all).
+    let mut map_buf: *mut c_char = ptr::null_mut();
+    let rhs = if map_to.bytes().eq_ignore_ascii_case(b"<nop>") {
+        c""
+    } else if arg.modes & MENU_TIP_MODE != 0 {
+        map_to.as_cstr()
+    } else {
+        translate_termcodes(map_to.as_cstr(), &mut map_buf)
+    };
+
+    add_menu_path(menu_path.as_cstr(), arg, pri_tab, Some(rhs));
+    if is_popup(menu_path.as_cstr()) {
+        for i in 0..MENU_INDEX_TIP {
+            if arg.modes & (1 << i) != 0 {
+                // All the modes, so that ":amenu" works.
+                let name = popup_mode_name(menu_path.as_cstr(), i);
+                add_menu_path(&name, arg, pri_tab, Some(rhs));
+            }
+        }
+    }
+    free_str(map_buf);
+}
+
+/// `replace_termcodes()`: `<C-x>` and its kind become the keys they name.
+/// The answer borrows the buffer left in `owner`, which the caller frees.
+fn translate_termcodes<'a>(rhs: &'a CStr, owner: &mut *mut c_char) -> &'a CStr {
+    // SAFETY: `rhs` is NUL-terminated and `owner` names a live slot;
+    // `replace_termcodes` allocates into it and answers a pointer into it.
+    unsafe {
+        let translated = replace_termcodes(
+            rhs.as_ptr(),
+            rhs.count_bytes(),
+            owner,
+            0,
+            REPTERM_DO_LT,
+            ptr::null_mut(),
+            p_cpo.get(),
+        );
+        CStr::from_ptr(translated)
     }
 }
 
-unsafe extern "C" fn add_menu_path(
-    menu_path: *const ::core::ffi::c_char,
-    mut menuarg: *mut vimmenu_T,
-    pri_tab: *const ::core::ffi::c_int,
-    call_data: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut amenu: ::core::ffi::c_int = 0;
-        let mut modes: ::core::ffi::c_int = (*menuarg).modes;
-        let mut menu: *mut vimmenu_T = ::core::ptr::null_mut::<vimmenu_T>();
-        let mut lower_pri: *mut *mut vimmenu_T = ::core::ptr::null_mut::<*mut vimmenu_T>();
-        let mut dname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut pri_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut old_modes: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut en_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut path_name: *mut ::core::ffi::c_char = xstrdup(menu_path);
-        let mut root_menu_ptr: *mut *mut vimmenu_T = get_root_menu(menu_path);
-        let mut menup: *mut *mut vimmenu_T = root_menu_ptr;
-        let mut parent: *mut vimmenu_T = ::core::ptr::null_mut::<vimmenu_T>();
-        let mut name: *mut ::core::ffi::c_char = path_name;
-        '_erret: {
-            while *name != 0 {
-                let mut next_name: *mut ::core::ffi::c_char = menu_name_skip(name);
-                let mut map_to: *mut ::core::ffi::c_char =
-                    menutrans_lookup(name, strlen(name) as ::core::ffi::c_int);
-                if !map_to.is_null() {
-                    en_name = name;
-                    name = map_to;
-                } else {
-                    en_name = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                }
-                dname = menu_text(
-                    name,
-                    ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                    ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-                );
-                if *dname as ::core::ffi::c_int == NUL {
-                    emsg(gettext(c"E792: Empty menu name".as_ptr()));
-                    break '_erret;
-                } else {
-                    lower_pri = menup;
-                    menu = *menup;
-                    while !menu.is_null() {
-                        if menu_name_equal(name, menu) as ::core::ffi::c_int != 0
-                            || menu_name_equal(dname, menu) as ::core::ffi::c_int != 0
-                        {
-                            if *next_name as ::core::ffi::c_int == NUL
-                                && !(*menu).children.is_null()
-                            {
-                                if !sys_menu.get() {
-                                    emsg(gettext(
-                                        c"E330: Menu path must not lead to a sub-menu".as_ptr(),
-                                    ));
-                                }
-                                break '_erret;
-                            } else {
-                                if !(*next_name as ::core::ffi::c_int != NUL
-                                    && (*menu).children.is_null())
-                                {
-                                    break;
-                                }
-                                if !sys_menu.get() {
-                                    emsg(gettext(e_notsubmenu.as_ptr()));
-                                }
-                                break '_erret;
-                            }
-                        } else {
-                            menup = &raw mut (*menu).next;
-                            if !parent.is_null()
-                                || menu_is_menubar((*menu).name) as ::core::ffi::c_int != 0
-                            {
-                                if (*menu).priority <= *pri_tab.offset(pri_idx as isize) {
-                                    lower_pri = menup;
-                                }
-                            }
-                            menu = (*menu).next;
-                        }
-                    }
-                    if menu.is_null() {
-                        if *next_name as ::core::ffi::c_int == NUL && parent.is_null() {
-                            emsg(gettext(
-                                c"E331: Must not add menu items directly to menu bar".as_ptr(),
-                            ));
-                            break '_erret;
-                        } else if menu_is_separator(dname) as ::core::ffi::c_int != 0
-                            && *next_name as ::core::ffi::c_int != NUL
-                        {
-                            emsg(gettext(
-                                c"E332: Separator cannot be part of a menu path".as_ptr(),
-                            ));
-                            break '_erret;
-                        } else {
-                            menu = xcalloc(1 as size_t, ::core::mem::size_of::<vimmenu_T>())
-                                as *mut vimmenu_T;
-                            (*menu).modes = modes;
-                            (*menu).enabled = MENU_ALL_MODES as ::core::ffi::c_int;
-                            (*menu).name = xstrdup(name);
-                            (*menu).dname =
-                                menu_text(name, &raw mut (*menu).mnemonic, &raw mut (*menu).actext);
-                            if !en_name.is_null() {
-                                (*menu).en_name = xstrdup(en_name);
-                                (*menu).en_dname = menu_text(
-                                    en_name,
-                                    ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                                    ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-                                );
-                            } else {
-                                (*menu).en_name = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                                (*menu).en_dname = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                            }
-                            (*menu).priority = *pri_tab.offset(pri_idx as isize);
-                            (*menu).parent = parent;
-                            (*menu).next = *lower_pri;
-                            *lower_pri = menu;
-                            old_modes = 0 as ::core::ffi::c_int;
-                        }
-                    } else {
-                        old_modes = (*menu).modes;
-                        (*menu).modes |= modes;
-                        (*menu).enabled |= modes;
-                    }
-                    menup = &raw mut (*menu).children;
-                    parent = menu;
-                    name = next_name;
-                    let mut ptr_: *mut *mut ::core::ffi::c_void =
-                        &raw mut dname as *mut *mut ::core::ffi::c_void;
-                    xfree(*ptr_);
-                    *ptr_ = NULL;
-                    let _ = *ptr_;
-                    if *pri_tab.offset((pri_idx + 1 as ::core::ffi::c_int) as isize)
-                        != -1 as ::core::ffi::c_int
-                    {
-                        pri_idx += 1;
-                    }
-                }
-            }
-            xfree(path_name as *mut ::core::ffi::c_void);
-            amenu = (modes
-                & (MENU_NORMAL_MODE as ::core::ffi::c_int | MENU_INSERT_MODE as ::core::ffi::c_int)
-                == MENU_NORMAL_MODE as ::core::ffi::c_int | MENU_INSERT_MODE as ::core::ffi::c_int)
-                as ::core::ffi::c_int;
-            if sys_menu.get() {
-                modes &= !old_modes;
-            }
-            if !menu.is_null() && modes != 0 {
-                let mut p: *mut ::core::ffi::c_char = if call_data.is_null() {
-                    ::core::ptr::null_mut::<::core::ffi::c_char>()
-                } else {
-                    xstrdup(call_data)
-                };
-                let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while i < MENU_MODES as ::core::ffi::c_int {
-                    if modes & (1 as ::core::ffi::c_int) << i != 0 {
-                        free_menu_string(menu, i);
-                        let mut c: ::core::ffi::c_char = 0 as ::core::ffi::c_char;
-                        let mut d: ::core::ffi::c_char = 0 as ::core::ffi::c_char;
-                        if amenu != 0
-                            && !call_data.is_null()
-                            && *call_data as ::core::ffi::c_int != NUL
-                        {
-                            match (1 as ::core::ffi::c_int) << i {
-                                2 | 4 | 8 | 32 => {
-                                    c = Ctrl_C as ::core::ffi::c_char;
-                                }
-                                16 => {
-                                    c = Ctrl_BSL as ::core::ffi::c_char;
-                                    d = Ctrl_O as ::core::ffi::c_char;
-                                }
-                                _ => {}
-                            }
-                        }
-                        if c as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
-                            (*menu).strings[i as usize] =
-                                xmalloc(strlen(call_data).wrapping_add(5 as size_t))
-                                    as *mut ::core::ffi::c_char;
-                            *(*menu).strings[i as usize].offset(0 as ::core::ffi::c_int as isize) =
-                                c;
-                            if d as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-                                strcpy(
-                                    (*menu).strings[i as usize]
-                                        .offset(1 as ::core::ffi::c_int as isize),
-                                    call_data as *mut ::core::ffi::c_char,
-                                );
-                            } else {
-                                *(*menu).strings[i as usize]
-                                    .offset(1 as ::core::ffi::c_int as isize) = d;
-                                strcpy(
-                                    (*menu).strings[i as usize]
-                                        .offset(2 as ::core::ffi::c_int as isize),
-                                    call_data as *mut ::core::ffi::c_char,
-                                );
-                            }
-                            if c as ::core::ffi::c_int == Ctrl_C {
-                                let mut len: ::core::ffi::c_int =
-                                    strlen((*menu).strings[i as usize]) as ::core::ffi::c_int;
-                                *(*menu).strings[i as usize].offset(len as isize) =
-                                    Ctrl_BSL as ::core::ffi::c_char;
-                                *(*menu).strings[i as usize]
-                                    .offset((len + 1 as ::core::ffi::c_int) as isize) =
-                                    Ctrl_G as ::core::ffi::c_char;
-                                *(*menu).strings[i as usize]
-                                    .offset((len + 2 as ::core::ffi::c_int) as isize) =
-                                    NUL as ::core::ffi::c_char;
-                            }
-                        } else {
-                            (*menu).strings[i as usize] = p;
-                        }
-                        (*menu).noremap[i as usize] =
-                            (*menuarg).noremap[0 as ::core::ffi::c_int as usize];
-                        (*menu).silent[i as usize] =
-                            (*menuarg).silent[0 as ::core::ffi::c_int as usize];
-                    }
-                    i += 1;
-                }
-            }
-            return OK;
+/// `getdigits_int(&p, false, 0)`: the number `p` starts with, advancing `p`
+/// past it. A value too big for an `int` answers 0, which the caller turns
+/// into [`PRIORITY_DEFAULT`] -- which is why this is not a plain parse.
+fn take_digits(p: &mut CText) -> c_int {
+    let mut raw = p.raw();
+    // SAFETY: `raw` names a live NUL-terminated buffer and `getdigits_int`
+    // only advances it over that string's own digits.
+    let digits = unsafe { getdigits_int(&raw mut raw, false, 0) };
+    // SAFETY: still inside the same buffer.
+    *p = unsafe { CText::new(raw) };
+    digits
+}
+
+/// A fresh zeroed node, as C's `xcalloc(1, sizeof(vimmenu_T))` gives it.
+/// The caller fills `name` and `dname` before the node is linked in, which
+/// is what completes [`Menu`]'s invariant.
+fn alloc_node() -> Menu {
+    // SAFETY: `xcalloc` never answers null and zeroes the whole struct.
+    unsafe { Menu::new(xcalloc(1, size_of::<vimmenu_T>()) as *mut vimmenu_T) }
+}
+
+/// Store `rhs` for every mode in `modes`, freeing whatever was there.
+///
+/// The one copy of the rhs is shared by every mode that takes it verbatim --
+/// `free_menu_string` counts the sharers before freeing, which is what makes
+/// that safe -- while the modes an `:amenu` has to prefix get one buffer
+/// each.
+fn set_rhs(mut menu: Menu, modes: c_int, arg: &MenuArg, amenu: bool, call_data: Option<&CStr>) {
+    let shared = call_data.map_or(ptr::null_mut(), dup);
+    for i in 0..MENU_MODES {
+        if modes & (1 << i) == 0 {
+            continue;
         }
-        xfree(path_name as *mut ::core::ffi::c_void);
-        xfree(dname as *mut ::core::ffi::c_void);
-        while !parent.is_null() && (*parent).children.is_null() {
-            if (*parent).parent.is_null() {
-                menup = root_menu_ptr;
-            } else {
-                menup = &raw mut (*(*parent).parent).children;
+        free_menu_string(menu, i);
+        // ":amenu" inserts the keys that get from the mode it is invoked in
+        // back to Normal mode, and back again afterwards. Not for "<Nop>".
+        let prefix = match call_data.map(CStr::to_bytes) {
+            Some(rhs) if amenu && !rhs.is_empty() => match 1 << i {
+                MENU_VISUAL_MODE | MENU_SELECT_MODE | MENU_OP_PENDING_MODE | MENU_CMDLINE_MODE => {
+                    Some(vec![Ctrl_C as u8])
+                }
+                MENU_INSERT_MODE => Some(vec![Ctrl_BSL as u8, Ctrl_O as u8]),
+                _ => None,
+            },
+            _ => None,
+        };
+        menu.strings[i] = match prefix {
+            None => shared,
+            Some(mut buf) => {
+                let restore = buf[0] == Ctrl_C as u8;
+                buf.extend_from_slice(call_data.expect("prefixed only with an rhs").to_bytes());
+                if restore {
+                    // CTRL-C left Visual mode; CTRL-\ CTRL-G returns to it.
+                    buf.extend_from_slice(&[Ctrl_BSL as u8, Ctrl_G as u8]);
+                }
+                dup_bytes(&buf)
             }
-            while !(*menup).is_null() && *menup != parent {
-                menup = &raw mut (**menup).next;
-            }
-            if (*menup).is_null() {
+        };
+        menu.noremap[i] = arg.noremap;
+        menu.silent[i] = arg.silent;
+    }
+}
+
+/// Add `menu_path` to the tree, creating every component that is missing,
+/// and store `call_data` as its right-hand side.
+///
+/// `pri_tab` holds one priority per level: a new node is linked in after the
+/// last sibling whose priority is no higher, which is what makes
+/// `:menu 10.20 …` order the menubar.
+fn add_menu_path(
+    menu_path: &CStr,
+    arg: &MenuArg,
+    pri_tab: &[c_int; MENUDEPTH + 1],
+    call_data: Option<&CStr>,
+) {
+    let mut buf = scratch(menu_path);
+    let mut name = text_of(&mut buf);
+    let mut menup = root_link();
+    let mut parent: Option<Menu> = None;
+    let mut menu: Option<Menu> = None;
+    let mut pri_idx = 0;
+    let mut old_modes = 0;
+    let mut modes = arg.modes;
+
+    while !name.is_empty() {
+        // The name of this component, and the simplified name the tree is
+        // also keyed by. A translation swaps the name and keeps the English
+        // one alongside.
+        let next_name = skip_component(name);
+        let translated = menutrans_lookup(name);
+        let (en_name, name_now) = match translated.as_deref() {
+            Some(to) => (Some(name.as_cstr().to_owned()), to.to_owned()),
+            None => (None, name.as_cstr().to_owned()),
+        };
+        let text = menu_text(&name_now);
+        if text.display.as_bytes().is_empty() {
+            // Only a mnemonic or accelerator is not a name.
+            emsg_c(c"E792: Empty menu name");
+            return unwind_empty(parent);
+        }
+
+        // See if it is already there, remembering the last sibling this one
+        // outranks so a new node can be spliced in after it.
+        let mut lower_pri = menup;
+        menu = None;
+        let mut cursor = menup.get();
+        while let Some(node) = cursor {
+            if name_equal(&name_now, node) || name_equal(&text.display, node) {
+                if next_name.is_empty() && node.children().is_some() {
+                    if !sys_menu.get() {
+                        emsg_c(c"E330: Menu path must not lead to a sub-menu");
+                    }
+                    return unwind_empty(parent);
+                }
+                if !next_name.is_empty() && node.children().is_none() {
+                    if !sys_menu.get() {
+                        emsg_c(E_NOTSUBMENU);
+                    }
+                    return unwind_empty(parent);
+                }
+                menu = Some(node);
                 break;
             }
-            parent = (*parent).parent;
-            free_menu(menup);
+            menup = node.next_link();
+            // Menus outside the menubar (PopUp, ToolBar) do not take part in
+            // the ordering.
+            if (parent.is_some() || is_menubar(node.name())) && node.priority <= pri_tab[pri_idx] {
+                lower_pri = menup;
+            }
+            cursor = node.next();
         }
-        return FAIL;
+
+        let node = match menu {
+            Some(node) => {
+                old_modes = node.modes;
+                // Available in this mode too now, and enabled either way.
+                let mut node = node;
+                node.modes |= modes;
+                node.enabled |= modes;
+                node
+            }
+            None => {
+                if next_name.is_empty() && parent.is_none() {
+                    emsg_c(c"E331: Must not add menu items directly to menu bar");
+                    return unwind_empty(parent);
+                }
+                if is_separator(&text.display) && !next_name.is_empty() {
+                    emsg_c(c"E332: Separator cannot be part of a menu path");
+                    return unwind_empty(parent);
+                }
+
+                let mut node = alloc_node();
+                node.modes = modes;
+                node.enabled = MENU_ALL_MODES;
+                node.name = dup(&name_now);
+                node.dname = dup(&text.display);
+                node.mnemonic = text.mnemonic.unwrap_or(0);
+                node.actext = text.actext.as_deref().map_or(ptr::null_mut(), dup);
+                if let Some(en_name) = &en_name {
+                    node.en_name = dup(en_name);
+                    node.en_dname = dup(&menu_text(en_name).display);
+                }
+                node.priority = pri_tab[pri_idx];
+                node.parent = parent.map_or(ptr::null_mut(), Menu::raw);
+                // Insert after the last sibling of no higher priority.
+                node.next = lower_pri.get().map_or(ptr::null_mut(), Menu::raw);
+                lower_pri.set(Some(node));
+                old_modes = 0;
+                node
+            }
+        };
+        menu = Some(node);
+        menup = node.children_link();
+        parent = Some(node);
+        name = next_name;
+        if pri_tab[pri_idx + 1] != PRIORITY_END {
+            pri_idx += 1;
+        }
+    }
+
+    // Was this an ":amenu"? Only then does the rhs get a mode-switching
+    // prefix.
+    let amenu =
+        modes & (MENU_NORMAL_MODE | MENU_INSERT_MODE) == MENU_NORMAL_MODE | MENU_INSERT_MODE;
+    if sys_menu.get() {
+        // Only add system menu items that have not been defined yet.
+        modes &= !old_modes;
+    }
+    if let Some(menu) = menu.filter(|_| modes != 0) {
+        set_rhs(menu, modes, arg, amenu, call_data);
+    }
+}
+
+/// Delete the empty submenus a failed [`add_menu_path`] created on its way
+/// down, innermost first.
+fn unwind_empty(mut parent: Option<Menu>) {
+    while let Some(node) = parent.filter(|node| node.children().is_none()) {
+        let mut menup = match node.parent() {
+            Some(grandparent) => grandparent.children_link(),
+            None => root_link(),
+        };
+        while let Some(sibling) = menup.get() {
+            if sibling.same(node) {
+                break;
+            }
+            menup = sibling.next_link();
+        }
+        if menup.get().is_none() {
+            // Safety check: not in the list its parent names.
+            break;
+        }
+        parent = node.parent();
+        free_menu(menup);
     }
 }

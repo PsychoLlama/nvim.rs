@@ -2,8 +2,8 @@
 //!
 //! [`set_context_in_menu_cmd`] parses as much of a half-typed `:menu` command
 //! as exists to decide what the next word could be -- a mode prefix, a menu
-//! path, or nothing -- and leaves the node the path reached in `expand_menu`
-//! for the generator.  [`get_menu_name`] and [`get_menu_names`] are then the
+//! path, or nothing -- and leaves the node the path reached in [`EXPAND_MENU`]
+//! for the generator. [`get_menu_name`] and [`get_menu_names`] are then the
 //! two generators the completion machinery calls repeatedly, the second
 //! walking submenus and offering both the translated and the original name of
 //! each.
@@ -12,260 +12,291 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
+
 use super::*;
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::keycodes::Ctrl_V;
-use crate::src::nvim::main::root_menu;
-use crate::src::nvim::memory::{xfree, xmalloc, xstrlcpy};
-use crate::src::nvim::os::libc::{strcat, strlen, strncmp};
-use crate::src::nvim::types::{expand_T, size_t, vimmenu_T};
+use crate::src::nvim::types::expand_T;
 
-static expand_menu: GlobalCell<*mut vimmenu_T> =
-    GlobalCell::new(::core::ptr::null_mut::<vimmenu_T>());
+/// How much of a submenu name the generator can answer with, separator
+/// included. Upstream's `TBUFFER_LEN`.
+const TBUFFER_LEN: usize = 256;
 
-static expand_modes: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+/// The separator `get_menu_names` marks a submenu with, so that a `.` in a
+/// name is escaped as text rather than read as a path separator.
+const SUBMENU_MARK: u8 = 0x01;
 
-static expand_emenu: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+/// The sibling list the generators walk, left here by
+/// [`set_context_in_menu_cmd`].
+///
+/// It is only read during the completion of the command line that set it,
+/// which is the same window in which C's `expand_menu` is valid.
+static EXPAND_MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);
 
+/// The modes the candidates must be defined in.
+static EXPAND_MODES: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// Whether the command being completed is `:emenu`, which does not offer
+/// separators.
+static EXPAND_EMENU: GlobalCell<bool> = GlobalCell::new(false);
+
+/// What the completion machinery should do next, and where the word it is
+/// completing starts.
+struct Context {
+    xp_context: c_int,
+    pattern: Option<CText>,
+}
+
+impl Context {
+    const NOTHING: Context = Context {
+        xp_context: EXPAND_NOTHING,
+        pattern: None,
+    };
+    const UNSUCCESSFUL: Context = Context {
+        xp_context: EXPAND_UNSUCCESSFUL,
+        pattern: None,
+    };
+}
+
+/// Work out what to complete in a half-typed menu command.
+///
+/// # Safety
+/// `xp` must be live, `cmd` a NUL-terminated string, and `arg` a position in
+/// the command line being completed.
 pub unsafe extern "C" fn set_context_in_menu_cmd(
-    mut xp: *mut expand_T,
-    mut cmd: *const ::core::ffi::c_char,
-    mut arg: *mut ::core::ffi::c_char,
-    mut forceit: bool,
-) -> *mut ::core::ffi::c_char {
+    xp: *mut expand_T,
+    cmd: *const c_char,
+    arg: *mut c_char,
+    forceit: bool,
+) -> *mut c_char {
+    // SAFETY: the caller's obligation.
+    let context = unsafe { menu_context(CStr::from_ptr(cmd), CText::new(arg), forceit) };
+    // SAFETY: the caller's obligation; both writes finish here, and the
+    // pattern is a position in the command line `xp` already describes.
     unsafe {
-        let mut after_dot: *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut path_name: *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut unmenu: bool = false;
-        let mut menu: *mut vimmenu_T = ::core::ptr::null_mut::<vimmenu_T>();
-        (*xp).xp_context = EXPAND_UNSUCCESSFUL as ::core::ffi::c_int;
-        p = arg;
-        while *p != 0 {
-            if !ascii_isdigit(*p as ::core::ffi::c_int)
-                && *p as ::core::ffi::c_int != '.' as ::core::ffi::c_int
-            {
-                break;
-            }
-            p = p.offset(1);
+        (*xp).xp_context = context.xp_context;
+        if let Some(pattern) = context.pattern {
+            (*xp).xp_pattern = pattern.raw();
         }
-        if !ascii_iswhite(*p as ::core::ffi::c_int) {
-            if strncmp(arg, c"enable".as_ptr(), 6 as size_t) == 0 as ::core::ffi::c_int
-                && (*arg.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-                    || ascii_iswhite(
-                        *arg.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    ) as ::core::ffi::c_int
-                        != 0)
-            {
-                p = arg.offset(6 as ::core::ffi::c_int as isize);
-            } else if strncmp(arg, c"disable".as_ptr(), 7 as size_t) == 0 as ::core::ffi::c_int
-                && (*arg.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-                    || ascii_iswhite(
-                        *arg.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    ) as ::core::ffi::c_int
-                        != 0)
-            {
-                p = arg.offset(7 as ::core::ffi::c_int as isize);
-            } else {
-                p = arg;
-            }
-        }
-        while *p as ::core::ffi::c_int != NUL
-            && ascii_iswhite(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-        {
-            p = p.offset(1);
-        }
-        after_dot = p;
-        arg = after_dot;
-        while *p as ::core::ffi::c_int != 0 && !ascii_iswhite(*p as ::core::ffi::c_int) {
-            if (*p as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-                || *p as ::core::ffi::c_int == Ctrl_V)
-                && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-            {
-                p = p.offset(1);
-            } else if *p as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
-                after_dot = p.offset(1 as ::core::ffi::c_int as isize);
-            }
-            p = p.offset(1);
-        }
-        let mut expand_menus: ::core::ffi::c_int = !(*cmd as ::core::ffi::c_int
-            == 't' as ::core::ffi::c_int
-            && *cmd.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == 'e' as ::core::ffi::c_int
-            || *cmd as ::core::ffi::c_int == 'p' as ::core::ffi::c_int)
-            as ::core::ffi::c_int;
-        expand_emenu
-            .set((*cmd as ::core::ffi::c_int == 'e' as ::core::ffi::c_int) as ::core::ffi::c_int);
-        if expand_menus != 0 && ascii_iswhite(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0 {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
-        }
-        if *p as ::core::ffi::c_int == NUL {
-            expand_modes.set(get_menu_cmd_modes(
-                cmd,
-                forceit,
-                ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                &raw mut unmenu,
-            ));
-            if !unmenu {
-                expand_modes.set(MENU_ALL_MODES as ::core::ffi::c_int);
-            }
-            menu = root_menu.get();
-            if after_dot > arg {
-                let mut path_len: size_t = after_dot.offset_from(arg) as size_t;
-                path_name = xmalloc(path_len) as *mut ::core::ffi::c_char;
-                xstrlcpy(path_name, arg, path_len);
-            }
-            let mut name: *mut ::core::ffi::c_char = path_name;
-            while !name.is_null() && *name as ::core::ffi::c_int != 0 {
-                p = menu_name_skip(name);
-                while !menu.is_null() {
-                    if menu_name_equal(name, menu) {
-                        if *p as ::core::ffi::c_int != NUL && (*menu).children.is_null()
-                            || (*menu).modes & expand_modes.get() == 0 as ::core::ffi::c_int
-                        {
-                            xfree(path_name as *mut ::core::ffi::c_void);
-                            return ::core::ptr::null_mut::<::core::ffi::c_char>();
-                        }
-                        break;
-                    } else {
-                        menu = (*menu).next;
-                    }
-                }
-                if menu.is_null() {
-                    xfree(path_name as *mut ::core::ffi::c_void);
-                    return ::core::ptr::null_mut::<::core::ffi::c_char>();
-                }
-                name = p;
-                menu = (*menu).children;
-            }
-            xfree(path_name as *mut ::core::ffi::c_void);
-            (*xp).xp_context = if expand_menus != 0 {
-                EXPAND_MENUNAMES as ::core::ffi::c_int
-            } else {
-                EXPAND_MENUS as ::core::ffi::c_int
-            };
-            (*xp).xp_pattern = after_dot;
-            expand_menu.set(menu);
+    }
+    ptr::null_mut()
+}
+
+fn white(byte: u8) -> bool {
+    ascii_iswhite(c_int::from(byte))
+}
+
+/// The body of [`set_context_in_menu_cmd`].
+fn menu_context(cmd: &CStr, arg: CText, forceit: bool) -> Context {
+    // Step over the priority numbers, then over "enable"/"disable".
+    let mut i = 0;
+    while arg.byte(i) != 0 && (ascii_isdigit(c_int::from(arg.byte(i))) || arg.byte(i) == b'.') {
+        i += 1;
+    }
+    let mut p = arg.at(i);
+    if !white(p.byte(0)) {
+        p = if arg.starts_with(b"enable") && (arg.byte(6) == 0 || white(arg.byte(6))) {
+            arg.at(6)
+        } else if arg.starts_with(b"disable") && (arg.byte(7) == 0 || white(arg.byte(7))) {
+            arg.at(7)
         } else {
-            (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+            arg
+        };
+    }
+    while p.byte(0) != 0 && white(p.byte(0)) {
+        p = p.at(1);
+    }
+
+    // The path being typed, and where its last component starts.
+    let start = p;
+    let mut after_dot = start;
+    let mut i = 0;
+    while start.byte(i) != 0 && !white(start.byte(i)) {
+        if (start.byte(i) == b'\\' || start.byte(i) == Ctrl_V as u8) && start.byte(i + 1) != 0 {
+            i += 1;
+        } else if start.byte(i) == b'.' {
+            after_dot = start.at(i + 1);
         }
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        i += 1;
+    }
+    let end = start.at(i);
+
+    // ":popup" and ":tearoff" take a menu, not one of its entries.
+    let bytes = cmd.to_bytes();
+    let whole_menus = !(bytes.starts_with(b"te") || bytes.first() == Some(&b'p'));
+    EXPAND_EMENU.set(bytes.first() == Some(&b'e'));
+    if whole_menus && white(end.byte(0)) {
+        return Context::UNSUCCESSFUL;
+    }
+    if !end.is_empty() {
+        // Still in the mapping part.
+        return Context::NOTHING;
+    }
+
+    // With `:unmenu` only the command's own modes can match; with `:menu` a
+    // name may be reused in another mode, so match them all.
+    let (modes, _, unmenu) = cmd_modes(bytes, forceit);
+    EXPAND_MODES.set(if unmenu { modes } else { MENU_ALL_MODES });
+
+    // Everything before the last dot has to resolve to a submenu.
+    let mut path: Vec<u8> = Vec::new();
+    let typed = after_dot.offset_from(start);
+    if typed > 0 {
+        path.extend_from_slice(&start.bytes()[..typed - 1]);
+        path.push(0);
+    }
+    let mut menu = root_first();
+    let mut name = (!path.is_empty()).then(|| text_of(&mut path));
+    while let Some(component) = name.filter(|n| !n.is_empty()) {
+        let rest = skip_component(component);
+        let matched = menu
+            .into_iter()
+            .flat_map(Menu::siblings)
+            .find(|node| name_equal(component.as_cstr(), *node));
+        let Some(node) = matched else {
+            // No menu with the name we were looking for.
+            return Context::UNSUCCESSFUL;
+        };
+        if (!rest.is_empty() && node.children().is_none()) || !node.in_modes(EXPAND_MODES.get()) {
+            // The path continues past a leaf, or the menu exists only in
+            // another mode.
+            return Context::UNSUCCESSFUL;
+        }
+        name = Some(rest);
+        menu = node.children();
+    }
+
+    EXPAND_MENU.set(menu);
+    Context {
+        xp_context: if whole_menus {
+            EXPAND_MENUNAMES
+        } else {
+            EXPAND_MENUS
+        },
+        pattern: Some(after_dot),
     }
 }
 
-pub unsafe extern "C" fn get_menu_name(
-    mut _xp: *mut expand_T,
-    mut idx: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        static menu: GlobalCell<*mut vimmenu_T> =
-            GlobalCell::new(::core::ptr::null_mut::<vimmenu_T>());
-        let mut str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        static should_advance: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-        if idx == 0 as ::core::ffi::c_int {
-            menu.set(expand_menu.get());
-            should_advance.set(false_0 != 0);
+/// The candidate generators alternate between a node's translated and
+/// English display names, advancing to the next node when both are spent.
+/// A node without an English name yields one candidate.
+struct Generator {
+    node: Menu,
+    advance: bool,
+}
+
+impl Generator {
+    /// The names to skip, restart, and the node to answer for -- shared by
+    /// both generators.
+    fn next(
+        idx: c_int,
+        menu: &GlobalCell<Option<Menu>>,
+        advance: &GlobalCell<bool>,
+        skip: impl Fn(Menu) -> bool,
+    ) -> Option<Generator> {
+        if idx == 0 {
+            // First call: start at the first item.
+            menu.set(EXPAND_MENU.get());
+            advance.set(false);
         }
-        while !(*menu.ptr()).is_null()
-            && (menu_is_hidden((*menu.get()).dname) as ::core::ffi::c_int != 0
-                || menu_is_separator((*menu.get()).dname) as ::core::ffi::c_int != 0
-                || (*menu.get()).children.is_null())
-        {
-            menu.set((*menu.get()).next);
+        let mut cursor = menu.get();
+        while let Some(node) = cursor.filter(|node| skip(*node)) {
+            cursor = node.next();
         }
-        if (*menu.ptr()).is_null() {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        menu.set(cursor);
+        cursor.map(|node| Generator {
+            node,
+            advance: advance.get(),
+        })
+    }
+
+    /// The display name to answer with, and the bookkeeping that decides
+    /// whether the next call moves on.
+    fn pick(&self, advance: &GlobalCell<bool>) -> *mut c_char {
+        if !self.node.in_modes(EXPAND_MODES.get()) {
+            // Not in these modes: an empty candidate, and no bookkeeping.
+            return c"".as_ptr().cast_mut();
         }
-        if (*menu.get()).modes & expand_modes.get() != 0 {
-            if should_advance.get() {
-                str = (*menu.get()).en_dname;
-            } else {
-                str = (*menu.get()).dname;
-                if (*menu.get()).en_dname.is_null() {
-                    should_advance.set(true_0 != 0);
-                }
-            }
+        if self.advance {
+            self.node.en_dname
         } else {
-            str = c"".as_ptr() as *mut ::core::ffi::c_char;
+            if self.node.en_dname.is_null() {
+                advance.set(true);
+            }
+            self.node.dname
         }
-        if should_advance.get() {
-            menu.set((*menu.get()).next);
+    }
+
+    fn step(self, menu: &GlobalCell<Option<Menu>>, advance: &GlobalCell<bool>) {
+        if advance.get() {
+            menu.set(self.node.next());
         }
-        should_advance.set(!should_advance.get());
-        return str;
+        advance.set(!advance.get());
     }
 }
 
-pub unsafe extern "C" fn get_menu_names(
-    mut _xp: *mut expand_T,
-    mut idx: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        static menu: GlobalCell<*mut vimmenu_T> =
-            GlobalCell::new(::core::ptr::null_mut::<vimmenu_T>());
-        static tbuffer: GlobalCell<[::core::ffi::c_char; 256]> = GlobalCell::new([0; 256]);
-        let mut str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        static should_advance: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-        if idx == 0 as ::core::ffi::c_int {
-            menu.set(expand_menu.get());
-            should_advance.set(false_0 != 0);
-        }
-        while !(*menu.ptr()).is_null()
-            && (menu_is_hidden((*menu.get()).dname) as ::core::ffi::c_int != 0
-                || expand_emenu.get() != 0
-                    && menu_is_separator((*menu.get()).dname) as ::core::ffi::c_int != 0
-                || *(*menu.get())
-                    .dname
-                    .add(strlen((*menu.get()).dname).wrapping_sub(1 as size_t))
-                    as ::core::ffi::c_int
-                    == '.' as ::core::ffi::c_int)
-        {
-            menu.set((*menu.get()).next);
-        }
-        if (*menu.ptr()).is_null() {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
-        }
-        if (*menu.get()).modes & expand_modes.get() != 0 {
-            if !(*menu.get()).children.is_null() {
-                if should_advance.get() {
-                    xstrlcpy(
-                        tbuffer.ptr() as *mut ::core::ffi::c_char,
-                        (*menu.get()).en_dname,
-                        TBUFFER_LEN as size_t,
-                    );
-                } else {
-                    xstrlcpy(
-                        tbuffer.ptr() as *mut ::core::ffi::c_char,
-                        (*menu.get()).dname,
-                        TBUFFER_LEN as size_t,
-                    );
-                    if (*menu.get()).en_dname.is_null() {
-                        should_advance.set(true_0 != 0);
-                    }
-                }
-                strcat(tbuffer.ptr() as *mut ::core::ffi::c_char, c"\x01".as_ptr());
-                str = tbuffer.ptr() as *mut ::core::ffi::c_char;
-            } else if should_advance.get() {
-                str = (*menu.get()).en_dname;
-            } else {
-                str = (*menu.get()).dname;
-                if (*menu.get()).en_dname.is_null() {
-                    should_advance.set(true_0 != 0);
-                }
-            }
-        } else {
-            str = c"".as_ptr() as *mut ::core::ffi::c_char;
-        }
-        if should_advance.get() {
-            menu.set((*menu.get()).next);
-        }
-        should_advance.set(!should_advance.get());
-        return str;
-    }
+/// `ExpandGeneric()`'s source for the list of (sub)menus, not entries.
+///
+/// # Safety
+/// Called by the completion machinery with the indices `0..` in order.
+pub unsafe extern "C" fn get_menu_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+    static MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);
+    static ADVANCE: GlobalCell<bool> = GlobalCell::new(false);
+
+    // Skip PopUp[nvoci], separators and leaves.
+    let Some(item) = Generator::next(idx, &MENU, &ADVANCE, |node| {
+        is_hidden(node.dname()) || is_separator(node.dname()) || node.children().is_none()
+    }) else {
+        // At the end of the linked list.
+        return ptr::null_mut();
+    };
+    let name = item.pick(&ADVANCE);
+    item.step(&MENU, &ADVANCE);
+    name
 }
 
-pub const TBUFFER_LEN: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
+/// `ExpandGeneric()`'s source for the list of menus *and* menu entries.
+///
+/// # Safety
+/// As [`get_menu_name`].
+pub unsafe extern "C" fn get_menu_names(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+    /// Scratch for the one candidate at a time a submenu is answered with.
+    static TBUFFER: GlobalCell<[u8; TBUFFER_LEN]> = GlobalCell::new([0; TBUFFER_LEN]);
+    static MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);
+    static ADVANCE: GlobalCell<bool> = GlobalCell::new(false);
+
+    // Skip Browse-style entries, popup menus and separators.
+    let Some(item) = Generator::next(idx, &MENU, &ADVANCE, |node| {
+        is_hidden(node.dname())
+            || (EXPAND_EMENU.get() && is_separator(node.dname()))
+            || node.dname().to_bytes().last() == Some(&b'.')
+    }) else {
+        return ptr::null_mut();
+    };
+
+    let name = item.pick(&ADVANCE);
+    let name = if item.node.children().is_some() && item.node.in_modes(EXPAND_MODES.get()) {
+        // Mark it as a submenu with a magic byte. Upstream copies up to the
+        // whole buffer and then appends, overrunning it by one for a
+        // 255-byte name; the separator is reserved for here.
+        // SAFETY: `name` is one of the node's display names.
+        let bytes = unsafe { CStr::from_ptr(name) }.to_bytes();
+        let kept = bytes.len().min(TBUFFER_LEN - 2);
+        TBUFFER.with_mut(|buf| {
+            buf[..kept].copy_from_slice(&bytes[..kept]);
+            buf[kept] = SUBMENU_MARK;
+            buf[kept + 1] = 0;
+        });
+        // The generator's contract is a borrowed string, so this hands back
+        // the scratch buffer itself.
+        TBUFFER.ptr().cast()
+    } else {
+        name
+    };
+
+    item.step(&MENU, &ADVANCE);
+    name
+}

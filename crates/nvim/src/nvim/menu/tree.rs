@@ -1,532 +1,453 @@
 //! The menu tree itself -- creating, walking, listing and freeing it.
 //!
-//! A menu is a linked list of `vimmenu_T` siblings, each with a `children`
-//! list of its own.  This is everything that treats that tree as a data
+//! A menu is a linked list of sibling [`Menu`] nodes, each with a `children`
+//! list of its own. This is everything that treats that tree as a data
 //! structure: [`find_menu`] resolves a path to a node,
 //! [`menu_get_recursive`]/[`menu_get`] dump it as the nested Dict
-//! `menu_get()` returns, [`show_menus`] and [`show_menus_recursive`] print the
-//! `:menu` listing, [`remove_menu`] unlinks and [`free_menu`] releases a
+//! `menu_get()` returns, [`show_menus`] and [`show_menus_recursive`] print
+//! the `:menu` listing, [`remove_menu`] unlinks and [`free_menu`] releases a
 //! subtree, and [`menu_enable_recurse`] flips the `enabled` flag.
 //!
 //! Original: `src/nvim/menu.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
+
 use super::*;
-use crate::semsg_c;
-use crate::src::nvim::eval::typval::tv_dict_len;
-use crate::src::nvim::eval::typval::{
-    tv_dict_add_allocated_str, tv_dict_add_dict, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str,
-    tv_dict_alloc, tv_list_alloc, tv_list_append_dict,
-};
 use crate::src::nvim::highlight_group::{HLF_8, HLF_D};
-use crate::src::nvim::main::{e_menu_only_exists_in_another_mode, got_int, root_menu};
-use crate::src::nvim::mbyte::utf_char2bytes;
-use crate::src::nvim::memory::{xfree, xstrdup};
+use crate::src::nvim::main::{e_menu_only_exists_in_another_mode, got_int};
+use crate::src::nvim::memory::xfree;
 use crate::src::nvim::message::{
-    emsg, msg_outnum, msg_outtrans, msg_outtrans_special, msg_putchar, msg_puts, msg_puts_hl,
-    msg_puts_title, str2special_save,
+    msg_outnum, msg_outtrans, msg_outtrans_special, msg_putchar, msg_puts, msg_puts_hl,
+    msg_puts_title,
 };
-use crate::src::nvim::os::libc::gettext;
-use crate::src::nvim::types::{
-    dict_T, kListLenMayKnow, list_T, ptrdiff_t, size_t, varnumber_T, vimmenu_T,
-};
+use crate::src::nvim::types::{dict_T, list_T, varnumber_T};
 
-pub(crate) unsafe extern "C" fn menu_enable_recurse(
-    mut menu: *mut vimmenu_T,
-    mut name: *mut ::core::ffi::c_char,
-    mut modes: ::core::ffi::c_int,
-    mut enable: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    unsafe {
-        if menu.is_null() {
-            return OK;
-        }
-        let mut p: *mut ::core::ffi::c_char = menu_name_skip(name);
-        while !menu.is_null() {
-            if *name as ::core::ffi::c_int == NUL
-                || *name as ::core::ffi::c_int == '*' as ::core::ffi::c_int
-                || menu_name_equal(name, menu) as ::core::ffi::c_int != 0
-            {
-                if *p as ::core::ffi::c_int != NUL {
-                    if (*menu).children.is_null() {
-                        emsg(gettext(e_notsubmenu.as_ptr()));
-                        return FAIL;
-                    }
-                    if menu_enable_recurse((*menu).children, p, modes, enable) == FAIL {
-                        return FAIL;
-                    }
-                } else if enable != 0 {
-                    (*menu).enabled |= modes;
-                } else {
-                    (*menu).enabled &= !modes;
-                }
-                if *name as ::core::ffi::c_int != NUL
-                    && *name as ::core::ffi::c_int != '*' as ::core::ffi::c_int
-                {
-                    break;
-                }
-            }
-            menu = (*menu).next;
-        }
-        if *name as ::core::ffi::c_int != NUL
-            && *name as ::core::ffi::c_int != '*' as ::core::ffi::c_int
-            && menu.is_null()
-        {
-            semsg_c!(gettext(e_nomenu.as_ptr()), name,);
-            return FAIL;
-        }
-        return OK;
-    }
-}
-
-pub(crate) unsafe extern "C" fn remove_menu(
-    mut menup: *mut *mut vimmenu_T,
-    mut name: *mut ::core::ffi::c_char,
-    mut modes: ::core::ffi::c_int,
-    mut silent: bool,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut menu: *mut vimmenu_T = ::core::ptr::null_mut::<vimmenu_T>();
-        if (*menup).is_null() {
-            return OK;
-        }
-        let mut p: *mut ::core::ffi::c_char = menu_name_skip(name);
-        loop {
-            menu = *menup;
-            if menu.is_null() {
-                break;
-            }
-            if *name as ::core::ffi::c_int == NUL
-                || menu_name_equal(name, menu) as ::core::ffi::c_int != 0
-            {
-                if *p as ::core::ffi::c_int != NUL && (*menu).children.is_null() {
-                    if !silent {
-                        emsg(gettext(e_notsubmenu.as_ptr()));
-                    }
-                    return FAIL;
-                }
-                if (*menu).modes & modes != 0 as ::core::ffi::c_int {
-                    if remove_menu(&raw mut (*menu).children, p, modes, silent) == FAIL {
-                        return FAIL;
-                    }
-                } else if *name as ::core::ffi::c_int != NUL {
-                    if !silent {
-                        emsg(gettext(
-                            &raw const e_menu_only_exists_in_another_mode
-                                as *const ::core::ffi::c_char,
-                        ));
-                    }
-                    return FAIL;
-                }
-                if *name as ::core::ffi::c_int != NUL {
-                    break;
-                }
-                (*menu).modes &= !modes;
-                if modes & MENU_TIP_MODE as ::core::ffi::c_int != 0 {
-                    free_menu_string(menu, MENU_INDEX_TIP as ::core::ffi::c_int);
-                }
-                if (*menu).modes & MENU_ALL_MODES as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-                    free_menu(menup);
-                } else {
-                    menup = &raw mut (*menu).next;
-                }
-            } else {
-                menup = &raw mut (*menu).next;
-            }
-        }
-        if *name as ::core::ffi::c_int != NUL {
-            if menu.is_null() {
-                if !silent {
-                    semsg_c!(gettext(e_nomenu.as_ptr()), name,);
-                }
-                return FAIL;
-            }
-            (*menu).modes &= !modes;
-            let mut child: *mut vimmenu_T = (*menu).children;
-            while !child.is_null() {
-                (*menu).modes |= (*child).modes;
-                child = (*child).next;
-            }
-            if modes & MENU_TIP_MODE as ::core::ffi::c_int != 0 {
-                free_menu_string(menu, MENU_INDEX_TIP as ::core::ffi::c_int);
-            }
-            if (*menu).modes & MENU_ALL_MODES as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-                *menup = menu;
-                free_menu(menup);
-            }
-        }
-        return OK;
-    }
-}
-
-pub(crate) unsafe extern "C" fn free_menu(mut menup: *mut *mut vimmenu_T) {
-    unsafe {
-        let mut menu: *mut vimmenu_T = *menup;
-        *menup = (*menu).next;
-        xfree((*menu).name as *mut ::core::ffi::c_void);
-        xfree((*menu).dname as *mut ::core::ffi::c_void);
-        xfree((*menu).en_name as *mut ::core::ffi::c_void);
-        xfree((*menu).en_dname as *mut ::core::ffi::c_void);
-        xfree((*menu).actext as *mut ::core::ffi::c_void);
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < MENU_MODES as ::core::ffi::c_int {
-            free_menu_string(menu, i);
-            i += 1;
-        }
-        xfree(menu as *mut ::core::ffi::c_void);
-    }
-}
-
-pub(crate) unsafe extern "C" fn free_menu_string(
-    mut menu: *mut vimmenu_T,
-    mut idx: ::core::ffi::c_int,
-) {
-    unsafe {
-        let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < MENU_MODES as ::core::ffi::c_int {
-            if (*menu).strings[i as usize] == (*menu).strings[idx as usize] {
-                count += 1;
-            }
-            i += 1;
-        }
-        if count == 1 as ::core::ffi::c_int {
-            xfree((*menu).strings[idx as usize] as *mut ::core::ffi::c_void);
-        }
-        (*menu).strings[idx as usize] = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    }
-}
-
-unsafe extern "C" fn menu_get_recursive(
-    mut menu: *const vimmenu_T,
-    mut modes: ::core::ffi::c_int,
-) -> *mut dict_T {
-    unsafe {
-        if menu.is_null() || (*menu).modes & modes == 0 as ::core::ffi::c_int {
-            return ::core::ptr::null_mut::<dict_T>();
-        }
-        let mut dict: *mut dict_T = tv_dict_alloc();
-        tv_dict_add_str(
-            dict,
-            c"name".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-            (*menu).dname,
-        );
-        tv_dict_add_nr(
-            dict,
-            c"priority".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
-            (*menu).priority as varnumber_T,
-        );
-        tv_dict_add_nr(
-            dict,
-            c"hidden".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-            menu_is_hidden((*menu).dname) as varnumber_T,
-        );
-        if (*menu).mnemonic != 0 {
-            let mut buf: [::core::ffi::c_char; 7] = [0 as ::core::ffi::c_char, 0, 0, 0, 0, 0, 0];
-            utf_char2bytes((*menu).mnemonic, &raw mut buf as *mut ::core::ffi::c_char);
-            tv_dict_add_str(
-                dict,
-                c"shortcut".as_ptr(),
-                ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
-                &raw mut buf as *mut ::core::ffi::c_char,
-            );
-        }
-        if !(*menu).actext.is_null() {
-            tv_dict_add_str(
-                dict,
-                c"actext".as_ptr(),
-                ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-                (*menu).actext,
-            );
-        }
-        if (*menu).modes & MENU_TIP_MODE as ::core::ffi::c_int != 0
-            && !(*menu).strings[MENU_INDEX_TIP as ::core::ffi::c_int as usize].is_null()
-        {
-            tv_dict_add_str(
-                dict,
-                c"tooltip".as_ptr(),
-                ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-                (*menu).strings[MENU_INDEX_TIP as ::core::ffi::c_int as usize],
-            );
-        }
-        if (*menu).children.is_null() {
-            let mut commands: *mut dict_T = tv_dict_alloc();
-            tv_dict_add_dict(
-                dict,
-                c"mappings".as_ptr(),
-                ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
-                commands,
-            );
-            let mut bit: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while bit < MENU_MODES as ::core::ffi::c_int {
-                if (*menu).modes & modes & (1 as ::core::ffi::c_int) << bit
-                    != 0 as ::core::ffi::c_int
-                {
-                    let mut impl_0: *mut dict_T = tv_dict_alloc();
-                    tv_dict_add_allocated_str(
-                        impl_0,
-                        c"rhs".as_ptr(),
-                        ::core::mem::size_of::<[::core::ffi::c_char; 4]>()
-                            .wrapping_sub(1 as size_t),
-                        str2special_save((*menu).strings[bit as usize], false_0 != 0, false_0 != 0),
-                    );
-                    tv_dict_add_nr(
-                        impl_0,
-                        c"silent".as_ptr(),
-                        ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-                            .wrapping_sub(1 as size_t),
-                        (*menu).silent[bit as usize] as varnumber_T,
-                    );
-                    tv_dict_add_nr(
-                        impl_0,
-                        c"enabled".as_ptr(),
-                        ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                            .wrapping_sub(1 as size_t),
-                        (if (*menu).enabled & (1 as ::core::ffi::c_int) << bit != 0 {
-                            1 as ::core::ffi::c_int
-                        } else {
-                            0 as ::core::ffi::c_int
-                        }) as varnumber_T,
-                    );
-                    tv_dict_add_nr(
-                        impl_0,
-                        c"noremap".as_ptr(),
-                        ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                            .wrapping_sub(1 as size_t),
-                        (if (*menu).noremap[bit as usize] & REMAP_NONE as ::core::ffi::c_int != 0 {
-                            1 as ::core::ffi::c_int
-                        } else {
-                            0 as ::core::ffi::c_int
-                        }) as varnumber_T,
-                    );
-                    tv_dict_add_nr(
-                        impl_0,
-                        c"sid".as_ptr(),
-                        ::core::mem::size_of::<[::core::ffi::c_char; 4]>()
-                            .wrapping_sub(1 as size_t),
-                        (if (*menu).noremap[bit as usize] & REMAP_SCRIPT as ::core::ffi::c_int != 0
-                        {
-                            1 as ::core::ffi::c_int
-                        } else {
-                            0 as ::core::ffi::c_int
-                        }) as varnumber_T,
-                    );
-                    tv_dict_add_dict(
-                        commands,
-                        (*menu_mode_chars.ptr())[bit as usize],
-                        1 as size_t,
-                        impl_0,
-                    );
-                }
-                bit += 1;
-            }
-        } else {
-            let children_list: *mut list_T =
-                tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
-            menu = (*menu).children;
-            while !menu.is_null() {
-                let mut d: *mut dict_T = menu_get_recursive(menu, modes);
-                if tv_dict_len(d) > 0 as ::core::ffi::c_long {
-                    tv_list_append_dict(children_list, d);
-                }
-                menu = (*menu).next;
-            }
-            tv_dict_add_list(
-                dict,
-                c"submenus".as_ptr(),
-                ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
-                children_list,
-            );
-        }
-        return dict;
-    }
-}
-
-pub unsafe extern "C" fn menu_get(
-    path_name: *mut ::core::ffi::c_char,
-    mut modes: ::core::ffi::c_int,
-    mut list: *mut list_T,
+/// Enable or disable the (sub)menus `name` reaches, recursively.
+///
+/// An empty name -- which is what `:menu enable *` becomes -- or a `*`
+/// component means "every sibling at this level", and then the walk does not
+/// stop at the first match.
+///
+/// Only the node the path *names* has its flag changed; the walk does not
+/// descend past it. No textual channel reads an intermediate node's flag
+/// (`menu_info()` answers an empty Dict for a submenu and the listing's `-`
+/// marker needs an rhs), so `:menu disable Foo` and `:menu disable *` change
+/// nothing observable. That is upstream's shape, not an omission here.
+pub(crate) fn menu_enable_recurse(
+    menu: Option<Menu>,
+    name: CText,
+    modes: c_int,
+    enable: bool,
 ) -> bool {
-    unsafe {
-        let mut menu: *mut vimmenu_T = *get_root_menu(path_name);
-        if *path_name as ::core::ffi::c_int != NUL {
-            menu = find_menu(menu, path_name, modes);
-            if menu.is_null() {
-                return false_0 != 0;
-            }
+    let Some(first) = menu else {
+        // Bottom of the hierarchy.
+        return true;
+    };
+    let rest = skip_component(name);
+    let every = name.is_empty() || name.byte(0) == b'*';
+
+    let mut found = false;
+    for mut node in first.siblings() {
+        if !every && !name_equal(name.as_cstr(), node) {
+            continue;
         }
-        while !menu.is_null() {
-            let mut d: *mut dict_T = menu_get_recursive(menu, modes);
-            if !d.is_null() && tv_dict_len(d) > 0 as ::core::ffi::c_long {
-                tv_list_append_dict(list, d);
+        if !rest.is_empty() {
+            let Some(children) = node.children() else {
+                emsg_c(E_NOTSUBMENU);
+                return false;
+            };
+            if !menu_enable_recurse(Some(children), rest, modes, enable) {
+                return false;
             }
-            if *path_name as ::core::ffi::c_int != NUL {
-                break;
-            }
-            menu = (*menu).next;
+        } else if enable {
+            node.enabled |= modes;
+        } else {
+            node.enabled &= !modes;
         }
-        return true_0 != 0;
+        if !every {
+            found = true;
+            break;
+        }
     }
+
+    if !every && !found {
+        semsg_name(message_str(E_NOMENU), name.raw());
+        return false;
+    }
+    true
 }
 
-unsafe extern "C" fn find_menu(
-    mut menu: *mut vimmenu_T,
-    mut path_name: *const ::core::ffi::c_char,
-    mut modes: ::core::ffi::c_int,
-) -> *mut vimmenu_T {
-    unsafe {
-        debug_assert!(*path_name != 0, "*path_name");
-        let saved_name: *mut ::core::ffi::c_char = xstrdup(path_name);
-        let mut name: *mut ::core::ffi::c_char = saved_name;
-        '_theend: while *name != 0 {
-            let mut p: *mut ::core::ffi::c_char = menu_name_skip(name);
-            while !menu.is_null() {
-                if menu_name_equal(name, menu) {
-                    if *p as ::core::ffi::c_int != NUL && (*menu).children.is_null() {
-                        emsg(gettext(e_notsubmenu.as_ptr()));
-                        menu = ::core::ptr::null_mut::<vimmenu_T>();
-                        break '_theend;
-                    } else if (*menu).modes & modes == 0 as ::core::ffi::c_int {
-                        emsg(gettext(
-                            &raw const e_menu_only_exists_in_another_mode
-                                as *const ::core::ffi::c_char,
-                        ));
-                        menu = ::core::ptr::null_mut::<vimmenu_T>();
-                        break '_theend;
-                    } else if *p as ::core::ffi::c_int == NUL {
-                        break '_theend;
-                    } else {
-                        break;
-                    }
-                } else {
-                    menu = (*menu).next;
+/// Remove the (sub)menu `name` reaches from the modes in `modes`,
+/// recursively, and free whatever is left in no mode at all.
+///
+/// An empty name means "every sibling at this level"; `:unmenu *` reaches
+/// it that way.
+pub(crate) fn remove_menu(menup: Link, name: CText, modes: c_int, silent: bool) -> bool {
+    if menup.get().is_none() {
+        // Bottom of the hierarchy.
+        return true;
+    }
+    let rest = skip_component(name);
+    let named = !name.is_empty();
+
+    let mut menup = menup;
+    let mut found = None;
+    while let Some(mut node) = menup.get() {
+        if named && !name_equal(name.as_cstr(), node) {
+            menup = node.next_link();
+            continue;
+        }
+        if !rest.is_empty() && node.children().is_none() {
+            if !silent {
+                emsg_c(E_NOTSUBMENU);
+            }
+            return false;
+        }
+        if node.in_modes(modes) {
+            if !remove_menu(node.children_link(), rest, modes, silent) {
+                return false;
+            }
+        } else if named {
+            if !silent {
+                emsg_shared(&e_menu_only_exists_in_another_mode);
+            }
+            return false;
+        }
+        if named {
+            found = Some(node);
+            break;
+        }
+
+        // Drop these modes; when none are left the node goes with them.
+        node.modes &= !modes;
+        if modes & MENU_TIP_MODE != 0 {
+            free_menu_string(node, MENU_INDEX_TIP as usize);
+        }
+        if node.modes & MENU_ALL_MODES == 0 {
+            free_menu(menup);
+        } else {
+            menup = node.next_link();
+        }
+    }
+
+    if named {
+        let Some(mut node) = found else {
+            if !silent {
+                semsg_name(message_str(E_NOMENU), name.raw());
+            }
+            return false;
+        };
+        // Recalculate the modes from the children that survived.
+        node.modes &= !modes;
+        let children = node.children();
+        for child in children.into_iter().flat_map(Menu::siblings) {
+            node.modes |= child.modes;
+        }
+        if modes & MENU_TIP_MODE != 0 {
+            free_menu_string(node, MENU_INDEX_TIP as usize);
+        }
+        if node.modes & MENU_ALL_MODES == 0 {
+            // Upstream re-stores `node` into `menup` here; the loop only
+            // broke out without advancing, so the slot already holds it.
+            free_menu(menup);
+        }
+    }
+    true
+}
+
+/// Unlink the node in `menup` and release it.
+pub(crate) fn free_menu(menup: Link) {
+    let menu = menup.get().expect("free_menu wants an occupied slot");
+    menup.set(menu.next());
+    free_str(menu.name);
+    free_str(menu.dname);
+    free_str(menu.en_name);
+    free_str(menu.en_dname);
+    free_str(menu.actext);
+    for idx in 0..MENU_MODES {
+        free_menu_string(menu, idx);
+    }
+    // SAFETY: the node came from `alloc_node`, is now unlinked, and nothing
+    // else holds it -- its children were freed before it could get here.
+    unsafe { xfree(menu.raw().cast()) };
+}
+
+/// Clear the right-hand side stored for one mode.
+///
+/// Several modes commonly share one buffer (see `set_rhs`), so it is only
+/// freed once this is the last mode holding it.
+pub(crate) fn free_menu_string(mut menu: Menu, idx: usize) {
+    let rhs = menu.strings[idx];
+    if menu.strings.iter().filter(|s| **s == rhs).count() == 1 {
+        free_str(rhs);
+    }
+    menu.strings[idx] = ptr::null_mut();
+}
+
+/// One node as the nested Dict `menu_get()` answers with, or null when the
+/// node is in none of `modes`.
+fn menu_get_recursive(menu: Menu, modes: c_int) -> *mut dict_T {
+    if !menu.in_modes(modes) {
+        return ptr::null_mut();
+    }
+
+    let dict = dict_alloc();
+    dict_add_str(dict, c"name", menu.dname());
+    dict_add_nr(dict, c"priority", varnumber_T::from(menu.priority));
+    dict_add_nr(dict, c"hidden", varnumber_T::from(is_hidden(menu.dname())));
+    if menu.mnemonic != 0 {
+        dict_add_str(dict, c"shortcut", &char_as_text(menu.mnemonic));
+    }
+    if let Some(actext) = menu.actext() {
+        dict_add_str(dict, c"actext", actext);
+    }
+    if menu.modes & MENU_TIP_MODE != 0
+        && let Some(tooltip) = menu.rhs(MENU_INDEX_TIP as usize)
+    {
+        dict_add_str(dict, c"tooltip", tooltip);
+    }
+
+    match menu.children() {
+        None => {
+            let commands = dict_alloc();
+            dict_add_dict(dict, c"mappings".to_bytes(), commands);
+            for bit in 0..MENU_MODES {
+                if menu.modes & modes & (1 << bit) == 0 {
+                    continue;
+                }
+                let mapping = dict_alloc();
+                dict_add_allocated_str(mapping, c"rhs", special_text(menu.strings[bit]));
+                dict_add_nr(mapping, c"silent", varnumber_T::from(menu.silent[bit]));
+                dict_add_nr(
+                    mapping,
+                    c"enabled",
+                    varnumber_T::from(menu.enabled & (1 << bit) != 0),
+                );
+                dict_add_nr(
+                    mapping,
+                    c"noremap",
+                    varnumber_T::from(menu.noremap[bit] & REMAP_NONE != 0),
+                );
+                dict_add_nr(
+                    mapping,
+                    c"sid",
+                    varnumber_T::from(menu.noremap[bit] & REMAP_SCRIPT != 0),
+                );
+                // One byte of the mode letters, so `tl` files under `t`.
+                dict_add_dict(commands, &MODE_CHARS[bit].to_bytes()[..1], mapping);
+            }
+        }
+        Some(children) => {
+            let list = list_alloc();
+            for child in children.siblings() {
+                let entry = menu_get_recursive(child, modes);
+                if dict_len(entry) > 0 {
+                    list_append_dict(list, entry);
                 }
             }
-            if menu.is_null() {
-                semsg_c!(gettext(e_nomenu.as_ptr()), name,);
-                break;
-            } else {
-                name = p;
-                debug_assert!(*name != 0, "*name");
-                menu = (*menu).children;
-            }
+            dict_add_list(dict, c"submenus", list);
         }
-        xfree(saved_name as *mut ::core::ffi::c_void);
-        return menu;
     }
+    dict
 }
 
-pub(crate) unsafe extern "C" fn show_menus(
-    path_name: *mut ::core::ffi::c_char,
-    mut modes: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut menu: *mut vimmenu_T = ::core::ptr::null_mut::<vimmenu_T>();
-        if *path_name as ::core::ffi::c_int != NUL {
-            menu = find_menu(*get_root_menu(path_name), path_name, modes);
-            if menu.is_null() {
-                return FAIL;
-            }
+/// Export the menus matching `path_name` into `list` -- the `menu_get()`
+/// builtin. An empty path exports every top-level menu.
+///
+/// # Safety
+/// `path_name` must name a NUL-terminated string and `list` a live List.
+pub unsafe extern "C" fn menu_get(path_name: *mut c_char, modes: c_int, list: *mut list_T) -> bool {
+    // SAFETY: the caller's obligation.
+    let path = unsafe { CStr::from_ptr(path_name) };
+
+    let mut menu = root_first();
+    if !path.is_empty() {
+        menu = find_menu(menu, path, modes);
+        if menu.is_none() {
+            return false;
         }
-        (*menus_locked.ptr()) += 1;
-        msg_puts_title(gettext(c"\n--- Menus ---".as_ptr()));
-        show_menus_recursive(menu, modes, 0 as ::core::ffi::c_int);
-        (*menus_locked.ptr()) -= 1;
-        return OK;
     }
+    for node in menu.into_iter().flat_map(Menu::siblings) {
+        let entry = menu_get_recursive(node, modes);
+        if !entry.is_null() && dict_len(entry) > 0 {
+            list_append_dict(list, entry);
+        }
+        if !path.is_empty() {
+            // A non-empty query only wants the node `find_menu` reached.
+            break;
+        }
+    }
+    true
 }
 
-unsafe extern "C" fn show_menus_recursive(
-    mut menu: *mut vimmenu_T,
-    mut modes: ::core::ffi::c_int,
-    mut depth: ::core::ffi::c_int,
-) {
-    unsafe {
-        if !menu.is_null() && (*menu).modes & modes == 0 as ::core::ffi::c_int {
+/// Resolve `path_name` against `menu`'s sibling list, reporting why it
+/// failed. Does not handle an empty path.
+fn find_menu(menu: Option<Menu>, path_name: &CStr, modes: c_int) -> Option<Menu> {
+    debug_assert!(!path_name.is_empty(), "find_menu wants a path");
+    let mut buf = scratch(path_name);
+    let mut name = text_of(&mut buf);
+    let mut menu = menu;
+
+    while !name.is_empty() {
+        let rest = skip_component(name);
+        let mut matched = None;
+        for node in menu.into_iter().flat_map(Menu::siblings) {
+            if !name_equal(name.as_cstr(), node) {
+                continue;
+            }
+            if !rest.is_empty() && node.children().is_none() {
+                emsg_c(E_NOTSUBMENU);
+                return None;
+            }
+            if !node.in_modes(modes) {
+                emsg_shared(&e_menu_only_exists_in_another_mode);
+                return None;
+            }
+            if rest.is_empty() {
+                return Some(node);
+            }
+            matched = Some(node);
+            break;
+        }
+        let Some(node) = matched else {
+            semsg_name(message_str(E_NOMENU), name.raw());
+            return None;
+        };
+        // Found a match; search its sub-menu.
+        name = rest;
+        menu = node.children();
+    }
+    menu
+}
+
+/// The `:menu` listing: the mappings of one menu, or of the whole tree.
+pub(crate) fn show_menus(path_name: &CStr, modes: c_int) -> bool {
+    let mut menu = None;
+    if !path_name.is_empty() {
+        menu = find_menu(root_first(), path_name, modes);
+        if menu.is_none() {
+            return false;
+        }
+    }
+
+    // Hold the tree still while it is walked.
+    with_menus_locked(|| {
+        put_title(c"\n--- Menus ---");
+        show_menus_recursive(menu, modes, 0);
+    });
+    true
+}
+
+/// Print `menu` and everything under it, indented by `depth`. A `None`
+/// menu means the root list, which is printed one level further out.
+fn show_menus_recursive(menu: Option<Menu>, modes: c_int, depth: c_int) {
+    if let Some(node) = menu {
+        if !node.in_modes(modes) {
             return;
         }
-        if !menu.is_null() {
-            msg_putchar('\n' as ::core::ffi::c_int);
+        put_char(b'\n');
+        if got_int.get() {
+            // "q" hit at the --more-- prompt.
+            return;
+        }
+        for _ in 0..depth {
+            put(c"  ");
+        }
+        if node.priority != 0 {
+            put_num(node.priority);
+            put(c" ");
+        }
+        // The same highlighting as for directories.
+        put_trans(node.name(), HLF_D);
+    }
+
+    let leaf = menu.filter(|node| node.children().is_none());
+    if let Some(node) = leaf {
+        for bit in 0..MENU_MODES {
+            if node.modes & modes & (1 << bit) == 0 {
+                continue;
+            }
+            put_char(b'\n');
             if got_int.get() {
                 return;
             }
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < depth {
-                msg_puts(c"  ".as_ptr());
-                i += 1;
+            for _ in 0..depth + 2 {
+                put(c"  ");
             }
-            if (*menu).priority != 0 {
-                msg_outnum((*menu).priority);
-                msg_puts(c" ".as_ptr());
-            }
-            msg_outtrans((*menu).name, HLF_D, false_0 != 0);
-        }
-        if !menu.is_null() && (*menu).children.is_null() {
-            let mut bit: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while bit < MENU_MODES as ::core::ffi::c_int {
-                if (*menu).modes & modes & (1 as ::core::ffi::c_int) << bit
-                    != 0 as ::core::ffi::c_int
-                {
-                    msg_putchar('\n' as ::core::ffi::c_int);
-                    if got_int.get() {
-                        return;
-                    }
-                    let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    while i_0 < depth + 2 as ::core::ffi::c_int {
-                        msg_puts(c"  ".as_ptr());
-                        i_0 += 1;
-                    }
-                    msg_puts((*menu_mode_chars.ptr())[bit as usize]);
-                    if (*menu).noremap[bit as usize] == REMAP_NONE as ::core::ffi::c_int {
-                        msg_putchar('*' as ::core::ffi::c_int);
-                    } else if (*menu).noremap[bit as usize] == REMAP_SCRIPT as ::core::ffi::c_int {
-                        msg_putchar('&' as ::core::ffi::c_int);
-                    } else {
-                        msg_putchar(' ' as ::core::ffi::c_int);
-                    }
-                    if (*menu).silent[bit as usize] {
-                        msg_putchar('s' as ::core::ffi::c_int);
-                    } else {
-                        msg_putchar(' ' as ::core::ffi::c_int);
-                    }
-                    if (*menu).modes & (*menu).enabled & (1 as ::core::ffi::c_int) << bit
-                        == 0 as ::core::ffi::c_int
-                    {
-                        msg_putchar('-' as ::core::ffi::c_int);
-                    } else {
-                        msg_putchar(' ' as ::core::ffi::c_int);
-                    }
-                    msg_puts(c" ".as_ptr());
-                    if *(*menu).strings[bit as usize] as ::core::ffi::c_int == NUL {
-                        msg_puts_hl(c"<Nop>".as_ptr(), HLF_8, false_0 != 0);
-                    } else {
-                        msg_outtrans_special(
-                            (*menu).strings[bit as usize],
-                            false_0 != 0,
-                            0 as ::core::ffi::c_int,
-                        );
-                    }
-                }
-                bit += 1;
-            }
-        } else {
-            if menu.is_null() {
-                menu = root_menu.get();
-                depth -= 1;
+            put(MODE_CHARS[bit]);
+            put_char(match node.noremap[bit] {
+                REMAP_NONE => b'*',
+                REMAP_SCRIPT => b'&',
+                _ => b' ',
+            });
+            put_char(if node.silent[bit] { b's' } else { b' ' });
+            put_char(if node.modes & node.enabled & (1 << bit) == 0 {
+                b'-'
             } else {
-                menu = (*menu).children;
+                b' '
+            });
+            put(c" ");
+            let rhs = node.strings[bit];
+            match node.rhs(bit).map(CStr::is_empty) {
+                Some(true) | None => put_hl(c"<Nop>", HLF_8),
+                Some(false) => put_special(rhs),
             }
-            while !menu.is_null() && !got_int.get() {
-                if !menu_is_hidden((*menu).dname) {
-                    show_menus_recursive(menu, modes, depth + 1 as ::core::ffi::c_int);
-                }
-                menu = (*menu).next;
-            }
-        };
+        }
+        return;
     }
+
+    // Recursively show the children, skipping PopUp[nvoci].
+    let (start, depth) = match menu {
+        Some(node) => (node.children(), depth + 1),
+        None => (root_first(), depth),
+    };
+    for child in start.into_iter().flat_map(Menu::siblings) {
+        if got_int.get() {
+            break;
+        }
+        if !is_hidden(child.dname()) {
+            show_menus_recursive(Some(child), modes, depth);
+        }
+    }
+}
+
+// The message entry points this listing is built from. Each hands the
+// message layer a `'static` literal or a string owned by a live node.
+
+fn put(s: &CStr) {
+    // SAFETY: a NUL-terminated string that outlives the call.
+    unsafe { msg_puts(s.as_ptr()) };
+}
+
+fn put_title(s: &CStr) {
+    // SAFETY: as `put`.
+    unsafe { msg_puts_title(s.as_ptr()) };
+}
+
+fn put_hl(s: &CStr, hl_id: c_int) {
+    // SAFETY: as `put`.
+    unsafe { msg_puts_hl(s.as_ptr(), hl_id, false) };
+}
+
+fn put_char(byte: u8) {
+    // SAFETY: no pointers involved.
+    unsafe { msg_putchar(c_int::from(byte)) };
+}
+
+fn put_num(n: c_int) {
+    // SAFETY: no pointers involved.
+    unsafe { msg_outnum(n) };
+}
+
+fn put_trans(s: &CStr, hl_id: c_int) {
+    // SAFETY: as `put`.
+    unsafe { msg_outtrans(s.as_ptr(), hl_id, false) };
+}
+
+fn put_special(s: *const c_char) {
+    // SAFETY: a node's rhs, NUL-terminated and live.
+    unsafe { msg_outtrans_special(s, false, 0) };
 }

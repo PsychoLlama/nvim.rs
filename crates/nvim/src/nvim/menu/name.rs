@@ -1,323 +1,241 @@
 //! Menu names as text -- parsing a path, matching one, and the mode
 //! letters.
 //!
-//! [`menu_name_skip`] steps over one `\ `-escaped path component;
-//! [`menu_name_equal`]/[`menu_namecmp`] compare a component against a node,
-//! ignoring the `&` mnemonic marker.  [`get_menu_cmd_modes`] maps the command
-//! name (`nmenu`, `vnoremenu`, `amenu!`, ...) onto the mode bitmask and the
-//! `:noremap` flag, [`get_menu_mode_str`] and [`popup_mode_name`] go the other
-//! way, and [`menu_text`] splits a name into the displayed text and the
-//! `<Tab>`-separated accelerator, dropping the mnemonic `&`.
+//! [`skip_component`] steps over one `\`-escaped path component;
+//! [`name_equal`] compares a component against a node, ignoring the `&`
+//! mnemonic marker and everything past a TAB. [`get_menu_cmd_modes`] maps
+//! the command name (`nmenu`, `vnoremenu`, `amenu!`, ...) onto the mode
+//! bitmask, the `:noremap` flag and the `:unmenu` flag; [`menu_mode_str`]
+//! and [`popup_mode_name`] go the other way, and [`menu_text`] splits a name
+//! into the displayed text, the mnemonic and the `<Tab>`-separated
+//! accelerator.
 //!
 //! Original: `src/nvim/menu.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use core::ffi::{CStr, c_char, c_int};
+use std::ffi::CString;
+
 use super::*;
 use crate::src::nvim::keycodes::Ctrl_V;
-use crate::src::nvim::mbyte::utfc_ptr2len;
-use crate::src::nvim::memory::{xmemdupz, xstrdup};
-use crate::src::nvim::os::libc::{memmove, strlen};
-use crate::src::nvim::strings::{vim_strchr, xstrnsave};
-use crate::src::nvim::types::{size_t, uint8_t, vimmenu_T};
 
-pub(crate) unsafe extern "C" fn menu_name_skip(
-    name: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        p = name;
-        while *p as ::core::ffi::c_int != 0 && *p as ::core::ffi::c_int != '.' as ::core::ffi::c_int
-        {
-            if *p as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-                || *p as ::core::ffi::c_int == Ctrl_V
-            {
-                memmove(
-                    p as *mut ::core::ffi::c_void,
-                    p.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-                    strlen(p.offset(1 as ::core::ffi::c_int as isize)).wrapping_add(1 as size_t),
-                );
-                if *p as ::core::ffi::c_int == NUL {
-                    break;
-                }
-            }
-            p = p.offset(utfc_ptr2len(p) as isize);
-        }
-        if *p != 0 {
-            let c2rust_fresh2 = p;
-            p = p.offset(1);
-            *c2rust_fresh2 = NUL as ::core::ffi::c_char;
-        }
-        return p;
-    }
+/// The accelerator separator inside a menu name. `\t` in a `:menu` argument
+/// is a backslash escaping the letter `t`; only a literal `<Tab>`, which
+/// [`menu_translate_tab_and_shift`] rewrites before the name is parsed,
+/// becomes this byte.
+const TAB: u8 = b'\t';
+
+/// The byte at `i`, with a NUL for anything past the end -- how C reads a
+/// string it has already tested the length of.
+fn at(bytes: &[u8], i: usize) -> u8 {
+    bytes.get(i).copied().unwrap_or(0)
 }
 
-pub(crate) unsafe extern "C" fn menu_name_equal(
-    name: *const ::core::ffi::c_char,
-    menu: *const vimmenu_T,
-) -> bool {
-    unsafe {
-        if !(*menu).en_name.is_null()
-            && (menu_namecmp(name, (*menu).en_name) as ::core::ffi::c_int != 0
-                || menu_namecmp(name, (*menu).en_dname) as ::core::ffi::c_int != 0)
-        {
-            return true_0 != 0;
-        }
-        return menu_namecmp(name, (*menu).name) as ::core::ffi::c_int != 0
-            || menu_namecmp(name, (*menu).dname) as ::core::ffi::c_int != 0;
-    }
-}
-
-unsafe extern "C" fn menu_namecmp(
-    name: *const ::core::ffi::c_char,
-    mname: *const ::core::ffi::c_char,
-) -> bool {
-    unsafe {
-        let mut i: ::core::ffi::c_int = 0;
-        i = 0 as ::core::ffi::c_int;
-        while *name.offset(i as isize) as ::core::ffi::c_int != NUL
-            && *name.offset(i as isize) as ::core::ffi::c_int != TAB
-        {
-            if *name.offset(i as isize) as ::core::ffi::c_int
-                != *mname.offset(i as isize) as ::core::ffi::c_int
-            {
+/// Consume one `.`-separated component of `name`, in place, and answer where
+/// the next one starts.
+///
+/// The component's own `\` and `^V` escapes are squeezed out and the `.`
+/// that ends it becomes a NUL, so `name` is left naming just the component
+/// and the answer names the rest. An escape squeezed at the very end stops
+/// the walk, leaving the answer on the terminator.
+pub(crate) fn skip_component(name: CText) -> CText {
+    let mut i = 0;
+    while name.byte(i) != 0 && name.byte(i) != b'.' {
+        if name.byte(i) == b'\\' || name.byte(i) == Ctrl_V as u8 {
+            name.squeeze(i, 1);
+            if name.byte(i) == 0 {
                 break;
             }
-            i += 1;
         }
-        return (*name.offset(i as isize) as ::core::ffi::c_int == NUL
-            || *name.offset(i as isize) as ::core::ffi::c_int == TAB)
-            && (*mname.offset(i as isize) as ::core::ffi::c_int == NUL
-                || *mname.offset(i as isize) as ::core::ffi::c_int == TAB);
+        // The escaped character is stepped over whole, so an escaped `.`
+        // does not end the component.
+        i += name.char_len(i);
     }
+    if name.byte(i) != 0 {
+        name.set(i, 0);
+        i += 1;
+    }
+    name.at(i)
 }
 
-pub unsafe extern "C" fn get_menu_cmd_modes(
-    mut cmd: *const ::core::ffi::c_char,
-    mut forceit: bool,
-    mut noremap: *mut ::core::ffi::c_int,
-    mut unmenu: *mut bool,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut modes: ::core::ffi::c_int = 0;
-        's_121: {
-            let c2rust_fresh3 = cmd;
-            cmd = cmd.offset(1);
-            match *c2rust_fresh3 as ::core::ffi::c_int {
-                118 => {
-                    modes = MENU_VISUAL_MODE as ::core::ffi::c_int
-                        | MENU_SELECT_MODE as ::core::ffi::c_int;
-                    break 's_121;
-                }
-                120 => {
-                    modes = MENU_VISUAL_MODE as ::core::ffi::c_int;
-                    break 's_121;
-                }
-                115 => {
-                    modes = MENU_SELECT_MODE as ::core::ffi::c_int;
-                    break 's_121;
-                }
-                111 => {
-                    modes = MENU_OP_PENDING_MODE as ::core::ffi::c_int;
-                    break 's_121;
-                }
-                105 => {
-                    modes = MENU_INSERT_MODE as ::core::ffi::c_int;
-                    break 's_121;
-                }
-                116 => {
-                    if *cmd as ::core::ffi::c_int == 'l' as ::core::ffi::c_int {
-                        modes = MENU_TERMINAL_MODE as ::core::ffi::c_int;
-                        cmd = cmd.offset(1);
-                        break 's_121;
-                    } else {
-                        modes = MENU_TIP_MODE as ::core::ffi::c_int;
-                        break 's_121;
-                    }
-                }
-                99 => {
-                    modes = MENU_CMDLINE_MODE as ::core::ffi::c_int;
-                    break 's_121;
-                }
-                97 => {
-                    modes = MENU_INSERT_MODE as ::core::ffi::c_int
-                        | MENU_CMDLINE_MODE as ::core::ffi::c_int
-                        | MENU_NORMAL_MODE as ::core::ffi::c_int
-                        | MENU_VISUAL_MODE as ::core::ffi::c_int
-                        | MENU_SELECT_MODE as ::core::ffi::c_int
-                        | MENU_OP_PENDING_MODE as ::core::ffi::c_int;
-                    break 's_121;
-                }
-                110 => {
-                    if *cmd as ::core::ffi::c_int != 'o' as ::core::ffi::c_int {
-                        modes = MENU_NORMAL_MODE as ::core::ffi::c_int;
-                        break 's_121;
-                    }
-                }
-                _ => {}
-            }
-            cmd = cmd.offset(-1);
-            if forceit {
-                modes = MENU_INSERT_MODE as ::core::ffi::c_int
-                    | MENU_CMDLINE_MODE as ::core::ffi::c_int;
-            } else {
-                modes = MENU_NORMAL_MODE as ::core::ffi::c_int
-                    | MENU_VISUAL_MODE as ::core::ffi::c_int
-                    | MENU_SELECT_MODE as ::core::ffi::c_int
-                    | MENU_OP_PENDING_MODE as ::core::ffi::c_int;
-            }
+/// Whether `name` names `menu`, compared four ways: the raw name and the
+/// display name, each in the menu's own language and -- for a node
+/// `:menutranslate` renamed -- in English.
+pub(crate) fn name_equal(name: &CStr, menu: Menu) -> bool {
+    let name = name.to_bytes();
+    if let Some(en_name) = menu.en_name() {
+        // `add_menu_path` sets the two English names together.
+        let en_dname = menu.en_dname().expect("en_dname accompanies en_name");
+        if namecmp(name, en_name.to_bytes()) || namecmp(name, en_dname.to_bytes()) {
+            return true;
         }
+    }
+    namecmp(name, menu.name().to_bytes()) || namecmp(name, menu.dname().to_bytes())
+}
+
+/// Whether two names agree up to the end of either -- where "the end" is the
+/// terminator or the first TAB, so the accelerator text never takes part.
+fn namecmp(name: &[u8], mname: &[u8]) -> bool {
+    let mut i = 0;
+    while at(name, i) != 0 && at(name, i) != TAB && at(name, i) == at(mname, i) {
+        i += 1;
+    }
+    matches!(at(name, i), 0 | TAB) && matches!(at(mname, i), 0 | TAB)
+}
+
+/// The `MENU_*_MODE` bits a menu command names, e.g. `:menu!` is
+/// `MENU_CMDLINE_MODE | MENU_INSERT_MODE`, plus the `noremap` value and
+/// whether this was an `:unmenu` form.
+///
+/// The command name is read one letter at a time; whatever is left after the
+/// mode prefix decides the other two, so `nnoremenu` is Normal mode and
+/// no-remap while `noremenu` is the default modes and no-remap.
+pub(crate) fn cmd_modes(cmd: &[u8], forceit: bool) -> (c_int, c_int, bool) {
+    let (modes, tail) = match at(cmd, 0) {
+        b'v' => (MENU_VISUAL_MODE | MENU_SELECT_MODE, 1),
+        b'x' => (MENU_VISUAL_MODE, 1),
+        b's' => (MENU_SELECT_MODE, 1),
+        b'o' => (MENU_OP_PENDING_MODE, 1),
+        b'i' => (MENU_INSERT_MODE, 1),
+        b't' if at(cmd, 1) == b'l' => (MENU_TERMINAL_MODE, 2),
+        b't' => (MENU_TIP_MODE, 1),
+        b'c' => (MENU_CMDLINE_MODE, 1),
+        b'a' => (MENU_AMENU_MODES, 1),
+        b'n' if at(cmd, 1) != b'o' => (MENU_NORMAL_MODE, 1),
+        // `noremenu`, `unmenu`, plain `menu`: nothing consumed.
+        _ if forceit => (MENU_INSERT_MODE | MENU_CMDLINE_MODE, 0),
+        _ => (MENU_PLAIN_MODES, 0),
+    };
+    let noremap = if at(cmd, tail) == b'n' {
+        REMAP_NONE
+    } else {
+        REMAP_YES
+    };
+    (modes, noremap, at(cmd, tail) == b'u')
+}
+
+/// [`cmd_modes`] for the two callers outside this module, which hold the
+/// command name as a C string and want the flags through out-parameters.
+///
+/// # Safety
+/// `cmd` must name a NUL-terminated string; `noremap` and `unmenu` must be
+/// null or writable.
+pub unsafe extern "C" fn get_menu_cmd_modes(
+    cmd: *const c_char,
+    forceit: bool,
+    noremap: *mut c_int,
+    unmenu: *mut bool,
+) -> c_int {
+    // SAFETY: the caller's obligation.
+    let (modes, no, un) = cmd_modes(unsafe { CStr::from_ptr(cmd) }.to_bytes(), forceit);
+    // SAFETY: the caller's obligation; both writes finish here.
+    unsafe {
         if !noremap.is_null() {
-            *noremap = if *cmd as ::core::ffi::c_int == 'n' as ::core::ffi::c_int {
-                REMAP_NONE as ::core::ffi::c_int
-            } else {
-                REMAP_YES as ::core::ffi::c_int
-            };
+            *noremap = no;
         }
         if !unmenu.is_null() {
-            *unmenu = *cmd as ::core::ffi::c_int == 'u' as ::core::ffi::c_int;
+            *unmenu = un;
         }
-        return modes;
+    }
+    modes
+}
+
+/// The command letters `modes` would be spelled with -- the opposite of
+/// [`cmd_modes`]. `" "` is plain `:menu`, `"!"` is `:menu!`.
+pub(crate) fn menu_mode_str(modes: c_int) -> &'static CStr {
+    let all = |bits| modes & bits == bits;
+    if all(MENU_AMENU_MODES) {
+        c"a"
+    } else if all(MENU_PLAIN_MODES) {
+        c" "
+    } else if all(MENU_INSERT_MODE | MENU_CMDLINE_MODE) {
+        c"!"
+    } else if all(MENU_VISUAL_MODE | MENU_SELECT_MODE) {
+        c"v"
+    } else if modes & MENU_VISUAL_MODE != 0 {
+        c"x"
+    } else if modes & MENU_SELECT_MODE != 0 {
+        c"s"
+    } else if modes & MENU_OP_PENDING_MODE != 0 {
+        c"o"
+    } else if modes & MENU_INSERT_MODE != 0 {
+        c"i"
+    } else if modes & MENU_TERMINAL_MODE != 0 {
+        c"tl"
+    } else if modes & MENU_CMDLINE_MODE != 0 {
+        c"c"
+    } else if modes & MENU_NORMAL_MODE != 0 {
+        c"n"
+    } else if modes & MENU_TIP_MODE != 0 {
+        c"t"
+    } else {
+        c""
     }
 }
 
-pub(crate) unsafe extern "C" fn get_menu_mode_str(
-    mut modes: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    if modes
-        & (MENU_INSERT_MODE as ::core::ffi::c_int
-            | MENU_CMDLINE_MODE as ::core::ffi::c_int
-            | MENU_NORMAL_MODE as ::core::ffi::c_int
-            | MENU_VISUAL_MODE as ::core::ffi::c_int
-            | MENU_SELECT_MODE as ::core::ffi::c_int
-            | MENU_OP_PENDING_MODE as ::core::ffi::c_int)
-        == MENU_INSERT_MODE as ::core::ffi::c_int
-            | MENU_CMDLINE_MODE as ::core::ffi::c_int
-            | MENU_NORMAL_MODE as ::core::ffi::c_int
-            | MENU_VISUAL_MODE as ::core::ffi::c_int
-            | MENU_SELECT_MODE as ::core::ffi::c_int
-            | MENU_OP_PENDING_MODE as ::core::ffi::c_int
-    {
-        return c"a".as_ptr() as *mut ::core::ffi::c_char;
-    }
-    if modes
-        & (MENU_NORMAL_MODE as ::core::ffi::c_int
-            | MENU_VISUAL_MODE as ::core::ffi::c_int
-            | MENU_SELECT_MODE as ::core::ffi::c_int
-            | MENU_OP_PENDING_MODE as ::core::ffi::c_int)
-        == MENU_NORMAL_MODE as ::core::ffi::c_int
-            | MENU_VISUAL_MODE as ::core::ffi::c_int
-            | MENU_SELECT_MODE as ::core::ffi::c_int
-            | MENU_OP_PENDING_MODE as ::core::ffi::c_int
-    {
-        return c" ".as_ptr() as *mut ::core::ffi::c_char;
-    }
-    if modes & (MENU_INSERT_MODE as ::core::ffi::c_int | MENU_CMDLINE_MODE as ::core::ffi::c_int)
-        == MENU_INSERT_MODE as ::core::ffi::c_int | MENU_CMDLINE_MODE as ::core::ffi::c_int
-    {
-        return c"!".as_ptr() as *mut ::core::ffi::c_char;
-    }
-    if modes & (MENU_VISUAL_MODE as ::core::ffi::c_int | MENU_SELECT_MODE as ::core::ffi::c_int)
-        == MENU_VISUAL_MODE as ::core::ffi::c_int | MENU_SELECT_MODE as ::core::ffi::c_int
-    {
-        return c"v".as_ptr() as *mut ::core::ffi::c_char;
-    }
-    if modes & MENU_VISUAL_MODE as ::core::ffi::c_int != 0 {
-        return c"x".as_ptr() as *mut ::core::ffi::c_char;
-    }
-    if modes & MENU_SELECT_MODE as ::core::ffi::c_int != 0 {
-        return c"s".as_ptr() as *mut ::core::ffi::c_char;
-    }
-    if modes & MENU_OP_PENDING_MODE as ::core::ffi::c_int != 0 {
-        return c"o".as_ptr() as *mut ::core::ffi::c_char;
-    }
-    if modes & MENU_INSERT_MODE as ::core::ffi::c_int != 0 {
-        return c"i".as_ptr() as *mut ::core::ffi::c_char;
-    }
-    if modes & MENU_TERMINAL_MODE as ::core::ffi::c_int != 0 {
-        return c"tl".as_ptr() as *mut ::core::ffi::c_char;
-    }
-    if modes & MENU_CMDLINE_MODE as ::core::ffi::c_int != 0 {
-        return c"c".as_ptr() as *mut ::core::ffi::c_char;
-    }
-    if modes & MENU_NORMAL_MODE as ::core::ffi::c_int != 0 {
-        return c"n".as_ptr() as *mut ::core::ffi::c_char;
-    }
-    if modes & MENU_TIP_MODE as ::core::ffi::c_int != 0 {
-        return c"t".as_ptr() as *mut ::core::ffi::c_char;
-    }
-    return c"".as_ptr() as *mut ::core::ffi::c_char;
+/// `PopUp…` with the mode's letters spliced in after `PopUp`, which is how
+/// the per-mode copies (`PopUpn`, `PopUptl`, ...) are named.
+///
+/// Only reached for a name [`is_popup`] accepted, so the first five bytes
+/// are there to split after.
+pub(crate) fn popup_mode_name(name: &CStr, idx: c_int) -> CString {
+    let (head, tail) = name.to_bytes().split_at(5);
+    let mode = MODE_CHARS[idx as usize].to_bytes();
+    let mut out = Vec::with_capacity(head.len() + mode.len() + tail.len());
+    out.extend_from_slice(head);
+    out.extend_from_slice(mode);
+    out.extend_from_slice(tail);
+    CString::new(out).expect("a menu name holds no interior NUL")
 }
 
-pub(crate) unsafe extern "C" fn popup_mode_name(
-    mut name: *mut ::core::ffi::c_char,
-    mut idx: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        let mut len: size_t = strlen(name);
-        debug_assert!(len >= 4 as size_t, "len >= 4");
-        let mut mode_chars: *mut ::core::ffi::c_char = (*menu_mode_chars.ptr())[idx as usize];
-        let mut mode_chars_len: size_t = strlen(mode_chars);
-        let mut p: *mut ::core::ffi::c_char = xstrnsave(name, len.wrapping_add(mode_chars_len));
-        memmove(
-            p.offset(5 as ::core::ffi::c_int as isize)
-                .add(mode_chars_len) as *mut ::core::ffi::c_void,
-            p.offset(5 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-            len.wrapping_sub(4 as size_t),
-        );
-        let mut i: size_t = 0 as size_t;
-        while i < mode_chars_len {
-            *p.add((5 as size_t).wrapping_add(i)) = *(*menu_mode_chars.ptr())[idx as usize].add(i);
-            i = i.wrapping_add(1);
-        }
-        return p;
-    }
+/// A menu name taken apart: what is displayed, the `&` mnemonic, and the
+/// accelerator after the first TAB.
+pub(crate) struct MenuText {
+    pub(crate) display: CString,
+    /// The byte after the first `&` that is not `&&`, if there was one.
+    pub(crate) mnemonic: Option<c_int>,
+    pub(crate) actext: Option<CString>,
 }
 
-pub(crate) unsafe extern "C" fn menu_text(
-    mut str: *const ::core::ffi::c_char,
-    mut mnemonic: *mut ::core::ffi::c_int,
-    mut actext: *mut *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        let mut text: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut p: *mut ::core::ffi::c_char = vim_strchr(str, TAB);
-        if !p.is_null() {
-            if !actext.is_null() {
-                *actext = xstrdup(p.offset(1 as ::core::ffi::c_int as isize));
+/// Split `name` into [`MenuText`]'s three parts.
+///
+/// Everything after the first TAB is the accelerator, kept verbatim. In
+/// what is left, each `&` is dropped and the character behind it taken
+/// whole, so `&&` reduces to one `&` and contributes no mnemonic; a
+/// trailing `&` is kept as text. The *last* mnemonic wins.
+pub(crate) fn menu_text(name: &CStr) -> MenuText {
+    let bytes = name.to_bytes();
+    let (head, actext) = match bytes.iter().position(|&b| b == TAB) {
+        Some(tab) => (&bytes[..tab], Some(cstring(&bytes[tab + 1..]))),
+        None => (bytes, None),
+    };
+
+    let mut display = Vec::with_capacity(head.len());
+    let mut mnemonic = None;
+    let mut i = 0;
+    while i < head.len() {
+        if head[i] == b'&' && i + 1 < head.len() {
+            if head[i + 1] != b'&' {
+                mnemonic = Some(c_int::from(head[i + 1]));
             }
-            debug_assert!(p >= str as *mut ::core::ffi::c_char, "p >= str");
-            text = xmemdupz(
-                str as *const ::core::ffi::c_void,
-                p.offset_from(str) as size_t,
-            ) as *mut ::core::ffi::c_char;
+            display.push(head[i + 1]);
+            i += 2;
         } else {
-            text = xstrdup(str);
+            display.push(head[i]);
+            i += 1;
         }
-        p = text;
-        while !p.is_null() {
-            p = vim_strchr(p, '&' as ::core::ffi::c_int);
-            if p.is_null() {
-                continue;
-            }
-            if *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL {
-                break;
-            }
-            if !mnemonic.is_null()
-                && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != '&' as ::core::ffi::c_int
-            {
-                *mnemonic =
-                    *p.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int;
-            }
-            memmove(
-                p as *mut ::core::ffi::c_void,
-                p.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-                strlen(p.offset(1 as ::core::ffi::c_int as isize)).wrapping_add(1 as size_t),
-            );
-            p = p.offset(1 as ::core::ffi::c_int as isize);
-        }
-        return text;
     }
+
+    MenuText {
+        display: cstring(&display),
+        mnemonic,
+        actext,
+    }
+}
+
+/// `bytes` as an owned C string. Menu names come from the command line,
+/// which `ex_docmd` has already split on NUL, so there is never one inside.
+pub(crate) fn cstring(bytes: &[u8]) -> CString {
+    CString::new(bytes).expect("a menu name holds no interior NUL")
 }
