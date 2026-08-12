@@ -155,20 +155,23 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
                 win.redraw_later(UPD_NOT_VALID);
             }
         }
-        win.w_wcol -= win.w_leftcol;
+        let leftcol = win.w_leftcol;
+        win.w_wcol -= leftcol;
     } else if win.w_wcol > win.w_leftcol {
-        win.w_wcol -= win.w_leftcol;
+        let leftcol = win.w_leftcol;
+        win.w_wcol -= leftcol;
     } else {
         win.w_wcol = 0;
     }
 
     // Skip over filler lines. At the top `w_topfill` counts the ones drawn
     // above the window's first line.
-    win.w_wrow += if win.w_cursor.lnum == win.w_topline {
+    let fill = if win.w_cursor.lnum == win.w_topline {
         win.w_topfill
     } else {
         win.fill_above(win.w_cursor.lnum)
     };
+    win.w_wrow += fill;
 
     let mut plines = 0;
     let so = win.scrolloff();

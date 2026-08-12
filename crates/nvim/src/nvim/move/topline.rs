@@ -470,7 +470,8 @@ pub unsafe fn set_topline(wp: *mut win_T, lnum: linenr_T) {
     let prev_topline = win.w_topline;
     // Go to the first line of a closed fold.
     let lnum = win.fold_first(lnum).unwrap_or(lnum);
-    win.w_botline += lnum - win.w_topline;
+    let shift = lnum - win.w_topline;
+    win.w_botline += shift;
     let last = win.buffer().line_count() + 1;
     if win.w_botline > last {
         win.w_botline = last;
