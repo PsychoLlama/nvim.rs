@@ -188,7 +188,7 @@
     "crates/nvim/src/nvim/drawscreen/resize.rs": {"cell_ptr": 9, "no_mangle": 1, "unsafe_lines": 192},
     "crates/nvim/src/nvim/drawscreen/separators.rs": {"cell_ptr": 3, "unsafe_lines": 174},
     "crates/nvim/src/nvim/drawscreen/winlines.rs": {"cell_ptr": 2, "unsafe_lines": 540},
-    "crates/nvim/src/nvim/drawscreen/winupdate.rs": {"cell_ptr": 14, "unsafe_lines": 562},
+    "crates/nvim/src/nvim/drawscreen/winupdate.rs": {"cell_ptr": 14, "unsafe_lines": 561},
     "crates/nvim/src/nvim/edit.rs": {"unsafe_lines": 3},
     "crates/nvim/src/nvim/edit/bs.rs": {"cell_ptr": 17, "unsafe_lines": 326},
     "crates/nvim/src/nvim/edit/chars.rs": {"cell_ptr": 5, "unsafe_lines": 189},

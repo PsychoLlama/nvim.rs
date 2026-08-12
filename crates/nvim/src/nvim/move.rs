@@ -120,14 +120,7 @@ impl Win {
     /// column, the command-line window's marker, the fold column and the sign
     /// column. None of them move when the window scrolls horizontally.
     pub(super) fn col_off(self) -> c_int {
-        let (number_width, stc_empty) = self.number_col();
-        let number_col =
-            if self.w_onebuf_opt.wo_nu != 0 || self.w_onebuf_opt.wo_rnu != 0 || !stc_empty {
-                number_width + stc_empty as c_int
-            } else {
-                0
-            };
-        number_col
+        self.number_col()
             + (self.raw() == cmdwin_win.get()) as c_int
             + self.fdccol_count()
             + self.w_scwidth * SIGN_WIDTH
@@ -137,15 +130,17 @@ impl Win {
     /// get. Positive only with 'number'/'relativenumber' and `n` in
     /// 'cpoptions'.
     pub(super) fn col_off2(self) -> c_int {
-        let (number_width, stc_empty) = self.number_col();
-        let numbered = self.w_onebuf_opt.wo_nu != 0 || self.w_onebuf_opt.wo_rnu != 0 || !stc_empty;
         // SAFETY: 'cpoptions' is a NUL-terminated option string.
         let indents = unsafe { !vim_strchr(p_cpo.get(), CPO_NUMCOL).is_null() };
-        if numbered && indents {
-            number_width + stc_empty as c_int
-        } else {
-            0
-        }
+        if indents { self.number_col() } else { 0 }
+    }
+
+    /// Both text widths at once: a line's first screen line, then its later
+    /// ones. Upstream reads the two offsets once each and so does this --
+    /// asking [`Win::col_off`] twice would ask [`number_width`] twice.
+    pub(super) fn text_widths(self) -> (c_int, c_int) {
+        let width1 = self.w_view_width - self.col_off();
+        (width1, width1 + self.col_off2())
     }
 
     /// Text width of a line's first screen line.
@@ -153,18 +148,21 @@ impl Win {
         self.w_view_width - self.col_off()
     }
 
-    /// Text width of a wrapped line's later screen lines.
-    pub(super) fn wrapped_width(self) -> c_int {
-        self.text_width() + self.col_off2()
-    }
-
-    /// The width the 'number'/'relativenumber' column would take, and whether
-    /// 'statuscolumn' is unset -- the two questions both offset helpers ask
-    /// together.
-    fn number_col(self) -> (c_int, bool) {
-        // SAFETY: a live window; an option string is NUL-terminated, never
-        // null.
-        unsafe { (number_width(self.raw()), *self.w_onebuf_opt.wo_stc == NUL) }
+    /// The width the 'number'/'statuscolumn' column takes: 'numberwidth'
+    /// digits plus one separating space, and nothing at all when neither
+    /// option is on.
+    ///
+    /// The early return is not just a shortcut. [`number_width`] *memoises*
+    /// into `w_nrwidth_width`, and this is on the per-line draw path, so
+    /// asking it where upstream would not both costs and writes.
+    fn number_col(self) -> c_int {
+        // SAFETY: an option string is NUL-terminated, never null.
+        let stc_empty = unsafe { *self.w_onebuf_opt.wo_stc == NUL };
+        if self.w_onebuf_opt.wo_nu == 0 && self.w_onebuf_opt.wo_rnu == 0 && stc_empty {
+            return 0;
+        }
+        // SAFETY: a live window.
+        unsafe { number_width(self.raw()) + stc_empty as c_int }
     }
 
     fn fdccol_count(self) -> c_int {
@@ -308,7 +306,8 @@ impl Win {
 
 /// Screen lines of the top line that `w_skipcol` scrolls out of sight.
 fn adjust_plines_for_skipcol(win: Win) -> c_int {
-    arith::skipped_plines(win.w_skipcol, win.text_width(), win.wrapped_width())
+    let (width1, width2) = win.text_widths();
+    arith::skipped_plines(win.w_skipcol, width1, width2)
 }
 
 impl Win {
@@ -334,24 +333,20 @@ impl Win {
 
 /// [`Win::corrected_plines`], for the callers still holding a raw window.
 ///
-/// Upstream also answers whether the line is folded through a `bool *`; no
-/// caller ever asked, so this form does not.
+/// Answers the height and the last line of a fold starting at `lnum`.
+/// Upstream passes both back through `linenr_T *`/`bool *` out-params; no
+/// caller ever asked for the third.
 ///
 /// # Safety
-/// `wp` must be a valid window; `nextp` may be null.
+/// `wp` must be a valid window.
 pub unsafe fn plines_correct_topline(
     wp: *mut win_T,
     lnum: linenr_T,
-    nextp: *mut linenr_T,
     limit_winheight: bool,
-) -> c_int {
+) -> (c_int, linenr_T) {
     // SAFETY: the caller's promise.
     let (n, next, _) = unsafe { Win::new(wp) }.corrected_plines(lnum, limit_winheight);
-    if !nextp.is_null() {
-        // SAFETY: the caller's promise.
-        unsafe { *nextp = next };
-    }
-    n
+    (n, next)
 }
 
 /// Recompute `w_botline` for the current `w_topline`.
@@ -465,7 +460,8 @@ impl Win {
 
     /// The `w_skipcol` that hides `plines_off` screen lines of the top line.
     pub(super) fn skipcol_from_plines(self, plines_off: c_int) -> colnr_T {
-        arith::skipcol_from_plines(plines_off, self.text_width(), self.wrapped_width())
+        let (width1, width2) = self.text_widths();
+        arith::skipcol_from_plines(plines_off, width1, width2)
     }
 
     /// Set `w_skipcol` back to zero, redrawing if it was not already.

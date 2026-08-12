@@ -320,9 +320,8 @@ impl Win {
                 // the whole window, the clipped ones have to be scrolled past
                 // before any other line can be.
                 let mut top_plines = self.plines_nofill(self.w_topline, false);
-                let width1 = self.text_width();
+                let (width1, width2) = sms_widths(self);
                 if width1 > 0 {
-                    let width2 = self.wrapped_width();
                     top_plines -= arith::top_skipped_plines(self.w_skipcol, width1, width2);
                     if top_plines > self.w_view_height {
                         scrolled += top_plines - self.w_view_height;
@@ -797,7 +796,7 @@ pub(super) fn scroll_with_sms(
             dir
         };
 
-        let (width1, width2) = (win.text_width(), win.wrapped_width());
+        let (width1, width2) = sms_widths(win);
         let count = if fixdir == FORWARD {
             let size = win.line_display_width(win.w_topline);
             arith::sms_fixup_count_forw(win.w_skipcol, size, width1, width2)

@@ -34,8 +34,8 @@ impl Win {
 
 /// The window's first and later screen lines' text widths, which every
 /// `'smoothscroll'` arm below works in.
-fn sms_widths(win: Win) -> (c_int, c_int) {
-    (win.text_width(), win.wrapped_width())
+pub(super) fn sms_widths(win: Win) -> (c_int, c_int) {
+    win.text_widths()
 }
 
 /// Whether this window scrolls by screen line rather than by buffer line.

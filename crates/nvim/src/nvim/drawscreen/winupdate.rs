@@ -667,8 +667,7 @@ unsafe fn scroll_up(wp: *mut win_T, rg: &mut Regions) {
         // going to be drawn below.
         if win_may_fill(wp) && rg.bot_start > 0 {
             (*(*wp).w_lines).wl_size =
-                plines_correct_topline(wp, (*wp).w_topline, ::core::ptr::null_mut(), true)
-                    as uint16_t;
+                plines_correct_topline(wp, (*wp).w_topline, true).0 as uint16_t;
         }
     }
 }

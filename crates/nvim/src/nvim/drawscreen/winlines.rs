@@ -473,8 +473,8 @@ unsafe fn scroll_for_changed_lines(wp: *mut win_T, rg: &mut Regions, w: &mut Wal
                 new_rows += old_cline_height;
                 j += 1;
             } else {
-                let n = plines_correct_topline(wp, l, &raw mut l, true);
-                new_rows += n;
+                let (n, l_last) = plines_correct_topline(wp, l, true);
+                (l, new_rows) = (l_last, new_rows + n);
                 j += c_int::from(n > 0); // do not count concealed lines
             }
             if new_rows > (*wp).w_view_height - w.row - 2 {
