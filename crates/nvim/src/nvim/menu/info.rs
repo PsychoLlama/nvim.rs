@@ -235,23 +235,28 @@ pub unsafe extern "C" fn f_menu_info(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    // SAFETY: the caller's obligation. Both strings live until the next
-    // conversion of the same typval, which is after this returns.
-    let (retdict, menu_name, which) = unsafe {
+    // SAFETY: the caller's obligation.
+    let (retdict, menu_name) = unsafe {
         tv_dict_alloc_ret(rettv);
-        let second = argvars.add(1);
-        (
-            (*rettv).vval.v_dict,
-            tv_get_string_chk(argvars),
-            if (*second).v_type != VAR_UNKNOWN {
-                tv_get_string_chk(second)
-            } else {
-                // The default is the modes of plain ":menu".
-                c"".as_ptr()
-            },
-        )
+        ((*rettv).vval.v_dict, tv_get_string_chk(argvars))
     };
-    if menu_name.is_null() || which.is_null() {
+    if menu_name.is_null() {
+        // Before the second argument is looked at: `tv_get_string_chk`
+        // answers a shared scratch buffer, so converting one argument can
+        // invalidate the other, and a bad first argument must report once.
+        return;
+    }
+    // SAFETY: the caller's obligation; the second argument if there is one.
+    let which = unsafe {
+        let second = argvars.add(1);
+        if (*second).v_type != VAR_UNKNOWN {
+            tv_get_string_chk(second)
+        } else {
+            // The default is the modes of plain ":menu".
+            c"".as_ptr()
+        }
+    };
+    if which.is_null() {
         return;
     }
     // SAFETY: `tv_get_string_chk` answers a NUL-terminated string or null.
