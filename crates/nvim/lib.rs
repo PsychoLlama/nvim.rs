@@ -257,6 +257,7 @@ pub mod src {
         } // mod vterm
         pub mod window;
         pub mod winfloat;
+        pub mod winlayer;
     } // mod nvim
     pub mod xdiff {
         pub mod ffi;
