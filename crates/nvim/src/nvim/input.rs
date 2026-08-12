@@ -102,7 +102,7 @@ unsafe fn is_swallowed_key(first: u8, key: c_int) -> bool {
     // SAFETY: the caller's contract.
     c_int::from(first) == KS_MODIFIER
         || key == K_IGNORE
-        || (unsafe { is_mouse_key(key) } && key != K_LEFTMOUSE)
+        || (is_mouse_key(key) && key != K_LEFTMOUSE)
 }
 
 /// Read one keystroke straight from the user, ignoring mouse clicks and

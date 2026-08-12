@@ -304,7 +304,7 @@ pub(super) unsafe fn ask_confirm(st: &mut Sub) -> Confirm {
     }
     State.set(save_state);
     // SAFETY: main thread.
-    unsafe { setmouse() };
+    setmouse();
     if cpo_no_undo_sync() {
         no_u_sync.set(no_u_sync.get() - 1);
     }

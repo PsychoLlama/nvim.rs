@@ -165,7 +165,7 @@ impl Win {
         unsafe { number_width(self.raw()) + stc_empty as c_int }
     }
 
-    fn fdccol_count(self) -> c_int {
+    pub(super) fn fdccol_count(self) -> c_int {
         // SAFETY: a live window.
         unsafe { win_fdccol_count(self.raw()) }
     }

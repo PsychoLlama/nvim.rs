@@ -5,280 +5,385 @@
 //! walking wrapped lines, folds and diff filler; [`mouse_find_win_inner`] and
 //! [`mouse_find_win_outer`] walk the frame tree for the window containing a
 //! screen position (the outer form counts the status line and separator as
-//! belonging to the window above/left of them);
-//! [`mouse_find_grid_win`] is the `ext_multigrid` entry point that maps a grid
-//! handle plus coordinates onto both.  [`vcol2col`] is the column half.
+//! belonging to the window above/left of them); `find_grid_win` is the
+//! `ext_multigrid` half that maps a grid handle plus coordinates onto both.
+//! [`vcol2col`] is the column half.
+//!
+//! Each of the four is a safe function over a [`MousePos`] with a raw shim on
+//! top of it, because the C's three `int *` out-parameters are one value.
 //!
 //! Original: `src/nvim/mouse.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::c_int;
+use core::iter;
+use core::ops::Deref;
+use core::ptr;
+
 #[allow(unused_imports)]
 use super::*;
-use crate::src::nvim::decoration::decor_conceal_line;
-use crate::src::nvim::fold::hasFolding;
 use crate::src::nvim::grid::get_win_by_grid_handle;
-use crate::src::nvim::main::{curtab, firstwin, msg_grid, msg_grid_pos, pum_grid, topframe};
-use crate::src::nvim::mbyte::{utf_ptr2StrCharInfo, utfc_next};
-use crate::src::nvim::memline::ml_get_buf;
-use crate::src::nvim::r#move::{win_col_off, win_col_off2};
-use crate::src::nvim::plines::{
-    init_charsize_arg, plines_win, plines_win_nofill, win_charsize, win_get_fill, win_may_fill,
-};
-use crate::src::nvim::types::{
-    CharsizeArg, CharsizeKind, ScreenGrid, StrCharInfo, colnr_T, frame_T, handle_T, linenr_T, win_T,
-};
+use crate::src::nvim::main::{firstwin, msg_grid, msg_grid_pos, pum_grid, topframe};
+use crate::src::nvim::plines::{init_charsize_arg, win_charsize};
+use crate::src::nvim::types::{CharsizeArg, frame_T, handle_T, linenr_T, win_T};
 use crate::src::nvim::ui_compositor::ui_comp_mouse_focus;
 
+// ---------------------------------------------------------------------------
+// The layout tree, wrapped
+
+/// A frame of the window layout tree the caller has promised is live.
+#[derive(Clone, Copy)]
+struct Frame(*mut frame_T);
+
+impl Deref for Frame {
+    type Target = frame_T;
+
+    fn deref(&self) -> &frame_T {
+        // SAFETY: the constructor's promise -- a live frame.
+        unsafe { &*self.0 }
+    }
+}
+
+impl Frame {
+    /// # Safety
+    /// `fp` must stay a live frame for as long as the value is used.
+    const unsafe fn new(fp: *mut frame_T) -> Self {
+        Self(fp)
+    }
+
+    /// This frame's first child, which every non-leaf frame has.
+    fn child(self) -> Option<Self> {
+        let child = self.fr_child;
+        (!child.is_null()).then_some(Self(child))
+    }
+
+    /// The frame beside this one, if it is not the last.
+    fn next(self) -> Option<Self> {
+        let next = self.fr_next;
+        (!next.is_null()).then_some(Self(next))
+    }
+}
+
+/// The windows of the current tab page, in layout order.
+///
+/// C spells this `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`, whose `curtab == curtab`
+/// test always picks `firstwin`.
+///
+/// # Safety
+/// The window list must be live, which it is from startup to exit.
+unsafe fn windows_in_tab() -> impl Iterator<Item = Win> {
+    let first = firstwin.get();
+    // SAFETY: the caller's promise -- a live window list.
+    let first = (!first.is_null()).then(|| unsafe { Win::new(first) });
+    iter::successors(first, |wp| wp.next())
+}
+
+/// The screen row the first window starts at: the tab page line's height.
+pub fn first_window_row() -> c_int {
+    // SAFETY: the window list is live from startup to exit.
+    unsafe { (*firstwin.get()).w_winrow }
+}
+
+// ---------------------------------------------------------------------------
+// Screen position to window
+
+/// Find the window at `pos`, rewriting it to be relative to the top-left of
+/// that window's inner area.
+///
+/// Answers `None` when something is wrong -- including a click on the popup
+/// menu, which has no window of its own.
+pub fn find_win_inner(pos: &mut MousePos) -> Option<Win> {
+    if let Some(win) = find_grid_win(pos) {
+        return Some(win);
+    } else if pos.grid > 1 {
+        return None;
+    }
+
+    // SAFETY: the layout tree is live from startup to exit.
+    let mut fp = unsafe { Frame::new(topframe.get()) };
+    pos.row -= first_window_row();
+    while fp.fr_layout as c_int != FR_LEAF {
+        // Upstream dereferences `fr_child` unchecked: a non-leaf frame always
+        // has children.  A missing one leaves `fp` non-leaf, whose `fr_win` is
+        // null, and the search below then answers None.
+        let Some(mut child) = fp.child() else { break };
+        let by_column = fp.fr_layout as c_int == FR_ROW;
+        // The last child is taken without a test, as the C's `for` is written.
+        while let Some(sibling) = child.next() {
+            if by_column {
+                if pos.col < child.fr_width {
+                    break;
+                }
+                pos.col -= child.fr_width;
+            } else {
+                if pos.row < child.fr_height {
+                    break;
+                }
+                pos.row -= child.fr_height;
+            }
+            child = sibling;
+        }
+        fp = child;
+    }
+
+    // When using a timer that closes a window the window might not actually
+    // exist.
+    // SAFETY: the window list is live from startup to exit.
+    let win = unsafe { windows_in_tab() }.find(|wp| wp.raw() == fp.fr_win)?;
+    pos.row -= win.w_winbar_height;
+    Some(win)
+}
+
+/// [`find_win_inner`], with `pos` left relative to the top-left of the whole
+/// window rather than of its inner area.
+fn find_win_outer(pos: &mut MousePos) -> Option<Win> {
+    let win = find_win_inner(pos)?;
+    pos.row += win.w_winrow_off;
+    pos.col += win.w_wincol_off;
+    Some(win)
+}
+
+/// The `ext_multigrid` half: map a grid handle plus coordinates onto the
+/// window that drew them, rewriting `pos` for the grid it settled on.
+fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
+    if pos.grid == msg_grid.with(|grid| grid.handle) {
+        pos.row += msg_grid_pos.get();
+        pos.grid = DEFAULT_GRID_HANDLE;
+    } else if pos.grid > 1 {
+        // SAFETY: the handle table answers a live window or null.
+        let wp = unsafe { get_win_by_grid_handle(pos.grid as handle_T) };
+        if wp.is_null() {
+            return None;
+        }
+        // SAFETY: as above.
+        let win = unsafe { Win::new(wp) };
+        if !win.w_grid_alloc.chars.is_null() && !(win.w_floating && !win.w_config.mouse) {
+            pos.row = (pos.row - win.w_grid.row_offset).min(win.w_view_height - 1);
+            pos.col = (pos.col - win.w_grid.col_offset).min(win.w_view_width - 1);
+            return Some(win);
+        }
+    } else if pos.grid == 0 {
+        // SAFETY: the compositor's layer stack is live; the grid it answers is
+        // one of the layers, or null.
+        let grid = unsafe { ui_comp_mouse_focus(pos.row, pos.col) };
+        if pum_grid.with(|pum| ptr::eq(grid, pum)) {
+            // SAFETY: the popup menu's grid is live.
+            unsafe {
+                pos.grid = (*grid).handle as c_int;
+                (pos.row, pos.col) = (pos.row - (*grid).comp_row, pos.col - (*grid).comp_col);
+            }
+            // The popup menu doesn't have a window, so answer None.
+            return None;
+        }
+        // SAFETY: the window list is live from startup to exit.
+        for win in unsafe { windows_in_tab() } {
+            if !ptr::eq(&raw const win.w_grid_alloc, grid) {
+                continue;
+            }
+            // SAFETY: the grid a window drew on is live.
+            pos.grid = unsafe { (*grid).handle } as c_int;
+            pos.row -= win.w_winrow + win.w_grid.row_offset;
+            pos.col -= win.w_wincol + win.w_grid.col_offset;
+            return Some(win);
+        }
+
+        // No grid found, return the default grid. With multigrid this happens
+        // for split separators for example.
+        pos.grid = DEFAULT_GRID_HANDLE;
+    }
+    None
+}
+
+// ---------------------------------------------------------------------------
+// Screen position to buffer position
+
+/// Compute the buffer line position from the screen position `row`/`col` in
+/// window `win`, both rewritten to be relative to that line.
+///
+/// Answers the line, and whether the position is below the last one.
+pub fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (linenr_T, bool) {
+    let mut screen_col = if win.w_onebuf_opt.wo_rl != 0 {
+        win.w_view_width - 1 - *col
+    } else {
+        *col
+    };
+    let mut screen_row = *row;
+    let mut below_last = false;
+    let last_line = win.buffer().line_count();
+    let mut lnum = win.w_topline;
+
+    while screen_row > 0 {
+        // Don't include filler lines in "count".
+        let mut count = if win.may_fill() {
+            screen_row -= if lnum == win.w_topline {
+                win.w_topfill
+            } else {
+                win.fill_above(lnum)
+            };
+            win.plines_nofill(lnum, false)
+        } else {
+            win.plines(lnum, false)
+        };
+
+        if win.w_skipcol > 0 && lnum == win.w_topline {
+            let (width1, width2) = win.text_widths();
+            if width1 > 0 {
+                // Adjust for 'smoothscroll' clipping the top screen lines.
+                count -= skipped_top_lines(win.w_skipcol, width1, width2);
+            }
+        }
+
+        if count > screen_row {
+            break; // Position is in this buffer line.
+        }
+
+        lnum = win.fold_last(lnum);
+        if lnum == last_line {
+            below_last = true;
+            break; // past end of file
+        }
+        screen_row -= count;
+        lnum += 1;
+    }
+
+    // Mouse row reached, adjust lnum for concealed lines.
+    while lnum < last_line && win.conceals_line(lnum - 1, false) {
+        lnum = win.fold_last(lnum + 1);
+    }
+
+    if !below_last {
+        // Compute the column without wrapping.
+        let off = win.col_off() - win.col_off2();
+        screen_col = screen_col.max(off) + screen_row * (win.w_view_width - off);
+        // Add skip column for the topline.
+        if lnum == win.w_topline {
+            screen_col += win.w_skipcol;
+        }
+    }
+
+    if win.w_onebuf_opt.wo_wrap == 0 {
+        screen_col += win.w_leftcol;
+    }
+
+    // Skip the line number and fold column in front of the line.
+    *col = (screen_col - win.col_off()).max(0);
+    *row = screen_row;
+    (lnum, below_last)
+}
+
+/// Convert a virtual (screen) column to a character column, the first column
+/// being zero.  Answers the byte index and the columns left over inside the
+/// character it landed in.
+pub fn vcol_to_col(win: Win, lnum: linenr_T, vcol: colnr_T) -> (colnr_T, colnr_T) {
+    // SAFETY: a live window, and `lnum` a line of the buffer it shows.
+    let line = unsafe { win.buffer().line(lnum) };
+    let mut csarg = CharsizeArg::default();
+    // SAFETY: a live window and a NUL-terminated line of its buffer.
+    let cstype = unsafe { init_charsize_arg(&mut csarg, win.raw(), lnum, line.raw()) };
+    let mut ci = line.first_char();
+    let mut cur_vcol: c_int = 0;
+    // Try to advance to the specified column.
+    // SAFETY: `ci` walks that line and the loop stops at its terminating NUL.
+    unsafe {
+        while cur_vcol < vcol && !line.ended(ci) {
+            let width = win_charsize(cstype, cur_vcol, ci.ptr, ci.chr.value, &mut csarg).width;
+            if cur_vcol + width > vcol {
+                break;
+            }
+            cur_vcol += width;
+            ci = line.next_char(ci);
+        }
+    }
+    (line.index_of(ci), vcol - cur_vcol)
+}
+
+// ---------------------------------------------------------------------------
+// The raw entry points the rest of the editor still calls
+
+/// [`comp_pos`], through the C's four pointers.
+///
+/// # Safety
+/// `win` must be a live window and the three out-parameters must be writable.
 pub unsafe extern "C" fn mouse_comp_pos(
-    mut win: *mut win_T,
-    mut rowp: *mut ::core::ffi::c_int,
-    mut colp: *mut ::core::ffi::c_int,
-    mut lnump: *mut linenr_T,
+    win: *mut win_T,
+    rowp: *mut c_int,
+    colp: *mut c_int,
+    lnump: *mut linenr_T,
 ) -> bool {
-    unsafe {
-        let mut col: ::core::ffi::c_int = *colp;
-        let mut row: ::core::ffi::c_int = *rowp;
-        let mut retval: bool = false_0 != 0;
-        let mut count: ::core::ffi::c_int = 0;
-        if (*win).w_onebuf_opt.wo_rl != 0 {
-            col = (*win).w_view_width - 1 as ::core::ffi::c_int - col;
-        }
-        let mut lnum: linenr_T = (*win).w_topline;
-        while row > 0 as ::core::ffi::c_int {
-            if win_may_fill(win) {
-                row -= if lnum == (*win).w_topline {
-                    (*win).w_topfill
-                } else {
-                    win_get_fill(win, lnum)
-                };
-                count = plines_win_nofill(win, lnum, false_0 != 0);
-            } else {
-                count = plines_win(win, lnum, false_0 != 0);
-            }
-            if (*win).w_skipcol > 0 as ::core::ffi::c_int && lnum == (*win).w_topline {
-                let mut width1: ::core::ffi::c_int = (*win).w_view_width - win_col_off(win);
-                if width1 > 0 as ::core::ffi::c_int {
-                    let mut skip_lines: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    if (*win).w_skipcol > width1 {
-                        skip_lines = ((*win).w_skipcol as ::core::ffi::c_int - width1)
-                            / (width1 + win_col_off2(win))
-                            + 1 as ::core::ffi::c_int;
-                    } else if (*win).w_skipcol > 0 as ::core::ffi::c_int {
-                        skip_lines = 1 as ::core::ffi::c_int;
-                    }
-                    count -= skip_lines;
-                }
-            }
-            if count > row {
-                break;
-            }
-            hasFolding(
-                win,
-                lnum,
-                ::core::ptr::null_mut::<linenr_T>(),
-                &raw mut lnum,
-            );
-            if lnum == (*(*win).w_buffer).b_ml.ml_line_count {
-                retval = true_0 != 0;
-                break;
-            } else {
-                row -= count;
-                lnum += 1;
-            }
-        }
-        while lnum < (*(*win).w_buffer).b_ml.ml_line_count
-            && decor_conceal_line(
-                win,
-                lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                false_0 != 0,
-            ) as ::core::ffi::c_int
-                != 0
-        {
-            lnum += 1;
-            hasFolding(
-                win,
-                lnum,
-                ::core::ptr::null_mut::<linenr_T>(),
-                &raw mut lnum,
-            );
-        }
-        if !retval {
-            let mut off: ::core::ffi::c_int = win_col_off(win) - win_col_off2(win);
-            col = if col > off { col } else { off };
-            col += row * ((*win).w_view_width - off);
-            if lnum == (*win).w_topline {
-                col += (*win).w_skipcol as ::core::ffi::c_int;
-            }
-        }
-        if (*win).w_onebuf_opt.wo_wrap == 0 {
-            col += (*win).w_leftcol as ::core::ffi::c_int;
-        }
-        col -= win_col_off(win);
-        col = if col > 0 as ::core::ffi::c_int {
-            col
-        } else {
-            0 as ::core::ffi::c_int
-        };
-        *colp = col;
-        *rowp = row;
-        *lnump = lnum;
-        return retval;
-    }
+    // SAFETY: the caller's promise.
+    let (lnum, below_last) = unsafe { comp_pos(Win::new(win), &mut *rowp, &mut *colp) };
+    // SAFETY: as above.
+    unsafe { *lnump = lnum };
+    below_last
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mouse_find_win_inner(
-    mut gridp: *mut ::core::ffi::c_int,
-    mut rowp: *mut ::core::ffi::c_int,
-    mut colp: *mut ::core::ffi::c_int,
+/// [`find_win_inner`], through the C's three pointers.
+///
+/// # Safety
+/// The three parameters must be readable and writable.
+pub unsafe fn mouse_find_win_inner(
+    gridp: *mut c_int,
+    rowp: *mut c_int,
+    colp: *mut c_int,
 ) -> *mut win_T {
-    unsafe {
-        let mut wp_grid: *mut win_T = mouse_find_grid_win(gridp, rowp, colp);
-        if !wp_grid.is_null() {
-            return wp_grid;
-        } else if *gridp > 1 as ::core::ffi::c_int {
-            return ::core::ptr::null_mut::<win_T>();
-        }
-        let mut fp: *mut frame_T = topframe.get();
-        *rowp -= (*firstwin.get()).w_winrow;
-        while (*fp).fr_layout as ::core::ffi::c_int != FR_LEAF {
-            if (*fp).fr_layout as ::core::ffi::c_int == FR_ROW {
-                fp = (*fp).fr_child;
-                while !(*fp).fr_next.is_null() {
-                    if *colp < (*fp).fr_width {
-                        break;
-                    }
-                    *colp -= (*fp).fr_width;
-                    fp = (*fp).fr_next;
-                }
-            } else {
-                fp = (*fp).fr_child;
-                while !(*fp).fr_next.is_null() {
-                    if *rowp < (*fp).fr_height {
-                        break;
-                    }
-                    *rowp -= (*fp).fr_height;
-                    fp = (*fp).fr_next;
-                }
-            }
-        }
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
-        } else {
-            (*curtab.get()).tp_firstwin
-        };
-        while !wp.is_null() {
-            if wp == (*fp).fr_win {
-                *rowp -= (*wp).w_winbar_height;
-                return wp;
-            }
-            wp = (*wp).w_next;
-        }
-        return ::core::ptr::null_mut::<win_T>();
-    }
+    // SAFETY: the caller's promise.
+    unsafe { with_raw_pos(gridp, rowp, colp, find_win_inner) }
 }
 
-pub unsafe extern "C" fn mouse_find_win_outer(
-    mut gridp: *mut ::core::ffi::c_int,
-    mut rowp: *mut ::core::ffi::c_int,
-    mut colp: *mut ::core::ffi::c_int,
+/// [`find_win_outer`], through the C's three pointers.
+///
+/// # Safety
+/// The three parameters must be readable and writable.
+pub unsafe fn mouse_find_win_outer(
+    gridp: *mut c_int,
+    rowp: *mut c_int,
+    colp: *mut c_int,
 ) -> *mut win_T {
-    unsafe {
-        let mut wp: *mut win_T = mouse_find_win_inner(gridp, rowp, colp);
-        if !wp.is_null() {
-            *rowp += (*wp).w_winrow_off;
-            *colp += (*wp).w_wincol_off;
-        }
-        return wp;
-    }
+    // SAFETY: the caller's promise.
+    unsafe { with_raw_pos(gridp, rowp, colp, find_win_outer) }
 }
 
-unsafe extern "C" fn mouse_find_grid_win(
-    mut gridp: *mut ::core::ffi::c_int,
-    mut rowp: *mut ::core::ffi::c_int,
-    mut colp: *mut ::core::ffi::c_int,
+/// Run one of the finders over three `int *`, as the C passes them.
+///
+/// # Safety
+/// The three parameters must be readable and writable.
+unsafe fn with_raw_pos(
+    gridp: *mut c_int,
+    rowp: *mut c_int,
+    colp: *mut c_int,
+    find: impl FnOnce(&mut MousePos) -> Option<Win>,
 ) -> *mut win_T {
-    unsafe {
-        if *gridp == (*msg_grid.ptr()).handle {
-            *rowp += msg_grid_pos.get();
-            *gridp = DEFAULT_GRID_HANDLE;
-        } else if *gridp > 1 as ::core::ffi::c_int {
-            let mut wp: *mut win_T = get_win_by_grid_handle(*gridp as handle_T);
-            if !wp.is_null()
-                && !(*wp).w_grid_alloc.chars.is_null()
-                && !((*wp).w_floating as ::core::ffi::c_int != 0 && !(*wp).w_config.mouse)
-            {
-                *rowp = if *rowp - (*wp).w_grid.row_offset
-                    < (*wp).w_view_height - 1 as ::core::ffi::c_int
-                {
-                    *rowp - (*wp).w_grid.row_offset
-                } else {
-                    (*wp).w_view_height - 1 as ::core::ffi::c_int
-                };
-                *colp = if *colp - (*wp).w_grid.col_offset
-                    < (*wp).w_view_width - 1 as ::core::ffi::c_int
-                {
-                    *colp - (*wp).w_grid.col_offset
-                } else {
-                    (*wp).w_view_width - 1 as ::core::ffi::c_int
-                };
-                return wp;
-            }
-        } else if *gridp == 0 as ::core::ffi::c_int {
-            let mut grid: *mut ScreenGrid = ui_comp_mouse_focus(*rowp, *colp);
-            if grid == pum_grid.ptr() {
-                *gridp = (*grid).handle as ::core::ffi::c_int;
-                *rowp -= (*grid).comp_row;
-                *colp -= (*grid).comp_col;
-                return ::core::ptr::null_mut::<win_T>();
-            } else {
-                let mut wp_0: *mut win_T = if curtab.get() == curtab.get() {
-                    firstwin.get()
-                } else {
-                    (*curtab.get()).tp_firstwin
-                };
-                while !wp_0.is_null() {
-                    if &raw mut (*wp_0).w_grid_alloc != grid {
-                        wp_0 = (*wp_0).w_next;
-                    } else {
-                        *gridp = (*grid).handle as ::core::ffi::c_int;
-                        *rowp -= (*wp_0).w_winrow + (*wp_0).w_grid.row_offset;
-                        *colp -= (*wp_0).w_wincol + (*wp_0).w_grid.col_offset;
-                        return wp_0;
-                    }
-                }
-            }
-            *gridp = DEFAULT_GRID_HANDLE;
+    // SAFETY: the caller's promise.
+    let mut pos = unsafe {
+        MousePos {
+            grid: *gridp,
+            row: *rowp,
+            col: *colp,
         }
-        return ::core::ptr::null_mut::<win_T>();
-    }
+    };
+    let win = find(&mut pos);
+    // SAFETY: as above.
+    unsafe { (*gridp, *rowp, *colp) = (pos.grid, pos.row, pos.col) };
+    win.map_or(ptr::null_mut(), Win::raw)
 }
 
+/// [`vcol_to_col`], writing the leftover columns through `coladdp`.
+///
+/// # Safety
+/// `wp` must be a live window and `lnum` a line of the buffer it shows;
+/// `coladdp` must be writable or null.
 pub unsafe extern "C" fn vcol2col(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-    mut vcol: colnr_T,
-    mut coladdp: *mut colnr_T,
+    wp: *mut win_T,
+    lnum: linenr_T,
+    vcol: colnr_T,
+    coladdp: *mut colnr_T,
 ) -> colnr_T {
-    unsafe {
-        let mut line: *mut ::core::ffi::c_char = ml_get_buf((*wp).w_buffer, lnum);
-        let mut csarg: CharsizeArg = CharsizeArg::default();
-        let mut cstype: CharsizeKind = init_charsize_arg(&mut csarg, wp, lnum, line);
-        let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
-        let mut cur_vcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while cur_vcol < vcol && *ci.ptr as ::core::ffi::c_int != NUL {
-            let mut next_vcol: ::core::ffi::c_int =
-                cur_vcol + win_charsize(cstype, cur_vcol, ci.ptr, ci.chr.value, &mut csarg).width;
-            if next_vcol > vcol {
-                break;
-            }
-            cur_vcol = next_vcol;
-            ci = utfc_next(ci);
-        }
-        if !coladdp.is_null() {
-            *coladdp = (vcol as ::core::ffi::c_int - cur_vcol) as colnr_T;
-        }
-        return ci.ptr.offset_from(line) as colnr_T;
+    // SAFETY: the caller's promise.
+    let (col, coladd) = unsafe { vcol_to_col(Win::new(wp), lnum, vcol) };
+    if !coladdp.is_null() {
+        // SAFETY: as above.
+        unsafe { *coladdp = coladd };
     }
+    col
 }

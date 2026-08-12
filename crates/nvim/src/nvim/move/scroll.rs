@@ -26,7 +26,7 @@ use crate::src::nvim::types::{colnr_T, int64_t, linenr_T, win_T};
 impl Win {
     /// Put the cursor at virtual column `wcol`, or as close as the line
     /// allows. Answers whether it got there.
-    fn coladvance(self, wcol: colnr_T) -> bool {
+    pub(in crate::src::nvim) fn coladvance(self, wcol: colnr_T) -> bool {
         // SAFETY: a live window.
         unsafe { coladvance(self.raw(), wcol) }
     }
@@ -491,7 +491,7 @@ pub unsafe fn check_topfill(wp: *mut win_T, down: bool) {
 impl Win {
     /// Don't end up with more filler lines in the window than fit. `down`
     /// scrolls down when there is not enough space.
-    pub(super) fn check_topfill(mut self, down: bool) {
+    pub(in crate::src::nvim) fn check_topfill(mut self, down: bool) {
         if self.w_topfill > 0 {
             let n = self.plines_nofill(self.w_topline, true);
             if self.w_topfill + n > self.w_view_height {
