@@ -254,6 +254,15 @@ impl Built {
 // The out-parameter tables
 // ---------------------------------------------------------------------------
 
+/// Where an item starts, as the caller's tables spell it.
+///
+/// The bound matches [`Built::items`]: a stale slot reached through
+/// upstream's index-for-count store can hold an offset from a *previous*
+/// expansion's buffer, and that offset may be past this one.
+fn start_of(out: &[u8], at: usize) -> *const c_char {
+    out[at.min(out.len())..].as_ptr().cast::<c_char>()
+}
+
 /// Fill the highlight table from this level's items and answer it.
 pub(super) fn collect_highlights(
     s: &mut StlScratch,
@@ -267,7 +276,7 @@ pub(super) fn collect_highlights(
             continue;
         }
         s.hltab[n] = stl_hlrec_t {
-            start: out[item.start..].as_ptr().cast::<c_char>().cast_mut(),
+            start: start_of(out, item.start).cast_mut(),
             userhl: item.minwid,
             item: item.kind.hl_item(),
         };
@@ -310,7 +319,7 @@ pub(super) fn collect_clicks(s: &mut StlScratch, out: &[u8], built: &Built) -> *
         };
         s.tabtab[n] = StlClickRecord {
             def,
-            start: out[item.start..].as_ptr().cast::<c_char>(),
+            start: start_of(out, item.start),
         };
         n += 1;
     }

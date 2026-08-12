@@ -140,9 +140,8 @@ impl Env {
     /// Evaluate `expr` for a `%{}` item, with the window and buffer the
     /// items describe made current.
     ///
-    /// # Panics
-    /// Nothing here may hold a [`SCRATCH`] borrow: this re-enters the
-    /// evaluator, which can reach `nvim_eval_statusline()` and land back in
+    /// No arena borrow may be live across this: it re-enters the evaluator,
+    /// which can reach `nvim_eval_statusline()` and land back in
     /// [`build_stl_str_hl`].
     pub fn eval(&self, expr: &CStr) -> Option<Vec<u8>> {
         // Upstream publishes the *real* current buffer and window under
