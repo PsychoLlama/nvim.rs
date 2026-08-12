@@ -24,7 +24,7 @@
 
 use core::ffi::c_char;
 use core::ops::{Deref, DerefMut};
-use core::{ptr, slice};
+use core::ptr;
 
 use crate::src::nvim::drawscreen::redraw_later;
 use crate::src::nvim::fold::{hasAnyFolding, hasFolding};
@@ -33,7 +33,7 @@ use crate::src::nvim::mark::mark_mb_adjustpos;
 use crate::src::nvim::mbyte::{utf_ptr2StrCharInfo, utfc_next};
 use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
 use crate::src::nvim::plines::{getvcol, getvvcol};
-use crate::src::nvim::types::{StrCharInfo, buf_T, colnr_T, linenr_T, pos_T, win_T, wline_T};
+use crate::src::nvim::types::{StrCharInfo, buf_T, colnr_T, linenr_T, pos_T, win_T};
 
 // ---------------------------------------------------------------------------
 // The pointers, wrapped
@@ -160,21 +160,6 @@ impl Win {
         (!next.is_null()).then_some(Self(next))
     }
 
-    /// The window's remembered screen lines, as far as they are valid.
-    #[inline(always)]
-    pub fn valid_lines(self) -> &'static [wline_T] {
-        // SAFETY: `w_lines` holds at least `w_lines_valid` initialised
-        // entries; a zero count says nothing about the pointer, so it answers
-        // an empty slice without forming one from it.
-        unsafe {
-            let len = (*self.0).w_lines_valid as usize;
-            match len {
-                0 => &[],
-                _ => slice::from_raw_parts((*self.0).w_lines, len),
-            }
-        }
-    }
-
     /// First line of the fold containing `lnum`, if there is one.
     #[inline(always)]
     pub fn fold_first(self, lnum: linenr_T) -> Option<linenr_T> {
@@ -251,6 +236,17 @@ impl Win {
     #[inline(always)]
     pub fn virtual_vcol(self, pos: Pos) -> colnr_T {
         self.virtual_vcol_span(pos).0
+    }
+
+    /// The virtual column the *cursor* shows at within the character at
+    /// `pos`, which is not its first column when the character is a tab.
+    #[inline(always)]
+    pub fn virtual_cursor_vcol(self, pos: Pos) -> colnr_T {
+        let mut cursor = 0;
+        let (none, c) = (ptr::null_mut(), &raw mut cursor);
+        // SAFETY: a live window and a live position in its buffer.
+        unsafe { getvvcol(self.0, pos.0, none, c, none) };
+        cursor
     }
 
     #[inline(always)]

@@ -12,388 +12,476 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::c_int;
+
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::buffer::buf_is_empty;
-use crate::src::nvim::cursor::check_cursor_lnum;
-use crate::src::nvim::decoration::{decor_conceal_line, win_lines_concealed};
-use crate::src::nvim::drawscreen::{
-    UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, conceal_cursor_line, redraw_later,
-};
-use crate::src::nvim::fold::hasFolding;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID};
 use crate::src::nvim::main::{
-    curtab, curwin, default_grid, dollar_vcol, first_tabpage, firstwin, mouse_dragging, p_sj, p_so,
+    curtab, default_grid, dollar_vcol, first_tabpage, firstwin, mouse_dragging, p_sj, p_so,
     skip_update_topline,
 };
-use crate::src::nvim::option::get_scrolloff_value;
-use crate::src::nvim::plines::{getvvcol, win_get_fill};
-use crate::src::nvim::types::{OptInt, colnr_T, int64_t, linenr_T, tabpage_T, win_T};
-use crate::src::nvim::winfloat::win_check_anchored_floats;
+use crate::src::nvim::types::{OptInt, int64_t, linenr_T, win_T};
+use crate::src::nvim::winlayer::Win;
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn update_topline(mut wp: *mut win_T) {
-    unsafe {
-        let mut check_botline: bool = false_0 != 0;
-        let mut so_ptr: *mut OptInt = if (*wp).w_onebuf_opt.wo_so >= 0 as OptInt {
-            &raw mut (*wp).w_onebuf_opt.wo_so
+/// The 'scrolloff' `update_topline()` works with: the window-local value when
+/// it is set, the global one otherwise.
+///
+/// C reaches this through an `OptInt *` because the mouse-drag arm *writes*
+/// through it and restores the old value on the way out, which is what the
+/// two variants are here to reproduce.
+#[derive(Clone, Copy)]
+enum ScrollOff {
+    Window(Win),
+    Global,
+}
+
+impl ScrollOff {
+    fn of(win: Win) -> Self {
+        if win.w_onebuf_opt.wo_so >= 0 {
+            Self::Window(win)
         } else {
-            p_so.ptr()
+            Self::Global
+        }
+    }
+
+    fn get(self) -> OptInt {
+        match self {
+            Self::Window(win) => win.w_onebuf_opt.wo_so,
+            Self::Global => p_so.get(),
+        }
+    }
+
+    fn set(self, value: OptInt) {
+        match self {
+            Self::Window(mut win) => win.w_onebuf_opt.wo_so = value,
+            Self::Global => p_so.set(value),
+        }
+    }
+}
+
+/// [`Win::update_topline`], for the callers still holding a raw window.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn update_topline(wp: *mut win_T) {
+    // SAFETY: the caller's promise.
+    unsafe { Win::new(wp) }.update_topline();
+}
+
+impl Win {
+    /// Move `w_topline` so that the cursor is on the screen, with 'scrolloff'
+    /// lines of context above and below it where the buffer allows.
+    pub(super) fn update_topline(self) {
+        update_topline_win(self);
+    }
+}
+
+fn update_topline_win(mut win: Win) {
+    let wp = win.raw();
+    let mut check_botline = false;
+    let so = ScrollOff::of(win);
+    let save_so = so.get();
+
+    // With 'splitkeep' the cursor is moved instead.
+    if skip_update_topline.get() {
+        return;
+    }
+
+    // No screen yet, or a window with no room: just show the cursor line.
+    if default_grid.with(|grid| grid.chars.is_null()) || win.w_view_height == 0 {
+        win.check_cursor_lnum();
+        win.w_topline = win.w_cursor.lnum;
+        win.w_botline = win.w_topline;
+        win.w_viewport_invalid = true;
+        win.w_scbind_pos = 1;
+        return;
+    }
+
+    win.check_cursor_moved();
+    if win.w_valid & VALID_TOPLINE != 0 {
+        return;
+    }
+
+    // Dragging with the mouse should not scroll that quickly.
+    if mouse_dragging.get() > 0 {
+        so.set((mouse_dragging.get() - 1) as OptInt);
+    }
+
+    let old_topline = win.w_topline;
+    let old_topfill = win.w_topfill;
+
+    // SAFETY: a live buffer.
+    if unsafe { buf_is_empty(win.buffer().raw()) } {
+        // Special case: an empty file always starts at line 1.
+        if win.w_topline != 1 {
+            win.redraw_later(UPD_NOT_VALID);
+        }
+        win.w_topline = 1;
+        win.w_botline = 2;
+        win.w_skipcol = 0;
+        win.w_valid |= VALID_BOTLINE | VALID_BOTLINE_AP;
+        win.w_viewport_invalid = true;
+        win.w_scbind_pos = 1;
+    } else if check_topline(win) {
+        let halfheight = arith::recentre_threshold(win.w_view_height);
+        // How far the cursor is above the top of the window, give or take:
+        // an approximation of how much would have to be scrolled.
+        let n = if win.lines_concealed() {
+            unconcealed_above(win, halfheight, so.get())
+        } else {
+            (win.w_topline as OptInt + so.get() - win.w_cursor.lnum as OptInt) as int64_t
         };
-        let mut save_so: OptInt = *so_ptr;
-        if skip_update_topline.get() {
-            return;
-        }
-        if (*default_grid.ptr()).chars.is_null() || (*wp).w_view_height == 0 as ::core::ffi::c_int {
-            check_cursor_lnum(wp);
-            (*wp).w_topline = (*wp).w_cursor.lnum;
-            (*wp).w_botline = (*wp).w_topline;
-            (*wp).w_viewport_invalid = true_0 != 0;
-            (*wp).w_scbind_pos = 1 as ::core::ffi::c_int;
-            return;
-        }
-        check_cursor_moved(wp);
-        if (*wp).w_valid & VALID_TOPLINE != 0 {
-            return;
-        }
-        if mouse_dragging.get() > 0 as ::core::ffi::c_int {
-            *so_ptr = (mouse_dragging.get() - 1 as ::core::ffi::c_int) as OptInt;
-        }
-        let mut old_topline: linenr_T = (*wp).w_topline;
-        let mut old_topfill: ::core::ffi::c_int = (*wp).w_topfill;
-        if buf_is_empty((*wp).w_buffer) {
-            if (*wp).w_topline != 1 as linenr_T {
-                redraw_later(wp, UPD_NOT_VALID);
-            }
-            (*wp).w_topline = 1 as ::core::ffi::c_int as linenr_T;
-            (*wp).w_botline = 2 as ::core::ffi::c_int as linenr_T;
-            (*wp).w_skipcol = 0 as ::core::ffi::c_int as colnr_T;
-            (*wp).w_valid |= VALID_BOTLINE | VALID_BOTLINE_AP;
-            (*wp).w_viewport_invalid = true_0 != 0;
-            (*wp).w_scbind_pos = 1 as ::core::ffi::c_int;
+        // Far out to begin with: put the cursor in the middle of the window.
+        // Close: put it near the top.
+        if n >= halfheight as int64_t {
+            // SAFETY: a live window.
+            unsafe { scroll_cursor_halfway(wp, false, false) };
         } else {
-            let mut check_topline: bool = false_0 != 0;
-            if (*wp).w_topline > 1 as linenr_T || (*wp).w_skipcol > 0 as ::core::ffi::c_int {
-                if (*wp).w_cursor.lnum < (*wp).w_topline {
-                    check_topline = true_0 != 0;
-                } else if check_top_offset(wp) {
-                    check_topline = true_0 != 0;
-                } else if (*wp).w_skipcol > 0 as ::core::ffi::c_int
-                    && (*wp).w_cursor.lnum == (*wp).w_topline
-                {
-                    let mut vcol: colnr_T = 0;
-                    getvvcol(
-                        wp,
-                        &raw mut (*wp).w_cursor,
-                        &raw mut vcol,
-                        ::core::ptr::null_mut::<colnr_T>(),
-                        ::core::ptr::null_mut::<colnr_T>(),
-                    );
-                    let mut overlap: ::core::ffi::c_int =
-                        sms_marker_overlap(wp, -1 as ::core::ffi::c_int);
-                    if (*wp).w_skipcol as ::core::ffi::c_int + overlap > vcol {
-                        check_topline = true_0 != 0;
-                    }
-                }
-            }
-            if !check_topline && (*wp).w_topfill > win_get_fill(wp, (*wp).w_topline) {
-                check_topline = true_0 != 0;
-            }
-            if check_topline {
-                let mut halfheight: ::core::ffi::c_int =
-                    (*wp).w_view_height / 2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
-                if halfheight < 2 as ::core::ffi::c_int {
-                    halfheight = 2 as ::core::ffi::c_int;
-                }
-                let mut n: int64_t = 0;
-                if win_lines_concealed(wp) {
-                    n = 0 as int64_t;
-                    let mut lnum: linenr_T = (*wp).w_cursor.lnum;
-                    while (lnum as OptInt) < (*wp).w_topline as OptInt + *so_ptr {
-                        debug_assert!(!(*wp).w_buffer.is_null(), "wp->w_buffer != 0");
-                        if lnum >= (*(*wp).w_buffer).b_ml.ml_line_count || {
-                            n += !decor_conceal_line(wp, lnum as ::core::ffi::c_int, false_0 != 0)
-                                as ::core::ffi::c_int as int64_t;
-                            n >= halfheight as int64_t
-                        } {
-                            break;
-                        }
-                        hasFolding(wp, lnum, ::core::ptr::null_mut::<linenr_T>(), &raw mut lnum);
-                        lnum += 1;
-                    }
-                } else {
-                    n = ((*wp).w_topline as OptInt + *so_ptr - (*wp).w_cursor.lnum as OptInt)
-                        as int64_t;
-                }
-                if n >= halfheight as int64_t {
-                    scroll_cursor_halfway(wp, false_0 != 0, false_0 != 0);
-                } else {
-                    scroll_cursor_top(wp, scrolljump_value(wp), false_0);
-                    check_botline = true_0 != 0;
-                }
-            } else {
-                hasFolding(
+            // SAFETY: a live window.
+            unsafe {
+                scroll_cursor_top(
                     wp,
-                    (*wp).w_topline,
-                    &raw mut (*wp).w_topline,
-                    ::core::ptr::null_mut::<linenr_T>(),
-                );
-                check_botline = true_0 != 0;
-            }
+                    arith::scrolljump_lines(p_sj.get(), win.w_view_height),
+                    false_0,
+                )
+            };
+            check_botline = true;
         }
-        if check_botline {
-            if (*wp).w_valid & VALID_BOTLINE_AP == 0 {
-                validate_botline_win(wp);
+    } else {
+        // Make sure the top line is the first line of a fold.
+        win.w_topline = win.fold_first(win.w_topline).unwrap_or(win.w_topline);
+        check_botline = true;
+    }
+
+    // The cursor below the bottom of the window: scroll it into view.
+    // Recompute `w_botline` first when it is invalid, to avoid a later
+    // redraw; when it was only approximated a redraw may still be needed in
+    // a few cases, but recomputing it for every small change costs more.
+    if check_botline {
+        if win.w_valid & VALID_BOTLINE_AP == 0 {
+            win.validate_botline();
+        }
+        if win.w_botline <= win.buffer().line_count() {
+            if win.w_cursor.lnum < win.w_botline {
+                check_botline = !enough_below(win, so.get());
             }
-            debug_assert!(!(*wp).w_buffer.is_null(), "wp->w_buffer != 0");
-            if (*wp).w_botline <= (*(*wp).w_buffer).b_ml.ml_line_count {
-                if (*wp).w_cursor.lnum < (*wp).w_botline {
-                    if (*wp).w_cursor.lnum as OptInt >= (*wp).w_botline as OptInt - *so_ptr
-                        || win_lines_concealed(wp) as ::core::ffi::c_int != 0
-                    {
-                        let mut loff: lineoff_T = lineoff_T {
-                            lnum: 0,
-                            fill: 0,
-                            height: 0,
-                        };
-                        let mut n_0: ::core::ffi::c_int = (*wp).w_empty_rows;
-                        loff.lnum = (*wp).w_cursor.lnum;
-                        hasFolding(
+            if check_botline {
+                let n = if win.lines_concealed() {
+                    unconcealed_below(win, so.get())
+                } else {
+                    ((win.w_cursor.lnum - win.w_botline + 1) as OptInt + so.get()) as int64_t
+                };
+                if n <= (win.w_view_height + 1) as int64_t {
+                    // SAFETY: a live window.
+                    unsafe {
+                        scroll_cursor_bot(
                             wp,
-                            loff.lnum,
-                            ::core::ptr::null_mut::<linenr_T>(),
-                            &raw mut loff.lnum,
-                        );
-                        loff.fill = 0 as ::core::ffi::c_int;
-                        n_0 += (*wp).w_filler_rows;
-                        loff.height = 0 as ::core::ffi::c_int;
-                        while loff.lnum < (*wp).w_botline
-                            && ((loff.lnum + 1 as linenr_T) < (*wp).w_botline
-                                || loff.fill == 0 as ::core::ffi::c_int)
-                        {
-                            n_0 += loff.height;
-                            if n_0 as OptInt >= *so_ptr {
-                                break;
-                            }
-                            botline_forw(wp, &raw mut loff);
-                        }
-                        if n_0 as OptInt >= *so_ptr {
-                            check_botline = false_0 != 0;
-                        }
-                    } else {
-                        check_botline = false_0 != 0;
-                    }
-                }
-                if check_botline {
-                    let mut n_1: int64_t = 0 as int64_t;
-                    if win_lines_concealed(wp) {
-                        let mut lnum_0: linenr_T = (*wp).w_cursor.lnum;
-                        while (lnum_0 as OptInt) >= (*wp).w_botline as OptInt - *so_ptr {
-                            if lnum_0 <= 0 as linenr_T || {
-                                n_1 += !decor_conceal_line(
-                                    wp,
-                                    lnum_0 as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                                    false_0 != 0,
-                                ) as ::core::ffi::c_int
-                                    as int64_t;
-                                n_1 > ((*wp).w_view_height + 1 as ::core::ffi::c_int) as int64_t
-                            } {
-                                break;
-                            }
-                            hasFolding(
-                                wp,
-                                lnum_0,
-                                &raw mut lnum_0,
-                                ::core::ptr::null_mut::<linenr_T>(),
-                            );
-                            lnum_0 -= 1;
-                        }
-                    } else {
-                        n_1 = (((*wp).w_cursor.lnum - (*wp).w_botline + 1 as linenr_T) as OptInt
-                            + *so_ptr) as int64_t;
-                    }
-                    if n_1 <= ((*wp).w_view_height + 1 as ::core::ffi::c_int) as int64_t {
-                        scroll_cursor_bot(wp, scrolljump_value(wp), false_0 != 0);
-                    } else {
-                        scroll_cursor_halfway(wp, false_0 != 0, false_0 != 0);
-                    }
+                            arith::scrolljump_lines(p_sj.get(), win.w_view_height),
+                            false,
+                        )
+                    };
+                } else {
+                    // SAFETY: a live window.
+                    unsafe { scroll_cursor_halfway(wp, false, false) };
                 }
             }
         }
-        (*wp).w_valid |= VALID_TOPLINE;
-        (*wp).w_viewport_invalid = true_0 != 0;
-        win_check_anchored_floats(wp);
-        if (*wp).w_topline != old_topline || (*wp).w_topfill != old_topfill {
-            dollar_vcol.set(-1 as ::core::ffi::c_int as colnr_T);
-            redraw_later(wp, UPD_VALID);
-            if (*wp).w_onebuf_opt.wo_sms == 0 {
-                reset_skipcol(wp);
-            } else if (*wp).w_skipcol != 0 as ::core::ffi::c_int {
-                redraw_later(wp, UPD_SOME_VALID);
-            }
-            if (*wp).w_cursor.lnum == (*wp).w_topline {
-                validate_cursor(wp);
-            }
-        }
-        *so_ptr = save_so;
     }
+
+    win.w_valid |= VALID_TOPLINE;
+    win.w_viewport_invalid = true;
+    win.check_anchored_floats();
+
+    // The top line moved, so the window has to be redrawn.
+    if win.w_topline != old_topline || win.w_topfill != old_topfill {
+        dollar_vcol.set(-1);
+        win.redraw_later(UPD_VALID);
+
+        // Without 'smoothscroll' there is nothing for `w_skipcol` to mean.
+        if win.w_onebuf_opt.wo_sms == 0 {
+            win.reset_skipcol();
+        } else if win.w_skipcol != 0 {
+            win.redraw_later(UPD_SOME_VALID);
+        }
+
+        // `w_skipcol` may have to be set when the cursor is on the top line.
+        if win.w_cursor.lnum == win.w_topline {
+            win.validate_cursor();
+        }
+    }
+
+    so.set(save_so);
 }
 
-unsafe extern "C" fn scrolljump_value(mut wp: *mut win_T) -> ::core::ffi::c_int {
-    unsafe {
-        let mut result: ::core::ffi::c_int = if p_sj.get() >= 0 as OptInt {
-            p_sj.get() as ::core::ffi::c_int
-        } else {
-            (*wp).w_view_height * -p_sj.get() as ::core::ffi::c_int / 100 as ::core::ffi::c_int
+/// Whether the cursor is above the window, or too close to its top for
+/// 'scrolloff', or the window shows more filler lines than there is room for.
+fn check_topline(win: Win) -> bool {
+    if win.w_topline > 1 || win.w_skipcol > 0 {
+        // Above the top line: scrolling is always needed. Far below it and
+        // with no folding: scrolling down never is.
+        if win.w_cursor.lnum < win.w_topline {
+            return true;
+        }
+        if check_top_offset(win) {
+            return true;
+        }
+        if win.w_skipcol > 0 && win.w_cursor.lnum == win.w_topline {
+            // Is the cursor's own column visible? Add the columns the
+            // top-left marker covers.
+            let vcol = win.virtual_vcol(win.cursor());
+            // SAFETY: a live window.
+            let overlap = unsafe { sms_marker_overlap(win.raw(), -1) };
+            if win.w_skipcol + overlap > vcol {
+                return true;
+            }
+        }
+    }
+    // More filler lines than there is room for.
+    win.w_topfill > win.fill_above(win.w_topline)
+}
+
+/// Logical lines between the cursor and `w_topline + 'scrolloff'`, counting
+/// only lines a decoration does not hide, and stopping once the answer can no
+/// longer matter.
+fn unconcealed_above(win: Win, halfheight: c_int, so: OptInt) -> int64_t {
+    let mut n: int64_t = 0;
+    let mut lnum = win.w_cursor.lnum;
+    while (lnum as OptInt) < win.w_topline as OptInt + so {
+        // Stop at the end of the file, or once we know we are far off.
+        if lnum >= win.buffer().line_count() || {
+            n += !win.conceals_line(lnum, false) as int64_t;
+            n >= halfheight as int64_t
+        } {
+            break;
+        }
+        lnum = win.fold_last(lnum) + 1;
+    }
+    n
+}
+
+/// As [`unconcealed_above`], downwards from the cursor to
+/// `w_botline - 'scrolloff'`.
+fn unconcealed_below(win: Win, so: OptInt) -> int64_t {
+    let mut n: int64_t = 0;
+    let mut lnum = win.w_cursor.lnum;
+    while (lnum as OptInt) >= win.w_botline as OptInt - so {
+        if lnum <= 0 || {
+            n += !win.conceals_line(lnum - 1, false) as int64_t;
+            n > (win.w_view_height + 1) as int64_t
+        } {
+            break;
+        }
+        lnum = win.fold_first(lnum).unwrap_or(lnum) - 1;
+    }
+    n
+}
+
+/// Whether there are already 'scrolloff' window lines below the cursor, so
+/// that nothing has to be scrolled.
+fn enough_below(win: Win, so: OptInt) -> bool {
+    if (win.w_cursor.lnum as OptInt) < win.w_botline as OptInt - so && !win.lines_concealed() {
+        return true;
+    }
+    let mut loff = lineoff_T {
+        // In a fold, count from its last line.
+        lnum: win.fold_last(win.w_cursor.lnum),
+        fill: 0,
+        height: 0,
+    };
+    let mut n = win.w_empty_rows + win.w_filler_rows;
+    while loff.lnum < win.w_botline && (loff.lnum + 1 < win.w_botline || loff.fill == 0) {
+        n += loff.height;
+        if n as OptInt >= so {
+            break;
+        }
+        // SAFETY: a live window and a `lineoff_T` of this frame.
+        unsafe { botline_forw(win.raw(), &raw mut loff) };
+    }
+    n as OptInt >= so
+}
+
+/// Whether there are fewer than 'scrolloff' visible screen lines above the
+/// cursor.
+fn check_top_offset(win: Win) -> bool {
+    let so = win.scrolloff();
+    if (win.w_cursor.lnum as int64_t) < win.w_topline as int64_t + so || win.lines_concealed() {
+        let mut loff = lineoff_T {
+            lnum: win.w_cursor.lnum,
+            fill: 0,
+            height: 0,
         };
-        return result;
+        // The filler lines above the top line are always context.
+        let mut n = win.w_topfill;
+        while (n as int64_t) < so {
+            // SAFETY: a live window and a `lineoff_T` of this frame.
+            unsafe { topline_back(win.raw(), &raw mut loff) };
+            // Stop once a line above the window has been counted.
+            if loff.lnum < win.w_topline || (loff.lnum == win.w_topline && loff.fill > 0) {
+                break;
+            }
+            n += loff.height;
+        }
+        if (n as int64_t) < so {
+            return true;
+        }
+    }
+    false
+}
+
+/// Recompute `w_curswant` from the cursor's virtual column.
+///
+/// # Safety
+/// The current window must be valid.
+pub unsafe fn update_curswant_force() {
+    // SAFETY: `curwin` is set from startup to exit.
+    let mut win = unsafe { Win::current() };
+    win.validate_virtcol();
+    win.w_curswant = win.w_virtcol;
+    win.w_set_curswant = false_0;
+}
+
+/// [`update_curswant_force`], but only when something asked for it.
+///
+/// # Safety
+/// The current window must be valid.
+pub unsafe fn update_curswant() {
+    // SAFETY: `curwin` is set from startup to exit.
+    if unsafe { Win::current() }.w_set_curswant != 0 {
+        // SAFETY: the caller's promise.
+        unsafe { update_curswant_force() };
     }
 }
 
-unsafe extern "C" fn check_top_offset(mut wp: *mut win_T) -> bool {
-    unsafe {
-        let mut so: int64_t = get_scrolloff_value(wp);
-        if ((*wp).w_cursor.lnum as int64_t) < (*wp).w_topline as int64_t + so
-            || win_lines_concealed(wp) as ::core::ffi::c_int != 0
+/// [`Win::check_cursor_moved`], for the callers still holding a raw window.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn check_cursor_moved(wp: *mut win_T) {
+    // SAFETY: the caller's promise.
+    unsafe { Win::new(wp) }.check_cursor_moved();
+}
+
+impl Win {
+    /// Notice that the cursor moved since the last check, and drop the
+    /// `w_valid` flags that no longer hold.
+    pub(super) fn check_cursor_moved(self) {
+        check_cursor_moved_win(self);
+    }
+
+    /// A window setting changed in a way that needs the cursor position,
+    /// `w_botline` and `w_topline` recomputed and the window redrawn --
+    /// 'wrap' or folding, for instance.
+    pub(super) fn changed_window_setting(mut self) {
+        self.w_lines_valid = 0;
+        self.invalidate_above_cursor();
+        self.w_valid &= !(VALID_BOTLINE | VALID_BOTLINE_AP | VALID_TOPLINE);
+        self.redraw_later(UPD_NOT_VALID);
+    }
+}
+
+fn check_cursor_moved_win(mut win: Win) {
+    if win.w_cursor.lnum != win.w_valid_cursor.lnum {
+        win.w_valid &=
+            !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CHEIGHT | VALID_CROW | VALID_TOPLINE);
+        // Concealed-line visibility toggled.
+        // SAFETY: `curwin` is set from startup to exit.
+        if unsafe { win.is_current() }
+            && win.w_valid_cursor.lnum > 0
+            && win.w_onebuf_opt.wo_cole >= 2
+            && !win.conceal_cursor_line()
+            && (win.conceals_line(win.w_cursor.lnum - 1, true)
+                || win.conceals_line(win.w_valid_cursor.lnum - 1, true))
         {
-            let mut loff: lineoff_T = lineoff_T {
-                lnum: 0,
-                fill: 0,
-                height: 0,
-            };
-            loff.lnum = (*wp).w_cursor.lnum;
-            loff.fill = 0 as ::core::ffi::c_int;
-            let mut n: ::core::ffi::c_int = (*wp).w_topfill;
-            while (n as int64_t) < so {
-                topline_back(wp, &raw mut loff);
-                if loff.lnum < (*wp).w_topline
-                    || loff.lnum == (*wp).w_topline && loff.fill > 0 as ::core::ffi::c_int
-                {
-                    break;
-                }
-                n += loff.height;
-            }
-            if (n as int64_t) < so {
-                return true_0 != 0;
-            }
+            win.changed_window_setting();
         }
-        return false_0 != 0;
+        win.w_valid_cursor = win.w_cursor;
+        win.w_valid_leftcol = win.w_leftcol;
+        win.w_valid_skipcol = win.w_skipcol;
+        win.w_viewport_invalid = true;
+    } else if win.w_skipcol != win.w_valid_skipcol {
+        win.w_valid &= !(VALID_WROW
+            | VALID_WCOL
+            | VALID_VIRTCOL
+            | VALID_CHEIGHT
+            | VALID_CROW
+            | VALID_BOTLINE
+            | VALID_BOTLINE_AP);
+        win.w_valid_cursor = win.w_cursor;
+        win.w_valid_leftcol = win.w_leftcol;
+        win.w_valid_skipcol = win.w_skipcol;
+    } else if win.w_cursor.col != win.w_valid_cursor.col
+        || win.w_leftcol != win.w_valid_leftcol
+        || win.w_cursor.coladd != win.w_valid_cursor.coladd
+    {
+        win.w_valid &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
+        win.w_valid_cursor.col = win.w_cursor.col;
+        win.w_valid_leftcol = win.w_leftcol;
+        win.w_valid_cursor.coladd = win.w_cursor.coladd;
+        win.w_viewport_invalid = true;
     }
 }
 
-pub unsafe extern "C" fn update_curswant_force() {
-    unsafe {
-        validate_virtcol(curwin.get());
-        (*curwin.get()).w_curswant = (*curwin.get()).w_virtcol;
-        (*curwin.get()).w_set_curswant = false_0;
+/// [`Win::changed_window_setting`], for the callers still holding a raw
+/// window.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn changed_window_setting(wp: *mut win_T) {
+    // SAFETY: the caller's promise.
+    unsafe { Win::new(wp) }.changed_window_setting();
+}
+
+/// [`changed_window_setting`] for every window of every tab page.
+///
+/// # Safety
+/// The editor's window list must be valid.
+pub unsafe fn changed_window_setting_all() {
+    let mut tp = first_tabpage.get();
+    while !tp.is_null() {
+        // The current tab page's windows hang off `firstwin`; a tab page's
+        // own list is only filled in when it is left.
+        let first = if tp == curtab.get() {
+            firstwin.get()
+        } else {
+            // SAFETY: a live tab page.
+            unsafe { (*tp).tp_firstwin }
+        };
+        // SAFETY: the editor's window list holds live windows.
+        let mut win = (!first.is_null()).then(|| unsafe { Win::new(first) });
+        while let Some(w) = win {
+            w.changed_window_setting();
+            win = w.next();
+        }
+        // SAFETY: a live tab page.
+        tp = unsafe { (*tp).tp_next };
     }
 }
 
-pub unsafe extern "C" fn update_curswant() {
-    unsafe {
-        if (*curwin.get()).w_set_curswant != 0 {
-            update_curswant_force();
-        }
+/// Put the window's top line at `lnum`, approximating `w_botline` rather than
+/// recomputing it.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn set_topline(wp: *mut win_T, lnum: linenr_T) {
+    // SAFETY: the caller's promise.
+    let mut win = unsafe { Win::new(wp) };
+    let prev_topline = win.w_topline;
+    // Go to the first line of a closed fold.
+    let lnum = win.fold_first(lnum).unwrap_or(lnum);
+    win.w_botline += lnum - win.w_topline;
+    let last = win.buffer().line_count() + 1;
+    if win.w_botline > last {
+        win.w_botline = last;
     }
-}
-
-pub unsafe extern "C" fn check_cursor_moved(mut wp: *mut win_T) {
-    unsafe {
-        if (*wp).w_cursor.lnum != (*wp).w_valid_cursor.lnum {
-            (*wp).w_valid &= !(VALID_WROW
-                | VALID_WCOL
-                | VALID_VIRTCOL
-                | VALID_CHEIGHT
-                | VALID_CROW
-                | VALID_TOPLINE);
-            if wp == curwin.get()
-                && (*wp).w_valid_cursor.lnum > 0 as linenr_T
-                && (*wp).w_onebuf_opt.wo_cole >= 2 as OptInt
-                && !conceal_cursor_line(wp)
-                && (decor_conceal_line(
-                    wp,
-                    (*wp).w_cursor.lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                    true_0 != 0,
-                ) as ::core::ffi::c_int
-                    != 0
-                    || decor_conceal_line(
-                        wp,
-                        (*wp).w_valid_cursor.lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                        true_0 != 0,
-                    ) as ::core::ffi::c_int
-                        != 0)
-            {
-                changed_window_setting(wp);
-            }
-            (*wp).w_valid_cursor = (*wp).w_cursor;
-            (*wp).w_valid_leftcol = (*wp).w_leftcol;
-            (*wp).w_valid_skipcol = (*wp).w_skipcol;
-            (*wp).w_viewport_invalid = true_0 != 0;
-        } else if (*wp).w_skipcol != (*wp).w_valid_skipcol {
-            (*wp).w_valid &= !(VALID_WROW
-                | VALID_WCOL
-                | VALID_VIRTCOL
-                | VALID_CHEIGHT
-                | VALID_CROW
-                | VALID_BOTLINE
-                | VALID_BOTLINE_AP);
-            (*wp).w_valid_cursor = (*wp).w_cursor;
-            (*wp).w_valid_leftcol = (*wp).w_leftcol;
-            (*wp).w_valid_skipcol = (*wp).w_skipcol;
-        } else if (*wp).w_cursor.col != (*wp).w_valid_cursor.col
-            || (*wp).w_leftcol != (*wp).w_valid_leftcol
-            || (*wp).w_cursor.coladd != (*wp).w_valid_cursor.coladd
-        {
-            (*wp).w_valid &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
-            (*wp).w_valid_cursor.col = (*wp).w_cursor.col;
-            (*wp).w_valid_leftcol = (*wp).w_leftcol;
-            (*wp).w_valid_cursor.coladd = (*wp).w_cursor.coladd;
-            (*wp).w_viewport_invalid = true_0 != 0;
-        }
+    win.w_topline = lnum;
+    win.w_topline_was_set = true_0 as ::core::ffi::c_char;
+    if lnum != prev_topline {
+        // The filler lines are kept when the top line did not change.
+        win.w_topfill = 0;
     }
-}
-
-pub unsafe extern "C" fn changed_window_setting(mut wp: *mut win_T) {
-    unsafe {
-        (*wp).w_lines_valid = 0 as ::core::ffi::c_int;
-        changed_line_abv_curs_win(wp);
-        (*wp).w_valid &= !(VALID_BOTLINE | VALID_BOTLINE_AP | VALID_TOPLINE);
-        redraw_later(wp, UPD_NOT_VALID);
-    }
-}
-
-pub unsafe extern "C" fn changed_window_setting_all() {
-    unsafe {
-        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-        while !tp.is_null() {
-            let mut wp: *mut win_T = if tp == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tp).tp_firstwin
-            };
-            while !wp.is_null() {
-                changed_window_setting(wp);
-                wp = (*wp).w_next;
-            }
-            tp = (*tp).tp_next as *mut tabpage_T;
-        }
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn set_topline(mut wp: *mut win_T, mut lnum: linenr_T) {
-    unsafe {
-        let mut prev_topline: linenr_T = (*wp).w_topline;
-        hasFolding(wp, lnum, &raw mut lnum, ::core::ptr::null_mut::<linenr_T>());
-        (*wp).w_botline += lnum - (*wp).w_topline;
-        if (*wp).w_botline > (*(*wp).w_buffer).b_ml.ml_line_count + 1 as linenr_T {
-            (*wp).w_botline = (*(*wp).w_buffer).b_ml.ml_line_count + 1 as linenr_T;
-        }
-        (*wp).w_topline = lnum;
-        (*wp).w_topline_was_set = true_0 as ::core::ffi::c_char;
-        if lnum != prev_topline {
-            (*wp).w_topfill = 0 as ::core::ffi::c_int;
-        }
-        (*wp).w_valid &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_TOPLINE);
-        redraw_later(wp, UPD_VALID);
-    }
+    win.w_valid &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_TOPLINE);
+    // Not VALID_TOPLINE: 'scrolloff' still has to be checked.
+    win.redraw_later(UPD_VALID);
 }

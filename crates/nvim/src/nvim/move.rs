@@ -10,6 +10,7 @@
 //! | [`scroll`] | `scrolldown()`/`scrollup()` and the clamped forms |
 //! | [`scrollcur`] | the `scroll_cursor_*` family and `cursor_correct()` |
 //! | [`page`] | `pagescroll()` and `'cursorbind'` |
+//! | [`arith`] | the pointer-free viewport arithmetic they share |
 //!
 //! What stays here is the `w_valid` flag alphabet the five share, the
 //! `lineoff_T` cursor those flags guard, the small predicates that read or
@@ -18,25 +19,20 @@
 //! and the two `win_col_off` helpers that say how much of a window is not
 //! text.
 //!
+//! The windows stay raw `*mut win_T` at the module boundary -- callers hold
+//! several at once and re-enter through autocommands -- but the dereferences
+//! do not spread: [`Win`] wraps one and makes its *construction* the unsafe
+//! step, and the `impl Win` block below adds one thin wrapper per call into a
+//! neighbouring module. Everything above that layer, this family's arithmetic
+//! included, is ordinary safe code.
+//!
 //! Original: `src/nvim/move.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::src::nvim::cursor::check_cursor_lnum;
-use crate::src::nvim::decoration::{SIGN_WIDTH, decor_conceal_line};
-use crate::src::nvim::drawscreen::{
-    UPD_INVERTED, UPD_SOME_VALID, UPD_VALID, conceal_cursor_line, number_width, redraw_buf_later,
-    redraw_later, redrawWinline, redrawing, win_cursorline_standout,
-};
-use crate::src::nvim::fold::hasFolding;
-use crate::src::nvim::main::{VIsual_active, cmdwin_win, curbuf, curwin, p_cpo};
-use crate::src::nvim::option::get_showbreak_value;
-use crate::src::nvim::options::kOptCuloptFlagScreenline;
-use crate::src::nvim::plines::{getvvcol, plines_win_full, win_may_fill};
-use crate::src::nvim::strings::vim_strchr;
-use crate::src::nvim::types::{MotionType, OptInt, colnr_T, linenr_T, win_T};
-use crate::src::nvim::window::win_fdccol_count;
-use crate::src::nvim::winfloat::win_check_anchored_floats;
+use core::ffi::{c_char, c_int, c_uint};
+
+pub mod arith;
 
 // The carve of the transpiled module; see each child's docs.
 mod columns;
@@ -51,434 +47,689 @@ pub use self::scroll::*;
 pub use self::scrollcur::*;
 pub use self::topline::*;
 
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
+use crate::src::nvim::cursor::check_cursor_lnum;
+use crate::src::nvim::decoration::{SIGN_WIDTH, decor_conceal_line, win_lines_concealed};
+use crate::src::nvim::drawscreen::{
+    UPD_INVERTED, UPD_SOME_VALID, UPD_VALID, conceal_cursor_line, number_width, redraw_buf_later,
+    redrawWinline, redrawing, win_cursorline_standout,
+};
+use crate::src::nvim::main::{VIsual_active, cmdwin_win, curbuf, p_cpo};
+use crate::src::nvim::option::{get_scrolloff_value, get_showbreak_value, get_sidescrolloff_value};
+use crate::src::nvim::options::kOptCuloptFlagScreenline;
+use crate::src::nvim::plines::{plines_win_full, win_get_fill, win_may_fill};
+use crate::src::nvim::strings::vim_strchr;
+use crate::src::nvim::types::{MotionType, colnr_T, int64_t, linenr_T, win_T, wline_T};
+use crate::src::nvim::window::win_fdccol_count;
+use crate::src::nvim::winfloat::win_check_anchored_floats;
+use crate::src::nvim::winlayer::Win;
+
+pub type C2Rust_Unnamed_15 = c_uint;
 pub const BL_FIX: C2Rust_Unnamed_15 = 4;
 pub const BL_SOL: C2Rust_Unnamed_15 = 2;
 pub const kMTCharWise: MotionType = 0;
+
+/// One buffer line as the vertical scrolling walks it: the line, the filler
+/// lines drawn above it, and the screen lines it takes.
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct lineoff_T {
     pub lnum: linenr_T,
-    pub fill: ::core::ffi::c_int,
-    pub height: ::core::ffi::c_int,
+    pub fill: c_int,
+    pub height: c_int,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const VALID_WROW: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const VALID_WCOL: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const VALID_VIRTCOL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-pub const VALID_CHEIGHT: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
-pub const VALID_CROW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
-pub const VALID_BOTLINE: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
-pub const VALID_BOTLINE_AP: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
-pub const VALID_TOPLINE: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-unsafe extern "C" fn adjust_plines_for_skipcol(mut wp: *mut win_T) -> ::core::ffi::c_int {
-    unsafe {
-        if (*wp).w_skipcol == 0 as ::core::ffi::c_int {
-            return 0 as ::core::ffi::c_int;
-        }
-        let mut width: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp);
-        let mut w2: ::core::ffi::c_int = width + win_col_off2(wp);
-        if (*wp).w_skipcol >= width && w2 > 0 as ::core::ffi::c_int {
-            return ((*wp).w_skipcol as ::core::ffi::c_int - width) / w2 + 1 as ::core::ffi::c_int;
-        }
-        return 0 as ::core::ffi::c_int;
-    }
-}
-pub unsafe extern "C" fn plines_correct_topline(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-    mut nextp: *mut linenr_T,
-    mut limit_winheight: bool,
-    mut foldedp: *mut bool,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut n: ::core::ffi::c_int =
-            plines_win_full(wp, lnum, nextp, foldedp, true_0 != 0, false_0 != 0);
-        if lnum == (*wp).w_topline {
-            n -= adjust_plines_for_skipcol(wp);
-        }
-        if limit_winheight as ::core::ffi::c_int != 0 && n > (*wp).w_view_height {
-            return (*wp).w_view_height;
-        }
-        return n;
-    }
-}
-unsafe extern "C" fn comp_botline(mut wp: *mut win_T) {
-    unsafe {
-        let mut lnum: linenr_T = 0;
-        let mut done: ::core::ffi::c_int = 0;
-        check_cursor_moved(wp);
-        if (*wp).w_valid & VALID_CROW != 0 {
-            lnum = (*wp).w_cursor.lnum;
-            done = (*wp).w_cline_row;
+
+/// `w_wrow` is right.
+pub const VALID_WROW: c_int = 0x1;
+/// `w_wcol` is right.
+pub const VALID_WCOL: c_int = 0x2;
+/// `w_virtcol` is right.
+pub const VALID_VIRTCOL: c_int = 0x4;
+/// `w_cline_height` and `w_cline_folded` are right.
+pub const VALID_CHEIGHT: c_int = 0x8;
+/// `w_cline_row` is right.
+pub const VALID_CROW: c_int = 0x10;
+/// `w_botline` is right.
+pub const VALID_BOTLINE: c_int = 0x20;
+/// `w_botline` is at worst approximately right.
+pub const VALID_BOTLINE_AP: c_int = 0x40;
+/// `w_topline` shows the cursor with 'scrolloff' context.
+pub const VALID_TOPLINE: c_int = 0x80;
+
+pub const OK: c_int = 1;
+pub const FAIL: c_int = 0;
+pub const true_0: c_int = 1;
+pub const false_0: c_int = 0;
+
+const NUL: c_char = 0;
+/// 'cpoptions' flag: the wrapped part of a 'number'ed line is indented too.
+const CPO_NUMCOL: c_int = 'n' as c_int;
+
+// ---------------------------------------------------------------------------
+// The window, as this family reads it
+//
+// Each method below is one call into a neighbouring module or one projection
+// off the window pointer, resting on the promise `Win`'s constructor took.
+// Everything else in the family is safe code written on top of them.
+
+impl Win {
+    /// Screen columns to the left of the text: the 'number'/'statuscolumn'
+    /// column, the command-line window's marker, the fold column and the sign
+    /// column. None of them move when the window scrolls horizontally.
+    pub(super) fn col_off(self) -> c_int {
+        let number_col = if self.w_onebuf_opt.wo_nu != 0
+            || self.w_onebuf_opt.wo_rnu != 0
+            || !self.statuscolumn_empty()
+        {
+            self.number_width() + self.statuscolumn_empty() as c_int
         } else {
-            lnum = (*wp).w_topline;
-            done = 0 as ::core::ffi::c_int;
-        }
-        while lnum <= (*(*wp).w_buffer).b_ml.ml_line_count {
-            let mut last: linenr_T = lnum;
-            let mut folded: bool = false;
-            let mut n: ::core::ffi::c_int =
-                plines_correct_topline(wp, lnum, &raw mut last, true_0 != 0, &raw mut folded);
-            if lnum <= (*wp).w_cursor.lnum && last >= (*wp).w_cursor.lnum {
-                (*wp).w_cline_row = done;
-                (*wp).w_cline_height = n;
-                (*wp).w_cline_folded = folded;
-                redraw_for_cursorline(wp);
-                (*wp).w_valid |= VALID_CROW | VALID_CHEIGHT;
-            }
-            if done + n > (*wp).w_view_height {
-                break;
-            }
-            done += n;
-            lnum = last;
-            lnum += 1;
-        }
-        (*wp).w_botline = lnum;
-        (*wp).w_valid |= VALID_BOTLINE | VALID_BOTLINE_AP;
-        (*wp).w_viewport_invalid = true_0 != 0;
-        set_empty_rows(wp, done);
-        win_check_anchored_floats(wp);
-    }
-}
-unsafe extern "C" fn redraw_for_cursorline(mut wp: *mut win_T) {
-    unsafe {
-        if (*wp).w_valid & VALID_CROW != 0 {
-            return;
-        }
-        if (*wp).w_onebuf_opt.wo_rnu != 0 || win_cursorline_standout(wp) as ::core::ffi::c_int != 0
-        {
-            redraw_later(wp, UPD_VALID);
-        }
-    }
-}
-unsafe extern "C" fn redraw_for_cursorcolumn(mut wp: *mut win_T) {
-    unsafe {
-        if wp == curwin.get()
-            && (*wp).w_onebuf_opt.wo_cole > 0 as OptInt
-            && conceal_cursor_line(wp) as ::core::ffi::c_int != 0
-        {
-            redrawWinline(wp, (*wp).w_cursor.lnum);
-        }
-        if (*wp).w_valid & VALID_VIRTCOL != 0 {
-            return;
-        }
-        if (*wp).w_onebuf_opt.wo_cuc != 0 {
-            redraw_later(wp, UPD_SOME_VALID);
-        } else if (*wp).w_onebuf_opt.wo_cul != 0
-            && (*wp).w_p_culopt_flags as ::core::ffi::c_int
-                & kOptCuloptFlagScreenline as ::core::ffi::c_int
-                != 0
-        {
-            redraw_later(wp, UPD_VALID);
-        }
-        if VIsual_active.get() as ::core::ffi::c_int != 0 && (*wp).w_buffer == curbuf.get() {
-            redraw_buf_later(curbuf.get(), UPD_INVERTED);
-        }
-    }
-}
-pub unsafe extern "C" fn set_valid_virtcol(mut wp: *mut win_T, mut vcol: colnr_T) {
-    unsafe {
-        (*wp).w_virtcol = vcol;
-        redraw_for_cursorcolumn(wp);
-        (*wp).w_valid |= VALID_VIRTCOL;
-    }
-}
-pub unsafe extern "C" fn sms_marker_overlap(
-    mut wp: *mut win_T,
-    mut extra2: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    unsafe {
-        if extra2 == -1 as ::core::ffi::c_int {
-            extra2 = win_col_off(wp) - win_col_off2(wp);
-        }
-        if *get_showbreak_value(wp) as ::core::ffi::c_int != NUL {
-            return 0 as ::core::ffi::c_int;
-        }
-        if (*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.prec != 0 {
-            return 1 as ::core::ffi::c_int;
-        }
-        return if extra2 > 3 as ::core::ffi::c_int {
-            0 as ::core::ffi::c_int
-        } else {
-            3 as ::core::ffi::c_int - extra2
+            0
         };
+        number_col
+            + (self.raw() == cmdwin_win.get()) as c_int
+            + self.fdccol_count()
+            + self.w_scwidth * SIGN_WIDTH
+    }
+
+    /// The extra offset the *second* and later screen lines of a wrapped line
+    /// get. Positive only with 'number'/'relativenumber' and `n` in
+    /// 'cpoptions'.
+    pub(super) fn col_off2(self) -> c_int {
+        let numbered = self.w_onebuf_opt.wo_nu != 0
+            || self.w_onebuf_opt.wo_rnu != 0
+            || !self.statuscolumn_empty();
+        // SAFETY: 'cpoptions' is a NUL-terminated option string.
+        let indents = unsafe { !vim_strchr(p_cpo.get(), CPO_NUMCOL).is_null() };
+        if numbered && indents {
+            self.number_width() + self.statuscolumn_empty() as c_int
+        } else {
+            0
+        }
+    }
+
+    /// Text width of a line's first screen line.
+    pub(super) fn text_width(self) -> c_int {
+        self.w_view_width - self.col_off()
+    }
+
+    /// Text width of a wrapped line's later screen lines.
+    pub(super) fn wrapped_width(self) -> c_int {
+        self.text_width() + self.col_off2()
+    }
+
+    fn number_width(self) -> c_int {
+        // SAFETY: a live window.
+        unsafe { number_width(self.raw()) }
+    }
+
+    fn fdccol_count(self) -> c_int {
+        // SAFETY: a live window.
+        unsafe { win_fdccol_count(self.raw()) }
+    }
+
+    /// Whether 'statuscolumn' is unset for this window.
+    fn statuscolumn_empty(self) -> bool {
+        // SAFETY: an option string is NUL-terminated, never null.
+        unsafe { *self.w_onebuf_opt.wo_stc == NUL }
+    }
+
+    /// Whether 'showbreak' is unset for this window.
+    pub(super) fn showbreak_empty(self) -> bool {
+        // SAFETY: a live window; the answer is a NUL-terminated string.
+        unsafe { *get_showbreak_value(self.raw()) == NUL }
+    }
+
+    /// Screen lines line `lnum` takes, folds, filler lines and 'wrap' all
+    /// counted. Answers the height, the last line of a fold starting at
+    /// `lnum` (`lnum` itself when there is none), and whether it is folded.
+    pub(super) fn plines_full(
+        self,
+        lnum: linenr_T,
+        cache: bool,
+        limit_winheight: bool,
+    ) -> (c_int, linenr_T, bool) {
+        let mut next = lnum;
+        let mut folded = false;
+        let (n, f) = (&raw mut next, &raw mut folded);
+        // SAFETY: a live window. `next` is written only for a folded line,
+        // which is why it is seeded with `lnum`.
+        let height = unsafe { plines_win_full(self.raw(), lnum, n, f, cache, limit_winheight) };
+        (height, next, folded)
+    }
+
+    /// Whether the window has filler lines above its top line ('diff').
+    pub(super) fn may_fill(self) -> bool {
+        // SAFETY: a live window.
+        unsafe { win_may_fill(self.raw()) }
+    }
+
+    /// Filler lines drawn above line `lnum`.
+    pub(super) fn fill_above(self, lnum: linenr_T) -> c_int {
+        // SAFETY: a live window.
+        unsafe { win_get_fill(self.raw(), lnum) }
+    }
+
+    /// Whether any line of the window is hidden outright by a decoration.
+    pub(super) fn lines_concealed(self) -> bool {
+        // SAFETY: a live window.
+        unsafe { win_lines_concealed(self.raw()) }
+    }
+
+    /// Whether line `lnum` (zero-based, as the decoration layer counts) is
+    /// hidden outright.
+    pub(super) fn conceals_line(self, lnum: c_int, include_cursor: bool) -> bool {
+        // SAFETY: a live window.
+        unsafe { decor_conceal_line(self.raw(), lnum, include_cursor) }
+    }
+
+    /// Whether the cursor line is drawn concealed in the current mode.
+    pub(super) fn conceal_cursor_line(self) -> bool {
+        // SAFETY: a live window.
+        unsafe { conceal_cursor_line(self.raw()) }
+    }
+
+    /// Whether 'cursorline' would draw this window's cursor line differently.
+    fn cursorline_standout(self) -> bool {
+        // SAFETY: a live window.
+        unsafe { win_cursorline_standout(self.raw()) }
+    }
+
+    /// 'scrolloff' for this window, its window-local value preferred.
+    pub(super) fn scrolloff(self) -> int64_t {
+        // SAFETY: a live window.
+        unsafe { get_scrolloff_value(self.raw()) }
+    }
+
+    /// 'sidescrolloff' for this window, its window-local value preferred.
+    pub(super) fn sidescrolloff(self) -> int64_t {
+        // SAFETY: a live window.
+        unsafe { get_sidescrolloff_value(self.raw()) }
+    }
+
+    /// Redraw just the cursor's line.
+    pub(super) fn redraw_cursor_line(self) {
+        // SAFETY: a live window.
+        unsafe { redrawWinline(self.raw(), self.w_cursor.lnum) };
+    }
+
+    /// Let any float anchored to this window follow it.
+    pub(super) fn check_anchored_floats(self) {
+        // SAFETY: a live window.
+        unsafe { win_check_anchored_floats(self.raw()) };
+    }
+
+    /// Clamp the cursor's line number to the buffer.
+    pub(super) fn check_cursor_lnum(self) {
+        // SAFETY: a live window.
+        unsafe { check_cursor_lnum(self.raw()) };
+    }
+
+    /// One of the screen lines the window remembers drawing, copied out.
+    ///
+    /// Copied rather than borrowed because the walk that reads these also
+    /// calls back into the fold and decoration layers between reads.
+    pub(super) fn remembered_line(self, i: c_int) -> wline_T {
+        debug_assert!(i >= 0 && i < self.w_lines_valid, "i < wp->w_lines_valid");
+        // SAFETY: `w_lines` holds at least `w_lines_valid` live entries.
+        unsafe { *self.w_lines.offset(i as isize) }
     }
 }
-unsafe extern "C" fn skipcol_from_plines(
-    mut wp: *mut win_T,
-    mut plines_off: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut width1: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp);
-        let mut skipcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if plines_off > 0 as ::core::ffi::c_int {
-            skipcol += width1;
+
+/// Screen lines of the top line that `w_skipcol` scrolls out of sight.
+fn adjust_plines_for_skipcol(win: Win) -> c_int {
+    arith::skipped_plines(win.w_skipcol, win.text_width(), win.wrapped_width())
+}
+
+impl Win {
+    /// Screen lines line `lnum` takes, corrected for it being the top line
+    /// (where `w_skipcol` may hide part of it) and optionally capped at the
+    /// window height. Also answers the last line of a fold starting at
+    /// `lnum`, and whether there is one.
+    pub(super) fn corrected_plines(
+        self,
+        lnum: linenr_T,
+        limit_winheight: bool,
+    ) -> (c_int, linenr_T, bool) {
+        let (mut n, next, folded) = self.plines_full(lnum, true, false);
+        if lnum == self.w_topline {
+            n -= adjust_plines_for_skipcol(self);
         }
-        if plines_off > 1 as ::core::ffi::c_int {
-            skipcol += (width1 + win_col_off2(wp)) * (plines_off - 1 as ::core::ffi::c_int);
+        if limit_winheight && n > self.w_view_height {
+            n = self.w_view_height;
         }
-        return skipcol;
+        (n, next, folded)
     }
 }
-unsafe extern "C" fn reset_skipcol(mut wp: *mut win_T) {
-    unsafe {
-        if (*wp).w_skipcol == 0 as ::core::ffi::c_int {
+
+/// [`Win::corrected_plines`], for the callers still holding a raw window.
+///
+/// # Safety
+/// `wp` must be a valid window; `nextp` and `foldedp` may be null.
+pub unsafe fn plines_correct_topline(
+    wp: *mut win_T,
+    lnum: linenr_T,
+    nextp: *mut linenr_T,
+    limit_winheight: bool,
+    foldedp: *mut bool,
+) -> c_int {
+    // SAFETY: the caller's promise.
+    let (n, next, folded) = unsafe { Win::new(wp) }.corrected_plines(lnum, limit_winheight);
+    if !nextp.is_null() {
+        // SAFETY: the caller's promise.
+        unsafe { *nextp = next };
+    }
+    if !foldedp.is_null() {
+        // SAFETY: the caller's promise.
+        unsafe { *foldedp = folded };
+    }
+    n
+}
+
+/// Recompute `w_botline` for the current `w_topline`.
+fn comp_botline(mut win: Win) {
+    win.check_cursor_moved();
+    // If `w_cline_row` is valid start there, otherwise at the top line.
+    let (mut lnum, mut done) = if win.w_valid & VALID_CROW != 0 {
+        (win.w_cursor.lnum, win.w_cline_row)
+    } else {
+        (win.w_topline, 0)
+    };
+    while lnum <= win.buffer().line_count() {
+        let (n, last, folded) = win.corrected_plines(lnum, true);
+        if lnum <= win.w_cursor.lnum && last >= win.w_cursor.lnum {
+            win.w_cline_row = done;
+            win.w_cline_height = n;
+            win.w_cline_folded = folded;
+            redraw_for_cursorline(win);
+            win.w_valid |= VALID_CROW | VALID_CHEIGHT;
+        }
+        if done + n > win.w_view_height {
+            break;
+        }
+        done += n;
+        lnum = last + 1;
+    }
+    // `w_botline` is the line just below the window.
+    win.w_botline = lnum;
+    win.w_valid |= VALID_BOTLINE | VALID_BOTLINE_AP;
+    win.w_viewport_invalid = true;
+    // SAFETY: a live window.
+    unsafe { set_empty_rows(win.raw(), done) };
+    win.check_anchored_floats();
+}
+
+/// Redraw when `w_cline_row` changed and 'relativenumber' or 'cursorline' is
+/// set, or when concealing is on and 'concealcursor' is not active.
+fn redraw_for_cursorline(win: Win) {
+    if win.w_valid & VALID_CROW != 0 {
+        return;
+    }
+    if win.w_onebuf_opt.wo_rnu != 0 || win.cursorline_standout() {
+        // `win_line()` will redraw the number column and cursorline only.
+        win.redraw_later(UPD_VALID);
+    }
+}
+
+/// Redraw when 'concealcursor' is active, or when `w_virtcol` changed and
+/// 'cursorcolumn' is set, 'cursorlineopt' contains "screenline", or Visual
+/// mode is active.
+fn redraw_for_cursorcolumn(win: Win) {
+    // Moving horizontally under 'concealcursor' changes what the line looks
+    // like, so it has to be drawn again to place the cursor.
+    // SAFETY: `curwin` is set from startup to exit.
+    if unsafe { win.is_current() } && win.w_onebuf_opt.wo_cole > 0 && win.conceal_cursor_line() {
+        win.redraw_cursor_line();
+    }
+    if win.w_valid & VALID_VIRTCOL != 0 {
+        return;
+    }
+    if win.w_onebuf_opt.wo_cuc != 0 {
+        win.redraw_later(UPD_SOME_VALID);
+    } else if win.w_onebuf_opt.wo_cul != 0
+        && win.w_p_culopt_flags as c_int & kOptCuloptFlagScreenline as c_int != 0
+    {
+        win.redraw_later(UPD_VALID);
+    }
+    // The current buffer's cursor moving in Visual mode changes the highlight.
+    if VIsual_active.get() && win.w_buffer == curbuf.get() {
+        // SAFETY: `curbuf` is set from startup to exit.
+        unsafe { redraw_buf_later(curbuf.get(), UPD_INVERTED) };
+    }
+}
+
+/// Record a `w_virtcol` the caller has already computed, redrawing if it was
+/// invalid before.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn set_valid_virtcol(wp: *mut win_T, vcol: colnr_T) {
+    // SAFETY: the caller's promise.
+    let mut win = unsafe { Win::new(wp) };
+    win.w_virtcol = vcol;
+    redraw_for_cursorcolumn(win);
+    win.w_valid |= VALID_VIRTCOL;
+}
+
+/// Columns of buffer text the 'listchars' "precedes" or 'smoothscroll' `<<<`
+/// marker covers. `extra2` is the padding on a wrapped line's second screen
+/// line, or -1 to compute it.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn sms_marker_overlap(wp: *mut win_T, extra2: c_int) -> c_int {
+    // SAFETY: the caller's promise.
+    let win = unsafe { Win::new(wp) };
+    let extra2 = if extra2 == -1 {
+        win.col_off() - win.col_off2()
+    } else {
+        extra2
+    };
+    arith::marker_overlap(
+        extra2,
+        !win.showbreak_empty(),
+        win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.prec != 0,
+    )
+}
+
+impl Win {
+    /// The `w_skipcol` that hides `plines_off` screen lines of the top line.
+    pub(super) fn skipcol_from_plines(self, plines_off: c_int) -> c_int {
+        arith::skipcol_from_plines(plines_off, self.text_width(), self.wrapped_width())
+    }
+
+    /// Set `w_skipcol` back to zero, redrawing if it was not already.
+    pub(super) fn reset_skipcol(mut self) {
+        if self.w_skipcol == 0 {
             return;
         }
-        (*wp).w_skipcol = 0 as ::core::ffi::c_int as colnr_T;
-        redraw_later(wp, UPD_SOME_VALID);
+        self.w_skipcol = 0;
+        // The cheapest redraw that shows everything that changed:
+        // UPD_NOT_VALID is too expensive and UPD_REDRAW_TOP redraws too
+        // little when the top line gains a screen line.
+        self.redraw_later(UPD_SOME_VALID);
     }
 }
-pub unsafe extern "C" fn changed_cline_bef_curs(mut wp: *mut win_T) {
-    unsafe {
-        (*wp).w_valid &=
+
+/// [`Win::skipcol_from_plines`], for the children still holding a raw window.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub(super) unsafe fn skipcol_from_plines(wp: *mut win_T, plines_off: c_int) -> c_int {
+    // SAFETY: the caller's promise.
+    unsafe { Win::new(wp) }.skipcol_from_plines(plines_off)
+}
+
+/// [`Win::reset_skipcol`], for the children still holding a raw window.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub(super) unsafe fn reset_skipcol(wp: *mut win_T) {
+    // SAFETY: the caller's promise.
+    unsafe { Win::new(wp) }.reset_skipcol();
+}
+
+/// The length of the cursor line changed *before* the cursor, so its screen
+/// height -- and with it `w_topline` and `w_crow` -- may have changed.
+/// `w_botline` is the caller's problem.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn changed_cline_bef_curs(wp: *mut win_T) {
+    // SAFETY: the caller's promise.
+    unsafe { Win::new(wp) }.invalidate_above_cursor();
+}
+
+/// As [`changed_cline_bef_curs`], for a line *above* the cursor in the
+/// current window.
+///
+/// # Safety
+/// The current window must be valid.
+pub unsafe fn changed_line_abv_curs() {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }.invalidate_above_cursor();
+}
+
+/// As [`changed_line_abv_curs`], for a given window.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn changed_line_abv_curs_win(wp: *mut win_T) {
+    // SAFETY: the caller's promise.
+    unsafe { Win::new(wp) }.invalidate_above_cursor();
+}
+
+impl Win {
+    /// Forget everything that depends on the cursor line's screen height.
+    fn invalidate_above_cursor(mut self) {
+        self.w_valid &=
             !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CROW | VALID_CHEIGHT | VALID_TOPLINE);
     }
 }
-pub unsafe extern "C" fn changed_line_abv_curs() {
-    unsafe {
-        (*curwin.get()).w_valid &=
-            !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CROW | VALID_CHEIGHT | VALID_TOPLINE);
-    }
-}
-pub unsafe extern "C" fn changed_line_abv_curs_win(mut wp: *mut win_T) {
-    unsafe {
-        (*wp).w_valid &=
-            !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CROW | VALID_CHEIGHT | VALID_TOPLINE);
-    }
-}
-pub unsafe extern "C" fn validate_botline_win(mut wp: *mut win_T) {
-    unsafe {
-        if (*wp).w_valid & VALID_BOTLINE == 0 {
-            comp_botline(wp);
+
+impl Win {
+    /// Make sure `w_botline` is right.
+    pub(super) fn validate_botline(self) {
+        if self.w_valid & VALID_BOTLINE == 0 {
+            comp_botline(self);
         }
     }
-}
-pub unsafe extern "C" fn invalidate_botline_win(mut wp: *mut win_T) {
-    unsafe {
-        (*wp).w_valid &= !(VALID_BOTLINE | VALID_BOTLINE_AP);
-    }
-}
-pub unsafe extern "C" fn approximate_botline_win(mut wp: *mut win_T) {
-    unsafe {
-        (*wp).w_valid &= !VALID_BOTLINE;
-    }
-}
-pub unsafe extern "C" fn cursor_valid(mut wp: *mut win_T) -> ::core::ffi::c_int {
-    unsafe {
-        check_cursor_moved(wp);
-        return ((*wp).w_valid & (VALID_WROW | VALID_WCOL) == VALID_WROW | VALID_WCOL)
-            as ::core::ffi::c_int;
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn validate_cursor(mut wp: *mut win_T) {
-    unsafe {
-        check_cursor_lnum(wp);
-        check_cursor_moved(wp);
-        if (*wp).w_valid & (VALID_WCOL | VALID_WROW) != VALID_WCOL | VALID_WROW {
-            curs_columns(wp, true_0);
+
+    /// Make sure `w_wrow` and `w_wcol` are right.
+    pub(super) fn validate_cursor(self) {
+        self.check_cursor_lnum();
+        self.check_cursor_moved();
+        if self.w_valid & (VALID_WCOL | VALID_WROW) != VALID_WCOL | VALID_WROW {
+            self.curs_columns(true);
         }
     }
+
+    /// Make sure `w_virtcol` is right.
+    pub(super) fn validate_virtcol(mut self) {
+        self.check_cursor_moved();
+        if self.w_valid & VALID_VIRTCOL != 0 {
+            return;
+        }
+        self.w_virtcol = self.virtual_cursor_vcol(self.cursor());
+        redraw_for_cursorcolumn(self);
+        self.w_valid |= VALID_VIRTCOL;
+    }
 }
-unsafe extern "C" fn curs_rows(mut wp: *mut win_T) {
-    unsafe {
-        let mut all_invalid: bool = !redrawing()
-            || (*wp).w_lines_valid == 0 as ::core::ffi::c_int
-            || (*(*wp).w_lines.offset(0 as ::core::ffi::c_int as isize)).wl_lnum > (*wp).w_topline;
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        (*wp).w_cline_row = 0 as ::core::ffi::c_int;
-        let mut lnum: linenr_T = (*wp).w_topline;
-        's_111: while lnum < (*wp).w_cursor.lnum {
-            let mut valid: bool = false_0 != 0;
-            's_11: {
-                if !all_invalid && i < (*wp).w_lines_valid {
-                    if (*(*wp).w_lines.offset(i as isize)).wl_lnum < lnum
-                        || !(*(*wp).w_lines.offset(i as isize)).wl_valid
-                    {
-                        break 's_11;
-                    } else if (*(*wp).w_lines.offset(i as isize)).wl_lnum == lnum {
-                        if !(*(*wp).w_buffer).b_mod_set
-                            || (*(*wp).w_lines.offset(i as isize)).wl_lastlnum < (*wp).w_cursor.lnum
-                            || (*(*wp).w_buffer).b_mod_top
-                                > (*(*wp).w_lines.offset(i as isize)).wl_lastlnum + 1 as linenr_T
-                        {
-                            valid = true_0 != 0;
-                        }
-                    } else if (*(*wp).w_lines.offset(i as isize)).wl_lnum > lnum {
-                        i -= 1;
-                    }
-                }
-                if valid as ::core::ffi::c_int != 0
-                    && (lnum != (*wp).w_topline
-                        || (*wp).w_skipcol == 0 as ::core::ffi::c_int && !win_may_fill(wp))
+
+/// [`Win::validate_botline`], for the callers still holding a raw window.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn validate_botline_win(wp: *mut win_T) {
+    // SAFETY: the caller's promise.
+    unsafe { Win::new(wp) }.validate_botline();
+}
+
+/// Mark `w_botline` invalid, because the buffer changed.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn invalidate_botline_win(wp: *mut win_T) {
+    // SAFETY: the caller's promise.
+    let mut win = unsafe { Win::new(wp) };
+    win.w_valid &= !(VALID_BOTLINE | VALID_BOTLINE_AP);
+}
+
+/// Mark `w_botline` as only approximately right.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn approximate_botline_win(wp: *mut win_T) {
+    // SAFETY: the caller's promise.
+    let mut win = unsafe { Win::new(wp) };
+    win.w_valid &= !VALID_BOTLINE;
+}
+
+/// Whether `w_wrow` and `w_wcol` are both right.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn cursor_valid(wp: *mut win_T) -> c_int {
+    // SAFETY: the caller's promise.
+    let win = unsafe { Win::new(wp) };
+    win.check_cursor_moved();
+    (win.w_valid & (VALID_WROW | VALID_WCOL) == VALID_WROW | VALID_WCOL) as c_int
+}
+
+/// Make sure `w_wrow` and `w_wcol` are right. `w_topline` must already be --
+/// callers usually want `update_topline()` first.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn validate_cursor(wp: *mut win_T) {
+    // SAFETY: the caller's promise.
+    unsafe { Win::new(wp) }.validate_cursor();
+}
+
+/// Compute `w_cline_row` and `w_cline_height` from the current `w_topline`.
+fn curs_rows(mut win: Win) {
+    // Are the remembered `w_lines[].wl_size` usable at all?
+    // SAFETY: `redrawing` reads editor state, not a pointer of ours.
+    let all_invalid = !unsafe { redrawing() }
+        || win.w_lines_valid == 0
+        || win.remembered_line(0).wl_lnum > win.w_topline;
+    let mut i: c_int = 0;
+    win.w_cline_row = 0;
+    let mut lnum = win.w_topline;
+    while lnum < win.w_cursor.lnum {
+        let mut valid = false;
+        let mut skipped = false;
+        if !all_invalid && i < win.w_lines_valid {
+            let wl = win.remembered_line(i);
+            if wl.wl_lnum < lnum || !wl.wl_valid {
+                // A changed or deleted line; move on to the next entry.
+                skipped = true;
+            } else if wl.wl_lnum == lnum {
+                // Newly inserted lines below this row mean the folds have to
+                // be looked at again.
+                if !win.buffer().b_mod_set
+                    || wl.wl_lastlnum < win.w_cursor.lnum
+                    || win.buffer().b_mod_top > wl.wl_lastlnum + 1
                 {
-                    lnum = (*(*wp).w_lines.offset(i as isize)).wl_lastlnum + 1 as linenr_T;
-                    if lnum > (*wp).w_cursor.lnum {
-                        break 's_111;
-                    }
-                    (*wp).w_cline_row +=
-                        (*(*wp).w_lines.offset(i as isize)).wl_size as ::core::ffi::c_int;
-                } else {
-                    let mut last: linenr_T = lnum;
-                    let mut folded: bool = false;
-                    let mut n: ::core::ffi::c_int = plines_correct_topline(
-                        wp,
-                        lnum,
-                        &raw mut last,
-                        true_0 != 0,
-                        &raw mut folded,
-                    );
-                    lnum = last + 1 as linenr_T;
-                    if lnum
-                        + decor_conceal_line(
-                            wp,
-                            lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                            false_0 != 0,
-                        ) as linenr_T
-                        > (*wp).w_cursor.lnum
-                    {
-                        break 's_111;
-                    }
-                    (*wp).w_cline_row += n;
+                    valid = true;
                 }
+            } else if wl.wl_lnum > lnum {
+                // Hold at inserted lines: the `i += 1` below undoes this.
+                i -= 1;
             }
-            i += 1;
         }
-        check_cursor_moved(wp);
-        if (*wp).w_valid & VALID_CHEIGHT == 0 {
-            if all_invalid as ::core::ffi::c_int != 0
-                || i == (*wp).w_lines_valid
-                || i < (*wp).w_lines_valid
-                    && (!(*(*wp).w_lines.offset(i as isize)).wl_valid
-                        || (*(*wp).w_lines.offset(i as isize)).wl_lnum != (*wp).w_cursor.lnum)
-            {
-                (*wp).w_cline_height = plines_win_full(
-                    wp,
-                    (*wp).w_cursor.lnum,
-                    ::core::ptr::null_mut::<linenr_T>(),
-                    &raw mut (*wp).w_cline_folded,
-                    true_0 != 0,
-                    true_0 != 0,
-                );
-            } else if i > (*wp).w_lines_valid {
-                (*wp).w_cline_height = 0 as ::core::ffi::c_int;
-                (*wp).w_cline_folded = hasFolding(
-                    wp,
-                    (*wp).w_cursor.lnum,
-                    ::core::ptr::null_mut::<linenr_T>(),
-                    ::core::ptr::null_mut::<linenr_T>(),
-                );
+        if !skipped {
+            if valid && (lnum != win.w_topline || (win.w_skipcol == 0 && !win.may_fill())) {
+                let wl = win.remembered_line(i);
+                lnum = wl.wl_lastlnum + 1;
+                // The cursor is inside folded or concealed lines; this row
+                // does not count.
+                if lnum > win.w_cursor.lnum {
+                    break;
+                }
+                win.w_cline_row += wl.wl_size as c_int;
             } else {
-                (*wp).w_cline_height =
-                    (*(*wp).w_lines.offset(i as isize)).wl_size as ::core::ffi::c_int;
-                (*wp).w_cline_folded = (*(*wp).w_lines.offset(i as isize)).wl_folded;
+                let (n, last, _) = win.corrected_plines(lnum, true);
+                lnum = last + 1;
+                if lnum + win.conceals_line(lnum - 1, false) as linenr_T > win.w_cursor.lnum {
+                    break;
+                }
+                win.w_cline_row += n;
             }
         }
-        redraw_for_cursorline(wp);
-        (*wp).w_valid |= VALID_CROW | VALID_CHEIGHT;
+        i += 1;
     }
-}
-pub unsafe extern "C" fn validate_virtcol(mut wp: *mut win_T) {
-    unsafe {
-        check_cursor_moved(wp);
-        if (*wp).w_valid & VALID_VIRTCOL != 0 {
-            return;
-        }
-        getvvcol(
-            wp,
-            &raw mut (*wp).w_cursor,
-            ::core::ptr::null_mut::<colnr_T>(),
-            &raw mut (*wp).w_virtcol,
-            ::core::ptr::null_mut::<colnr_T>(),
-        );
-        redraw_for_cursorcolumn(wp);
-        (*wp).w_valid |= VALID_VIRTCOL;
-    }
-}
-pub unsafe extern "C" fn validate_cheight(mut wp: *mut win_T) {
-    unsafe {
-        check_cursor_moved(wp);
-        if (*wp).w_valid & VALID_CHEIGHT != 0 {
-            return;
-        }
-        (*wp).w_cline_height = plines_win_full(
-            wp,
-            (*wp).w_cursor.lnum,
-            ::core::ptr::null_mut::<linenr_T>(),
-            &raw mut (*wp).w_cline_folded,
-            true_0 != 0,
-            true_0 != 0,
-        );
-        (*wp).w_valid |= VALID_CHEIGHT;
-    }
-}
-pub unsafe extern "C" fn validate_cursor_col(mut wp: *mut win_T) {
-    unsafe {
-        validate_virtcol(wp);
-        if (*wp).w_valid & VALID_WCOL != 0 {
-            return;
-        }
-        let mut col: colnr_T = (*wp).w_virtcol;
-        let mut off: colnr_T = win_col_off(wp);
-        col += off;
-        let mut width: ::core::ffi::c_int =
-            (*wp).w_view_width - off as ::core::ffi::c_int + win_col_off2(wp);
-        if (*wp).w_onebuf_opt.wo_wrap != 0
-            && col >= (*wp).w_view_width
-            && width > 0 as ::core::ffi::c_int
-        {
-            col -= ((col as ::core::ffi::c_int - (*wp).w_view_width) / width
-                + 1 as ::core::ffi::c_int)
-                * width;
-        }
-        if col > (*wp).w_leftcol {
-            col -= (*wp).w_leftcol;
+
+    win.check_cursor_moved();
+    if win.w_valid & VALID_CHEIGHT == 0 {
+        // The remembered entry is unusable when it names another line or was
+        // marked stale.
+        let stale = i < win.w_lines_valid && {
+            let wl = win.remembered_line(i);
+            !wl.wl_valid || wl.wl_lnum != win.w_cursor.lnum
+        };
+        if all_invalid || i == win.w_lines_valid || stale {
+            let (height, _, folded) = win.plines_full(win.w_cursor.lnum, true, true);
+            win.w_cline_height = height;
+            win.w_cline_folded = folded;
+        } else if i > win.w_lines_valid {
+            // A line too long to fit on the last screen line.
+            win.w_cline_height = 0;
+            win.w_cline_folded = win.fold_span(win.w_cursor.lnum).0;
         } else {
-            col = 0 as ::core::ffi::c_int as colnr_T;
+            let wl = win.remembered_line(i);
+            win.w_cline_height = wl.wl_size as c_int;
+            win.w_cline_folded = wl.wl_folded;
         }
-        (*wp).w_wcol = col as ::core::ffi::c_int;
-        (*wp).w_valid |= VALID_WCOL;
     }
+    redraw_for_cursorline(win);
+    win.w_valid |= VALID_CROW | VALID_CHEIGHT;
 }
+
+/// Make sure `w_virtcol` is right, and nothing else.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn validate_virtcol(wp: *mut win_T) {
+    // SAFETY: the caller's promise.
+    unsafe { Win::new(wp) }.validate_virtcol();
+}
+
+/// Make sure `w_cline_height` is right, and nothing else.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn validate_cheight(wp: *mut win_T) {
+    // SAFETY: the caller's promise.
+    let mut win = unsafe { Win::new(wp) };
+    win.check_cursor_moved();
+    if win.w_valid & VALID_CHEIGHT != 0 {
+        return;
+    }
+    let (height, _, folded) = win.plines_full(win.w_cursor.lnum, true, true);
+    win.w_cline_height = height;
+    win.w_cline_folded = folded;
+    win.w_valid |= VALID_CHEIGHT;
+}
+
+/// Make sure `w_wcol` and `w_virtcol` are right, and nothing else.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn validate_cursor_col(wp: *mut win_T) {
+    // SAFETY: the caller's promise.
+    let mut win = unsafe { Win::new(wp) };
+    win.validate_virtcol();
+    if win.w_valid & VALID_WCOL != 0 {
+        return;
+    }
+    let off = win.col_off();
+    win.w_wcol = arith::cursor_screen_col(
+        win.w_virtcol,
+        off,
+        win.w_view_width,
+        win.w_view_width - off + win.col_off2(),
+        win.w_onebuf_opt.wo_wrap != 0,
+        win.w_leftcol,
+    );
+    win.w_valid |= VALID_WCOL;
+}
+
+/// Columns of a window that are not text: the 'number'/'statuscolumn'
+/// column, the fold column and the sign column. They do not move when the
+/// window scrolls horizontally.
+///
+/// # Safety
+/// `wp` must be a valid window.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn win_col_off(mut wp: *mut win_T) -> ::core::ffi::c_int {
-    unsafe {
-        return (if (*wp).w_onebuf_opt.wo_nu != 0
-            || (*wp).w_onebuf_opt.wo_rnu != 0
-            || *(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int != NUL
-        {
-            number_width(wp)
-                + (*(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int == NUL) as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        }) + (if wp != cmdwin_win.get() {
-            0 as ::core::ffi::c_int
-        } else {
-            1 as ::core::ffi::c_int
-        }) + win_fdccol_count(wp)
-            + (*wp).w_scwidth * SIGN_WIDTH as ::core::ffi::c_int;
-    }
+pub unsafe extern "C" fn win_col_off(wp: *mut win_T) -> c_int {
+    // SAFETY: the caller's promise.
+    unsafe { Win::new(wp) }.col_off()
 }
-pub unsafe extern "C" fn win_col_off2(mut wp: *mut win_T) -> ::core::ffi::c_int {
-    unsafe {
-        if ((*wp).w_onebuf_opt.wo_nu != 0
-            || (*wp).w_onebuf_opt.wo_rnu != 0
-            || *(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int != NUL)
-            && !vim_strchr(p_cpo.get(), CPO_NUMCOL).is_null()
-        {
-            return number_width(wp)
-                + (*(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int == NUL) as ::core::ffi::c_int;
-        }
-        return 0 as ::core::ffi::c_int;
-    }
+
+/// The extra column offset a wrapped line's later screen lines get.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn win_col_off2(wp: *mut win_T) -> c_int {
+    // SAFETY: the caller's promise.
+    unsafe { Win::new(wp) }.col_off2()
 }
-pub const CPO_NUMCOL: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

@@ -1,5 +1,5 @@
 {
-  "internal_exports": 25,
+  "internal_exports": 21,
   "files_without_forbid_unsafe": 992,
   "files_without_deny_unsafe_op": 98,
   "files": {
@@ -148,7 +148,7 @@
     "crates/nvim/src/nvim/cmdexpand/wildkey.rs": {"cell_ptr": 1, "unsafe_lines": 181},
     "crates/nvim/src/nvim/cmdhist.rs": {"cell_ptr": 1, "unsafe_lines": 105},
     "crates/nvim/src/nvim/context.rs": {"unsafe_lines": 186},
-    "crates/nvim/src/nvim/cursor.rs": {"unsafe_lines": 89},
+    "crates/nvim/src/nvim/cursor.rs": {"unsafe_lines": 86},
     "crates/nvim/src/nvim/cursor_shape.rs": {"unsafe_lines": 21},
     "crates/nvim/src/nvim/debugger.rs": {"cell_ptr": 1, "unsafe_lines": 261},
     "crates/nvim/src/nvim/debugger/mode.rs": {"unsafe_lines": 107},
@@ -621,12 +621,12 @@
     "crates/nvim/src/nvim/mouse/find.rs": {"cell_ptr": 2, "no_mangle": 1, "unsafe_lines": 215},
     "crates/nvim/src/nvim/mouse/jump.rs": {"cell_ptr": 6, "unsafe_lines": 378},
     "crates/nvim/src/nvim/mouse/scroll.rs": {"cell_ptr": 2, "unsafe_lines": 193},
-    "crates/nvim/src/nvim/move.rs": {"no_mangle": 2, "unsafe_lines": 343},
-    "crates/nvim/src/nvim/move/columns.rs": {"no_mangle": 1, "unsafe_lines": 435},
+    "crates/nvim/src/nvim/move.rs": {"no_mangle": 1, "unsafe_lines": 42},
+    "crates/nvim/src/nvim/move/columns.rs": {"unsafe_lines": 48},
     "crates/nvim/src/nvim/move/page.rs": {"unsafe_lines": 233},
     "crates/nvim/src/nvim/move/scroll.rs": {"unsafe_lines": 611},
     "crates/nvim/src/nvim/move/scrollcur.rs": {"unsafe_lines": 686},
-    "crates/nvim/src/nvim/move/topline.rs": {"cell_ptr": 2, "no_mangle": 2, "unsafe_lines": 339},
+    "crates/nvim/src/nvim/move/topline.rs": {"unsafe_lines": 31},
     "crates/nvim/src/nvim/msgpack_rpc/channel.rs": {"cell_ptr": 4, "unsafe_lines": 568},
     "crates/nvim/src/nvim/msgpack_rpc/channel/envelope.rs": {"unsafe_lines": 134},
     "crates/nvim/src/nvim/msgpack_rpc/channel/trace.rs": {"unsafe_lines": 54},
@@ -966,7 +966,7 @@
     "crates/nvim/src/nvim/vterm/vterm.rs": {"no_mangle": 4, "unsafe_lines": 103},
     "crates/nvim/src/nvim/window.rs": {"cell_ptr": 57, "lines": 8636, "no_mangle": 5, "unsafe_lines": 8304},
     "crates/nvim/src/nvim/winfloat.rs": {"cell_ptr": 7, "unsafe_lines": 634},
-    "crates/nvim/src/nvim/winlayer.rs": {"unsafe_lines": 33},
+    "crates/nvim/src/nvim/winlayer.rs": {"unsafe_lines": 27},
     "crates/nvim/src/xdiff/ffi.rs": {"unsafe_lines": 40}
   }
 }

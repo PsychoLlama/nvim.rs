@@ -12,7 +12,11 @@
 //! into a neighbouring module, then rests on that single promise — which each
 //! `pub unsafe fn` here restates in its own `# Safety` section, so the bodies
 //! below do not repeat it line by line. The four wrappers themselves live in
-//! [`winlayer`](crate::src::nvim::winlayer), shared with the viewport code.
+//! [`winlayer`](crate::src::nvim::winlayer), shared with the viewport code,
+//! and `Win::text_width`, `Win::sidescrolloff` and `Win::validate_virtcol`
+//! come from
+//! [`move`](crate::src::nvim::move) -- which owns `win_col_off()`, exactly as
+//! `cursor.c` calls it out of `move.c`.
 //!
 //! The arithmetic that touches no pointer at all — the column clamps, the
 //! 'wrap' target, the fold-skipping line count — lives in [`arith`], which
@@ -34,10 +38,8 @@ use crate::src::nvim::main::{State, VIsual, VIsual_active, curwin, p_sel, restar
 use crate::src::nvim::mbyte::{utf_head_off, utf_ptr2char};
 use crate::src::nvim::memline::{dec, inc, ml_get_len, ml_replace};
 use crate::src::nvim::memory::xmallocz;
-use crate::src::nvim::r#move::{
-    changed_cline_bef_curs, set_valid_virtcol, validate_virtcol, win_col_off,
-};
-use crate::src::nvim::option::{get_sidescrolloff_value, get_ve_flags};
+use crate::src::nvim::r#move::{changed_cline_bef_curs, set_valid_virtcol};
+use crate::src::nvim::option::get_ve_flags;
 use crate::src::nvim::options::{kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::src::nvim::plines::{init_charsize_arg, linetabsize, linetabsize_eol, win_charsize};
 use crate::src::nvim::pos::MAXCOL;
@@ -65,13 +67,6 @@ impl Win {
     #[inline(always)]
     fn view_width(self) -> c_int {
         self.w_view_width
-    }
-
-    /// Columns of that width the text itself gets.
-    #[inline(always)]
-    fn text_width(self) -> c_int {
-        // SAFETY: a live window, as `Win`'s constructor promised.
-        self.view_width() - unsafe { win_col_off(self.raw()) }
     }
 
     #[inline(always)]
@@ -117,12 +112,6 @@ impl Win {
     }
 
     #[inline(always)]
-    fn validate_virtcol(self) {
-        // SAFETY: a live window.
-        unsafe { validate_virtcol(self.raw()) };
-    }
-
-    #[inline(always)]
     fn cursor_line_changed(self) {
         // SAFETY: a live window.
         unsafe { changed_cline_bef_curs(self.raw()) };
@@ -138,12 +127,6 @@ impl Win {
     fn virtual_active(self) -> bool {
         // SAFETY: a live window.
         unsafe { virtual_active(self.raw()) }
-    }
-
-    #[inline(always)]
-    fn sidescrolloff(self) -> int64_t {
-        // SAFETY: a live window.
-        unsafe { get_sidescrolloff_value(self.raw()) }
     }
 
     /// Virtual columns line `lnum` occupies.

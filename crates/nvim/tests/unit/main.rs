@@ -20,6 +20,7 @@ mod linematch;
 mod map;
 mod marktree;
 mod memory;
+mod r#move;
 mod multiqueue;
 mod packer;
 mod parser;

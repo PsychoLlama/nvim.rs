@@ -11,498 +11,487 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{CStr, c_char, c_int};
+
 #[allow(unused_imports)]
 use super::*;
 use crate::semsg_c;
-use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_later, win_scroll_lines};
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, win_scroll_lines};
 use crate::src::nvim::eval::typval::{
     tv_check_for_number_arg, tv_dict_add_nr, tv_dict_alloc_ret, tv_get_number, tv_get_number_chk,
 };
 use crate::src::nvim::eval::window::find_win_by_nr_or_id;
-use crate::src::nvim::fold::hasFolding;
 use crate::src::nvim::main::{dollar_vcol, e_invalid_line_number_nr, p_ss};
 use crate::src::nvim::mbyte::utf_head_off;
-use crate::src::nvim::memline::ml_get_buf;
 use crate::src::nvim::mouse::vcol2col;
-use crate::src::nvim::option::{get_scrolloff_value, get_sidescrolloff_value};
 use crate::src::nvim::os::libc::gettext;
-use crate::src::nvim::plines::{
-    getvcol, getvvcol, plines_m_win, plines_win, plines_win_nofill, win_get_fill,
-};
+use crate::src::nvim::plines::{plines_m_win, plines_win, plines_win_nofill};
 use crate::src::nvim::types::{
-    EvalFuncData, OptInt, colnr_T, dict_T, int64_t, linenr_T, pos_T, size_t, typval_T, varnumber_T,
-    win_T,
+    EvalFuncData, colnr_T, dict_T, int64_t, linenr_T, pos_T, size_t, typval_T, varnumber_T, win_T,
 };
-use crate::src::nvim::winfloat::win_check_anchored_floats;
+use crate::src::nvim::winlayer::{Pos, Win};
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn curs_columns(mut wp: *mut win_T, mut may_scroll: ::core::ffi::c_int) {
-    unsafe {
-        let mut startcol: colnr_T = 0;
-        let mut endcol: colnr_T = 0;
-        update_topline(wp);
-        if (*wp).w_valid & VALID_CROW == 0 {
-            curs_rows(wp);
-        }
-        if (*wp).w_cline_folded {
-            endcol = (*wp).w_leftcol;
-            (*wp).w_virtcol = endcol;
-            startcol = (*wp).w_virtcol;
-        } else {
-            getvvcol(
-                wp,
-                &raw mut (*wp).w_cursor,
-                &raw mut startcol,
-                &raw mut (*wp).w_virtcol,
-                &raw mut endcol,
-            );
-        }
-        if startcol > dollar_vcol.get() {
-            dollar_vcol.set(-1 as ::core::ffi::c_int as colnr_T);
-        }
-        let mut extra: ::core::ffi::c_int = win_col_off(wp);
-        (*wp).w_wcol = (*wp).w_virtcol as ::core::ffi::c_int + extra;
-        endcol += extra;
-        (*wp).w_wrow = (*wp).w_cline_row;
-        let mut n: ::core::ffi::c_int = 0;
-        let mut width1: ::core::ffi::c_int = (*wp).w_view_width - extra;
-        let mut width2: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut did_sub_skipcol: bool = false_0 != 0;
-        if width1 <= 0 as ::core::ffi::c_int {
-            (*wp).w_wcol = (*wp).w_view_width - 1 as ::core::ffi::c_int;
-            if (*wp).w_onebuf_opt.wo_wrap != 0 {
-                (*wp).w_wrow = (*wp).w_view_height - 1 as ::core::ffi::c_int;
-            } else {
-                (*wp).w_wrow = (*wp).w_view_height - 1 as ::core::ffi::c_int - (*wp).w_empty_rows;
-            }
-        } else if (*wp).w_onebuf_opt.wo_wrap != 0 && (*wp).w_view_width != 0 as ::core::ffi::c_int {
-            width2 = width1 + win_col_off2(wp);
-            if (*wp).w_cursor.lnum == (*wp).w_topline
-                && (*wp).w_skipcol > 0 as ::core::ffi::c_int
-                && (*wp).w_wcol >= (*wp).w_skipcol
-            {
-                if (*wp).w_skipcol <= width1 {
-                    (*wp).w_wcol -= width2;
-                } else {
-                    (*wp).w_wcol -= width2
-                        * (((*wp).w_skipcol as ::core::ffi::c_int - width1) / width2
-                            + 1 as ::core::ffi::c_int);
-                }
-                did_sub_skipcol = true_0 != 0;
-            }
-            if (*wp).w_wcol >= (*wp).w_view_width {
-                n = ((*wp).w_wcol - (*wp).w_view_width) / width2 + 1 as ::core::ffi::c_int;
-                (*wp).w_wcol -= n * width2;
-                (*wp).w_wrow += n;
-            }
-        } else if may_scroll != 0 && !(*wp).w_cline_folded {
-            let mut siso: int64_t = get_sidescrolloff_value(wp);
-            let mut off_left: int64_t = (startcol - (*wp).w_leftcol) as int64_t - siso;
-            let mut off_right: int64_t = (endcol - (*wp).w_leftcol) as int64_t
-                - ((*wp).w_view_width as int64_t - siso)
-                + 1 as int64_t;
-            if off_left < 0 as int64_t || off_right > 0 as int64_t {
-                let mut diff: int64_t = if off_left < 0 as int64_t {
-                    -off_left
-                } else {
-                    off_right
-                };
-                let mut new_leftcol: ::core::ffi::c_int = 0;
-                if p_ss.get() == 0 as OptInt
-                    || diff >= (width1 / 2 as ::core::ffi::c_int) as int64_t
-                    || off_right >= off_left
-                {
-                    new_leftcol = (*wp).w_wcol - extra - width1 / 2 as ::core::ffi::c_int;
-                } else {
-                    if diff < p_ss.get() {
-                        debug_assert!(p_ss.get() <= 2147483647 as OptInt, "p_ss <= INT_MAX");
-                        diff = p_ss.get() as int64_t;
-                    }
-                    if off_left < 0 as int64_t {
-                        new_leftcol =
-                            (*wp).w_leftcol as ::core::ffi::c_int - diff as ::core::ffi::c_int;
-                    } else {
-                        new_leftcol =
-                            (*wp).w_leftcol as ::core::ffi::c_int + diff as ::core::ffi::c_int;
-                    }
-                }
-                new_leftcol = if new_leftcol > 0 as ::core::ffi::c_int {
-                    new_leftcol
-                } else {
-                    0 as ::core::ffi::c_int
-                };
-                if new_leftcol != (*wp).w_leftcol {
-                    (*wp).w_leftcol = new_leftcol as colnr_T;
-                    win_check_anchored_floats(wp);
-                    redraw_later(wp, UPD_NOT_VALID);
-                }
-            }
-            (*wp).w_wcol -= (*wp).w_leftcol as ::core::ffi::c_int;
-        } else if (*wp).w_wcol > (*wp).w_leftcol {
-            (*wp).w_wcol -= (*wp).w_leftcol as ::core::ffi::c_int;
-        } else {
-            (*wp).w_wcol = 0 as ::core::ffi::c_int;
-        }
-        if (*wp).w_cursor.lnum == (*wp).w_topline {
-            (*wp).w_wrow += (*wp).w_topfill;
-        } else {
-            (*wp).w_wrow += win_get_fill(wp, (*wp).w_cursor.lnum);
-        }
-        let mut plines: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut so: int64_t = get_scrolloff_value(wp);
-        let mut prev_skipcol: colnr_T = (*wp).w_skipcol;
-        if ((*wp).w_wrow >= (*wp).w_view_height
-            || (prev_skipcol > 0 as ::core::ffi::c_int
-                || (*wp).w_wrow as int64_t + so >= (*wp).w_view_height as int64_t)
-                && {
-                    plines = plines_win_nofill(wp, (*wp).w_cursor.lnum, false_0 != 0);
-                    plines - 1 as ::core::ffi::c_int >= (*wp).w_view_height
-                })
-            && (*wp).w_view_height != 0 as ::core::ffi::c_int
-            && (*wp).w_cursor.lnum == (*wp).w_topline
-            && width2 > 0 as ::core::ffi::c_int
-            && (*wp).w_view_width != 0 as ::core::ffi::c_int
-        {
-            extra = 0 as ::core::ffi::c_int;
-            if (*wp).w_skipcol as int64_t + so * width2 as int64_t > (*wp).w_virtcol as int64_t {
-                extra = 1 as ::core::ffi::c_int;
-            }
-            if plines == 0 as ::core::ffi::c_int {
-                plines = plines_win(wp, (*wp).w_cursor.lnum, false_0 != 0);
-            }
-            plines -= 1;
-            if plines as int64_t > (*wp).w_wrow as int64_t + so {
-                debug_assert!(
-                    (*wp).w_wrow as int64_t + so <= 2147483647 as int64_t,
-                    "wp->w_wrow + so <= INT_MAX"
-                );
-                n = ((*wp).w_wrow as int64_t + so) as ::core::ffi::c_int;
-            } else {
-                n = plines;
-            }
-            if n as int64_t
-                >= ((*wp).w_view_height + (*wp).w_skipcol as ::core::ffi::c_int / width2) as int64_t
-                    - so
-            {
-                extra += 2 as ::core::ffi::c_int;
-            }
-            if extra == 3 as ::core::ffi::c_int
-                || (*wp).w_view_height as int64_t <= so * 2 as int64_t
-            {
-                n = (*wp).w_virtcol as ::core::ffi::c_int / width2;
-                if n > (*wp).w_view_height / 2 as ::core::ffi::c_int {
-                    n -= (*wp).w_view_height / 2 as ::core::ffi::c_int;
-                } else {
-                    n = 0 as ::core::ffi::c_int;
-                }
-                if n > plines - (*wp).w_view_height + 1 as ::core::ffi::c_int {
-                    n = plines - (*wp).w_view_height + 1 as ::core::ffi::c_int;
-                }
-                (*wp).w_skipcol = (if n > 0 as ::core::ffi::c_int {
-                    width1 + (n - 1 as ::core::ffi::c_int) * width2
-                } else {
-                    0 as ::core::ffi::c_int
-                }) as colnr_T;
-            } else if extra == 1 as ::core::ffi::c_int {
-                debug_assert!(so <= 2147483647 as int64_t, "so <= INT_MAX");
-                extra = (((*wp).w_skipcol as int64_t + so * width2 as int64_t
-                    - (*wp).w_virtcol as int64_t
-                    + width2 as int64_t
-                    - 1 as int64_t)
-                    / width2 as int64_t) as ::core::ffi::c_int;
-                if extra > 0 as ::core::ffi::c_int {
-                    if extra * width2 > (*wp).w_skipcol {
-                        extra = (*wp).w_skipcol as ::core::ffi::c_int / width2;
-                    }
-                    (*wp).w_skipcol -= extra * width2;
-                }
-            } else if extra == 2 as ::core::ffi::c_int {
-                endcol = ((n - (*wp).w_view_height + 1 as ::core::ffi::c_int) * width2) as colnr_T;
-                while endcol > (*wp).w_virtcol {
-                    endcol -= width2;
-                }
-                (*wp).w_skipcol = if (*wp).w_skipcol > endcol {
-                    (*wp).w_skipcol
-                } else {
-                    endcol
-                };
-            }
-            if did_sub_skipcol {
-                (*wp).w_wrow -= ((*wp).w_skipcol as ::core::ffi::c_int
-                    - prev_skipcol as ::core::ffi::c_int)
-                    / width2;
-            } else {
-                (*wp).w_wrow -= (*wp).w_skipcol as ::core::ffi::c_int / width2;
-            }
-            if (*wp).w_wrow >= (*wp).w_view_height {
-                extra = (*wp).w_wrow - (*wp).w_view_height + 1 as ::core::ffi::c_int;
-                (*wp).w_skipcol += extra * width2;
-                (*wp).w_wrow -= extra;
-            }
-            extra = (prev_skipcol as ::core::ffi::c_int - (*wp).w_skipcol as ::core::ffi::c_int)
-                / width2;
-            if !(*wp).w_grid.target.is_null() {
-                win_scroll_lines(wp, 0 as ::core::ffi::c_int, extra);
-            }
-        } else if (*wp).w_onebuf_opt.wo_sms == 0 {
-            (*wp).w_skipcol = 0 as ::core::ffi::c_int as colnr_T;
-        }
-        if prev_skipcol != (*wp).w_skipcol {
-            redraw_later(wp, UPD_SOME_VALID);
-        }
-        redraw_for_cursorcolumn(wp);
-        (*wp).w_valid_leftcol = (*wp).w_leftcol;
-        (*wp).w_valid_skipcol = (*wp).w_skipcol;
-        (*wp).w_valid |= VALID_WCOL | VALID_WROW | VALID_VIRTCOL;
+impl Win {
+    /// Screen lines line `lnum` takes with 'wrap' and folds accounted for but
+    /// filler lines left out, optionally capped at the window height.
+    fn plines_nofill(self, lnum: linenr_T, limit_winheight: bool) -> c_int {
+        // SAFETY: a live window.
+        unsafe { plines_win_nofill(self.raw(), lnum, limit_winheight) }
+    }
+
+    /// As [`Win::plines_nofill`], filler lines included.
+    fn plines(self, lnum: linenr_T, limit_winheight: bool) -> c_int {
+        // SAFETY: a live window.
+        unsafe { plines_win(self.raw(), lnum, limit_winheight) }
+    }
+
+    /// Screen lines the range `first..=last` takes, capped at `max`.
+    fn plines_range(self, first: linenr_T, last: linenr_T, max: c_int) -> c_int {
+        // SAFETY: a live window.
+        unsafe { plines_m_win(self.raw(), first, last, max) }
+    }
+
+    /// Scroll the window's own grid by `lines`, so that a `w_skipcol` change
+    /// does not have to redraw everything.
+    fn scroll_grid_lines(self, lines: c_int) {
+        // SAFETY: a live window with a grid attached.
+        unsafe { win_scroll_lines(self.raw(), 0, lines) };
     }
 }
 
-pub unsafe extern "C" fn textpos2screenpos(
-    mut wp: *mut win_T,
-    mut pos: *mut pos_T,
-    mut rowp: *mut ::core::ffi::c_int,
-    mut scolp: *mut ::core::ffi::c_int,
-    mut ccolp: *mut ::core::ffi::c_int,
-    mut ecolp: *mut ::core::ffi::c_int,
-    mut local: bool,
-) {
-    unsafe {
-        let mut scol: colnr_T = 0 as colnr_T;
-        let mut ccol: colnr_T = 0 as colnr_T;
-        let mut ecol: colnr_T = 0 as colnr_T;
-        let mut row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut coloff: colnr_T = 0 as colnr_T;
-        let mut visible_row: bool = false_0 != 0;
-        let mut is_folded: bool = false_0 != 0;
-        let mut lnum: linenr_T = (*pos).lnum;
-        if lnum >= (*wp).w_topline && lnum <= (*wp).w_botline {
-            is_folded = hasFolding(wp, lnum, &raw mut lnum, ::core::ptr::null_mut::<linenr_T>());
-            row = plines_m_win(wp, (*wp).w_topline, lnum - 1 as linenr_T, INT_MAX);
-            row -= adjust_plines_for_skipcol(wp);
-            row += if lnum == (*wp).w_topline {
-                (*wp).w_topfill
-            } else {
-                win_get_fill(wp, lnum)
-            };
-            visible_row = true_0 != 0;
-        } else if !local || lnum < (*wp).w_topline {
-            row = 0 as ::core::ffi::c_int;
+/// [`Win::curs_columns`], for the callers still holding a raw window.
+///
+/// # Safety
+/// `wp` must be a valid window.
+pub unsafe fn curs_columns(wp: *mut win_T, may_scroll: c_int) {
+    // SAFETY: the caller's promise.
+    unsafe { Win::new(wp) }.curs_columns(may_scroll != 0);
+}
+
+impl Win {
+    /// Compute `w_wcol` and `w_virtcol`, and with them `w_wrow`,
+    /// `w_cline_row` and `w_leftcol`. `may_scroll` allows a horizontal
+    /// scroll.
+    pub(super) fn curs_columns(self, may_scroll: bool) {
+        curs_columns_win(self, may_scroll);
+    }
+}
+
+fn curs_columns_win(mut win: Win, may_scroll: bool) {
+    // First make sure `w_topline` is valid (the cursor may have moved).
+    win.update_topline();
+    // Then that `w_cline_row` is.
+    if win.w_valid & VALID_CROW == 0 {
+        curs_rows(win);
+    }
+
+    let (startcol, mut endcol) = if win.w_cline_folded {
+        // In a folded line the cursor is always in the first column.
+        win.w_virtcol = win.w_leftcol;
+        (win.w_leftcol, win.w_leftcol)
+    } else {
+        let (start, cursor, end) = win.virtual_vcol_triple(win.cursor());
+        win.w_virtcol = cursor;
+        (start, end)
+    };
+
+    // Remove the `$` of a change command once the cursor moves onto it.
+    if startcol > dollar_vcol.get() {
+        dollar_vcol.set(-1);
+    }
+
+    let extra = win.col_off();
+    win.w_wcol = win.w_virtcol + extra;
+    endcol += extra;
+
+    // Now `w_wrow`, counting screen lines from `w_cline_row`.
+    win.w_wrow = win.w_cline_row;
+
+    let width1 = win.w_view_width - extra;
+    let mut width2 = 0;
+    let mut did_sub_skipcol = false;
+    if width1 <= 0 {
+        // No room for text: put the cursor in the last column of the window,
+        // and without 'wrap' on the last non-empty line.
+        win.w_wcol = win.w_view_width - 1;
+        win.w_wrow = if win.w_onebuf_opt.wo_wrap != 0 {
+            win.w_view_height - 1
         } else {
-            row = (*wp).w_view_height - 1 as ::core::ffi::c_int;
+            win.w_view_height - 1 - win.w_empty_rows
+        };
+    } else if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
+        width2 = width1 + win.col_off2();
+        let (wcol, wrow, subbed) = arith::wrap_cursor_cell(
+            win.w_wcol,
+            win.w_wrow,
+            win.w_skipcol,
+            win.w_cursor.lnum == win.w_topline,
+            width1,
+            width2,
+            win.w_view_width,
+        );
+        win.w_wcol = wcol;
+        win.w_wrow = wrow;
+        did_sub_skipcol = subbed;
+    } else if may_scroll && !win.w_cline_folded {
+        // No line wrapping: compute `w_leftcol` if scrolling is on and the
+        // line is not folded. With scrolling off `w_leftcol` is assumed 0.
+        let scrolled = arith::sidescroll_leftcol(
+            startcol,
+            endcol,
+            win.w_leftcol,
+            win.w_wcol,
+            extra,
+            win.w_view_width,
+            width1,
+            win.sidescrolloff(),
+            p_ss.get(),
+        );
+        if let Some(new_leftcol) = scrolled {
+            if new_leftcol != win.w_leftcol {
+                win.w_leftcol = new_leftcol;
+                win.check_anchored_floats();
+                // The screen has to be redrawn with the new `w_leftcol`.
+                win.redraw_later(UPD_NOT_VALID);
+            }
         }
-        let mut existing_row: bool =
-            lnum > 0 as linenr_T && lnum <= (*(*wp).w_buffer).b_ml.ml_line_count;
-        if (local as ::core::ffi::c_int != 0 || visible_row as ::core::ffi::c_int != 0)
-            && existing_row as ::core::ffi::c_int != 0
-        {
-            let off: colnr_T = win_col_off(wp);
-            if is_folded {
-                row += (if local as ::core::ffi::c_int != 0 {
-                    0 as ::core::ffi::c_int
-                } else {
-                    (*wp).w_winrow + (*wp).w_winrow_off
-                }) + 1 as ::core::ffi::c_int;
-                coloff = (if local as ::core::ffi::c_int != 0 {
-                    0 as colnr_T
-                } else {
-                    (*wp).w_wincol as colnr_T + (*wp).w_wincol_off as colnr_T
-                }) + 1 as colnr_T
-                    + off;
+        win.w_wcol -= win.w_leftcol;
+    } else if win.w_wcol > win.w_leftcol {
+        win.w_wcol -= win.w_leftcol;
+    } else {
+        win.w_wcol = 0;
+    }
+
+    // Skip over filler lines. At the top `w_topfill` counts the ones drawn
+    // above the window's first line.
+    win.w_wrow += if win.w_cursor.lnum == win.w_topline {
+        win.w_topfill
+    } else {
+        win.fill_above(win.w_cursor.lnum)
+    };
+
+    let mut plines = 0;
+    let so = win.scrolloff();
+    let prev_skipcol = win.w_skipcol;
+    // A single line that does not fit on the screen: find a `w_skipcol` that
+    // shows the text around the cursor, without scrolling all the time.
+    let too_tall = win.w_wrow >= win.w_view_height
+        || (prev_skipcol > 0 || win.w_wrow as int64_t + so >= win.w_view_height as int64_t) && {
+            plines = win.plines_nofill(win.w_cursor.lnum, false);
+            // The C spells this `plines - 1 >= w_view_height`; `plines` is a
+            // screen-line count, so the two never differ.
+            plines > win.w_view_height
+        };
+    if too_tall
+        && win.w_view_height != 0
+        && win.w_cursor.lnum == win.w_topline
+        && width2 > 0
+        && win.w_view_width != 0
+    {
+        if plines == 0 {
+            plines = win.plines(win.w_cursor.lnum, false);
+        }
+        win.w_skipcol = arith::skipcol_for_tall_line(
+            win.w_skipcol,
+            win.w_virtcol,
+            so,
+            width1,
+            width2,
+            win.w_view_height,
+            win.w_wrow,
+            plines,
+        );
+        let (skipcol, wrow, scrolled) = arith::fit_skipcol_to_window(
+            win.w_skipcol,
+            prev_skipcol,
+            win.w_wrow,
+            did_sub_skipcol,
+            width2,
+            win.w_view_height,
+        );
+        win.w_skipcol = skipcol;
+        win.w_wrow = wrow;
+        // TODO(bfredl): this is very suspicious when not called by
+        // `win_update()`. We should not randomly alter screen state outside
+        // of `update_screen()` :(
+        if !win.w_grid.target.is_null() {
+            win.scroll_grid_lines(scrolled);
+        }
+    } else if win.w_onebuf_opt.wo_sms == 0 {
+        win.w_skipcol = 0;
+    }
+    if prev_skipcol != win.w_skipcol {
+        win.redraw_later(UPD_SOME_VALID);
+    }
+
+    redraw_for_cursorcolumn(win);
+
+    // `w_leftcol` and `w_skipcol` are valid now; keep `check_cursor_moved()`
+    // from thinking otherwise.
+    win.w_valid_leftcol = win.w_leftcol;
+    win.w_valid_skipcol = win.w_skipcol;
+    win.w_valid |= VALID_WCOL | VALID_WROW | VALID_VIRTCOL;
+}
+
+/// The screen position of the character at `pos` in window `wp`. The answers
+/// are one-based, and zero when the character is not visible.
+///
+/// # Safety
+/// `wp` must be a valid window, `pos` a position in its buffer, and the four
+/// out-params must be writable.
+pub unsafe fn textpos2screenpos(
+    wp: *mut win_T,
+    pos: *mut pos_T,
+    rowp: *mut c_int,
+    scolp: *mut c_int,
+    ccolp: *mut c_int,
+    ecolp: *mut c_int,
+    local: bool,
+) {
+    // SAFETY: the caller's promise.
+    let (win, pos) = unsafe { (Win::new(wp), Pos::new(pos)) };
+    let (mut scol, mut ccol, mut ecol): (colnr_T, colnr_T, colnr_T) = (0, 0, 0);
+    let mut coloff: colnr_T = 0;
+    let mut visible_row = false;
+    let mut is_folded = false;
+
+    let mut lnum = pos.lnum;
+    let mut row = if lnum >= win.w_topline && lnum <= win.w_botline {
+        let fold_start = win.fold_first(lnum);
+        is_folded = fold_start.is_some();
+        lnum = fold_start.unwrap_or(lnum);
+        // The screen line line `lnum` begins on, which can be negative when
+        // it is the top line and `w_skipcol` is set.
+        let mut row = win.plines_range(win.w_topline, lnum - 1, c_int::MAX);
+        row -= adjust_plines_for_skipcol(win);
+        // Filler lines drawn above this buffer line.
+        row += if lnum == win.w_topline {
+            win.w_topfill
+        } else {
+            win.fill_above(lnum)
+        };
+        visible_row = true;
+        row
+    } else if !local || lnum < win.w_topline {
+        0
+    } else {
+        win.w_view_height - 1
+    };
+
+    let existing_row = lnum > 0 && lnum <= win.buffer().line_count();
+    if (local || visible_row) && existing_row {
+        let off = win.col_off();
+        if is_folded {
+            row += if local {
+                0
             } else {
-                debug_assert!(lnum == (*pos).lnum, "lnum == pos->lnum");
-                getvcol(wp, pos, &raw mut scol, &raw mut ccol, &raw mut ecol);
-                let mut col: colnr_T = scol;
-                col += off;
-                let mut width: ::core::ffi::c_int =
-                    (*wp).w_view_width - off as ::core::ffi::c_int + win_col_off2(wp);
-                if (*wp).w_onebuf_opt.wo_wrap != 0
-                    && col >= (*wp).w_view_width
-                    && width > 0 as ::core::ffi::c_int
-                {
-                    let mut rowoff: ::core::ffi::c_int = if visible_row as ::core::ffi::c_int != 0 {
-                        (col as ::core::ffi::c_int - (*wp).w_view_width) / width
-                            + 1 as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    };
-                    col -= rowoff * width;
-                    row += rowoff;
-                }
-                col -= (*wp).w_leftcol;
-                if col >= 0 as ::core::ffi::c_int
-                    && col < (*wp).w_view_width
-                    && row >= 0 as ::core::ffi::c_int
-                    && row < (*wp).w_view_height
-                {
-                    coloff = (col as ::core::ffi::c_int - scol as ::core::ffi::c_int
-                        + (if local as ::core::ffi::c_int != 0 {
-                            0 as ::core::ffi::c_int
-                        } else {
-                            (*wp).w_wincol + (*wp).w_wincol_off
-                        })
-                        + 1 as ::core::ffi::c_int) as colnr_T;
-                    row += (if local as ::core::ffi::c_int != 0 {
-                        0 as ::core::ffi::c_int
-                    } else {
-                        (*wp).w_winrow + (*wp).w_winrow_off
-                    }) + 1 as ::core::ffi::c_int;
+                win.w_winrow + win.w_winrow_off
+            } + 1;
+            coloff = if local {
+                0
+            } else {
+                win.w_wincol + win.w_wincol_off
+            } + 1
+                + off;
+        } else {
+            debug_assert!(lnum == pos.lnum, "lnum == pos->lnum");
+            (scol, ccol, ecol) = win.vcol_triple(pos);
+
+            // As in `validate_cursor_col()`.
+            let mut col = scol + off;
+            let width = win.w_view_width - off + win.col_off2();
+            // Long line wrapping, adjusting the row.
+            if win.w_onebuf_opt.wo_wrap != 0 && col >= win.w_view_width && width > 0 {
+                let rowoff = if visible_row {
+                    arith::wrap_rowoff(col, win.w_view_width, width)
                 } else {
-                    ecol = 0 as ::core::ffi::c_int as colnr_T;
-                    ccol = ecol;
-                    scol = ccol;
-                    if local {
-                        coloff = (if col < 0 as ::core::ffi::c_int {
-                            -1 as ::core::ffi::c_int
-                        } else {
-                            (*wp).w_view_width + 1 as ::core::ffi::c_int
-                        }) as colnr_T;
+                    0
+                };
+                col -= rowoff * width;
+                row += rowoff;
+            }
+            col -= win.w_leftcol;
+
+            if col >= 0 && col < win.w_view_width && row >= 0 && row < win.w_view_height {
+                coloff = col - scol
+                    + if local {
+                        0
                     } else {
-                        row = 0 as ::core::ffi::c_int;
+                        win.w_wincol + win.w_wincol_off
                     }
+                    + 1;
+                row += if local {
+                    0
+                } else {
+                    win.w_winrow + win.w_winrow_off
+                } + 1;
+            } else {
+                // The character is left of, right of or below the window.
+                scol = 0;
+                ccol = 0;
+                ecol = 0;
+                if local {
+                    coloff = if col < 0 { -1 } else { win.w_view_width + 1 };
+                } else {
+                    row = 0;
                 }
             }
         }
+    }
+    // SAFETY: the caller's promise about the out-params.
+    unsafe {
         *rowp = row;
-        *scolp = (scol + coloff) as ::core::ffi::c_int;
-        *ccolp = (ccol + coloff) as ::core::ffi::c_int;
-        *ecolp = (ecol + coloff) as ::core::ffi::c_int;
+        *scolp = scol + coloff;
+        *ccolp = ccol + coloff;
+        *ecolp = ecol + coloff;
     }
 }
 
+/// `screenpos({winid}, {lnum}, {col})`.
+///
+/// # Safety
+/// The evaluator's calling convention: `argvars` and `rettv` must be valid.
 pub unsafe extern "C" fn f_screenpos(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
+    // SAFETY: the evaluator's calling convention.
+    let (dict, wp) = unsafe { (alloc_dict_ret(rettv), find_win_by_nr_or_id(argvars)) };
+    if wp.is_null() {
+        return;
+    }
+    // SAFETY: the evaluator's calling convention: three arguments, checked
+    // by the builtin table.
+    let (lnum, col) = unsafe { (arg_number(argvars, 1), arg_number(argvars, 2)) };
+    let mut pos = pos_T {
+        lnum: lnum as linenr_T,
+        col: (col as colnr_T - 1).max(0),
+        coladd: 0,
+    };
+    // SAFETY: `find_win_by_nr_or_id` answered a live window.
+    if pos.lnum > unsafe { Win::new(wp) }.buffer().line_count() {
+        // SAFETY: a NUL-terminated format string and the one argument it
+        // names. Not `semsg!`: this is vim's own `printf`.
+        unsafe {
+            semsg_c!(
+                gettext(&raw const e_invalid_line_number_nr as *const c_char),
+                pos.lnum,
+            )
+        };
+        return;
+    }
+    let (mut row, mut scol, mut ccol, mut ecol) = (0, 0, 0, 0);
+    let (r, s, c, e) = (&raw mut row, &raw mut scol, &raw mut ccol, &raw mut ecol);
+    // SAFETY: a live window, and five out-params of this frame.
+    unsafe { textpos2screenpos(wp, &raw mut pos, r, s, c, e, false) };
+    for (name, value) in [
+        (c"row", row),
+        (c"col", scol),
+        (c"curscol", ccol),
+        (c"endcol", ecol),
+    ] {
+        // SAFETY: a live Dict and a NUL-terminated key.
+        unsafe { dict_add_nr(dict, name, value) };
+    }
+}
+
+/// `tv_dict_alloc_ret`, answering the Dict it installed.
+///
+/// # Safety
+/// `rettv` must be a writable return value.
+unsafe fn alloc_dict_ret(rettv: *mut typval_T) -> *mut dict_T {
     unsafe {
         tv_dict_alloc_ret(rettv);
-        let mut dict: *mut dict_T = (*rettv).vval.v_dict;
-        let mut wp: *mut win_T =
-            find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
-        if wp.is_null() {
-            return;
-        }
-        let mut pos: pos_T = pos_T {
-            lnum: tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize)) as linenr_T,
-            col: tv_get_number(argvars.offset(2 as ::core::ffi::c_int as isize)) as colnr_T
-                - 1 as colnr_T,
-            coladd: 0 as colnr_T,
-        };
-        if pos.lnum > (*(*wp).w_buffer).b_ml.ml_line_count {
-            semsg_c!(
-                gettext(&raw const e_invalid_line_number_nr as *const ::core::ffi::c_char),
-                pos.lnum,
-            );
-            return;
-        }
-        pos.col = (if pos.col > 0 as ::core::ffi::c_int {
-            pos.col as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        }) as colnr_T;
-        let mut row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut scol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut ccol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut ecol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        textpos2screenpos(
-            wp,
-            &raw mut pos,
-            &raw mut row,
-            &raw mut scol,
-            &raw mut ccol,
-            &raw mut ecol,
-            false_0 != 0,
-        );
-        tv_dict_add_nr(
-            dict,
-            c"row".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
-            row as varnumber_T,
-        );
-        tv_dict_add_nr(
-            dict,
-            c"col".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
-            scol as varnumber_T,
-        );
-        tv_dict_add_nr(
-            dict,
-            c"curscol".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-            ccol as varnumber_T,
-        );
-        tv_dict_add_nr(
-            dict,
-            c"endcol".as_ptr(),
-            ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-            ecol as varnumber_T,
-        );
+        (*rettv).vval.v_dict
     }
 }
 
-unsafe extern "C" fn virtcol2col(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-    mut vcol: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// The `n`th argument of a builtin, as a number.
+///
+/// # Safety
+/// `argvars` must hold at least `n + 1` values.
+unsafe fn arg_number(argvars: *mut typval_T, n: isize) -> varnumber_T {
+    unsafe { tv_get_number(argvars.offset(n)) }
+}
+
+/// `tv_dict_add_nr` with the key spelled as a C string literal.
+///
+/// # Safety
+/// `dict` must be a live Dict.
+unsafe fn dict_add_nr(dict: *mut dict_T, key: &CStr, value: c_int) {
+    let bytes = key.to_bytes();
     unsafe {
-        let mut offset: ::core::ffi::c_int = vcol2col(
-            wp,
-            lnum,
-            vcol as colnr_T - 1 as colnr_T,
-            ::core::ptr::null_mut::<colnr_T>(),
-        );
-        let mut line: *mut ::core::ffi::c_char = ml_get_buf((*wp).w_buffer, lnum);
-        let mut p: *mut ::core::ffi::c_char = line.offset(offset as isize);
-        if *p as ::core::ffi::c_int == NUL {
-            if p == line {
-                return 0 as ::core::ffi::c_int;
-            }
-            p = p.offset(
-                -((utf_head_off(line, p.offset(-(1 as ::core::ffi::c_int as isize)))
-                    + 1 as ::core::ffi::c_int) as isize),
-            );
-        }
-        return (p.offset_from(line) + 1_isize) as ::core::ffi::c_int;
-    }
+        tv_dict_add_nr(
+            dict,
+            bytes.as_ptr().cast::<c_char>(),
+            bytes.len() as size_t,
+            value as varnumber_T,
+        )
+    };
 }
 
+/// The character column that shows at virtual (screen) column `vcol`. The
+/// first column is one; for a multibyte character the column of its first
+/// byte is answered.
+///
+/// # Safety
+/// `wp` must be a valid window and `lnum` a line of its buffer.
+unsafe fn virtcol2col(win: Win, lnum: linenr_T, vcol: c_int) -> c_int {
+    // SAFETY: a live window and a line of its buffer.
+    let offset = unsafe { vcol2col(win.raw(), lnum, vcol - 1, ::core::ptr::null_mut()) };
+    // SAFETY: a live window and a line of its buffer.
+    let line = unsafe { win.buffer().line(lnum) };
+    // SAFETY: `vcol2col` answers a byte index within the line.
+    if unsafe { line.byte(offset) } != 0 {
+        return offset + 1;
+    }
+    if offset == 0 {
+        // An empty line.
+        return 0;
+    }
+    // Move back onto the first byte of the last character.
+    // SAFETY: `offset` is past the line's first byte and within it.
+    let head = unsafe { utf_head_off(line.raw(), line.raw().offset((offset - 1) as isize)) };
+    offset - head
+}
+
+/// `virtcol2col({winid}, {lnum}, {col})`.
+///
+/// # Safety
+/// The evaluator's calling convention: `argvars` and `rettv` must be valid.
 pub unsafe extern "C" fn f_virtcol2col(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    unsafe {
-        (*rettv).vval.v_number = -1 as varnumber_T;
-        if tv_check_for_number_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
-            || tv_check_for_number_arg(argvars, 1 as ::core::ffi::c_int) == FAIL
-            || tv_check_for_number_arg(argvars, 2 as ::core::ffi::c_int) == FAIL
-        {
-            return;
-        }
-        let mut wp: *mut win_T =
-            find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
-        if wp.is_null() {
-            return;
-        }
-        let mut error: bool = false_0 != 0;
-        let mut lnum: linenr_T = tv_get_number_chk(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-            &raw mut error,
-        ) as linenr_T;
-        if error as ::core::ffi::c_int != 0
-            || lnum < 0 as linenr_T
-            || lnum > (*(*wp).w_buffer).b_ml.ml_line_count
-        {
-            return;
-        }
-        let mut screencol: ::core::ffi::c_int = tv_get_number_chk(
-            argvars.offset(2 as ::core::ffi::c_int as isize),
-            &raw mut error,
-        ) as ::core::ffi::c_int;
-        if error as ::core::ffi::c_int != 0 || screencol < 0 as ::core::ffi::c_int {
-            return;
-        }
-        (*rettv).vval.v_number = virtcol2col(wp, lnum, screencol) as varnumber_T;
+    // SAFETY: the evaluator's calling convention.
+    unsafe { (*rettv).vval.v_number = -1 };
+    // SAFETY: the evaluator's calling convention: three arguments.
+    let typed = unsafe { (0..3).all(|n| tv_check_for_number_arg(argvars, n) != FAIL) };
+    if !typed {
+        return;
     }
+    // SAFETY: the evaluator's calling convention.
+    let wp = unsafe { find_win_by_nr_or_id(argvars) };
+    if wp.is_null() {
+        return;
+    }
+    let mut error = false;
+    // SAFETY: the evaluator's calling convention, and `error` is of this frame.
+    let lnum = unsafe { tv_get_number_chk(argvars.offset(1), &raw mut error) } as linenr_T;
+    // SAFETY: `find_win_by_nr_or_id` answered a live window.
+    let win = unsafe { Win::new(wp) };
+    if error || lnum < 0 || lnum > win.buffer().line_count() {
+        return;
+    }
+    // SAFETY: the evaluator's calling convention, and `error` is of this frame.
+    let screencol = unsafe { tv_get_number_chk(argvars.offset(2), &raw mut error) } as c_int;
+    if error || screencol < 0 {
+        return;
+    }
+    // SAFETY: a live window and a line of its buffer.
+    let col = unsafe { virtcol2col(win, lnum, screencol) };
+    // SAFETY: the evaluator's calling convention.
+    unsafe { (*rettv).vval.v_number = col as varnumber_T };
 }
