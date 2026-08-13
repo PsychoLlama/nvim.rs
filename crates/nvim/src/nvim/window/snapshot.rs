@@ -195,11 +195,18 @@ fn snapshot_curwin_rec(ft: Frame) -> Option<Win> {
     unsafe { Win::from_raw(ft.fr_win) }
 }
 
-pub(crate) unsafe extern "C" fn get_snapshot_curwin(idx: c_int) -> *mut win_T {
-    raw_win(snapshot_of(cur_tab(), idx).and_then(snapshot_curwin_rec))
+/// The window the snapshot in slot `idx` of the current tab page remembers as
+/// the current one, if there is one.
+pub(crate) fn snapshot_curwin(idx: c_int) -> Option<Win> {
+    snapshot_of(cur_tab(), idx).and_then(snapshot_curwin_rec)
 }
 
 pub unsafe extern "C" fn restore_snapshot(idx: c_int, close_curwin: c_int) {
+    restore_layout(idx, close_curwin != 0);
+}
+
+/// Put the layout saved in slot `idx` back, if it still fits the screen.
+pub(crate) fn restore_layout(idx: c_int, close_curwin: bool) {
     let tp = cur_tab();
     let top = current_topframe();
     if let Some(sn) = snapshot_of(tp, idx) {
@@ -207,9 +214,8 @@ pub unsafe extern "C" fn restore_snapshot(idx: c_int, close_curwin: c_int) {
         {
             let wp = restore_snapshot_rec(sn, top);
             comp_positions();
-            if let Some(wp) = wp.filter(|_| close_curwin != 0) {
-                // SAFETY: a live window; nothing derived from it is read after.
-                unsafe { win_goto(wp.raw()) };
+            if let Some(wp) = wp.filter(|_| close_curwin) {
+                goto_win(wp);
             }
             redraw_all(UPD_NOT_VALID);
         }

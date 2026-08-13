@@ -40,14 +40,19 @@ use crate::src::nvim::winfloat::win_float_anchor_laststatus;
 use crate::src::nvim::winlayer::{Frame, Win, frames, tabs};
 
 pub unsafe extern "C" fn win_split(size: c_int, flags: c_int) -> c_int {
+    split(size, flags)
+}
+
+/// Split the current window, `flags` being the `WSP_*` set: which half the new
+/// window takes, whether it is vertical, and whether it is entered.
+pub(crate) fn split(size: c_int, flags: c_int) -> c_int {
     let cur = cur_win();
     // SAFETY: a live window.
     if unsafe { check_split_disallowed(cur.raw()) } == FAIL {
         return FAIL;
     }
     // When the ":tab" modifier was used, open a new tab page instead.
-    // SAFETY: reads the command modifiers and the tab page list.
-    if unsafe { may_open_tabpage() } == OK {
+    if may_open_tabpage() == OK {
         return OK;
     }
     // Add flags from ":vertical", ":topleft" and ":botright".
@@ -121,7 +126,7 @@ fn split_ins(
     }
     if new_wp.is_none() {
         // SAFETY: fires `WinNewPre`, which reads no argument of ours.
-        unsafe { trigger_winnewpre() };
+        trigger_winnewpre();
     }
 
     let mut oldwin = if flags & WSP_TOP as c_int != 0 {
@@ -230,9 +235,9 @@ fn split_ins(
             0
         };
         let enter = WEE_TRIGGER_ENTER_AUTOCMDS as c_int | WEE_TRIGGER_LEAVE_AUTOCMDS as c_int;
-        // SAFETY: a live window; this fires WinNew/WinEnter/WinLeave, after
-        // which nothing derived from `wp` is read.
-        unsafe { win_enter_ext(wp.raw(), new_flags | enter) };
+        // This fires WinNew/WinEnter/WinLeave, after which nothing derived
+        // from `wp` is read.
+        enter_ext(wp, new_flags | enter);
     }
     opt.set(saved as OptInt);
     // An autocommand may have closed `oldwin`.

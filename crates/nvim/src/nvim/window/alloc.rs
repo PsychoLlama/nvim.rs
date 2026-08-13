@@ -73,8 +73,7 @@ pub unsafe extern "C" fn win_alloc_first() {
         // SAFETY: aborts the process; nothing comes back.
         unsafe { abort() };
     }
-    // SAFETY: `alloc_tabpage` answers a fresh live tab page.
-    first_tabpage.set(unsafe { alloc_tabpage() });
+    first_tabpage.set(alloc_tabpage().raw());
     curtab.set(first_tabpage.get());
     // SAFETY: the tab page just allocated.
     unsafe { unuse_tabpage(first_tabpage.get()) };
@@ -203,9 +202,8 @@ fn alloc(after: Option<Win>, hidden: bool) -> Win {
     let mut new_wp = unsafe { Win::new(zeroed::<win_T>()) };
     last_win_id.set(last_win_id.get() + 1);
     new_wp.handle = last_win_id.get() as handle_T;
-    let (map, key, val) = (window_handles.ptr(), new_wp.handle as c_int, new_wp.raw());
-    // SAFETY: the handle map is the editor's own, and `new_wp` is live.
-    unsafe { map_put_int_ptr_t(map, key, val as ptr_t) };
+    let (key, val) = (new_wp.handle as c_int, new_wp.raw());
+    window_handles.with_mut(|map| map_put_int_ptr_t(map, key, val as ptr_t));
     new_wp.w_grid_alloc.mouse_enabled = true;
     // SAFETY: the window's own grid.
     unsafe { grid_assign_handle(&raw mut new_wp.w_grid_alloc) };

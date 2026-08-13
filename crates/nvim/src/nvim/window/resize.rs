@@ -550,6 +550,12 @@ fn add_height(frp: Frame, n: c_int) {
 }
 
 pub unsafe extern "C" fn last_status(morewin: bool) {
+    update_last_status(morewin);
+}
+
+/// Add or remove the last window's status line, whichever `'laststatus'` and
+/// the number of windows now call for.
+pub(crate) fn update_last_status(morewin: bool) {
     // If the window has a status line and it is not needed, or the other way
     // round, add or remove one.
     last_status_rec(

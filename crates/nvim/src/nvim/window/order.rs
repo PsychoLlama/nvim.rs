@@ -263,7 +263,7 @@ pub unsafe extern "C" fn win_splitmove(wp: *mut win_T, size: c_int, flags: c_int
 
 /// Take `wp` out of the layout and put it back in as a split given by `flags`,
 /// from `win_splitmove()`. Restores the old layout on failure.
-fn splitmove(wp: Win, size: c_int, flags: c_int) -> c_int {
+pub(crate) fn splitmove(wp: Win, size: c_int, flags: c_int) -> c_int {
     let height = wp.w_height;
     if is_only_window(wp, None) {
         return OK;

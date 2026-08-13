@@ -34,29 +34,37 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use crate::src::nvim::api::private::helpers::{api_clear_error, api_set_error};
-use crate::src::nvim::autocmd::is_aucmd_win;
+use crate::src::nvim::autocmd::{apply_autocmds, is_aucmd_win};
+use crate::src::nvim::buffer::{bt_quickfix, buf_hide};
+use crate::src::nvim::cursor::check_cursor;
 use crate::src::nvim::drawscreen::redraw_all_later;
-use crate::src::nvim::ex_getln::is_in_cmdwin;
+use crate::src::nvim::ex_docmd::do_cmdline_cmd;
+use crate::src::nvim::ex_getln::{ERROR_INIT, is_in_cmdwin};
+use crate::src::nvim::getchar::beep_flush;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     c_bytes, curtab, curwin, e_not_allowed_to_change_window_layout_in_this_autocmd,
-    e_winfixbuf_cannot_go_to_buffer, first_tabpage, prevwin, swb_flags, topframe,
+    e_winfixbuf_cannot_go_to_buffer, first_tabpage, firstwin, lastwin, prevwin, swb_flags,
+    topframe,
 };
 use crate::src::nvim::map::map_put_ref_int_ptr_t;
 use crate::src::nvim::memory::xfree;
-use crate::src::nvim::message::emsg;
+use crate::src::nvim::message::{emsg, msg};
 use crate::src::nvim::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::terminal::terminal_check_size;
 use crate::src::nvim::types::{
     AlignTextPos, CMD_tabnew, CdCause, Direction, Error, Map_int_ptr_t, MapHash, MotionType,
     OptInt, OptValType, Set_uint32_t, WinSplit, WinStyle, aucmdwin_T, bln_values, buf_T,
-    cmd_addr_T, cmdidx_T, dobuf_action_values, dobuf_start_values, getf_values, handle_T,
+    cmd_addr_T, cmdidx_T, dobuf_action_values, dobuf_start_values, event_T, getf_values, handle_T,
     kErrorTypeException, kErrorTypeNone, ptr_t, size_t, tabpage_T, uint32_t, win_T,
 };
-use crate::src::nvim::winlayer::{Frame, TabPage, Win, tab_windows, windows, windows_in_tab};
+use crate::src::nvim::ui_compositor::ui_comp_remove_grid;
+use crate::src::nvim::winlayer::{Buf, Frame, TabPage, Win, tab_windows, windows, windows_in_tab};
 
 // The carve of the transpiled module; see each child's docs.
 mod alloc;
@@ -233,21 +241,14 @@ pub const SET_INIT: Set_uint32_t = Set_uint32_t {
     h: MAPHASH_INIT,
     keys: ::core::ptr::null_mut::<uint32_t>(),
 };
+/// `pmap_put(int)`: store `value` under `key`.
 #[inline]
-unsafe extern "C" fn map_put_int_ptr_t(
-    mut map: *mut Map_int_ptr_t,
-    mut key: ::core::ffi::c_int,
-    mut value: ptr_t,
-) {
-    unsafe {
-        let mut val: *mut ptr_t = map_put_ref_int_ptr_t(
-            map,
-            key,
-            ::core::ptr::null_mut::<*mut ::core::ffi::c_int>(),
-            ::core::ptr::null_mut::<bool>(),
-        );
-        *val = value;
-    }
+fn map_put_int_ptr_t(map: &mut Map_int_ptr_t, key: ::core::ffi::c_int, value: ptr_t) {
+    let (nokey, nonew) = (ptr::null_mut(), ptr::null_mut());
+    // SAFETY: the map is live; a null `oldkey`/`new` means "do not report".
+    let slot: *mut ptr_t = unsafe { map_put_ref_int_ptr_t(map, key, nokey, nonew) };
+    // SAFETY: `map_put_ref` answers a live slot of the value array.
+    unsafe { *slot = value };
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = 9;
@@ -264,109 +265,110 @@ static split_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as :
 static close_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static frame_locked: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub unsafe extern "C" fn window_layout_lock() {
-    unsafe {
-        (*split_disallowed.ptr()) += 1;
-        (*close_disallowed.ptr()) += 1;
-    }
+    window_lock();
 }
+
 pub unsafe extern "C" fn window_layout_unlock() {
-    unsafe {
-        (*split_disallowed.ptr()) -= 1;
-        (*close_disallowed.ptr()) -= 1;
-    }
+    window_unlock();
 }
+
+/// Forbid splitting and closing windows until [`window_unlock`].
+fn window_lock() {
+    split_disallowed.set(split_disallowed.get() + 1);
+    close_disallowed.set(close_disallowed.get() + 1);
+}
+
+/// Undo one [`window_lock`].
+fn window_unlock() {
+    split_disallowed.set(split_disallowed.get() - 1);
+    close_disallowed.set(close_disallowed.get() - 1);
+}
+
 pub unsafe extern "C" fn frames_locked() -> bool {
-    return frame_locked.get() != 0;
+    frame_locked.get() != 0
 }
-pub unsafe extern "C" fn window_layout_locked(mut cmd: cmdidx_T) -> bool {
-    unsafe {
-        let mut err: Error = Error {
-            type_0: kErrorTypeNone,
-            msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        };
-        let locked: bool = window_layout_locked_err(cmd, &raw mut err);
-        if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            emsg(gettext(err.msg));
-            api_clear_error(&raw mut err);
-        }
-        return locked;
+
+pub unsafe extern "C" fn window_layout_locked(cmd: cmdidx_T) -> bool {
+    layout_locked(cmd)
+}
+
+/// Whether an autocommand has forbidden this change to the window layout,
+/// reporting the reason itself.
+fn layout_locked(cmd: cmdidx_T) -> bool {
+    let mut e = ERROR_INIT;
+    let locked = locked_err(cmd, &mut e);
+    if e.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+        err(e.msg);
+        // SAFETY: an error this call filled in, which owns its message.
+        unsafe { api_clear_error(&raw mut e) };
     }
+    locked
 }
-pub unsafe extern "C" fn window_layout_locked_err(mut cmd: cmdidx_T, mut err: *mut Error) -> bool {
-    unsafe {
-        if split_disallowed.get() > 0 as ::core::ffi::c_int
-            || close_disallowed.get() > 0 as ::core::ffi::c_int
-        {
-            if close_disallowed.get() == 0 as ::core::ffi::c_int
-                && cmd as ::core::ffi::c_int == CMD_tabnew as ::core::ffi::c_int
-            {
-                api_set_error(
-                    err,
-                    kErrorTypeException,
-                    c"%s".as_ptr(),
-                    e_cannot_split_window_when_closing_buffer.as_ptr(),
-                );
-            } else {
-                api_set_error(
-                    err,
-                    kErrorTypeException,
-                    c"%s".as_ptr(),
-                    &raw const e_not_allowed_to_change_window_layout_in_this_autocmd
-                        as *const ::core::ffi::c_char,
-                );
-            }
-            return true_0 != 0;
-        }
-        return false_0 != 0;
+
+pub unsafe extern "C" fn window_layout_locked_err(cmd: cmdidx_T, err: *mut Error) -> bool {
+    // SAFETY: the caller's promise -- a writable error slot.
+    locked_err(cmd, unsafe { &mut *err })
+}
+
+/// [`layout_locked`], reporting through `err` instead of the message area.
+fn locked_err(cmd: cmdidx_T, err: &mut Error) -> bool {
+    if split_disallowed.get() <= 0 && close_disallowed.get() <= 0 {
+        return false;
     }
+    let msg = if close_disallowed.get() == 0 && cmd as ::core::ffi::c_int == CMD_tabnew as c_int {
+        e_cannot_split_window_when_closing_buffer.as_ptr()
+    } else {
+        &raw const e_not_allowed_to_change_window_layout_in_this_autocmd as *const c_char
+    };
+    set_err(err, msg);
+    true
 }
+
 pub unsafe extern "C" fn check_can_set_curbuf_disabled() -> bool {
-    unsafe {
-        if (*curwin.get()).w_onebuf_opt.wo_wfb != 0 {
-            emsg(gettext(
-                &raw const e_winfixbuf_cannot_go_to_buffer as *const ::core::ffi::c_char,
-            ));
-            return false_0 != 0;
-        }
-        return true_0 != 0;
-    }
+    winfixbuf_allows()
 }
-pub unsafe extern "C" fn check_can_set_curbuf_forceit(mut forceit: ::core::ffi::c_int) -> bool {
-    unsafe {
-        if forceit == 0 && (*curwin.get()).w_onebuf_opt.wo_wfb != 0 {
-            emsg(gettext(
-                &raw const e_winfixbuf_cannot_go_to_buffer as *const ::core::ffi::c_char,
-            ));
-            return false_0 != 0;
-        }
-        return true_0 != 0;
-    }
+
+pub unsafe extern "C" fn check_can_set_curbuf_forceit(forceit: ::core::ffi::c_int) -> bool {
+    forceit != 0 || winfixbuf_allows()
 }
+
+/// Whether the current window's `'winfixbuf'` lets another buffer in, saying
+/// so if it does not.
+fn winfixbuf_allows() -> bool {
+    if cur_win().w_onebuf_opt.wo_wfb != 0 {
+        err(&raw const e_winfixbuf_cannot_go_to_buffer as *const c_char);
+        return false;
+    }
+    true
+}
+
 pub unsafe extern "C" fn prevwin_curwin() -> *mut win_T {
-    unsafe {
-        return if is_in_cmdwin() as ::core::ffi::c_int != 0 && !(*prevwin.ptr()).is_null() {
-            prevwin.get()
-        } else {
-            curwin.get()
-        };
+    // SAFETY: reads the cmdline-window state, which is always set up.
+    let in_cmdwin = unsafe { is_in_cmdwin() };
+    let prev = prevwin.get();
+    if in_cmdwin && !prev.is_null() {
+        prev
+    } else {
+        curwin.get()
     }
 }
-pub unsafe extern "C" fn swbuf_goto_win_with_buf(mut buf: *mut buf_T) -> *mut win_T {
-    unsafe {
-        let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        if buf.is_null() {
-            return wp;
-        }
-        if swb_flags.get() & kOptSwbFlagUseopen as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
-            wp = buf_jump_open_win(buf);
-        }
-        if wp.is_null()
-            && swb_flags.get() & kOptSwbFlagUsetab as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-        {
-            wp = buf_jump_open_tab(buf);
-        }
-        return wp;
+
+pub unsafe extern "C" fn swbuf_goto_win_with_buf(buf: *mut buf_T) -> *mut win_T {
+    // SAFETY: the caller's promise -- a live buffer or null.
+    raw_win(unsafe { Buf::from_raw(buf) }.and_then(swbuf_goto_win))
+}
+
+/// The window `'switchbuf'` says to jump to for `buf`, having jumped to it.
+fn swbuf_goto_win(buf: Buf) -> Option<Win> {
+    let flag = |f: ::core::ffi::c_int| swb_flags.get() & f as ::core::ffi::c_uint != 0;
+    let mut wp = None;
+    if flag(kOptSwbFlagUseopen as ::core::ffi::c_int) {
+        wp = jump_open_win(buf);
     }
+    if wp.is_none() && flag(kOptSwbFlagUsetab as ::core::ffi::c_int) {
+        wp = jump_open_tab(buf);
+    }
+    wp
 }
 static min_set_ch: GlobalCell<OptInt> = GlobalCell::new(1 as OptInt);
 
@@ -385,12 +387,13 @@ pub unsafe extern "C" fn win_valid(win: *const win_T) -> bool {
 }
 
 pub unsafe extern "C" fn tabpage_win_valid(tp: *const tabpage_T, win: *const win_T) -> bool {
-    if win.is_null() {
-        return false;
-    }
     // SAFETY: the caller's promise -- a live tab page. `win` is only compared.
-    let tp = unsafe { TabPage::new(tp as *mut tabpage_T) };
-    windows_in_tab(tp).any(|wp| wp.raw() as *const win_T == win)
+    valid_win_in_tab(unsafe { TabPage::new(tp as *mut tabpage_T) }, win)
+}
+
+/// Whether `win` is on `tp`'s window list. `win` is only compared.
+fn valid_win_in_tab(tp: TabPage, win: *const win_T) -> bool {
+    !win.is_null() && windows_in_tab(tp).any(|wp| wp.raw() as *const win_T == win)
 }
 
 pub unsafe extern "C" fn win_find_by_handle(handle: handle_T) -> *mut win_T {
@@ -400,10 +403,12 @@ pub unsafe extern "C" fn win_find_by_handle(handle: handle_T) -> *mut win_T {
 }
 
 pub unsafe extern "C" fn win_valid_any_tab(win: *mut win_T) -> bool {
-    if win.is_null() {
-        return false;
-    }
-    tab_windows().any(|wp| wp.raw() == win)
+    valid_win_any_tab(win)
+}
+
+/// Whether `win` is on the window list of any tab page. `win` is only compared.
+fn valid_win_any_tab(win: *mut win_T) -> bool {
+    !win.is_null() && tab_windows().any(|wp| wp.raw() == win)
 }
 
 pub unsafe extern "C" fn win_count() -> ::core::ffi::c_int {
@@ -442,9 +447,21 @@ fn redraw_all(redraw_type: ::core::ffi::c_int) {
 
 /// Whether `win` is the only non-floating window of its tab page.
 fn is_only_window(win: Win, tp: Option<TabPage>) -> bool {
-    // SAFETY: a live window, and a live tab page or the null that means "the
-    // current one".
-    unsafe { one_window(win.raw(), tp.map_or(ptr::null_mut(), TabPage::raw)) }
+    only_window(win, tp)
+}
+
+/// `emsg()` over a message the caller has already translated, or that upstream
+/// deliberately does not translate.
+fn err_raw(msg: *const ::core::ffi::c_char) {
+    // SAFETY: every caller passes a static NUL-terminated message.
+    unsafe { emsg(msg) };
+}
+
+/// "Already only one window", the answer to `:only` and CTRL-W T when there is
+/// nothing to do.
+fn only_one_message() {
+    // SAFETY: a static message; zero means "no highlight attribute".
+    unsafe { msg(gettext(m_onlyone.get()), 0) };
 }
 
 /// Whether `win` is one of the hidden windows autocommands are executed in.
@@ -486,6 +503,105 @@ fn cur_tab() -> TabPage {
     // SAFETY: `curtab` is set from startup to exit.
     unsafe { TabPage::current() }
 }
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The first window of the current tab page.
+fn first_win() -> Win {
+    // SAFETY: `firstwin` is set from startup to exit.
+    unsafe { Win::new(firstwin.get()) }
+}
+
+/// The last window of the current tab page, floats included.
+fn last_win() -> Win {
+    // SAFETY: `lastwin` is set from startup to exit.
+    unsafe { Win::new(lastwin.get()) }
+}
+
+/// The first tab page, which is the only one when it has no `tp_next`.
+fn first_tab() -> TabPage {
+    // SAFETY: `first_tabpage` is set from startup to exit.
+    unsafe { TabPage::new(first_tabpage.get()) }
+}
+
+/// `api_set_error(err, kErrorTypeException, "%s", msg)`.
+fn set_err(err: &mut Error, msg: *const ::core::ffi::c_char) {
+    // SAFETY: an error slot to fill in, and a NUL-terminated message static.
+    unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), msg) };
+}
+
+/// `apply_autocmds(event, NULL, NULL, false, buf)`.
+///
+/// **Nothing derived from a window or buffer survives this call**: the event
+/// may close windows, switch tab pages or wipe the buffer.
+fn fire(event: event_T, buf: Buf) -> bool {
+    let (none, raw) = (ptr::null_mut(), buf.raw());
+    // SAFETY: a live buffer; both name arguments are optional.
+    unsafe { apply_autocmds(event, none, none, false, raw) }
+}
+
+/// [`fire`] with a name, which the event reports as `<afile>` and matches
+/// against: a window id for `WinClosed`, a tab page index for `TabClosed`, a
+/// file name for `TabNew`. `None` is the buffer-less form two events take.
+fn fire_named(event: event_T, name: *mut ::core::ffi::c_char, buf: Option<Buf>) -> bool {
+    let buf = buf.map_or(ptr::null_mut(), Buf::raw);
+    // SAFETY: a live buffer or null, and a NUL-terminated name or null.
+    unsafe { apply_autocmds(event, name, name, false, buf) }
+}
+
+/// Ring the bell and drop the typeahead, the family's answer to a move that
+/// cannot be made.
+fn beep() {
+    // SAFETY: reads no argument of ours.
+    unsafe { beep_flush() };
+}
+
+/// Whether `buf` may be left in a window that is closing (`'hidden'`,
+/// `'bufhidden'`).
+fn hides(buf: Buf) -> bool {
+    // SAFETY: a live buffer.
+    unsafe { buf_hide(buf.raw()) }
+}
+
+/// Whether `buf` is a quickfix or location list buffer.
+fn is_quickfix(buf: Option<Buf>) -> bool {
+    let raw = buf.map_or(ptr::null(), |b| b.raw() as *const buf_T);
+    // SAFETY: a live buffer, or the null the callers pass for "no buffer".
+    unsafe { bt_quickfix(raw) }
+}
+
+/// Clamp the cursor of `win` back into its buffer.
+fn revalidate_cursor(win: Win) {
+    // SAFETY: a live window.
+    unsafe { check_cursor(win.raw()) };
+}
+
+/// Tell a terminal buffer its window changed size, if `buf` has one.
+fn resize_terminal(buf: Buf) {
+    let term = buf.terminal;
+    if !term.is_null() {
+        // SAFETY: a live buffer's terminal.
+        unsafe { terminal_check_size(term) };
+    }
+}
+
+/// Run one Ex command line, as if the user had typed it.
+fn run_cmd(cmd: *const ::core::ffi::c_char) {
+    // SAFETY: a NUL-terminated command line.
+    unsafe { do_cmdline_cmd(cmd) };
+}
+
+/// Drop `win`'s external grid, which the compositor still holds.
+fn drop_grid(win: Win) {
+    let mut win = win;
+    // SAFETY: the window's own grid.
+    unsafe { ui_comp_remove_grid(&raw mut win.w_grid_alloc) };
+}
+
 static command_frame_height: GlobalCell<bool> = GlobalCell::new(true_0 != 0);
 static last_win_id: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(LOWEST_WIN_ID as ::core::ffi::c_int - 1 as ::core::ffi::c_int);

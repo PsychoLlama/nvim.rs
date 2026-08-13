@@ -53,7 +53,7 @@ pub(crate) unsafe extern "C" fn win_free_mem(
 
 /// Free `win`'s frame and the window itself, and say which neighbour took its
 /// room and along which axis.
-fn free_mem(win: Win, tp: Option<TabPage>) -> (Option<Win>, c_int) {
+pub(crate) fn free_mem(win: Win, tp: Option<TabPage>) -> (Option<Win>, c_int) {
     let mut win_tp = tp.unwrap_or_else(cur_tab);
     let (wp, dir) = if win.w_floating {
         // SAFETY: a live window and tab page.

@@ -4,608 +4,626 @@
 //! shows it, fire `WinClosed`, remove the frame and give its room to a
 //! neighbour, pick the window to enter next, and cope with the fact that any
 //! of those autocommands may have closed further windows or freed the buffer
-//! in hand.  [`win_close_othertab`] is the same for a window that is not on
-//! the current tab page, and cannot simply enter it to do the work.
+//! in hand.  [`close_othertab`] is the same for a window that is not on the
+//! current tab page, and cannot simply enter it to do the work.
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{c_char, c_int};
+use core::ptr;
+
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::autocmd::{
     EVENT_BUFENTER, EVENT_BUFLEAVE, EVENT_TABCLOSED, EVENT_TABCLOSEDPRE, EVENT_TABLEAVE,
-    EVENT_WINCLOSED, EVENT_WINLEAVE, EVENT_WINNEWPRE, apply_autocmds, has_event, is_aucmd_win,
+    EVENT_WINCLOSED, EVENT_WINLEAVE, EVENT_WINNEWPRE, has_event,
 };
-use crate::src::nvim::buffer::{
-    bt_help, bt_quickfix, buf_hide, bufref_valid, close_buffer, set_bufref,
-};
-use crate::src::nvim::cursor::check_cursor;
+use crate::src::nvim::buffer::{BufRef, bt_help, close_buffer};
 use crate::src::nvim::diff::diffopt_closeoff;
-use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_all_later};
-use crate::src::nvim::ex_docmd::do_cmdline_cmd;
+use crate::src::nvim::drawscreen::UPD_NOT_VALID;
 use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
-    curbuf, curtab, curwin, e_autocmd_close, e_floatonly, first_tabpage, firstwin, getout, lastwin,
-    p_ea, p_ead, p_ru, redraw_cmdline, redraw_tabline,
+    curbuf, curtab, curwin, e_autocmd_close, e_floatonly, firstwin, lastwin, p_ea, p_ead, p_ru,
+    redraw_cmdline, redraw_tabline,
 };
-use crate::src::nvim::message::{emsg, internal_error};
+use crate::src::nvim::main::{first_tabpage, getout};
+use crate::src::nvim::message::internal_error;
 use crate::src::nvim::normal::reset_VIsual_and_resel;
-use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::strings::vim_snprintf;
-use crate::src::nvim::terminal::terminal_check_size;
 use crate::src::nvim::types::ui::kUIMultigrid;
-use crate::src::nvim::types::{
-    CMD_SIZE, CMD_close, Integer, buf_T, bufref_T, frame_T, size_t, tabpage_T, win_T,
-};
+use crate::src::nvim::types::{CMD_SIZE, CMD_close, Integer, frame_T, size_t};
 use crate::src::nvim::ui::{ui_call_win_close, ui_has};
-use crate::src::nvim::ui_compositor::ui_comp_remove_grid;
 use crate::src::nvim::winfloat::win_float_find_altwin;
+use crate::src::nvim::winlayer::tabs;
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn win_close(
-    mut win: *mut win_T,
-    mut free_buf: bool,
-    mut force: bool,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut prev_curtab: *mut tabpage_T = curtab.get();
-        let mut win_frame: *mut frame_T = if (*win).w_floating as ::core::ffi::c_int != 0 {
-            ::core::ptr::null_mut::<frame_T>()
-        } else {
-            (*(*win).w_frame).fr_parent
-        };
-        let had_diffmode: bool = (*win).w_onebuf_opt.wo_diff != 0;
-        if last_window(win) {
-            emsg(gettext(e_cannot_close_last_window.as_ptr()));
-            return FAIL;
+pub unsafe extern "C" fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> c_int {
+    // SAFETY: the caller's promise -- a live window.
+    close(unsafe { Win::new(win) }, free_buf, force)
+}
+
+/// Close window `win`, which must be on the current tab page, unloading its
+/// buffer with `free_buf`. `FAIL` when the window was not closed.
+///
+/// Called by `:quit`, `:close`, `:xit`, `:wq` and `findtag()`.
+pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
+    let mut win = win;
+    let prev_curtab = curtab.get();
+    let win_frame = if win.w_floating {
+        ptr::null_mut::<frame_T>()
+    } else {
+        win.frame().fr_parent
+    };
+    let had_diffmode = win.w_onebuf_opt.wo_diff != 0;
+
+    if is_last_window(win) {
+        err(e_cannot_close_last_window.as_ptr());
+        return FAIL;
+    }
+    if !win.w_floating && layout_locked(CMD_close) {
+        return FAIL;
+    }
+    if win.w_locked || win.buffer_or_none().is_some_and(|buf| buf.b_locked > 0) {
+        return FAIL; // window is already being closed
+    }
+    if is_autocmd_window(Some(win)) {
+        err(&raw const e_autocmd_close as *const c_char);
+        return FAIL;
+    }
+    if last_win().w_floating && only_window(win, None) {
+        if let Some(rc) = close_the_floats(win, force) {
+            return rc;
         }
-        if !(*win).w_floating && window_layout_locked(CMD_close) as ::core::ffi::c_int != 0 {
-            return FAIL;
+    }
+
+    // When closing the last window in a tab page first go to another tab page
+    // and then close the window and the tab page, so that `curwin` and `curtab`
+    // are never invalid while memory is freed.
+    if close_last_tabpage_window(win, free_buf, prev_curtab) {
+        return FAIL;
+    }
+
+    // When closing the help window, try restoring a snapshot afterwards.
+    // Otherwise clear the snapshot, which is now invalid.
+    let help_window = is_help(win.buffer_or_none());
+    if !help_window {
+        drop_snapshot(cur_tab(), SNAP_HELP_IDX);
+    }
+    let quickfix_window = is_quickfix(win.buffer_or_none());
+    if !quickfix_window {
+        drop_snapshot(cur_tab(), SNAP_QUICKFIX_IDX);
+    }
+
+    let mut other_buffer = false;
+    if win.is_current() {
+        match leave_closing_window(win) {
+            Leave::Failed => return FAIL,
+            Leave::Ok { other } => other_buffer = other,
         }
-        if win_locked(win) != 0
-            || !(*win).w_buffer.is_null() && (*(*win).w_buffer).b_locked > 0 as ::core::ffi::c_int
-        {
-            return FAIL;
-        }
-        if is_aucmd_win(win) {
-            emsg(gettext(
-                &raw const e_autocmd_close as *const ::core::ffi::c_char,
-            ));
-            return FAIL;
-        }
-        if (*lastwin.get()).w_floating as ::core::ffi::c_int != 0
-            && one_window(win, ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int != 0
-        {
-            if is_aucmd_win(lastwin.get()) {
-                emsg(gettext(
-                    c"E814: Cannot close window, only autocmd window would remain".as_ptr(),
-                ));
-                return FAIL;
-            }
-            if force as ::core::ffi::c_int != 0
-                || can_close_floating_windows(::core::ptr::null_mut::<tabpage_T>())
-                    as ::core::ffi::c_int
-                    != 0
-            {
-                while (*lastwin.get()).w_floating {
-                    if win_close(
-                        lastwin.get(),
-                        !buf_hide((*lastwin.get()).w_buffer),
-                        true_0 != 0,
-                    ) == FAIL
-                    {
-                        return FAIL;
-                    }
-                }
-                if !win_valid_any_tab(win) {
-                    return FAIL;
-                }
-                if last_window(win) {
-                    emsg(gettext(e_cannot_close_last_window.as_ptr()));
-                    return FAIL;
-                }
-            } else {
-                emsg(&raw const e_floatonly as *const ::core::ffi::c_char);
-                return FAIL;
-            }
-        }
-        if close_last_window_tabpage(win, free_buf, prev_curtab) {
-            return FAIL;
-        }
-        let mut help_window: bool = false_0 != 0;
-        let mut quickfix_window: bool = false_0 != 0;
-        if bt_help((*win).w_buffer) {
-            help_window = true_0 != 0;
-        } else {
-            clear_snapshot(curtab.get(), SNAP_HELP_IDX);
-        }
-        if bt_quickfix((*win).w_buffer) {
-            quickfix_window = true_0 != 0;
-        } else {
-            clear_snapshot(curtab.get(), SNAP_QUICKFIX_IDX);
-        }
-        let mut other_buffer: bool = false_0 != 0;
-        if win == curwin.get() {
-            leaving_window(curwin.get());
-            let mut wp: *mut win_T = if (*win).w_floating as ::core::ffi::c_int != 0 {
-                win_float_find_altwin(win, ::core::ptr::null::<tabpage_T>())
-            } else {
-                frame2win(win_altframe(win, ::core::ptr::null_mut::<tabpage_T>()))
-            };
-            if (*wp).w_buffer != curbuf.get() {
-                reset_VIsual_and_resel();
-                other_buffer = true_0 != 0;
-                if !win_valid(win) {
-                    return FAIL;
-                }
-                (*win).w_locked = true_0 != 0;
-                apply_autocmds(
-                    EVENT_BUFLEAVE,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    false_0 != 0,
-                    curbuf.get(),
-                );
-                if !win_valid(win) {
-                    return FAIL;
-                }
-                (*win).w_locked = false_0 != 0;
-                if last_window(win) {
-                    return FAIL;
-                }
-            }
-            (*win).w_locked = true_0 != 0;
-            apply_autocmds(
-                EVENT_WINLEAVE,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
-                curbuf.get(),
-            );
-            if !win_valid(win) {
-                return FAIL;
-            }
-            (*win).w_locked = false_0 != 0;
-            if last_window(win) {
-                return FAIL;
-            }
-            if aborting() {
-                return FAIL;
-            }
-        }
-        do_autocmd_winclosed(win);
-        if !win_valid_any_tab(win) {
-            return OK;
-        }
-        let mut bufref: bufref_T = bufref_T::default();
-        set_bufref(&raw mut bufref, (*win).w_buffer);
-        let mut did_decrement: bool = win_close_buffer(
-            win,
-            if free_buf as ::core::ffi::c_int != 0 {
-                DOBUF_UNLOAD as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            },
-            true_0 != 0,
-        );
-        if win_valid(win) as ::core::ffi::c_int != 0
-            && (*win).w_buffer.is_null()
-            && !(*win).w_floating
-            && last_window(win) as ::core::ffi::c_int != 0
-        {
-            if (*curwin.get()).w_buffer.is_null() {
-                (*curwin.get()).w_buffer = curbuf.get();
-            }
-            getout(0 as ::core::ffi::c_int);
-        }
-        if curtab.get() != prev_curtab
-            && win_valid_any_tab(win) as ::core::ffi::c_int != 0
-            && (*win).w_buffer.is_null()
-        {
-            win_close_othertab(win, false_0, prev_curtab, force);
-            return FAIL;
-        }
-        if !win_valid(win) {
-            return FAIL;
-        }
-        if one_window(win, ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int != 0
-            && ((*first_tabpage.get()).tp_next.is_null()
-                || (*lastwin.get()).w_floating as ::core::ffi::c_int != 0)
-        {
-            if !(*first_tabpage.get()).tp_next.is_null() {
-                emsg(&raw const e_floatonly as *const ::core::ffi::c_char);
-            }
-            win_unclose_buffer(win, &raw mut bufref, did_decrement);
-            return FAIL;
-        }
-        if close_last_window_tabpage(win, free_buf, prev_curtab) {
-            return FAIL;
-        }
-        (*split_disallowed.ptr()) += 1;
-        let mut was_floating: bool = (*win).w_floating;
-        if ui_has(kUIMultigrid) {
-            ui_call_win_close((*win).w_grid_alloc.handle as Integer);
-        }
-        if (*win).w_floating {
-            ui_comp_remove_grid(&raw mut (*win).w_grid_alloc);
-            debug_assert!(!(*first_tabpage.ptr()).is_null(), "first_tabpage != NULL");
-            if (*win).w_config.external {
-                let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-                while !tp.is_null() {
-                    if tp != curtab.get() && (*tp).tp_curwin == win {
-                        (*tp).tp_curwin = (*tp).tp_firstwin;
-                    }
-                    tp = (*tp).tp_next as *mut tabpage_T;
-                }
-            }
-        }
-        set_bufref(&raw mut bufref, (*win).w_buffer);
-        let mut had_cmdline_ruler: bool = p_ru.get() != 0
-            && win == curwin.get()
-            && (*win).w_status_height == 0 as ::core::ffi::c_int;
-        let mut dir: ::core::ffi::c_int = 0;
-        let mut wp_0: *mut win_T =
-            win_free_mem(win, &raw mut dir, ::core::ptr::null_mut::<tabpage_T>());
-        if help_window as ::core::ffi::c_int != 0 || quickfix_window as ::core::ffi::c_int != 0 {
-            let mut prev_win: *mut win_T =
-                get_snapshot_curwin(if help_window as ::core::ffi::c_int != 0 {
-                    SNAP_HELP_IDX
-                } else {
-                    SNAP_QUICKFIX_IDX
-                });
-            if win_valid(prev_win) {
-                wp_0 = prev_win;
-            }
-        }
-        let mut close_curwin: bool = false_0 != 0;
-        if win == curwin.get() {
-            curwin.set(wp_0);
-            if (*wp_0).w_onebuf_opt.wo_pvw != 0
-                || bt_quickfix((*wp_0).w_buffer) as ::core::ffi::c_int != 0
-            {
-                loop {
-                    if (*wp_0).w_next.is_null() {
-                        wp_0 = firstwin.get();
-                    } else {
-                        wp_0 = (*wp_0).w_next;
-                    }
-                    if wp_0 == curwin.get() {
-                        break;
-                    }
-                    if !((*wp_0).w_onebuf_opt.wo_pvw == 0
-                        && !bt_quickfix((*wp_0).w_buffer)
-                        && !((*wp_0).w_floating as ::core::ffi::c_int != 0
-                            && ((*wp_0).w_config.hide as ::core::ffi::c_int != 0
-                                || !(*wp_0).w_config.focusable)))
-                    {
-                        continue;
-                    }
-                    curwin.set(wp_0);
-                    break;
-                }
-            }
-            curbuf.set((*curwin.get()).w_buffer);
-            close_curwin = true_0 != 0;
-            check_cursor(curwin.get());
-        }
-        if !was_floating {
-            last_status(false_0 != 0);
-            if !(*curwin.get()).w_floating
-                && p_ea.get() != 0
-                && (*p_ead.get() as ::core::ffi::c_int == 'b' as ::core::ffi::c_int
-                    || *p_ead.get() as ::core::ffi::c_int == dir)
-            {
-                win_equal(
-                    curwin.get(),
-                    (*(*curwin.get()).w_frame).fr_parent == win_frame,
-                    dir,
-                );
-            } else {
-                win_comp_pos();
-                win_fix_scroll(false_0 != 0);
-            }
-        } else if had_cmdline_ruler as ::core::ffi::c_int != 0
-            && (*wp_0).w_status_height > 0 as ::core::ffi::c_int
-        {
-            redraw_cmdline.set(true_0 != 0);
-        }
-        if !bufref.br_buf.is_null()
-            && bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
-            && !(*bufref.br_buf).terminal.is_null()
-        {
-            terminal_check_size((*bufref.br_buf).terminal);
-        }
-        if close_curwin {
-            win_enter_ext(
-                wp_0,
-                WEE_CURWIN_INVALID as ::core::ffi::c_int
-                    | WEE_TRIGGER_ENTER_AUTOCMDS as ::core::ffi::c_int
-                    | WEE_TRIGGER_LEAVE_AUTOCMDS as ::core::ffi::c_int,
-            );
-            if other_buffer {
-                apply_autocmds(
-                    EVENT_BUFENTER,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    false_0 != 0,
-                    curbuf.get(),
-                );
-            }
-        }
-        if firstwin.get() == lastwin.get()
-            && (*curwin.get()).w_locked as ::core::ffi::c_int != 0
-            && (*curbuf.get()).b_locked_split != 0
-            && !(*first_tabpage.get()).tp_next.is_null()
-        {
-            apply_autocmds(
-                EVENT_TABLEAVE,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
-                curbuf.get(),
-            );
-        }
-        (*split_disallowed.ptr()) -= 1;
-        if help_window as ::core::ffi::c_int != 0 || quickfix_window as ::core::ffi::c_int != 0 {
-            restore_snapshot(
-                if help_window as ::core::ffi::c_int != 0 {
-                    SNAP_HELP_IDX
-                } else {
-                    SNAP_QUICKFIX_IDX
-                },
-                close_curwin as ::core::ffi::c_int,
-            );
-        }
-        if diffopt_closeoff() as ::core::ffi::c_int != 0
-            && had_diffmode as ::core::ffi::c_int != 0
-            && curtab.get() == prev_curtab
-        {
-            let mut diffcount: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            let mut dwin: *mut win_T = if curtab.get() == curtab.get() {
-                firstwin.get()
-            } else {
-                (*curtab.get()).tp_firstwin
-            };
-            while !dwin.is_null() {
-                if (*dwin).w_onebuf_opt.wo_diff != 0 {
-                    diffcount += 1;
-                }
-                dwin = (*dwin).w_next;
-            }
-            if diffcount == 1 as ::core::ffi::c_int {
-                do_cmdline_cmd(c"diffoff!".as_ptr());
-            }
-        }
-        (*curwin.get()).w_pos_changed = true_0 != 0;
-        if !was_floating {
-            redraw_all_later(UPD_NOT_VALID);
-        }
+    }
+
+    // Fire WinClosed just before starting to free window-related resources.
+    fire_winclosed(win);
+    // The autocommand may have freed the window already.
+    if !valid_win_any_tab(win.raw()) {
         return OK;
     }
-}
 
-pub(crate) unsafe extern "C" fn trigger_winnewpre() {
-    unsafe {
-        window_layout_lock();
-        apply_autocmds(
-            EVENT_WINNEWPRE,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            false_0 != 0,
-            ::core::ptr::null_mut::<buf_T>(),
-        );
-        window_layout_unlock();
+    let bufref = BufRef::of_raw(win.w_buffer);
+    let action = if free_buf { DOBUF_UNLOAD as c_int } else { 0 };
+    let did_decrement = close_win_buffer(win, action, true);
+
+    if valid_win(win.raw()).is_some()
+        && win.buffer_or_none().is_none()
+        && !win.w_floating
+        && is_last_window(win)
+    {
+        // Autocommands have closed all windows, quit now. Restore
+        // `curwin->w_buffer`, or writing the ShaDa file may fail.
+        if cur_win().buffer_or_none().is_none() {
+            cur_win().w_buffer = curbuf.get();
+        }
+        quit_now();
     }
-}
-
-unsafe extern "C" fn do_autocmd_winclosed(mut win: *mut win_T) {
-    unsafe {
-        static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-        if recursive.get() as ::core::ffi::c_int != 0 || !has_event(EVENT_WINCLOSED) {
-            return;
+    // Autocommands may have moved to another tab page.
+    if curtab.get() != prev_curtab && valid_win_any_tab(win.raw()) && win.buffer_or_none().is_none()
+    {
+        // The window has to be closed anyway, since the buffer is gone.
+        if let Some(prev) = valid_tab(prev_curtab) {
+            close_othertab(win, false, prev, force);
         }
-        recursive.set(true_0 != 0);
-        let mut winid: [::core::ffi::c_char; 65] = [0; 65];
-        vim_snprintf(
-            &raw mut winid as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 65]>(),
-            c"%d".as_ptr(),
-            (*win).handle,
-        );
-        apply_autocmds(
-            EVENT_WINCLOSED,
-            &raw mut winid as *mut ::core::ffi::c_char,
-            &raw mut winid as *mut ::core::ffi::c_char,
-            false_0 != 0,
-            (*win).w_buffer,
-        );
-        recursive.set(false_0 != 0);
+        return FAIL;
     }
-}
 
-pub unsafe extern "C" fn trigger_tabclosedpre(mut tp: *mut tabpage_T) {
-    unsafe {
-        static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-        let mut ptp: *mut tabpage_T = curtab.get();
-        if !has_event(EVENT_TABCLOSEDPRE) || recursive.get() as ::core::ffi::c_int != 0 {
-            return;
+    // Autocommands may have closed the window already, or closed the only other
+    // window, or moved to another tab page.
+    if valid_win(win.raw()).is_none() {
+        return FAIL;
+    }
+    if only_window(win, None) && (first_tab().next().is_none() || last_win().w_floating) {
+        if first_tab().next().is_some() {
+            err_raw(&raw const e_floatonly as *const c_char);
         }
-        if valid_tabpage(tp) {
-            goto_tabpage_tp(tp, false_0 != 0, false_0 != 0);
+        unclose_win_buffer(win, bufref, did_decrement);
+        return FAIL;
+    }
+    if close_last_tabpage_window(win, free_buf, prev_curtab) {
+        return FAIL;
+    }
+
+    // Now the window really is going to close. Disallow any autocommand from
+    // splitting a window, to avoid trouble.
+    split_disallowed.set(split_disallowed.get() + 1);
+    let was_floating = win.w_floating;
+    if ui_has(kUIMultigrid) {
+        ui_call_win_close(win.w_grid_alloc.handle as Integer);
+    }
+    if win.w_floating {
+        drop_grid(win);
+        debug_assert!(tabs().next().is_some(), "first_tabpage != NULL");
+        if win.w_config.external {
+            for mut tp in tabs() {
+                if !tp.is_current() && tp.tp_curwin == win.raw() {
+                    // An autocommand can still abort the closing of this
+                    // window, but carrying the change out anyway is no
+                    // catastrophe.
+                    tp.tp_curwin = tp.tp_firstwin;
+                }
+            }
         }
-        recursive.set(true_0 != 0);
-        window_layout_lock();
-        apply_autocmds(
-            EVENT_TABCLOSEDPRE,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            false_0 != 0,
-            ::core::ptr::null_mut::<buf_T>(),
-        );
-        window_layout_unlock();
-        recursive.set(false_0 != 0);
-        if valid_tabpage(ptp) {
-            goto_tabpage_tp(ptp, false_0 != 0, false_0 != 0);
+    }
+
+    // About to free the window: remember its final buffer for
+    // `terminal_check_size`, which may have changed since the last `BufRef`
+    // (`close_buffer` autocommands, say).
+    let bufref = BufRef::of_raw(win.w_buffer);
+    let had_cmdline_ruler = p_ru.get() != 0 && win.is_current() && win.w_status_height == 0;
+    let was_current = win.is_current();
+
+    // Free the memory the window used, and take the window that received its
+    // screen space.
+    let (wp, dir) = free_mem(win, None);
+    let mut wp = wp.expect("the window that took the room");
+    if help_window || quickfix_window {
+        // Closing the help window moves the cursor back to the window that was
+        // current when the snapshot was taken.
+        let idx = snapshot_index(help_window);
+        if let Some(prev) = snapshot_curwin(idx).and_then(|w| valid_win(w.raw())) {
+            wp = prev;
+        }
+    }
+
+    // Make sure `curwin` is not invalid: it causes severe trouble when printing
+    // an error message, and `win_equal()` needs `curbuf` to be valid too.
+    let close_curwin = was_current;
+    if was_current {
+        curwin.set(wp.raw());
+        if wp.w_onebuf_opt.wo_pvw != 0 || is_quickfix(wp.buffer_or_none()) {
+            wp = away_from_preview(wp);
+        }
+        curbuf.set(cur_win().w_buffer);
+        // The cursor position may be invalid if the buffer changed after the
+        // window was last used.
+        revalidate_cursor(cur_win());
+    }
+
+    if !was_floating {
+        // If the last window has a status line now and we do not want one,
+        // remove it. Do this before `equal()`, which may change a height.
+        update_last_status(false);
+        // SAFETY: `'eadirection'` is a NUL-terminated option string.
+        let ead = unsafe { *p_ead.get() } as c_int;
+        if !cur_win().w_floating && p_ea.get() != 0 && (ead == 'b' as c_int || ead == dir) {
+            // If the frame of the closed window contains the new current
+            // window, resize only that frame; otherwise resize all windows.
+            let same = cur_win().frame().fr_parent == win_frame;
+            equal(Some(cur_win()), same, dir);
         } else {
-            goto_tabpage_tp(first_tabpage.get(), false_0 != 0, false_0 != 0);
-        };
+            comp_positions();
+            fix_scroll(false);
+        }
+    } else if had_cmdline_ruler && wp.w_status_height > 0 {
+        redraw_cmdline.set(true); // clear the cmdline 'ruler'
     }
+    if let Some(buf) = bufref.get() {
+        resize_terminal(buf);
+    }
+
+    if close_curwin {
+        let flags = WEE_CURWIN_INVALID as c_int
+            | WEE_TRIGGER_ENTER_AUTOCMDS as c_int
+            | WEE_TRIGGER_LEAVE_AUTOCMDS as c_int;
+        enter_ext(wp, flags);
+        if other_buffer {
+            // careful: after this `wp` and `win` may be invalid!
+            fire(EVENT_BUFENTER, cur_buf());
+        }
+    }
+
+    if firstwin.get() == lastwin.get()
+        && cur_win().w_locked
+        && cur_buf().b_locked_split != 0
+        && first_tab().next().is_some()
+    {
+        // The new `curwin` is the last window of the current tab page and is
+        // already being closed. Trigger TabLeave now: once its buffer is gone
+        // it is no longer safe to do so.
+        fire(EVENT_TABLEAVE, cur_buf());
+    }
+    split_disallowed.set(split_disallowed.get() - 1);
+
+    // After closing the help or quickfix window, try restoring the layout from
+    // before it was opened.
+    if help_window || quickfix_window {
+        restore_layout(snapshot_index(help_window), close_curwin);
+    }
+
+    // If the window had 'diff' set and only one window with 'diff' is left in
+    // the tab page, and "closeoff" is in 'diffopt', run ":diffoff!".
+    if diffopt_closeoff() && had_diffmode && curtab.get() == prev_curtab {
+        let diffcount = windows().filter(|w| w.w_onebuf_opt.wo_diff != 0).count();
+        if diffcount == 1 {
+            run_cmd(c"diffoff!".as_ptr());
+        }
+    }
+
+    cur_win().w_pos_changed = true;
+    if !was_floating {
+        redraw_all(UPD_NOT_VALID);
+    }
+    OK
+}
+
+/// Which snapshot slot a help or quickfix window restores from.
+fn snapshot_index(help_window: bool) -> c_int {
+    if help_window {
+        SNAP_HELP_IDX
+    } else {
+        SNAP_QUICKFIX_IDX
+    }
+}
+
+/// Closing `win` would leave only floating windows: close those first.
+///
+/// `None` when the caller may go on, `Some(FAIL)` when it may not.
+fn close_the_floats(win: Win, force: bool) -> Option<c_int> {
+    if is_autocmd_window(Some(last_win())) {
+        err(c"E814: Cannot close window, only autocmd window would remain".as_ptr());
+        return Some(FAIL);
+    }
+    if !force && !can_close_floats(None) {
+        err_raw(&raw const e_floatonly as *const c_char);
+        return Some(FAIL);
+    }
+    // Close the last window until there are no floating windows left. The
+    // `force` flag is not actually used when closing a floating window.
+    while last_win().w_floating {
+        if close(last_win(), !hides(last_win().buffer()), true) == FAIL {
+            // Give up rather than loop forever.
+            return Some(FAIL);
+        }
+    }
+    if !valid_win_any_tab(win.raw()) {
+        return Some(FAIL); // already closed by autocommands
+    }
+    // Autocommands may have closed all other tab pages; check again.
+    if is_last_window(win) {
+        err(e_cannot_close_last_window.as_ptr());
+        return Some(FAIL);
+    }
+    None
+}
+
+/// What `leave_closing_window` found.
+enum Leave {
+    /// An autocommand invalidated the window, or aborted the script.
+    Failed,
+    /// The `BufLeave`/`WinLeave` events are done; `other` says whether the
+    /// window taking over shows a different buffer.
+    Ok { other: bool },
+}
+
+/// Leave `win`, which is the current window and about to close: fire
+/// `BufLeave` and `WinLeave`, guarding the window across both.
+fn leave_closing_window(win: Win) -> Leave {
+    let mut win = win;
+    leave_window(cur_win());
+
+    // Guess which window is going to be the new current one. This may change
+    // because of the autocommands (sigh).
+    let wp = if win.w_floating {
+        // SAFETY: a live window; a null tab page means the current one.
+        unsafe { Win::new(win_float_find_altwin(win.raw(), ptr::null())) }
+    } else {
+        frame2window(alt_frame(win, None))
+    };
+
+    // Be careful: if autocommands delete the window, or leave it the last one,
+    // return now.
+    let mut other_buffer = false;
+    if wp.w_buffer != curbuf.get() {
+        reset_VIsual_and_resel(); // stop Visual mode
+        other_buffer = true;
+        if valid_win(win.raw()).is_none() {
+            return Leave::Failed;
+        }
+        win.w_locked = true;
+        fire(EVENT_BUFLEAVE, cur_buf());
+        if valid_win(win.raw()).is_none() {
+            return Leave::Failed;
+        }
+        win.w_locked = false;
+        if is_last_window(win) {
+            return Leave::Failed;
+        }
+    }
+    win.w_locked = true;
+    fire(EVENT_WINLEAVE, cur_buf());
+    if valid_win(win.raw()).is_none() {
+        return Leave::Failed;
+    }
+    win.w_locked = false;
+    if is_last_window(win) {
+        return Leave::Failed;
+    }
+    // autocmds may abort script processing
+    if aborting() {
+        return Leave::Failed;
+    }
+    Leave::Ok {
+        other: other_buffer,
+    }
+}
+
+/// The cursor would land on the preview or quickfix window: walk on round the
+/// window list looking for one it may sit in instead.
+fn away_from_preview(wp: Win) -> Win {
+    let mut wp = wp;
+    loop {
+        wp = wp.next().unwrap_or_else(first_win);
+        if wp.is_current() {
+            return wp;
+        }
+        let hidden = wp.w_floating && (wp.w_config.hide || !wp.w_config.focusable);
+        if wp.w_onebuf_opt.wo_pvw == 0 && !is_quickfix(wp.buffer_or_none()) && !hidden {
+            curwin.set(wp.raw());
+            return wp;
+        }
+    }
+}
+
+pub(crate) fn trigger_winnewpre() {
+    window_lock();
+    fire_named(EVENT_WINNEWPRE, ptr::null_mut(), None);
+    window_unlock();
+}
+
+/// `WinClosed`, named after the window's own handle. Never re-entered.
+fn fire_winclosed(mut win: Win) {
+    static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
+    if RECURSIVE.get() || !event_wanted(EVENT_WINCLOSED) {
+        return;
+    }
+    RECURSIVE.set(true);
+    let mut winid = [0 as c_char; NUMBUFLEN as usize];
+    number_into(&mut winid, c"%d".as_ptr(), win.handle);
+    fire_named(EVENT_WINCLOSED, winid.as_mut_ptr(), win.buffer_or_none());
+    RECURSIVE.set(false);
+}
+
+pub unsafe extern "C" fn trigger_tabclosedpre(tp: *mut tabpage_T) {
+    tabclosedpre(tp);
+}
+
+/// `TabClosedPre` for `tp`, fired from inside that tab page and never
+/// re-entered. Comes back to the tab page it started in, or to the first.
+fn tabclosedpre(tp: *mut tabpage_T) {
+    static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
+    let ptp = curtab.get();
+    // Return quickly when there is no TabClosedPre autocommand to run, or one
+    // is already running.
+    if !event_wanted(EVENT_TABCLOSEDPRE) || RECURSIVE.get() {
+        return;
+    }
+    if let Some(tp) = valid_tab(tp) {
+        goto_tab(tp, false, false);
+    }
+    RECURSIVE.set(true);
+    window_lock();
+    fire_named(EVENT_TABCLOSEDPRE, ptr::null_mut(), None);
+    window_unlock();
+    RECURSIVE.set(false);
+    // The tab page may have been modified or deleted by the autocommands: try
+    // to recover it, and fall back to the first tab page.
+    // SAFETY: `first_tabpage` is set from startup to exit.
+    let back = valid_tab(ptp).unwrap_or_else(|| unsafe { TabPage::new(first_tabpage.get()) });
+    goto_tab(back, false, false);
 }
 
 pub unsafe extern "C" fn win_close_othertab(
-    mut win: *mut win_T,
-    mut free_buf: ::core::ffi::c_int,
-    mut tp: *mut tabpage_T,
-    mut force: bool,
+    win: *mut win_T,
+    free_buf: c_int,
+    tp: *mut tabpage_T,
+    force: bool,
 ) -> bool {
-    unsafe {
-        let mut bufref: bufref_T = bufref_T::default();
-        let mut free_tp_idx: ::core::ffi::c_int = 0;
-        let mut dir: ::core::ffi::c_int = 0;
-        debug_assert!(tp != curtab.get(), "tp != curtab");
-        let mut did_decrement: bool = false_0 != 0;
-        if window_layout_locked(CMD_SIZE) {
-            return false_0 != 0;
-        }
-        if win_locked(win) != 0
-            || !(*win).w_buffer.is_null() && (*(*win).w_buffer).b_locked > 0 as ::core::ffi::c_int
-        {
-            return false_0 != 0;
-        }
-        if is_aucmd_win(win) {
-            emsg(gettext(
-                &raw const e_autocmd_close as *const ::core::ffi::c_char,
-            ));
-            return false_0 != 0;
-        }
-        '_leave_open: {
-            if (*(*tp).tp_lastwin).w_floating as ::core::ffi::c_int != 0
-                && one_window(win, tp) as ::core::ffi::c_int != 0
-            {
-                if force as ::core::ffi::c_int != 0
-                    || can_close_floating_windows(tp) as ::core::ffi::c_int != 0
-                {
-                    // Not immutable: win_close_othertab() updates tp_lastwin behind the raw pointer.
-                    #[allow(clippy::while_immutable_condition)]
-                    while (*(*tp).tp_lastwin).w_floating {
-                        if !win_close_othertab(
-                            (*tp).tp_lastwin,
-                            !buf_hide((*(*tp).tp_lastwin).w_buffer) as ::core::ffi::c_int,
-                            tp,
-                            true_0 != 0,
-                        ) {
-                            break '_leave_open;
-                        }
-                    }
-                    if !win_valid_any_tab(win) {
-                        return false_0 != 0;
-                    }
-                } else {
-                    emsg(&raw const e_floatonly as *const ::core::ffi::c_char);
-                    break '_leave_open;
-                }
-            }
-            if !(*win).w_buffer.is_null() {
-                do_autocmd_winclosed(win);
-                if !win_valid_any_tab(win) {
-                    return false_0 != 0;
-                }
-            }
-            if (*tp).tp_firstwin == (*tp).tp_lastwin && !(*tp).tp_did_tabclosedpre {
-                trigger_tabclosedpre(tp);
-                if !win_valid_any_tab(win) {
-                    return false_0 != 0;
-                }
-            }
-            bufref = bufref_T::default();
-            set_bufref(&raw mut bufref, (*win).w_buffer);
-            if !(*win).w_buffer.is_null() {
-                did_decrement = close_buffer(
-                    win,
-                    (*win).w_buffer,
-                    if free_buf != 0 {
-                        DOBUF_UNLOAD as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    },
-                    false_0 != 0,
-                    true_0 != 0,
-                );
-            }
-            if !(!valid_tabpage(tp) || tp == curtab.get()) {
-                if tabpage_win_valid(tp, win) {
-                    if (*(*tp).tp_lastwin).w_floating as ::core::ffi::c_int != 0
-                        && one_window(win, tp) as ::core::ffi::c_int != 0
-                    {
-                        emsg(&raw const e_floatonly as *const ::core::ffi::c_char);
-                    } else {
-                        free_tp_idx = 0 as ::core::ffi::c_int;
-                        if (*tp).tp_firstwin == (*tp).tp_lastwin {
-                            free_tp_idx = tabpage_index(tp);
-                            let mut h: ::core::ffi::c_int = tabline_height();
-                            if tp == first_tabpage.get() {
-                                first_tabpage.set((*tp).tp_next);
-                            } else {
-                                let mut ptp: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
-                                ptp = first_tabpage.get();
-                                while !ptp.is_null() && (*ptp).tp_next != tp {
-                                    ptp = (*ptp).tp_next;
-                                }
-                                if ptp.is_null() {
-                                    internal_error(c"win_close_othertab()".as_ptr());
-                                    return false_0 != 0;
-                                }
-                                (*ptp).tp_next = (*tp).tp_next;
-                            }
-                            redraw_tabline.set(true_0 != 0);
-                            if h != tabline_height() {
-                                win_new_screen_rows();
-                            }
-                        }
-                        set_bufref(&raw mut bufref, (*win).w_buffer);
-                        dir = 0;
-                        win_free_mem(win, &raw mut dir, tp);
-                        if !bufref.br_buf.is_null()
-                            && bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
-                            && !(*bufref.br_buf).terminal.is_null()
-                        {
-                            terminal_check_size((*bufref.br_buf).terminal);
-                        }
-                        if free_tp_idx > 0 as ::core::ffi::c_int {
-                            free_tabpage(tp);
-                            if has_event(EVENT_TABCLOSED) {
-                                let mut prev_idx: [::core::ffi::c_char; 65] = [0; 65];
-                                vim_snprintf(
-                                    &raw mut prev_idx as *mut ::core::ffi::c_char,
-                                    NUMBUFLEN as ::core::ffi::c_int as size_t,
-                                    c"%i".as_ptr(),
-                                    free_tp_idx,
-                                );
-                                apply_autocmds(
-                                    EVENT_TABCLOSED,
-                                    &raw mut prev_idx as *mut ::core::ffi::c_char,
-                                    &raw mut prev_idx as *mut ::core::ffi::c_char,
-                                    false_0 != 0,
-                                    if !bufref.br_buf.is_null()
-                                        && bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
-                                    {
-                                        bufref.br_buf
-                                    } else {
-                                        curbuf.get()
-                                    },
-                                );
-                            }
-                        }
-                        return true_0 != 0;
-                    }
-                }
-            }
-        }
-        if win_valid_any_tab(win) {
-            win_unclose_buffer(win, &raw mut bufref, did_decrement);
-        }
-        return false_0 != 0;
+    // SAFETY: the caller's promise -- a live window and a live tab page.
+    let (win, tp) = unsafe { (Win::new(win), TabPage::new(tp)) };
+    close_othertab(win, free_buf != 0, tp, force)
+}
+
+/// Close window `win` in tab page `tp`, which is not the current one.
+///
+/// This may be the last window of that tab page and so close the tab page,
+/// which makes `tp` invalid. The caller must check whether the buffer is
+/// hidden and whether the tabline needs updating.
+///
+/// `false` when the window was not closed as a direct result of this call
+/// (through autocommands, say).
+pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool) -> bool {
+    let mut win = win;
+    let mut tp = tp;
+    debug_assert!(!tp.is_current(), "tp != curtab");
+    let mut did_decrement = false;
+    let mut bufref = BufRef::of_raw(ptr::null_mut());
+
+    // Commands that may call this already check the lock, but check again just
+    // in case.
+    if layout_locked(CMD_SIZE) {
+        return false;
     }
+    // Get here with `win->w_buffer == NULL` when `close()` detects that the tab
+    // page changed.
+    if win.w_locked || win.buffer_or_none().is_some_and(|buf| buf.b_locked > 0) {
+        return false; // window is already being closed
+    }
+    if is_autocmd_window(Some(win)) {
+        err(&raw const e_autocmd_close as *const c_char);
+        return false;
+    }
+
+    'leave_open: {
+        // Would closing this window leave only floating windows?
+        if tab_last_win(tp).w_floating && only_window(win, Some(tp)) {
+            if !force && !can_close_floats(Some(tp)) {
+                err_raw(&raw const e_floatonly as *const c_char);
+                break 'leave_open;
+            }
+            // Close the last window until there are no floating windows left.
+            // The `force` flag is not actually used for a floating window.
+            while tab_last_win(tp).w_floating {
+                let last = tab_last_win(tp);
+                if !close_othertab(last, !hides(last.buffer()), tp, true) {
+                    // Give up rather than loop forever.
+                    break 'leave_open;
+                }
+            }
+            if !valid_win_any_tab(win.raw()) {
+                return false; // already closed by autocommands
+            }
+        }
+
+        // Fire WinClosed just before freeing window-related resources. With no
+        // buffer it is not safe to trigger autocommands, and `close()` will
+        // already have fired WinClosed.
+        if win.buffer_or_none().is_some() {
+            fire_winclosed(win);
+            // The autocommand may have freed the window already.
+            if !valid_win_any_tab(win.raw()) {
+                return false;
+            }
+        }
+        if tp.tp_firstwin == tp.tp_lastwin && !tp.tp_did_tabclosedpre {
+            tabclosedpre(tp.raw());
+            // The autocommand may have freed the window already.
+            if !valid_win_any_tab(win.raw()) {
+                return false;
+            }
+        }
+
+        bufref = BufRef::of_raw(win.w_buffer);
+        if let Some(mut buf) = win.buffer_or_none() {
+            // Close the link to the buffer.
+            let action = if free_buf { DOBUF_UNLOAD as c_int } else { 0 };
+            let (w, b) = (win.raw(), buf.raw());
+            // SAFETY: a live window and its own live buffer.
+            did_decrement = unsafe { close_buffer(w, b, action, false, true) };
+        }
+
+        // Careful: autocommands may have closed the tab page, or made it the
+        // current one.
+        if valid_tab(tp.raw()).is_none() || tp.is_current() {
+            break 'leave_open;
+        }
+        // Autocommands may have closed the window already, or
+        // `nvim_win_set_config` moved it to a different tab page.
+        if !valid_win_in_tab(tp, win.raw()) {
+            break 'leave_open;
+        }
+        // Autocommands may again leave only floats; check again, but this time
+        // without bothering to close them.
+        if tab_last_win(tp).w_floating && only_window(win, Some(tp)) {
+            err_raw(&raw const e_floatonly as *const c_char);
+            break 'leave_open;
+        }
+
+        // When closing the last window of a tab page, remove the tab page.
+        let mut free_tp_idx = 0;
+        if tp.tp_firstwin == tp.tp_lastwin {
+            free_tp_idx = tab_index(tp);
+            let h = tabline_rows();
+            if tp.raw() == first_tabpage.get() {
+                first_tabpage.set(tp.tp_next);
+            } else {
+                let Some(mut ptp) = tabs().find(|ptp| ptp.tp_next == tp.raw()) else {
+                    // SAFETY: a static message naming the caller.
+                    unsafe { internal_error(c"win_close_othertab()".as_ptr()) };
+                    return false;
+                };
+                ptp.tp_next = tp.tp_next;
+            }
+            redraw_tabline.set(true);
+            if h != tabline_rows() {
+                new_screen_rows();
+            }
+        }
+
+        // About to free the window: remember its final buffer for
+        // `terminal_check_size` and TabClosed, which may have changed since the
+        // last `BufRef` (`close_buffer` autocommands, say).
+        bufref = BufRef::of_raw(win.w_buffer);
+        free_mem(win, Some(tp));
+        if let Some(buf) = bufref.get() {
+            resize_terminal(buf);
+        }
+        if free_tp_idx > 0 {
+            free_tab(tp);
+            if event_wanted(EVENT_TABCLOSED) {
+                let mut prev_idx = [0 as c_char; NUMBUFLEN as usize];
+                number_into(&mut prev_idx, c"%i".as_ptr(), free_tp_idx);
+                let buf = bufref.get().unwrap_or_else(cur_buf);
+                fire_named(EVENT_TABCLOSED, prev_idx.as_mut_ptr(), Some(buf));
+            }
+        }
+        return true;
+    }
+
+    if let Some(win) = valid_win_any_tab(win.raw()).then_some(win) {
+        unclose_win_buffer(win, bufref, did_decrement);
+    }
+    false
+}
+
+/// The last window of `tp`, floats included. `tp` is never the current tab
+/// page here, so `tp_lastwin` is the live answer.
+fn tab_last_win(tp: TabPage) -> Win {
+    // SAFETY: the tail of a live window list is a live window.
+    unsafe { Win::new(tp.tp_lastwin) }
+}
+
+/// Whether `buf` is a help buffer.
+fn is_help(buf: Option<Buf>) -> bool {
+    let raw = buf.map_or(ptr::null(), |b| b.raw() as *const buf_T);
+    // SAFETY: a live buffer, or the null the callers pass for "no buffer".
+    unsafe { bt_help(raw) }
+}
+
+/// Whether any autocommand is listening for `event`.
+fn event_wanted(event: event_T) -> bool {
+    // SAFETY: reads the autocommand tables.
+    unsafe { has_event(event) }
+}
+
+/// `vim_snprintf(buf, sizeof(buf), fmt, n)` for the one-number event names.
+fn number_into(buf: &mut [c_char; NUMBUFLEN as usize], fmt: *const c_char, n: c_int) {
+    let (dst, len) = (buf.as_mut_ptr(), buf.len() as size_t);
+    // SAFETY: a buffer of its own length, and a format taking one `int`.
+    unsafe { vim_snprintf(dst, len, fmt, n) };
+}
+
+/// Exit the editor: every window is gone.
+fn quit_now() -> ! {
+    // SAFETY: never returns; tears the editor down.
+    unsafe { getout(0) }
 }

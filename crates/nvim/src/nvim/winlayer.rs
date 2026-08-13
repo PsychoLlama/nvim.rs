@@ -228,12 +228,29 @@ impl Win {
         Pos(unsafe { &raw mut (*self.0).w_cursor })
     }
 
+    /// The buffer this window shows, `None` for the moment between losing one
+    /// and being given another.
+    #[inline(always)]
+    pub fn buffer_or_none(self) -> Option<Buf> {
+        // A live window's `w_buffer` is a live buffer or null.
+        let buf = self.w_buffer;
+        (!buf.is_null()).then_some(Buf(buf))
+    }
+
     /// The next window in this tab page's list, if any.
     #[inline(always)]
     pub fn next(self) -> Option<Self> {
         // SAFETY: a live window's `w_next` is a live window or NULL.
         let next = unsafe { (*self.0).w_next };
         (!next.is_null()).then_some(Self(next))
+    }
+
+    /// The window before this one in its tab page's list, if any.
+    #[inline(always)]
+    pub fn prev(self) -> Option<Self> {
+        // A live window's `w_prev` is a live window or null.
+        let prev = self.w_prev;
+        (!prev.is_null()).then_some(Self(prev))
     }
 
     /// First line of the fold containing `lnum`, if there is one.
