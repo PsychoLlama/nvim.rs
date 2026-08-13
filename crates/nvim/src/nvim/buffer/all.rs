@@ -27,8 +27,8 @@ use crate::src::nvim::normal::reset_VIsual_and_resel;
 use crate::src::nvim::options::kOptJopFlagClean;
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::types::{
-    CMD_sunhide, CMD_unhide, OptInt, bufref_T, cleanup_T, exarg_T, except_T, linenr_T, tabpage_T,
-    win_T,
+    CMD_sunhide, CMD_unhide, OptInt, buf_T, bufref_T, cleanup_T, exarg_T, except_T, linenr_T,
+    tabpage_T, win_T,
 };
 use crate::src::nvim::undo::bufIsChanged;
 use crate::src::nvim::window::{
@@ -242,7 +242,7 @@ pub unsafe fn ex_buffer_all(eap: *mut exarg_T) {
     enter_win(last_nofloat());
     autocmd_no_leave.set(autocmd_no_leave.get() + 1);
 
-    let mut buf = Some(first_buf());
+    let mut buf = buf_of(firstbuf.get());
     while let Some(b) = buf {
         if (open_wins as linenr_T) >= count {
             break;
@@ -261,9 +261,10 @@ pub unsafe fn ex_buffer_all(eap: *mut exarg_T) {
     close_extra_windows(count, &mut open_wins);
 }
 
-fn first_buf() -> Buf {
-    // SAFETY: `firstbuf` is set from startup to exit.
-    unsafe { Buf::new(firstbuf.get()) }
+fn buf_of(buf: *mut buf_T) -> Option<Buf> {
+    // SAFETY: `firstbuf`, and every `b_next` reached from it, is a live
+    // buffer or null -- and upstream's loop condition allows null here.
+    (!buf.is_null()).then(|| unsafe { Buf::new(buf) })
 }
 
 /// The first stage: close the windows showing a buffer twice, and the ones

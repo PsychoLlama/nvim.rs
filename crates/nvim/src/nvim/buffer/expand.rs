@@ -142,10 +142,11 @@ pub unsafe extern "C" fn ExpandBufnames(
     // Make a copy of "pat" and change "^" to "\(^\|[\/]\)" (when matching
     // with a regular expression).
     if !fuzzy {
-        // SAFETY: a NUL-terminated pattern, so its second byte is there to
-        // be read once the first is not NUL.
-        let (head, next) = unsafe { (*pat, *pat.add(1)) };
-        let anchored = head == b'^' as c_char;
+        // SAFETY: a NUL-terminated pattern.
+        let anchored = unsafe { *pat } == b'^' as c_char;
+        // SAFETY: past a byte that is not the terminator, so there is a
+        // second one -- which is why upstream reads it only here.
+        let next = if anchored { unsafe { *pat.add(1) } } else { 0 };
         if anchored && next != 0 {
             patc = dup(pat.wrapping_add(1));
             to_free = true;
@@ -365,10 +366,9 @@ pub unsafe extern "C" fn buflist_findnr(nr: c_int) -> *mut buf_T {
 
 /// [`buflist_findnr`] with its answer wrapped.
 pub(crate) fn find_buf(nr: c_int) -> Option<Buf> {
-    // SAFETY: a plain buffer number.
-    let buf = unsafe { buflist_findnr(nr) };
-    // SAFETY: non-null, hence live.
-    (!buf.is_null()).then(|| unsafe { Buf::new(buf) })
+    // SAFETY: a plain buffer number in; the handle map answers a live buffer
+    // or null, and only the non-null case reaches `Buf`.
+    unsafe { buflist_findnr(nr).as_mut().map(|buf| Buf::new(buf)) }
 }
 
 /// The name of buffer `n`, shortened with `home_replace`, freshly allocated;

@@ -785,10 +785,11 @@ pub unsafe extern "C" fn buflist_findpat(
     diffmode: bool,
     curtab_only: bool,
 ) -> c_int {
-    // SAFETY: the caller's promise -- a pattern of at least one byte.
-    let head = unsafe { *pattern };
-    let shorthand = pattern_end == pattern.wrapping_add(1)
-        && (head == b'%' as c_char || head == b'#' as c_char);
+    let one_byte = pattern_end == pattern.wrapping_add(1);
+    // SAFETY: a one-byte pattern, which the caller promised is readable.
+    // Upstream reads it behind the same test, in one `&&` chain.
+    let head = if one_byte { unsafe { *pattern } } else { 0 };
+    let shorthand = one_byte && (head == b'%' as c_char || head == b'#' as c_char);
     let matched = if shorthand {
         match_shorthand(head, diffmode)
     } else {
